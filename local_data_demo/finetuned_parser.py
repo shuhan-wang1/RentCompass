@@ -19,12 +19,19 @@ class FinetunedParser:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
-        # Load base model - FIXED: use dtype instead of torch_dtype
+        # Load base model (CPU-safe: only request CUDA dtypes/dispatch when a GPU is present)
         print(f"[Model] Loading base model weights...")
+        if torch.cuda.is_available():
+            model_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+            device_map = "auto"
+        else:
+            print("[Model] No CUDA GPU detected — loading on CPU (float32). This will be slower.")
+            model_dtype = torch.float32
+            device_map = None
         self.base_model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
-            device_map="auto",
+            torch_dtype=model_dtype,
+            device_map=device_map,
             trust_remote_code=True
         )
         

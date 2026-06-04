@@ -2,15 +2,21 @@
 
 import json
 import re
+import os
 import requests
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL_NAME = "gemma3:27b-cloud"  # 使用 Ollama 云端模型，更强的推理能力
 
-USE_FINETUNED_MODEL = False  # 禁用 fine-tuned model，统一使用主 LLM
+USE_FINETUNED_MODEL = True  # 启用 fine-tuned LoRA model 解析查询
 # ========================================
-FINETUNED_BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"  # or path to Ollama's download
-FINETUNED_ADAPTER_PATH = "./student_model_lora/"     # Your LoRA adapters directory
+FINETUNED_BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"  # base model (downloaded from HF Hub on first use)
+# Robust absolute path to the trained LoRA adapter (repo_root/fine_tuning/student_model_lora),
+# independent of the process working directory.
+FINETUNED_ADAPTER_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "fine_tuning", "student_model_lora",
+)
 # ========================================
   # Default model if not using fine-tuned
 

@@ -693,7 +693,7 @@
         // --- CONFIGURATION ---
         // Change this if your backend is running on a different URL or port.
         // If empty, it uses relative paths (standard for production).
-        // If you are opening this HTML file directly (blob: or file:), we default to localhost:5000.
+        // If you are opening this HTML file directly (blob: or file:), we default to localhost:5001.
         let API_BASE_URL = ''; 
 
         /* -------------------------------------------------------------------------- */
@@ -714,7 +714,7 @@
                 // In a local/preview context with no explicit API_BASE_URL, 
                 // we default to a likely local backend to prevent URL parsing errors.
                 // You can change this default port if your python/node server is different.
-                url = 'http://localhost:5000' + endpoint;
+                url = 'http://localhost:5001' + endpoint;
                 console.warn(`[Alex UI] Detected local/blob environment. Defaulting API calls to ${url}. Configure API_BASE_URL in script if needed.`);
             }
 

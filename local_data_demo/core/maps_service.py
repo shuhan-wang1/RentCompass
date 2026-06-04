@@ -61,6 +61,32 @@ def _get_coordinates(address: str) -> dict | None:
         return None
 
 
+def geocode_address(address: str) -> dict | None:
+    """Public geocoder: returns the FULL Google geocode result for an address
+    (including 'address_components' and 'geometry'), with caching.
+
+    Unlike _get_coordinates (which returns only {lat, lng}), this returns the
+    complete first result so callers can read postal_code / address_components.
+    """
+    if not address or not isinstance(address, str):
+        return None
+    cache_key = create_cache_key('geocode_address', address)
+    cached_result = get_from_cache(cache_key)
+    if cached_result:
+        return cached_result
+
+    try:
+        geocode_result = gmaps.geocode(address)
+        if not geocode_result:
+            return None
+        result = geocode_result[0]
+        set_to_cache(cache_key, result)
+        return result
+    except Exception as e:
+        print(f"An error occurred during geocoding: {e}")
+        return None
+
+
 def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
     """
     统一的出行时间计算接口。

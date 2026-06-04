@@ -226,13 +226,21 @@ def clean_response(response: str) -> str:
 
     result = '\n'.join(lines).strip() or response
 
-    # Year validation
+    # Year validation: flag only years AFTER the current year as projected
     current_year = datetime.datetime.now().year
-    future_patterns = [
-        (r'\b(202[6-9]|20[3-9]\d)\s*(NHS|visa|Council Tax|rent)', r'\1 \2 (projected, verify officially)'),
-    ]
-    for pat, repl in future_patterns:
-        result = re.sub(pat, repl, result, flags=re.IGNORECASE)
+
+    def _flag_future_year(match):
+        year = int(match.group(1))
+        if year > current_year:
+            return f"{year} {match.group(2)} (projected, verify officially)"
+        return match.group(0)
+
+    result = re.sub(
+        r'\b(20\d{2})\s*(NHS|visa|Council Tax|rent)',
+        _flag_future_year,
+        result,
+        flags=re.IGNORECASE,
+    )
 
     return result
 

@@ -27,7 +27,6 @@ def load_mock_properties_from_csv(filename: str = None) -> list[dict]:
     except FileNotFoundError:
         print(f"/!\\ ERROR: Mock data file not found at '{filename}'. Please create it. /!\\")
         return []
-        return []
     except Exception as e:
         print(f"/!\\ ERROR: Failed to read mock data file: {e} /!\\")
         return []

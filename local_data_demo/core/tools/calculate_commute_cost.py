@@ -136,7 +136,7 @@ def _get_zone_from_address(address: str) -> Optional[int]:
             if zone:
                 return zone
 
-        # 如果无法从地址提取，使用 Google Maps API
+        # 如果无法从地址提取，使用免费地理编码（Postcodes.io/Nominatim）获取 postcode
         from core.maps_service import geocode_address
 
         geocode_result = geocode_address(address)
@@ -144,13 +144,10 @@ def _get_zone_from_address(address: str) -> Optional[int]:
             print(f"   ❌ 无法 geocode 地址: {address}")
             return None
 
-        # 从 geocode 结果中提取 postcode
-        address_components = geocode_result.get('address_components', [])
-        for component in address_components:
-            if 'postal_code' in component.get('types', []):
-                postcode = component['short_name']
-                print(f"   📮 从 Google Maps 获取 Postcode: {postcode}")
-                return _get_zone_from_postcode(postcode)
+        postcode = geocode_result.get('postcode')
+        if postcode:
+            print(f"   📮 从地理编码获取 Postcode: {postcode}")
+            return _get_zone_from_postcode(postcode)
 
         print(f"   ⚠️ 无法从 geocode 结果提取 postcode")
         return None
@@ -279,43 +276,21 @@ async def calculate_commute_cost_impl(
         print(f"      到: {to_address[:60]}...")
         print(f"      类型: {travel_type}, 方式: {mode}")
 
-        # Step 1: 获取详细路线信息 (包含时间和路线详情)
-        from core.maps_service import gmaps
-        from datetime import datetime
+        # Step 1: 通勤时间 (TfL Journey Planner，免费；非伦敦自动回退直线估算)
+        from core.maps_service import calculate_travel_time
 
-        # Get detailed route information
-        try:
-            now = datetime.now()
-            departure_time = now.replace(hour=9, minute=0, second=0, microsecond=0) if mode == "transit" else now
-
-            directions_result = gmaps.directions(
-                from_address,
-                to_address,
-                mode=mode,
-                departure_time=departure_time
-            )
-
-            if not directions_result or 'legs' not in directions_result[0]:
-                return {
-                    'success': False,
-                    'error': '无法计算路线（地址解析失败或路线不可达）'
-                }
-
-            # Extract duration
-            duration_seconds = directions_result[0]['legs'][0]['duration']['value']
-            duration_minutes = round(duration_seconds / 60)
-            print(f"   ✅ Route found: {duration_minutes} mins")
-
-        except Exception as e:
-            print(f"   ❌ Error getting route details: {e}")
+        duration_minutes = calculate_travel_time(from_address, to_address, mode)
+        if duration_minutes is None:
             return {
                 'success': False,
-                'error': f'路线查询失败: {str(e)}'
+                'error': '无法计算路线（地址解析失败或路线不可达）'
             }
+        print(f"   ✅ Route found: {duration_minutes} mins")
 
-        # Step 2: 检查路线是否使用公共交通
-        uses_transit = _check_route_uses_transit(directions_result[0], mode)
-        print(f"   🚌 Route uses public transport: {uses_transit}")
+        # Step 2: 是否需要公共交通票价
+        # TfL/估算没有逐步路线信息，用启发式：transit 模式且时长 > 15 分钟视为需要公共交通
+        uses_transit = (mode == "transit" and duration_minutes is not None and duration_minutes > 15)
+        print(f"   🚌 Route uses public transport (heuristic): {uses_transit}")
 
         transport_cost_info = None
 

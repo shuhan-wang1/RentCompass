@@ -1,17 +1,24 @@
-# maps_service.py - FIXED to handle landmark names properly
+# maps_service.py - free providers (no Google Maps required):
+#   geocoding   -> OSM Nominatim + Postcodes.io (no key)
+#   travel time -> TfL Journey Planner (London public transport), haversine fallback
+#   POIs        -> OpenStreetMap Overpass (no key)
 
+import os
+import re
 import requests
-import googlemaps
 from datetime import datetime
 import pandas as pd
 from collections import Counter
 import asyncio
 import math
-from config import GOOGLE_MAPS_API_KEY, OPENROUTESERVICE_API_KEY, USE_TRAVEL_SERVICE
 from .cache_service import get_from_cache, set_to_cache, create_cache_key
 
-# Initialize Google Maps Client
-gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
+# Optional free TfL app key (register at api-portal.tfl.gov.uk) to raise rate limits;
+# the Journey Planner also works without a key at low volume.
+TFL_APP_KEY = os.getenv("TFL_APP_KEY", "")
+# Nominatim / OSM require a descriptive User-Agent.
+_OSM_HEADERS = {"User-Agent": "uk-rent-recommendation/1.0 (student-housing demo)"}
+_UK_POSTCODE_RE = re.compile(r"([A-Z]{1,2}[0-9]{1,2}[A-Z]?[ ]?[0-9][A-Z]{2})", re.IGNORECASE)
 
 # Map common landmarks to specific addresses that Google Maps API can route to
 LANDMARK_TO_ADDRESS = {
@@ -39,126 +46,151 @@ def _normalize_address_for_routing(address: str) -> str:
     
     return address
 
-def _get_coordinates(address: str) -> dict | None:
-    """Internal function: gets coordinates for an address and caches the result."""
+def _free_geocode(address: str) -> dict | None:
+    """Free geocoder: Postcodes.io for UK postcodes, else OSM Nominatim.
+    Returns {'lat','lng','postcode'(optional)} or None. Cached."""
     if not address or not isinstance(address, str):
         return None
-    cache_key = create_cache_key('_get_coordinates', address)
-    cached_result = get_from_cache(cache_key)
-    if cached_result:
-        return cached_result
-    
-    try:
-        geocode_result = gmaps.geocode(address)
-        if not geocode_result:
-            return None
-        
-        location = geocode_result[0]['geometry']['location']
-        set_to_cache(cache_key, location)
-        return location
-    except Exception as e:
-        print(f"An error occurred during geocoding: {e}")
+    address = _normalize_address_for_routing(address)
+    cache_key = create_cache_key('_free_geocode', address)
+    cached = get_from_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    result = None
+    # 1) UK postcode -> Postcodes.io (most accurate, no key)
+    m = _UK_POSTCODE_RE.search(address)
+    if m:
+        pc = m.group(1).upper().replace(' ', '')
+        try:
+            r = requests.get(f"https://api.postcodes.io/postcodes/{pc}", timeout=8)
+            if r.status_code == 200:
+                d = (r.json() or {}).get('result') or {}
+                if d.get('latitude') is not None:
+                    result = {'lat': d['latitude'], 'lng': d['longitude'],
+                              'postcode': d.get('postcode')}
+        except Exception as e:
+            print(f"  [geocode] Postcodes.io error: {e}")
+
+    # 2) Fall back to Nominatim (free, no key)
+    if result is None:
+        try:
+            r = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={'q': address, 'format': 'json', 'countrycodes': 'gb',
+                        'limit': 1, 'addressdetails': 1},
+                headers=_OSM_HEADERS, timeout=10,
+            )
+            if r.status_code == 200:
+                arr = r.json()
+                if arr:
+                    top = arr[0]
+                    result = {'lat': float(top['lat']), 'lng': float(top['lon']),
+                              'postcode': (top.get('address') or {}).get('postcode')}
+        except Exception as e:
+            print(f"  [geocode] Nominatim error: {e}")
+
+    if result is not None:
+        set_to_cache(cache_key, result)
+    return result
+
+
+def _get_coordinates(address: str) -> dict | None:
+    """Returns {'lat','lng'} for an address via the free geocoder, or None."""
+    geo = _free_geocode(address)
+    if not geo:
         return None
+    return {'lat': geo['lat'], 'lng': geo['lng']}
 
 
 def geocode_address(address: str) -> dict | None:
-    """Public geocoder: returns the FULL Google geocode result for an address
-    (including 'address_components' and 'geometry'), with caching.
+    """Public geocoder returning {'lat','lng','postcode'} (free providers).
+    Used by callers that need the postcode (e.g. Transport Zone lookup)."""
+    return _free_geocode(address)
 
-    Unlike _get_coordinates (which returns only {lat, lng}), this returns the
-    complete first result so callers can read postal_code / address_components.
-    """
-    if not address or not isinstance(address, str):
-        return None
-    cache_key = create_cache_key('geocode_address', address)
-    cached_result = get_from_cache(cache_key)
-    if cached_result:
-        return cached_result
 
+def _tfl_travel_time(origin: dict, dest: dict, mode: str = "transit") -> int | None:
+    """TfL Journey Planner duration in minutes between two {'lat','lng'} points.
+    Returns None when TfL has no journey (e.g. outside London) or on error."""
+    frm = f"{origin['lat']},{origin['lng']}"
+    to = f"{dest['lat']},{dest['lng']}"
+    params = {}
+    if TFL_APP_KEY:
+        params['app_key'] = TFL_APP_KEY
+    if mode in ('walking', 'foot-walking'):
+        params['mode'] = 'walking'
+    elif mode in ('bicycling', 'cycling-regular', 'cycle'):
+        params['mode'] = 'cycle'
+    # transit / anything else: let TfL use all public-transport modes
     try:
-        geocode_result = gmaps.geocode(address)
-        if not geocode_result:
+        url = f"https://api.tfl.gov.uk/Journey/JourneyResults/{frm}/to/{to}"
+        resp = requests.get(url, params=params, timeout=12)
+        if resp.status_code != 200:
             return None
-        result = geocode_result[0]
-        set_to_cache(cache_key, result)
-        return result
+        journeys = resp.json().get('journeys') or []
+        durations = [int(j['duration']) for j in journeys if j.get('duration') is not None]
+        return min(durations) if durations else None
     except Exception as e:
-        print(f"An error occurred during geocoding: {e}")
+        print(f"  [TfL] error: {e}")
         return None
 
 
 def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
-    """
-    统一的出行时间计算接口。
-    根据 config.py 的设置自动选择使用 Google Maps 或 OpenRouteService。
-    """
+    """Travel time in minutes via TfL Journey Planner (London public transport),
+    falling back to a straight-line estimate when TfL has no route. Free, no Google."""
     if not origin_address or not destination_address:
         return None
-    
-    # Normalize addresses for routing
+
     origin_normalized = _normalize_address_for_routing(origin_address)
     destination_normalized = _normalize_address_for_routing(destination_address)
-    
+
     cache_key = create_cache_key('calculate_travel_time', origin_normalized, destination_normalized, mode)
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
         print(f"  -> [Cache HIT] Travel time for: {origin_address} ({mode})")
         return cached_result
 
-    print(f"  -> [Google Maps API] Getting travel time: {origin_address} -> {destination_normalized} ({mode})")
-    
-    try:
-        now = datetime.now()
-        # For transit, query for weekday morning commute
-        if mode == "transit":
-            departure_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        else:
-            departure_time = now
-
-        directions_result = gmaps.directions(
-            origin_normalized,           # Use normalized address
-            destination_normalized,      # Use normalized address
-            mode=mode, 
-            departure_time=departure_time
-        )
-        
-        if directions_result and 'legs' in directions_result[0]:
-            duration_seconds = directions_result[0]['legs'][0]['duration']['value']
-            minutes = round(duration_seconds / 60)
-            print(f"  [OK] [Google Maps] Route found: {minutes} mins")
-            set_to_cache(cache_key, minutes)
-            return minutes
-        else:
-            print(f"  [WARN]  [Google Maps] No route found")
-            return None
-            
-    except Exception as e:
-        print(f"  ❌ [Google Maps API] Error: {e}")
+    origin_coords = _get_coordinates(origin_normalized)
+    dest_coords = _get_coordinates(destination_normalized)
+    if not origin_coords or not dest_coords:
+        print(f"  [WARN] Could not geocode origin/destination for travel time")
         return None
 
+    minutes = _tfl_travel_time(origin_coords, dest_coords, mode)
+    if minutes is not None:
+        print(f"  [OK] [TfL] {origin_address} -> {destination_normalized}: {minutes} mins ({mode})")
+    else:
+        minutes = estimate_travel_time_simple(origin_normalized, destination_normalized, mode)
+        if minutes is not None:
+            print(f"  [OK] [estimate] {origin_address} -> {destination_normalized}: {minutes} mins (TfL had no route)")
+
+    if minutes is not None:
+        set_to_cache(cache_key, minutes)
+    return minutes
+
 def find_nearby_places(address: str, amenities_of_interest: list[str], radius: int = 1500) -> dict:
-    """Find nearby places using Google Places API"""
+    """Count nearby amenities using OpenStreetMap Overpass (FREE - no API key)."""
     cache_key = create_cache_key('find_nearby_places', address, tuple(sorted(amenities_of_interest)), radius)
     cached_result = get_from_cache(cache_key)
     if cached_result:
         print(f"  -> [Cache HIT] Nearby places for: {address}")
         return cached_result
 
-    print(f"  -> [API Call] Getting nearby places for: {address}")
-    
-    location = _get_coordinates(address)
-    if not location:
-        return {}
+    print(f"  -> [Overpass] Getting nearby places for: {address}")
 
-    poi_summary = {f"{poi}_in_{radius}m": 0 for poi in amenities_of_interest}
-    
+    # Map common Google place types to our OSM amenity types.
+    type_map = {
+        'supermarket': 'supermarket', 'grocery_or_supermarket': 'supermarket',
+        'park': 'park', 'gym': 'gym', 'restaurant': 'restaurant',
+        'cafe': 'cafe', 'school': 'school', 'hospital': 'hospital',
+        'library': 'library',
+    }
+
+    poi_summary = {}
     for place_type in amenities_of_interest:
-        try:
-            places_result = gmaps.places_nearby(location=location, radius=radius, type=place_type)
-            key = f"{place_type}_in_{radius}m"
-            poi_summary[key] = len(places_result.get('results', []))
-        except Exception as e:
-             print(f"An error occurred with Google Places API for type '{place_type}': {e}")
+        osm_type = type_map.get(place_type, place_type)
+        places = get_nearby_places_osm(address, osm_type, radius_m=radius)
+        poi_summary[f"{place_type}_in_{radius}m"] = len(places)
 
     set_to_cache(cache_key, poi_summary)
     return poi_summary
@@ -252,18 +284,10 @@ def get_environmental_data(address: str) -> dict:
         print(f"  -> [Cache HIT] Environmental data for: {address}")
         return cached_result
     
-    print(f"  -> [API Call] Getting environmental data for: {address}")
-    
-    location = _get_coordinates(address)
-    if not location:
-        return {}
+    print(f"  -> [Overpass] Getting environmental data for: {address}")
 
-    parks_in_1km = 0
-    try:
-        places_result = gmaps.places_nearby(location=location, radius=1000, type='park')
-        parks_in_1km = len(places_result.get('results', []))
-    except Exception as e:
-        print(f"Could not fetch park data: {e}")
+    parks = get_nearby_places_osm(address, 'park', radius_m=1000)
+    parks_in_1km = len(parks)
 
     air_quality = "good"
     if parks_in_1km == 0:

@@ -17,14 +17,24 @@ from typing import Optional, Dict, List
 from core.tool_system import Tool, ToolResult
 import re
 
-# 数据文件路径
+# 数据文件路径（fallback：未启用 scraper 时用 bundled 假数据）
 DATA_PATH = Path(__file__).parent.parent.parent / "data" / "fake_property_listings.csv"
+
+
+def _active_data_path() -> Path:
+    """解析当前实际供数的 CSV：scraper 缓存存在则用缓存，否则用假数据。
+    保证详情工具与列表/搜索读取的是同一份数据。"""
+    try:
+        from core.scraping.provider import get_active_property_csv
+        return get_active_property_csv()
+    except Exception:
+        return DATA_PATH
 
 
 def load_property_database() -> pd.DataFrame:
     """加载房产数据库"""
     try:
-        df = pd.read_csv(DATA_PATH)
+        df = pd.read_csv(_active_data_path())
         return df
     except Exception as e:
         print(f"❌ 加载房产数据失败: {e}")

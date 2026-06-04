@@ -14,7 +14,7 @@ import json
 import traceback
 import re
 from core.user_session import add_to_favorites, get_favorites, _session_data
-from core.data_loader import load_mock_properties_from_csv
+from core.data_loader import load_mock_properties_from_csv, load_properties
 from rag.rag_coordinator import RAGCoordinator
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
@@ -98,9 +98,9 @@ except Exception as e:
     traceback.print_exc()
     raise  # Re-raise to see full stack trace
 
-print("[STARTUP] Loading mock properties from CSV...")
-all_properties = load_mock_properties_from_csv()
-print(f"✓ [STARTUP] Loaded {len(all_properties)} properties from CSV")
+print("[STARTUP] Loading properties (PROPERTY_SOURCE=%s)..." % _os.getenv("PROPERTY_SOURCE", "auto"))
+all_properties = load_properties()
+print(f"✓ [STARTUP] Loaded {len(all_properties)} properties")
 
 # ✅ FIXED: 确保在建立索引前处理所有属性，添加 parsed_price
 if all_properties:
@@ -314,6 +314,18 @@ INSTRUCTIONS: The user just answered your clarification question. Use their answ
 
 Current user message: {user_message}"""
 
+    # ── 注入长期记忆（Generative-Agents 评分检索: relevance+recency+importance）──
+    try:
+        from rag.agent_memory import get_agent_memory
+        _am = get_agent_memory()
+        _mems = _am.retrieve(user_message, session_id="default", user_id="default", n=6)
+        _mem_block = _am.format_for_prompt(_mems)
+        if _mem_block:
+            query_with_history = f"{_mem_block}\n\n{query_with_history}"
+            print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
+    except Exception as _e:
+        print(f"[Memory] retrieve skipped: {_e}")
+
     # ── 构建 AgentState 并调用 LangGraph ─────────────────────────
     initial_state = create_initial_state(
         user_query=query_with_history,
@@ -343,6 +355,18 @@ Current user message: {user_message}"""
     })
     if len(conversation_history) > MAX_HISTORY_LENGTH:
         conversation_history = conversation_history[-MAX_HISTORY_LENGTH:]
+
+    # ── 写入长期记忆（后台线程: Mem0 式抽取+整合 / GA 反思，不阻塞响应）──
+    try:
+        from rag.agent_memory import get_agent_memory
+        _td = final_state.get('tool_decision')
+        _tool_used = _td.get('tool') if isinstance(_td, dict) else None
+        get_agent_memory().remember_turn_async(
+            user_message, response_text,
+            session_id="default", user_id="default", tool_used=_tool_used,
+        )
+    except Exception as _e:
+        print(f"[Memory] write skipped: {_e}")
 
     # ── 检查是否有房源搜索结果 ──────────────────────────────────
     if tool_data.get('recommendations'):

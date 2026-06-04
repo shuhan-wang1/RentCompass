@@ -31,6 +31,41 @@ def load_mock_properties_from_csv(filename: str = None) -> list[dict]:
         print(f"/!\\ ERROR: Failed to read mock data file: {e} /!\\")
         return []
 
+def load_properties(force_refresh: bool = False) -> list[dict]:
+    """Smart property loader — the entry point the app should use.
+
+    Selected via the PROPERTY_SOURCE env var:
+      - 'csv'     : always the bundled fake CSV (old demo behaviour).
+      - 'scraper' : real scraped data, honouring the hybrid TTL cache; scrapes
+                    on startup when the cache is missing/stale (can be slow).
+      - 'auto'    : (default) serve the scraped cache if it has been built,
+                    otherwise the fake CSV. Never blocks startup on a live scrape
+                    unless SCRAPE_ON_STARTUP is truthy. Build/refresh the cache
+                    out-of-band with:  python build_scraped_dataset.py
+
+    Always falls back to the fake CSV if the scraping layer is unavailable, so
+    the app can never start with zero properties.
+    """
+    mode = os.getenv("PROPERTY_SOURCE", "auto").lower()
+    if mode == "csv":
+        return load_mock_properties_from_csv()
+
+    try:
+        from .scraping.provider import get_properties
+    except Exception as e:
+        print(f"/!\\ Scraping layer unavailable ({e}); using fake CSV. /!\\")
+        return load_mock_properties_from_csv()
+
+    if mode == "scraper":
+        return get_properties(force_refresh=force_refresh, allow_scrape=True)
+
+    # auto
+    scrape_on_start = os.getenv("SCRAPE_ON_STARTUP", "0").lower() in (
+        "1", "true", "yes",
+    )
+    return get_properties(force_refresh=force_refresh, allow_scrape=scrape_on_start)
+
+
 def parse_price(price_str: str) -> float | None:
     if not isinstance(price_str, str): return None
     if 'poa' in price_str.lower(): return None

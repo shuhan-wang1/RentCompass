@@ -39,3 +39,11 @@ local_data_demo/chroma_db_area/
 *.safetensors
 *.bin
 !requirements.txt
+
+# Scraped property cache (regenerable via build_scraped_dataset.py)
+local_data_demo/data/scraped_property_listings.csv
+
+# Playwright MCP artifacts
+.playwright-mcp/
+chroma_db_agent_memory/
+local_data_demo/chroma_db_agent_memory/

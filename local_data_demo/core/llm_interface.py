@@ -5,6 +5,10 @@ import re
 import os
 import requests
 
+from core.llm_config import (
+    LLM_PROVIDER, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
+)
+
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL_NAME = "gemma3:27b-cloud"  # 使用 Ollama 云端模型，更强的推理能力
 
@@ -21,8 +25,32 @@ FINETUNED_ADAPTER_PATH = os.path.join(
   # Default model if not using fine-tuned
 
 
+def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
+                   temperature: float = 0.1, max_tokens: int = 4000) -> str:
+    """Call DeepSeek's OpenAI-compatible chat API. Returns text, or None on error."""
+    from openai import OpenAI
+    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=timeout)
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    try:
+        resp = client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return resp.choices[0].message.content
+    except Exception as e:
+        print(f"❌ DeepSeek API error: {e}")
+        return None
+
+
 def call_ollama(prompt: str, system_prompt: str = None, timeout: int = 360) -> str:
-    """Call Ollama with better defaults"""
+    """Call the configured LLM (DeepSeek API or local Ollama) with sane defaults."""
+    if LLM_PROVIDER == "deepseek":
+        return _call_deepseek(prompt, system_prompt, timeout)
     url = f"{OLLAMA_BASE_URL}/api/generate"
     
     payload = {

@@ -22,7 +22,9 @@ langgraph
 langchain
 langchain-core
 langchain-ollama
+langchain-openai
 langchain-community
+openai
 mcp
 peft
 accelerate

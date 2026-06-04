@@ -339,6 +339,33 @@ def _make_extract_preferences_node():
     return extract_preferences_node
 
 
+_RECALL_KWS = [
+    'do you remember', 'what do you remember', 'you remember', 'remind me',
+    'what am i looking for', "what i'm looking for", 'what i am looking for',
+    'what do you know about me', 'what do you know about my', 'about my search',
+    'my requirements', 'my preferences', 'summarise my', 'summarize my',
+    'what did i say', 'what have i told you', 'recap',
+    '你还记得', '还记得', '我在找什么', '我要找什么', '我的需求', '我之前说',
+    '总结一下我', '你知道我',
+]
+
+
+def _current_message(user_query: str) -> str:
+    """Strip the injected long-term-memory block and conversation history so we can
+    detect the user's ACTUAL current intent (the memory block contains words like
+    'remember' / 'looking for' that would otherwise false-trigger recall detection)."""
+    q = user_query or ""
+    if q.startswith("What I remember about this user:"):
+        sep = chr(10) + chr(10)
+        idx = q.find(sep)
+        if idx != -1:
+            q = q[idx + 2:]
+    for marker in ("Current user message:", "answer to the clarification question:"):
+        if marker in q:
+            q = q.split(marker)[-1]
+    return q.strip()
+
+
 def _make_decide_tool_node(tool_registry, classification_llm):
     """Create the decide_tool node with majority voting."""
 
@@ -346,6 +373,14 @@ def _make_decide_tool_node(tool_registry, classification_llm):
         user_query = state["user_query"]
         extracted_context = state["extracted_context"]
         query_lower = user_query.lower()
+
+        # 0) Memory-recall questions -> answer conversationally from the injected
+        #    long-term memory (which is already prepended to user_query).
+        if any(kw in _current_message(user_query).lower() for kw in _RECALL_KWS):
+            return {"tool_decision": {
+                "tool": "direct_answer", "params": {},
+                "reason": "User is asking what we remember about them - answer from long-term memory"
+            }}
 
         # 1) Property context check
         if extracted_context.get('property_address'):

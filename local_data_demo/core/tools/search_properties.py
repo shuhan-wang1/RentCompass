@@ -37,6 +37,28 @@ def _clean_explanation(desc, travel_min, location):
     return (cleaned + suffix).strip()
 
 
+_RAG_COORDINATOR = None
+
+
+def _get_rag_coordinator():
+    """Cached RAGCoordinator + FAISS index, built once and reused across searches —
+    avoids reloading sentence-transformers and rebuilding the index on every call
+    (which made each search ~15-20s slower)."""
+    global _RAG_COORDINATOR
+    if _RAG_COORDINATOR is None:
+        from rag.rag_coordinator import RAGCoordinator
+        from core.data_loader import load_mock_properties_from_csv, parse_price
+        rc = RAGCoordinator()
+        props = load_mock_properties_from_csv()
+        for prop in props:
+            if 'parsed_price' not in prop:
+                prop['parsed_price'] = parse_price(prop.get('Price'))
+        if not getattr(rc.property_store, 'index', None):
+            rc.property_store.build_index(props)
+        _RAG_COORDINATOR = rc
+    return _RAG_COORDINATOR
+
+
 class PropertyFilter:
     """严格的过滤器 - 用户必须满足的条件"""
 
@@ -358,21 +380,16 @@ async def search_properties_impl(
         print(f"   🏠 房产特征: {all_property_features}")
         print(f"   💭 软性偏好: {all_soft_preferences}")
         
-        from rag.rag_coordinator import RAGCoordinator
         from core.data_loader import load_mock_properties_from_csv, parse_price
-        
-        # 获取 RAG Coordinator
-        rag_coordinator = RAGCoordinator()
-        
-        # 确保属性有 parsed_price
+
+        # 获取（缓存的）RAG Coordinator —— 仅首次加载模型+建索引，之后复用（大幅提速）
+        rag_coordinator = _get_rag_coordinator()
+
+        # CSV 很小，加载便宜；用于价格解析（索引已在 singleton 内构建）
         all_properties = load_mock_properties_from_csv()
         for prop in all_properties:
             if 'parsed_price' not in prop:
                 prop['parsed_price'] = parse_price(prop.get('Price'))
-        
-        # 重建索引（如果需要）
-        if not hasattr(rag_coordinator.property_store, 'index') or rag_coordinator.property_store.index is None:
-            rag_coordinator.property_store.build_index(all_properties)
         
         # 🆕 构建包含房产特征的搜索查询
         search_query = f"Find flat near {location} under £{max_budget}"

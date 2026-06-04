@@ -375,8 +375,10 @@ def _make_decide_tool_node(tool_registry, classification_llm):
     return decide_tool_node
 
 
-def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=5):
-    """LLM majority voting for tool selection."""
+def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=1):
+    """LLM tool selection. num_votes=1 by default: a cloud LLM (DeepSeek) is reliable
+    in one shot and each call has real network latency, so 5 sequential votes were the
+    main source of latency. Raise num_votes for more robustness with a weaker model."""
     prompt = CLASSIFICATION_PROMPT.format(user_query=user_query)
     votes = []
 

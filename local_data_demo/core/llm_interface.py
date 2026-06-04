@@ -12,7 +12,7 @@ from core.llm_config import (
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL_NAME = "gemma3:27b-cloud"  # 使用 Ollama 云端模型，更强的推理能力
 
-USE_FINETUNED_MODEL = True  # 启用 fine-tuned LoRA model 解析查询
+USE_FINETUNED_MODEL = False  # 关闭本地 LoRA（CPU 太慢）；查询解析改走 DeepSeek（call_ollama）
 # ========================================
 FINETUNED_BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"  # base model (downloaded from HF Hub on first use)
 # Robust absolute path to the trained LoRA adapter (repo_root/fine_tuning/student_model_lora),

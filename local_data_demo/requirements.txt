@@ -23,3 +23,6 @@ langchain
 langchain-core
 langchain-ollama
 langchain-community
+mcp
+peft
+accelerate

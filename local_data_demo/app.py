@@ -54,6 +54,29 @@ except Exception as e:
     print(f"⚠️  [STARTUP] Warning: Tool System initialization failed: {e}")
     tool_registry = None
 
+# --- MCP tool client (optional) ---
+# The agent executes tools via the MCP server (stdio); on any failure it falls back
+# to the in-process registry. Disable entirely with env USE_MCP_TOOLS=0.
+import os as _os
+agent_tool_provider = tool_registry
+if _os.environ.get("USE_MCP_TOOLS", "1").lower() not in ("0", "false", "no"):
+    try:
+        import sys as _sys
+        from core.mcp_client import MCPToolClient
+        _mcp_client = MCPToolClient(
+            command=_sys.executable,
+            args=["mcp_server.py"],
+            cwd=_os.path.dirname(_os.path.abspath(__file__)),
+            fallback_registry=tool_registry,
+        ).start()
+        if _mcp_client.connected:
+            agent_tool_provider = _mcp_client
+            print(f"✓ [STARTUP] Agent tools served via MCP ({len(_mcp_client.list_tool_names())} tools)")
+        else:
+            print("⚠️  [STARTUP] MCP not connected; using in-process tool registry")
+    except Exception as _e:
+        print(f"⚠️  [STARTUP] MCP init failed ({_e}); using in-process tool registry")
+
 # --- RAG Setup as per markdown ---
 # Initialize the coordinator and build the index at startup
 print("[STARTUP] Initializing RAG Coordinator...")
@@ -163,17 +186,21 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     没有任何关键词匹配 - 完全由 LLM 决策
     """
-    global agent_graph, tool_registry, last_search_results, conversation_history, agent_persistent_state
+    global agent_graph, tool_registry, agent_tool_provider, last_search_results, conversation_history, agent_persistent_state
 
     # 确保 tool_registry 已初始化
     if tool_registry is None:
         print("[LangGraph] tool_registry 为空，重新初始化...")
         tool_registry = create_tool_registry()
 
+    # 选择工具提供方：优先 MCP 客户端，否则进程内 registry
+    if agent_tool_provider is None:
+        agent_tool_provider = tool_registry
+
     # 懒加载编译 LangGraph
     if agent_graph is None:
         print("[LangGraph] 首次请求，编译 LangGraph StateGraph...")
-        agent_graph = build_agent_graph(tool_registry)
+        agent_graph = build_agent_graph(agent_tool_provider)
         print("[LangGraph] ✓ LangGraph agent 编译完成")
 
     # ── 构建本轮 extracted_context ──────────────────────────────

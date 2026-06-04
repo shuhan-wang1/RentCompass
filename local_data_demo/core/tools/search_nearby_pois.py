@@ -227,8 +227,28 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     out center body;
     """
     
+    headers = {"User-Agent": "uk-rent-recommendation/1.0 (student-housing demo)"}
+    # 公共 Overpass 服务器经常过载(429/5xx) —— 带退避重试，最多 3 次
+    response = None
+    last_err = None
+    for attempt in range(3):
+        try:
+            response = requests.post(OVERPASS_URL, data={"data": query}, headers=headers, timeout=30)
+            if response.status_code in (429, 502, 503, 504):
+                last_err = f"HTTP {response.status_code}"
+                response = None
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            response.raise_for_status()
+            break
+        except requests.exceptions.RequestException as e:
+            last_err = e
+            response = None
+            time.sleep(1.0 * (attempt + 1))
+    if response is None:
+        print(f"❌ OSM 查询失败 ({poi_type}) (重试后仍失败): {last_err}")
+        raise RuntimeError(f"Overpass API request failed for {poi_type}: {last_err}")
     try:
-        response = requests.post(OVERPASS_URL, data={"data": query}, timeout=30)
         if response.status_code == 200:
             data = response.json()
             pois = []
@@ -283,9 +303,11 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
                     unique_pois.append(poi)
             
             return unique_pois
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
+        # API 失败（如缺 User-Agent 导致的 406、超时、限流）不能伪装成"附近没有" —— 抛出让上层报错
         print(f"❌ OSM 查询失败 ({poi_type}): {e}")
-    
+        raise RuntimeError(f"Overpass API request failed for {poi_type}: {e}") from e
+
     return []
 
 

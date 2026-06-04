@@ -171,7 +171,10 @@ def _get_zone_from_postcode(postcode: str) -> Optional[int]:
 
     注意: 这是简化版，实际 Zone 划分非常复杂
     """
-    postcode = postcode.upper().replace(' ', '')
+    # 只取 outward district（空格前部分），避免把内码数字并进区号
+    # 例: "N7 0EG" -> "N7"；无空格时去掉末尾 3 位内码: "N70EG" -> "N7"
+    pc = postcode.upper().strip()
+    postcode = pc.split(' ')[0] if ' ' in pc else (pc[:-3] if len(pc) > 3 else pc)
 
     # Zone 1 - 伦敦市中心
     if any(postcode.startswith(prefix) for prefix in ['WC', 'EC', 'SW1', 'W1', 'SE1']):

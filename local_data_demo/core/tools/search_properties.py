@@ -20,6 +20,21 @@ import pandas as pd
 import asyncio
 from pathlib import Path
 import json
+import re
+
+
+def _clean_explanation(desc, travel_min, location):
+    """Single-source the commute time in the explanation: strip the static CSV
+    Bus/Walk/Cycle/Drive minutes (which disagree with the live TfL time) and append
+    the real TfL transit time so the card never shows two conflicting commute times."""
+    desc = desc or ''
+    cleaned = re.sub(r'(Bus|Walk|Cycle|Drive)[ ]*[0-9]+[ ]*min[,. ]*', '', desc, flags=re.IGNORECASE)
+    cleaned = ' '.join(cleaned.split()).strip().rstrip('.,').strip()[:120]
+    try:
+        suffix = f" (TfL transit: {int(travel_min)} min to {location})"
+    except (TypeError, ValueError):
+        suffix = ''
+    return (cleaned + suffix).strip()
 
 
 class PropertyFilter:
@@ -550,7 +565,7 @@ async def search_properties_impl(
                             'url': prop.get('URL', prop.get('url', '')),
                             'images': images,  # 🆕 添加图片
                             'geo_location': geo_location,  # 🆕 添加地理位置
-                            'explanation': prop.get('Description', '')[:150] if prop.get('Description') else '',
+                            'explanation': _clean_explanation(prop.get('Description', ''), prop.get('travel_time'), location),
                         })
                     
                     return {
@@ -614,7 +629,7 @@ async def search_properties_impl(
                 'url': prop.get('URL', prop.get('url', '')),
                 'images': images,  # 🆕 添加图片列表
                 'geo_location': geo_location,  # 🆕 添加地理位置
-                'explanation': prop.get('Description', prop.get('description', ''))[:150] if prop.get('Description', prop.get('description')) else '',  # 🆕 添加说明
+                'explanation': _clean_explanation(prop.get('Description', prop.get('description', '')), prop.get('travel_time'), location),  # 单一来源：真实 TfL 时间
             })
         
         return {

@@ -135,6 +135,86 @@ def _tfl_travel_time(origin: dict, dest: dict, mode: str = "transit") -> int | N
         return None
 
 
+def _tfl_journey(origin: dict, dest: dict, mode: str = "transit") -> dict | None:
+    """TfL Journey Planner: returns the fastest journey dict (with legs), or None."""
+    frm = f"{origin['lat']},{origin['lng']}"
+    to = f"{dest['lat']},{dest['lng']}"
+    params = {}
+    if TFL_APP_KEY:
+        params['app_key'] = TFL_APP_KEY
+    if mode in ('walking', 'foot-walking'):
+        params['mode'] = 'walking'
+    elif mode in ('bicycling', 'cycling-regular', 'cycle'):
+        params['mode'] = 'cycle'
+    try:
+        url = f"https://api.tfl.gov.uk/Journey/JourneyResults/{frm}/to/{to}"
+        resp = requests.get(url, params=params, timeout=12)
+        if resp.status_code != 200:
+            return None
+        journeys = [j for j in (resp.json().get('journeys') or []) if j.get('duration') is not None]
+        if not journeys:
+            return None
+        return min(journeys, key=lambda j: j['duration'])
+    except Exception as e:
+        print(f"  [TfL] journey error: {e}")
+        return None
+
+
+def _summarise_tfl_legs(journey: dict):
+    """Turn a TfL journey into (structured legs, human-readable route summary)."""
+    legs_out = []
+    parts = []
+    for leg in journey.get('legs', []):
+        mode_name = (leg.get('mode') or {}).get('name', '') or ''
+        dur = leg.get('duration')
+        lines = [ro.get('name') for ro in (leg.get('routeOptions') or []) if ro.get('name')]
+        summary = (leg.get('instruction') or {}).get('summary', '')
+        dep = (leg.get('departurePoint') or {}).get('commonName', '')
+        arr = (leg.get('arrivalPoint') or {}).get('commonName', '')
+        legs_out.append({
+            'mode': mode_name, 'lines': lines, 'duration_minutes': dur,
+            'summary': summary, 'from': dep, 'to': arr,
+        })
+        if mode_name.lower() == 'walking':
+            parts.append(f"Walk{(' to ' + arr) if arr else ''} ({dur} min)")
+        else:
+            line_txt = '/'.join(lines) if lines else mode_name
+            dest_txt = (' to ' + arr) if arr else ''
+            parts.append(f"{mode_name.capitalize()} {line_txt}{dest_txt} ({dur} min)")
+    return legs_out, " -> ".join(parts)
+
+
+def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit") -> dict | None:
+    """Like calculate_travel_time, but also returns the route (legs + line names).
+    Returns {'duration_minutes','route_legs','route_summary','source'} or None."""
+    if not origin_address or not destination_address:
+        return None
+    origin_n = _normalize_address_for_routing(origin_address)
+    dest_n = _normalize_address_for_routing(destination_address)
+    o = _get_coordinates(origin_n)
+    d = _get_coordinates(dest_n)
+    if not o or not d:
+        return None
+    journey = _tfl_journey(o, d, mode)
+    if journey is not None:
+        legs, summary = _summarise_tfl_legs(journey)
+        return {
+            'duration_minutes': int(journey['duration']),
+            'route_legs': legs,
+            'route_summary': summary,
+            'source': 'TfL Journey Planner',
+        }
+    est = estimate_travel_time_simple(origin_n, dest_n, mode)
+    if est is None:
+        return None
+    return {
+        'duration_minutes': est,
+        'route_legs': [],
+        'route_summary': 'No detailed route available (estimated; outside TfL coverage).',
+        'source': 'estimate',
+    }
+
+
 def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
     """Travel time in minutes via TfL Journey Planner (London public transport),
     falling back to a straight-line estimate when TfL has no route. Free, no Google."""

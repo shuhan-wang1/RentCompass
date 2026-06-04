@@ -3,8 +3,18 @@ Tool 4: Get Weather Tool
 获取地点的天气信息
 """
 
+import requests
 from core.tool_system import Tool
 from typing import Optional
+
+# Open-Meteo weather_code -> human-readable condition
+_WEATHER_CODE = {
+    0: "Clear", 1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
+    45: "Fog", 48: "Fog", 51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
+    61: "Light Rain", 63: "Rain", 65: "Heavy Rain", 71: "Light Snow", 73: "Snow",
+    75: "Heavy Snow", 80: "Showers", 81: "Showers", 82: "Heavy Showers",
+    95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm",
+}
 
 
 async def get_weather_impl(
@@ -13,34 +23,50 @@ async def get_weather_impl(
     longitude: Optional[float] = None
 ) -> dict:
     """
-    获取地点的天气信息
+    获取地点的真实天气信息（Open-Meteo —— 免费、无需 API key）
     """
     try:
-        print(f"   🌤️  获取天气:")
-        print(f"      地点: {location}")
-        
-        # 简化实现：直接返回模拟数据
-        # 在实际应用中，这里应该调用真实的天气 API
-        
-        # 这里可以调用真实的 API（如 Open-Meteo 或 WeatherAPI）
-        # 暂时返回示例数据
-        weather_data = {
-            'location': location,
-            'current_temp': 15,  # 摄氏度
-            'condition': 'Partly Cloudy',
-            'humidity': 65,
-            'wind_speed': 12,  # km/h
-            'rainfall_chance': 30,  # %
-            'uv_index': 3,
-            'feels_like': 13,  # 摄氏度
-            'recommendation': '天气良好，适合外出看房'
+        print(f"   🌤️  获取天气: {location}")
+
+        # 无坐标时用 Open-Meteo 的免费地理编码解析地点
+        if latitude is None or longitude is None:
+            g = requests.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": location, "count": 1, "language": "en"}, timeout=10,
+            )
+            results = (g.json() or {}).get("results") if g.status_code == 200 else None
+            if not results:
+                return {"success": False, "error": f"无法解析地点: {location}"}
+            latitude = results[0]["latitude"]
+            longitude = results[0]["longitude"]
+
+        w = requests.get("https://api.open-meteo.com/v1/forecast", params={
+            "latitude": latitude, "longitude": longitude,
+            "current": "temperature_2m,relative_humidity_2m,apparent_temperature,"
+                       "precipitation,weather_code,wind_speed_10m",
+            "hourly": "uv_index", "timezone": "auto", "wind_speed_unit": "kmh",
+        }, timeout=10)
+        w.raise_for_status()
+        data = w.json()
+        c = data.get("current", {})
+        precip = c.get("precipitation") or 0
+        return {
+            "location": location,
+            "latitude": latitude,
+            "longitude": longitude,
+            "current_temp": c.get("temperature_2m"),
+            "condition": _WEATHER_CODE.get(c.get("weather_code"), "Unknown"),
+            "humidity": c.get("relative_humidity_2m"),
+            "wind_speed": c.get("wind_speed_10m"),
+            "uv_index": (data.get("hourly", {}).get("uv_index") or [None])[0],
+            "feels_like": c.get("apparent_temperature"),
+            "rainfall_chance": None,
+            "recommendation": "天气良好，适合外出看房" if precip == 0 else "可能有雨，看房记得带伞",
         }
-        
-        return weather_data
-    
+
     except Exception as e:
         print(f"   ❌ 天气获取出错: {e}")
-        raise
+        return {"success": False, "error": f"天气查询失败: {e}"}
 
 
 # 创建工具实例

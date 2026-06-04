@@ -16,22 +16,23 @@ async def calculate_commute_impl(
     计算两个地址之间的通勤时间
     """
     try:
-        from core.maps_service import calculate_travel_time
-        
+        from core.maps_service import calculate_travel_details
+
         print(f"   🚇 计算通勤:")
         print(f"      从: {from_address[:50]}...")
         print(f"      到: {to_address[:50]}...")
         print(f"      方式: {mode}")
-        
-        # 调用地图服务计算通勤时间
-        duration = calculate_travel_time(from_address, to_address, mode)
-        
-        if duration is None:
+
+        # 调用地图服务计算通勤时间 + 真实路线（TfL 线路明细）
+        details = calculate_travel_details(from_address, to_address, mode)
+
+        if not details or details.get('duration_minutes') is None:
             return {
                 'success': False,
                 'error': '无法计算通勤时间（地址解析失败）'
             }
-        
+
+        duration = details['duration_minutes']
         return {
             'from_address': from_address,
             'to_address': to_address,
@@ -42,7 +43,10 @@ async def calculate_commute_impl(
                 'Short (< 20 min)' if duration < 20
                 else 'Medium (20-45 min)' if duration <= 45
                 else 'Long (> 45 min)'
-            )
+            ),
+            'route_summary': details.get('route_summary'),
+            'route_legs': details.get('route_legs', []),
+            'route_source': details.get('source'),
         }
     
     except Exception as e:
@@ -59,8 +63,8 @@ calculate_commute_tool = Tool(
 
 **功能:**
 - 支持公共交通、骑行、步行三种方式
-- 使用 Google Maps API（需要有 API 密钥）
-- 返回分钟数和通勤分类
+- 使用 TfL Journey Planner（免费，伦敦公共交通，返回真实线路）
+- 返回分钟数、通勤分类，以及具体路线/线路
 
 **何时使用:**
 - 用户提到通勤时间要求
@@ -73,6 +77,8 @@ calculate_commute_tool = Tool(
 
 **返回内容:**
 - duration_minutes: 通勤时间（分钟）
+- route_summary: 具体路线（坐哪条线/公交、换乘点、步行段）
+- route_legs: 每段明细（mode/线路名/时长/起讫站）
 - is_acceptable: 是否在可接受范围内
 - duration_category: 通勤时间分类
 """,

@@ -18,9 +18,24 @@ Run standalone (speaks MCP over stdio):
 Register in an external MCP client (e.g. Claude Desktop) with
 command=<python>, args=["mcp_server.py"], cwd=<this directory>. See MCP.md.
 """
+import sys
+from io import TextIOWrapper
+
+# MCP speaks JSON-RPC over *stdout*. The tool/registry code prints diagnostics with
+# print(), which would corrupt that protocol channel (and crash on a non-UTF-8
+# Windows console). Capture the real stdout for the transport, then route every
+# print() to (UTF-8) stderr.
+_REAL_STDOUT_BUFFER = sys.stdout.buffer
+try:
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+sys.stdout = sys.stderr
+
 import asyncio
 import json
 
+import anyio
 import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -73,7 +88,9 @@ async def call_tool(name: str, arguments: dict | None) -> list[types.TextContent
 
 
 async def main() -> None:
-    async with stdio_server() as (read_stream, write_stream):
+    # Hand the MCP transport the REAL stdout (print() was redirected to stderr above).
+    real_stdout = anyio.wrap_file(TextIOWrapper(_REAL_STDOUT_BUFFER, encoding="utf-8"))
+    async with stdio_server(stdout=real_stdout) as (read_stream, write_stream):
         await server.run(
             read_stream,
             write_stream,

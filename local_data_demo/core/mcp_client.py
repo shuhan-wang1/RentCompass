@@ -19,6 +19,7 @@ falls back to an in-process ``ToolRegistry`` (when one is supplied).
 """
 import asyncio
 import json
+import os
 import threading
 from contextlib import AsyncExitStack
 from typing import List, Optional
@@ -85,8 +86,13 @@ class MCPToolClient:
         from mcp.client.stdio import stdio_client
 
         self._stack = AsyncExitStack()
+        # Ensure the server subprocess uses UTF-8 (Windows consoles default to a
+        # legacy codec that crashes on emoji prints).
+        sub_env = dict(self.env) if self.env else dict(os.environ)
+        sub_env.setdefault("PYTHONUTF8", "1")
+        sub_env.setdefault("PYTHONIOENCODING", "utf-8")
         params = StdioServerParameters(
-            command=self.command, args=self.args, cwd=self.cwd, env=self.env
+            command=self.command, args=self.args, cwd=self.cwd, env=sub_env
         )
         read, write = await self._stack.enter_async_context(stdio_client(params))
         self._session = await self._stack.enter_async_context(ClientSession(read, write))

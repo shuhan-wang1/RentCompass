@@ -1,5 +1,12 @@
 # app.py - Enhanced with RAG and LangGraph Agent Framework
 
+import sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 import asyncio
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS

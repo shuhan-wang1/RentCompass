@@ -326,6 +326,10 @@ Current user message: {user_message}"""
     except Exception as _e:
         print(f"[Memory] retrieve skipped: {_e}")
 
+    # 原始当前消息（不含记忆/历史前缀）——供工具做"仅基于本条消息"的解析
+    # (预算/通勤正则、postcode/序数解析)，避免误抓注入记忆里的旧值。
+    extracted_context['current_message'] = user_message
+
     # ── 构建 AgentState 并调用 LangGraph ─────────────────────────
     initial_state = create_initial_state(
         user_query=query_with_history,
@@ -374,6 +378,7 @@ Current user message: {user_message}"""
 
         # 保存搜索结果到 persistent extracted_context 供后续安全/设施问题使用
         prev_results_context = "\n"
+        structured_results = []  # 结构化，供 _resolve_target_address 解析 "the first one"/postcode
         for i, rec in enumerate(tool_data['recommendations'][:6], 1):
             addr = rec.get('address', 'Unknown')
             price = rec.get('price', 'N/A')
@@ -387,6 +392,12 @@ Current user message: {user_message}"""
             property_name = addr.split(',')[0].strip()
             full_address = full_prop.get('Address', addr) if full_prop else addr
 
+            structured_results.append({
+                'name': property_name,
+                'address': full_address,
+                'price': price,
+            })
+
             prev_results_context += f"{i}. **{property_name}**\n"
             prev_results_context += f"   - Full Address: {full_address}\n"
             prev_results_context += f"   - Price: {price}\n"
@@ -397,6 +408,7 @@ Current user message: {user_message}"""
             prev_results_context += "\n"
 
         agent_persistent_state['extracted_context']['previous_search_results'] = prev_results_context
+        agent_persistent_state['extracted_context']['last_results'] = structured_results
         print(f"[LangGraph] 💾 已保存 {len(tool_data['recommendations'])} 个搜索结果到上下文")
 
         return jsonify({

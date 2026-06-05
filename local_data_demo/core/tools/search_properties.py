@@ -22,6 +22,87 @@ from pathlib import Path
 import json
 import re
 
+# Sentinel meaning "user set no commute limit" — kept internally so the search can
+# proceed without asking, but must never be shown to the user (see _commute_phrase).
+NO_COMMUTE_LIMIT = 999
+
+
+def _extract_budget(text: str):
+    """Pull an explicit monthly/weekly budget out of the *current* user message.
+    Returns (amount:int, period:'week'|'month') or (None, None). Deterministic regex
+    so a conversational update ("my budget is now 1800") overrides accumulated state
+    without an extra LLM round-trip."""
+    if not text:
+        return None, None
+    t = text.lower().replace(',', '')
+    amount = None
+    # 1) currency-tagged amount: "£1800", "£ 1800"
+    m = re.search(r'£\s?(\d{3,5})\b', t)
+    # 2) amount followed by a budget unit: "1800 pcm", "1800 per month", "1800 a week"
+    if not m:
+        m = re.search(r'\b(\d{3,5})\s*(?:pcm|pm|pw|/\s*(?:month|week|wk)|per\s+(?:month|week)|a\s+(?:month|week)|pounds?)\b', t)
+    # 3) budget keyword + amount: "budget is now 1800", "budget of 1800", "max budget 1800"
+    if not m:
+        m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5})\b', t)
+    if m:
+        val = int(m.group(1))
+        if 200 <= val <= 20000:
+            amount = val
+    if amount is None:
+        return None, None
+    period = 'week' if re.search(r'\b(?:pw|/\s*w(?:k|eek)?|per\s+week|a\s+week)\b', t) else 'month'
+    return amount, period
+
+
+def _extract_commute_minutes(text: str):
+    """Pull an explicit commute-time limit (in minutes) out of the current message.
+    Returns int minutes or None. Handles '40 min', 'within 30 minutes', 'half an hour',
+    'an hour'."""
+    if not text:
+        return None
+    t = text.lower()
+    if re.search(r'\bhalf\s+an?\s+hour\b', t):
+        return 30
+    if re.search(r'\b(?:an?|1)\s+hour\b', t):
+        return 60
+    m = re.search(r'\b(\d{1,3})\s*(?:-)?\s*(?:min|mins|minute|minutes)\b', t)
+    if not m:
+        m = re.search(r'\b(\d{1,3})\s*hours?\b', t)
+        if m:
+            v = int(m.group(1)) * 60
+            return v if 1 <= v <= 180 else None
+    if m:
+        v = int(m.group(1))
+        if 1 <= v <= 180:
+            return v
+    return None
+
+
+def _commute_phrase(max_commute_time, location: str) -> str:
+    """User-facing commute clause. Empty when the limit is the no-limit sentinel so
+    we never print 'within 999 min'."""
+    try:
+        if max_commute_time is None or int(max_commute_time) >= NO_COMMUTE_LIMIT:
+            return ""
+    except (TypeError, ValueError):
+        return ""
+    return f" within {int(max_commute_time)} min of {location}"
+
+
+def _found_summary(n_perfect: int, n_soft: int, max_budget, max_commute_time, location: str) -> str:
+    """Accurate, non-contradictory result headline (no '999 min', no 'Great news! 0 within budget')."""
+    commute = _commute_phrase(max_commute_time, location)
+    if n_perfect:
+        s = f"I found {n_perfect} option{'s' if n_perfect != 1 else ''} within your £{max_budget}/month budget"
+        if n_soft:
+            s += f", plus {n_soft} more just over budget"
+    else:  # only over-budget ("soft") matches
+        s = (f"I couldn't find anything fully within your £{max_budget}/month budget, but "
+             f"{'here is' if n_soft == 1 else 'here are'} {n_soft} close option{'s' if n_soft != 1 else ''} just over budget")
+    if commute:
+        s += f", all{commute}"
+    return s + "."
+
 
 def _clean_explanation(desc, travel_min, location):
     """Single-source the commute time in the explanation: strip the static CSV
@@ -162,6 +243,7 @@ async def search_properties_impl(
     property_features: list = None,  # 🆕 累积的房产特征（如 studio, private）
     accumulated_preferences: list = None,  # 🆕 累积的软性偏好
     budget_period: str = "month",  # 🆕 预算周期：'week' 或 'month'
+    current_message: str = "",  # 🆕 仅本轮原始消息（用于显式预算/通勤覆盖，避免误抓注入记忆）
     **kwargs  # 接受 LLM 可能传递的任何额外参数（如 property_type）
 ) -> dict:
     """
@@ -227,7 +309,25 @@ async def search_properties_impl(
         print(f"   property_features (累积): {all_property_features}")
         print(f"   soft_preferences (累积): {all_soft_preferences}")
         print(f"{'='*60}")
-        
+
+        # ================================================================
+        # 步骤 0: 当前消息里的显式预算/通勤优先于累积值（修复"改预算被忽略"）
+        # 累积条件由 agent 作为显式参数注入，会让下面的提取被跳过；这里先用
+        # 当前消息覆盖，使会话中途 "my budget is now 1800" / "40 minute commute" 生效。
+        # ================================================================
+        # 只在"本轮原始消息"上做正则提取；user_query 可能含注入的记忆/历史（旧预算）。
+        msg_for_extraction = current_message or user_query
+        if msg_for_extraction:
+            fresh_budget, fresh_period = _extract_budget(msg_for_extraction)
+            if fresh_budget and fresh_budget != max_budget:
+                print(f"   🔄 当前消息更新预算: £{max_budget} → £{fresh_budget}/{fresh_period}")
+                max_budget = fresh_budget
+                budget_period = fresh_period or budget_period
+            fresh_commute = _extract_commute_minutes(msg_for_extraction)
+            if fresh_commute and fresh_commute != max_commute_time:
+                print(f"   🔄 当前消息更新通勤上限: {max_commute_time} → {fresh_commute} min")
+                max_commute_time = fresh_commute
+
         # ================================================================
         # 步骤 1: 检查参数完整性，必要时用 Fine-tuned Model 提取
         # ================================================================
@@ -588,7 +688,7 @@ async def search_properties_impl(
                     return {
                         'success': True,
                         'status': 'no_exact_match_but_similar',
-                        'message': f"Based on our database, no properties were found within your budget of £{max_budget}/month and {max_commute_time} min commute to {location}.",
+                        'message': f"Based on our database, no properties were found within your budget of £{max_budget}/month{_commute_phrase(max_commute_time, location) or f' near {location}'}.",
                         'suggestion': f"However, I found {len(closest_3)} similar properties. The closest match is £{int(closest_3[0].get('price', 0))}/month. Would you consider increasing your budget by approximately £{budget_increase} (to £{suggested_budget}/month)?",
                         'similar_properties': similar_formatted,
                         'suggested_budget': suggested_budget,
@@ -602,10 +702,21 @@ async def search_properties_impl(
                     }
             
             # 如果 RAG 也没有找到
+            _has_commute_limit = max_commute_time is not None and int(max_commute_time) < NO_COMMUTE_LIMIT
+            _suggestions = [f"- Try increasing your budget to £{int(max_budget * 1.3)}/month"]
+            if _has_commute_limit:
+                _suggestions.append(f"- Or extend your commute time to {int(max_commute_time * 1.5)} minutes")
+            _suggestions.append("- Or consider different nearby areas")
+            _why = [f"1. Your budget of £{max_budget}/month might be too low for the {location} area"]
+            if _has_commute_limit:
+                _why.append(f"2. The commute limit of {int(max_commute_time)} minutes might be too restrictive")
             return {
                 'success': True,
                 'status': 'no_results',
-                'message': f"Unfortunately, no properties were found in our database near {location} within {max_commute_time} minutes. This might be because:\n\n1. Your budget of £{max_budget}/month might be too low for the {location} area\n2. The commute time of {max_commute_time} minutes might be too restrictive\n\n**Suggestions:**\n- Try increasing your budget to £{int(max_budget * 1.3)}/month\n- Or extend your commute time to {int(max_commute_time * 1.5)} minutes\n- Or consider different nearby areas",
+                'message': (f"Unfortunately, no properties were found in our database near {location}"
+                            f"{f' within {int(max_commute_time)} minutes' if _has_commute_limit else ''}."
+                            f" This might be because:\n\n" + "\n".join(_why)
+                            + "\n\n**Suggestions:**\n" + "\n".join(_suggestions)),
                 'recommendations': []
             }
         
@@ -661,7 +772,9 @@ async def search_properties_impl(
                 'soft_preferences': all_soft_preferences,     # 🆕 包含软性偏好
             },
             'recommendations': formatted_results,
-            'summary': f"Found {len(perfect_match)} properties within budget (£{max_budget}/month) and {len(soft_violation)} slightly over budget, all within {max_commute_time} min of {location}."
+            'perfect_count': len(perfect_match),
+            'soft_count': len(soft_violation),
+            'summary': _found_summary(len(perfect_match), len(soft_violation), max_budget, max_commute_time, location),
         }
 
     except Exception as e:

@@ -459,17 +459,60 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
     return _build_tool_params(winner, user_query, extracted_context, tool_registry)
 
 
+# UK postcode (full or outward+inward), e.g. "SW8 1RZ", "WC1E 6BT", "EC1A 1BB".
+_UK_POSTCODE_RE = re.compile(r'\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b', re.IGNORECASE)
+_ORDINAL_WORDS = {
+    'first': 0, '1st': 0, 'second': 1, '2nd': 1, 'third': 2, '3rd': 2,
+    'fourth': 3, '4th': 3, 'fifth': 4, '5th': 4,
+}
+
+
+def _resolve_target_address(user_query, extracted_context):
+    """Resolve the address/postcode a location-specific tool (safety / POIs / commute)
+    should use, preferring what the user JUST said over stale frontend context.
+
+    Order: (1) an explicit postcode in the message, (2) an ordinal/deictic reference
+    ("the first one", "that property") mapped to the previous search results, (3) a
+    property name from the previous results mentioned in the message, (4) the
+    frontend-provided property_address (the 'Ask AI' path). Returns None if nothing
+    resolves, so the caller can ask for clarification."""
+    # Prefer the raw current message: user_query may be prefixed with injected memory
+    # and prior turns, whose postcodes/ordinals must not hijack this turn's resolution.
+    q = (extracted_context.get('current_message') or user_query) or ""
+    m = _UK_POSTCODE_RE.search(q)
+    if m:
+        return re.sub(r'\s+', ' ', m.group(1)).upper()
+
+    ql = q.lower()
+    results = extracted_context.get('last_results') or []
+    if results:
+        for word, idx in _ORDINAL_WORDS.items():
+            if re.search(rf'\b{word}\b', ql) and idx < len(results):
+                r = results[idx]
+                return r.get('address') or r.get('name')
+        if any(p in ql for p in ['that one', 'this one', 'that property', 'this property',
+                                 'the property', 'the place', 'that place', 'the flat', 'the studio']):
+            r = results[0]
+            return r.get('address') or r.get('name')
+        for r in results:
+            name = (r.get('name') or '').strip().lower()
+            if len(name) > 3 and name in ql:
+                return r.get('address') or r.get('name')
+
+    return extracted_context.get('property_address')
+
+
 def _heuristic_fallback(user_query, extracted_context, tool_registry):
     """Fallback when no votes succeed."""
     ql = user_query.lower()
     if any(k in ql for k in ['find me', 'show me', '\u627e\u623f', '\u641c\u623f', '\u79df\u623f']):
         return {"tool": "search_properties", "params": {"user_query": user_query}, "reason": "Heuristic: property search"}
     if any(k in ql for k in ['safe', 'crime', '\u5b89\u5168', '\u72af\u7f6a']):
-        addr = extracted_context.get('property_address')
+        addr = _resolve_target_address(user_query, extracted_context)
         if addr:
             return {"tool": "check_safety", "params": {"address": addr, "area": addr, "user_query": user_query}, "reason": "Heuristic: safety"}
         return {"tool": "clarification", "params": {},
-                "clarification_message": "Please provide a postcode or click 'Ask AI' on a property card.",
+                "clarification_message": "Which property or area should I check? You can give me a postcode (e.g. SW8 1RZ), say 'the first one' from your last search, or click 'Ask AI' on a property card.",
                 "reason": "Need address for safety check"}
     if any(k in ql for k in ['weather', '\u5929\u6c14']):
         return {"tool": "get_weather", "params": {"location": "London"}, "reason": "Heuristic: weather"}
@@ -483,15 +526,15 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry):
     elif tool_name == 'search_properties':
         return {"tool": "search_properties", "params": {"user_query": user_query}, "reason": f"Voted: {tool_name}"}
     elif tool_name == 'search_nearby_pois':
-        addr = extracted_context.get('property_address', 'London')
+        addr = _resolve_target_address(user_query, extracted_context) or 'London'
         return {"tool": "search_nearby_pois",
                 "params": {"address": addr, "user_query": user_query, "radius": 1000},
                 "reason": f"Voted: {tool_name}"}
     elif tool_name == 'check_safety':
-        addr = extracted_context.get('property_address')
+        addr = _resolve_target_address(user_query, extracted_context)
         if not addr:
             return {"tool": "clarification", "params": {},
-                    "clarification_message": "Please provide a postcode or click 'Ask AI' on a property card.",
+                    "clarification_message": "Which property or area should I check? You can give me a postcode (e.g. SW8 1RZ), say 'the first one' from your last search, or click 'Ask AI' on a property card.",
                     "reason": "Need address for safety check"}
         return {"tool": "check_safety",
                 "params": {"address": addr, "area": addr, "user_query": user_query},
@@ -581,6 +624,10 @@ def _make_execute_tool_node(tool_registry):
                 raw_data = {'property_info': observation}
 
             elif tool_name == 'search_properties':
+                # Raw current message so the tool can let an explicit budget/commute in
+                # THIS message override the accumulated values injected just below.
+                if not params.get('current_message'):
+                    params['current_message'] = extracted_context.get('current_message', '')
                 # Inject accumulated criteria
                 if not params.get('location') and accumulated.get('destination'):
                     params['location'] = accumulated['destination']
@@ -734,8 +781,8 @@ def _make_format_output_node():
                 response_type = 'question'
             elif raw_data.get('status') == 'found' and raw_data.get('recommendations'):
                 recs = apply_preference_filter(raw_data['recommendations'], prefs)
-                summary = raw_data.get('summary', f"Found {len(recs)} properties.")
-                response = f"Great news! {summary}\n\nCheck out the listings on the right panel."
+                summary = raw_data.get('summary', f"I found {len(recs)} properties.")
+                response = f"{summary}\n\nCheck out the listings on the right panel."
                 tool_data = {'recommendations': recs, 'search_criteria': raw_data.get('search_criteria', {})}
 
         elif tool_name == 'multi_search' and raw_data:

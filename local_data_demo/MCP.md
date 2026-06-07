@@ -1,10 +1,12 @@
 # MCP integration (UK rent tools)
 
-The rental tools (`search_properties`, `check_safety`, `calculate_commute`,
-`calculate_commute_cost`, `check_transport_cost`, `search_nearby_pois`,
-`get_property_details`, `web_search`, `get_weather`) are exposed over the
+Every tool registered in `create_tool_registry()` is exposed over the
 **Model Context Protocol** by `mcp_server.py`, and the LangGraph agent consumes
-them through that server over **stdio**.
+them through that server over **stdio**. That is currently 11 tools: the 9 domain
+tools (`search_properties`, `check_safety`, `calculate_commute`,
+`calculate_commute_cost`, `check_transport_cost`, `search_nearby_pois`,
+`get_property_details`, `web_search`, `get_weather`) **plus** the two
+memory-as-tools (`recall_memory`, `remember`).
 
 ## Architecture
 
@@ -18,7 +20,7 @@ core/mcp_client.py  MCPToolClient ── duck-types ToolRegistry.execute_tool
 mcp_server.py  (MCP stdio server)
       │  reuses core.tool_system.create_tool_registry()    ← single source of truth
       ▼
-core/tools/*  (the 9 tool implementations)
+core/tools/*  (the tool implementations)
 ```
 
 `MCPToolClient` exposes exactly the one method the agent uses on the registry
@@ -44,8 +46,11 @@ cd local_data_demo
 python mcp_server.py        # speaks MCP over stdio
 ```
 
-It has the same runtime requirements as the app (valid `GOOGLE_MAPS_API_KEY` in
-`.env`, Ollama running, etc.).
+It has the same runtime requirements as the app: an LLM provider configured in
+`.env` — a `DEEPSEEK_API_KEY` by default, or a running Ollama if you set
+`LLM_PROVIDER=ollama`. The map stack (geocoding / transport / POIs) uses free,
+key-free providers (Postcodes.io, Nominatim, TfL, Overpass); `GOOGLE_MAPS_API_KEY`
+is optional.
 
 ## Using the tools from an external MCP client (e.g. Claude Desktop)
 

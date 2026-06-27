@@ -36,6 +36,7 @@ class MCPToolClient:
         env: Optional[dict] = None,
         fallback_registry=None,
         connect_timeout: float = 60.0,
+        call_timeout: float = 120.0,
     ):
         self.command = command
         self.args = args
@@ -43,6 +44,10 @@ class MCPToolClient:
         self.env = env
         self.fallback_registry = fallback_registry
         self.connect_timeout = connect_timeout
+        # Per-call ceiling. If the background loop / MCP subprocess hangs (e.g. the
+        # server dies mid-call), ``wrap_future`` would otherwise await forever and
+        # block the request. On timeout we cancel the call and fall back in-process.
+        self.call_timeout = call_timeout
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
@@ -134,9 +139,16 @@ class MCPToolClient:
         on any failure. Safe to call from any event loop."""
         if not self.connected:
             return await self._fallback(name, kwargs, "not connected")
+        cfut = None
         try:
             cfut = asyncio.run_coroutine_threadsafe(self._call(name, kwargs), self._loop)
-            return await asyncio.wrap_future(cfut)
+            return await asyncio.wait_for(asyncio.wrap_future(cfut), timeout=self.call_timeout)
+        except asyncio.TimeoutError:
+            # Background call is hung (commonly a dead MCP subprocess). Detach and
+            # fall back so the request event loop is never blocked indefinitely.
+            if cfut is not None:
+                cfut.cancel()
+            return await self._fallback(name, kwargs, f"timed out after {self.call_timeout}s")
         except Exception as e:  # noqa: BLE001
             return await self._fallback(name, kwargs, repr(e))
 

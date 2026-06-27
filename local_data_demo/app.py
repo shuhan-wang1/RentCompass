@@ -8,7 +8,10 @@ except Exception:
     pass
 
 import asyncio
-from flask import Flask, request, jsonify, render_template
+import uuid
+import copy
+import threading
+from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
 import json
 import traceback
@@ -22,30 +25,117 @@ from core.langgraph_agent import build_agent_graph, create_initial_state
 app = Flask(__name__, template_folder='.')
 CORS(app)
 
+# Secret key — needed for the server-side `session` cookie used as a per-browser
+# identity fallback (priority (c) in resolve_identity). Read from env first so a real
+# deployment secret is never clobbered; otherwise use a stable dev secret so cookies
+# survive across requests (a random per-boot key would break single-user continuity).
+if not app.secret_key:
+    import os as _os_secret
+    app.secret_key = _os_secret.environ.get(
+        "FLASK_SECRET_KEY", "uk-rent-dev-secret-key-do-not-use-in-prod"
+    )
+
 # 统一 UI 模式标志
 USE_UNIFIED_UI = True  # 设置为 True 使用新的统一 Alex 界面
 
 # LangGraph Agent — compiled graph (lazy-initialized)
 agent_graph = None
 
-# Persistent cross-turn state (preferences & accumulated search criteria)
-agent_persistent_state = {
-    'user_preferences': {
-        'hard_preferences': [], 'soft_preferences': [],
-        'excluded_areas': [], 'required_amenities': [],
-        'safety_concerns': [],
-    },
-    'accumulated_search_criteria': {
-        'destination': None, 'max_budget': None, 'max_travel_time': None,
-        'property_features': [], 'soft_preferences': [],
-        'amenities_of_interest': [],
-    },
-    'extracted_context': {},
-}
+# ============================================================================
+# Multi-user identity + per-user isolated state (L2 conversational state)
+# ----------------------------------------------------------------------------
+# Previously these were bare module globals shared by EVERY caller. They are now
+# keyed by user_id so different people get fully isolated conversations. The inner
+# shapes are unchanged — single-user behaviour under user_id="default" is identical.
+# ============================================================================
 
-# 对话历史存储 - 用于保持上下文记忆
-conversation_history = []
+def _default_persistent_state():
+    """Canonical default cross-turn state (preferences & accumulated criteria).
+
+    Returns a FRESH copy every call so per-user slices never alias each other.
+    """
+    return {
+        'user_preferences': {
+            'hard_preferences': [], 'soft_preferences': [],
+            'excluded_areas': [], 'required_amenities': [],
+            'safety_concerns': [],
+        },
+        'accumulated_search_criteria': {
+            'destination': None, 'max_budget': None, 'max_travel_time': None,
+            'property_features': [], 'soft_preferences': [],
+            'amenities_of_interest': [],
+        },
+        'extracted_context': {},
+    }
+
+
+# Per-user L2 stores (was: agent_persistent_state / conversation_history / last_search_results)
+_user_states = {}        # user_id -> persistent cross-turn state dict
+_user_histories = {}     # user_id -> conversation history list
+_user_last_results = {}  # user_id -> last search results list
+_user_stores_lock = threading.Lock()  # guards lazy slice creation only
+
 MAX_HISTORY_LENGTH = 10  # 保留最近10轮对话
+
+
+def _get_user_state(user_id):
+    """Lazily initialise and return this user's persistent state slice."""
+    s = _user_states.get(user_id)
+    if s is None:
+        with _user_stores_lock:
+            s = _user_states.setdefault(user_id, _default_persistent_state())
+    return s
+
+
+def _get_user_history(user_id):
+    """Lazily initialise and return this user's conversation history list."""
+    h = _user_histories.get(user_id)
+    if h is None:
+        with _user_stores_lock:
+            h = _user_histories.setdefault(user_id, [])
+    return h
+
+
+def _get_user_last_results(user_id):
+    """Lazily initialise and return this user's last search results list."""
+    r = _user_last_results.get(user_id)
+    if r is None:
+        with _user_stores_lock:
+            r = _user_last_results.setdefault(user_id, [])
+    return r
+
+
+def resolve_identity(data=None):
+    """Resolve a per-request (user_id, session_id) for L2 + L3 isolation.
+
+    Priority:
+      (a) explicit 'user_id' in the POST JSON body
+      (b) 'X-User-Id' request header
+      (c) a Flask server-side session cookie holding a generated UUID
+          (auto-isolates different browsers without any client changes)
+      (d) 'default'  (final fallback — preserves legacy single-user behaviour)
+
+    session_id mirrors user_id (the app has no separate per-conversation id);
+    user_id is the isolation axis for both conversational state and ChromaDB memory.
+    """
+    uid = None
+    if isinstance(data, dict):
+        uid = data.get('user_id')
+    if not uid:
+        try:
+            uid = request.headers.get('X-User-Id')
+        except Exception:
+            uid = None
+    if not uid:
+        try:
+            uid = session.get('user_id')
+            if not uid:
+                uid = uuid.uuid4().hex
+                session['user_id'] = uid
+        except Exception:
+            uid = None
+    uid = (str(uid).strip() if uid else '') or 'default'
+    return uid, uid
 
 # --- Tool System Setup (从 fengyuan-agent 迁移) ---
 print("[STARTUP] Initializing Tool System...")
@@ -123,9 +213,6 @@ else:
     print("⚠️  WARNING: No properties loaded from CSV. RAG search may not work properly.")
 # ------------------------------------
 
-# Store last search results for chat context
-last_search_results = []
-
 @app.route('/')
 def index():
     """Serves the main HTML page."""
@@ -153,25 +240,27 @@ async def api_alex():
     - 是否需要搜索附近设施（调用 search_nearby_pois 工具）
     - 或者直接回答用户问题
     """
-    global last_search_results
-
     data = request.get_json()
     if not data or not data.get('message'):
         return jsonify({"error": "Message is required"}), 400
-    
+
     user_message = data.get('message')
     context = data.get('context', {})
     is_continuation = data.get('is_continuation', False)
-    
+
+    # Resolve per-request identity (body user_id > X-User-Id header > session cookie > "default")
+    user_id, session_id = resolve_identity(data)
+
     print(f"\n{'='*60}")
     print(f"🤖 [ALEX - LangGraph Agent] 收到消息: {user_message}")
+    print(f"👤 [ALEX] user_id: {user_id}")
     print(f"📋 [ALEX] is_continuation: {is_continuation}")
     print(f"📋 [ALEX] context: {context}")
     print(f"{'='*60}")
-    
+
     try:
         # 所有请求都通过 ReAct Agent 处理
-        return await handle_with_react_agent(user_message, context, is_continuation)
+        return await handle_with_react_agent(user_message, context, is_continuation, user_id, session_id)
     
     except Exception as e:
         print(f"❌ [ALEX] 错误: {e}")
@@ -182,7 +271,8 @@ async def api_alex():
         }), 500
 
 
-async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool):
+async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool,
+                                  user_id: str = "default", session_id: str = "default"):
     """
     使用 LangGraph Agent 处理所有用户请求 - 纯 LLM 驱动
 
@@ -193,7 +283,13 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     没有任何关键词匹配 - 完全由 LLM 决策
     """
-    global agent_graph, tool_registry, agent_tool_provider, last_search_results, conversation_history, agent_persistent_state
+    global agent_graph, tool_registry, agent_tool_provider
+
+    # ── Load THIS user's isolated L2 slices (no cross-user sharing) ──────────
+    # Locals keep the legacy names so the existing in-place dict mutations of
+    # `agent_persistent_state` continue to update the stored slice directly.
+    agent_persistent_state = _get_user_state(user_id)
+    conversation_history = _get_user_history(user_id)
 
     # 确保 tool_registry 已初始化
     if tool_registry is None:
@@ -318,7 +414,7 @@ Current user message: {user_message}"""
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
-        _mems = _am.retrieve(user_message, session_id="default", user_id="default", n=6)
+        _mems = _am.retrieve(user_message, session_id=session_id, user_id=user_id, n=6)
         _mem_block = _am.format_for_prompt(_mems)
         if _mem_block:
             query_with_history = f"{_mem_block}\n\n{query_with_history}"
@@ -359,6 +455,8 @@ Current user message: {user_message}"""
     })
     if len(conversation_history) > MAX_HISTORY_LENGTH:
         conversation_history = conversation_history[-MAX_HISTORY_LENGTH:]
+    # Windowing may rebind the local to a new list — persist it back to this user's slice.
+    _user_histories[user_id] = conversation_history
 
     # ── 写入长期记忆（后台线程: Mem0 式抽取+整合 / GA 反思，不阻塞响应）──
     try:
@@ -367,14 +465,14 @@ Current user message: {user_message}"""
         _tool_used = _td.get('tool') if isinstance(_td, dict) else None
         get_agent_memory().remember_turn_async(
             user_message, response_text,
-            session_id="default", user_id="default", tool_used=_tool_used,
+            session_id=session_id, user_id=user_id, tool_used=_tool_used,
         )
     except Exception as _e:
         print(f"[Memory] write skipped: {_e}")
 
     # ── 检查是否有房源搜索结果 ──────────────────────────────────
     if tool_data.get('recommendations'):
-        last_search_results = tool_data['recommendations']
+        _user_last_results[user_id] = tool_data['recommendations']
 
         # 保存搜索结果到 persistent extracted_context 供后续安全/设施问题使用
         prev_results_context = "\n"
@@ -441,24 +539,16 @@ Current user message: {user_message}"""
 
 @app.route('/api/clear_history', methods=['POST'])
 def clear_history():
-    """清除对话历史，开始新对话"""
-    global conversation_history, agent_persistent_state
-    conversation_history = []
-    # 重置跨轮持久状态
-    agent_persistent_state = {
-        'user_preferences': {
-            'hard_preferences': [], 'soft_preferences': [],
-            'excluded_areas': [], 'required_amenities': [],
-            'safety_concerns': [],
-        },
-        'accumulated_search_criteria': {
-            'destination': None, 'max_budget': None, 'max_travel_time': None,
-            'property_features': [], 'soft_preferences': [],
-            'amenities_of_interest': [],
-        },
-        'extracted_context': {},
-    }
-    print("[ALEX] 对话历史已清除")
+    """清除对话历史，开始新对话 —— 只重置当前用户自己的 L2 状态，不影响其他用户。"""
+    data = request.get_json(silent=True)
+    user_id, _session_id = resolve_identity(data)
+
+    # Reset ONLY this user's slices (fresh default-shaped state + empty history/results).
+    _user_states[user_id] = _default_persistent_state()
+    _user_histories[user_id] = []
+    _user_last_results[user_id] = []
+
+    print(f"[ALEX] 对话历史已清除 (user_id={user_id})")
     return jsonify({"success": True, "message": "Conversation history cleared"})
 
 

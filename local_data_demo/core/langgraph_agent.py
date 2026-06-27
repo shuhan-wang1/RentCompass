@@ -6,20 +6,30 @@ Preserves all business logic: majority voting, accumulated criteria injection,
 Alex persona prompts, preference extraction, and response formatting.
 
 Graph Flow:
-    START -> extract_preferences -> decide_tool -> [conditional routing]
-        -> execute_tool -> [conditional routing]
-        -> generate_response -> format_output -> END
+    START -> extract_preferences -> decide_tool
+    decide_tool routes via Command(goto=...):
+        - direct_answer   -> generate_response
+        - clarification   -> format_output
+        - multi_search    -> dispatch_searches
+        - any other tool  -> execute_tool
+    execute_tool routes via Command(goto=...) -> format_output | generate_response
+    multi_search map-reduce:
+        dispatch_searches -(Send fan-out)-> search_worker x N -> gather_searches
+        -> generate_response
+    generate_response -> format_output -> END
 """
 
 import asyncio
+import operator
 import json
 import re
 import logging
 import datetime
-from typing import TypedDict, Optional, Dict, List, Any, Annotated
+from typing import TypedDict, Optional, Dict, List, Any, Annotated, Literal
 from collections import Counter
 
 from langgraph.graph import StateGraph, START, END
+from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 logger = logging.getLogger(__name__)
@@ -58,6 +68,8 @@ class AgentState(TypedDict):
     tool_decision: Dict[str, Any]
     tool_observation: Optional[str]
     tool_raw_data: Optional[Any]
+    # Map-reduce fan-out results from multi_search workers (reducer-merged)
+    search_results: Annotated[list, operator.add]
     # Output
     final_response: str
     response_type: str
@@ -367,9 +379,14 @@ def _current_message(user_query: str) -> str:
 
 
 def _make_decide_tool_node(tool_registry, classification_llm):
-    """Create the decide_tool node with majority voting."""
+    """Create the decide_tool node with majority voting.
 
-    def decide_tool_node(state: AgentState) -> dict:
+    Routes via Command(goto=...) based on the computed tool decision:
+    direct_answer -> generate_response, clarification -> format_output,
+    multi_search -> dispatch_searches, anything else -> execute_tool.
+    """
+
+    def _compute_decision(state: AgentState) -> dict:
         user_query = state["user_query"]
         extracted_context = state["extracted_context"]
         query_lower = user_query.lower()
@@ -377,10 +394,10 @@ def _make_decide_tool_node(tool_registry, classification_llm):
         # 0) Memory-recall questions -> answer conversationally from the injected
         #    long-term memory (which is already prepended to user_query).
         if any(kw in _current_message(user_query).lower() for kw in _RECALL_KWS):
-            return {"tool_decision": {
+            return {
                 "tool": "direct_answer", "params": {},
                 "reason": "User is asking what we remember about them - answer from long-term memory"
-            }}
+            }
 
         # 1) Property context check
         if extracted_context.get('property_address'):
@@ -389,28 +406,42 @@ def _make_decide_tool_node(tool_registry, classification_llm):
                         '\u8d85\u5e02', '\u5730\u94c1', '\u8f66\u7ad9', '\u8ddd\u79bb',
                         '\u9644\u8fd1', '\u65c1\u8fb9', '\u5468\u56f4']
             if not any(kw in query_lower for kw in poi_kws):
-                return {"tool_decision": {
+                return {
                     "tool": "reasoning_property", "params": {},
                     "reason": "Property context detected - use database info"
-                }}
+                }
 
         # 2) Simple greetings
         greetings = ['hi', 'hello', '\u4f60\u597d', '\u60a8\u597d', 'hey', 'thanks', '\u8c22\u8c22']
         if any(g == query_lower.strip() for g in greetings) or (
                 len(user_query) < 10 and any(g in query_lower for g in greetings)):
-            return {"tool_decision": {
+            return {
                 "tool": "direct_answer", "params": {},
                 "reason": "Simple greeting"
-            }}
+            }
 
         # 3) Majority voting
-        decision = _majority_vote(user_query, extracted_context, classification_llm, tool_registry)
-        return {"tool_decision": decision}
+        return _majority_vote(user_query, extracted_context, classification_llm,
+                              tool_registry, accumulated=state["accumulated_search_criteria"])
+
+    def decide_tool_node(state: AgentState) -> Command[Literal[
+            "execute_tool", "generate_response", "format_output", "dispatch_searches"]]:
+        decision = _compute_decision(state)
+        tool = decision["tool"]
+        if tool == "direct_answer":
+            goto = "generate_response"
+        elif tool == "clarification":
+            goto = "format_output"
+        elif tool == "multi_search":
+            goto = "dispatch_searches"
+        else:
+            goto = "execute_tool"
+        return Command(update={"tool_decision": decision}, goto=goto)
 
     return decide_tool_node
 
 
-def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=1):
+def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=1, accumulated=None):
     """LLM tool selection. num_votes=1 by default: a cloud LLM (DeepSeek) is reliable
     in one shot and each call has real network latency, so 5 sequential votes were the
     main source of latency. Raise num_votes for more robustness with a weaker model."""
@@ -437,7 +468,7 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
             continue
 
     if not votes:
-        return _heuristic_fallback(user_query, extracted_context, tool_registry)
+        return _heuristic_fallback(user_query, extracted_context, tool_registry, accumulated)
 
     counter = Counter(votes)
     winner, count = counter.most_common(1)[0]
@@ -456,7 +487,7 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
     if any(kw in query_lower for kw in action_kws) and 'search_properties' in counter:
         winner = 'search_properties'
 
-    return _build_tool_params(winner, user_query, extracted_context, tool_registry)
+    return _build_tool_params(winner, user_query, extracted_context, tool_registry, accumulated)
 
 
 # UK postcode (full or outward+inward), e.g. "SW8 1RZ", "WC1E 6BT", "EC1A 1BB".
@@ -498,11 +529,56 @@ def _resolve_target_address(user_query, extracted_context):
             name = (r.get('name') or '').strip().lower()
             if len(name) > 3 and name in ql:
                 return r.get('address') or r.get('name')
+            # Also match on the address itself: a user often types the street
+            # ("is 40 Merchant St safe?") rather than the listing's name.
+            addr = (r.get('address') or '').strip().lower()
+            if addr:
+                street = addr.split(',')[0].strip()           # "40 merchant st"
+                street_nonum = re.sub(r'^\d+\s*', '', street)   # "merchant st"
+                for cand in (street, street_nonum):
+                    if len(cand) >= 4 and cand in ql:
+                        return r.get('address') or r.get('name')
 
     return extracted_context.get('property_address')
 
 
-def _heuristic_fallback(user_query, extracted_context, tool_registry):
+# Common student/work destinations -> geocodable full addresses. Short tokens like
+# "UCL" alone often fail geocoding, so we expand them to full addresses.
+_KNOWN_DESTINATIONS = {
+    'university college london': 'University College London, Gower Street, London WC1E 6BT',
+    'ucl': 'University College London, Gower Street, London WC1E 6BT',
+    'london school of economics': 'London School of Economics, Houghton Street, London WC2A 2AE',
+    'lse': 'London School of Economics, Houghton Street, London WC2A 2AE',
+    'imperial college': 'Imperial College London, South Kensington, London SW7 2AZ',
+    'imperial': 'Imperial College London, South Kensington, London SW7 2AZ',
+    "king's college": "King's College London, Strand, London WC2R 2LS",
+    'kings college': "King's College London, Strand, London WC2R 2LS",
+    'kcl': "King's College London, Strand, London WC2R 2LS",
+    'canary wharf': 'Canary Wharf, London E14 5AB',
+}
+
+
+def _resolve_destination_address(user_query, extracted_context, accumulated):
+    """Resolve the DESTINATION (to_address) for a commute query: a destination named
+    in THIS message wins, else the user's accumulated destination — both normalised
+    through the known-destination map so short tokens like 'UCL' geocode reliably."""
+    accumulated = accumulated or {}
+    q = (extracted_context.get('current_message') or user_query) or ""
+    ql = q.lower()
+    for kw, addr in _KNOWN_DESTINATIONS.items():
+        if kw in ql:
+            return addr
+    dest = accumulated.get('destination')
+    if dest:
+        dl = str(dest).lower()
+        for kw, addr in _KNOWN_DESTINATIONS.items():
+            if kw in dl:
+                return addr
+        return dest
+    return None
+
+
+def _heuristic_fallback(user_query, extracted_context, tool_registry, accumulated=None):
     """Fallback when no votes succeed."""
     ql = user_query.lower()
     if any(k in ql for k in ['find me', 'show me', '\u627e\u623f', '\u641c\u623f', '\u79df\u623f']):
@@ -519,7 +595,7 @@ def _heuristic_fallback(user_query, extracted_context, tool_registry):
     return {"tool": "web_search", "params": {"query": user_query}, "reason": "Heuristic: default web search"}
 
 
-def _build_tool_params(tool_name, user_query, extracted_context, tool_registry):
+def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, accumulated=None):
     """Build appropriate params for the selected tool."""
     if tool_name == 'reasoning_property':
         return {"tool": "reasoning_property", "params": {}, "reason": f"Voted: {tool_name}"}
@@ -548,8 +624,22 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry):
     elif tool_name in ('web_search', 'multi_search'):
         return _plan_web_searches(user_query, tool_registry)
     elif tool_name == 'calculate_commute_cost':
+        # The tool requires BOTH endpoints (and does NOT accept user_query), so the
+        # old {"user_query": ...} always failed its required-param check. Resolve the
+        # origin from conversation context and the destination from message/accumulated.
+        from_addr = _resolve_target_address(user_query, extracted_context)
+        to_addr = _resolve_destination_address(user_query, extracted_context, accumulated)
+        if not from_addr and not to_addr:
+            return {"tool": "clarification", "params": {},
+                    "clarification_message": "To work out the commute cost I need a starting property (a postcode, 'the first one' from your last search, or an 'Ask AI' property) and a destination (e.g. your university or workplace).",
+                    "reason": "commute needs both endpoints"}
+        if not from_addr or not to_addr:
+            missing = "starting property/address" if not from_addr else "destination (e.g. your university or workplace)"
+            return {"tool": "clarification", "params": {},
+                    "clarification_message": f"To calculate the commute cost I just need the {missing}. Could you tell me?",
+                    "reason": "commute needs both endpoints"}
         return {"tool": "calculate_commute_cost",
-                "params": {"user_query": user_query},
+                "params": {"from_address": from_addr, "to_address": to_addr},
                 "reason": f"Voted: {tool_name}"}
     else:
         return {"tool": "web_search", "params": {"query": user_query}, "reason": "Default fallback"}
@@ -593,9 +683,15 @@ JSON:"""
 
 
 def _make_execute_tool_node(tool_registry):
-    """Create the execute_tool node."""
+    """Create the execute_tool node.
 
-    async def execute_tool_node(state: AgentState) -> dict:
+    multi_search no longer reaches here (it runs through the dispatch_searches ->
+    search_worker -> gather_searches map-reduce subgraph). This node routes via
+    Command(goto=...) to format_output or generate_response.
+    """
+
+    async def execute_tool_node(state: AgentState) -> Command[Literal[
+            "format_output", "generate_response"]]:
         decision = state["tool_decision"]
         tool_name = decision["tool"]
         params = dict(decision.get("params", {}))
@@ -604,13 +700,10 @@ def _make_execute_tool_node(tool_registry):
 
         observation = None
         raw_data = None
+        update = {}
 
         try:
-            if tool_name == 'multi_search':
-                observation, raw_data = await _execute_multi_search(
-                    decision['params']['searches'], tool_registry)
-
-            elif tool_name == 'reasoning_property':
+            if tool_name == 'reasoning_property':
                 # Assemble property info from context
                 parts = [f"Property: {extracted_context.get('property_address', 'N/A')}"]
                 for key, label in [('property_price', 'Price'), ('room_type', 'Room Type'),
@@ -648,11 +741,7 @@ def _make_execute_tool_node(tool_registry):
                 if raw_data:
                     extracted = raw_data.get('extracted_so_far') or raw_data.get('search_criteria') or {}
                     if extracted:
-                        new_acc = update_search_criteria(accumulated, extracted)
-                        return {
-                            "tool_observation": observation, "tool_raw_data": raw_data,
-                            "accumulated_search_criteria": new_acc
-                        }
+                        update["accumulated_search_criteria"] = update_search_criteria(accumulated, extracted)
 
             else:
                 # Standard tool execution
@@ -672,45 +761,12 @@ def _make_execute_tool_node(tool_registry):
             observation = f"Error executing {tool_name}: {str(e)}"
             raw_data = None
 
-        return {"tool_observation": observation, "tool_raw_data": raw_data}
+        update["tool_observation"] = observation
+        update["tool_raw_data"] = raw_data
+        goto = _route_after_execution(tool_name, raw_data)
+        return Command(update=update, goto=goto)
 
     return execute_tool_node
-
-
-async def _execute_multi_search(searches, tool_registry):
-    """Execute multiple tools in parallel."""
-    async def _run_one(search):
-        tool_name = search.get('tool', 'web_search')
-        params = search.get('params', {})
-        try:
-            result = await tool_registry.execute_tool(tool_name, **params)
-            if result.success:
-                obs = result.data.get('results', json.dumps(result.data, ensure_ascii=False)) if isinstance(result.data, dict) else str(result.data)
-                return obs, result.data
-            return f"Error: {result.error}", None
-        except Exception as e:
-            return f"Error: {e}", None
-
-    results = await asyncio.gather(*[_run_one(s) for s in searches], return_exceptions=True)
-
-    all_obs = []
-    all_raw = {}
-    for i, (search, res) in enumerate(zip(searches, results)):
-        tool_name = search.get('tool', 'web_search')
-        if isinstance(res, Exception):
-            obs, rd = f"Error: {res}", None
-        else:
-            obs, rd = res
-        if not isinstance(obs, str):
-            obs = str(obs)
-        all_obs.append(f"### Sub-search {i+1}: {tool_name}\nParams: {json.dumps(search.get('params',{}), ensure_ascii=False)}\nResult:\n{obs}")
-        if rd:
-            all_raw[f"{tool_name}_{i+1}"] = rd
-
-    combined = "\n" + "="*50 + "\n## Combined Results\n" + "="*50 + "\n\n"
-    combined += "\n---\n".join(all_obs)
-    combined += f"\n\nTotal: {len(searches)} tools executed.\n"
-    return combined, all_raw
 
 
 def _make_generate_response_node():
@@ -864,21 +920,10 @@ def _format_commute_cost(data):
 # GRAPH ROUTING FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════
 
-def route_by_tool(state: AgentState) -> str:
-    """Route after tool decision."""
-    tool = state["tool_decision"].get("tool", "")
-    if tool == "direct_answer":
-        return "generate_response"
-    if tool == "clarification":
-        return "format_output"
-    return "execute_tool"
+def _route_after_execution(tool: str, raw) -> str:
+    """Pure helper: decide the next node after tool execution from (tool, raw_data).
 
-
-def route_after_execution(state: AgentState) -> str:
-    """Route after tool execution."""
-    tool = state["tool_decision"].get("tool", "")
-    raw = state.get("tool_raw_data")
-
+    Called by execute_tool to compute Command(goto=...)."""
     # search_properties: check for special statuses
     if tool == "search_properties" and raw and isinstance(raw, dict):
         status = raw.get("status")
@@ -896,6 +941,73 @@ def route_after_execution(state: AgentState) -> str:
                 return "format_output"
 
     return "generate_response"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# MULTI-SEARCH MAP-REDUCE (dispatch -> Send fan-out -> gather)
+# ═══════════════════════════════════════════════════════════════════
+
+def _make_dispatch_searches_node():
+    """Create the dispatch_searches node.
+
+    No-op node; its conditional edge (fan_out_searches) does the Send fan-out."""
+    def dispatch_searches_node(state: AgentState) -> dict:
+        return {}
+    return dispatch_searches_node
+
+
+def fan_out_searches(state: AgentState):
+    """MAP: one Send per planned sub-search."""
+    searches = (state["tool_decision"].get("params") or {}).get("searches") or []
+    if not searches:
+        return "gather_searches"   # nothing to fan out
+    return [Send("search_worker", {"search": s, "search_index": i})
+            for i, s in enumerate(searches)]
+
+
+def _make_search_worker_node(tool_registry):
+    """Create the search_worker node (runs one sub-search; results reducer-merged)."""
+    async def search_worker_node(state) -> dict:
+        s = state["search"]
+        i = state["search_index"]
+        tool_name = s.get("tool", "web_search")
+        params = s.get("params", {})
+        try:
+            result = await tool_registry.execute_tool(tool_name, **params)
+            if result.success:
+                obs = (result.data.get('results', json.dumps(result.data, ensure_ascii=False))
+                       if isinstance(result.data, dict) else str(result.data))
+                raw = result.data
+            else:
+                obs, raw = f"Error: {result.error}", None
+        except Exception as e:
+            obs, raw = f"Error: {e}", None
+        return {"search_results": [{
+            "index": i, "tool": tool_name, "params": params,
+            "obs": obs if isinstance(obs, str) else str(obs), "raw": raw,
+        }]}
+    return search_worker_node
+
+
+def _make_gather_searches_node():
+    """REDUCE: fold worker results into one observation, preserving the old
+    _execute_multi_search combined-string format."""
+    def gather_searches_node(state: AgentState) -> dict:
+        items = sorted(state.get("search_results", []), key=lambda r: r.get("index", 0))
+        all_obs, all_raw = [], {}
+        for it in items:
+            all_obs.append(
+                f"### Sub-search {it['index']+1}: {it['tool']}\n"
+                f"Params: {json.dumps(it.get('params', {}), ensure_ascii=False)}\n"
+                f"Result:\n{it['obs']}"
+            )
+            if it.get("raw"):
+                all_raw[f"{it['tool']}_{it['index']+1}"] = it["raw"]
+        combined = "\n" + "=" * 50 + "\n## Combined Results\n" + "=" * 50 + "\n\n"
+        combined += "\n---\n".join(all_obs)
+        combined += f"\n\nTotal: {len(items)} tools executed.\n"
+        return {"tool_observation": combined, "tool_raw_data": all_raw}
+    return gather_searches_node
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -921,21 +1033,19 @@ def build_agent_graph(tool_registry):
     graph.add_node("extract_preferences", _make_extract_preferences_node())
     graph.add_node("decide_tool", _make_decide_tool_node(tool_registry, classification_llm))
     graph.add_node("execute_tool", _make_execute_tool_node(tool_registry))
+    graph.add_node("dispatch_searches", _make_dispatch_searches_node())
+    graph.add_node("search_worker", _make_search_worker_node(tool_registry))
+    graph.add_node("gather_searches", _make_gather_searches_node())
     graph.add_node("generate_response", _make_generate_response_node())
     graph.add_node("format_output", _make_format_output_node())
 
     # Edges
     graph.add_edge(START, "extract_preferences")
     graph.add_edge("extract_preferences", "decide_tool")
-    graph.add_conditional_edges("decide_tool", route_by_tool, {
-        "generate_response": "generate_response",
-        "format_output": "format_output",
-        "execute_tool": "execute_tool",
-    })
-    graph.add_conditional_edges("execute_tool", route_after_execution, {
-        "format_output": "format_output",
-        "generate_response": "generate_response",
-    })
+    # decide_tool and execute_tool route via Command(goto=...) — no conditional edges needed
+    graph.add_conditional_edges("dispatch_searches", fan_out_searches, ["search_worker", "gather_searches"])
+    graph.add_edge("search_worker", "gather_searches")
+    graph.add_edge("gather_searches", "generate_response")
     graph.add_edge("generate_response", "format_output")
     graph.add_edge("format_output", END)
 
@@ -963,6 +1073,7 @@ def create_initial_state(user_query: str,
         tool_decision={},
         tool_observation=None,
         tool_raw_data=None,
+        search_results=[],
         final_response="",
         response_type="answer",
         tool_data={},

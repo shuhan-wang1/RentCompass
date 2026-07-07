@@ -47,3 +47,28 @@ local_data_demo/data/scraped_property_listings.csv
 .playwright-mcp/
 chroma_db_agent_memory/
 local_data_demo/chroma_db_agent_memory/
+
+# Refactor implementation plan (local only)
+REFACTOR_IMPLEMENTATION_PLAN.md
+
+# Packaging and persistent runtime cache
+/build/
+/dist/
+/src/*.egg-info/
+*.sqlite3
+
+# Local model weights and generated artifacts
+student_model_lora/
+fine_tuning/student_model_lora/
+*.safetensors
+*.bin
+UK_Rent_Agent_Technical_Report.*
+quick_test_results.csv
+diagnose_geocoding.py
+**/.env
+
+# Zoopla repair guide (local only)
+ZOOPLA_REPAIR_GUIDE.md
+
+# Next-gen architecture design doc (local only)
+NEXT_GEN_AGENT_ARCHITECTURE.md

@@ -44,6 +44,14 @@ def _is_fresh(path, ttl_hours: float) -> bool:
 def _run_source(source: str, task: dict, radius, min_price, max_price,
                 limit_per_task) -> list[dict]:
     """Dispatch one (source, task) pair to the matching scraper."""
+    if source == "onthemarket":
+        slug = task.get("onthemarket_slug")
+        if not slug:
+            return []
+        from . import onthemarket
+        return onthemarket.find_rich_onthemarket(
+            slug, radius, min_price, max_price, limit=limit_per_task
+        )
     if source == "openrent":
         term = task.get("openrent_term")
         if not term:

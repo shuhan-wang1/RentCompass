@@ -14,6 +14,8 @@ import sys
 import importlib
 from pathlib import Path
 
+from uk_rent_agent.domain.schema import RICH_COLUMNS
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -37,23 +39,6 @@ SCRAPPER_DIR = REPO_ROOT / "scrapped_data_demo" / "scrapper"
 # Rich schema — MUST stay column-identical to fake_property_listings.csv so the
 # loader, FAISS embeddings and get_property_details all keep working unchanged.
 # ---------------------------------------------------------------------------
-RICH_COLUMNS = [
-    "Price",
-    "Address",
-    "Description",
-    "URL",
-    "Available From",
-    "Platform",
-    "Images",
-    "geo_location",
-    "Room_Type_Category",
-    "Detailed_Amenities",
-    "Guest_Policy",
-    "Payment_Rules",
-    "Excluded_Features",
-    "Enhanced_Description",
-]
-
 # ---------------------------------------------------------------------------
 # Cache behaviour
 # ---------------------------------------------------------------------------
@@ -73,13 +58,17 @@ DEFAULT_MIN_BEDROOMS = int(os.getenv("SCRAPER_MIN_BEDROOMS", "0"))
 DEFAULT_MAX_BEDROOMS = int(os.getenv("SCRAPER_MAX_BEDROOMS", "2"))
 
 # Which sources to run, in order. Comma-separated env override.
-#   openrent  -> works out of the box (scraping-tolerant, no extra setup)
+#   onthemarket -> works out of the box (server-rendered __NEXT_DATA__ JSON,
+#                  robots-permitted); the current primary source.
+#   openrent  -> DEAD as of 2026-07: listing pages now sit behind an AWS WAF
+#                "Human Verification" challenge (GET returns HTTP 405 + bot
+#                interstitial). Kept as an opt-in stub; don't expect data.
 #   zoopla    -> needs a local FlareSolverr Docker container on :8191
 #   rightmove -> DEAD: Rightmove decommissioned /api/_search and prohibits
 #                scraping; kept only as an opt-in stub. Don't expect data.
 DEFAULT_SOURCES = [
     s.strip().lower()
-    for s in os.getenv("SCRAPER_SOURCES", "openrent").split(",")
+    for s in os.getenv("SCRAPER_SOURCES", "onthemarket").split(",")
     if s.strip()
 ]
 
@@ -90,6 +79,7 @@ DEFAULT_SOURCES = [
 DEFAULT_SEARCH_TASKS = [
     {
         "name": "Russell Square / UCL",
+        "onthemarket_slug": "bloomsbury",
         "openrent_term": "University College London",
         "rightmove_id": "STATION^7877",          # (legacy; endpoint is dead)
         "zoopla_slug": "station/tube/russell-square",
@@ -97,31 +87,37 @@ DEFAULT_SEARCH_TASKS = [
     },
     {
         "name": "King's Cross",
+        "onthemarket_slug": "kings-cross",
         "openrent_term": "King's Cross",
         "radius": 1.0,
     },
     {
         "name": "Camden Town",
+        "onthemarket_slug": "camden",
         "openrent_term": "Camden Town",
         "radius": 1.0,
     },
     {
         "name": "Stratford (UEL / QMUL)",
+        "onthemarket_slug": "stratford-london",
         "openrent_term": "Stratford London",
         "radius": 1.5,
     },
     {
         "name": "Mile End (QMUL)",
+        "onthemarket_slug": "mile-end",
         "openrent_term": "Mile End",
         "radius": 1.0,
     },
     {
         "name": "Elephant & Castle (LSE / UAL)",
+        "onthemarket_slug": "elephant-and-castle",
         "openrent_term": "Elephant and Castle",
         "radius": 1.0,
     },
     {
         "name": "Wembley Park",
+        "onthemarket_slug": "wembley-park",
         "openrent_term": "Wembley Park",
         "rightmove_id": "STATION^9782",           # (legacy; endpoint is dead)
         "zoopla_slug": "wembley-park",

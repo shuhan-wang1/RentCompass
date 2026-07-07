@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uk-rent-agent"
+version = "0.1.0"
+description = "UK student rental recommendation agent"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "flask",
+  "flask-cors",
+  "pandas",
+  "python-dotenv",
+  "requests",
+  "waitress",
+  "chromadb", "sentence-transformers", "faiss-cpu", "geopy", "folium", "ddgs",
+  "langgraph", "langchain", "langchain-core", "langchain-ollama",
+  "langchain-openai", "openai", "mcp",
+]
+
+[project.optional-dependencies]
+finetune = ["torch", "torchvision", "torchaudio", "transformers", "peft", "accelerate"]
+dev = ["pytest", "pytest-asyncio", "import-linter"]
+
+[project.scripts]
+uk-rent-web = "uk_rent_agent.web.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "local_data_demo"]
+testpaths = ["tests_refactor"]

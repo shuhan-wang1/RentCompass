@@ -1,6 +1,10 @@
 # app.py - Enhanced with RAG and LangGraph Agent Framework
 
 import sys
+from pathlib import Path
+_src_dir = Path(__file__).resolve().parents[1] / "src"
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -11,29 +15,29 @@ import asyncio
 import uuid
 import copy
 import threading
+import os
 from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
 import json
 import traceback
 import re
-from core.user_session import add_to_favorites, get_favorites, _session_data
+from uk_rent_agent.web.session_store import SessionStore
+from uk_rent_agent.config import Config
 from core.data_loader import load_mock_properties_from_csv, load_properties
 from rag.rag_coordinator import RAGCoordinator
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
 
 app = Flask(__name__, template_folder='.')
-CORS(app)
+_runtime_config = Config.from_env()
+CORS(app, origins=list(_runtime_config.cors_origins))
 
 # Secret key — needed for the server-side `session` cookie used as a per-browser
 # identity fallback (priority (c) in resolve_identity). Read from env first so a real
 # deployment secret is never clobbered; otherwise use a stable dev secret so cookies
 # survive across requests (a random per-boot key would break single-user continuity).
 if not app.secret_key:
-    import os as _os_secret
-    app.secret_key = _os_secret.environ.get(
-        "FLASK_SECRET_KEY", "uk-rent-dev-secret-key-do-not-use-in-prod"
-    )
+    app.secret_key = _runtime_config.flask_secret_key or "uk-rent-dev-secret-key-do-not-use-in-prod"
 
 # 统一 UI 模式标志
 USE_UNIFIED_UI = True  # 设置为 True 使用新的统一 Alex 界面
@@ -70,39 +74,27 @@ def _default_persistent_state():
 
 
 # Per-user L2 stores (was: agent_persistent_state / conversation_history / last_search_results)
-_user_states = {}        # user_id -> persistent cross-turn state dict
-_user_histories = {}     # user_id -> conversation history list
-_user_last_results = {}  # user_id -> last search results list
-_user_stores_lock = threading.Lock()  # guards lazy slice creation only
+_session_store = SessionStore(
+    max_users=_runtime_config.session_max_users,
+    ttl_seconds=_runtime_config.session_ttl_seconds,
+)
 
 MAX_HISTORY_LENGTH = 10  # 保留最近10轮对话
 
 
 def _get_user_state(user_id):
     """Lazily initialise and return this user's persistent state slice."""
-    s = _user_states.get(user_id)
-    if s is None:
-        with _user_stores_lock:
-            s = _user_states.setdefault(user_id, _default_persistent_state())
-    return s
+    return _session_store.get(user_id).persistent_state
 
 
 def _get_user_history(user_id):
     """Lazily initialise and return this user's conversation history list."""
-    h = _user_histories.get(user_id)
-    if h is None:
-        with _user_stores_lock:
-            h = _user_histories.setdefault(user_id, [])
-    return h
+    return _session_store.get(user_id).history
 
 
 def _get_user_last_results(user_id):
     """Lazily initialise and return this user's last search results list."""
-    r = _user_last_results.get(user_id)
-    if r is None:
-        with _user_stores_lock:
-            r = _user_last_results.setdefault(user_id, [])
-    return r
+    return _session_store.get(user_id).last_results
 
 
 def resolve_identity(data=None):
@@ -156,7 +148,7 @@ except Exception as e:
 # to the in-process registry. Disable entirely with env USE_MCP_TOOLS=0.
 import os as _os
 agent_tool_provider = tool_registry
-if _os.environ.get("USE_MCP_TOOLS", "1").lower() not in ("0", "false", "no"):
+if _os.environ.get("USE_MCP_TOOLS", "0").lower() not in ("0", "false", "no"):
     try:
         import sys as _sys
         from core.mcp_client import MCPToolClient
@@ -166,6 +158,8 @@ if _os.environ.get("USE_MCP_TOOLS", "1").lower() not in ("0", "false", "no"):
             cwd=_os.path.dirname(_os.path.abspath(__file__)),
             fallback_registry=tool_registry,
         ).start()
+        import atexit
+        atexit.register(_mcp_client.close)
         if _mcp_client.connected:
             agent_tool_provider = _mcp_client
             print(f"✓ [STARTUP] Agent tools served via MCP ({len(_mcp_client.list_tool_names())} tools)")
@@ -203,6 +197,8 @@ if all_properties:
     print("[STARTUP] Building FAISS index for property embeddings... (This may take a moment)")
     try:
         rag_coordinator.property_store.build_index(all_properties)
+        from core.tools.search_properties import set_rag_coordinator
+        set_rag_coordinator(rag_coordinator)
         print("✓ [STARTUP] FAISS index built successfully. Starting server...")
     except Exception as e:
         print(f"❌ ERROR building FAISS index: {e}")
@@ -432,6 +428,8 @@ Current user message: {user_message}"""
         extracted_context=extracted_context,
         user_preferences=agent_persistent_state['user_preferences'],
         accumulated_search_criteria=agent_persistent_state['accumulated_search_criteria'],
+        user_id=user_id,
+        session_id=session_id,
     )
 
     print(f"[LangGraph] ▶ 开始执行 graph.ainvoke() ...")
@@ -456,7 +454,7 @@ Current user message: {user_message}"""
     if len(conversation_history) > MAX_HISTORY_LENGTH:
         conversation_history = conversation_history[-MAX_HISTORY_LENGTH:]
     # Windowing may rebind the local to a new list — persist it back to this user's slice.
-    _user_histories[user_id] = conversation_history
+    _session_store.get(user_id).history = conversation_history
 
     # ── 写入长期记忆（后台线程: Mem0 式抽取+整合 / GA 反思，不阻塞响应）──
     try:
@@ -472,7 +470,7 @@ Current user message: {user_message}"""
 
     # ── 检查是否有房源搜索结果 ──────────────────────────────────
     if tool_data.get('recommendations'):
-        _user_last_results[user_id] = tool_data['recommendations']
+        _session_store.get(user_id).last_results = tool_data['recommendations']
 
         # 保存搜索结果到 persistent extracted_context 供后续安全/设施问题使用
         prev_results_context = "\n"
@@ -544,9 +542,7 @@ def clear_history():
     user_id, _session_id = resolve_identity(data)
 
     # Reset ONLY this user's slices (fresh default-shaped state + empty history/results).
-    _user_states[user_id] = _default_persistent_state()
-    _user_histories[user_id] = []
-    _user_last_results[user_id] = []
+    _session_store.clear(user_id)
 
     print(f"[ALEX] 对话历史已清除 (user_id={user_id})")
     return jsonify({"success": True, "message": "Conversation history cleared"})
@@ -560,7 +556,11 @@ def add_favorite():
         return jsonify({"error": "No data provided"}), 400
     
     try:
-        add_to_favorites(data)
+        user_id, _ = resolve_identity(data)
+        url = data.get('URL') or data.get('url')
+        if not url:
+            return jsonify({"error": "Property URL is required"}), 400
+        _session_store.get(user_id).favorites[url] = data
         return jsonify({"success": True, "message": "Added to favorites"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -569,7 +569,8 @@ def add_favorite():
 def get_favorites_list():
     """Get all favorited properties"""
     try:
-        favorites = get_favorites()
+        user_id, _ = resolve_identity()
+        favorites = list(_session_store.get(user_id).favorites.values())
         return jsonify({"favorites": favorites})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -578,8 +579,10 @@ def get_favorites_list():
 def remove_favorite(url):
     """Remove a property from favorites"""
     try:
-        if url in _session_data['favorites']:
-            del _session_data['favorites'][url]
+        user_id, _ = resolve_identity()
+        favorites = _session_store.get(user_id).favorites
+        if url in favorites:
+            del favorites[url]
             return jsonify({"success": True, "message": "Removed from favorites"})
         return jsonify({"error": "Property not found"}), 404
     except Exception as e:
@@ -589,7 +592,8 @@ def remove_favorite(url):
 def get_search_history():
     """Get search history"""
     try:
-        history = _session_data.get('search_history', [])
+        user_id, _ = resolve_identity()
+        history = _session_store.get(user_id).search_history
         return jsonify({"history": history})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -728,4 +732,4 @@ def get_cached_pois():
     
 if __name__ == '__main__':
     # 允许所有来源访问(用于公网访问)
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    app.run(debug=False, host='127.0.0.1', port=5001)

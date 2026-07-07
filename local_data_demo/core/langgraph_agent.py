@@ -31,6 +31,7 @@ from collections import Counter
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from uk_rent_agent.agent.state import AgentState, create_initial_state
 
 logger = logging.getLogger(__name__)
 
@@ -54,27 +55,6 @@ POI_TYPES = {
 # ═══════════════════════════════════════════════════════════════════
 # STATE SCHEMA
 # ═══════════════════════════════════════════════════════════════════
-
-class AgentState(TypedDict):
-    """LangGraph agent state — flows through all graph nodes."""
-    # User input
-    user_query: str
-    # Property context from UI (address, price, amenities, etc.)
-    extracted_context: Dict[str, Any]
-    # Accumulated across conversation turns
-    user_preferences: Dict[str, List[str]]
-    accumulated_search_criteria: Dict[str, Any]
-    # Per-turn tool execution
-    tool_decision: Dict[str, Any]
-    tool_observation: Optional[str]
-    tool_raw_data: Optional[Any]
-    # Map-reduce fan-out results from multi_search workers (reducer-merged)
-    search_results: Annotated[list, operator.add]
-    # Output
-    final_response: str
-    response_type: str
-    tool_data: Dict[str, Any]
-
 
 # ═══════════════════════════════════════════════════════════════════
 # HELPER FUNCTIONS (ported from react_agent.py)
@@ -695,6 +675,9 @@ def _make_execute_tool_node(tool_registry):
         decision = state["tool_decision"]
         tool_name = decision["tool"]
         params = dict(decision.get("params", {}))
+        if tool_name in {"recall_memory", "remember"}:
+            params["user_id"] = state.get("user_id", "default")
+            params["session_id"] = state.get("session_id", "default")
         accumulated = state["accumulated_search_criteria"]
         extracted_context = state["extracted_context"]
 
@@ -1050,31 +1033,3 @@ def build_agent_graph(tool_registry):
     graph.add_edge("format_output", END)
 
     return graph.compile()
-
-
-def create_initial_state(user_query: str,
-                          extracted_context: dict = None,
-                          user_preferences: dict = None,
-                          accumulated_search_criteria: dict = None) -> AgentState:
-    """Create an initial AgentState for graph invocation."""
-    return AgentState(
-        user_query=user_query,
-        extracted_context=extracted_context or {},
-        user_preferences=user_preferences or {
-            'hard_preferences': [], 'soft_preferences': [],
-            'excluded_areas': [], 'required_amenities': [],
-            'safety_concerns': [],
-        },
-        accumulated_search_criteria=accumulated_search_criteria or {
-            'destination': None, 'max_budget': None, 'max_travel_time': None,
-            'property_features': [], 'soft_preferences': [],
-            'amenities_of_interest': [],
-        },
-        tool_decision={},
-        tool_observation=None,
-        tool_raw_data=None,
-        search_results=[],
-        final_response="",
-        response_type="answer",
-        tool_data={},
-    )

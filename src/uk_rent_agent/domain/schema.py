@@ -1,0 +1,16 @@
+RICH_COLUMNS = [
+    "Price",
+    "Address",
+    "Description",
+    "URL",
+    "Available From",
+    "Platform",
+    "Images",
+    "geo_location",
+    "Room_Type_Category",
+    "Detailed_Amenities",
+    "Guest_Policy",
+    "Payment_Rules",
+    "Excluded_Features",
+    "Enhanced_Description",
+]

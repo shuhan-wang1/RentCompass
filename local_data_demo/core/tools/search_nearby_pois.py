@@ -7,7 +7,7 @@ import requests
 import time
 import math
 from typing import Optional, List, Dict
-from core.tool_system import Tool, ToolResult
+from core.tool_system import Tool
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 
@@ -415,7 +415,7 @@ async def search_nearby_pois_impl(
     poi_type: str = "all",
     radius: int = 300,
     user_query: str = ""
-) -> ToolResult:
+) -> dict:
     """
     使用 OpenStreetMap 搜索地址周边的 POI
     
@@ -439,11 +439,12 @@ async def search_nearby_pois_impl(
         # 地理编码
         coords = geocode_address(address)
         if not coords:
-            return ToolResult(
-                success=False,
-                error=f"Could not find coordinates for address: {address}",
-                tool_name="search_nearby_pois"
-            )
+            return {
+                "success": False,
+                "error": f"Could not find coordinates for address: {address}",
+                "address": address,
+                "pois": {},
+            }
         
         lat, lon = coords
         print(f"📍 坐标: {lat:.6f}, {lon:.6f}")
@@ -483,15 +484,12 @@ async def search_nearby_pois_impl(
             time.sleep(0.5)  # 限速
         
         if not results:
-            return ToolResult(
-                success=True,
-                data={
-                    "address": address,
-                    "message": f"No {poi_type} found within {radius}m of this address.",
-                    "pois": {}
-                },
-                tool_name="search_nearby_pois"
-            )
+            return {
+                "success": True,
+                "address": address,
+                "message": f"No {poi_type} found within {radius}m of this address.",
+                "pois": {},
+            }
         
         # 格式化输出
         formatted = []
@@ -508,24 +506,17 @@ async def search_nearby_pois_impl(
         
         summary = f"Found {sum(len(p) for p in results.values())} places within {radius}m:\n" + "\n".join(formatted)
         
-        return ToolResult(
-            success=True,
-            data={
-                "address": address,
-                "radius_m": radius,
-                "summary": summary,
-                "pois": results
-            },
-            tool_name="search_nearby_pois"
-        )
+        return {
+            "success": True,
+            "address": address,
+            "radius_m": radius,
+            "summary": summary,
+            "pois": results,
+        }
         
     except Exception as e:
         print(f"❌ [OSM POI] 错误: {e}")
-        return ToolResult(
-            success=False,
-            error=str(e),
-            tool_name="search_nearby_pois"
-        )
+        return {"success": False, "error": str(e), "address": address, "pois": {}}
 
 
 # 创建工具实例

@@ -20,6 +20,9 @@ from typing import Optional
 import re
 import csv
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Load travel cost data from CSV
 def _load_travel_cost_data():
@@ -41,10 +44,10 @@ def _load_travel_cost_data():
                     'day_anytime': float(row['Travelcards: Day anytime'].replace('£', '')),
                     'day_off_peak': float(row['Travelcards: Day off-peak'].replace('£', ''))
                 }
-        print(f"   ✅ Loaded {len(cost_data)} fare zones from CSV")
+        logger.info("Loaded %s fare zones from CSV", len(cost_data))
         return cost_data
     except Exception as e:
-        print(f"   ❌ Failed to load travel_cost_data.csv: {e}")
+        logger.exception("Failed to load travel_cost_data.csv: %s", e)
         return {}
 
 # Cache the loaded data

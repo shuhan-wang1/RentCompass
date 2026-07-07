@@ -21,10 +21,11 @@ import asyncio
 from pathlib import Path
 import json
 import re
+from uk_rent_agent.domain import constants as C
 
 # Sentinel meaning "user set no commute limit" — kept internally so the search can
 # proceed without asking, but must never be shown to the user (see _commute_phrase).
-NO_COMMUTE_LIMIT = 999
+NO_COMMUTE_LIMIT = C.NO_COMMUTE_LIMIT
 
 
 def _extract_budget(text: str):
@@ -121,6 +122,12 @@ def _clean_explanation(desc, travel_min, location):
 _RAG_COORDINATOR = None
 
 
+def set_rag_coordinator(coordinator):
+    """Inject the process-wide coordinator built by the composition root."""
+    global _RAG_COORDINATOR
+    _RAG_COORDINATOR = coordinator
+
+
 def _get_rag_coordinator():
     """Cached RAGCoordinator + FAISS index, built once and reused across searches —
     avoids reloading sentence-transformers and rebuilding the index on every call
@@ -128,9 +135,9 @@ def _get_rag_coordinator():
     global _RAG_COORDINATOR
     if _RAG_COORDINATOR is None:
         from rag.rag_coordinator import RAGCoordinator
-        from core.data_loader import load_mock_properties_from_csv, parse_price
+        from core.data_loader import load_properties, parse_price
         rc = RAGCoordinator()
-        props = load_mock_properties_from_csv()
+        props = load_properties()
         for prop in props:
             if 'parsed_price' not in prop:
                 prop['parsed_price'] = parse_price(prop.get('Price'))
@@ -188,7 +195,7 @@ class PropertyFilter:
                         'commute_status': '✅ 通勤符合',
                         'recommendation_score': PropertyFilter.calculate_score(price, commute, budget, max_commute)
                     })
-                elif price <= budget * 1.15:  # 允许超预算最多15%
+                elif price <= budget * C.BUDGET_SOFT_MULTIPLIER:  # 允许超预算最多15%
                     # ⚠️ 轻微超预算（可推荐但需说明）
                     price_diff = price - budget
                     price_diff_percentage = round((price_diff / budget) * 100, 1)
@@ -466,7 +473,7 @@ async def search_properties_impl(
         
         if budget_period and budget_period.lower() == 'week':
             # 周租 × 4.33 ≈ 月租（一个月平均 4.33 周）
-            max_budget = int(max_budget * 4.33)
+            max_budget = int(max_budget * C.WEEKS_PER_MONTH)
             budget_converted = True
             print(f"\n💱 [BUDGET] 周租转月租: £{original_budget}/week → £{max_budget}/month")
         
@@ -480,13 +487,14 @@ async def search_properties_impl(
         print(f"   🏠 房产特征: {all_property_features}")
         print(f"   💭 软性偏好: {all_soft_preferences}")
         
-        from core.data_loader import load_mock_properties_from_csv, parse_price
+        from core.data_loader import get_property_source, load_properties, parse_price
 
         # 获取（缓存的）RAG Coordinator —— 仅首次加载模型+建索引，之后复用（大幅提速）
         rag_coordinator = _get_rag_coordinator()
 
         # CSV 很小，加载便宜；用于价格解析（索引已在 singleton 内构建）
-        all_properties = load_mock_properties_from_csv()
+        all_properties = load_properties()
+        data_source = get_property_source()
         for prop in all_properties:
             if 'parsed_price' not in prop:
                 prop['parsed_price'] = parse_price(prop.get('Price'))
@@ -635,7 +643,7 @@ async def search_properties_impl(
                             prop.get('Address', ''),
                             location
                         )
-                        if travel_time and travel_time <= max_commute_time * 1.5:  # 允许通勤时间超50%
+                        if travel_time and travel_time <= max_commute_time * C.SIMILAR_COMMUTE_SLACK:  # 允许通勤时间超50%
                             prop['travel_time'] = travel_time
                             prop['price'] = prop.get('parsed_price', parse_price(prop.get('Price', '')))
                             similar_with_commute.append(prop)
@@ -651,7 +659,7 @@ async def search_properties_impl(
                     
                     # 计算建议的预算
                     min_price_needed = min(p.get('price', 0) for p in closest_3)
-                    suggested_budget = int(min_price_needed * 1.05)  # 加5%余量
+                    suggested_budget = int(min_price_needed * C.SUGGESTED_BUDGET_MARGIN)  # 加5%余量
                     budget_increase = suggested_budget - max_budget
                     
                     # 格式化这3个推荐
@@ -679,6 +687,7 @@ async def search_properties_impl(
                             'property_type': prop.get('Type', prop.get('type', 'Flat')),
                             'bedrooms': prop.get('Bedrooms', prop.get('bedrooms', 'N/A')),
                             'match_type': 'similar_suggestion',
+                            'source': data_source,
                             'url': prop.get('URL', prop.get('url', '')),
                             'images': images,  # 🆕 添加图片
                             'geo_location': geo_location,  # 🆕 添加地理位置
@@ -703,9 +712,9 @@ async def search_properties_impl(
             
             # 如果 RAG 也没有找到
             _has_commute_limit = max_commute_time is not None and int(max_commute_time) < NO_COMMUTE_LIMIT
-            _suggestions = [f"- Try increasing your budget to £{int(max_budget * 1.3)}/month"]
+            _suggestions = [f"- Try increasing your budget to £{int(max_budget * C.BUDGET_BUMP_SUGGESTION)}/month"]
             if _has_commute_limit:
-                _suggestions.append(f"- Or extend your commute time to {int(max_commute_time * 1.5)} minutes")
+                _suggestions.append(f"- Or extend your commute time to {int(max_commute_time * C.SIMILAR_COMMUTE_SLACK)} minutes")
             _suggestions.append("- Or consider different nearby areas")
             _why = [f"1. Your budget of £{max_budget}/month might be too low for the {location} area"]
             if _has_commute_limit:
@@ -754,6 +763,7 @@ async def search_properties_impl(
                 'property_type': prop.get('Type', prop.get('type', 'Flat')),
                 'bedrooms': prop.get('Bedrooms', prop.get('bedrooms', 'N/A')),
                 'match_type': prop.get('match_type', 'perfect'),
+                'source': data_source,
                 'url': prop.get('URL', prop.get('url', '')),
                 'images': images,  # 🆕 添加图片列表
                 'geo_location': geo_location,  # 🆕 添加地理位置

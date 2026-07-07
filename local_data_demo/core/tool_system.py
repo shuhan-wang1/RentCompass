@@ -15,6 +15,9 @@ import re
 from typing import Callable, Dict, Any, Optional, List
 from dataclasses import dataclass
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -102,7 +105,7 @@ class Tool:
         
         for attempt in range(self.max_retries):
             try:
-                print(f"  [EXECUTE] [{self.name}] 执行中... (尝试 {attempt + 1}/{self.max_retries})")
+                logger.debug("Executing %s (attempt %s/%s)", self.name, attempt + 1, self.max_retries)
                 
                 # 验证输入参数
                 self._validate_input(kwargs)
@@ -117,11 +120,13 @@ class Tool:
                 
                 execution_time = (time.time() - start_time) * 1000
                 
-                print(f"  ✅ [{self.name}] 成功 ({execution_time:.0f}ms)")
+                logger.info("Tool %s succeeded (%.0fms)", self.name, execution_time)
                 
+                logical_success = not isinstance(result, dict) or result.get('success', True) is not False
                 return ToolResult(
-                    success=True,
+                    success=logical_success,
                     data=result,
+                    error=result.get('error') if isinstance(result, dict) and not logical_success else None,
                     execution_time_ms=execution_time,
                     tool_name=self.name
                 )
@@ -130,17 +135,17 @@ class Tool:
                 execution_time = (time.time() - start_time) * 1000
                 error_msg = f"{type(e).__name__}: {str(e)}"
                 
-                print(f"  ❌ [{self.name}] 错误: {error_msg}")
+                logger.warning("Tool %s failed: %s", self.name, error_msg)
                 
                 # 是否重试
                 if attempt < self.max_retries - 1 and self.retry_on_error:
                     wait_time = 2 ** attempt  # 指数退避：2, 4, 8...
-                    print(f"  ⏳ [{self.name}] {wait_time}秒后重试...")
+                    logger.info("Retrying %s in %ss", self.name, wait_time)
                     await asyncio.sleep(wait_time)
                     continue
                 else:
                     # 最后一次尝试失败
-                    print(f"  💥 [{self.name}] 所有尝试都失败")
+                    logger.error("Tool %s exhausted all retries", self.name)
                     if attempt == self.max_retries - 1:
                         traceback.print_exc()
                     
@@ -255,7 +260,7 @@ class ToolRegistry:
     def register(self, tool: Tool):
         """注册一个工具"""
         if tool.name in self.tools:
-            print(f"⚠️  工具 '{tool.name}' 已存在，将被覆盖")
+            logger.warning("Tool %s already exists and will be replaced", tool.name)
         
         self.tools[tool.name] = tool
         self._stats[tool.name] = {
@@ -265,7 +270,7 @@ class ToolRegistry:
             'total_time_ms': 0
         }
         
-        print(f"✅ 注册工具: {tool.name}")
+        logger.debug("Registered tool: %s", tool.name)
     
     def register_multiple(self, tools: List[Tool]):
         """批量注册工具"""
@@ -586,7 +591,7 @@ def create_tool_registry() -> ToolRegistry:
     registry.register(recall_memory_tool)         # 🧠 长期记忆：召回
     registry.register(remember_tool)              # 🧠 长期记忆：写入
 
-    print(f"\n✅ 工具系统初始化完成！共注册 {len(registry.tools)} 个工具")
+    logger.info("Tool registry initialized with %s tools", len(registry.tools))
 
     return registry
 

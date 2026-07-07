@@ -24,7 +24,7 @@ An AI-powered rental housing recommendation system for international students in
 
 ## Features
 
-- **Live Property Data** — Real rental listings scraped from **OpenRent** with a hybrid TTL cache; transparently falls back to a stale cache, then to bundled sample data, so the app always has results
+- **Live Property Data** — Real rental listings scraped from **OnTheMarket** with a hybrid TTL cache; transparently falls back to bundled sample data, so the app always has results
 - **Semantic Property Search** — FAISS-based similarity matching over property descriptions using SentenceTransformer embeddings
 - **Three-Source RAG** — Retrieves and ranks results from property embeddings, conversation history, and area knowledge
 - **LangGraph StateGraph Agent** — A graph-based agent with conditional routing, voting-based tool selection, and cross-turn state persistence
@@ -72,7 +72,7 @@ User Query (Web UI)
      |                      v
 +------------------------------------------------+
 |  Tools + RAG + External APIs & Data            |
-|  - OpenRent (live listings, hybrid cache)      |
+|  - OnTheMarket (live listings, hybrid cache)   |
 |  - police.uk (crime)                           |
 |  - TfL Journey Planner / Google Maps (commute) |
 |  - Postcodes.io / Nominatim (geocoding)        |
@@ -346,7 +346,7 @@ uk_rent_recommendation/
 | **Geocoding** | Postcodes.io, OpenStreetMap Nominatim (no key) |
 | **Transport / Commute** | TfL Journey Planner (free), Google Maps / OpenRouteService (optional) |
 | **POIs / Amenities** | OpenStreetMap Overpass (no key), Folium, Leaflet |
-| **Listing Data** | OpenRent scraper (BeautifulSoup, Requests) with hybrid TTL cache |
+| **Listing Data** | OnTheMarket scraper with hybrid TTL cache |
 | **Web Search** | DuckDuckGo (DDGS) |
 | **Data Processing** | Pandas, NumPy, Scikit-learn |
 | **ML / NLP** | PyTorch, Transformers, Sentence-Transformers |
@@ -373,8 +373,8 @@ uk_rent_recommendation/
 2. **Install dependencies**
 
    ```bash
-   cd local_data_demo
-   pip install -r requirements.txt
+   conda activate uk_rent
+   pip install -e .
    ```
 
 3. **Set up environment variables**
@@ -398,8 +398,9 @@ uk_rent_recommendation/
    TFL_APP_KEY=your_tfl_key                      # optional, raises TfL rate limits
 
    # --- Optional toggles ---
-   USE_MCP_TOOLS=1                              # set 0 to disable MCP, use in-process tools
-   SCRAPER_SOURCES=openrent                     # comma-separated scraper sources
+   FLASK_SECRET_KEY=replace-with-a-long-random-value
+   USE_MCP_TOOLS=0                              # default: fast in-process tools; set 1 for MCP
+   SCRAPER_SOURCES=onthemarket                  # comma-separated scraper sources
    SCRAPER_CACHE_TTL_HOURS=24                   # how long the live cache stays fresh
    ```
 
@@ -412,7 +413,8 @@ uk_rent_recommendation/
 4. **Run the application**
 
    ```bash
-   python app.py
+   conda activate uk_rent
+   python -m uk_rent_agent.web
    ```
 
    Open your browser and navigate to `http://localhost:5001`.
@@ -436,7 +438,7 @@ Per-task LLM factories are defined there: `get_react_llm` (low temperature, resp
 USE_TRAVEL_SERVICE = 'google'
 ```
 
-**MCP** — on by default; set `USE_MCP_TOOLS=0` to run tools in-process. **Scraper** — controlled by `SCRAPER_SOURCES` and `SCRAPER_CACHE_TTL_HOURS`.
+**MCP** — off by default; set `USE_MCP_TOOLS=1` only when the web process must use the stdio MCP subprocess. **Scraper** — controlled by `SCRAPER_SOURCES` and `SCRAPER_CACHE_TTL_HOURS`.
 
 ## Usage
 
@@ -507,7 +509,7 @@ All registered tools are served to the agent over MCP (with in-process fallback)
 
 | Tool | Description |
 |---|---|
-| `search_properties` | Search live rentals (OpenRent, via the scraper layer + cache) |
+| `search_properties` | Search rentals from the unified repository and active cache |
 | `calculate_commute_cost` | Calculate travel time and cost for a route |
 | `calculate_commute` | Basic commute time calculation |
 | `check_transport_cost` | Transport cost estimation |
@@ -525,7 +527,7 @@ Property listings come from a **real-scraper integration layer** (`core/scraping
 
 - **Hybrid TTL cache** — If a fresh scraped cache CSV exists (younger than `SCRAPER_CACHE_TTL_HOURS`, default 24h), it's served directly. Otherwise the system scrapes live data, normalizes it, writes the cache, and serves the fresh results.
 - **Graceful fallback** — On any scrape failure or empty result, it falls back to a stale cache if present, then to the bundled `fake_property_listings.csv`, so the app always has data.
-- **Sources** — **OpenRent** is the working, verified live source (set via `SCRAPER_SOURCES`, default `openrent`). Rightmove is kept only as an opt-in stub: its `/api/_search` endpoint is decommissioned and its ToS prohibits scraping. Zoopla is also available.
+- **Sources** — **OnTheMarket** is the default live source (`SCRAPER_SOURCES=onthemarket`). OpenRent and Rightmove are retained as opt-in legacy stubs; Zoopla requires its separate anti-bot setup.
 - **Search tasks** — Focused on student-dense London areas (UCL/Russell Square, King's Cross, Camden, Stratford, Mile End, etc.), de-duplicated by listing URL, since the travel-time/geocoding stack is London-optimized via TfL.
 
 ### Map Visualization

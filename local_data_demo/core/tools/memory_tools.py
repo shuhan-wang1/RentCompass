@@ -44,6 +44,8 @@ recall_memory_tool = Tool(
         'properties': {
             'query': {'type': 'string', 'description': 'what to recall about the user'},
             'n': {'type': 'integer', 'description': 'max number of memories to return', 'default': 6},
+            'user_id': {'type': 'string', 'description': 'current user identity', 'default': 'default'},
+            'session_id': {'type': 'string', 'description': 'current conversation identity', 'default': 'default'},
         },
         'required': ['query'],
     },
@@ -62,6 +64,9 @@ remember_tool = Tool(
         'type': 'object',
         'properties': {
             'content': {'type': 'string', 'description': 'the durable fact to remember about the user'},
+            'kind': {'type': 'string', 'description': 'episodic, semantic, or reflection', 'default': 'semantic'},
+            'user_id': {'type': 'string', 'description': 'current user identity', 'default': 'default'},
+            'session_id': {'type': 'string', 'description': 'current conversation identity', 'default': 'default'},
         },
         'required': ['content'],
     },

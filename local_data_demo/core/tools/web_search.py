@@ -4,7 +4,7 @@ Web Search Tool - 智能搜索协调器
 用于回答综合性问题
 """
 
-from core.tool_system import Tool, ToolResult
+from core.tool_system import Tool
 from core.web_search import get_search_snippets
 from typing import Optional, List, Dict
 import json
@@ -20,7 +20,7 @@ def set_tool_registry(registry):
     print("[WEB_SEARCH] ✅ Tool registry 已设置，可以调用本地工具")
 
 
-async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) -> ToolResult:
+async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) -> dict:
     """
     智能搜索协调器 - 可以调用本地工具 + 网络搜索
     
@@ -34,7 +34,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
             ]
     
     Returns:
-        ToolResult: 合并的搜索结果
+        dict: 合并的搜索结果；由 Tool.execute 统一包装。
     """
     try:
         print(f"[WEB_SEARCH] 主查询: {query}")
@@ -90,11 +90,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
             web_result = get_search_snippets(query, max_results=5)
             
             if not web_result or web_result == "Could not retrieve search information.":
-                return ToolResult(
-                    success=False,
-                    error="No search results found",
-                    tool_name="web_search"
-                )
+                return {"success": False, "error": "No search results found", "query": query, "results": ""}
             
             results_parts.append(web_result)
             all_data['web_search'] = web_result
@@ -104,25 +100,18 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
         
         print(f"[WEB_SEARCH] ✅ 完成! 共 {len(results_parts)} 个结果片段")
         
-        return ToolResult(
-            success=True,
-            data={
-                "query": query,
-                "results": combined_results,
-                "detailed_data": all_data
-            },
-            tool_name="web_search"
-        )
+        return {
+            "success": True,
+            "query": query,
+            "results": combined_results,
+            "detailed_data": all_data,
+        }
         
     except Exception as e:
         print(f"[WEB_SEARCH] ❌ 错误: {e}")
         import traceback
         traceback.print_exc()
-        return ToolResult(
-            success=False,
-            error=str(e),
-            tool_name="web_search"
-        )
+        return {"success": False, "error": str(e), "query": query, "results": ""}
 
 
 # 工具定义

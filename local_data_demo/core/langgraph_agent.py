@@ -758,8 +758,14 @@ def _make_execute_tool_node(tool_registry):
                 )
                 params["idempotency_key"] = invocation.idempotency_key
                 result = await tool_registry.execute_tool(tool_name, **params)
-                raw_data = result.data if result.success else None
-                observation = json.dumps(result.data, ensure_ascii=False, indent=2) if result.success else f"Error: {result.error}"
+                # Domain-level outcomes such as ``need_clarification`` deliberately
+                # use success=False but still carry authoritative structured data.
+                # Keep that payload so routing/formatting can handle the outcome.
+                raw_data = result.data
+                if result.data is not None:
+                    observation = json.dumps(result.data, ensure_ascii=False, indent=2)
+                else:
+                    observation = f"Error: {result.error}"
 
                 # Update accumulated criteria from search results
                 if raw_data:

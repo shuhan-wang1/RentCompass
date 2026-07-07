@@ -39,7 +39,10 @@ def _model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel]:
     fields = {}
     for field_name, definition in schema.get("properties", {}).items():
         annotation = type_map.get(definition.get("type"), Any)
-        default = ... if field_name in required else definition.get("default", None)
+        is_required = field_name in required
+        if not is_required:
+            annotation = Optional[annotation]
+        default = ... if is_required else definition.get("default", None)
         fields[field_name] = (
             annotation,
             Field(default=default, description=definition.get("description")),
@@ -246,7 +249,11 @@ class Tool:
         properties = self.parameters.get('properties', {})
         
         for param_name, param_info in properties.items():
-            if param_name not in result and 'default' in param_info:
+            if (
+                param_name not in result
+                and 'default' in param_info
+                and param_info['default'] is not None
+            ):
                 result[param_name] = param_info['default']
         
         return result

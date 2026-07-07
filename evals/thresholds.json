@@ -1,0 +1,6 @@
+{
+  "intent_accuracy": 0.85,
+  "recall@5": 0.80,
+  "ndcg@5": 0.70,
+  "grounded_rate": 0.90
+}

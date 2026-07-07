@@ -148,6 +148,15 @@ class MCPToolClient:
             # fall back so the request event loop is never blocked indefinitely.
             if cfut is not None:
                 cfut.cancel()
+            tool = self.fallback_registry.get(name) if self.fallback_registry is not None else None
+            if tool is not None and not tool.retry_safe:
+                return ToolResult(
+                    success=False,
+                    error=f"MCP call timed out after {self.call_timeout}s; write outcome is unknown and was not retried",
+                    tool_name=name,
+                    version=tool.version,
+                    idempotency_key=kwargs.get("idempotency_key"),
+                )
             return await self._fallback(name, kwargs, f"timed out after {self.call_timeout}s")
         except Exception as e:  # noqa: BLE001
             return await self._fallback(name, kwargs, repr(e))
@@ -166,6 +175,8 @@ class MCPToolClient:
             error=env.get("error"),
             execution_time_ms=env.get("execution_time_ms"),
             tool_name=name,
+            version=str(env.get("version", "1")),
+            idempotency_key=env.get("idempotency_key"),
         )
 
     @staticmethod

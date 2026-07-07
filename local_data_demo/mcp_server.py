@@ -82,6 +82,8 @@ async def call_tool(name: str, arguments: dict | None) -> list[types.TextContent
         "error": result.error,
         "tool_name": result.tool_name,
         "execution_time_ms": result.execution_time_ms,
+        "version": result.version,
+        "idempotency_key": result.idempotency_key,
     }
     text = json.dumps(envelope, ensure_ascii=False, default=str)
     return [types.TextContent(type="text", text=text)]

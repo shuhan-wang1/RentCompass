@@ -23,6 +23,8 @@ import traceback
 import re
 from uk_rent_agent.web.session_store import SessionStore
 from uk_rent_agent.config import Config
+from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, graph_config
+from uk_rent_agent.observability import new_request_id, request_context
 from core.data_loader import load_mock_properties_from_csv, load_properties
 from rag.rag_coordinator import RAGCoordinator
 from core.tool_system import create_tool_registry
@@ -254,9 +256,15 @@ async def api_alex():
     print(f"📋 [ALEX] context: {context}")
     print(f"{'='*60}")
 
+    request_id = new_request_id(request.headers.get("X-Request-Id"))
     try:
         # 所有请求都通过 ReAct Agent 处理
-        return await handle_with_react_agent(user_message, context, is_continuation, user_id, session_id)
+        with request_context(request_id, user_id):
+            response = await handle_with_react_agent(
+                user_message, context, is_continuation, user_id, session_id, request_id
+            )
+            response.headers["X-Request-Id"] = request_id
+            return response
     
     except Exception as e:
         print(f"❌ [ALEX] 错误: {e}")
@@ -268,7 +276,8 @@ async def api_alex():
 
 
 async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool,
-                                  user_id: str = "default", session_id: str = "default"):
+                                  user_id: str = "default", session_id: str = "default",
+                                  request_id: str | None = None):
     """
     使用 LangGraph Agent 处理所有用户请求 - 纯 LLM 驱动
 
@@ -299,7 +308,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # 懒加载编译 LangGraph
     if agent_graph is None:
         print("[LangGraph] 首次请求，编译 LangGraph StateGraph...")
-        agent_graph = build_agent_graph(agent_tool_provider)
+        checkpointer = None
+        if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
+            checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+        agent_graph = build_agent_graph(agent_tool_provider, checkpointer=checkpointer)
         print("[LangGraph] ✓ LangGraph agent 编译完成")
 
     # ── 构建本轮 extracted_context ──────────────────────────────
@@ -430,10 +442,14 @@ Current user message: {user_message}"""
         accumulated_search_criteria=agent_persistent_state['accumulated_search_criteria'],
         user_id=user_id,
         session_id=session_id,
+        request_id=request_id,
     )
 
     print(f"[LangGraph] ▶ 开始执行 graph.ainvoke() ...")
-    final_state = await agent_graph.ainvoke(initial_state)
+    final_state = await agent_graph.ainvoke(
+        initial_state,
+        config=graph_config(user_id, session_id, request_id=request_id),
+    )
     print(f"[LangGraph] ✓ 完成!")
 
     # ── 持久化跨轮状态 ──────────────────────────────────────────
@@ -464,6 +480,7 @@ Current user message: {user_message}"""
         get_agent_memory().remember_turn_async(
             user_message, response_text,
             session_id=session_id, user_id=user_id, tool_used=_tool_used,
+            idempotency_key=f"turn:{request_id}" if request_id else None,
         )
     except Exception as _e:
         print(f"[Memory] write skipped: {_e}")

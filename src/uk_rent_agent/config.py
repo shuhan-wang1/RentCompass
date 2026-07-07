@@ -25,6 +25,8 @@ class Config:
     use_mcp_tools: bool = False
     session_max_users: int = 10_000
     session_ttl_seconds: int = 7 * 24 * 3600
+    checkpoint_path: Path | None = None
+    enable_checkpointer: bool = True
 
     @property
     def data_dir(self) -> Path:
@@ -57,4 +59,8 @@ class Config:
             use_mcp_tools=_bool("USE_MCP_TOOLS"),
             session_max_users=int(os.getenv("SESSION_MAX_USERS", "10000")),
             session_ttl_seconds=int(os.getenv("SESSION_TTL_SECONDS", str(7 * 24 * 3600))),
+            checkpoint_path=Path(
+                os.getenv("CHECKPOINT_PATH", str(root / ".runtime" / "checkpoints.sqlite3"))
+            ),
+            enable_checkpointer=_bool("ENABLE_CHECKPOINTER", True),
         )

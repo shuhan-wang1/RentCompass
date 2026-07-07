@@ -1,0 +1,4 @@
+{"query":"Find a studio under £1,500 near UCL","expected_intent":"search_properties","expected_slots":{"max_budget":1500}}
+{"query":"How safe is E1 6AN?","expected_intent":"check_safety","expected_slots":{}}
+{"query":"What is the commute from Camden to Imperial?","expected_intent":"calculate_commute","expected_slots":{}}
+{"query":"Hello Alex","expected_intent":"chat","expected_slots":{}}

@@ -16,8 +16,35 @@ from typing import Callable, Dict, Any, Optional, List
 from dataclasses import dataclass
 import traceback
 import logging
+import os
+from pathlib import Path
+
+from pydantic import BaseModel, Field, create_model
+from uk_rent_agent.tools.idempotency import IdempotencyStore
 
 logger = logging.getLogger(__name__)
+
+
+def _model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel]:
+    """Create the runtime input contract once; JSON schema is then generated from it."""
+    type_map = {
+        "string": str,
+        "integer": int,
+        "number": float,
+        "boolean": bool,
+        "array": list,
+        "object": dict,
+    }
+    required = set(schema.get("required", []))
+    fields = {}
+    for field_name, definition in schema.get("properties", {}).items():
+        annotation = type_map.get(definition.get("type"), Any)
+        default = ... if field_name in required else definition.get("default", None)
+        fields[field_name] = (
+            annotation,
+            Field(default=default, description=definition.get("description")),
+        )
+    return create_model(f"{''.join(part.title() for part in name.split('_'))}Input", **fields)
 
 
 @dataclass
@@ -30,6 +57,8 @@ class ToolResult:
     error: Optional[str] = None
     execution_time_ms: Optional[float] = None
     tool_name: Optional[str] = None
+    version: str = "1"
+    idempotency_key: Optional[str] = None
     
     def to_dict(self) -> dict:
         """转换为字典格式"""
@@ -38,7 +67,9 @@ class ToolResult:
             'data': self.data,
             'error': self.error,
             'execution_time_ms': self.execution_time_ms,
-            'tool_name': self.tool_name
+            'tool_name': self.tool_name,
+            'version': self.version,
+            'idempotency_key': self.idempotency_key,
         }
 
 
@@ -56,7 +87,13 @@ class Tool:
         parameters: Dict[str, Any],
         return_direct: bool = False,
         max_retries: int = 2,
-        retry_on_error: bool = True
+        retry_on_error: bool = True,
+        version: str = "1",
+        side_effect: str = "none",
+        retry_safe: Optional[bool] = None,
+        cacheable: bool = False,
+        input_model: Optional[type[BaseModel]] = None,
+        output_model: Optional[type[BaseModel]] = None,
     ):
         """
         参数说明：
@@ -71,10 +108,16 @@ class Tool:
         self.name = name
         self.description = description
         self.func = func
-        self.parameters = parameters
+        self.input_model = input_model or _model_from_schema(name, parameters)
+        self.output_model = output_model
+        self.parameters = self.input_model.model_json_schema()
         self.return_direct = return_direct
         self.max_retries = max_retries
         self.retry_on_error = retry_on_error
+        self.version = version
+        self.side_effect = side_effect
+        self.retry_safe = (side_effect == "none") if retry_safe is None else retry_safe
+        self.cacheable = cacheable
         
         # 验证参数格式
         self._validate_parameters()
@@ -100,12 +143,37 @@ class Tool:
         """
         start_time = time.time()
         
+        idempotency_key = kwargs.pop("idempotency_key", None)
+        idempotency_store = kwargs.pop("_idempotency_store", None)
+
         # 填充默认值
         kwargs = self._apply_defaults(kwargs)
-        
-        for attempt in range(self.max_retries):
+        try:
+            kwargs = self.input_model.model_validate(kwargs).model_dump(exclude_none=True)
+        except Exception as exc:
+            return ToolResult(False, error=f"ValidationError: {exc}", tool_name=self.name,
+                              version=self.version, idempotency_key=idempotency_key)
+
+        claimed = False
+        if self.side_effect == "write":
+            if not idempotency_key:
+                return ToolResult(False, error="idempotency_key is required for write tools",
+                                  tool_name=self.name, version=self.version)
+            previous = idempotency_store.get(idempotency_key) if idempotency_store else None
+            if previous is not None:
+                return ToolResult(True, data=previous, tool_name=self.name, version=self.version,
+                                  idempotency_key=idempotency_key)
+            if idempotency_store:
+                claimed = idempotency_store.claim(idempotency_key, self.name)
+                if not claimed:
+                    return ToolResult(False, error="logical invocation is already in progress",
+                                      tool_name=self.name, version=self.version,
+                                      idempotency_key=idempotency_key)
+
+        attempts = self.max_retries if self.retry_safe else 1
+        for attempt in range(attempts):
             try:
-                logger.debug("Executing %s (attempt %s/%s)", self.name, attempt + 1, self.max_retries)
+                logger.debug("Executing %s (attempt %s/%s)", self.name, attempt + 1, attempts)
                 
                 # 验证输入参数
                 self._validate_input(kwargs)
@@ -123,12 +191,18 @@ class Tool:
                 logger.info("Tool %s succeeded (%.0fms)", self.name, execution_time)
                 
                 logical_success = not isinstance(result, dict) or result.get('success', True) is not False
+                if logical_success and self.output_model is not None:
+                    result = self.output_model.model_validate(result).model_dump()
+                if logical_success and claimed:
+                    idempotency_store.complete(idempotency_key, result)
                 return ToolResult(
                     success=logical_success,
                     data=result,
                     error=result.get('error') if isinstance(result, dict) and not logical_success else None,
                     execution_time_ms=execution_time,
-                    tool_name=self.name
+                    tool_name=self.name,
+                    version=self.version,
+                    idempotency_key=idempotency_key,
                 )
             
             except Exception as e:
@@ -138,7 +212,7 @@ class Tool:
                 logger.warning("Tool %s failed: %s", self.name, error_msg)
                 
                 # 是否重试
-                if attempt < self.max_retries - 1 and self.retry_on_error:
+                if attempt < attempts - 1 and self.retry_on_error and self.retry_safe:
                     wait_time = 2 ** attempt  # 指数退避：2, 4, 8...
                     logger.info("Retrying %s in %ss", self.name, wait_time)
                     await asyncio.sleep(wait_time)
@@ -146,15 +220,16 @@ class Tool:
                 else:
                     # 最后一次尝试失败
                     logger.error("Tool %s exhausted all retries", self.name)
-                    if attempt == self.max_retries - 1:
+                    if attempt == attempts - 1:
                         traceback.print_exc()
-                    
                     return ToolResult(
                         success=False,
                         data=None,
                         error=error_msg,
                         execution_time_ms=execution_time,
-                        tool_name=self.name
+                        tool_name=self.name,
+                        version=self.version,
+                        idempotency_key=idempotency_key,
                     )
     
     def _validate_input(self, kwargs: Dict):
@@ -253,9 +328,16 @@ class ToolRegistry:
     工具注册中心 - 负责存放、检索、组织多个 Tool 实例
     """
     
-    def __init__(self):
+    def __init__(self, idempotency_store: Optional[IdempotencyStore] = None):
         self.tools: Dict[str, Tool] = {}
         self._stats: Dict[str, Dict] = {}
+        default_path = Path(
+            os.getenv(
+                "IDEMPOTENCY_DB",
+                str(Path(__file__).resolve().parents[2] / ".runtime" / "idempotency.sqlite3"),
+            )
+        )
+        self._idempotency_store = idempotency_store or IdempotencyStore(default_path)
     
     def register(self, tool: Tool):
         """注册一个工具"""
@@ -322,7 +404,7 @@ class ToolRegistry:
             )
         
         # 执行工具
-        result = await tool.execute(**kwargs)
+        result = await tool.execute(_idempotency_store=self._idempotency_store, **kwargs)
         
         # 更新统计
         stats = self._stats[name]

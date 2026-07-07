@@ -54,19 +54,22 @@ def _ollama_llm(temperature: float, num_predict: int, num_ctx: int,
 def get_react_llm():
     """LLM for agent reasoning and response generation (low temperature)."""
     if LLM_PROVIDER == "deepseek":
-        return _deepseek_llm(temperature=0.1, max_tokens=4000)
+        from uk_rent_agent.llm.router import ModelRouter
+        return ModelRouter().create("responder")
     return _ollama_llm(temperature=0.1, num_predict=4000, num_ctx=8192, top_p=0.9)
 
 
 def get_classification_llm():
     """LLM for tool-selection voting (higher temperature for diversity)."""
     if LLM_PROVIDER == "deepseek":
-        return _deepseek_llm(temperature=0.7, max_tokens=50)
+        from uk_rent_agent.llm.router import ModelRouter
+        return ModelRouter().create("intent")
     return _ollama_llm(temperature=0.7, num_predict=50, num_ctx=4096, top_p=0.95, top_k=40)
 
 
 def get_planning_llm():
     """LLM for search planning (higher temperature for creative query generation)."""
     if LLM_PROVIDER == "deepseek":
-        return _deepseek_llm(temperature=0.8, max_tokens=2000)
+        from uk_rent_agent.llm.router import ModelRouter
+        return ModelRouter().create("planner")
     return _ollama_llm(temperature=0.8, num_predict=2000, num_ctx=8192, top_p=0.9)

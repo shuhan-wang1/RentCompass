@@ -32,6 +32,9 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from uk_rent_agent.agent.state import AgentState, create_initial_state
+from uk_rent_agent.agent.contracts import ToolInvocation
+from uk_rent_agent.agent.critic import evaluate_grounding, safe_fallback
+from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -259,15 +262,10 @@ CLASSIFICATION_PROMPT = '''You are a tool router. Classify this query into ONE t
 
 USER QUERY: "{user_query}"
 
-TOOLS:
-1. reasoning_property - User asks about a SPECIFIC property's details/features/policies
-2. search_properties - User wants to FIND/SHOW/GET properties from database
-3. calculate_commute_cost - Calculate SPECIFIC commute cost between two addresses
-4. web_search - User wants INFORMATION, ADVICE, COMPARISONS, or GENERAL PRICING
-5. search_nearby_pois - Questions about SURROUNDINGS / NEARBY AMENITIES
-6. check_safety - Safety/crime questions about specific location
-7. get_weather - Weather questions
-8. multi_search - Multiple independent sub-questions requiring different tools
+TOOLS (generated from the live registry; pseudo routes are marked):
+{tool_catalog}
+reasoning_property - pseudo route for a specific property already in context
+multi_search - pseudo route for multiple independent read-only questions
 
 Output ONLY the tool name:
 Tool: '''
@@ -425,7 +423,13 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
     """LLM tool selection. num_votes=1 by default: a cloud LLM (DeepSeek) is reliable
     in one shot and each call has real network latency, so 5 sequential votes were the
     main source of latency. Raise num_votes for more robustness with a weaker model."""
-    prompt = CLASSIFICATION_PROMPT.format(user_query=user_query)
+    catalog_lines = []
+    for name in tool_registry.list_tool_names():
+        tool = tool_registry.get(name) if hasattr(tool_registry, "get") else None
+        description = getattr(tool, "description", "registered tool")
+        catalog_lines.append(f"- {name}: {description}")
+    catalog = "\n".join(catalog_lines)
+    prompt = CLASSIFICATION_PROMPT.format(user_query=user_query, tool_catalog=catalog)
     votes = []
 
     for i in range(num_votes):
@@ -436,9 +440,12 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
 
             tool = None
             # Priority matching (specific to general)
-            for name in ['search_nearby_pois', 'calculate_commute_cost', 'multi_search',
-                         'reasoning_property', 'search_properties', 'check_safety',
-                         'get_weather', 'web_search']:
+            candidates = sorted(
+                set(tool_registry.list_tool_names()) | {"multi_search", "reasoning_property"},
+                key=len,
+                reverse=True,
+            )
+            for name in candidates:
                 if name in text or name.replace('_', ' ') in text:
                     tool = name
                     break
@@ -621,6 +628,34 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         return {"tool": "calculate_commute_cost",
                 "params": {"from_address": from_addr, "to_address": to_addr},
                 "reason": f"Voted: {tool_name}"}
+    elif tool_name == 'calculate_commute':
+        from_addr = _resolve_target_address(user_query, extracted_context)
+        to_addr = _resolve_destination_address(user_query, extracted_context, accumulated)
+        if not from_addr or not to_addr:
+            return {"tool": "clarification", "params": {},
+                    "clarification_message": "Please provide both the starting address and destination for the commute.",
+                    "reason": "commute needs both endpoints"}
+        return {"tool": tool_name, "params": {"from_address": from_addr, "to_address": to_addr},
+                "reason": f"Voted: {tool_name}"}
+    elif tool_name == 'get_property_details':
+        address = _resolve_target_address(user_query, extracted_context)
+        return {"tool": tool_name,
+                "params": {"property_address": address or "", "question": user_query},
+                "reason": f"Voted: {tool_name}"}
+    elif tool_name == 'check_transport_cost':
+        zone_match = re.search(r"\bzone\s*([1-9])\b", user_query, re.IGNORECASE)
+        if not zone_match:
+            return {"tool": "clarification", "params": {},
+                    "clarification_message": "Which London fare zone is the destination in?",
+                    "reason": "transport cost needs destination zone"}
+        return {"tool": tool_name, "params": {"end_zone": int(zone_match.group(1))},
+                "reason": f"Voted: {tool_name}"}
+    elif tool_name == 'recall_memory':
+        return {"tool": tool_name, "params": {"query": user_query},
+                "reason": f"Voted: {tool_name}"}
+    elif tool_name == 'remember':
+        return {"tool": tool_name, "params": {"content": user_query, "kind": "semantic"},
+                "reason": f"Voted: {tool_name}"}
     else:
         return {"tool": "web_search", "params": {"query": user_query}, "reason": "Default fallback"}
 
@@ -716,6 +751,12 @@ def _make_execute_tool_node(tool_registry):
                 if accumulated.get('soft_preferences'):
                     params['accumulated_preferences'] = accumulated['soft_preferences']
 
+                invocation = ToolInvocation.create(
+                    run_id=state.get("run_id", "legacy"), node_id="execute_tool",
+                    tool=tool_name, params=params,
+                    version=getattr(tool_registry.get(tool_name), "version", "1") if hasattr(tool_registry, "get") else "1",
+                )
+                params["idempotency_key"] = invocation.idempotency_key
                 result = await tool_registry.execute_tool(tool_name, **params)
                 raw_data = result.data if result.success else None
                 observation = json.dumps(result.data, ensure_ascii=False, indent=2) if result.success else f"Error: {result.error}"
@@ -728,6 +769,19 @@ def _make_execute_tool_node(tool_registry):
 
             else:
                 # Standard tool execution
+                tool = tool_registry.get(tool_name) if hasattr(tool_registry, "get") else None
+                side_effect = getattr(tool, "side_effect", "none")
+                if not tool_allowed(
+                    side_effect=side_effect,
+                    context_tainted=state.get("context_tainted", False),
+                    tool_name=tool_name,
+                ):
+                    raise PermissionError("write tool denied because this turn contains untrusted content")
+                invocation = ToolInvocation.create(
+                    run_id=state.get("run_id", "legacy"), node_id="execute_tool",
+                    tool=tool_name, params=params, version=getattr(tool, "version", "1"),
+                )
+                params["idempotency_key"] = invocation.idempotency_key
                 result = await tool_registry.execute_tool(tool_name, **params)
                 raw_data = result.data if result.success else None
 
@@ -746,6 +800,9 @@ def _make_execute_tool_node(tool_registry):
 
         update["tool_observation"] = observation
         update["tool_raw_data"] = raw_data
+        update["context_tainted"] = state.get("context_tainted", False) or tool_name in {
+            "web_search", "search_properties", "reasoning_property", "multi_search"
+        }
         goto = _route_after_execution(tool_name, raw_data)
         return Command(update=update, goto=goto)
 
@@ -768,6 +825,8 @@ def _make_generate_response_node():
         llm = get_react_llm()
 
         if observation:
+            if state.get("context_tainted"):
+                observation = sanitize_untrusted(str(observation)).text
             if tool_name == 'reasoning_property':
                 prompt = REASONING_PROPERTY_PROMPT.format(
                     user_query=user_query, observation=observation)
@@ -789,6 +848,26 @@ def _make_generate_response_node():
             return {"final_response": "I'm sorry, I couldn't process your request. Please try again."}
 
     return generate_response_node
+
+
+def _make_critic_node():
+    """Grounding-sensitive requests are checked before reaching the formatter."""
+    def critic_node(state: AgentState) -> dict:
+        tool_name = (state.get("tool_decision") or {}).get("tool", "")
+        retrieval_expected = tool_name not in {"", "direct_answer", "clarification"}
+        verdict = evaluate_grounding(
+            state.get("final_response", ""),
+            state.get("tool_raw_data"),
+            retrieval_expected=retrieval_expected,
+        )
+        update = {
+            "verdict": verdict.model_dump(),
+            "critic_attempts": state.get("critic_attempts", 0) + 1,
+        }
+        if not verdict.grounded:
+            update["final_response"] = safe_fallback(verdict)
+        return update
+    return critic_node
 
 
 def _make_format_output_node():
@@ -944,7 +1023,9 @@ def fan_out_searches(state: AgentState):
     searches = (state["tool_decision"].get("params") or {}).get("searches") or []
     if not searches:
         return "gather_searches"   # nothing to fan out
-    return [Send("search_worker", {"search": s, "search_index": i})
+    return [Send("search_worker", {
+                "search": s, "search_index": i, "run_id": state.get("run_id", "legacy")
+            })
             for i, s in enumerate(searches)]
 
 
@@ -968,6 +1049,7 @@ def _make_search_worker_node(tool_registry):
         return {"search_results": [{
             "index": i, "tool": tool_name, "params": params,
             "obs": obs if isinstance(obs, str) else str(obs), "raw": raw,
+            "run_id": state.get("run_id", "legacy"),
         }]}
     return search_worker_node
 
@@ -976,7 +1058,11 @@ def _make_gather_searches_node():
     """REDUCE: fold worker results into one observation, preserving the old
     _execute_multi_search combined-string format."""
     def gather_searches_node(state: AgentState) -> dict:
-        items = sorted(state.get("search_results", []), key=lambda r: r.get("index", 0))
+        run_id = state.get("run_id", "legacy")
+        items = sorted(
+            (item for item in state.get("search_results", []) if item.get("run_id") == run_id),
+            key=lambda item: item.get("index", 0),
+        )
         all_obs, all_raw = [], {}
         for it in items:
             all_obs.append(
@@ -989,7 +1075,11 @@ def _make_gather_searches_node():
         combined = "\n" + "=" * 50 + "\n## Combined Results\n" + "=" * 50 + "\n\n"
         combined += "\n---\n".join(all_obs)
         combined += f"\n\nTotal: {len(items)} tools executed.\n"
-        return {"tool_observation": combined, "tool_raw_data": all_raw}
+        return {
+            "tool_observation": combined,
+            "tool_raw_data": all_raw,
+            "context_tainted": True,
+        }
     return gather_searches_node
 
 
@@ -997,7 +1087,7 @@ def _make_gather_searches_node():
 # GRAPH BUILDER
 # ═══════════════════════════════════════════════════════════════════
 
-def build_agent_graph(tool_registry):
+def build_agent_graph(tool_registry, *, checkpointer=None, store=None):
     """Build and compile the LangGraph StateGraph.
 
     Args:
@@ -1020,6 +1110,7 @@ def build_agent_graph(tool_registry):
     graph.add_node("search_worker", _make_search_worker_node(tool_registry))
     graph.add_node("gather_searches", _make_gather_searches_node())
     graph.add_node("generate_response", _make_generate_response_node())
+    graph.add_node("critic", _make_critic_node())
     graph.add_node("format_output", _make_format_output_node())
 
     # Edges
@@ -1029,7 +1120,13 @@ def build_agent_graph(tool_registry):
     graph.add_conditional_edges("dispatch_searches", fan_out_searches, ["search_worker", "gather_searches"])
     graph.add_edge("search_worker", "gather_searches")
     graph.add_edge("gather_searches", "generate_response")
-    graph.add_edge("generate_response", "format_output")
+    graph.add_edge("generate_response", "critic")
+    graph.add_edge("critic", "format_output")
     graph.add_edge("format_output", END)
 
-    return graph.compile()
+    compile_options = {}
+    if checkpointer is not None:
+        compile_options["checkpointer"] = checkpointer
+    if store is not None:
+        compile_options["store"] = store
+    return graph.compile(**compile_options)

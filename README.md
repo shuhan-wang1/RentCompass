@@ -7,6 +7,7 @@ An AI-powered rental housing recommendation system for international students in
 - [Features](#features)
 - [System Architecture](#system-architecture)
 - [LangGraph Agent Architecture](#langgraph-agent-architecture)
+- [Next-generation runtime](#next-generation-runtime)
 - [MCP Integration](#mcp-integration)
 - [Long-Term Agent Memory](#long-term-agent-memory)
 - [Project Structure](#project-structure)
@@ -38,6 +39,31 @@ An AI-powered rental housing recommendation system for international students in
 - **Conversation Memory** — ChromaDB-backed persistent chat history for context-aware follow-up responses
 - **Budget-Aware Ranking** — Hybrid scoring (semantic similarity, travel time, budget match, soft preferences) with clear budget violation explanations
 - **Key-Free by Default** — Geocoding (Postcodes.io / Nominatim), transport (TfL), and POIs (OpenStreetMap Overpass) all run without API keys; the only required key is the LLM provider key
+
+## Next-generation runtime
+
+The Phase 6+ foundations from `NEXT_GEN_AGENT_ARCHITECTURE.md` are implemented in
+`src/uk_rent_agent/`. Persistence, contracts, routing, critic, guardrails, and model
+routing are integrated with the compatibility graph; the extracted retrieval pipeline
+is ready for the planned source-by-source migration:
+
+- SQLite LangGraph checkpoints keyed by `user_id:session_id`, bounded state reducers,
+  and durable idempotency keys for write tools.
+- Pydantic node/tool contracts, versioned tool envelopes, registry-generated routing
+  capabilities, explicit ranking results, and per-source retrieval health/circuit breaking.
+- A grounding critic before final formatting, untrusted-content boundaries, tainted-turn
+  write restrictions, and per-user memory erasure.
+- JSON request-correlated logging, DeepSeek per-node model routes, graph/token SSE event
+  translation, and a production ASGI shell.
+- Offline intent/retrieval/e2e golden sets, Recall@K/MRR/nDCG metrics, and a CI gate.
+
+Run the server with `uk-rent-web` (now ASGI/uvicorn). Production requires a real
+`FLASK_SECRET_KEY`; checkpoints default to `.runtime/checkpoints.sqlite3` and can be
+changed with `CHECKPOINT_PATH`. Disable checkpoints only for diagnostics with
+`ENABLE_CHECKPOINTER=0`.
+
+Run unit and architecture tests with `python -m pytest -q`. Apply metric floors to a
+generated JSON report with `uk-rent-eval-gate report.json`.
 
 ## System Architecture
 

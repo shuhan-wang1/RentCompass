@@ -86,6 +86,19 @@ def _extract_json(text):
     return None
 
 
+def _classify_pii(text: str) -> str:
+    """Conservative metadata tag; content stays local and remains erasable by user_id."""
+    value = (text or "").casefold()
+    categories = []
+    if re.search(r"\b£?\d{3,5}\s*(?:pcm|per month|budget)?\b", value):
+        categories.append("financial_preference")
+    if re.search(r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b", text or "", re.IGNORECASE):
+        categories.append("location")
+    if any(term in value for term in ("partner", "child", "family", "flatmate", "roommate")):
+        categories.append("household")
+    return ",".join(categories) or "none"
+
+
 class AgentMemory:
     def __init__(self, db_path: str = _DB_PATH):
         self.client = chromadb.PersistentClient(path=db_path)
@@ -97,12 +110,19 @@ class AgentMemory:
 
     # ------------------------------------------------------------------ writing
     def add(self, text, mtype, session_id="default", user_id="default",
-            role="", importance=None) -> str | None:
+            role="", importance=None, idempotency_key=None) -> str | None:
         text = (text or "").strip()
         if not text:
             return None
         h = hashlib.md5(f"{mtype}|{user_id}|{text}".encode("utf-8")).hexdigest()
         with self._lock:
+            if idempotency_key:
+                try:
+                    previous = self.col.get(where={"idempotency_key": idempotency_key})
+                    if previous and previous.get("ids"):
+                        return previous["ids"][0]
+                except Exception:
+                    pass
             try:
                 existing = self.col.get(where={"hash": h})
                 if existing and existing.get("ids"):
@@ -117,7 +137,10 @@ class AgentMemory:
                 "mtype": mtype, "session_id": session_id, "user_id": user_id,
                 "role": role, "importance": int(importance),
                 "created_at": _now_iso(), "last_access": _now_iso(), "hash": h,
+                "pii_categories": _classify_pii(text),
             }
+            if idempotency_key:
+                meta["idempotency_key"] = idempotency_key
             try:
                 self.col.add(documents=[text], metadatas=[meta], ids=[mem_id])
             except Exception as e:
@@ -208,13 +231,20 @@ class AgentMemory:
             print(f"[memory] consolidate error: {e}")
 
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
-                      user_id="default", tool_used=None):
+                      user_id="default", tool_used=None, idempotency_key=None):
         """After-turn entry point (run this in the background — it makes LLM calls)."""
         try:
+            if idempotency_key:
+                existing = self.col.get(where={"idempotency_key": idempotency_key})
+                if existing and existing.get("ids"):
+                    return
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
             if tool_used:
                 ep += f"  [assistant used: {tool_used}]"
-            self.add(ep, "episodic", session_id, user_id, role="user")
+            self.add(
+                ep, "episodic", session_id, user_id, role="user",
+                idempotency_key=idempotency_key,
+            )
             self._consolidate(self._extract_facts(user_msg, assistant_msg), session_id, user_id)
             self.maybe_reflect(session_id, user_id)
         except Exception as e:
@@ -304,6 +334,20 @@ class AgentMemory:
             return {"total": self.col.count()}
         except Exception:
             return {"total": 0}
+
+    def forget(self, user_id: str) -> int:
+        """Delete all memory for one user (UK GDPR erasure boundary)."""
+        user_id = (user_id or "").strip()
+        if not user_id:
+            raise ValueError("user_id is required")
+        with self._lock:
+            existing = self.col.get(where={"user_id": user_id})
+            ids = list(existing.get("ids") or [])
+            if ids:
+                self.col.delete(ids=ids)
+            for key in [key for key in self._accum if key[0] == user_id]:
+                self._accum.pop(key, None)
+        return len(ids)
 
 
 _AGENT_MEMORY = None

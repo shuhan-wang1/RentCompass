@@ -71,4 +71,7 @@ remember_tool = Tool(
         'required': ['content'],
     },
     max_retries=1,
+    side_effect="write",
+    retry_safe=False,
+    cacheable=False,
 )

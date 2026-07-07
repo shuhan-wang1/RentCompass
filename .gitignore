@@ -55,6 +55,7 @@ REFACTOR_IMPLEMENTATION_PLAN.md
 /build/
 /dist/
 /src/*.egg-info/
+.runtime/
 *.sqlite3
 
 # Local model weights and generated artifacts

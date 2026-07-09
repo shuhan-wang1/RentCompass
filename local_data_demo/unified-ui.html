@@ -815,6 +815,10 @@
                     <svg class="icon" viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"></polyline></svg>
                 </button>
                 <div class="user-dropdown" id="userDropdown">
+                    <button id="loginBtn">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                        <span data-i18n="login_register">Log in / Register</span>
+                    </button>
                     <button id="renameUserBtn">
                         <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                         <span data-i18n="rename_user">Rename</span>
@@ -827,6 +831,10 @@
                     <button id="forgetMeBtn" class="danger">
                         <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         <span data-i18n="forget_me">Delete my data</span>
+                    </button>
+                    <button id="logoutBtn">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        <span data-i18n="logout">Log out</span>
                     </button>
                 </div>
             </div>
@@ -1141,6 +1149,30 @@
                 forget_me_confirm: "This permanently erases ALL your conversations, saved properties and long-term memory for this profile. This cannot be undone. Continue?",
                 forgotten: "Your data has been deleted.",
 
+                // Authentication
+                login_register: "Log in / Register",
+                logout: "Log out",
+                login_title: "Log in",
+                register_title: "Create account",
+                username_label: "Username",
+                password_label: "Password",
+                display_name_label: "Display name (optional)",
+                username_placeholder: "3–32 chars: letters, digits, _ . -",
+                password_placeholder: "At least 6 characters",
+                display_name_placeholder: "How you'll appear",
+                sign_in: "Sign in",
+                create_account: "Create account",
+                switch_to_register: "Need an account? Register",
+                switch_to_login: "Have an account? Log in",
+                login_success: "Logged in.",
+                register_success: "Account created.",
+                logout_success: "Logged out.",
+                signed_in_as: "Signed in",
+                err_auth_failed: "Invalid username or password.",
+                err_username_taken: "That username is already taken.",
+                err_auth_generic: "Could not complete that request. Check your details and try again.",
+                err_fields_required: "Enter a username and a password.",
+
                 // Errors
                 error_load_conversations: "Could not load conversations.",
                 error_create_conversation: "Could not create a new chat.",
@@ -1236,6 +1268,30 @@
                 forget_me: "删除我的数据",
                 forget_me_confirm: "这将永久删除该档案下的所有会话、收藏和长期记忆，且无法恢复。确定继续吗？",
                 forgotten: "您的数据已被删除。",
+
+                // Authentication
+                login_register: "登录 / 注册",
+                logout: "退出登录",
+                login_title: "登录",
+                register_title: "创建账号",
+                username_label: "用户名",
+                password_label: "密码",
+                display_name_label: "显示名称（可选）",
+                username_placeholder: "3–32 位：字母、数字、_ . -",
+                password_placeholder: "至少 6 个字符",
+                display_name_placeholder: "他人看到的名称",
+                sign_in: "登录",
+                create_account: "创建账号",
+                switch_to_register: "还没有账号？去注册",
+                switch_to_login: "已有账号？去登录",
+                login_success: "已登录。",
+                register_success: "账号创建成功。",
+                logout_success: "已退出登录。",
+                signed_in_as: "已登录",
+                err_auth_failed: "用户名或密码错误。",
+                err_username_taken: "该用户名已被占用。",
+                err_auth_generic: "无法完成请求，请检查信息后重试。",
+                err_fields_required: "请输入用户名和密码。",
 
                 // Errors
                 error_load_conversations: "无法加载会话列表。",
@@ -2551,6 +2607,24 @@
             });
         }
 
+        // Swap the active identity (guest switch, login, register, logout all funnel here):
+        // repoint localStorage, wipe in-memory per-user state, then reload from the server.
+        async function applyIdentitySwitch(uid, name) {
+            localStorage.setItem(LS_USER_ID, uid);
+            localStorage.setItem(LS_USER_NAME, name || 'Guest');
+            localStorage.removeItem(LS_ACTIVE_CONV);
+            activeConversationId = null;
+            conversations = [];
+            favorites.clear();
+            favoriteItems = [];
+            currentResults = [];
+            updateUserNameLabel();
+            updateFavCount();
+            await loadConversations(true);
+            startBlankConversation();
+            await fetchFavorites();
+        }
+
         function switchUser() {
             closeUserDropdown();
             openDialog({
@@ -2558,23 +2632,197 @@
                 message: t('switch_user_confirm'),
                 confirmLabel: t('switch_user'),
                 onConfirm: async () => {
-                    const uid = uuidHex();
-                    localStorage.setItem(LS_USER_ID, uid);
-                    localStorage.setItem(LS_USER_NAME, 'Guest');
-                    localStorage.removeItem(LS_ACTIVE_CONV);
-                    activeConversationId = null;
-                    conversations = [];
-                    favorites.clear();
-                    favoriteItems = [];
-                    currentResults = [];
-                    updateUserNameLabel();
-                    updateFavCount();
-                    await loadConversations(true);
-                    startBlankConversation();
-                    await fetchFavorites();
+                    await applyIdentitySwitch(uuidHex(), 'Guest');
                     showToast(t('switched_user'), 'success');
                 }
             });
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* AUTHENTICATION (username/password)                                         */
+        /* - The server session is authoritative; on load we sync localStorage to it. */
+        /* - Guests keep the self-declared-id flow; this layer is purely additive.    */
+        /* -------------------------------------------------------------------------- */
+        let authState = { authenticated: false };
+
+        function updateAuthUI() {
+            const authed = !!(authState && authState.authenticated);
+            const show = (id, on) => { const b = document.getElementById(id); if (b) b.style.display = on ? '' : 'none'; };
+            show('loginBtn', !authed);       // guest-only
+            show('renameUserBtn', !authed);  // guest-only (account uses its display_name)
+            show('switchUserBtn', !authed);  // guest-only
+            show('logoutBtn', authed);       // authed-only
+        }
+
+        async function refreshAuthState() {
+            try {
+                const resp = await apiFetch('/api/auth/me', { method: 'GET' });
+                if (resp.ok) {
+                    authState = await resp.json() || { authenticated: false };
+                    if (authState.authenticated && authState.user_id) {
+                        // Mirror the authoritative server identity into localStorage so the
+                        // X-User-Id header/query sent on every request matches the session.
+                        localStorage.setItem(LS_USER_ID, authState.user_id);
+                        localStorage.setItem(LS_USER_NAME, authState.display_name || authState.username || 'User');
+                    }
+                } else {
+                    authState = { authenticated: false };
+                }
+            } catch (e) {
+                authState = { authenticated: false };  // offline → treat as guest
+            }
+            updateAuthUI();
+            updateUserNameLabel();
+        }
+
+        async function onAuthSuccess(data, toastMsg) {
+            authState = {
+                authenticated: true,
+                user_id: data.user_id,
+                username: data.username,
+                display_name: data.display_name,
+            };
+            await applyIdentitySwitch(data.user_id, data.display_name || data.username);
+            updateAuthUI();
+            showToast(toastMsg, 'success');
+        }
+
+        async function doLogin(username, password) {
+            const resp = await apiFetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            });
+            if (resp.ok) {
+                await onAuthSuccess(await resp.json(), t('login_success'));
+                return { ok: true };
+            }
+            return { ok: false, message: resp.status === 401 ? t('err_auth_failed') : t('err_auth_generic') };
+        }
+
+        async function doRegister(username, password, displayName) {
+            const resp = await apiFetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password, display_name: displayName || undefined }),
+            });
+            if (resp.ok) {
+                await onAuthSuccess(await resp.json(), t('register_success'));
+                return { ok: true };
+            }
+            if (resp.status === 409) return { ok: false, message: t('err_username_taken') };
+            let msg = t('err_auth_generic');
+            try { const e = await resp.json(); if (e && e.error) msg = e.error; } catch (_) {}
+            return { ok: false, message: msg };
+        }
+
+        async function doLogout() {
+            closeUserDropdown();
+            try {
+                await apiFetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+            } catch (e) { /* ignore — clear locally regardless */ }
+            authState = { authenticated: false };
+            await applyIdentitySwitch(uuidHex(), 'Guest');  // fresh guest identity
+            updateAuthUI();
+            showToast(t('logout_success'), 'success');
+        }
+
+        function openAuthDialog(mode) {
+            mode = mode || 'login';
+            closeUserDropdown();
+            const overlay = document.getElementById('dialogOverlay');
+            overlay.innerHTML = '';
+            const card = el('div', 'dialog-card');
+
+            const title = el('div', 'dialog-title');
+            card.appendChild(title);
+
+            const errBox = el('div', 'dialog-message');
+            errBox.style.color = '#e5484d';
+            errBox.style.display = 'none';
+            card.appendChild(errBox);
+
+            const userInput = el('input', 'dialog-input');
+            userInput.type = 'text';
+            userInput.autocomplete = 'username';
+            userInput.setAttribute('maxlength', '32');
+            card.appendChild(userInput);
+
+            const passInput = el('input', 'dialog-input');
+            passInput.type = 'password';
+            passInput.setAttribute('maxlength', '128');
+            card.appendChild(passInput);
+
+            const nameInput = el('input', 'dialog-input');
+            nameInput.type = 'text';
+            nameInput.autocomplete = 'nickname';
+            nameInput.setAttribute('maxlength', '64');
+            card.appendChild(nameInput);
+
+            const switchLink = el('button', 'dialog-link');
+            switchLink.style.cssText = 'background:none;border:none;color:var(--primary-color);cursor:pointer;font-size:13px;padding:4px 2px;text-align:left;';
+            card.appendChild(switchLink);
+
+            const actions = el('div', 'dialog-actions');
+            const cancel = el('button', 'dialog-btn');
+            cancel.textContent = t('cancel');
+            cancel.addEventListener('click', closeDialog);
+            const submit = el('button', 'dialog-btn primary');
+            actions.appendChild(cancel);
+            actions.appendChild(submit);
+            card.appendChild(actions);
+
+            let busy = false;
+            const showErr = (msg) => { errBox.textContent = msg || ''; errBox.style.display = msg ? 'block' : 'none'; };
+            function applyMode() {
+                showErr('');
+                const reg = mode === 'register';
+                title.textContent = reg ? t('register_title') : t('login_title');
+                userInput.placeholder = t('username_label') + (reg ? ' · ' + t('username_placeholder') : '');
+                passInput.placeholder = t('password_label') + (reg ? ' · ' + t('password_placeholder') : '');
+                passInput.autocomplete = reg ? 'new-password' : 'current-password';
+                nameInput.placeholder = t('display_name_label');
+                nameInput.style.display = reg ? '' : 'none';
+                submit.textContent = reg ? t('create_account') : t('sign_in');
+                switchLink.textContent = reg ? t('switch_to_login') : t('switch_to_register');
+            }
+            switchLink.addEventListener('click', () => {
+                mode = mode === 'register' ? 'login' : 'register';
+                applyMode();
+                userInput.focus();
+            });
+
+            async function doSubmit() {
+                if (busy) return;
+                const username = userInput.value.trim();
+                const password = passInput.value;
+                if (!username || !password) { showErr(t('err_fields_required')); return; }
+                busy = true; submit.disabled = true; submit.style.opacity = '0.6';
+                let res;
+                try {
+                    res = mode === 'register'
+                        ? await doRegister(username, password, nameInput.value.trim())
+                        : await doLogin(username, password);
+                } catch (e) {
+                    res = { ok: false, message: t('err_auth_generic') };
+                }
+                if (res && res.ok) { closeDialog(); return; }
+                showErr((res && res.message) || t('err_auth_generic'));
+                busy = false; submit.disabled = false; submit.style.opacity = '';
+            }
+            submit.addEventListener('click', doSubmit);
+            [userInput, passInput, nameInput].forEach(inp => inp.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); doSubmit(); }
+            }));
+
+            applyMode();
+            overlay.appendChild(card);
+            overlay.style.display = 'flex';
+            userInput.focus();
         }
 
         function forgetMe() {
@@ -2643,6 +2891,8 @@
             document.getElementById('renameUserBtn').addEventListener('click', promptRenameUser);
             document.getElementById('switchUserBtn').addEventListener('click', switchUser);
             document.getElementById('forgetMeBtn').addEventListener('click', forgetMe);
+            document.getElementById('loginBtn').addEventListener('click', () => openAuthDialog('login'));
+            document.getElementById('logoutBtn').addEventListener('click', doLogout);
             // Close dropdown / dialog on outside interaction
             document.addEventListener('click', e => {
                 if (!e.target.closest('#userMenuBtn') && !e.target.closest('#userDropdown')) {
@@ -2666,6 +2916,10 @@
             wireEvents();
             setLanguage('en');            // default language + static strings + welcome
             updateUserNameLabel();
+
+            // Sync to the authoritative server session BEFORE loading any per-user data,
+            // so a logged-in user's conversations/favorites load under their account id.
+            await refreshAuthState();
 
             await loadConversations(true);
 

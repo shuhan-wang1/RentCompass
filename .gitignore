@@ -58,6 +58,13 @@ REFACTOR_IMPLEMENTATION_PLAN.md
 .runtime/
 *.sqlite3
 
+# Local user credential store (password HASHES — never commit, even by mistake).
+# Default lives under .runtime/ (already ignored) but pin the filename anywhere it lands.
+users.json
+**/users.json
+users.json.tmp
+**/users.json.tmp
+
 # Local model weights and generated artifacts
 student_model_lora/
 fine_tuning/student_model_lora/

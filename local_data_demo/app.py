@@ -25,7 +25,10 @@ import re
 from uk_rent_agent.web.session_store import SessionStore
 from uk_rent_agent.web.conversation_store import ConversationStore
 from uk_rent_agent.web.identity import (
-    resolve_user_id, normalize_message, InvalidUserId, InvalidMessage,
+    resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
+)
+from uk_rent_agent.web.auth_store import (
+    AuthStore, AuthError, InvalidUsername, WeakPassword, UsernameTaken,
 )
 from uk_rent_agent.config import Config
 from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, graph_config
@@ -35,9 +38,19 @@ from rag.rag_coordinator import RAGCoordinator
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 app = Flask(__name__, template_folder='.')
 _runtime_config = Config.from_env()
-CORS(app, origins=list(_runtime_config.cors_origins))
+# supports_credentials=True so the signed session cookie (which now carries the
+# authenticated identity) survives cross-origin requests when the UI is opened over a
+# different origin (e.g. file://). Same-origin (render_template at :5001) works regardless.
+CORS(app, origins=list(_runtime_config.cors_origins), supports_credentials=True)
 
 # Secret key — needed for the server-side `session` cookie used as a per-browser
 # identity fallback (priority (c) in resolve_identity). Read from env first so a real
@@ -45,6 +58,27 @@ CORS(app, origins=list(_runtime_config.cors_origins))
 # survive across requests (a random per-boot key would break single-user continuity).
 if not app.secret_key:
     app.secret_key = _runtime_config.flask_secret_key or "uk-rent-dev-secret-key-do-not-use-in-prod"
+
+# Session cookie hardening — the signed session cookie now also carries the authenticated
+# identity, so lock it to HTTP-only + Lax SameSite. Not marked Secure (local demo runs over
+# plain http://localhost); set SESSION_COOKIE_SECURE=1 behind TLS in a real deployment.
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=_bool_env("SESSION_COOKIE_SECURE", False),
+    PERMANENT_SESSION_LIFETIME=_runtime_config.session_ttl_seconds,
+)
+
+# ============================================================================
+# Local username/password authentication
+# ----------------------------------------------------------------------------
+# Credentials live in a gitignored JSON file (password *hashes* only, never plaintext).
+# A logged-in session's identity is authoritative — see resolve_identity — so a client
+# can no longer impersonate an account by spoofing the X-User-Id header/query/body.
+# ============================================================================
+auth_store = AuthStore(str(_runtime_config.auth_db_path))
+print(f"[STARTUP] Auth store: {auth_store.path} "
+      f"(require_auth={_runtime_config.require_auth})")
 
 # 统一 UI 模式标志
 USE_UNIFIED_UI = True  # 设置为 True 使用新的统一 Alex 界面
@@ -214,14 +248,35 @@ def get_json_or_400() -> dict:
     return data
 
 
+def _authed_user_id():
+    """Return the authenticated user_id if the session is logged in, else None.
+
+    A logged-in session is authoritative: its identity was proven by a password and cannot
+    be overridden by a (spoofable) client-supplied user_id. Returns None for guests, which
+    preserves the original header/query/cookie/mint resolution untouched.
+    """
+    try:
+        if session.get('authenticated'):
+            uid = session.get('auth_user_id')
+            if valid_user_id(uid or ''):
+                return uid
+    except Exception:
+        pass
+    return None
+
+
 def resolve_identity(data=None):
     """Resolve (user_id, session_id) with the uniform contract priority:
-    body user_id > X-User-Id header > ?user_id= query > Flask session cookie > mint.
+    authenticated session > body user_id > X-User-Id header > ?user_id= query >
+    Flask session cookie > mint.
 
     A client-supplied id (body/header/query) violating the regex → ApiError 400.
     session_id mirrors user_id (kept for signature compatibility); the conversation axis
     is threaded separately as conversation_id.
     """
+    authed = _authed_user_id()
+    if authed is not None:
+        return authed, authed
     body_uid = data.get('user_id') if isinstance(data, dict) else None
     try:
         header_uid = request.headers.get('X-User-Id')
@@ -352,6 +407,94 @@ else:
 def index():
     """Serves the main HTML page."""
     return render_template('unified-ui.html')
+
+
+# ============================================================================
+# Authentication routes (local username/password)
+# ----------------------------------------------------------------------------
+# Login/register prove an identity with a password and pin it into the signed session
+# cookie; resolve_identity then treats that identity as authoritative. Guests (no session)
+# keep the original self-declared-id behaviour, so this layer is purely additive.
+# ============================================================================
+
+def _current_auth() -> dict:
+    """Public auth view for the current session, or {"authenticated": False} for a guest."""
+    if session.get('authenticated') and valid_user_id(session.get('auth_user_id') or ''):
+        return {
+            "authenticated": True,
+            "user_id": session.get('auth_user_id'),
+            "username": session.get('username'),
+            "display_name": session.get('display_name') or session.get('username'),
+        }
+    return {"authenticated": False}
+
+
+def _establish_session(view: dict) -> None:
+    """Persist a verified account into the signed session cookie."""
+    session['authenticated'] = True
+    session['auth_user_id'] = view['user_id']
+    session['username'] = view['username']
+    session['display_name'] = view['display_name']
+    session.permanent = True
+
+
+@app.before_request
+def _enforce_auth():
+    """When REQUIRE_AUTH is on, gate every /api/* route (except /api/auth/*) behind login."""
+    if not _runtime_config.require_auth:
+        return None
+    if request.method == 'OPTIONS':
+        return None  # never block CORS preflight
+    path = request.path or ''
+    if not path.startswith('/api/') or path.startswith('/api/auth/'):
+        return None
+    if session.get('authenticated'):
+        return None
+    return jsonify({"error": "authentication required"}), 401
+
+
+@app.route('/api/auth/register', methods=['POST'])
+def auth_register():
+    """Create an account and log it in. Body {username, password, display_name?}."""
+    data = get_json_or_400()
+    try:
+        view = auth_store.register(
+            data.get('username'), data.get('password'), data.get('display_name'))
+    except UsernameTaken:
+        raise ApiError(409, "username already taken")
+    except (InvalidUsername, WeakPassword) as e:
+        raise ApiError(400, str(e))
+    except AuthError as e:
+        raise ApiError(400, str(e))
+    _establish_session(view)
+    print(f"[AUTH] registered + logged in: {view['username']} -> {view['user_id']}")
+    return jsonify({"authenticated": True, **view})
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def auth_login():
+    """Verify credentials and start a session. Body {username, password}."""
+    data = get_json_or_400()
+    view = auth_store.verify(data.get('username'), data.get('password'))
+    if not view:
+        raise ApiError(401, "invalid username or password")
+    _establish_session(view)
+    print(f"[AUTH] login: {view['username']} -> {view['user_id']}")
+    return jsonify({"authenticated": True, **view})
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def auth_logout():
+    """Clear the authenticated identity (and the guest fallback id) from the session."""
+    for k in ('authenticated', 'auth_user_id', 'username', 'display_name', 'user_id'):
+        session.pop(k, None)
+    return jsonify({"authenticated": False})
+
+
+@app.route('/api/auth/me', methods=['GET'])
+def auth_me():
+    """Report the current session's auth state (used by the frontend on load)."""
+    return jsonify(_current_auth())
 
 # ============================================================================
 # 统一的 Alex API 端点 - LangGraph StateGraph 架构

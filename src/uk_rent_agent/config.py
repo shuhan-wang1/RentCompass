@@ -27,6 +27,11 @@ class Config:
     session_ttl_seconds: int = 7 * 24 * 3600
     checkpoint_path: Path | None = None
     enable_checkpointer: bool = True
+    # Local username/password credential store (JSON, gitignored). See web/auth_store.py.
+    auth_db_path: Path | None = None
+    # When True, every /api/* route except /api/auth/* requires an authenticated session
+    # (401 otherwise). Default False keeps the guest flow working for the local demo.
+    require_auth: bool = False
 
     @property
     def data_dir(self) -> Path:
@@ -63,4 +68,8 @@ class Config:
                 os.getenv("CHECKPOINT_PATH", str(root / ".runtime" / "checkpoints.sqlite3"))
             ),
             enable_checkpointer=_bool("ENABLE_CHECKPOINTER", True),
+            auth_db_path=Path(
+                os.getenv("AUTH_DB_PATH", str(root / ".runtime" / "users.json"))
+            ),
+            require_auth=_bool("REQUIRE_AUTH", False),
         )

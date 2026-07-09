@@ -1,0 +1,126 @@
+# Full-stack deployment for the UK-rent agent.
+#
+#   app     :5001  ── the agent web app (uvicorn/ASGI)
+#   searxng :8080  ── private metasearch backend for the web_search tool
+#   valkey         ── cache / rate-limit store for SearXNG (internal only)
+#
+# The app reaches SearXNG over the compose network at http://searxng:8080
+# (SEARXNG_URL), so the web_search tool works without anything on the host.
+#
+#   docker compose up -d --build      # build + start everything
+#   open http://localhost:5001        # the agent UI
+#
+# Secrets and pre-built data come from the host via bind mounts (see `app`),
+# so nothing sensitive is baked into the image.
+
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: uk-rent-valkey
+    command: valkey-server --save 30 1 --loglevel warning
+    restart: unless-stopped
+    networks: [rentnet]
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: uk-rent-searxng
+    restart: unless-stopped
+    depends_on:
+      valkey:
+        condition: service_started
+    networks: [rentnet]
+    ports:
+      # Published to the host too, so a host-run copy of the app (or curl) can
+      # also hit the JSON API at http://localhost:8080.
+      - "8080:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      # Public URL SearXNG advertises for itself.
+      SEARXNG_BASE_URL: "http://localhost:8080/"
+      # Overrides server.secret_key in settings.yml.
+      SEARXNG_SECRET: "739038e174f59b462a203f8533a2719285164b373c507d9e6cc89c1502a7621c"
+    healthcheck:
+      # Verifies the instance is up AND that the JSON API (the whole point) is
+      # actually enabled — a default install would 403 here.
+      test:
+        - "CMD-SHELL"
+        - "wget -q -O /dev/null 'http://localhost:8080/search?q=ping&format=json' || exit 1"
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: uk-rent-agent:latest
+    container_name: uk-rent-app
+    restart: unless-stopped
+    # Trust the X-Forwarded-* headers set by the nginx reverse proxy so the app
+    # sees the real client IP and https scheme (needed for Secure session cookies).
+    # forwarded-allow-ips=* is safe because the port is bound to 127.0.0.1 (see
+    # the ports: mapping) — only nginx on this host can reach the app.
+    command:
+      - python
+      - -m
+      - uvicorn
+      - uk_rent_agent.web.asgi:create_asgi_app
+      - --factory
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "5001"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    depends_on:
+      searxng:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+    networks: [rentnet]
+    ports:
+      # Bound to loopback only: reachable via the nginx reverse proxy on this
+      # host, NOT exposed on the public IP. (Was "5001:5001".)
+      - "127.0.0.1:5001:5001"
+    # Brings in LLM keys, FLASK_SECRET_KEY, PROPERTY_SOURCE, etc.
+    env_file:
+      - ./local_data_demo/.env
+    environment:
+      # Point the web_search tool at the SearXNG service on the compose network.
+      SEARXNG_URL: "http://searxng:8080"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # Secrets (also read directly by config.from_env via load_dotenv).
+      - ./local_data_demo/.env:/app/local_data_demo/.env:ro
+      # Pre-built + writable RAG indexes and runtime state, shared with the host.
+      - ./chroma_db:/app/chroma_db
+      - ./chroma_db_area:/app/chroma_db_area
+      - ./local_data_demo/chroma_db_agent_memory:/app/local_data_demo/chroma_db_agent_memory
+      - ./local_data_demo/data:/app/local_data_demo/data
+      - ./.runtime:/app/.runtime
+      # Embedding-model cache so it is downloaded only once.
+      - hf_cache:/opt/hf-cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+networks:
+  rentnet:
+    driver: bridge
+
+volumes:
+  valkey_data:
+  hf_cache:

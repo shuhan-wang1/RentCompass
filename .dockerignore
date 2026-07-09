@@ -1,0 +1,50 @@
+# Keep the build context small and secrets/data out of image layers.
+# Runtime data + secrets are bind-mounted from the host at run time instead.
+
+# Virtualenvs (huge — must never enter the context)
+**/.venv
+**/venv
+**/env
+
+# VCS / caches / bytecode
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+**/*.pyo
+
+# Secrets — mounted at runtime, never baked into the image
+**/.env
+**/.env.*
+.env
+
+# Runtime state / generated data — bind-mounted from host
+.runtime/
+**/*.sqlite3
+chroma_db/
+chroma_db_area/
+chroma_db_agent_memory/
+local_data_demo/chroma_db/
+local_data_demo/chroma_db_area/
+local_data_demo/chroma_db_agent_memory/
+local_data_demo/data/
+**/*.log
+
+# Docker + local model weights + heavy dirs not needed to run the web app
+Dockerfile
+docker-compose.yml
+.dockerignore
+searxng/
+*.safetensors
+*.bin
+student_model_lora/
+fine_tuning/
+evals/
+tests/
+tests_refactor/
+map_visualization/
+maps/
+scrapped_data_demo/
+scrapped_data/
+.playwright-mcp/
+*.md

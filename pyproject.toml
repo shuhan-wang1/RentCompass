@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "UK student rental recommendation agent"
 requires-python = ">=3.10,<3.13"
 dependencies = [
-  "flask",
+  "flask[async]",
   "flask-cors",
   "pandas",
   "python-dotenv",

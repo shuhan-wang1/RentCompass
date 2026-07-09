@@ -4,6 +4,7 @@ Web Search Module - 使用 SearXNG 本地实例进行网络搜索
 替代 DuckDuckGo，提供更稳定和可控的搜索能力
 """
 
+import os
 import requests
 from typing import List, Dict, Optional, Union
 from .cache_service import get_from_cache, set_to_cache, create_cache_key
@@ -334,8 +335,11 @@ class SearXNGSearch:
 
 
 # 全局搜索实例（使用本地 SearXNG）
+# instance_url 通过 SEARXNG_URL 环境变量配置：
+#   - 主机直接运行时默认 http://localhost:8080
+#   - 在 docker-compose 中运行时设为 http://searxng:8080（服务名解析）
 _searxng_client = SearXNGSearch(
-    instance_url="http://localhost:8080",
+    instance_url=os.getenv("SEARXNG_URL", "http://localhost:8080"),
     timeout=10,
     default_max_results=10
 )

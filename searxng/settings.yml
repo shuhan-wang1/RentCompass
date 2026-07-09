@@ -1,0 +1,47 @@
+# SearXNG settings for the UK-rent agent stack.
+# Docs: https://docs.searxng.org/admin/settings/index.html
+#
+# This is a PRIVATE, server-to-server search backend consumed by the agent's
+# `web_search` tool. Two things matter for that to work:
+#   1. search.formats must include `json` — the default install serves HTML only
+#      and returns 403 for `format=json`, which is exactly what the tool requests.
+#   2. server.limiter is disabled — the limiter is anti-bot protection for public
+#      instances; for an internal caller it just blocks legitimate API calls.
+
+use_default_settings: true
+
+general:
+  instance_name: "uk-rent-searxng"
+  # No public stats/metrics needed for an internal instance.
+  enable_metrics: false
+
+server:
+  # Overridden at runtime by the SEARXNG_SECRET env var (see docker-compose.yml);
+  # this literal is only a fallback for running the file standalone.
+  secret_key: "739038e174f59b462a203f8533a2719285164b373c507d9e6cc89c1502a7621c"
+  # Private instance → turn the request limiter off so the agent can call freely.
+  limiter: false
+  public_instance: false
+  image_proxy: true
+  method: "GET"
+
+search:
+  # THE CRITICAL LINE: expose the JSON API the agent's web_search tool consumes.
+  formats:
+    - html
+    - json
+  # Match the tool's defaults.
+  default_lang: "en-GB"
+  safe_search: 0
+
+# Cache / rate-limit backend. SearXNG still reads this under the `redis` key even
+# when the server is Valkey (protocol-compatible). Harmless if Valkey is absent.
+redis:
+  url: redis://valkey:6379/0
+
+ui:
+  static_use_hash: true
+
+# Keep the engine set lean and reliable — the tool primarily uses Google, and
+# falls back to a few general engines. The defaults already include these; we
+# don't override the engine list so upstream defaults stay current.

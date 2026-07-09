@@ -3,16 +3,14 @@ Tool: Search Nearby POIs (使用 OpenStreetMap)
 查询地址周边的餐厅、超市、便利店等设施
 """
 
-import requests
 import time
 import math
 from typing import Optional, List, Dict
 from core.tool_system import Tool
+from core.maps_service import overpass_request, OverpassError
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 
-# Overpass API 配置
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 DEFAULT_RADIUS = 200  # 默认搜索半径 500m
 
 # 🆕 大品牌超市/便利店白名单（不区分大小写匹配）
@@ -227,88 +225,67 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     out center body;
     """
     
-    headers = {"User-Agent": "uk-rent-recommendation/1.0 (student-housing demo)"}
-    # 公共 Overpass 服务器经常过载(429/5xx) —— 带退避重试，最多 3 次
-    response = None
-    last_err = None
-    for attempt in range(3):
-        try:
-            response = requests.post(OVERPASS_URL, data={"data": query}, headers=headers, timeout=30)
-            if response.status_code in (429, 502, 503, 504):
-                last_err = f"HTTP {response.status_code}"
-                response = None
-                time.sleep(1.5 * (attempt + 1))
-                continue
-            response.raise_for_status()
-            break
-        except requests.exceptions.RequestException as e:
-            last_err = e
-            response = None
-            time.sleep(1.0 * (attempt + 1))
-    if response is None:
-        print(f"❌ OSM 查询失败 ({poi_type}) (重试后仍失败): {last_err}")
-        raise RuntimeError(f"Overpass API request failed for {poi_type}: {last_err}")
+    # 通过共享的 Overpass 客户端查询：始终带描述性 User-Agent（否则参考服务器返回 406），
+    # 并在多个公共镜像之间轮换 + 指数退避重试。全部镜像失败才抛出 OverpassError。
     try:
-        if response.status_code == 200:
-            data = response.json()
-            pois = []
-            for element in data.get("elements", []):
-                tags = element.get("tags", {})
-                name = tags.get("name", "Unnamed")
-                brand = tags.get("brand", "")
-                
-                # 跳过无名的
-                if name == "Unnamed":
-                    continue
-                
-                # 🆕 对超市/便利店应用大品牌过滤
-                if poi_type in ['supermarket', 'convenience']:
-                    if not _is_major_brand(name, brand, poi_type):
-                        continue
-                
-                # 获取POI坐标
-                poi_lat = element.get("lat") or element.get("center", {}).get("lat")
-                poi_lon = element.get("lon") or element.get("center", {}).get("lon")
-                
-                # 🆕 计算距离
-                distance_m = None
-                if poi_lat and poi_lon:
-                    distance_m = _calculate_distance(origin_lat, origin_lon, poi_lat, poi_lon)
-                
-                poi = {
-                    "name": name,
-                    "type": POI_TYPES[poi_type]["name"],
-                    "icon": POI_TYPES[poi_type]["icon"],
-                    "lat": poi_lat,
-                    "lon": poi_lon,
-                    "distance_m": round(distance_m) if distance_m else None,  # 🆕 距离（米）
-                    "distance_display": _format_distance(distance_m) if distance_m else "N/A",  # 🆕 格式化距离
-                    "cuisine": tags.get("cuisine"),
-                    "brand": brand,
-                    "opening_hours": tags.get("opening_hours"),
-                }
-                pois.append(poi)
-            
-            # 🆕 按距离排序
-            pois.sort(key=lambda x: x.get('distance_m') or float('inf'))
-            
-            # 🆕 去重：同名店铺只保留最近的一个
-            seen_names = set()
-            unique_pois = []
-            for poi in pois:
-                # 使用名称的小写形式作为去重键
-                name_key = poi.get('name', '').lower().strip()
-                if name_key not in seen_names:
-                    seen_names.add(name_key)
-                    unique_pois.append(poi)
-            
-            return unique_pois
-    except requests.exceptions.RequestException as e:
+        data = overpass_request(query, timeout=30)
+    except OverpassError as e:
         # API 失败（如缺 User-Agent 导致的 406、超时、限流）不能伪装成"附近没有" —— 抛出让上层报错
         print(f"❌ OSM 查询失败 ({poi_type}): {e}")
         raise RuntimeError(f"Overpass API request failed for {poi_type}: {e}") from e
 
-    return []
+    pois = []
+    for element in data.get("elements", []):
+        tags = element.get("tags", {})
+        name = tags.get("name", "Unnamed")
+        brand = tags.get("brand", "")
+
+        # 跳过无名的
+        if name == "Unnamed":
+            continue
+
+        # 🆕 对超市/便利店应用大品牌过滤
+        if poi_type in ['supermarket', 'convenience']:
+            if not _is_major_brand(name, brand, poi_type):
+                continue
+
+        # 获取POI坐标
+        poi_lat = element.get("lat") or element.get("center", {}).get("lat")
+        poi_lon = element.get("lon") or element.get("center", {}).get("lon")
+
+        # 🆕 计算距离
+        distance_m = None
+        if poi_lat and poi_lon:
+            distance_m = _calculate_distance(origin_lat, origin_lon, poi_lat, poi_lon)
+
+        poi = {
+            "name": name,
+            "type": POI_TYPES[poi_type]["name"],
+            "icon": POI_TYPES[poi_type]["icon"],
+            "lat": poi_lat,
+            "lon": poi_lon,
+            "distance_m": round(distance_m) if distance_m else None,  # 🆕 距离（米）
+            "distance_display": _format_distance(distance_m) if distance_m else "N/A",  # 🆕 格式化距离
+            "cuisine": tags.get("cuisine"),
+            "brand": brand,
+            "opening_hours": tags.get("opening_hours"),
+        }
+        pois.append(poi)
+
+    # 🆕 按距离排序
+    pois.sort(key=lambda x: x.get('distance_m') or float('inf'))
+
+    # 🆕 去重：同名店铺只保留最近的一个
+    seen_names = set()
+    unique_pois = []
+    for poi in pois:
+        # 使用名称的小写形式作为去重键
+        name_key = poi.get('name', '').lower().strip()
+        if name_key not in seen_names:
+            seen_names.add(name_key)
+            unique_pois.append(poi)
+
+    return unique_pois
 
 
 def _format_distance(distance_m: float) -> str:

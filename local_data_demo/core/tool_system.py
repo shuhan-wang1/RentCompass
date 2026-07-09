@@ -663,6 +663,7 @@ def create_tool_registry() -> ToolRegistry:
         calculate_commute_cost_tool  # 🆕 综合通勤成本计算工具
     )
     from core.tools.check_transport_cost import check_transport_cost_tool
+    from core.tools.get_transport_info import get_transport_info_tool
     from core.tools.memory_tools import recall_memory_tool, remember_tool
 
     registry = ToolRegistry()
@@ -677,6 +678,7 @@ def create_tool_registry() -> ToolRegistry:
     registry.register(search_nearby_pois_tool)
     registry.register(get_property_details_tool)
     registry.register(check_transport_cost_tool)  # 交通费用查询工具
+    registry.register(get_transport_info_tool)    # 🚇 实时 TfL：journey/fare/travelcard/line status
     registry.register(recall_memory_tool)         # 🧠 长期记忆：召回
     registry.register(remember_tool)              # 🧠 长期记忆：写入
 

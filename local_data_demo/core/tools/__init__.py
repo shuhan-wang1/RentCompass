@@ -11,6 +11,7 @@ from core.tools.search_nearby_pois import search_nearby_pois_tool
 from core.tools.get_property_details import get_property_details_tool
 from core.tools.check_transport_cost import check_transport_cost_tool
 from core.tools.calculate_commute_cost import calculate_commute_cost_tool
+from core.tools.get_transport_info import get_transport_info_tool
 from core.tools.memory_tools import recall_memory_tool, remember_tool
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     'get_property_details_tool',
     'check_transport_cost_tool',
     'calculate_commute_cost_tool',
+    'get_transport_info_tool',
     'recall_memory_tool',
     'remember_tool',
 ]

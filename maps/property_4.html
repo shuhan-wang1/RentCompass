@@ -1,0 +1,2329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_7b6fe3573404dfa5ccfb095799dadc63 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.fullscreen@3.0.0/Control.FullScreen.css"/>
+</head>
+<body>
+    
+    
+        <div style="position: fixed; bottom: 10px; right: 10px; background: white; 
+                    border: 2px solid #3498db; padding: 10px 15px; border-radius: 5px; 
+                    z-index: 999; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            <button id="hideAllBtn" style="padding: 8px 12px; background: #e74c3c; 
+                    color: white; border: none; border-radius: 3px; cursor: pointer; 
+                    font-weight: bold;">
+                Hide All Layers
+            </button>
+            <button id="showAllBtn" style="padding: 8px 12px; background: #27ae60; 
+                    color: white; border: none; border-radius: 3px; cursor: pointer; 
+                    font-weight: bold; margin-left: 5px;">
+                Show All Layers
+            </button>
+        </div>
+        
+    
+        <script>
+            document.getElementById('hideAllBtn').addEventListener('click', function() {
+                var layers = document.querySelectorAll('input[type="checkbox"]');
+                layers.forEach(function(checkbox) {
+                    if (checkbox.checked) {
+                        checkbox.click();
+                    }
+                });
+            });
+            
+            document.getElementById('showAllBtn').addEventListener('click', function() {
+                var layers = document.querySelectorAll('input[type="checkbox"]');
+                layers.forEach(function(checkbox) {
+                    if (!checkbox.checked) {
+                        checkbox.click();
+                    }
+                });
+            });
+        </script>
+        
+    
+            <div class="folium-map" id="map_7b6fe3573404dfa5ccfb095799dadc63" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_7b6fe3573404dfa5ccfb095799dadc63 = L.map(
+                "map_7b6fe3573404dfa5ccfb095799dadc63",
+                {
+                    center: [51.52493775206437, -0.09812591499494164],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 15,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_d53e7962185e5979921d07c73b30cc09 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_d53e7962185e5979921d07c73b30cc09.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var marker_b273ee673797082157d037e456bd6c58 = L.marker(
+                [51.52493775206437, -0.09812591499494164],
+                {
+}
+            ).addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var icon_7840bcbfb32b725c494f5d19f22011f2 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "red",
+  "iconColor": "white",
+  "icon": "home",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_b851b626396faf5b99a9ebd91b1b1384 = L.popup({
+  "maxWidth": 300,
+});
+
+        
+            
+                var html_d7f4b03d07a57f7da7d2a99888b75dc6 = $(`<div id="html_d7f4b03d07a57f7da7d2a99888b75dc6" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial; min-width: 200px;">             <h4 style="margin-bottom: 10px; color: #2c3e50;">🏠 Property</h4>             <b>Price:</b> £1693 pcm<br>             <b>Address:</b> City, 11 Bastwick Street, London EC1V 3AQ, UK<br>             <b>Description:</b> Bronze En-suite near King’s Cross area. Approx 1.92 km to UCL. Bus 20 min, Walk 30 min, Cycle 13 min, Drive 9 min.<br>             <b>Available:</b> Now<br>         </div>         </div>`)[0];
+                popup_b851b626396faf5b99a9ebd91b1b1384.setContent(html_d7f4b03d07a57f7da7d2a99888b75dc6);
+            
+        
+
+        marker_b273ee673797082157d037e456bd6c58.bindPopup(popup_b851b626396faf5b99a9ebd91b1b1384)
+        ;
+
+        
+    
+    
+            marker_b273ee673797082157d037e456bd6c58.bindTooltip(
+                `<div>
+                     Property: City, 11 Bastwick Street, London EC1V 3A...
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_b273ee673797082157d037e456bd6c58.setIcon(icon_7840bcbfb32b725c494f5d19f22011f2);
+            
+    
+            var circle_d5c8cc5d8e1757d0caee5b808465ba05 = L.circle(
+                [51.52493775206437, -0.09812591499494164],
+                {"bubblingMouseEvents": true, "color": "red", "dashArray": null, "dashOffset": null, "fill": false, "fillColor": "red", "fillOpacity": 0.2, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 0.3, "radius": 1500.0, "stroke": true, "weight": 2}
+            ).addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            circle_d5c8cc5d8e1757d0caee5b808465ba05.bindTooltip(
+                `<div>
+                     1.5km search radius
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var feature_group_2470a776bfca5eb1e11e9140ba26cb4f = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_d93a63e74fccecbbcb83fa052f9c5637 = L.marker(
+                [51.51992850326346, -0.08973974920581052],
+                {
+}
+            ).addTo(feature_group_2470a776bfca5eb1e11e9140ba26cb4f);
+        
+    
+            var icon_eb7886b15a40b8c381579d2debe27f7e = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "shopping-cart",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_139ec93002def2f02ab56e4d59bc860b = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_b06e9e3129d278a5ac670218a6a22636 = $(`<div id="html_b06e9e3129d278a5ac670218a6a22636" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: blue;">                             Tesco Express                         </h4>                     </div></div>`)[0];
+                popup_139ec93002def2f02ab56e4d59bc860b.setContent(html_b06e9e3129d278a5ac670218a6a22636);
+            
+        
+
+        marker_d93a63e74fccecbbcb83fa052f9c5637.bindPopup(popup_139ec93002def2f02ab56e4d59bc860b)
+        ;
+
+        
+    
+    
+            marker_d93a63e74fccecbbcb83fa052f9c5637.bindTooltip(
+                `<div>
+                     Tesco Express
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_d93a63e74fccecbbcb83fa052f9c5637.setIcon(icon_eb7886b15a40b8c381579d2debe27f7e);
+            
+    
+            var marker_bd21a4f4cb933bddf4fe42c06133db56 = L.marker(
+                [51.530488467236204, -0.0986757769462612],
+                {
+}
+            ).addTo(feature_group_2470a776bfca5eb1e11e9140ba26cb4f);
+        
+    
+            var icon_6c743b0598d1c91e7d33854e90b35249 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "shopping-cart",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_c8fface3baeb787eab4601fb30542d35 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_4798a7d359dc4e3f6c10d5552a2717ba = $(`<div id="html_4798a7d359dc4e3f6c10d5552a2717ba" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: blue;">                             Sainsbury's Local                         </h4>                     </div></div>`)[0];
+                popup_c8fface3baeb787eab4601fb30542d35.setContent(html_4798a7d359dc4e3f6c10d5552a2717ba);
+            
+        
+
+        marker_bd21a4f4cb933bddf4fe42c06133db56.bindPopup(popup_c8fface3baeb787eab4601fb30542d35)
+        ;
+
+        
+    
+    
+            marker_bd21a4f4cb933bddf4fe42c06133db56.bindTooltip(
+                `<div>
+                     Sainsbury's Local
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_bd21a4f4cb933bddf4fe42c06133db56.setIcon(icon_6c743b0598d1c91e7d33854e90b35249);
+            
+    
+            var marker_bae0ce6ad997c8487f658d1757983130 = L.marker(
+                [51.536849524821875, -0.09881550362963325],
+                {
+}
+            ).addTo(feature_group_2470a776bfca5eb1e11e9140ba26cb4f);
+        
+    
+            var icon_af95164fa6c5af96136e8d2a77e266b1 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "shopping-cart",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_a17d88146a8c8c364baae6870778bed8 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_4684d3cb7206ccb1240497e1bedbb2fa = $(`<div id="html_4684d3cb7206ccb1240497e1bedbb2fa" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: blue;">                             Sainsbury's Local                         </h4>                     </div></div>`)[0];
+                popup_a17d88146a8c8c364baae6870778bed8.setContent(html_4684d3cb7206ccb1240497e1bedbb2fa);
+            
+        
+
+        marker_bae0ce6ad997c8487f658d1757983130.bindPopup(popup_a17d88146a8c8c364baae6870778bed8)
+        ;
+
+        
+    
+    
+            marker_bae0ce6ad997c8487f658d1757983130.bindTooltip(
+                `<div>
+                     Sainsbury's Local
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_bae0ce6ad997c8487f658d1757983130.setIcon(icon_af95164fa6c5af96136e8d2a77e266b1);
+            
+    
+            var marker_75696376c158618a8ecd0523b9a4c49e = L.marker(
+                [51.529443238457745, -0.08697956047995198],
+                {
+}
+            ).addTo(feature_group_2470a776bfca5eb1e11e9140ba26cb4f);
+        
+    
+            var icon_e3509606eb5f394eff8cad4c90d6e4e1 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "shopping-cart",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_43d2aaaf19ede6284dbcf0bca3ba9b52 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_a95a3aab4d6efc1961bd3cd5545e71ba = $(`<div id="html_a95a3aab4d6efc1961bd3cd5545e71ba" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: blue;">                             Asda                         </h4>                     </div></div>`)[0];
+                popup_43d2aaaf19ede6284dbcf0bca3ba9b52.setContent(html_a95a3aab4d6efc1961bd3cd5545e71ba);
+            
+        
+
+        marker_75696376c158618a8ecd0523b9a4c49e.bindPopup(popup_43d2aaaf19ede6284dbcf0bca3ba9b52)
+        ;
+
+        
+    
+    
+            marker_75696376c158618a8ecd0523b9a4c49e.bindTooltip(
+                `<div>
+                     Asda
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_75696376c158618a8ecd0523b9a4c49e.setIcon(icon_e3509606eb5f394eff8cad4c90d6e4e1);
+            
+    
+            var marker_506f6fd5528e07aad3e1940f43720d8f = L.marker(
+                [51.521172986988745, -0.09037392519126333],
+                {
+}
+            ).addTo(feature_group_2470a776bfca5eb1e11e9140ba26cb4f);
+        
+    
+            var icon_0e4550413014c68acef2237dfcdef50f = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "blue",
+  "iconColor": "white",
+  "icon": "shopping-cart",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_0a78b1c1b1fb5b8c8f4caa365a1d4097 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_068108ce03d605d553856dbc6cc3309f = $(`<div id="html_068108ce03d605d553856dbc6cc3309f" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: blue;">                             Co-op                         </h4>                     </div></div>`)[0];
+                popup_0a78b1c1b1fb5b8c8f4caa365a1d4097.setContent(html_068108ce03d605d553856dbc6cc3309f);
+            
+        
+
+        marker_506f6fd5528e07aad3e1940f43720d8f.bindPopup(popup_0a78b1c1b1fb5b8c8f4caa365a1d4097)
+        ;
+
+        
+    
+    
+            marker_506f6fd5528e07aad3e1940f43720d8f.bindTooltip(
+                `<div>
+                     Co-op
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_506f6fd5528e07aad3e1940f43720d8f.setIcon(icon_0e4550413014c68acef2237dfcdef50f);
+            
+    
+            feature_group_2470a776bfca5eb1e11e9140ba26cb4f.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var feature_group_96916cead6384d09fd02aa640da8f70d = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_0966a4f6060a94b780073dbe51f5b43d = L.marker(
+                [51.52314288243033, -0.10137070263177002],
+                {
+}
+            ).addTo(feature_group_96916cead6384d09fd02aa640da8f70d);
+        
+    
+            var icon_96b39e9df7e217c81d5527c748e54ed6 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "shopping-basket",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_bf7ca8dd1a5ae41d834fd318079c3734 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_95e546ba5bd9701ddb6a9715770f042f = $(`<div id="html_95e546ba5bd9701ddb6a9715770f042f" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: green;">                             Costcutter                         </h4>                     </div></div>`)[0];
+                popup_bf7ca8dd1a5ae41d834fd318079c3734.setContent(html_95e546ba5bd9701ddb6a9715770f042f);
+            
+        
+
+        marker_0966a4f6060a94b780073dbe51f5b43d.bindPopup(popup_bf7ca8dd1a5ae41d834fd318079c3734)
+        ;
+
+        
+    
+    
+            marker_0966a4f6060a94b780073dbe51f5b43d.bindTooltip(
+                `<div>
+                     Costcutter
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_0966a4f6060a94b780073dbe51f5b43d.setIcon(icon_96b39e9df7e217c81d5527c748e54ed6);
+            
+    
+            var marker_7a97edaa2836aa73655b75ddd935f3db = L.marker(
+                [51.52246669118499, -0.10191337866219125],
+                {
+}
+            ).addTo(feature_group_96916cead6384d09fd02aa640da8f70d);
+        
+    
+            var icon_5769fbd1ad3de74c55d1a25e37a4cd11 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "shopping-basket",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_c8bda5b3217490c6bec69ff52e4ed654 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_9c52335bc8144566b933a2cd23021653 = $(`<div id="html_9c52335bc8144566b933a2cd23021653" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: green;">                             Premier Store                         </h4>                     </div></div>`)[0];
+                popup_c8bda5b3217490c6bec69ff52e4ed654.setContent(html_9c52335bc8144566b933a2cd23021653);
+            
+        
+
+        marker_7a97edaa2836aa73655b75ddd935f3db.bindPopup(popup_c8bda5b3217490c6bec69ff52e4ed654)
+        ;
+
+        
+    
+    
+            marker_7a97edaa2836aa73655b75ddd935f3db.bindTooltip(
+                `<div>
+                     Premier Store
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_7a97edaa2836aa73655b75ddd935f3db.setIcon(icon_5769fbd1ad3de74c55d1a25e37a4cd11);
+            
+    
+            var marker_8a20bbc1126998705b91be323c39cb4d = L.marker(
+                [51.521073449152176, -0.09046114386445583],
+                {
+}
+            ).addTo(feature_group_96916cead6384d09fd02aa640da8f70d);
+        
+    
+            var icon_cf55a7c5f65dc42286c4d01ff5e436fb = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "shopping-basket",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_2540001c4747d7c738a341c24d0a7006 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_45d550e3c568c98113bb2b99cb9bd000 = $(`<div id="html_45d550e3c568c98113bb2b99cb9bd000" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: green;">                             Premier Store                         </h4>                     </div></div>`)[0];
+                popup_2540001c4747d7c738a341c24d0a7006.setContent(html_45d550e3c568c98113bb2b99cb9bd000);
+            
+        
+
+        marker_8a20bbc1126998705b91be323c39cb4d.bindPopup(popup_2540001c4747d7c738a341c24d0a7006)
+        ;
+
+        
+    
+    
+            marker_8a20bbc1126998705b91be323c39cb4d.bindTooltip(
+                `<div>
+                     Premier Store
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_8a20bbc1126998705b91be323c39cb4d.setIcon(icon_cf55a7c5f65dc42286c4d01ff5e436fb);
+            
+    
+            var marker_e5486cb4666107fecf943b21aa3b3862 = L.marker(
+                [51.530306960983644, -0.11089314214262197],
+                {
+}
+            ).addTo(feature_group_96916cead6384d09fd02aa640da8f70d);
+        
+    
+            var icon_37c98214911d56b68b5da56da03b87d9 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "shopping-basket",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_cb5c790064475a133ead00c4d23c63cc = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_12875a59f9085a4ee5314ba233cd0c5f = $(`<div id="html_12875a59f9085a4ee5314ba233cd0c5f" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: green;">                             Nisa Local                         </h4>                     </div></div>`)[0];
+                popup_cb5c790064475a133ead00c4d23c63cc.setContent(html_12875a59f9085a4ee5314ba233cd0c5f);
+            
+        
+
+        marker_e5486cb4666107fecf943b21aa3b3862.bindPopup(popup_cb5c790064475a133ead00c4d23c63cc)
+        ;
+
+        
+    
+    
+            marker_e5486cb4666107fecf943b21aa3b3862.bindTooltip(
+                `<div>
+                     Nisa Local
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_e5486cb4666107fecf943b21aa3b3862.setIcon(icon_37c98214911d56b68b5da56da03b87d9);
+            
+    
+            var marker_c4e2e8b17ad8146d1d4fb3935c2bd117 = L.marker(
+                [51.5158047029561, -0.08498208343359849],
+                {
+}
+            ).addTo(feature_group_96916cead6384d09fd02aa640da8f70d);
+        
+    
+            var icon_e5efed0e24b2075948534d36ad76f4ff = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "shopping-basket",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_a38a89a26ae720a81f236e31d26dd243 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_bec3475f86b32e995eb70698df5d547c = $(`<div id="html_bec3475f86b32e995eb70698df5d547c" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: green;">                             Premier Store                         </h4>                     </div></div>`)[0];
+                popup_a38a89a26ae720a81f236e31d26dd243.setContent(html_bec3475f86b32e995eb70698df5d547c);
+            
+        
+
+        marker_c4e2e8b17ad8146d1d4fb3935c2bd117.bindPopup(popup_a38a89a26ae720a81f236e31d26dd243)
+        ;
+
+        
+    
+    
+            marker_c4e2e8b17ad8146d1d4fb3935c2bd117.bindTooltip(
+                `<div>
+                     Premier Store
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_c4e2e8b17ad8146d1d4fb3935c2bd117.setIcon(icon_e5efed0e24b2075948534d36ad76f4ff);
+            
+    
+            feature_group_96916cead6384d09fd02aa640da8f70d.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var feature_group_0de95204f50fa5ecda49b700bda7d346 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_6a97edc74e6a6012a90d8e1da30fb59f = L.marker(
+                [51.53411370977459, -0.11155360350123514],
+                {
+}
+            ).addTo(feature_group_0de95204f50fa5ecda49b700bda7d346);
+        
+    
+            var icon_1dd933a3c97c3ed2f635e9521de01c43 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "cutlery",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_272f57145f5370cf9b3e1c38ac3cd9d6 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_f761d61501455014dbf0e5bbf8ad9158 = $(`<div id="html_f761d61501455014dbf0e5bbf8ad9158" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkred;">                             Happy Wok                         </h4>                     <b>Cuisine:</b> chinese<br></div></div>`)[0];
+                popup_272f57145f5370cf9b3e1c38ac3cd9d6.setContent(html_f761d61501455014dbf0e5bbf8ad9158);
+            
+        
+
+        marker_6a97edc74e6a6012a90d8e1da30fb59f.bindPopup(popup_272f57145f5370cf9b3e1c38ac3cd9d6)
+        ;
+
+        
+    
+    
+            marker_6a97edc74e6a6012a90d8e1da30fb59f.bindTooltip(
+                `<div>
+                     Happy Wok
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_6a97edc74e6a6012a90d8e1da30fb59f.setIcon(icon_1dd933a3c97c3ed2f635e9521de01c43);
+            
+    
+            var marker_07569f427216bdf4ca8fe465d27dccad = L.marker(
+                [51.534422793438495, -0.11054781404080331],
+                {
+}
+            ).addTo(feature_group_0de95204f50fa5ecda49b700bda7d346);
+        
+    
+            var icon_edd61ec9e20267ab723ce08f6e9319af = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "cutlery",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_1bea217104839ecf6ae43be7cbcb7fd7 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_3427b62d643a87d93f0a52251fb4b981 = $(`<div id="html_3427b62d643a87d93f0a52251fb4b981" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkred;">                             Dragon Palace                         </h4>                     <b>Cuisine:</b> chinese<br></div></div>`)[0];
+                popup_1bea217104839ecf6ae43be7cbcb7fd7.setContent(html_3427b62d643a87d93f0a52251fb4b981);
+            
+        
+
+        marker_07569f427216bdf4ca8fe465d27dccad.bindPopup(popup_1bea217104839ecf6ae43be7cbcb7fd7)
+        ;
+
+        
+    
+    
+            marker_07569f427216bdf4ca8fe465d27dccad.bindTooltip(
+                `<div>
+                     Dragon Palace
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_07569f427216bdf4ca8fe465d27dccad.setIcon(icon_edd61ec9e20267ab723ce08f6e9319af);
+            
+    
+            var marker_65389f23788f32832876f7d4fee1e6d1 = L.marker(
+                [51.52555431293508, -0.09291242548855998],
+                {
+}
+            ).addTo(feature_group_0de95204f50fa5ecda49b700bda7d346);
+        
+    
+            var icon_b9dc82309a25abd8ea105a0855ab11fa = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "cutlery",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_52e7deca8e16e559693e2b32296fef54 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_4539818fac28408e4c24cdf37169079c = $(`<div id="html_4539818fac28408e4c24cdf37169079c" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkred;">                             New Shanghai                         </h4>                     <b>Cuisine:</b> chinese<br></div></div>`)[0];
+                popup_52e7deca8e16e559693e2b32296fef54.setContent(html_4539818fac28408e4c24cdf37169079c);
+            
+        
+
+        marker_65389f23788f32832876f7d4fee1e6d1.bindPopup(popup_52e7deca8e16e559693e2b32296fef54)
+        ;
+
+        
+    
+    
+            marker_65389f23788f32832876f7d4fee1e6d1.bindTooltip(
+                `<div>
+                     New Shanghai
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_65389f23788f32832876f7d4fee1e6d1.setIcon(icon_b9dc82309a25abd8ea105a0855ab11fa);
+            
+    
+            var marker_efa5e640399f947a3bcd0f012dcfa782 = L.marker(
+                [51.51847581692959, -0.11473922477740642],
+                {
+}
+            ).addTo(feature_group_0de95204f50fa5ecda49b700bda7d346);
+        
+    
+            var icon_f92fb1268485f7867fadea41b22790c5 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "cutlery",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_147db7c59f0188eb9a46c64ba779f2b0 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_e852165f689b3fa3033016102889b6b8 = $(`<div id="html_e852165f689b3fa3033016102889b6b8" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkred;">                             Happy Wok                         </h4>                     <b>Cuisine:</b> chinese<br></div></div>`)[0];
+                popup_147db7c59f0188eb9a46c64ba779f2b0.setContent(html_e852165f689b3fa3033016102889b6b8);
+            
+        
+
+        marker_efa5e640399f947a3bcd0f012dcfa782.bindPopup(popup_147db7c59f0188eb9a46c64ba779f2b0)
+        ;
+
+        
+    
+    
+            marker_efa5e640399f947a3bcd0f012dcfa782.bindTooltip(
+                `<div>
+                     Happy Wok
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_efa5e640399f947a3bcd0f012dcfa782.setIcon(icon_f92fb1268485f7867fadea41b22790c5);
+            
+    
+            var marker_790ef5584b4a4b9fd7c8509bb73025c6 = L.marker(
+                [51.527975969607986, -0.09920164166967284],
+                {
+}
+            ).addTo(feature_group_0de95204f50fa5ecda49b700bda7d346);
+        
+    
+            var icon_edae360a1bc3e856dbb60a09c2ca8e87 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "cutlery",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_1039a0702f965f105b9176f244c0f633 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_3ce44b94e237663044bc526e3329d8db = $(`<div id="html_3ce44b94e237663044bc526e3329d8db" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkred;">                             Dragon Palace                         </h4>                     <b>Cuisine:</b> chinese<br></div></div>`)[0];
+                popup_1039a0702f965f105b9176f244c0f633.setContent(html_3ce44b94e237663044bc526e3329d8db);
+            
+        
+
+        marker_790ef5584b4a4b9fd7c8509bb73025c6.bindPopup(popup_1039a0702f965f105b9176f244c0f633)
+        ;
+
+        
+    
+    
+            marker_790ef5584b4a4b9fd7c8509bb73025c6.bindTooltip(
+                `<div>
+                     Dragon Palace
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_790ef5584b4a4b9fd7c8509bb73025c6.setIcon(icon_edae360a1bc3e856dbb60a09c2ca8e87);
+            
+    
+            var marker_6762970640430be2592cc1efc6341fbf = L.marker(
+                [51.529352831656134, -0.10496939782543115],
+                {
+}
+            ).addTo(feature_group_0de95204f50fa5ecda49b700bda7d346);
+        
+    
+            var icon_416e3a95bddc95f62de337e42177d215 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "cutlery",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_e930f41c5ca2a7378806f456f30ca367 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_880b92e3bc99b979e1e716008e52bfeb = $(`<div id="html_880b92e3bc99b979e1e716008e52bfeb" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkred;">                             Jade Garden                         </h4>                     <b>Cuisine:</b> chinese<br></div></div>`)[0];
+                popup_e930f41c5ca2a7378806f456f30ca367.setContent(html_880b92e3bc99b979e1e716008e52bfeb);
+            
+        
+
+        marker_6762970640430be2592cc1efc6341fbf.bindPopup(popup_e930f41c5ca2a7378806f456f30ca367)
+        ;
+
+        
+    
+    
+            marker_6762970640430be2592cc1efc6341fbf.bindTooltip(
+                `<div>
+                     Jade Garden
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_6762970640430be2592cc1efc6341fbf.setIcon(icon_416e3a95bddc95f62de337e42177d215);
+            
+    
+            var marker_bc19468afae009575dfba248c03249a0 = L.marker(
+                [51.52443892209898, -0.10543726646795641],
+                {
+}
+            ).addTo(feature_group_0de95204f50fa5ecda49b700bda7d346);
+        
+    
+            var icon_5946737c062fe8628c9678cbee055cf5 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkred",
+  "iconColor": "white",
+  "icon": "cutlery",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_09e60ed7a06b2ad8065438ebb6f0c950 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_dc340c68cbc3451b84e0c40b7b36337e = $(`<div id="html_dc340c68cbc3451b84e0c40b7b36337e" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkred;">                             Happy Wok                         </h4>                     <b>Cuisine:</b> chinese<br></div></div>`)[0];
+                popup_09e60ed7a06b2ad8065438ebb6f0c950.setContent(html_dc340c68cbc3451b84e0c40b7b36337e);
+            
+        
+
+        marker_bc19468afae009575dfba248c03249a0.bindPopup(popup_09e60ed7a06b2ad8065438ebb6f0c950)
+        ;
+
+        
+    
+    
+            marker_bc19468afae009575dfba248c03249a0.bindTooltip(
+                `<div>
+                     Happy Wok
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_bc19468afae009575dfba248c03249a0.setIcon(icon_5946737c062fe8628c9678cbee055cf5);
+            
+    
+            feature_group_0de95204f50fa5ecda49b700bda7d346.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var feature_group_09068d5ca324ed9cd12e9ca28046a3dc = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_feb70c979d52619e8a65063bb5bcec6f = L.marker(
+                [51.525443502502135, -0.08850530452432723],
+                {
+}
+            ).addTo(feature_group_09068d5ca324ed9cd12e9ca28046a3dc);
+        
+    
+            var icon_1fd053f6fb48d12a54fd32f6e94ef883 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "coffee",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_f189d98fc56ddb6622c4cebe3b5705e5 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_bcf367a406b08f00aa4b879685f9484a = $(`<div id="html_bcf367a406b08f00aa4b879685f9484a" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: orange;">                             Starbucks                         </h4>                     </div></div>`)[0];
+                popup_f189d98fc56ddb6622c4cebe3b5705e5.setContent(html_bcf367a406b08f00aa4b879685f9484a);
+            
+        
+
+        marker_feb70c979d52619e8a65063bb5bcec6f.bindPopup(popup_f189d98fc56ddb6622c4cebe3b5705e5)
+        ;
+
+        
+    
+    
+            marker_feb70c979d52619e8a65063bb5bcec6f.bindTooltip(
+                `<div>
+                     Starbucks
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_feb70c979d52619e8a65063bb5bcec6f.setIcon(icon_1fd053f6fb48d12a54fd32f6e94ef883);
+            
+    
+            var marker_c6afa7ede815c5e833301fd96c574859 = L.marker(
+                [51.530193468097494, -0.09568825928336647],
+                {
+}
+            ).addTo(feature_group_09068d5ca324ed9cd12e9ca28046a3dc);
+        
+    
+            var icon_f76e4c82b079eaa80e867efc3c584780 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "coffee",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_f475b310729848da0cd065e408d20acd = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_b9769a20de753268b1ba3b65c9d48e37 = $(`<div id="html_b9769a20de753268b1ba3b65c9d48e37" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: orange;">                             Costa Coffee                         </h4>                     </div></div>`)[0];
+                popup_f475b310729848da0cd065e408d20acd.setContent(html_b9769a20de753268b1ba3b65c9d48e37);
+            
+        
+
+        marker_c6afa7ede815c5e833301fd96c574859.bindPopup(popup_f475b310729848da0cd065e408d20acd)
+        ;
+
+        
+    
+    
+            marker_c6afa7ede815c5e833301fd96c574859.bindTooltip(
+                `<div>
+                     Costa Coffee
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_c6afa7ede815c5e833301fd96c574859.setIcon(icon_f76e4c82b079eaa80e867efc3c584780);
+            
+    
+            var marker_986de97a6f060ed1423467a216e25d2a = L.marker(
+                [51.523321121416394, -0.09418239488590717],
+                {
+}
+            ).addTo(feature_group_09068d5ca324ed9cd12e9ca28046a3dc);
+        
+    
+            var icon_25441d91102993e15cd6938b5e66c8e2 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "coffee",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_fd628a47bb60a3a9072aa696634d2e02 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_c069944fa7a00005078715e2cee0b5be = $(`<div id="html_c069944fa7a00005078715e2cee0b5be" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: orange;">                             Gail's Bakery                         </h4>                     </div></div>`)[0];
+                popup_fd628a47bb60a3a9072aa696634d2e02.setContent(html_c069944fa7a00005078715e2cee0b5be);
+            
+        
+
+        marker_986de97a6f060ed1423467a216e25d2a.bindPopup(popup_fd628a47bb60a3a9072aa696634d2e02)
+        ;
+
+        
+    
+    
+            marker_986de97a6f060ed1423467a216e25d2a.bindTooltip(
+                `<div>
+                     Gail's Bakery
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_986de97a6f060ed1423467a216e25d2a.setIcon(icon_25441d91102993e15cd6938b5e66c8e2);
+            
+    
+            var marker_7ba216b6bfcba9bf887ae46d25c9a8c6 = L.marker(
+                [51.521408921466275, -0.11361071895357275],
+                {
+}
+            ).addTo(feature_group_09068d5ca324ed9cd12e9ca28046a3dc);
+        
+    
+            var icon_b585e44a03ae9e9536114feb97f7a849 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "coffee",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_6742a423b10a94399cb165bba569fe48 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_5c18e71175f800e54b041aed09f1dcc7 = $(`<div id="html_5c18e71175f800e54b041aed09f1dcc7" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: orange;">                             Starbucks                         </h4>                     </div></div>`)[0];
+                popup_6742a423b10a94399cb165bba569fe48.setContent(html_5c18e71175f800e54b041aed09f1dcc7);
+            
+        
+
+        marker_7ba216b6bfcba9bf887ae46d25c9a8c6.bindPopup(popup_6742a423b10a94399cb165bba569fe48)
+        ;
+
+        
+    
+    
+            marker_7ba216b6bfcba9bf887ae46d25c9a8c6.bindTooltip(
+                `<div>
+                     Starbucks
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_7ba216b6bfcba9bf887ae46d25c9a8c6.setIcon(icon_b585e44a03ae9e9536114feb97f7a849);
+            
+    
+            var marker_4c9472234a51c7242a9dd73f61a9b1d3 = L.marker(
+                [51.51346971229252, -0.08788792998103165],
+                {
+}
+            ).addTo(feature_group_09068d5ca324ed9cd12e9ca28046a3dc);
+        
+    
+            var icon_043396478196906ad1efdcb2c0193535 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "orange",
+  "iconColor": "white",
+  "icon": "coffee",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_36559ddd0cba12a9a9645ab4e33d6900 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_4e628fcd48bc3ab1152d165340826539 = $(`<div id="html_4e628fcd48bc3ab1152d165340826539" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: orange;">                             Caffè Nero                         </h4>                     </div></div>`)[0];
+                popup_36559ddd0cba12a9a9645ab4e33d6900.setContent(html_4e628fcd48bc3ab1152d165340826539);
+            
+        
+
+        marker_4c9472234a51c7242a9dd73f61a9b1d3.bindPopup(popup_36559ddd0cba12a9a9645ab4e33d6900)
+        ;
+
+        
+    
+    
+            marker_4c9472234a51c7242a9dd73f61a9b1d3.bindTooltip(
+                `<div>
+                     Caffè Nero
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_4c9472234a51c7242a9dd73f61a9b1d3.setIcon(icon_043396478196906ad1efdcb2c0193535);
+            
+    
+            feature_group_09068d5ca324ed9cd12e9ca28046a3dc.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var feature_group_b95894b9006a367154a5fa676db456a6 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_a3afd9339a08315d35eecdbb53ee7181 = L.marker(
+                [51.53298349708818, -0.08910406000376594],
+                {
+}
+            ).addTo(feature_group_b95894b9006a367154a5fa676db456a6);
+        
+    
+            var icon_945b7c9c7411bc9aeb871655430b5ae9 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkgreen",
+  "iconColor": "white",
+  "icon": "tree",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_edb05669fb88926ec0d24a0c148f34a2 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_205135db8e1910b84840952f9b136526 = $(`<div id="html_205135db8e1910b84840952f9b136526" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkgreen;">                             Community Garden                         </h4>                     </div></div>`)[0];
+                popup_edb05669fb88926ec0d24a0c148f34a2.setContent(html_205135db8e1910b84840952f9b136526);
+            
+        
+
+        marker_a3afd9339a08315d35eecdbb53ee7181.bindPopup(popup_edb05669fb88926ec0d24a0c148f34a2)
+        ;
+
+        
+    
+    
+            marker_a3afd9339a08315d35eecdbb53ee7181.bindTooltip(
+                `<div>
+                     Community Garden
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a3afd9339a08315d35eecdbb53ee7181.setIcon(icon_945b7c9c7411bc9aeb871655430b5ae9);
+            
+    
+            var marker_c259d42ffa094a31f4506d06dcf7ec85 = L.marker(
+                [51.51839589840184, -0.0959742862081081],
+                {
+}
+            ).addTo(feature_group_b95894b9006a367154a5fa676db456a6);
+        
+    
+            var icon_442ab5d3de57d6115552941fd6263bed = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkgreen",
+  "iconColor": "white",
+  "icon": "tree",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_e8a8de56e1b2c1ac080daa778a425259 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_465dc4307f93a27ba729205471420db7 = $(`<div id="html_465dc4307f93a27ba729205471420db7" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkgreen;">                             Nature Reserve                         </h4>                     </div></div>`)[0];
+                popup_e8a8de56e1b2c1ac080daa778a425259.setContent(html_465dc4307f93a27ba729205471420db7);
+            
+        
+
+        marker_c259d42ffa094a31f4506d06dcf7ec85.bindPopup(popup_e8a8de56e1b2c1ac080daa778a425259)
+        ;
+
+        
+    
+    
+            marker_c259d42ffa094a31f4506d06dcf7ec85.bindTooltip(
+                `<div>
+                     Nature Reserve
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_c259d42ffa094a31f4506d06dcf7ec85.setIcon(icon_442ab5d3de57d6115552941fd6263bed);
+            
+    
+            var marker_f777a673ff2f36ce22b307be56ca81a8 = L.marker(
+                [51.52707389658958, -0.09339790654831658],
+                {
+}
+            ).addTo(feature_group_b95894b9006a367154a5fa676db456a6);
+        
+    
+            var icon_359238dec6e556773199c068794da72c = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkgreen",
+  "iconColor": "white",
+  "icon": "tree",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_fbc2be08ef7b7be8a7c588dc27f303e6 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_11a48937bd591ff22456a206554277ba = $(`<div id="html_11a48937bd591ff22456a206554277ba" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkgreen;">                             Nature Reserve                         </h4>                     </div></div>`)[0];
+                popup_fbc2be08ef7b7be8a7c588dc27f303e6.setContent(html_11a48937bd591ff22456a206554277ba);
+            
+        
+
+        marker_f777a673ff2f36ce22b307be56ca81a8.bindPopup(popup_fbc2be08ef7b7be8a7c588dc27f303e6)
+        ;
+
+        
+    
+    
+            marker_f777a673ff2f36ce22b307be56ca81a8.bindTooltip(
+                `<div>
+                     Nature Reserve
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_f777a673ff2f36ce22b307be56ca81a8.setIcon(icon_359238dec6e556773199c068794da72c);
+            
+    
+            var marker_0ec0dab0f3d5dbaff09b784663d74a92 = L.marker(
+                [51.52822044944006, -0.0963733902791901],
+                {
+}
+            ).addTo(feature_group_b95894b9006a367154a5fa676db456a6);
+        
+    
+            var icon_66601a27cb60800061548e0464e87dc4 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkgreen",
+  "iconColor": "white",
+  "icon": "tree",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_5c391572f2d765dc1c4fbe304b574cfc = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_e92e482421cf17a6a20dffe3f17eec6e = $(`<div id="html_e92e482421cf17a6a20dffe3f17eec6e" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkgreen;">                             Public Garden                         </h4>                     </div></div>`)[0];
+                popup_5c391572f2d765dc1c4fbe304b574cfc.setContent(html_e92e482421cf17a6a20dffe3f17eec6e);
+            
+        
+
+        marker_0ec0dab0f3d5dbaff09b784663d74a92.bindPopup(popup_5c391572f2d765dc1c4fbe304b574cfc)
+        ;
+
+        
+    
+    
+            marker_0ec0dab0f3d5dbaff09b784663d74a92.bindTooltip(
+                `<div>
+                     Public Garden
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_0ec0dab0f3d5dbaff09b784663d74a92.setIcon(icon_66601a27cb60800061548e0464e87dc4);
+            
+    
+            var marker_a3470acc72de6c21d9f2d1272bed105f = L.marker(
+                [51.52328571907858, -0.10138565153663981],
+                {
+}
+            ).addTo(feature_group_b95894b9006a367154a5fa676db456a6);
+        
+    
+            var icon_8f558b60898072eafe605dc18ffcd64f = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkgreen",
+  "iconColor": "white",
+  "icon": "tree",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_18973891834ec4971921ef998fac7ca1 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_ca2fefc8e9c72b14a2aa83eb99da1c88 = $(`<div id="html_ca2fefc8e9c72b14a2aa83eb99da1c88" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkgreen;">                             Recreation Ground                         </h4>                     </div></div>`)[0];
+                popup_18973891834ec4971921ef998fac7ca1.setContent(html_ca2fefc8e9c72b14a2aa83eb99da1c88);
+            
+        
+
+        marker_a3470acc72de6c21d9f2d1272bed105f.bindPopup(popup_18973891834ec4971921ef998fac7ca1)
+        ;
+
+        
+    
+    
+            marker_a3470acc72de6c21d9f2d1272bed105f.bindTooltip(
+                `<div>
+                     Recreation Ground
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a3470acc72de6c21d9f2d1272bed105f.setIcon(icon_8f558b60898072eafe605dc18ffcd64f);
+            
+    
+            var marker_9885df83e306ed5d3e4c5d913a094b6a = L.marker(
+                [51.53608920838619, -0.09538465230451257],
+                {
+}
+            ).addTo(feature_group_b95894b9006a367154a5fa676db456a6);
+        
+    
+            var icon_6f04aff595468fbcf5744539adef3595 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkgreen",
+  "iconColor": "white",
+  "icon": "tree",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_7935b1eab899c127ae833ba51803c3ed = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_81970a5df3b96c3fb82dfe1c94b03d74 = $(`<div id="html_81970a5df3b96c3fb82dfe1c94b03d74" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkgreen;">                             Public Garden                         </h4>                     </div></div>`)[0];
+                popup_7935b1eab899c127ae833ba51803c3ed.setContent(html_81970a5df3b96c3fb82dfe1c94b03d74);
+            
+        
+
+        marker_9885df83e306ed5d3e4c5d913a094b6a.bindPopup(popup_7935b1eab899c127ae833ba51803c3ed)
+        ;
+
+        
+    
+    
+            marker_9885df83e306ed5d3e4c5d913a094b6a.bindTooltip(
+                `<div>
+                     Public Garden
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_9885df83e306ed5d3e4c5d913a094b6a.setIcon(icon_6f04aff595468fbcf5744539adef3595);
+            
+    
+            feature_group_b95894b9006a367154a5fa676db456a6.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var feature_group_800da72e68e44ba539cb1a14e911603c = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_9259de2ca18c2218494589602046868b = L.marker(
+                [51.53288668410074, -0.09887457845466284],
+                {
+}
+            ).addTo(feature_group_800da72e68e44ba539cb1a14e911603c);
+        
+    
+            var icon_19e0164be3b9027510b7aba907ae506d = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "plus-sign",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_60d15a5a1d90950cd88af41200fb80f0 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_25c264844c39a069e4de06183ecad736 = $(`<div id="html_25c264844c39a069e4de06183ecad736" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: purple;">                             Boots                         </h4>                     </div></div>`)[0];
+                popup_60d15a5a1d90950cd88af41200fb80f0.setContent(html_25c264844c39a069e4de06183ecad736);
+            
+        
+
+        marker_9259de2ca18c2218494589602046868b.bindPopup(popup_60d15a5a1d90950cd88af41200fb80f0)
+        ;
+
+        
+    
+    
+            marker_9259de2ca18c2218494589602046868b.bindTooltip(
+                `<div>
+                     Boots
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_9259de2ca18c2218494589602046868b.setIcon(icon_19e0164be3b9027510b7aba907ae506d);
+            
+    
+            var marker_d333ba01392d317312c1ddb049cac57e = L.marker(
+                [51.52423063110741, -0.10499367501719337],
+                {
+}
+            ).addTo(feature_group_800da72e68e44ba539cb1a14e911603c);
+        
+    
+            var icon_e950e0bc8d5a6170b8ba43166fa139c6 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "plus-sign",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_9582bdf49be174e7b366902ff4ab7cd5 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_c66dfc388285bcba654c4c9874aee80b = $(`<div id="html_c66dfc388285bcba654c4c9874aee80b" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: purple;">                             Local Pharmacy                         </h4>                     </div></div>`)[0];
+                popup_9582bdf49be174e7b366902ff4ab7cd5.setContent(html_c66dfc388285bcba654c4c9874aee80b);
+            
+        
+
+        marker_d333ba01392d317312c1ddb049cac57e.bindPopup(popup_9582bdf49be174e7b366902ff4ab7cd5)
+        ;
+
+        
+    
+    
+            marker_d333ba01392d317312c1ddb049cac57e.bindTooltip(
+                `<div>
+                     Local Pharmacy
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_d333ba01392d317312c1ddb049cac57e.setIcon(icon_e950e0bc8d5a6170b8ba43166fa139c6);
+            
+    
+            var marker_9dd9edac5dc87595ea73f06efbd155a1 = L.marker(
+                [51.530139182586346, -0.11411729999814568],
+                {
+}
+            ).addTo(feature_group_800da72e68e44ba539cb1a14e911603c);
+        
+    
+            var icon_a2b8391a503d921507e018e1f2b88180 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "plus-sign",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_fff28c7f1fcf4ae46ddb035c57e6770d = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_6d6cd86a697ee23cdbc2d1dedeac380a = $(`<div id="html_6d6cd86a697ee23cdbc2d1dedeac380a" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: purple;">                             Well Pharmacy                         </h4>                     </div></div>`)[0];
+                popup_fff28c7f1fcf4ae46ddb035c57e6770d.setContent(html_6d6cd86a697ee23cdbc2d1dedeac380a);
+            
+        
+
+        marker_9dd9edac5dc87595ea73f06efbd155a1.bindPopup(popup_fff28c7f1fcf4ae46ddb035c57e6770d)
+        ;
+
+        
+    
+    
+            marker_9dd9edac5dc87595ea73f06efbd155a1.bindTooltip(
+                `<div>
+                     Well Pharmacy
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_9dd9edac5dc87595ea73f06efbd155a1.setIcon(icon_a2b8391a503d921507e018e1f2b88180);
+            
+    
+            var marker_aaa7bca2d86ab81d4703c6e1106957bb = L.marker(
+                [51.530411874269696, -0.08635477839290512],
+                {
+}
+            ).addTo(feature_group_800da72e68e44ba539cb1a14e911603c);
+        
+    
+            var icon_24eedc13ede3c12215533d4ad4de5bc6 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "plus-sign",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_8499f2324d32114235564de8d02921d9 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_1bc31f82073fb11f895d8a1320205c1a = $(`<div id="html_1bc31f82073fb11f895d8a1320205c1a" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: purple;">                             Well Pharmacy                         </h4>                     </div></div>`)[0];
+                popup_8499f2324d32114235564de8d02921d9.setContent(html_1bc31f82073fb11f895d8a1320205c1a);
+            
+        
+
+        marker_aaa7bca2d86ab81d4703c6e1106957bb.bindPopup(popup_8499f2324d32114235564de8d02921d9)
+        ;
+
+        
+    
+    
+            marker_aaa7bca2d86ab81d4703c6e1106957bb.bindTooltip(
+                `<div>
+                     Well Pharmacy
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_aaa7bca2d86ab81d4703c6e1106957bb.setIcon(icon_24eedc13ede3c12215533d4ad4de5bc6);
+            
+    
+            var marker_87b32651edee024870e1badc10dd54b9 = L.marker(
+                [51.52451312970144, -0.10964269581099001],
+                {
+}
+            ).addTo(feature_group_800da72e68e44ba539cb1a14e911603c);
+        
+    
+            var icon_c82392e8d0fc61d9dbf8a4bc8bf6de77 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "plus-sign",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_1bd7786d8b10caf6d6acdd84d98ec162 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_440271a992bcf86595c0cc030ec2f5b7 = $(`<div id="html_440271a992bcf86595c0cc030ec2f5b7" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: purple;">                             Boots                         </h4>                     </div></div>`)[0];
+                popup_1bd7786d8b10caf6d6acdd84d98ec162.setContent(html_440271a992bcf86595c0cc030ec2f5b7);
+            
+        
+
+        marker_87b32651edee024870e1badc10dd54b9.bindPopup(popup_1bd7786d8b10caf6d6acdd84d98ec162)
+        ;
+
+        
+    
+    
+            marker_87b32651edee024870e1badc10dd54b9.bindTooltip(
+                `<div>
+                     Boots
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_87b32651edee024870e1badc10dd54b9.setIcon(icon_c82392e8d0fc61d9dbf8a4bc8bf6de77);
+            
+    
+            var marker_f246ce89f8a6e541ea03735f9a2b06e1 = L.marker(
+                [51.52566135751248, -0.0927990719596047],
+                {
+}
+            ).addTo(feature_group_800da72e68e44ba539cb1a14e911603c);
+        
+    
+            var icon_e98ff02debd2d80de6d18fdf9b463801 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "purple",
+  "iconColor": "white",
+  "icon": "plus-sign",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_dcc7d95c23c2a6bbf494ac5995a737d1 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_edc9d4423d7facdd53b95605cac35420 = $(`<div id="html_edc9d4423d7facdd53b95605cac35420" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: purple;">                             Lloyds Pharmacy                         </h4>                     </div></div>`)[0];
+                popup_dcc7d95c23c2a6bbf494ac5995a737d1.setContent(html_edc9d4423d7facdd53b95605cac35420);
+            
+        
+
+        marker_f246ce89f8a6e541ea03735f9a2b06e1.bindPopup(popup_dcc7d95c23c2a6bbf494ac5995a737d1)
+        ;
+
+        
+    
+    
+            marker_f246ce89f8a6e541ea03735f9a2b06e1.bindTooltip(
+                `<div>
+                     Lloyds Pharmacy
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_f246ce89f8a6e541ea03735f9a2b06e1.setIcon(icon_e98ff02debd2d80de6d18fdf9b463801);
+            
+    
+            feature_group_800da72e68e44ba539cb1a14e911603c.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var feature_group_23baacaa19a8f86304447b18407d55f9 = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_183ca2a965cf62563e7ca63d1e4905a5 = L.marker(
+                [51.52732733646122, -0.09598301264834573],
+                {
+}
+            ).addTo(feature_group_23baacaa19a8f86304447b18407d55f9);
+        
+    
+            var icon_2e7b689ab35bd3ef643e63042919ba57 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkblue",
+  "iconColor": "white",
+  "icon": "gbp",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_25bd5b7c59bcd50711af2fc1e199a94b = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_70845a006a1b8096ebebd3731d2636e2 = $(`<div id="html_70845a006a1b8096ebebd3731d2636e2" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkblue;">                             NatWest                         </h4>                     </div></div>`)[0];
+                popup_25bd5b7c59bcd50711af2fc1e199a94b.setContent(html_70845a006a1b8096ebebd3731d2636e2);
+            
+        
+
+        marker_183ca2a965cf62563e7ca63d1e4905a5.bindPopup(popup_25bd5b7c59bcd50711af2fc1e199a94b)
+        ;
+
+        
+    
+    
+            marker_183ca2a965cf62563e7ca63d1e4905a5.bindTooltip(
+                `<div>
+                     NatWest
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_183ca2a965cf62563e7ca63d1e4905a5.setIcon(icon_2e7b689ab35bd3ef643e63042919ba57);
+            
+    
+            var marker_a83fb822a562374754f64efae0a839a4 = L.marker(
+                [51.52994263853655, -0.10601246144251678],
+                {
+}
+            ).addTo(feature_group_23baacaa19a8f86304447b18407d55f9);
+        
+    
+            var icon_ff367957f28587f355ff4374dc7102fc = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkblue",
+  "iconColor": "white",
+  "icon": "gbp",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_455fb880daaef15e17c7383b8964daee = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_f93456e0949ec23edd470326fe00b520 = $(`<div id="html_f93456e0949ec23edd470326fe00b520" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkblue;">                             NatWest                         </h4>                     </div></div>`)[0];
+                popup_455fb880daaef15e17c7383b8964daee.setContent(html_f93456e0949ec23edd470326fe00b520);
+            
+        
+
+        marker_a83fb822a562374754f64efae0a839a4.bindPopup(popup_455fb880daaef15e17c7383b8964daee)
+        ;
+
+        
+    
+    
+            marker_a83fb822a562374754f64efae0a839a4.bindTooltip(
+                `<div>
+                     NatWest
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a83fb822a562374754f64efae0a839a4.setIcon(icon_ff367957f28587f355ff4374dc7102fc);
+            
+    
+            var marker_867d389c8394ba91fc09846bb977e8ee = L.marker(
+                [51.53241693526166, -0.08090425041076454],
+                {
+}
+            ).addTo(feature_group_23baacaa19a8f86304447b18407d55f9);
+        
+    
+            var icon_f311628328b89198e558b3e179d89d45 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkblue",
+  "iconColor": "white",
+  "icon": "gbp",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_984828bddc8f4ff890e7468be47eaf72 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_b2b9076c5857f25ee1bb8f543fff785f = $(`<div id="html_b2b9076c5857f25ee1bb8f543fff785f" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkblue;">                             Metro Bank                         </h4>                     </div></div>`)[0];
+                popup_984828bddc8f4ff890e7468be47eaf72.setContent(html_b2b9076c5857f25ee1bb8f543fff785f);
+            
+        
+
+        marker_867d389c8394ba91fc09846bb977e8ee.bindPopup(popup_984828bddc8f4ff890e7468be47eaf72)
+        ;
+
+        
+    
+    
+            marker_867d389c8394ba91fc09846bb977e8ee.bindTooltip(
+                `<div>
+                     Metro Bank
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_867d389c8394ba91fc09846bb977e8ee.setIcon(icon_f311628328b89198e558b3e179d89d45);
+            
+    
+            var marker_a9ecbfe1beb3c867e078c067f985b670 = L.marker(
+                [51.52247668641298, -0.08926649086315469],
+                {
+}
+            ).addTo(feature_group_23baacaa19a8f86304447b18407d55f9);
+        
+    
+            var icon_14c8ecfcbde1f6d57c95dbb8d098b482 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkblue",
+  "iconColor": "white",
+  "icon": "gbp",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_c2b5f2fb1122a094374268e8865a87cf = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_39d81983e1019f14eac73e949d7eddf5 = $(`<div id="html_39d81983e1019f14eac73e949d7eddf5" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkblue;">                             Santander                         </h4>                     </div></div>`)[0];
+                popup_c2b5f2fb1122a094374268e8865a87cf.setContent(html_39d81983e1019f14eac73e949d7eddf5);
+            
+        
+
+        marker_a9ecbfe1beb3c867e078c067f985b670.bindPopup(popup_c2b5f2fb1122a094374268e8865a87cf)
+        ;
+
+        
+    
+    
+            marker_a9ecbfe1beb3c867e078c067f985b670.bindTooltip(
+                `<div>
+                     Santander
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a9ecbfe1beb3c867e078c067f985b670.setIcon(icon_14c8ecfcbde1f6d57c95dbb8d098b482);
+            
+    
+            var marker_4391f0e4c40f8752726e6ed3e74725ad = L.marker(
+                [51.51900917808148, -0.1101411400055962],
+                {
+}
+            ).addTo(feature_group_23baacaa19a8f86304447b18407d55f9);
+        
+    
+            var icon_04981b1137a05ac829cec278fa5eac52 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "darkblue",
+  "iconColor": "white",
+  "icon": "gbp",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_b8f1bdd3bfbcbb9847e647d875a1732c = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_8ea04fc71ecc2c7bd42c5a89ba70300c = $(`<div id="html_8ea04fc71ecc2c7bd42c5a89ba70300c" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: darkblue;">                             NatWest                         </h4>                     </div></div>`)[0];
+                popup_b8f1bdd3bfbcbb9847e647d875a1732c.setContent(html_8ea04fc71ecc2c7bd42c5a89ba70300c);
+            
+        
+
+        marker_4391f0e4c40f8752726e6ed3e74725ad.bindPopup(popup_b8f1bdd3bfbcbb9847e647d875a1732c)
+        ;
+
+        
+    
+    
+            marker_4391f0e4c40f8752726e6ed3e74725ad.bindTooltip(
+                `<div>
+                     NatWest
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_4391f0e4c40f8752726e6ed3e74725ad.setIcon(icon_04981b1137a05ac829cec278fa5eac52);
+            
+    
+            feature_group_23baacaa19a8f86304447b18407d55f9.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var feature_group_b9694e0a54058d28870e7d5bec70f18a = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_7e60ca34ef8ac56ec3e9f952d75e67f1 = L.marker(
+                [51.519111817849414, -0.10080618013872061],
+                {
+}
+            ).addTo(feature_group_b9694e0a54058d28870e7d5bec70f18a);
+        
+    
+            var icon_29646583794b2e7d0d8a7ba68a695f8e = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "gray",
+  "iconColor": "white",
+  "icon": "train",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_721795616b74cdd0ff005a8dd0cf1dad = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_9fdf9aa2ad2a36acb29546f7fce03569 = $(`<div id="html_9fdf9aa2ad2a36acb29546f7fce03569" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: gray;">                             Victoria                         </h4>                     </div></div>`)[0];
+                popup_721795616b74cdd0ff005a8dd0cf1dad.setContent(html_9fdf9aa2ad2a36acb29546f7fce03569);
+            
+        
+
+        marker_7e60ca34ef8ac56ec3e9f952d75e67f1.bindPopup(popup_721795616b74cdd0ff005a8dd0cf1dad)
+        ;
+
+        
+    
+    
+            marker_7e60ca34ef8ac56ec3e9f952d75e67f1.bindTooltip(
+                `<div>
+                     Victoria
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_7e60ca34ef8ac56ec3e9f952d75e67f1.setIcon(icon_29646583794b2e7d0d8a7ba68a695f8e);
+            
+    
+            var marker_a68a76908380c6e975bc8cf6ab4ae0a9 = L.marker(
+                [51.53214275365961, -0.09430055523938902],
+                {
+}
+            ).addTo(feature_group_b9694e0a54058d28870e7d5bec70f18a);
+        
+    
+            var icon_dd29d08419bc5882d7e56c457735c335 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "gray",
+  "iconColor": "white",
+  "icon": "train",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_f8292c8eb34f7d2484df0b3e1dbc1bfc = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_bc07ceb8dc85c64c68d7555d0645da56 = $(`<div id="html_bc07ceb8dc85c64c68d7555d0645da56" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: gray;">                             King's Cross St Pancras                         </h4>                     </div></div>`)[0];
+                popup_f8292c8eb34f7d2484df0b3e1dbc1bfc.setContent(html_bc07ceb8dc85c64c68d7555d0645da56);
+            
+        
+
+        marker_a68a76908380c6e975bc8cf6ab4ae0a9.bindPopup(popup_f8292c8eb34f7d2484df0b3e1dbc1bfc)
+        ;
+
+        
+    
+    
+            marker_a68a76908380c6e975bc8cf6ab4ae0a9.bindTooltip(
+                `<div>
+                     King's Cross St Pancras
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a68a76908380c6e975bc8cf6ab4ae0a9.setIcon(icon_dd29d08419bc5882d7e56c457735c335);
+            
+    
+            var marker_a83cd4c8da76f0a0487aa99028465e3b = L.marker(
+                [51.52259377080931, -0.10749051470095106],
+                {
+}
+            ).addTo(feature_group_b9694e0a54058d28870e7d5bec70f18a);
+        
+    
+            var icon_62dc59846a9a7bbc622e2f5b99249b33 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "gray",
+  "iconColor": "white",
+  "icon": "train",
+  "prefix": "fa",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_8b92794614aa7bb38c4caf85cc01b0d1 = L.popup({
+  "maxWidth": 250,
+});
+
+        
+            
+                var html_ca26c872505b83e4fa2fb5b19c244d42 = $(`<div id="html_ca26c872505b83e4fa2fb5b19c244d42" style="width: 100.0%; height: 100.0%;">                     <div style="font-family: Arial; min-width: 150px;">                         <h4 style="margin-bottom: 10px; color: gray;">                             Liverpool Street                         </h4>                     </div></div>`)[0];
+                popup_8b92794614aa7bb38c4caf85cc01b0d1.setContent(html_ca26c872505b83e4fa2fb5b19c244d42);
+            
+        
+
+        marker_a83cd4c8da76f0a0487aa99028465e3b.bindPopup(popup_8b92794614aa7bb38c4caf85cc01b0d1)
+        ;
+
+        
+    
+    
+            marker_a83cd4c8da76f0a0487aa99028465e3b.bindTooltip(
+                `<div>
+                     Liverpool Street
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a83cd4c8da76f0a0487aa99028465e3b.setIcon(icon_62dc59846a9a7bbc622e2f5b99249b33);
+            
+    
+            feature_group_b9694e0a54058d28870e7d5bec70f18a.addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+    
+            var layer_control_b5645b49f730c53857d937a161444d78_layers = {
+                base_layers : {
+                    "openstreetmap" : tile_layer_d53e7962185e5979921d07c73b30cc09,
+                },
+                overlays :  {
+                    "Supermarkets" : feature_group_2470a776bfca5eb1e11e9140ba26cb4f,
+                    "Convenience Stores" : feature_group_96916cead6384d09fd02aa640da8f70d,
+                    "Chinese Restaurants" : feature_group_0de95204f50fa5ecda49b700bda7d346,
+                    "Caf\u00e9s" : feature_group_09068d5ca324ed9cd12e9ca28046a3dc,
+                    "Parks" : feature_group_b95894b9006a367154a5fa676db456a6,
+                    "Pharmacies" : feature_group_800da72e68e44ba539cb1a14e911603c,
+                    "Banks" : feature_group_23baacaa19a8f86304447b18407d55f9,
+                    "Metro Stations" : feature_group_b9694e0a54058d28870e7d5bec70f18a,
+                },
+            };
+            let layer_control_b5645b49f730c53857d937a161444d78 = L.control.layers(
+                layer_control_b5645b49f730c53857d937a161444d78_layers.base_layers,
+                layer_control_b5645b49f730c53857d937a161444d78_layers.overlays,
+                {
+  "position": "topright",
+  "collapsed": false,
+  "autoZIndex": true,
+}
+            ).addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+
+        
+    
+            L.control.fullscreen(
+                {
+  "position": "topleft",
+  "title": "Fullscreen",
+  "titleCancel": "Exit Fullscreen",
+  "forceSeparateButton": true,
+}
+            ).addTo(map_7b6fe3573404dfa5ccfb095799dadc63);
+        
+</script>
+</html>

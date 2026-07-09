@@ -1,0 +1,29 @@
+Function Calling 是一种让LLM生成结构化JSON来调用函数或工具的标准方式
+它的核心是:
+1. 告诉LLM ---- “我有哪些函数tools可以使用”
+2. 你定义每个函数的输入参数结构
+3. LLM根据用户请求，输出调用哪个函数、用什么参数
+4. 你的程序执行那个函数，再把结果传给LLM
+
+一个tool的例子:
+{
+  "name": "get_weather",
+  "description": "获取指定城市的天气",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "city": {
+        "type": "string",
+        "description": "城市名称，如 London 或 Beijing"
+      },
+      "unit": {
+        "type": "string",
+        "enum": ["celsius", "fahrenheit"]
+      }
+    },
+    "required": ["city"]
+  }
+}
+
+tool system 结构安排
+每个tool一个独立的.py文件，一个class代表一个tool

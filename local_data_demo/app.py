@@ -18,10 +18,15 @@ import threading
 import os
 from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
 import json
 import traceback
 import re
 from uk_rent_agent.web.session_store import SessionStore
+from uk_rent_agent.web.conversation_store import ConversationStore
+from uk_rent_agent.web.identity import (
+    resolve_user_id, normalize_message, InvalidUserId, InvalidMessage,
+)
 from uk_rent_agent.config import Config
 from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, graph_config
 from uk_rent_agent.observability import new_request_id, request_context
@@ -76,60 +81,192 @@ def _default_persistent_state():
 
 
 # Per-user L2 stores (was: agent_persistent_state / conversation_history / last_search_results)
+# SessionStore is now a HOT CACHE keyed by (user_id, conversation_id); the durable copy of
+# conversations / messages / favorites lives in the sqlite ConversationStore below.
 _session_store = SessionStore(
     max_users=_runtime_config.session_max_users,
     ttl_seconds=_runtime_config.session_ttl_seconds,
 )
 
+
+def _conversation_db_path():
+    """Sqlite path for the durable conversation store. Defaults alongside the LangGraph
+    checkpointer under .runtime/; override via CONVERSATION_DB_PATH so a test instance can
+    use an isolated file instead of sharing the live server's DB."""
+    override = os.getenv("CONVERSATION_DB_PATH")
+    if override:
+        return override
+    cp = _runtime_config.checkpoint_path
+    base = Path(cp).parent if cp else (Path(__file__).resolve().parents[1] / ".runtime")
+    return str(base / "conversations.sqlite3")
+
+
+conversation_store = ConversationStore(_conversation_db_path())
+print(f"[STARTUP] Conversation store: {conversation_store.db_path}")
+
 MAX_HISTORY_LENGTH = 10  # 保留最近10轮对话
 
-
-def _get_user_state(user_id):
-    """Lazily initialise and return this user's persistent state slice."""
-    return _session_store.get(user_id).persistent_state
-
-
-def _get_user_history(user_id):
-    """Lazily initialise and return this user's conversation history list."""
-    return _session_store.get(user_id).history
+# extracted_context 白名单：只回传前端真正需要的房产上下文标量。
+# 其余内部字段（previous_search_results / last_results / comparison_properties /
+# current_message 以及原始房源大文本）留在服务端，避免把候选池泄露给客户端。
+_EXTRACTED_CONTEXT_WHITELIST = (
+    "property_address", "property_price", "property_travel_time", "property_url",
+)
 
 
-def _get_user_last_results(user_id):
-    """Lazily initialise and return this user's last search results list."""
-    return _session_store.get(user_id).last_results
+def _whitelist_extracted_context(ctx) -> dict:
+    if not isinstance(ctx, dict):
+        return {}
+    return {k: ctx[k] for k in _EXTRACTED_CONTEXT_WHITELIST
+            if ctx.get(k) not in (None, "", [], {})}
+
+
+def _get_session(user_id, conversation_id):
+    """Return the hot-cache slice for (user_id, conversation_id), rehydrating history
+    from the durable sqlite store on a cache miss (fresh slice / after a restart)."""
+    sess = _session_store.get(user_id, conversation_id)
+    if not sess.rehydrated:
+        try:
+            if not sess.history:
+                sess.history = conversation_store.rehydrate_history(
+                    user_id, conversation_id, MAX_HISTORY_LENGTH)
+        except Exception as e:
+            print(f"[rehydrate] failed ({user_id}:{conversation_id}): {e}")
+        sess.rehydrated = True
+    return sess
+
+
+# ============================================================================
+# API error contract — every /api/* failure returns JSON, never an HTML page.
+# ============================================================================
+
+class ApiError(Exception):
+    """Raised anywhere in a request to short-circuit to a JSON error response."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+        self.message = message
+
+
+def _is_api_path() -> bool:
+    try:
+        return request.path.startswith('/api/')
+    except Exception:
+        return False
+
+
+@app.errorhandler(ApiError)
+def _handle_api_error(e: ApiError):
+    return jsonify({"error": e.message}), e.status
+
+
+@app.errorhandler(HTTPException)
+def _handle_http_exception(e: HTTPException):
+    # Malformed JSON (400), wrong Content-Type (415), 404/405 etc. → JSON under /api/*.
+    if _is_api_path():
+        message = {
+            400: "bad request", 404: "not found", 405: "method not allowed",
+            415: "unsupported media type", 500: "internal server error",
+        }.get(e.code, (e.description or e.name or "error"))
+        return jsonify({"error": message}), (e.code or 500)
+    return e
+
+
+@app.errorhandler(Exception)
+def _handle_uncaught(e: Exception):
+    if isinstance(e, ApiError):
+        return _handle_api_error(e)
+    if isinstance(e, HTTPException):
+        return _handle_http_exception(e)
+    traceback.print_exc()
+    if _is_api_path():
+        # Generic message only — never leak a traceback to the client.
+        return jsonify({"error": "internal server error"}), 500
+    raise e
+
+
+def _request_body():
+    """Best-effort JSON body for identity on GET/DELETE (never raises)."""
+    try:
+        if request.mimetype == 'application/json' and request.data:
+            data = request.get_json(silent=True)
+            return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+    return None
+
+
+def get_json_or_400() -> dict:
+    """Parse a REQUIRED JSON object body, mapping Flask's HTML errors to JSON per contract."""
+    try:
+        data = request.get_json(silent=False)
+    except UnsupportedMediaType:
+        raise ApiError(415, "Content-Type must be application/json")
+    except BadRequest:
+        raise ApiError(400, "malformed JSON body")
+    except Exception:
+        raise ApiError(400, "malformed JSON body")
+    if data is None:
+        raise ApiError(400, "request body must be JSON")
+    if not isinstance(data, dict):
+        raise ApiError(400, "request body must be a JSON object")
+    return data
 
 
 def resolve_identity(data=None):
-    """Resolve a per-request (user_id, session_id) for L2 + L3 isolation.
+    """Resolve (user_id, session_id) with the uniform contract priority:
+    body user_id > X-User-Id header > ?user_id= query > Flask session cookie > mint.
 
-    Priority:
-      (a) explicit 'user_id' in the POST JSON body
-      (b) 'X-User-Id' request header
-      (c) a Flask server-side session cookie holding a generated UUID
-          (auto-isolates different browsers without any client changes)
-      (d) 'default'  (final fallback — preserves legacy single-user behaviour)
-
-    session_id mirrors user_id (the app has no separate per-conversation id);
-    user_id is the isolation axis for both conversational state and ChromaDB memory.
+    A client-supplied id (body/header/query) violating the regex → ApiError 400.
+    session_id mirrors user_id (kept for signature compatibility); the conversation axis
+    is threaded separately as conversation_id.
     """
-    uid = None
-    if isinstance(data, dict):
-        uid = data.get('user_id')
-    if not uid:
+    body_uid = data.get('user_id') if isinstance(data, dict) else None
+    try:
+        header_uid = request.headers.get('X-User-Id')
+    except Exception:
+        header_uid = None
+    try:
+        query_uid = request.args.get('user_id')
+    except Exception:
+        query_uid = None
+    try:
+        cookie_uid = session.get('user_id')
+    except Exception:
+        cookie_uid = None
+
+    try:
+        uid, minted = resolve_user_id(
+            body_uid=body_uid, header_uid=header_uid, query_uid=query_uid,
+            cookie_uid=cookie_uid, mint=lambda: uuid.uuid4().hex,
+        )
+    except InvalidUserId:
+        raise ApiError(400, "invalid user_id")
+    if minted:
         try:
-            uid = request.headers.get('X-User-Id')
+            session['user_id'] = uid
         except Exception:
-            uid = None
-    if not uid:
-        try:
-            uid = session.get('user_id')
-            if not uid:
-                uid = uuid.uuid4().hex
-                session['user_id'] = uid
-        except Exception:
-            uid = None
-    uid = (str(uid).strip() if uid else '') or 'default'
+            pass
     return uid, uid
+
+
+def _identity_from_request(data=None):
+    """Resolve identity for handlers that may not have parsed a body (GET/DELETE)."""
+    if data is None:
+        data = _request_body()
+    return resolve_identity(data)
+
+
+def _delete_checkpoint_thread(user_id: str, conversation_id: str) -> None:
+    """Drop a conversation's LangGraph checkpointer thread (best-effort)."""
+    try:
+        if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
+            cp = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+            if cp is not None:
+                cp.delete_thread(f"{user_id}:{conversation_id}")
+    except Exception as e:
+        print(f"[checkpoint] delete_thread failed ({user_id}:{conversation_id}): {e}")
 
 # --- Tool System Setup (从 fengyuan-agent 迁移) ---
 print("[STARTUP] Initializing Tool System...")
@@ -238,45 +375,82 @@ async def api_alex():
     - 是否需要搜索附近设施（调用 search_nearby_pois 工具）
     - 或者直接回答用户问题
     """
-    data = request.get_json()
-    if not data or not data.get('message'):
-        return jsonify({"error": "Message is required"}), 400
+    # --- parse + validate (these raise ApiError → JSON 4xx, NOT 500) -----------
+    data = get_json_or_400()
+    user_id, _session_id = resolve_identity(data)
+    try:
+        user_message = normalize_message(data.get('message'))
+    except InvalidMessage as e:
+        raise ApiError(400, str(e))
 
-    user_message = data.get('message')
-    context = data.get('context', {})
+    context = data.get('context', {}) or {}
     is_continuation = data.get('is_continuation', False)
 
-    # Resolve per-request identity (body user_id > X-User-Id header > session cookie > "default")
-    user_id, session_id = resolve_identity(data)
+    # --- resolve / implicitly create the conversation --------------------------
+    conversation_id = data.get('conversation_id')
+    conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
+    if not conv:
+        conv = conversation_store.create_conversation(user_id, title=_derive_title(user_message))
+        conversation_id = conv['id']
+        print(f"🆕 [ALEX] implicitly created conversation {conversation_id}")
 
     print(f"\n{'='*60}")
     print(f"🤖 [ALEX - LangGraph Agent] 收到消息: {user_message}")
-    print(f"👤 [ALEX] user_id: {user_id}")
+    print(f"👤 [ALEX] user_id: {user_id} | 🧵 conversation_id: {conversation_id}")
     print(f"📋 [ALEX] is_continuation: {is_continuation}")
     print(f"📋 [ALEX] context: {context}")
     print(f"{'='*60}")
+
+    # Persist the user turn up-front (survives a crash mid-generation).
+    conversation_store.add_message(user_id, conversation_id, "user", user_message)
 
     request_id = new_request_id(request.headers.get("X-Request-Id"))
     try:
         # 所有请求都通过 ReAct Agent 处理
         with request_context(request_id, user_id):
-            response = await handle_with_react_agent(
-                user_message, context, is_continuation, user_id, session_id, request_id
+            payload = await handle_with_react_agent(
+                user_message, context, is_continuation, user_id, conversation_id, request_id
             )
-            response.headers["X-Request-Id"] = request_id
-            return response
-    
     except Exception as e:
         print(f"❌ [ALEX] 错误: {e}")
         traceback.print_exc()
-        return jsonify({
+        payload = {
             "response_type": "error",
-            "message": "抱歉，处理您的请求时出错了。请稍后再试。"
-        }), 500
+            "message": "抱歉，处理您的请求时出错了。请稍后再试。",
+        }
+
+    # conversation_id is echoed in EVERY response (incl. errors + implicit creation).
+    payload["conversation_id"] = conversation_id
+
+    # Persist the assistant reply (recommendations preserved verbatim for re-render).
+    try:
+        conversation_store.add_message(
+            user_id, conversation_id, "assistant",
+            payload.get("message", ""),
+            response_type=payload.get("response_type"),
+            recommendations=payload.get("recommendations"),
+        )
+    except Exception as e:
+        print(f"[persist] assistant message failed: {e}")
+
+    # Always HTTP 200: an agent-side "error" is a normal response_type the client renders,
+    # and returning 200 lets the frontend adopt conversation_id + persist the turn even when
+    # generation failed (a 500 would orphan the freshly-created conversation).
+    response = jsonify(payload)
+    response.headers["X-Request-Id"] = request_id
+    return response
+
+
+def _derive_title(message: str) -> str:
+    """Human-friendly conversation title from the first user message (implicit creation)."""
+    text = " ".join((message or "").split())
+    if not text:
+        return "New chat"
+    return text[:40] + ("…" if len(text) > 40 else "")
 
 
 async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool,
-                                  user_id: str = "default", session_id: str = "default",
+                                  user_id: str = "default", conversation_id: str = "default",
                                   request_id: str | None = None):
     """
     使用 LangGraph Agent 处理所有用户请求 - 纯 LLM 驱动
@@ -290,11 +464,16 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     """
     global agent_graph, tool_registry, agent_tool_provider
 
-    # ── Load THIS user's isolated L2 slices (no cross-user sharing) ──────────
-    # Locals keep the legacy names so the existing in-place dict mutations of
-    # `agent_persistent_state` continue to update the stored slice directly.
-    agent_persistent_state = _get_user_state(user_id)
-    conversation_history = _get_user_history(user_id)
+    # ── Phase 1: snapshot THIS conversation's L2 state under the per-conv lock ──
+    # The turn lock makes the read here and the write-back in phase 3 atomic vs.
+    # concurrent same-conversation requests, WITHOUT being held across the slow LLM
+    # call in phase 2. We work off deep-copied snapshots so the graph mutating its
+    # inputs can never corrupt the shared cached state mid-flight.
+    turn_lock = _session_store.turn_lock(user_id, conversation_id)
+    with turn_lock:
+        _sess = _get_session(user_id, conversation_id)
+        persistent_snapshot = copy.deepcopy(_sess.persistent_state)
+        history_snapshot = list(_sess.history)
 
     # 确保 tool_registry 已初始化
     if tool_registry is None:
@@ -315,7 +494,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         print("[LangGraph] ✓ LangGraph agent 编译完成")
 
     # ── 构建本轮 extracted_context ──────────────────────────────
-    extracted_context = dict(agent_persistent_state.get('extracted_context', {}))
+    extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
 
     # 如果有 property context，设置到 extracted_context 中并从数据库获取详细信息
     if context and context.get('property'):
@@ -389,8 +568,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     if has_property_context:
         print(f"[LangGraph] 📍 用户正在询问关于特定房产的问题，将使用房产上下文回答")
-    elif conversation_history:
-        last_response = conversation_history[-1].get('assistant', '') if conversation_history else ''
+    elif history_snapshot:
+        last_response = history_snapshot[-1].get('assistant', '') if history_snapshot else ''
         is_clarification_answer = any(q in last_response.lower() for q in [
             'what is your', 'could you tell me', 'what\'s the maximum',
             'please provide', 'how many', 'which area', '?'
@@ -400,7 +579,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             print(f"[LangGraph] 🔄 检测到澄清回复，保持完整上下文")
             history_text = "\n".join([
                 f"User: {h['user']}\nAlex: {h['assistant']}"
-                for h in conversation_history[-5:]
+                for h in history_snapshot[-5:]
             ])
             query_with_history = f"""Previous conversation (IMPORTANT - user is answering a clarification question):
 {history_text}
@@ -411,7 +590,7 @@ INSTRUCTIONS: The user just answered your clarification question. Use their answ
         else:
             history_text = "\n".join([
                 f"User: {h['user']}\nAlex: {h['assistant']}"
-                for h in conversation_history[-3:]
+                for h in history_snapshot[-3:]
             ])
             query_with_history = f"""Previous conversation:
 {history_text}
@@ -422,7 +601,9 @@ Current user message: {user_message}"""
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
-        _mems = _am.retrieve(user_message, session_id=session_id, user_id=user_id, n=6)
+        # Long-term memory is per-USER (shared across the user's conversations), so it is
+        # namespaced by user_id — NOT by conversation_id.
+        _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6)
         _mem_block = _am.format_for_prompt(_mems)
         if _mem_block:
             query_with_history = f"{_mem_block}\n\n{query_with_history}"
@@ -435,185 +616,274 @@ Current user message: {user_message}"""
     extracted_context['current_message'] = user_message
 
     # ── 构建 AgentState 并调用 LangGraph ─────────────────────────
+    # session_id passed to the graph/checkpointer IS the conversation_id, so the
+    # checkpointer thread_id = f"{user_id}:{conversation_id}".
     initial_state = create_initial_state(
         user_query=query_with_history,
         extracted_context=extracted_context,
-        user_preferences=agent_persistent_state['user_preferences'],
-        accumulated_search_criteria=agent_persistent_state['accumulated_search_criteria'],
+        user_preferences=persistent_snapshot['user_preferences'],
+        accumulated_search_criteria=persistent_snapshot['accumulated_search_criteria'],
         user_id=user_id,
-        session_id=session_id,
+        session_id=conversation_id,
         request_id=request_id,
     )
 
+    # ── Phase 2: the slow LLM call — NO turn lock held here ──────
     print(f"[LangGraph] ▶ 开始执行 graph.ainvoke() ...")
     final_state = await agent_graph.ainvoke(
         initial_state,
-        config=graph_config(user_id, session_id, request_id=request_id),
+        config=graph_config(user_id, conversation_id, request_id=request_id),
     )
     print(f"[LangGraph] ✓ 完成!")
-
-    # ── 持久化跨轮状态 ──────────────────────────────────────────
-    agent_persistent_state['user_preferences'] = final_state.get('user_preferences', agent_persistent_state['user_preferences'])
-    agent_persistent_state['accumulated_search_criteria'] = final_state.get('accumulated_search_criteria', agent_persistent_state['accumulated_search_criteria'])
 
     response_text = final_state.get('final_response', '')
     response_type = final_state.get('response_type', 'answer')
     tool_data = final_state.get('tool_data', {})
+    recommendations = tool_data.get('recommendations')
 
     print(f"[LangGraph] Response Type: {response_type}")
 
-    # ── 保存对话历史 ────────────────────────────────────────────
-    conversation_history.append({
-        'user': user_message,
-        'assistant': response_text[:500]
-    })
-    if len(conversation_history) > MAX_HISTORY_LENGTH:
-        conversation_history = conversation_history[-MAX_HISTORY_LENGTH:]
-    # Windowing may rebind the local to a new list — persist it back to this user's slice.
-    _session_store.get(user_id).history = conversation_history
+    # 构建搜索结果的上下文串（纯计算，不触碰共享状态）
+    # D3: build ONLY from the real, city-correct OnTheMarket recommendations. The old
+    # code enriched each row from `all_properties` (the bundled London demo CSV), which
+    # leaked wrong-city amenities/URLs into follow-up detail answers. Each stored record
+    # now keeps the FULL listing fields so an ordinal/name follow-up ("the second one")
+    # resolves to the ACTUAL listing (in-graph) and never falls back to demo data.
+    prev_results_context = None
+    structured_results = None
+    if recommendations:
+        prev_results_context = "\n"
+        structured_results = []  # 结构化，供 _resolve_last_result / _resolve_target_address 解析
+        for i, rec in enumerate(recommendations[:6], 1):
+            addr = rec.get('address', 'Unknown')
+            price = rec.get('price', 'N/A')
+            travel = rec.get('travel_time', 'N/A')
+            property_name = addr.split(',')[0].strip()
+
+            structured_results.append({
+                'name': property_name,
+                'address': addr,
+                'price': price,
+                'travel_time': travel,
+                'bedrooms': rec.get('bedrooms'),
+                'property_type': rec.get('property_type'),
+                'budget_status': rec.get('budget_status'),
+                'source': rec.get('source'),
+                'url': rec.get('url'),
+                'explanation': rec.get('explanation'),
+                'geo_location': rec.get('geo_location'),
+            })
+
+            prev_results_context += f"{i}. **{property_name}**\n"
+            prev_results_context += f"   - Full Address: {addr}\n"
+            prev_results_context += f"   - Price: {price}\n"
+            prev_results_context += f"   - Commute: {travel}\n"
+            if rec.get('bedrooms') not in (None, '', 'N/A'):
+                prev_results_context += f"   - Bedrooms: {rec.get('bedrooms')}\n"
+            if rec.get('property_type'):
+                prev_results_context += f"   - Type: {rec.get('property_type')}\n"
+            if rec.get('budget_status'):
+                prev_results_context += f"   - Budget: {rec.get('budget_status')}\n"
+            if rec.get('url'):
+                prev_results_context += f"   - URL: {rec.get('url')}\n"
+            prev_results_context += "\n"
+
+    # ── Phase 3: atomic write-back of L2 state under the per-conv lock ──
+    # In-place append + slice-trim keeps the SAME list object, so a concurrent
+    # same-conversation turn's append is never clobbered (the original defect).
+    with turn_lock:
+        _sess = _get_session(user_id, conversation_id)
+        _sess.persistent_state['user_preferences'] = final_state.get(
+            'user_preferences', _sess.persistent_state['user_preferences'])
+        _sess.persistent_state['accumulated_search_criteria'] = final_state.get(
+            'accumulated_search_criteria', _sess.persistent_state['accumulated_search_criteria'])
+        _sess.history.append({'user': user_message, 'assistant': response_text[:500]})
+        if len(_sess.history) > MAX_HISTORY_LENGTH:
+            del _sess.history[:-MAX_HISTORY_LENGTH]
+        if recommendations:
+            _sess.last_results = recommendations
+            _sess.persistent_state.setdefault('extracted_context', {})
+            _sess.persistent_state['extracted_context']['previous_search_results'] = prev_results_context
+            _sess.persistent_state['extracted_context']['last_results'] = structured_results
+            print(f"[LangGraph] 💾 已保存 {len(recommendations)} 个搜索结果到上下文")
 
     # ── 写入长期记忆（后台线程: Mem0 式抽取+整合 / GA 反思，不阻塞响应）──
+    # 记忆按 user_id 命名空间共享（跨会话），故 session_id 传 user_id。
     try:
         from rag.agent_memory import get_agent_memory
         _td = final_state.get('tool_decision')
         _tool_used = _td.get('tool') if isinstance(_td, dict) else None
         get_agent_memory().remember_turn_async(
             user_message, response_text,
-            session_id=session_id, user_id=user_id, tool_used=_tool_used,
+            session_id=user_id, user_id=user_id, tool_used=_tool_used,
             idempotency_key=f"turn:{request_id}" if request_id else None,
         )
     except Exception as _e:
         print(f"[Memory] write skipped: {_e}")
 
-    # ── 检查是否有房源搜索结果 ──────────────────────────────────
-    if tool_data.get('recommendations'):
-        _session_store.get(user_id).last_results = tool_data['recommendations']
-
-        # 保存搜索结果到 persistent extracted_context 供后续安全/设施问题使用
-        prev_results_context = "\n"
-        structured_results = []  # 结构化，供 _resolve_target_address 解析 "the first one"/postcode
-        for i, rec in enumerate(tool_data['recommendations'][:6], 1):
-            addr = rec.get('address', 'Unknown')
-            price = rec.get('price', 'N/A')
-            travel = rec.get('travel_time', 'N/A')
-            full_prop = None
-            for prop in all_properties:
-                if prop.get('Address', '').startswith(addr.split(',')[0]):
-                    full_prop = prop
-                    break
-
-            property_name = addr.split(',')[0].strip()
-            full_address = full_prop.get('Address', addr) if full_prop else addr
-
-            structured_results.append({
-                'name': property_name,
-                'address': full_address,
-                'price': price,
-            })
-
-            prev_results_context += f"{i}. **{property_name}**\n"
-            prev_results_context += f"   - Full Address: {full_address}\n"
-            prev_results_context += f"   - Price: {price}\n"
-            prev_results_context += f"   - Commute: {travel}\n"
-            if full_prop:
-                prev_results_context += f"   - Amenities: {full_prop.get('Detailed_Amenities', 'N/A')}\n"
-                prev_results_context += f"   - URL: {full_prop.get('URL', 'N/A')}\n"
-            prev_results_context += "\n"
-
-        agent_persistent_state['extracted_context']['previous_search_results'] = prev_results_context
-        agent_persistent_state['extracted_context']['last_results'] = structured_results
-        print(f"[LangGraph] 💾 已保存 {len(tool_data['recommendations'])} 个搜索结果到上下文")
-
-        return jsonify({
+    # ── 构建响应 payload（conversation_id 由调用方 api_alex 注入）──
+    if recommendations:
+        return {
             "response_type": "search",
             "message": response_text,
-            "recommendations": tool_data['recommendations']
-        })
+            "recommendations": recommendations,
+        }
 
-    # ── 根据结果类型返回响应 ─────────────────────────────────────
     if response_type == 'question' or response_type == 'clarification':
-        return jsonify({
+        return {
             "response_type": "clarification",
             "message": response_text,
             "agent_state": "waiting_for_input",
-            "extracted_context": extracted_context
-        })
+            "extracted_context": _whitelist_extracted_context(extracted_context),
+        }
 
-    elif response_type == 'answer':
-        return jsonify({
+    if response_type == 'answer':
+        return {
             "response_type": "chat",
             "message": response_text,
-        })
+        }
 
-    else:
-        return jsonify({
-            "response_type": "chat",
-            "message": response_text or "I'm here to help! What would you like to know?"
-        })
+    return {
+        "response_type": "chat",
+        "message": response_text or "I'm here to help! What would you like to know?",
+    }
+
+
+# ============================================================================
+# Conversations CRUD (all state scoped to the resolved user_id)
+# ============================================================================
+
+@app.route('/api/conversations', methods=['GET'])
+def list_conversations():
+    """List the resolved user's conversations, newest-updated first."""
+    user_id, _ = _identity_from_request()
+    return jsonify({"conversations": conversation_store.list_conversations(user_id)})
+
+
+@app.route('/api/conversations', methods=['POST'])
+def create_conversation():
+    """Create a new conversation. Body: {user_id, title?}."""
+    data = get_json_or_400()
+    user_id, _ = resolve_identity(data)
+    conv = conversation_store.create_conversation(user_id, title=data.get('title'))
+    return jsonify({"conversation": conv}), 201
+
+
+@app.route('/api/conversations/<cid>', methods=['PATCH'])
+def rename_conversation(cid):
+    """Rename a conversation. Body: {user_id, title}. 404 if not owned by this user."""
+    data = get_json_or_400()
+    user_id, _ = resolve_identity(data)
+    title = data.get('title')
+    if not isinstance(title, str) or not title.strip():
+        raise ApiError(400, "title is required")
+    conv = conversation_store.rename_conversation(user_id, cid, title.strip())
+    if conv is None:
+        raise ApiError(404, "conversation not found")
+    return jsonify(conv)
+
+
+@app.route('/api/conversations/<cid>', methods=['DELETE'])
+def delete_conversation(cid):
+    """Delete a conversation + its messages, hot-cache slice, and checkpointer thread.
+    Does NOT touch long-term (ChromaDB) memory. 404 if not owned."""
+    user_id, _ = _identity_from_request()
+    if not conversation_store.delete_conversation(user_id, cid):
+        raise ApiError(404, "conversation not found")
+    _session_store.clear(user_id, cid)
+    _delete_checkpoint_thread(user_id, cid)
+    return jsonify({"deleted": True})
+
+
+@app.route('/api/conversations/<cid>/messages', methods=['GET'])
+def get_conversation_messages(cid):
+    """Full persisted transcript (role/content/timestamp[/response_type/recommendations])
+    in chronological order. 404 if the conversation isn't owned by this user."""
+    user_id, _ = _identity_from_request()
+    if conversation_store.get_conversation(user_id, cid) is None:
+        raise ApiError(404, "conversation not found")
+    return jsonify({"messages": conversation_store.get_messages(user_id, cid)})
 
 
 @app.route('/api/clear_history', methods=['POST'])
 def clear_history():
-    """清除对话历史，开始新对话 —— 只重置当前用户自己的 L2 状态，不影响其他用户。"""
-    data = request.get_json(silent=True)
-    user_id, _session_id = resolve_identity(data)
-
-    # Reset ONLY this user's slices (fresh default-shaped state + empty history/results).
-    _session_store.clear(user_id)
-
-    print(f"[ALEX] 对话历史已清除 (user_id={user_id})")
+    """Conversation-scoped reset (NEVER touches ChromaDB long-term memory).
+    Body {user_id, conversation_id?}: with a conversation_id clears just that conversation;
+    without one clears ALL of the user's conversations. The frontend routes clearing through
+    DELETE /api/conversations/<cid> instead, but this stays for API completeness."""
+    data = get_json_or_400()
+    user_id, _ = resolve_identity(data)
+    cid = data.get('conversation_id')
+    if cid:
+        conversation_store.clear_conversation_messages(user_id, cid)
+        _session_store.clear(user_id, cid)
+        _delete_checkpoint_thread(user_id, cid)
+    else:
+        for c in conversation_store.delete_all_conversations(user_id):
+            _delete_checkpoint_thread(user_id, c)
+        _session_store.clear_user(user_id)
+    print(f"[ALEX] 对话历史已清除 (user_id={user_id}, conversation_id={cid})")
     return jsonify({"success": True, "message": "Conversation history cleared"})
 
 
+@app.route('/api/forget_me', methods=['POST'])
+def forget_me():
+    """PRIVACY: the ONLY route that wipes long-term memory. Body {user_id}.
+    Erases the user's ChromaDB/Mem0 memory AND all conversations, messages, favorites,
+    checkpointer threads, and hot-cache slices."""
+    data = get_json_or_400()
+    user_id, _ = resolve_identity(data)
+
+    # 1) long-term memory (ChromaDB, namespaced by user_id)
+    try:
+        from rag.agent_memory import get_agent_memory
+        wiped = get_agent_memory().forget(user_id)
+        print(f"[forget_me] wiped {wiped} memory records for user_id={user_id}")
+    except Exception as e:
+        print(f"[forget_me] memory wipe skipped: {e}")
+
+    # 2) conversations + messages (+ checkpointer threads) + favorites + hot cache
+    for c in conversation_store.delete_all_conversations(user_id):
+        _delete_checkpoint_thread(user_id, c)
+    conversation_store.delete_all_favorites(user_id)
+    _session_store.clear_user(user_id)
+
+    return jsonify({"forgotten": True})
+
+
+# ============================================================================
+# Favorites — per-USER, persisted to sqlite (survives restart), keyed on lowercase url
+# ============================================================================
+
 @app.route('/api/favorites', methods=['POST'])
 def add_favorite():
-    """Add a property to favorites"""
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-    
-    try:
-        user_id, _ = resolve_identity(data)
-        url = data.get('URL') or data.get('url')
-        if not url:
-            return jsonify({"error": "Property URL is required"}), 400
-        _session_store.get(user_id).favorites[url] = data
-        return jsonify({"success": True, "message": "Added to favorites"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Add/replace a favorite. Body is the full property dict (lowercase canonical keys)
+    plus user_id. Stored VERBATIM (incl. geo_location) — no fields stripped."""
+    data = get_json_or_400()
+    user_id, _ = resolve_identity(data)
+    # New frontend sends lowercase `url`; keep `URL` as a legacy fallback.
+    url = data.get('url') or data.get('URL')
+    if not url:
+        raise ApiError(400, "Property URL is required")
+    conversation_store.add_favorite(user_id, str(url), data)
+    return jsonify({"success": True, "message": "Added to favorites"})
+
 
 @app.route('/api/favorites', methods=['GET'])
 def get_favorites_list():
-    """Get all favorited properties"""
-    try:
-        user_id, _ = resolve_identity()
-        favorites = list(_session_store.get(user_id).favorites.values())
-        return jsonify({"favorites": favorites})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Return all of the resolved user's saved properties (full stored dicts)."""
+    user_id, _ = _identity_from_request()
+    return jsonify({"favorites": conversation_store.list_favorites(user_id)})
+
 
 @app.route('/api/favorites/<path:url>', methods=['DELETE'])
 def remove_favorite(url):
-    """Remove a property from favorites"""
-    try:
-        user_id, _ = resolve_identity()
-        favorites = _session_store.get(user_id).favorites
-        if url in favorites:
-            del favorites[url]
-            return jsonify({"success": True, "message": "Removed from favorites"})
-        return jsonify({"error": "Property not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Remove a favorite by (percent-decoded) url. Identity via header + ?user_id=."""
+    user_id, _ = _identity_from_request()
+    if conversation_store.remove_favorite(user_id, url):
+        return jsonify({"success": True, "message": "Removed from favorites"})
+    raise ApiError(404, "Property not found")
 
-@app.route('/api/history', methods=['GET'])
-def get_search_history():
-    """Get search history"""
-    try:
-        user_id, _ = resolve_identity()
-        history = _session_store.get(user_id).search_history
-        return jsonify({"history": history})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/generate_map', methods=['POST'])
 def generate_property_map():
@@ -637,15 +907,15 @@ def generate_property_map():
     
     try:
         from core.amenity_map_generator import PropertyAmenityMapGenerator
-        from core.maps_service import get_nearby_places_osm
-        
+        from core.maps_service import OverpassError
+
         print(f"\n{'='*60}")
         print(f"[MAP GEN] Generating amenity map for: {data['address']}")
         print(f"{'='*60}\n")
-        
+
         # Initialize map generator
         generator = PropertyAmenityMapGenerator(radius_km=1.5)
-        
+
         # Prepare property data
         property_data = {
             'Address': data['address'],
@@ -657,96 +927,48 @@ def generate_property_map():
             'geo_location': data.get('geo_location'),
             'coordinates': data.get('coordinates') or data.get('geo_location')
         }
-        
-        # Query amenities from OpenStreetMap
-        print(f"  [MAP GEN] Querying nearby amenities...")
-        amenities_data = {}
-        
+
         # Parse coordinates once
         coords = generator.parse_geo_location(data.get('geo_location'))
         if not coords:
             return jsonify({"error": "Invalid coordinates"}), 400
-        
+
         lat, lon = coords
-        
-        # Use the new query method that supports cuisine filtering
-        for amenity_key in generator.amenity_config.keys():
-            try:
-                config = generator.amenity_config[amenity_key]
-                cuisine_filter = config.get('cuisine_filter', None)
-                
-                # Use the specialized query method that handles cuisine filtering
-                places = generator.query_osm_amenities_with_filter(
-                    lat, lon,
-                    amenity_key,
-                    cuisine_filter
-                )
-                amenities_data[amenity_key] = places
-                print(f"    ✓ Found {len(places)} {config['name']}")
-            except Exception as e:
-                print(f"    ✗ Error querying {amenity_key}: {e}")
-                import traceback as tb
-                tb.print_exc()
-                amenities_data[amenity_key] = []
-        
+
+        # Fetch every amenity category in ONE cached, batched Overpass query.
+        # OverpassError means the provider is down (all mirrors failed) -> render
+        # the map with a visible "data unavailable" banner rather than a
+        # silently-empty map. An empty dict of results is a legitimate "nothing
+        # nearby" and is shown without a banner.
+        print(f"  [MAP GEN] Querying nearby amenities (batched)...")
+        amenities_unavailable = False
+        try:
+            amenities_data = generator.fetch_all_amenities(lat, lon)
+        except OverpassError as e:
+            print(f"  [WARN] Amenity provider unavailable: {e}")
+            amenities_data = {}
+            amenities_unavailable = True
+
         # Generate map HTML
         print(f"\n  [MAP GEN] Generating interactive map...")
-        map_html = generator.generate_map_html(property_data, amenities_data)
-        
+        map_html = generator.generate_map_html(
+            property_data, amenities_data,
+            amenities_unavailable=amenities_unavailable,
+        )
+
         if map_html:
             print(f"  ✓ [MAP GEN] Map generated successfully\n")
             return map_html, 200, {'Content-Type': 'text/html; charset=utf-8'}
         else:
             return jsonify({"error": "Failed to generate map"}), 500
-            
+
     except Exception as e:
         print(f"❌ Error generating map: {e}")
         traceback.print_exc()
         return jsonify({"error": f"Map generation failed: {str(e)}"}), 500
 
 
-@app.route('/api/cached_pois', methods=['GET'])
-def get_cached_pois():
-    """
-    获取缓存的 POI 数据
-    
-    Query params:
-    - address: 要查询的地址
-    
-    Returns:
-    缓存的 POI 数据或错误
-    """
-    address = request.args.get('address')
-    if not address:
-        return jsonify({"error": "Address is required"}), 400
-    
-    try:
-        import os
-        cache_file = "data/osm_poi_cache.json"
-        
-        if not os.path.exists(cache_file):
-            return jsonify({"error": "No cache file found", "cached": False}), 404
-        
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            cache = json.load(f)
-        
-        cache_key = address.lower().strip()
-        
-        if cache_key in cache:
-            return jsonify({
-                "cached": True,
-                "data": cache[cache_key]
-            })
-        else:
-            return jsonify({
-                "cached": False,
-                "message": "Address not in cache"
-            }), 404
-            
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-    
 if __name__ == '__main__':
-    # 允许所有来源访问(用于公网访问)
-    app.run(debug=False, host='127.0.0.1', port=5001)
+    # 允许所有来源访问(用于公网访问)。端口可用 PORT 环境变量覆盖（默认 5001）。
+    port = int(os.getenv("PORT", "5001"))
+    app.run(debug=False, host='127.0.0.1', port=port, use_reloader=False)

@@ -31,14 +31,13 @@ class RAGCoordinator:
         semantic_results = self.property_store.search(search_query, top_k=20)
         print(f"    -> [RAG] Got {len(semantic_results)} semantic results")
         
-        # 2. Get relevant past conversations
+        # 2. Past conversations: NOT queried here. enhanced_search has no user
+        #    identity in scope, and ConversationMemory retrieval is strictly
+        #    per-user (a global, cross-user query from here was a privacy leak).
+        #    The only caller discards past_context anyway; callers that want
+        #    history must call conversation_memory.retrieve_relevant_history
+        #    directly with an explicit user_id.
         past_context = []
-        try:
-            past_context = self.conversation_memory.retrieve_relevant_history(
-                user_query, n_results=3
-            )
-        except Exception as e:
-            print(f"    -> [RAG] Warning: Could not retrieve conversation history: {e}")
         
         # 3. Retrieve area-specific knowledge
         area_info = []

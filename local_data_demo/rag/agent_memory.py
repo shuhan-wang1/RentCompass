@@ -86,6 +86,27 @@ def _extract_json(text):
     return None
 
 
+def _valid_user_id(user_id) -> str | None:
+    """Strict identity gate for every memory READ and WRITE path.
+
+    Memory is namespaced by user_id. Returns the normalised id, or None when the
+    caller failed to supply a real identity — in which case the operation must
+    fail CLOSED (no write, empty retrieval), never fall back to a shared bucket.
+
+    'default' is explicitly rejected: it was the implicit shared namespace that
+    every call site missing a user_id silently read from / wrote to, so one
+    user's preferences (budget, university, ...) leaked to brand-new users.
+    (forget() deliberately does NOT use this gate, so the legacy 'default'
+    bucket stays erasable via /api/forget_me.)
+    """
+    if not isinstance(user_id, str):
+        return None
+    uid = user_id.strip()
+    if not uid or uid.lower() == "default":
+        return None
+    return uid
+
+
 def _classify_pii(text: str) -> str:
     """Conservative metadata tag; content stays local and remains erasable by user_id."""
     value = (text or "").casefold()
@@ -109,8 +130,12 @@ class AgentMemory:
         self._accum = {}  # (user_id, session_id) -> accrued importance (reflection gate)
 
     # ------------------------------------------------------------------ writing
-    def add(self, text, mtype, session_id="default", user_id="default",
+    def add(self, text, mtype, session_id="default", user_id=None,
             role="", importance=None, idempotency_key=None) -> str | None:
+        user_id = _valid_user_id(user_id)
+        if user_id is None:
+            print("[memory] add rejected: missing/shared user_id (memory must be per-user)")
+            return None
         text = (text or "").strip()
         if not text:
             return None
@@ -118,13 +143,16 @@ class AgentMemory:
         with self._lock:
             if idempotency_key:
                 try:
-                    previous = self.col.get(where={"idempotency_key": idempotency_key})
+                    # user-scoped: an idempotency-key collision must never surface
+                    # (or suppress writes against) another user's records.
+                    previous = self.col.get(where={"$and": [
+                        {"idempotency_key": idempotency_key}, {"user_id": user_id}]})
                     if previous and previous.get("ids"):
                         return previous["ids"][0]
                 except Exception:
                     pass
             try:
-                existing = self.col.get(where={"hash": h})
+                existing = self.col.get(where={"$and": [{"hash": h}, {"user_id": user_id}]})
                 if existing and existing.get("ids"):
                     return existing["ids"][0]
             except Exception:
@@ -231,11 +259,16 @@ class AgentMemory:
             print(f"[memory] consolidate error: {e}")
 
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
-                      user_id="default", tool_used=None, idempotency_key=None):
+                      user_id=None, tool_used=None, idempotency_key=None):
         """After-turn entry point (run this in the background — it makes LLM calls)."""
+        user_id = _valid_user_id(user_id)
+        if user_id is None:
+            print("[memory] remember_turn rejected: missing/shared user_id")
+            return
         try:
             if idempotency_key:
-                existing = self.col.get(where={"idempotency_key": idempotency_key})
+                existing = self.col.get(where={"$and": [
+                    {"idempotency_key": idempotency_key}, {"user_id": user_id}]})
                 if existing and existing.get("ids"):
                     return
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
@@ -254,6 +287,9 @@ class AgentMemory:
         threading.Thread(target=self.remember_turn, args=args, kwargs=kwargs, daemon=True).start()
 
     def maybe_reflect(self, session_id, user_id):
+        user_id = _valid_user_id(user_id)
+        if user_id is None:
+            return
         key = (user_id, session_id)
         if self._accum.get(key, 0) < REFLECT_IMPORTANCE_THRESHOLD:
             return
@@ -278,8 +314,16 @@ class AgentMemory:
             print(f"[memory] reflect error: {e}")
 
     # ---------------------------------------------------------------- retrieval
-    def retrieve(self, query, session_id="default", user_id="default", n=6) -> list:
-        """Generative-Agents scored retrieval: relevance + recency + importance."""
+    def retrieve(self, query, session_id="default", user_id=None, n=6) -> list:
+        """Generative-Agents scored retrieval: relevance + recency + importance.
+
+        STRICT per-user isolation: the where-filter is always applied with a real
+        user_id. A missing/blank/'default' id fails CLOSED (returns []) — there is
+        no global fallback, and records written without a user_id can never match.
+        """
+        user_id = _valid_user_id(user_id)
+        if user_id is None:
+            return []
         query = (query or "").strip()
         if not query:
             return []

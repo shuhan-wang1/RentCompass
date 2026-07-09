@@ -14,20 +14,20 @@
             --primary-active: #991b1b;
             --primary-light: #fef2f2;
             --primary-fade: rgba(220, 38, 38, 0.06);
-            
+
             /* 中性色 - Cool Grays for Professional Look */
             --text-main: #1f2937;      /* 更深的灰，比纯黑柔和 */
             --text-secondary: #6b7280; /* 次级文本 */
             --text-tertiary: #9ca3af;  /* 占位符或禁用态 */
-            
+
             --bg-body: #f3f4f6;        /* 浅灰背景 */
             --bg-surface: #ffffff;     /* 纯白卡片背景 */
             --bg-hover: #f9fafb;       /* 悬停背景 */
-            
+
             --border-light: #f3f4f6;
             --border-medium: #e5e7eb;
             --border-dark: #d1d5db;
-            
+
             /* --- 阴影系统 (更弥散、高端) --- */
             --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
             --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
@@ -40,13 +40,13 @@
             --radius-md: 8px;
             --radius-lg: 12px;
             --radius-full: 9999px;
-            
+
             /* --- 动画 --- */
             --transition-base: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        
+
         body {
             /* FIX: 优化了字体栈顺序。
                将 "Apple Color Emoji", "Segoe UI Emoji" 等表情符号字体放在中文字体之前。
@@ -149,25 +149,26 @@
             background: var(--border-medium); /* 分隔线 */
             gap: 1px;
         }
-        
+
         /* --- 左侧聊天面板 (Chat Panel) --- */
         .chat-panel {
-            flex: 0 0 420px;
+            flex: 0 0 400px;
             background: var(--bg-surface);
             display: flex;
             flex-direction: column;
             height: 100%;
             position: relative;
             z-index: 10;
+            min-width: 0;
         }
-        
+
         .chat-header {
             padding: 16px 24px;
             border-bottom: 1px solid var(--border-medium);
             background: rgba(255,255,255,0.95);
             backdrop-filter: blur(8px);
         }
-        
+
         .chat-header h1 {
             font-size: 1rem;
             font-weight: 600;
@@ -176,7 +177,7 @@
             margin-bottom: 2px;
         }
         .chat-header p { font-size: 0.8rem; color: var(--text-secondary); }
-        
+
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -187,7 +188,7 @@
             background: #ffffff;
             scroll-behavior: smooth;
         }
-        
+
         /* 消息气泡 - 专业化 */
         .message {
             max-width: 100%;
@@ -195,10 +196,10 @@
             display: flex;
             flex-direction: column;
         }
-        
+
         .message.user { align-items: flex-end; }
         .message.alex { align-items: flex-start; }
-        
+
         .message .sender {
             font-size: 11px;
             color: var(--text-tertiary);
@@ -233,7 +234,7 @@
             background: var(--primary-color);
             color: white;
             border-top-right-radius: 2px;
-            white-space: pre-wrap; 
+            white-space: pre-wrap;
         }
 
         /* Markdown Styles within Bubbles */
@@ -245,7 +246,7 @@
             line-height: 1.3;
             color: #111;
         }
-        .message.alex .bubble ul, 
+        .message.alex .bubble ul,
         .message.alex .bubble ol { margin: 6px 0; padding-left: 20px; }
         .message.alex .bubble li { margin-bottom: 4px; }
         .message.alex .bubble p { margin-bottom: 8px; }
@@ -253,7 +254,7 @@
         .message.alex .bubble strong { color: #000; font-weight: 600; }
         .message.alex .bubble a { color: var(--primary-color); text-decoration: none; border-bottom: 1px solid transparent; }
         .message.alex .bubble a:hover { border-bottom-color: var(--primary-color); }
-        
+
         /* 表格样式 */
         .message.alex .bubble table {
             width: 100%;
@@ -288,7 +289,7 @@
             background: white;
             border-top: 1px solid var(--border-medium);
         }
-        
+
         .quick-actions {
             display: flex;
             gap: 8px;
@@ -298,7 +299,7 @@
             scrollbar-width: none;
         }
         .quick-actions::-webkit-scrollbar { display: none; }
-        
+
         .quick-action {
             padding: 6px 12px;
             background: white;
@@ -317,7 +318,7 @@
             color: var(--primary-color);
             background: var(--primary-light);
         }
-        
+
         .input-wrapper {
             display: flex;
             gap: 10px;
@@ -334,7 +335,7 @@
             border-color: var(--primary-color);
             box-shadow: var(--shadow-focus);
         }
-        
+
         .chat-textarea {
             flex: 1;
             padding: 8px 4px;
@@ -351,7 +352,7 @@
             min-height: 24px;
         }
         .chat-textarea::placeholder { color: var(--text-tertiary); }
-        
+
         .send-btn {
             width: 36px;
             height: 36px;
@@ -367,6 +368,9 @@
         }
         .send-btn:hover { background: var(--primary-hover); }
         .send-btn:disabled { background: var(--text-tertiary); cursor: not-allowed; }
+        /* Cancel / stop state while a request is in flight */
+        .send-btn.is-stop { background: var(--text-main); }
+        .send-btn.is-stop:hover { background: #000; }
 
         /* --- 焦点指示器 (Context Focus) --- */
         #propertyFocusIndicator {
@@ -383,6 +387,7 @@
             animation: slideIn 0.2s ease;
         }
         @keyframes slideIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
         /* --- 右侧结果区 (Results Panel) --- */
         .results-panel {
@@ -392,8 +397,9 @@
             flex-direction: column;
             overflow: hidden;
             height: 100%;
+            min-width: 0;
         }
-        
+
         .results-header {
             background: white;
             padding: 0 32px;
@@ -404,9 +410,9 @@
             height: 65px;
             flex-shrink: 0;
         }
-        
+
         .results-header h2 { font-size: 1.125rem; color: var(--text-main); font-weight: 700; }
-        
+
         .view-toggle {
             display: flex;
             background: var(--bg-body);
@@ -414,7 +420,7 @@
             border-radius: var(--radius-md);
             gap: 2px;
         }
-        
+
         .toggle-btn {
             padding: 6px 16px;
             background: transparent;
@@ -433,14 +439,14 @@
             color: var(--text-main);
             box-shadow: var(--shadow-sm);
         }
-        
+
         .results-content {
             flex: 1;
             overflow-y: auto;
             padding: 32px;
             scroll-behavior: smooth;
         }
-        
+
         /* --- 房源卡片 (Property Card) --- */
         .property-card {
             background: white;
@@ -463,7 +469,7 @@
             .property-card { flex-direction: row; min-height: 220px; }
             .property-image-container { flex: 0 0 300px; height: auto !important; }
         }
-        
+
         .property-image-container {
             position: relative;
             height: 200px;
@@ -477,7 +483,7 @@
         .rank-badge {
             position: absolute; top: 12px; left: 12px;
             background: white; color: var(--text-main);
-            padding: 4px 8px; border-radius: var(--radius-sm); 
+            padding: 4px 8px; border-radius: var(--radius-sm);
             font-weight: 700; font-size: 12px;
             box-shadow: var(--shadow-md);
             z-index: 2;
@@ -486,52 +492,52 @@
         .image-count-badge {
             position: absolute; bottom: 12px; right: 12px;
             background: rgba(0,0,0,0.7); color: white;
-            padding: 4px 8px; border-radius: var(--radius-sm); 
+            padding: 4px 8px; border-radius: var(--radius-sm);
             font-size: 11px; font-weight: 500;
             display: flex; align-items: center; gap: 4px; backdrop-filter: blur(4px);
         }
-        
+
         .property-content {
             padding: 20px 24px;
             flex: 1;
             display: flex;
             flex-direction: column;
         }
-        
+
         .property-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
-        .property-address { 
-            font-size: 1.1rem; 
-            font-weight: 700; 
-            color: var(--text-main); 
-            line-height: 1.35; 
+        .property-address {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1.35;
             margin-right: 12px;
             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
-        
+
         .favorite-btn {
             background: transparent; border: 1px solid var(--border-medium);
             width: 32px; height: 32px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: var(--transition-base); 
+            cursor: pointer; transition: var(--transition-base);
             color: var(--text-tertiary); flex-shrink: 0;
         }
         .favorite-btn:hover { border-color: var(--primary-color); color: var(--primary-color); background: var(--primary-light); }
         .favorite-btn.active { fill: var(--primary-color); color: var(--primary-color); border-color: var(--primary-color); }
-        
+
         .property-details { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-        .detail-item { 
-            display: flex; align-items: center; gap: 6px; 
-            font-size: 0.9rem; font-weight: 600; color: var(--text-main); 
+        .detail-item {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.9rem; font-weight: 600; color: var(--text-main);
             background: var(--bg-body); padding: 4px 10px; border-radius: var(--radius-sm);
         }
         .detail-item .icon { width: 14px; height: 14px; color: var(--text-secondary); }
-        
+
         .property-explanation {
             font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;
             margin-bottom: 20px; flex: 1;
             display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
         }
-        
+
         .property-actions { display: flex; gap: 10px; margin-top: auto; }
         .action-btn {
             flex: 1; padding: 9px;
@@ -542,10 +548,10 @@
             text-decoration: none;
         }
         .action-btn:hover { background: var(--bg-hover); border-color: var(--border-dark); }
-        .action-btn.primary { 
-            background: var(--text-main); 
-            color: white; 
-            border-color: var(--text-main); 
+        .action-btn.primary {
+            background: var(--text-main);
+            color: white;
+            border-color: var(--text-main);
         }
         .action-btn.primary:hover { background: #000; border-color: #000; }
 
@@ -554,10 +560,10 @@
         .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
         .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
         @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-        
+
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
         .empty-state-icon { margin-bottom: 16px; color: var(--border-dark); }
-        
+
         .spinner { width: 24px; height: 24px; border: 2px solid var(--border-medium); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -588,6 +594,166 @@
         .alert-warning { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
         .alert-success { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
 
+        /* ============================================================= */
+        /* CONVERSATION SIDEBAR                                           */
+        /* ============================================================= */
+        .navbar-left { display: flex; align-items: center; gap: 12px; }
+        .menu-toggle {
+            display: none; width: 38px; height: 38px;
+            border: 1px solid var(--border-medium); background: white;
+            border-radius: var(--radius-md); cursor: pointer;
+            align-items: center; justify-content: center; color: var(--text-main);
+        }
+        .menu-toggle:hover { background: var(--bg-hover); }
+
+        .conv-sidebar {
+            flex: 0 0 260px;
+            background: var(--bg-surface);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-width: 0;
+        }
+        .conv-sidebar-header {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 8px;
+            padding: 16px 16px 12px 16px;
+            border-bottom: 1px solid var(--border-medium);
+            flex-shrink: 0;
+        }
+        .conv-sidebar-title {
+            font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.6px; color: var(--text-tertiary);
+        }
+        .new-chat-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 10px; border: 1px solid var(--border-medium);
+            background: white; color: var(--text-main); border-radius: var(--radius-md);
+            font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--transition-base);
+            white-space: nowrap;
+        }
+        .new-chat-btn:hover { border-color: var(--primary-color); color: var(--primary-color); background: var(--primary-light); }
+        .new-chat-btn .icon { width: 14px; height: 14px; }
+
+        .conv-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+        .conv-empty { padding: 28px 12px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
+        .conv-item {
+            display: flex; align-items: center; border-radius: var(--radius-md);
+            transition: var(--transition-base); position: relative;
+        }
+        .conv-item:hover { background: var(--bg-hover); }
+        .conv-item.active { background: var(--primary-light); }
+        .conv-item.active .conv-title { color: var(--primary-color); font-weight: 600; }
+        .conv-item-main {
+            flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+            padding: 9px 10px; background: none; border: none; cursor: pointer; text-align: left;
+            font-family: inherit;
+        }
+        .conv-title { font-size: 0.85rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .conv-meta { font-size: 11px; color: var(--text-tertiary); }
+        .conv-item-actions { display: flex; gap: 2px; padding-right: 6px; opacity: 0; transition: var(--transition-base); }
+        .conv-item:hover .conv-item-actions, .conv-item.active .conv-item-actions { opacity: 1; }
+        .conv-icon-btn {
+            width: 26px; height: 26px; border: none; background: transparent; border-radius: var(--radius-sm);
+            color: var(--text-tertiary); cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: var(--transition-base);
+        }
+        .conv-icon-btn:hover { background: white; color: var(--primary-color); }
+        .conv-icon-btn .icon { width: 14px; height: 14px; }
+
+        /* ============================================================= */
+        /* USER MENU                                                      */
+        /* ============================================================= */
+        .conv-sidebar-footer { border-top: 1px solid var(--border-medium); padding: 10px; position: relative; flex-shrink: 0; }
+        .user-menu-btn {
+            width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+            background: none; border: 1px solid transparent; border-radius: var(--radius-md);
+            cursor: pointer; transition: var(--transition-base); text-align: left; font-family: inherit;
+        }
+        .user-menu-btn:hover { background: var(--bg-hover); border-color: var(--border-medium); }
+        .user-avatar {
+            width: 30px; height: 30px; border-radius: 50%; background: var(--primary-color); color: white;
+            display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;
+            text-transform: uppercase;
+        }
+        .user-name { flex: 1; min-width: 0; font-size: 0.85rem; font-weight: 600; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .user-menu-btn .icon { color: var(--text-tertiary); width: 15px; height: 15px; }
+        .user-dropdown {
+            display: none; position: absolute; bottom: calc(100% + 4px); left: 10px; right: 10px;
+            background: white; border: 1px solid var(--border-medium); border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg); overflow: hidden; z-index: 60;
+        }
+        .user-dropdown.open { display: block; }
+        .user-dropdown button {
+            width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+            background: none; border: none; cursor: pointer; font-size: 0.85rem; color: var(--text-main);
+            transition: var(--transition-base); text-align: left; font-family: inherit;
+        }
+        .user-dropdown button:hover { background: var(--bg-hover); }
+        .user-dropdown button.danger { color: var(--primary-color); }
+        .user-dropdown .icon { width: 15px; height: 15px; color: var(--text-secondary); }
+        .user-dropdown button.danger .icon { color: var(--primary-color); }
+        .user-dropdown-divider { height: 1px; background: var(--border-medium); margin: 2px 0; }
+
+        /* ============================================================= */
+        /* TOASTS                                                         */
+        /* ============================================================= */
+        .toast-container {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; flex-direction: column; gap: 10px; z-index: 3000; width: min(92vw, 440px);
+            pointer-events: none;
+        }
+        .toast {
+            display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+            background: var(--text-main); color: white; border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg); font-size: 0.85rem; animation: toastIn 0.25s ease;
+            pointer-events: auto;
+        }
+        .toast span { flex: 1; }
+        .toast-error { background: #7f1d1d; }
+        .toast-success { background: #065f46; }
+        .toast-action {
+            background: rgba(255,255,255,0.16); border: none; color: white; font-weight: 600;
+            padding: 5px 12px; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.8rem; white-space: nowrap;
+        }
+        .toast-action:hover { background: rgba(255,255,255,0.28); }
+        .toast-hide { opacity: 0; transform: translateY(8px); transition: all 0.3s ease; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ============================================================= */
+        /* DIALOG                                                         */
+        /* ============================================================= */
+        .dialog-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            z-index: 2500; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(2px);
+        }
+        .dialog-card {
+            background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+            width: min(92vw, 400px); padding: 24px; animation: slideIn 0.2s ease;
+        }
+        .dialog-title { font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px; }
+        .dialog-message { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 16px; }
+        .dialog-input {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--border-medium); border-radius: var(--radius-md);
+            font-size: 0.925rem; font-family: inherit; color: var(--text-main); outline: none; margin-bottom: 20px;
+            transition: var(--transition-base);
+        }
+        .dialog-input:focus { border-color: var(--primary-color); box-shadow: var(--shadow-focus); }
+        .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+        .dialog-btn {
+            padding: 9px 16px; border: 1px solid var(--border-medium); background: white;
+            border-radius: var(--radius-md); font-size: 0.85rem; font-weight: 600; color: var(--text-main);
+            cursor: pointer; transition: var(--transition-base); font-family: inherit;
+        }
+        .dialog-btn:hover { background: var(--bg-hover); }
+        .dialog-btn.primary { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+        .dialog-btn.primary:hover { background: var(--primary-hover); }
+
+        .sidebar-backdrop { display: none; }
+
+        /* ============================================================= */
+        /* RESPONSIVE                                                     */
+        /* ============================================================= */
         @media (max-width: 1024px) {
             .main-container { flex-direction: column; height: auto; }
             .chat-panel { flex: none; height: 60vh; width: 100%; border-bottom: 1px solid var(--border-medium); }
@@ -595,63 +761,114 @@
             .navbar { padding: 0 16px; }
             .results-header { padding: 0 16px; }
             .results-content { padding: 16px; }
+
+            .menu-toggle { display: flex; }
+            .conv-sidebar {
+                position: fixed; top: 60px; left: 0; bottom: 0; width: 280px; z-index: 120;
+                transform: translateX(-100%); transition: transform 0.25s ease;
+                box-shadow: var(--shadow-lg); border-right: 1px solid var(--border-medium);
+            }
+            .conv-sidebar.open { transform: translateX(0); }
+            .sidebar-backdrop.open {
+                display: block; position: fixed; top: 60px; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.4); z-index: 110;
+            }
         }
     </style>
 </head>
 <body>
 
     <nav class="navbar">
-        <a href="#" class="brand">
-            <div class="brand-logo-bg">
-                <svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l8-4 8 4v14M8 21v-2a4 4 0 0 1 4-4v0a4 4 0 0 1 4 4v2"/></svg>
-            </div>
-            <span data-i18n="brand">Alex</span>
-        </a>
-        
+        <div class="navbar-left">
+            <button class="menu-toggle" id="menuToggle" aria-label="Menu" title="Menu">
+                <svg class="icon" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <a href="#" class="brand" onclick="return false;">
+                <div class="brand-logo-bg">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l8-4 8 4v14M8 21v-2a4 4 0 0 1 4-4v0a4 4 0 0 1 4 4v2"/></svg>
+                </div>
+                <span data-i18n="brand">Alex</span>
+            </a>
+        </div>
+
         <div class="lang-switch">
-            <button class="lang-btn active" onclick="setLanguage('en')">EN</button>
-            <button class="lang-btn" onclick="setLanguage('zh')">中文</button>
+            <button class="lang-btn active" data-lang="en">EN</button>
+            <button class="lang-btn" data-lang="zh">中文</button>
         </div>
     </nav>
 
     <div class="main-container">
-        <!-- LEFT PANEL -->
+        <!-- CONVERSATION SIDEBAR -->
+        <aside class="conv-sidebar" id="convSidebar">
+            <div class="conv-sidebar-header">
+                <span class="conv-sidebar-title" data-i18n="conversations_title">Conversations</span>
+                <button class="new-chat-btn" id="newChatBtn" data-i18n-title="new_chat">
+                    <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span data-i18n="new_chat_short">New</span>
+                </button>
+            </div>
+            <div class="conv-list" id="convList"></div>
+            <div class="conv-sidebar-footer">
+                <button class="user-menu-btn" id="userMenuBtn" aria-haspopup="true">
+                    <span class="user-avatar" id="userAvatar">G</span>
+                    <span class="user-name" id="userNameLabel">Guest</span>
+                    <svg class="icon" viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"></polyline></svg>
+                </button>
+                <div class="user-dropdown" id="userDropdown">
+                    <button id="renameUserBtn">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        <span data-i18n="rename_user">Rename</span>
+                    </button>
+                    <button id="switchUserBtn">
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <span data-i18n="switch_user">Switch user</span>
+                    </button>
+                    <div class="user-dropdown-divider"></div>
+                    <button id="forgetMeBtn" class="danger">
+                        <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        <span data-i18n="forget_me">Delete my data</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- LEFT PANEL (CHAT) -->
         <div class="chat-panel">
             <div class="chat-header">
-                <h1 data-i18n="assistant_title">
+                <h1>
                     <svg class="icon icon-sm" style="color:var(--primary-color);" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
-                    AI Assistant
+                    <span data-i18n="assistant_title">AI Assistant</span>
                 </h1>
                 <p data-i18n="assistant_subtitle">London Rental Intelligence</p>
             </div>
-            
+
             <div class="chat-messages" id="chatMessages">
                 <!-- Welcome message generated by JS -->
             </div>
-            
+
             <div id="propertyFocusIndicator"></div>
 
             <div class="chat-input-area">
                 <div class="quick-actions" id="quickActions">
                     <!-- Generated by JS -->
                 </div>
-                
+
                 <div class="input-wrapper">
-                    <textarea 
-                        class="chat-textarea" 
-                        id="chatInput" 
-                        rows="1" 
+                    <textarea
+                        class="chat-textarea"
+                        id="chatInput"
+                        rows="1"
                         placeholder="Message Alex..."
                         oninput="autoResize(this)"
                         onkeydown="handleEnter(event)"
                     ></textarea>
-                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                    <button class="send-btn" id="sendBtn" aria-label="Send" title="Send">
                         <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </div>
             </div>
         </div>
-        
+
         <!-- RIGHT PANEL -->
         <div class="results-panel">
             <div class="results-header">
@@ -667,13 +884,22 @@
                     </button>
                 </div>
             </div>
-            
+
             <div class="results-content" id="resultsContent">
                 <!-- Empty state handled by JS -->
             </div>
         </div>
     </div>
-    
+
+    <!-- Mobile sidebar backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Reusable dialog -->
+    <div class="dialog-overlay" id="dialogOverlay"></div>
+
     <!-- Gallery Modal -->
     <div id="imageModal" class="modal">
         <button class="modal-close-btn" onclick="closeModal()">
@@ -688,54 +914,145 @@
             <div class="gallery-thumbnails" id="galleryThumbnails"></div>
         </div>
     </div>
-    
+
     <script>
-        // --- CONFIGURATION ---
-        // Change this if your backend is running on a different URL or port.
-        // If empty, it uses relative paths (standard for production).
-        // If you are opening this HTML file directly (blob: or file:), we default to localhost:5001.
-        let API_BASE_URL = ''; 
+        /* -------------------------------------------------------------------------- */
+        /* CONFIGURATION                                                              */
+        /* -------------------------------------------------------------------------- */
+        // If empty, relative paths are used (standard for production / same-origin).
+        // When opening the file directly (file:/blob:), we default to localhost:5001.
+        let API_BASE_URL = '';
+        const API_TIMEOUT_MS = 240000; // 240s per contract
 
         /* -------------------------------------------------------------------------- */
-        /* API FETCH WRAPPER (Fixes "Failed to parse URL" errors)                     */
+        /* SMALL HELPERS                                                              */
         /* -------------------------------------------------------------------------- */
-        async function apiFetch(endpoint, options = {}) {
-            // Ensure endpoint starts with / if not already
+        function el(tag, className) {
+            const node = document.createElement(tag);
+            if (className) node.className = className;
+            return node;
+        }
+
+        // Escape ALL HTML-significant characters. Used wherever dynamic text is placed
+        // into an innerHTML string (kept minimal — most rendering uses textContent).
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Only allow safe navigable link schemes (blocks javascript:, data:, etc.)
+        function isSafeHref(url) {
+            if (!url) return false;
+            return /^(https?:|mailto:)/i.test(String(url).trim());
+        }
+
+        // Only allow safe image sources.
+        function safeImgSrc(src) {
+            if (!src) return '';
+            return /^(https?:|data:image\/)/i.test(String(src).trim()) ? String(src) : '';
+        }
+
+        // uuid4 hex (32 chars, matches contract [A-Za-z0-9_-]+, 1-64 chars)
+        function uuidHex() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+                return window.crypto.randomUUID().replace(/-/g, '');
+            }
+            let out = '';
+            for (let i = 0; i < 32; i++) {
+                out += Math.floor(Math.random() * 16).toString(16);
+            }
+            return out;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* IDENTITY (localStorage per contract)                                       */
+        /* -------------------------------------------------------------------------- */
+        const LS_USER_ID = 'ukra_user_id';
+        const LS_USER_NAME = 'ukra_user_name';
+        const LS_ACTIVE_CONV = 'ukra_active_conversation';
+
+        function getUserId() {
+            return localStorage.getItem(LS_USER_ID) || '';
+        }
+        function getUserName() {
+            return localStorage.getItem(LS_USER_NAME) || 'Guest';
+        }
+
+        function ensureIdentity() {
+            let uid = localStorage.getItem(LS_USER_ID);
+            if (!uid || !/^[A-Za-z0-9_-]{1,64}$/.test(uid)) {
+                uid = uuidHex();
+                localStorage.setItem(LS_USER_ID, uid);
+            }
+            if (!localStorage.getItem(LS_USER_NAME)) {
+                localStorage.setItem(LS_USER_NAME, 'Guest');
+            }
+            activeConversationId = localStorage.getItem(LS_ACTIVE_CONV) || null;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* API FETCH WRAPPER                                                          */
+        /* - injects X-User-Id header + credentials:'include' on every request        */
+        /* - adds ?user_id= for GET/DELETE (contract identity priority c)             */
+        /* - AbortController + 240s timeout; links an optional external signal        */
+        /* - THROWS on network/abort so callers can surface toasts (no silent swallow)*/
+        /* -------------------------------------------------------------------------- */
+        function resolveUrl(endpoint) {
             if (!endpoint.startsWith('/')) endpoint = '/' + endpoint;
-            
-            let url = endpoint;
-            
-            // Detect if we are in a blob/file environment where relative URLs fail
             const isLocalContext = window.location.protocol === 'file:' || window.location.protocol === 'blob:';
-            
-            if (API_BASE_URL) {
-                url = API_BASE_URL + endpoint;
-            } else if (isLocalContext) {
-                // In a local/preview context with no explicit API_BASE_URL, 
-                // we default to a likely local backend to prevent URL parsing errors.
-                // You can change this default port if your python/node server is different.
-                url = 'http://localhost:5001' + endpoint;
-                console.warn(`[Alex UI] Detected local/blob environment. Defaulting API calls to ${url}. Configure API_BASE_URL in script if needed.`);
+            if (API_BASE_URL) return API_BASE_URL + endpoint;
+            if (isLocalContext) return 'http://localhost:5001' + endpoint;
+            return endpoint;
+        }
+
+        async function apiFetch(endpoint, options = {}) {
+            const method = (options.method || 'GET').toUpperCase();
+            let url = resolveUrl(endpoint);
+
+            const headers = Object.assign({}, options.headers || {});
+            headers['X-User-Id'] = getUserId();
+
+            // For GET/DELETE the identity travels as a query param too (contract).
+            if (method === 'GET' || method === 'DELETE') {
+                const sep = url.indexOf('?') === -1 ? '?' : '&';
+                url = url + sep + 'user_id=' + encodeURIComponent(getUserId());
             }
 
+            const controller = new AbortController();
+            const timeoutId = setTimeout(function () {
+                controller.abort(new DOMException('Request timed out', 'TimeoutError'));
+            }, options.timeout || API_TIMEOUT_MS);
+
+            // Chain an external signal (e.g. the visible Cancel button).
+            if (options.signal) {
+                if (options.signal.aborted) {
+                    controller.abort();
+                } else {
+                    options.signal.addEventListener('abort', function () { controller.abort(); }, { once: true });
+                }
+            }
+
+            const finalOptions = Object.assign({}, options, {
+                method: method,
+                headers: headers,
+                credentials: 'include',
+                signal: controller.signal
+            });
+
             try {
-                const response = await fetch(url, options);
-                return response;
-            } catch (error) {
-                console.warn(`[Alex UI] Fetch error for ${url}:`, error);
-                // Return a safe dummy response object so calling code doesn't crash immediately
-                return {
-                    ok: false,
-                    status: 0,
-                    statusText: "Network Error",
-                    json: async () => ({ error: "Connection failed. Backend may be offline." }),
-                    text: async () => "Connection failed"
-                };
+                return await fetch(url, finalOptions);
+            } finally {
+                clearTimeout(timeoutId);
             }
         }
 
         /* -------------------------------------------------------------------------- */
-        /* TRANSLATIONS                               */
+        /* TRANSLATIONS                                                               */
         /* -------------------------------------------------------------------------- */
         const translations = {
             en: {
@@ -747,19 +1064,19 @@
                 tab_saved: "Saved",
                 placeholder_input: "Message Alex...",
                 placeholder_focus: "Ask about this property...",
-                
+
                 // Welcome Message
                 welcome_text: "Hello! I'm Alex. I can help you find apartments in London.",
                 try_asking: "Try asking me:",
                 example_1: "Find a 1-bed near King's Cross under £2000",
                 example_2: "What is the vibe like in Hackney?",
                 example_3: "Show me flats with a 20min commute to UCL",
-                
+
                 // Quick Actions
                 qa_ucl: "Near UCL",
                 qa_safe: "Safe areas",
                 qa_stats: "Rent stats",
-                
+
                 // Empty States
                 empty_title: "Ready to search",
                 empty_desc: "Tell Alex what you are looking for.",
@@ -767,22 +1084,72 @@
                 empty_saved_desc: "Tap the heart icon on listings to save them here.",
                 no_results_title: "No properties found",
                 no_results_desc: "Try adjusting your budget or location.",
-                
+                backend_offline_title: "Backend offline",
+                backend_offline_desc: "Could not connect to load your saved properties.",
+
                 // Cards
                 view_deal: "View Deal",
                 map_btn: "Map",
                 ask_ai_btn: "Ask AI",
+                save_btn: "Save",
+                no_image: "No Image",
                 similar_alert_title: "Similar Properties (Over Budget)",
                 similar_alert_desc: "No exact matches found. Here are the closest options.",
-                
+
                 // System
                 focusing_on: "Focusing on:",
                 loading_map: "Loading...",
-                error_connection: "Connection error. Please check server.",
-                
-                // --- [FIX] 新增商业化状态词 ---
+                error_connection: "Connection error. Please check the server.",
+                request_cancelled: "Request cancelled.",
+                retry: "Retry",
+                send: "Send",
+                cancel: "Cancel",
+                confirm: "Confirm",
+                save: "Save",
+                delete: "Delete",
+
                 status_budget_ok: "Within Budget",
-                status_budget_over: "Over Budget"
+                status_budget_over: "Over Budget",
+
+                // Conversations
+                conversations_title: "Conversations",
+                new_chat: "New chat",
+                new_chat_short: "New",
+                new_chat_title: "New chat",
+                untitled_chat: "Untitled chat",
+                no_conversations: "No conversations yet. Start a new chat.",
+                rename: "Rename",
+                rename_conversation: "Rename conversation",
+                conversation_title_placeholder: "Conversation title",
+                delete_conversation: "Delete conversation",
+                delete_conversation_confirm: "This permanently deletes this conversation and its messages. Continue?",
+
+                // Time (relative)
+                time_now: "just now",
+                time_min: "m ago",
+                time_hour: "h ago",
+                time_day: "d ago",
+
+                // User menu
+                rename_user: "Rename",
+                rename_user_title: "Your display name",
+                user_name_placeholder: "Enter a name",
+                switch_user: "Switch user",
+                switch_user_confirm: "Switch to a brand-new user profile? Your current data stays under this profile; the new profile starts empty.",
+                switched_user: "Switched to a new user profile.",
+                forget_me: "Delete my data",
+                forget_me_confirm: "This permanently erases ALL your conversations, saved properties and long-term memory for this profile. This cannot be undone. Continue?",
+                forgotten: "Your data has been deleted.",
+
+                // Errors
+                error_load_conversations: "Could not load conversations.",
+                error_create_conversation: "Could not create a new chat.",
+                error_load_messages: "Could not load this conversation.",
+                error_rename: "Could not rename.",
+                error_delete: "Could not delete.",
+                error_favorite: "Could not update your saved properties.",
+                error_map: "Could not generate the map.",
+                error_forget: "Could not delete your data."
             },
             zh: {
                 brand: "Alex",
@@ -793,19 +1160,19 @@
                 tab_saved: "收藏夹",
                 placeholder_input: "给 Alex 发送消息...",
                 placeholder_focus: "询问关于这套房源...",
-                
+
                 // Welcome Message
                 welcome_text: "你好！我是 Alex。我可以帮你寻找伦敦的公寓。",
                 try_asking: "试着问我：",
                 example_1: "帮我找国王十字附近 2000 镑以下的一居室",
                 example_2: "Hackney 这个区域怎么样？",
                 example_3: "显示去 UCL 通勤 20 分钟内的公寓",
-                
+
                 // Quick Actions
                 qa_ucl: "UCL 附近",
                 qa_safe: "安全区域",
                 qa_stats: "租金统计",
-                
+
                 // Empty States
                 empty_title: "准备搜索",
                 empty_desc: "告诉 Alex 您想找什么样的房源。",
@@ -813,31 +1180,80 @@
                 empty_saved_desc: "点击房源上的心形图标可将其保存至此处。",
                 no_results_title: "未找到房源",
                 no_results_desc: "请尝试调整您的预算或位置。",
-                
+                backend_offline_title: "后端离线",
+                backend_offline_desc: "无法连接以加载您的收藏。",
+
                 // Cards
                 view_deal: "查看详情",
                 map_btn: "地图",
                 ask_ai_btn: "AI 咨询",
+                save_btn: "收藏",
+                no_image: "暂无图片",
                 similar_alert_title: "相似房源 (超出预算)",
                 similar_alert_desc: "未找到完全匹配的房源。以下是最接近的选项。",
-                
+
                 // System
                 focusing_on: "当前关注：",
                 loading_map: "加载中...",
                 error_connection: "连接错误，请检查服务器。",
+                request_cancelled: "请求已取消。",
+                retry: "重试",
+                send: "发送",
+                cancel: "取消",
+                confirm: "确认",
+                save: "保存",
+                delete: "删除",
 
-                // --- [FIX] 新增商业化状态词 ---
                 status_budget_ok: "预算范围内",
-                status_budget_over: "超出预算"
+                status_budget_over: "超出预算",
+
+                // Conversations
+                conversations_title: "会话",
+                new_chat: "新建会话",
+                new_chat_short: "新建",
+                new_chat_title: "新会话",
+                untitled_chat: "未命名会话",
+                no_conversations: "暂无会话，开始一个新会话吧。",
+                rename: "重命名",
+                rename_conversation: "重命名会话",
+                conversation_title_placeholder: "会话标题",
+                delete_conversation: "删除会话",
+                delete_conversation_confirm: "这将永久删除此会话及其所有消息，确定继续吗？",
+
+                // Time (relative)
+                time_now: "刚刚",
+                time_min: "分钟前",
+                time_hour: "小时前",
+                time_day: "天前",
+
+                // User menu
+                rename_user: "重命名",
+                rename_user_title: "您的显示名称",
+                user_name_placeholder: "请输入名称",
+                switch_user: "切换用户",
+                switch_user_confirm: "切换到一个全新的用户档案？当前数据仍保留在此档案下，新档案将从空白开始。",
+                switched_user: "已切换到新的用户档案。",
+                forget_me: "删除我的数据",
+                forget_me_confirm: "这将永久删除该档案下的所有会话、收藏和长期记忆，且无法恢复。确定继续吗？",
+                forgotten: "您的数据已被删除。",
+
+                // Errors
+                error_load_conversations: "无法加载会话列表。",
+                error_create_conversation: "无法创建新会话。",
+                error_load_messages: "无法加载此会话。",
+                error_rename: "重命名失败。",
+                error_delete: "删除失败。",
+                error_favorite: "无法更新您的收藏。",
+                error_map: "无法生成地图。",
+                error_forget: "无法删除您的数据。"
             }
         };
 
-        let currentLang = 'en'; // Default language
+        let currentLang = 'en';
 
         /* -------------------------------------------------------------------------- */
-        /* ICONS (SVG)                                */
+        /* ICONS (SVG) — trusted, local-only strings                                  */
         /* -------------------------------------------------------------------------- */
-        // Helper to return SVG strings
         function getIcon(name, size = '') {
             const icons = {
                 error: `<svg class="icon ${size}" style="color:#ef4444" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
@@ -851,63 +1267,69 @@
                 search: `<svg class="icon ${size}" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
                 warning: `<svg class="icon ${size}" style="color:#d97706" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
                 heart: `<svg class="icon ${size}" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
-                close: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`
+                close: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+                edit: `<svg class="icon ${size}" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+                trash: `<svg class="icon ${size}" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+                stop: `<svg class="icon ${size}" style="fill:currentColor;stroke:none" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`,
+                send: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`
             };
             return icons[name] || '';
         }
 
         /* -------------------------------------------------------------------------- */
-        /* STATE                                      */
+        /* STATE                                                                      */
         /* -------------------------------------------------------------------------- */
         let currentResults = [];
         let favorites = new Set();
+        let favoriteItems = [];          // raw favorite objects from the backend
         let currentPropertyContext = null;
         let currentGalleryImages = [];
         let currentImageIndex = 0;
         let isProcessing = false;
         let lastResponseType = null;
+        let lastUserMessage = '';
+        let activeController = null;     // in-flight /api/alex request (for cancel)
+        let showingWelcome = false;
+
+        let conversations = [];
+        let activeConversationId = null;
 
         /* -------------------------------------------------------------------------- */
-        /* LANGUAGE LOGIC                                 */
+        /* LANGUAGE LOGIC                                                             */
         /* -------------------------------------------------------------------------- */
         function t(key) {
-            return translations[currentLang][key] || key;
+            return (translations[currentLang] && translations[currentLang][key]) || key;
         }
 
         function setLanguage(lang) {
             currentLang = lang;
-            
-            // Toggle UI buttons
+
             document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`.lang-btn[onclick="setLanguage('${lang}')"]`).classList.add('active');
+            const activeBtn = document.querySelector('.lang-btn[data-lang="' + lang + '"]');
+            if (activeBtn) activeBtn.classList.add('active');
 
-            // Update Static Text
-            document.querySelectorAll('[data-i18n]').forEach(el => {
-                const key = el.getAttribute('data-i18n');
-                el.innerText = t(key);
+            // Static text nodes (never contain sibling icons — icons are separate elements)
+            document.querySelectorAll('[data-i18n]').forEach(elm => {
+                elm.textContent = t(elm.getAttribute('data-i18n'));
             });
-            
-            // Update Placeholders
+            document.querySelectorAll('[data-i18n-title]').forEach(elm => {
+                elm.title = t(elm.getAttribute('data-i18n-title'));
+            });
+
             const input = document.getElementById('chatInput');
-            if (!currentPropertyContext) {
-                input.placeholder = t('placeholder_input');
-            } else {
-                input.placeholder = t('placeholder_focus');
-            }
+            input.placeholder = currentPropertyContext ? t('placeholder_focus') : t('placeholder_input');
 
-            // Update Quick Actions
             renderQuickActions();
+            renderConversationList();
+            updateUserNameLabel();
+            if (!isProcessing) setProcessingUI(false);
 
-            // Check if we need to render welcome message (only if chat is empty)
-            const msgs = document.getElementById('chatMessages');
-            if (msgs.children.length === 0) {
+            if (showingWelcome) {
                 renderWelcomeMessage();
             }
 
-            // Refresh Results / Empty States if needed
-            // If we are showing results, we should re-render them to update button labels
-            if (document.querySelector('.toggle-btn.active').id === 'btn-favorites') {
-                loadFavorites();
+            if (favoritesTabActive()) {
+                renderFavorites();
             } else {
                 displayResults(currentResults);
             }
@@ -915,7 +1337,7 @@
 
         function renderQuickActions() {
             const container = document.getElementById('quickActions');
-            // Different predefined queries for different languages to make it natural
+            container.innerHTML = '';
             const actions = currentLang === 'en' ? [
                 { label: `🎓 ${t('qa_ucl')}`, query: "Find flats near UCL under £1500" },
                 { label: `🛡️ ${t('qa_safe')}`, query: "Safe areas in London" },
@@ -925,43 +1347,46 @@
                 { label: `🛡️ ${t('qa_safe')}`, query: "伦敦哪些区域比较安全？" },
                 { label: `📊 ${t('qa_stats')}`, query: "Camden 的平均租金是多少？" }
             ];
-
-            container.innerHTML = actions.map(action => `
-                <button class="quick-action" onclick="sendQuickMessage('${action.query}')">
-                    ${action.label}
-                </button>
-            `).join('');
+            actions.forEach(action => {
+                const btn = el('button', 'quick-action');
+                btn.textContent = action.label;
+                btn.addEventListener('click', () => sendQuickMessage(action.query));
+                container.appendChild(btn);
+            });
         }
 
         function renderWelcomeMessage() {
             const msgs = document.getElementById('chatMessages');
-            msgs.innerHTML = ''; // Clear previous welcome if exists
-            
-            const welcomeHTML = `
-                <div class="message alex">
-                    <div class="sender">
-                        ${t('brand')}
-                    </div>
-                    <div class="bubble">
-                        ${t('welcome_text')}
-                        <br><br>
-                        <strong>${t('try_asking')}</strong>
-                        <ul>
-                            <li>"${t('example_1')}"</li>
-                            <li>"${t('example_2')}"</li>
-                            <li>"${t('example_3')}"</li>
-                        </ul>
-                    </div>
-                </div>
-            `;
-            msgs.innerHTML = welcomeHTML;
+            msgs.innerHTML = '';
+            // All values below come from the trusted i18n table (no user/LLM data).
+            const wrap = el('div', 'message alex');
+            const sender = el('div', 'sender');
+            sender.textContent = t('brand');
+            const bubble = el('div', 'bubble');
+            const intro = document.createElement('span');
+            intro.textContent = t('welcome_text');
+            bubble.appendChild(intro);
+            bubble.appendChild(document.createElement('br'));
+            bubble.appendChild(document.createElement('br'));
+            const strong = document.createElement('strong');
+            strong.textContent = t('try_asking');
+            bubble.appendChild(strong);
+            const ul = document.createElement('ul');
+            ['example_1', 'example_2', 'example_3'].forEach(k => {
+                const li = document.createElement('li');
+                li.textContent = '"' + t(k) + '"';
+                ul.appendChild(li);
+            });
+            bubble.appendChild(ul);
+            wrap.appendChild(sender);
+            wrap.appendChild(bubble);
+            msgs.appendChild(wrap);
+            showingWelcome = true;
         }
 
         /* -------------------------------------------------------------------------- */
-        /* CORE FUNCTIONS                                 */
+        /* INPUT HELPERS                                                              */
         /* -------------------------------------------------------------------------- */
-        
-        // Auto-resize textarea
         function autoResize(textarea) {
             textarea.style.height = 'auto';
             textarea.style.height = textarea.scrollHeight + 'px';
@@ -971,29 +1396,24 @@
         function handleEnter(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                sendMessage();
+                if (!isProcessing) sendMessage();
             }
         }
-        
-        // --- [FIX] ReAct 过滤函数：清洗模型思维链 ---
-        // 专门用于移除模型输出中的 Thought, Action, Observation 等中间步骤，只保留最终回复
+
+        // --- ReAct 过滤函数：清洗模型思维链 ---
         function cleanRawResponse(text) {
             if (!text) return "";
-            
-            // 🆕 策略 0: 全面检查 JSON 格式 - 处理所有可能的情况
-            // 包括 {"answer": "..."}, {"response": "..."} 等
+
             if (text.trim().startsWith('{')) {
                 try {
                     const jsonData = JSON.parse(text.trim());
-                    // 尝试提取所有可能的响应字段
-                    const possibleKeys = ['achanswer', 'response', 'response_text', 'message', 'text', 'content', 'result'];
+                    const possibleKeys = ['answer', 'response', 'response_text', 'message', 'text', 'content', 'result'];
                     for (const key of possibleKeys) {
                         if (jsonData[key] && typeof jsonData[key] === 'string') {
                             text = jsonData[key];
                             break;
                         }
                     }
-                    // 如果没找到已知键，但只有一个字符串值，用它
                     if (text.trim().startsWith('{')) {
                         const values = Object.values(jsonData);
                         const stringValue = values.find(v => typeof v === 'string' && v.length > 20);
@@ -1002,166 +1422,104 @@
                         }
                     }
                 } catch (e) {
-                    // 不是有效 JSON，检查是否是截断的 JSON
-                    // 如 '{\n  "answer": "内容...' 这种情况
                     const partialMatch = text.match(/"(?:answer|response|message|text)"\s*:\s*"([^"]+)/i);
                     if (partialMatch && partialMatch[1]) {
                         text = partialMatch[1];
                     }
                 }
             }
-            
-            // 🆕 策略 0.5: 清理 markdown 格式
+
             text = text.replace(/^\s*\*\*Final Answer:\*\*\s*/i, '');
             text = text.replace(/^\s*\*\*Final Answer:\s*/i, '');
             text = text.replace(/^\s*Final Answer:\s*/i, '');
-            
-            // 如果文本以 ** 开头但不是标题，移除它
+
             if (text.startsWith('**') && !text.startsWith('**#')) {
                 if (text === '**' || text === '** ') {
                     text = '';
                 }
             }
-            
-            // 策略 1: 如果模型输出了 "Final Answer:"
+
             const finalAnswerRegex = /Final Answer:\s*([\s\S]+)/i;
             const match = text.match(finalAnswerRegex);
             if (match && match[1]) {
                 return match[1].trim();
             }
 
-            // 策略 2: 如果没有 Final Answer 标记，则尝试去除 Thought/Action 块
-            // 移除以 Thought:, Action:, Observation: 开头的行或块
             let cleanText = text;
-            
-            // 移除 ReAct 常见的块状标记
-            // 使用正则非贪婪匹配移除这些块
             cleanText = cleanText.replace(/Thought:[\s\S]*?(?=(Final Answer:|Action:|Observation:|$))/gi, "");
             cleanText = cleanText.replace(/Action:[\s\S]*?(?=(Final Answer:|Observation:|$))/gi, "");
             cleanText = cleanText.replace(/Observation:[\s\S]*?(?=(Final Answer:|Thought:|$))/gi, "");
-            
-            // 兜底：移除残余的关键字标记
             cleanText = cleanText.replace(/(Thought|Action|Action Input|Observation):/gi, "");
 
             return cleanText.trim();
         }
-        
-        // Formatter handles Markdown -> HTML (Enhanced with Emoji support)
+
+        /* -------------------------------------------------------------------------- */
+        /* MARKDOWN -> HTML (escape-by-default; NO svg passthrough)                    */
+        /* Everything is HTML-escaped first; only trusted structural markup and       */
+        /* validated links are re-introduced afterwards.                              */
+        /* -------------------------------------------------------------------------- */
         function formatMessage(text) {
             if (!text) return '';
-            
-            // 🆕 先保护 SVG - 在转义前提取 SVG，处理后再还原
-            const svgRegex = /<svg[^>]*>[\s\S]*?<\/svg>/g;
-            const svgs = text.match(svgRegex) || [];
-            let html = text;
-            
-            // 替换 SVG 为占位符
-            let svgPlaceholders = {};
-            svgs.forEach((svg, index) => {
-                const placeholder = `__SVG_PLACEHOLDER_${index}__`;
-                svgPlaceholders[placeholder] = svg;
-                html = html.replace(svg, placeholder);
-            });
-            
-            // 🔧 FIX: 先提取链接，避免被HTML转义破坏
-            const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+            let src = String(text);
+
+            // 1) Pull markdown links out so we can rebuild them safely later.
             const links = [];
-            let linkMatch;
-            while ((linkMatch = linkRegex.exec(html)) !== null) {
-                links.push({
-                    full: linkMatch[0],
-                    text: linkMatch[1],
-                    url: linkMatch[2],
-                    placeholder: `__LINK_PLACEHOLDER_${links.length}__`
-                });
-            }
-            
-            // 替换链接为占位符
-            links.forEach(link => {
-                html = html.replace(link.full, link.placeholder);
+            src = src.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (m, txt, url) {
+                const idx = links.length;
+                links.push({ text: txt, url: url });
+                return '%%LINK' + idx + '%%';
             });
-            
-            // 只转义 HTML 特殊字符，但保留 emoji 和占位符
-            html = html.replace(/&/g, "&amp;");
-            html = html.replace(/</g, "&lt;");
-            html = html.replace(/>/g, "&gt;");
-            
-            // Markdown 解析 - 分割线 (必须在标题之前处理)
-            html = html.replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">');
-            html = html.replace(/^\*\*\*+$/gm, '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">');
-            html = html.replace(/^___+$/gm, '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">');
-            
-            // Markdown 解析 - 标题 (支持 1-6 级)
+
+            // 2) Escape ALL html-significant characters.
+            let html = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+            // 3) Structural markdown (operates on already-escaped text).
+            html = html.replace(/^\s*(---+|\*\*\*+|___+)\s*$/gm, '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">');
             html = html.replace(/^###### (.+)$/gm, '<h6 style="font-size:0.85rem;font-weight:600;margin:8px 0 4px 0;color:#374151;">$1</h6>');
             html = html.replace(/^##### (.+)$/gm, '<h5 style="font-size:0.9rem;font-weight:600;margin:8px 0 4px 0;color:#374151;">$1</h5>');
             html = html.replace(/^#### (.+)$/gm, '<h4 style="font-size:0.95rem;font-weight:600;margin:10px 0 6px 0;color:#1f2937;">$1</h4>');
             html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
             html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-            
-            // 粗体和斜体
+
             html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-            
-            // 行内代码
             html = html.replace(/`([^`]+)`/g, '<code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:0.9em;">$1</code>');
-            
-            // 🔧 FIX: 还原链接（已经是正确的HTML格式）
-            links.forEach(link => {
-                const linkHtml = `<a href="${link.url}" target="_blank" rel="noopener noreferrer" style="color:var(--primary-color);text-decoration:underline;">${link.text}</a>`;
-                html = html.replace(link.placeholder, linkHtml);
-            });
-            
-            // 处理表格 - Markdown 表格格式
-            // 识别 | 分隔的表格
+
+            // 4) Tables.
             const lines = html.split('\n');
             const tables = [];
             let i = 0;
-            
             while (i < lines.length) {
                 const line = lines[i];
-                
-                // 检查是否是表格头部 (以 | 开头，包含数据)
                 if (line.trim().startsWith('|') && line.trim().endsWith('|') && i + 1 < lines.length) {
                     const nextLine = lines[i + 1];
-                    
-                    // 检查下一行是否是分隔符 (|---|--| 格式)
                     if (nextLine.trim().startsWith('|') && /^[\|\s\-:]+$/.test(nextLine.trim())) {
-                        // 这是表格!
                         const headerLine = line;
                         const headers = headerLine.split('|').map(h => h.trim()).filter(h => h);
-                        
-                        // 收集表格行
                         const rows = [];
                         let j = i + 2;
                         while (j < lines.length && lines[j].trim().startsWith('|') && /^[\|\s\-:]/.test(lines[j].trim())) {
                             const cells = lines[j].split('|').map(cell => cell.trim()).filter(cell => cell);
-                            if (cells.length > 0) {
-                                rows.push(cells);
-                            }
+                            if (cells.length > 0) rows.push(cells);
                             j++;
                         }
-                        
-                        // 生成 HTML 表格
                         let tableHtml = '<table style="width:100%;border-collapse:collapse;margin:12px 0;border:1px solid #ddd;">';
                         tableHtml += '<thead><tr style="background:#f3f4f6;border-bottom:2px solid #e5e7eb;">';
                         headers.forEach(header => {
-                            tableHtml += `<th style="padding:10px;text-align:left;font-weight:600;border-right:1px solid #ddd;">${header}</th>`;
+                            tableHtml += '<th style="padding:10px;text-align:left;font-weight:600;border-right:1px solid #ddd;">' + header + '</th>';
                         });
-                        tableHtml += '</tr></thead>';
-                        
-                        tableHtml += '<tbody>';
+                        tableHtml += '</tr></thead><tbody>';
                         rows.forEach((row, idx) => {
                             const bgColor = idx % 2 === 0 ? 'white' : '#fafbfc';
-                            tableHtml += `<tr style="background:${bgColor};border-bottom:1px solid #ddd;">`;
+                            tableHtml += '<tr style="background:' + bgColor + ';border-bottom:1px solid #ddd;">';
                             row.forEach(cell => {
-                                tableHtml += `<td style="padding:10px;border-right:1px solid #ddd;">${cell}</td>`;
+                                tableHtml += '<td style="padding:10px;border-right:1px solid #ddd;">' + cell + '</td>';
                             });
                             tableHtml += '</tr>';
                         });
-                        tableHtml += '</tbody>';
-                        tableHtml += '</table>';
-                        
+                        tableHtml += '</tbody></table>';
                         tables.push({ startIdx: i, endIdx: j - 1, html: tableHtml });
                         i = j;
                         continue;
@@ -1169,490 +1527,715 @@
                 }
                 i++;
             }
-            
-            // 将表格从后向前替换（避免索引偏移）
             for (let idx = tables.length - 1; idx >= 0; idx--) {
                 const table = tables[idx];
-                // 替换对应的行
-                lines.splice(table.startIdx, table.endIdx - table.startIdx + 1, `__TABLE_PLACEHOLDER_${idx}__`);
+                lines.splice(table.startIdx, table.endIdx - table.startIdx + 1, '%%TABLE' + idx + '%%');
             }
-            
             html = lines.join('\n');
-            
-            // 处理列表 - 改进版本
+
+            // 5) Lists / paragraphs.
             const linesList = html.split('\n');
             let output = [];
             let inUl = false;
             let inOl = false;
-            let olStarted = false;  // 追踪有序列表是否已经开始
-            
             linesList.forEach((line, lineIdx) => {
                 const trimmedLine = line.trim();
-                
-                // 无序列表: - 或 *
                 if (trimmedLine.match(/^[-*]\s+/) && !trimmedLine.startsWith('|')) {
-                    if (inOl) { output.push('</ol>'); inOl = false; olStarted = false; }
+                    if (inOl) { output.push('</ol>'); inOl = false; }
                     if (!inUl) { output.push('<ul>'); inUl = true; }
-                    output.push(`<li>${trimmedLine.replace(/^[-*]\s+/, '')}</li>`);
-                }
-                // 有序列表: 1. 2. 等（支持重复的 1.）
-                else if (trimmedLine.match(/^\d+[\.\)]\s+/) && !trimmedLine.startsWith('|')) {
+                    output.push('<li>' + trimmedLine.replace(/^[-*]\s+/, '') + '</li>');
+                } else if (trimmedLine.match(/^\d+[\.\)]\s+/) && !trimmedLine.startsWith('|')) {
                     if (inUl) { output.push('</ul>'); inUl = false; }
-                    
-                    // 检查是否需要开始新的有序列表
-                    // 如果上一行不是列表项，则开始新列表
                     const prevLine = lineIdx > 0 ? linesList[lineIdx - 1].trim() : '';
                     const isPrevListItem = prevLine.match(/^[-*\d+][\.\)\s]/) || inOl;
-                    
                     if (!inOl || !isPrevListItem) {
                         if (inOl) { output.push('</ol>'); }
                         output.push('<ol>');
                         inOl = true;
-                        olStarted = true;
                     }
-                    
-                    // 提取列表项内容（移除序号）
                     const itemContent = trimmedLine.replace(/^\d+[\.\)]\s+/, '');
-                    output.push(`<li>${itemContent}</li>`);
-                }
-                // 普通段落
-                else {
+                    output.push('<li>' + itemContent + '</li>');
+                } else {
                     if (inUl) { output.push('</ul>'); inUl = false; }
-                    if (inOl) { output.push('</ol>'); inOl = false; olStarted = false; }
+                    if (inOl) { output.push('</ol>'); inOl = false; }
                     if (trimmedLine) {
-                        output.push(`<p>${line}</p>`);
+                        output.push('<p>' + line + '</p>');
                     }
                 }
             });
-            
-            // 关闭未关闭的列表
             if (inUl) output.push('</ul>');
             if (inOl) output.push('</ol>');
-            
             html = output.join('');
-            
-            // 还原表格占位符
+
+            // 6) Restore tables.
             tables.forEach((table, idx) => {
-                const placeholder = `__TABLE_PLACEHOLDER_${idx}__`;
-                html = html.replace(`<p>${placeholder}</p>`, table.html);
-                html = html.replace(placeholder, table.html);
+                const placeholder = '%%TABLE' + idx + '%%';
+                html = html.replace('<p>' + placeholder + '</p>', table.html);
+                html = html.split(placeholder).join(table.html);
             });
-            
-            // 🆕 还原 SVG - 保证 SVG 完整性
-            Object.entries(svgPlaceholders).forEach(([placeholder, svg]) => {
-                html = html.replace(placeholder, svg);
+
+            // 7) Restore links with escaped text + validated href.
+            links.forEach((link, idx) => {
+                const safe = isSafeHref(link.url) ? link.url : '#';
+                const a = '<a href="' + escapeHtml(safe) + '" target="_blank" rel="noopener noreferrer" style="color:var(--primary-color);text-decoration:underline;">' + escapeHtml(link.text) + '</a>';
+                html = html.split('%%LINK' + idx + '%%').join(a);
             });
-            
+
             return html;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* TOASTS                                                                     */
+        /* -------------------------------------------------------------------------- */
+        function showToast(message, type, action) {
+            const container = document.getElementById('toastContainer');
+            const toast = el('div', 'toast' + (type ? ' toast-' + type : ''));
+            const span = document.createElement('span');
+            span.textContent = message;
+            toast.appendChild(span);
+            if (action && action.label) {
+                const btn = el('button', 'toast-action');
+                btn.textContent = action.label;
+                btn.addEventListener('click', () => {
+                    removeToast(toast);
+                    if (typeof action.onClick === 'function') action.onClick();
+                });
+                toast.appendChild(btn);
+            }
+            container.appendChild(toast);
+            const ttl = action ? 9000 : 4500;
+            setTimeout(() => removeToast(toast), ttl);
+        }
+        function removeToast(toast) {
+            if (!toast || !toast.parentNode) return;
+            toast.classList.add('toast-hide');
+            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* REUSABLE DIALOG                                                            */
+        /* -------------------------------------------------------------------------- */
+        function openDialog(opts) {
+            const overlay = document.getElementById('dialogOverlay');
+            overlay.innerHTML = '';
+            const card = el('div', 'dialog-card');
+
+            const title = el('div', 'dialog-title');
+            title.textContent = opts.title || '';
+            card.appendChild(title);
+
+            if (opts.message) {
+                const msg = el('div', 'dialog-message');
+                msg.textContent = opts.message;
+                card.appendChild(msg);
+            }
+
+            let input = null;
+            if (opts.withInput) {
+                input = el('input', 'dialog-input');
+                input.type = 'text';
+                input.value = opts.defaultValue || '';
+                input.placeholder = opts.placeholder || '';
+                input.setAttribute('maxlength', '120');
+                card.appendChild(input);
+            }
+
+            const actions = el('div', 'dialog-actions');
+            const cancel = el('button', 'dialog-btn');
+            cancel.textContent = opts.cancelLabel || t('cancel');
+            cancel.addEventListener('click', closeDialog);
+
+            const confirm = el('button', 'dialog-btn primary');
+            confirm.textContent = opts.confirmLabel || t('confirm');
+            const doConfirm = () => {
+                const val = input ? input.value.trim() : null;
+                if (opts.withInput && !val) { input.focus(); return; }
+                closeDialog();
+                if (typeof opts.onConfirm === 'function') opts.onConfirm(val);
+            };
+            confirm.addEventListener('click', doConfirm);
+
+            actions.appendChild(cancel);
+            actions.appendChild(confirm);
+            card.appendChild(actions);
+
+            overlay.appendChild(card);
+            overlay.style.display = 'flex';
+
+            if (input) {
+                input.focus();
+                input.select();
+                input.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') { e.preventDefault(); doConfirm(); }
+                });
+            }
+        }
+        function closeDialog() {
+            const overlay = document.getElementById('dialogOverlay');
+            overlay.style.display = 'none';
+            overlay.innerHTML = '';
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* CHAT — SEND / CANCEL                                                        */
+        /* -------------------------------------------------------------------------- */
+        function setProcessingUI(processing) {
+            const btn = document.getElementById('sendBtn');
+            if (!btn) return;
+            if (processing) {
+                btn.classList.add('is-stop');
+                btn.innerHTML = getIcon('stop');
+                btn.setAttribute('aria-label', t('cancel'));
+                btn.title = t('cancel');
+            } else {
+                btn.classList.remove('is-stop');
+                btn.innerHTML = getIcon('send');
+                btn.setAttribute('aria-label', t('send'));
+                btn.title = t('send');
+            }
+        }
+
+        function cancelRequest() {
+            if (activeController) activeController.abort();
+        }
+
+        function onSendButtonClick() {
+            if (isProcessing) cancelRequest();
+            else sendMessage();
+        }
+
+        function showRetryToast() {
+            showToast(t('error_connection'), 'error', {
+                label: t('retry'),
+                onClick: () => {
+                    const input = document.getElementById('chatInput');
+                    input.value = lastUserMessage;
+                    sendMessage();
+                }
+            });
+        }
+
+        function adoptConversationId(cid) {
+            if (!cid || cid === activeConversationId) return;
+            activeConversationId = cid;
+            localStorage.setItem(LS_ACTIVE_CONV, cid);
         }
 
         async function sendMessage() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
-            
             if (!message || isProcessing) return;
-            
+
+            lastUserMessage = message;
             isProcessing = true;
-            document.getElementById('sendBtn').disabled = true;
-            
+            setProcessingUI(true);
+
             addMessage(message, 'user');
-            
             input.value = '';
             input.style.height = 'auto';
-            
             showTypingIndicator();
-            
+
+            activeController = new AbortController();
+
             try {
                 const isContinuation = lastResponseType === 'clarification';
-                
-                // Use apiFetch wrapper
+                const body = {
+                    message: message,
+                    user_id: getUserId(),
+                    context: currentPropertyContext ? { property: currentPropertyContext } : {},
+                    is_continuation: isContinuation,
+                    language: currentLang
+                };
+                if (activeConversationId) body.conversation_id = activeConversationId;
+
                 const response = await apiFetch('/api/alex', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        message: message,
-                        context: currentPropertyContext ? { property: currentPropertyContext } : {},
-                        is_continuation: isContinuation,
-                        language: currentLang 
-                    })
+                    body: JSON.stringify(body),
+                    signal: activeController.signal
                 });
-                
-                const data = await response.json();
+
                 removeTypingIndicator();
-                
-                if (data.error) {
-                    addMessage(`${getIcon('error', 'icon-sm')} ${data.error}`, 'alex');
+
+                if (!response.ok) {
+                    let errMsg = t('error_connection');
+                    try { const ed = await response.json(); if (ed && ed.error) errMsg = ed.error; } catch (_) {}
+                    addMessage(errMsg, 'alex', { icon: 'error' });
                     lastResponseType = 'error';
-                } else if (data.response_type === 'clarification') {
-                    // --- [FIX] 清洗消息 ---
-                    const cleanMsg = cleanRawResponse(data.message);
-                    addMessage(`${getIcon('question', 'icon-sm')} ${cleanMsg}`, 'alex');
-                    lastResponseType = 'clarification';
-                } else if (data.response_type === 'search' && data.recommendations) {
-                    // --- [FIX] 清洗消息 ---
-                    const cleanMsg = cleanRawResponse(data.message || t('empty_state_desc'));
-                    addMessage(cleanMsg, 'alex'); 
-                    currentResults = data.recommendations;
-                    displayResults(data.recommendations);
-                    lastResponseType = 'search';
+                    showRetryToast();
                 } else {
-                    // --- [FIX] 清洗消息 ---
-                    const rawText = data.message || data.response || "I couldn't get a response from the server.";
-                    const cleanText = cleanRawResponse(rawText);
-                    
-                    addMessage(cleanText, 'alex');
-                    if (data.recommendations && data.recommendations.length > 0) {
+                    const data = await response.json();
+                    if (data.conversation_id) adoptConversationId(data.conversation_id);
+
+                    if (data.error) {
+                        addMessage(cleanRawResponse(String(data.error)), 'alex', { icon: 'error' });
+                        lastResponseType = 'error';
+                    } else if (data.response_type === 'clarification') {
+                        addMessage(cleanRawResponse(data.message), 'alex', { icon: 'question' });
+                        lastResponseType = 'clarification';
+                    } else if (data.response_type === 'search' && data.recommendations) {
+                        addMessage(cleanRawResponse(data.message || ''), 'alex');
                         currentResults = data.recommendations;
                         displayResults(data.recommendations);
                         lastResponseType = 'search';
+                    } else if (data.response_type === 'error') {
+                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error' });
+                        lastResponseType = 'error';
                     } else {
-                        lastResponseType = 'answer';
+                        const rawText = data.message || data.response || t('error_connection');
+                        addMessage(cleanRawResponse(rawText), 'alex');
+                        if (data.recommendations && data.recommendations.length > 0) {
+                            currentResults = data.recommendations;
+                            displayResults(data.recommendations);
+                            lastResponseType = 'search';
+                        } else {
+                            lastResponseType = 'answer';
+                        }
                     }
+                    // Refresh the sidebar ordering / updated_at (and pick up an
+                    // implicitly-created conversation).
+                    loadConversations(true);
                 }
             } catch (error) {
                 removeTypingIndicator();
-                addMessage(`${getIcon('error', 'icon-sm')} ${t('error_connection')}`, 'alex');
-                console.error('Error:', error);
-                lastResponseType = 'error';
+                if (error && error.name === 'AbortError') {
+                    addMessage(t('request_cancelled'), 'alex', { icon: 'error' });
+                    lastResponseType = null;
+                } else {
+                    addMessage(t('error_connection'), 'alex', { icon: 'error' });
+                    lastResponseType = 'error';
+                    showRetryToast();
+                    console.error('Error:', error);
+                }
+            } finally {
+                isProcessing = false;
+                activeController = null;
+                setProcessingUI(false);
+                if (window.innerWidth > 1024) input.focus();
             }
-            
-            isProcessing = false;
-            document.getElementById('sendBtn').disabled = false;
-            if (window.innerWidth > 1024) input.focus();
         }
-        
+
         function sendQuickMessage(text) {
+            if (isProcessing) return;
             const input = document.getElementById('chatInput');
             input.value = text;
             autoResize(input);
             sendMessage();
         }
-        
-        function addMessage(text, sender) {
+
+        /* -------------------------------------------------------------------------- */
+        /* MESSAGE RENDERING                                                          */
+        /* opts.icon = trusted local icon name prepended to the (escaped) bubble.     */
+        /* -------------------------------------------------------------------------- */
+        function addMessage(text, sender, opts) {
+            opts = opts || {};
+            showingWelcome = false;
+
             const messagesDiv = document.getElementById('chatMessages');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
-            
-            // 🆕 处理后端返回的 SVG icons - 修复转义问题
-            let processedText = text;
-            
-            // 修复被转义的 SVG 标签
-            // 从 &lt;svg 还原为 <svg，从 &gt; 还原为 >
-            if (processedText.includes('&lt;svg')) {
-                processedText = processedText.replace(/&lt;svg/g, '<svg');
-                processedText = processedText.replace(/&gt;/g, '>');
-                processedText = processedText.replace(/&quot;/g, '"');
-                processedText = processedText.replace(/&#x27;/g, "'");
-            }
-            
-            const formattedText = sender === 'alex' ? formatMessage(processedText) : processedText;
-            
+            const messageDiv = el('div', 'message ' + sender);
+
             if (sender === 'alex') {
-                messageDiv.innerHTML = `
-                    <div class="sender">${t('brand')}</div>
-                    <div class="bubble">${formattedText}</div>
-                `;
+                const senderEl = el('div', 'sender');
+                senderEl.textContent = t('brand');
+                const bubble = el('div', 'bubble');
+                // Local icon (trusted) + escaped/formatted message body.
+                let inner = '';
+                if (opts.icon) inner += getIcon(opts.icon, 'icon-sm') + ' ';
+                inner += formatMessage(text);
+                bubble.innerHTML = inner;
+                messageDiv.appendChild(senderEl);
+                messageDiv.appendChild(bubble);
             } else {
-                messageDiv.innerHTML = `<div class="bubble">${text}</div>`;
+                const bubble = el('div', 'bubble');
+                bubble.textContent = text; // user echo — escaped by textContent
+                messageDiv.appendChild(bubble);
             }
-            
+
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-        
+
         function showTypingIndicator() {
             const messagesDiv = document.getElementById('chatMessages');
-            const indicator = document.createElement('div');
+            const indicator = el('div', 'message alex');
             indicator.id = 'typingIndicator';
-            indicator.className = 'message alex';
-            indicator.innerHTML = `
-                <div class="sender">${t('brand')}</div>
-                <div class="bubble">
-                    <div class="typing-indicator">
-                        <span></span><span></span><span></span>
-                    </div>
-                </div>
-            `;
+            const senderEl = el('div', 'sender');
+            senderEl.textContent = t('brand');
+            const bubble = el('div', 'bubble');
+            bubble.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+            indicator.appendChild(senderEl);
+            indicator.appendChild(bubble);
             messagesDiv.appendChild(indicator);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-        
+
         function removeTypingIndicator() {
             const indicator = document.getElementById('typingIndicator');
             if (indicator) indicator.remove();
         }
-        
-        /* -------------------------------------------------------------------------- */
-        /* RESULTS & CARDS                                  */
-        /* -------------------------------------------------------------------------- */
-        function displayResults(recommendations) {
-            // Ensure we are on the results tab
-            if(document.getElementById('btn-results')) {
-               document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
-               document.getElementById('btn-results').classList.add('active');
-            }
 
+        /* -------------------------------------------------------------------------- */
+        /* RESULTS & CARDS                                                            */
+        /* -------------------------------------------------------------------------- */
+        function setActiveTab(view) {
+            document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+            const id = view === 'favorites' ? 'btn-favorites' : 'btn-results';
+            const btn = document.getElementById(id);
+            if (btn) btn.classList.add('active');
+        }
+        function favoritesTabActive() {
+            const b = document.getElementById('btn-favorites');
+            return !!(b && b.classList.contains('active'));
+        }
+
+        function buildEmptyState(iconName, title, desc) {
+            const wrap = el('div', 'empty-state');
+            const ic = el('div', 'empty-state-icon');
+            ic.innerHTML = getIcon(iconName, 'icon-lg');
+            const h = document.createElement('h3');
+            h.textContent = title;
+            const p = document.createElement('p');
+            p.textContent = desc;
+            wrap.appendChild(ic);
+            wrap.appendChild(h);
+            wrap.appendChild(p);
+            return wrap;
+        }
+
+        function buildSimilarAlert() {
+            const box = el('div', 'alert-box alert-warning');
+            box.innerHTML = getIcon('warning');
+            const div = document.createElement('div');
+            const strong = document.createElement('strong');
+            strong.style.cssText = 'display:block;margin-bottom:2px;';
+            strong.textContent = t('similar_alert_title');
+            const span = document.createElement('span');
+            span.style.fontSize = '0.9em';
+            span.textContent = t('similar_alert_desc');
+            div.appendChild(strong);
+            div.appendChild(span);
+            box.appendChild(div);
+            return box;
+        }
+
+        function displayResults(recommendations) {
+            setActiveTab('results');
             const content = document.getElementById('resultsContent');
-            
+            content.innerHTML = '';
+
             if (!recommendations || recommendations.length === 0) {
-                content.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            ${getIcon('search', 'icon-lg')}
-                        </div>
-                        <h3>${t('no_results_title')}</h3>
-                        <p>${t('no_results_desc')}</p>
-                    </div>
-                `;
+                content.appendChild(buildEmptyState('search', t('no_results_title'), t('no_results_desc')));
                 return;
             }
-            
-            const isSimilarSuggestion = recommendations[0]?.match_type === 'similar_suggestion';
-            
-            let headerHTML = '';
-            if (isSimilarSuggestion) {
-                headerHTML = `
-                    <div class="alert-box alert-warning">
-                        ${getIcon('warning')}
-                        <div>
-                            <strong style="display:block;margin-bottom:2px;">${t('similar_alert_title')}</strong>
-                            <span style="font-size:0.9em;">${t('similar_alert_desc')}</span>
-                        </div>
-                    </div>
-                `;
+
+            if (recommendations[0] && recommendations[0].match_type === 'similar_suggestion') {
+                content.appendChild(buildSimilarAlert());
             }
-            
-            content.innerHTML = headerHTML + recommendations.map(rec => createPropertyCard(rec)).join('');
+            recommendations.forEach(rec => content.appendChild(createPropertyCard(rec)));
         }
 
-        function createPropertyCard(rec) {
-            const images = rec.images || [];
-            const hasImages = images.length > 0;
-            const isFavorited = favorites.has(rec.url);
-            
-            // 判断是否是相似推荐或软性违规
+        function buildBudgetBadge(rec) {
+            if (!rec.budget_status) return null;
             const isOverBudget = rec.match_type === 'similar_suggestion' || rec.match_type === 'soft_violation';
-            
-            const heartClass = isFavorited ? 'favorite-btn active' : 'favorite-btn';
-            
-            // --- [FIX] 预算标签优化逻辑 ---
-            let badge = '';
-            if (rec.budget_status) {
-                // 1. 去除所有 Emoji 和特殊符号 (只保留文字和空格)
-                // 这样无论后端传什么 ✅, ❌, ⚠️，我们都先清理掉
-                let cleanStatus = rec.budget_status.replace(/✅|❌|⚠️/g, '').trim();
-                
-                // 2. 语义映射：根据 cleanStatus 中的关键词判断显示什么（解决中英文问题）
-                // 如果后端传来的是 "Within Budget" 或 "在预算内"
-                let displayText = cleanStatus;
-                let isGreen = true;
-
-                // 简单的关键词匹配来决定显示哪种专业术语
-                if (cleanStatus.toLowerCase().includes('within') || cleanStatus.includes('内') || cleanStatus.includes('OK')) {
-                    displayText = t('status_budget_ok'); // "Within Budget" or "预算范围内"
-                    isGreen = true;
-                } else if (cleanStatus.toLowerCase().includes('over') || cleanStatus.includes('超出') || cleanStatus.includes('High')) {
-                    displayText = t('status_budget_over'); // "Over Budget" or "超出预算"
-                    isGreen = false;
-                } else {
-                    // 兜底：如果有些奇怪的状态，直接显示清洗后的文字
-                    displayText = cleanStatus;
-                    isGreen = !isOverBudget;
-                }
-
-                // 3. 样式定义
-                const style = isGreen 
-                    ? 'background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;' // 绿色系
-                    : 'background:#fffbeb;color:#b45309;border:1px solid #fcd34d;'; // 黄色系 (警告)
-
-                badge = `<span style="font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;display:inline-block;${style}">${displayText}</span>`;
+            // Strip emoji/status glyphs, then map to a canonical localized label.
+            let clean = String(rec.budget_status).replace(/[✅❌⚠️]/g, '').trim();
+            let displayText = clean;
+            let isGreen = !isOverBudget;
+            const low = clean.toLowerCase();
+            if (low.includes('within') || clean.includes('内') || clean.includes('OK')) {
+                displayText = t('status_budget_ok');
+                isGreen = true;
+            } else if (low.includes('over') || clean.includes('超出') || clean.includes('High')) {
+                displayText = t('status_budget_over');
+                isGreen = false;
             }
-
-            return `
-                <div class="property-card">
-                    <div class="property-image-container" onclick='openGallery(${JSON.stringify(images)}, "${escapeHtml(rec.address)}")'>
-                        ${hasImages ? `
-                            <img src="${images[0]}" alt="${escapeHtml(rec.address)}" class="property-image" onerror="this.style.display='none'">
-                            <span class="image-count-badge">${getIcon('camera', 'icon-sm')} ${images.length}</span>
-                        ` : `
-                            <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;flex-direction:column;gap:8px;">
-                                ${getIcon('building')} <span style="font-size:12px">No Image</span>
-                            </div>
-                        `}
-                        <span class="rank-badge">#${rec.rank}</span>
-                    </div>
-                    <div class="property-content">
-                        <div>
-                            <div class="property-header">
-                                <div class="property-address">${rec.address}</div>
-                                <button class="${heartClass}" onclick="toggleFavorite('${escapeHtml(rec.url)}')" title="Save">
-                                    <svg class="icon" style="${isFavorited ? 'fill:currentColor' : ''}" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-                                </button>
-                            </div>
-                            <div class="property-details">
-                                <div class="detail-item">${getIcon('money')} ${rec.price}</div>
-                                <div class="detail-item">${getIcon('clock')} ${rec.travel_time}</div>
-                                ${badge}
-                            </div>
-                            <div class="property-explanation">${rec.explanation || ''}</div>
-                        </div>
-                        <div class="property-actions">
-                            <a href="${rec.url}" target="_blank" class="action-btn primary">${t('view_deal')}</a>
-                            <button class="action-btn" onclick='openMap("${escapeHtml(rec.address)}", "${rec.geo_location || ''}", "${rec.price}", "${rec.travel_time}")'>
-                                ${getIcon('mapPin', 'icon-sm')} ${t('map_btn')}
-                            </button>
-                            <button class="action-btn" onclick='askAboutProperty(${JSON.stringify({address: rec.address, price: rec.price, travel_time: rec.travel_time})})'>
-                                ${getIcon('chat', 'icon-sm')} ${t('ask_ai_btn')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;display:inline-block;'
+                + (isGreen
+                    ? 'background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;'
+                    : 'background:#fffbeb;color:#b45309;border:1px solid #fcd34d;');
+            badge.textContent = displayText;
+            return badge;
         }
-        
+
+        // Built entirely with DOM APIs — dynamic listing/LLM values go through
+        // textContent (never innerHTML), so they cannot inject markup.
+        function createPropertyCard(rec) {
+            const images = Array.isArray(rec.images) ? rec.images : [];
+            const hasImages = images.length > 0;
+            const url = rec.url || '';
+            const isFav = favorites.has(url);
+
+            const card = el('div', 'property-card');
+
+            // --- image container ---
+            const imgc = el('div', 'property-image-container');
+            if (hasImages) {
+                const img = document.createElement('img');
+                img.className = 'property-image';
+                img.src = safeImgSrc(images[0]);
+                img.alt = rec.address || '';
+                img.addEventListener('error', function () { this.style.display = 'none'; });
+                imgc.appendChild(img);
+                const cb = el('span', 'image-count-badge');
+                cb.innerHTML = getIcon('camera', 'icon-sm');
+                cb.appendChild(document.createTextNode(' ' + images.length));
+                imgc.appendChild(cb);
+            } else {
+                const ph = document.createElement('div');
+                ph.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:#9ca3af;flex-direction:column;gap:8px;';
+                ph.innerHTML = getIcon('building');
+                const noImg = document.createElement('span');
+                noImg.style.fontSize = '12px';
+                noImg.textContent = t('no_image');
+                ph.appendChild(noImg);
+                imgc.appendChild(ph);
+            }
+            const rankBadge = el('span', 'rank-badge');
+            rankBadge.textContent = '#' + (rec.rank != null ? rec.rank : '');
+            imgc.appendChild(rankBadge);
+            imgc.addEventListener('click', () => openGallery(images, rec.address || ''));
+            card.appendChild(imgc);
+
+            // --- content ---
+            const content = el('div', 'property-content');
+            const top = document.createElement('div');
+
+            const header = el('div', 'property-header');
+            const addr = el('div', 'property-address');
+            addr.textContent = rec.address || '';
+            header.appendChild(addr);
+
+            const favBtn = el('button', isFav ? 'favorite-btn active' : 'favorite-btn');
+            favBtn.title = t('save_btn');
+            favBtn.setAttribute('aria-label', t('save_btn'));
+            favBtn.innerHTML = getIcon('heart');
+            if (isFav) {
+                const svg = favBtn.querySelector('svg');
+                if (svg) svg.style.fill = 'currentColor';
+            }
+            favBtn.addEventListener('click', () => toggleFavorite(rec));
+            header.appendChild(favBtn);
+            top.appendChild(header);
+
+            const details = el('div', 'property-details');
+            const priceItem = el('div', 'detail-item');
+            priceItem.innerHTML = getIcon('money');
+            priceItem.appendChild(document.createTextNode(' ' + (rec.price || '')));
+            details.appendChild(priceItem);
+            const timeItem = el('div', 'detail-item');
+            timeItem.innerHTML = getIcon('clock');
+            timeItem.appendChild(document.createTextNode(' ' + (rec.travel_time || '')));
+            details.appendChild(timeItem);
+            const badge = buildBudgetBadge(rec);
+            if (badge) details.appendChild(badge);
+            top.appendChild(details);
+
+            const expl = el('div', 'property-explanation');
+            expl.textContent = rec.explanation || '';
+            top.appendChild(expl);
+            content.appendChild(top);
+
+            const actions = el('div', 'property-actions');
+            const view = document.createElement('a');
+            view.className = 'action-btn primary';
+            view.textContent = t('view_deal');
+            if (isSafeHref(url)) {
+                view.href = url;
+                view.target = '_blank';
+                view.rel = 'noopener noreferrer';
+            } else {
+                view.href = '#';
+                view.addEventListener('click', e => e.preventDefault());
+            }
+            actions.appendChild(view);
+
+            const mapBtn = el('button', 'action-btn');
+            mapBtn.innerHTML = getIcon('mapPin', 'icon-sm');
+            mapBtn.appendChild(document.createTextNode(' ' + t('map_btn')));
+            mapBtn.addEventListener('click', () => openMap(rec, mapBtn));
+            actions.appendChild(mapBtn);
+
+            const askBtn = el('button', 'action-btn');
+            askBtn.innerHTML = getIcon('chat', 'icon-sm');
+            askBtn.appendChild(document.createTextNode(' ' + t('ask_ai_btn')));
+            askBtn.addEventListener('click', () => askAboutProperty({
+                address: rec.address, price: rec.price, travel_time: rec.travel_time
+            }));
+            actions.appendChild(askBtn);
+
+            content.appendChild(actions);
+            card.appendChild(content);
+            return card;
+        }
+
         function askAboutProperty(property) {
             currentPropertyContext = property;
             const indicator = document.getElementById('propertyFocusIndicator');
             indicator.style.display = 'flex';
-            
-            indicator.innerHTML = `
-                <div style="display:flex;align-items:center;gap:8px;">
-                    ${getIcon('mapPin', 'icon-sm')}
-                    <span>${t('focusing_on')} <strong>${property.address.substring(0, 30)}...</strong></span>
-                </div>
-                <button onclick="clearPropertyFocus()" style="background:none;border:none;cursor:pointer;color:currentColor;display:flex;">
-                    ${getIcon('close', 'icon-sm')}
-                </button>
-            `;
-            
+            indicator.innerHTML = '';
+
+            const left = document.createElement('div');
+            left.style.cssText = 'display:flex;align-items:center;gap:8px;';
+            left.innerHTML = getIcon('mapPin', 'icon-sm');
+            const span = document.createElement('span');
+            span.textContent = t('focusing_on') + ' ';
+            const strong = document.createElement('strong');
+            const addr = property.address || '';
+            strong.textContent = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
+            span.appendChild(strong);
+            left.appendChild(span);
+
+            const close = document.createElement('button');
+            close.style.cssText = 'background:none;border:none;cursor:pointer;color:currentColor;display:flex;';
+            close.innerHTML = getIcon('close', 'icon-sm');
+            close.addEventListener('click', clearPropertyFocus);
+
+            indicator.appendChild(left);
+            indicator.appendChild(close);
+
             const input = document.getElementById('chatInput');
             input.placeholder = t('placeholder_focus');
             input.focus();
         }
-        
+
         function clearPropertyFocus() {
             currentPropertyContext = null;
             document.getElementById('propertyFocusIndicator').style.display = 'none';
             document.getElementById('chatInput').placeholder = t('placeholder_input');
         }
-        
+
         function switchView(view) {
-            document.querySelectorAll('.toggle-btn').forEach(btn => btn.classList.remove('active'));
-            if(view === 'results') document.getElementById('btn-results').classList.add('active');
-            else document.getElementById('btn-favorites').classList.add('active');
-            
-            if (view === 'favorites') {
-                loadFavorites();
-            } else {
-                displayResults(currentResults);
-            }
+            setActiveTab(view);
+            if (view === 'favorites') loadFavorites();
+            else displayResults(currentResults);
         }
 
         /* -------------------------------------------------------------------------- */
-        /* FAVORITES LOGIC                                  */
+        /* FAVORITES (per-user, persisted; sends full property incl geo_location)     */
         /* -------------------------------------------------------------------------- */
-        async function toggleFavorite(url) {
-            const property = currentResults.find(r => r.url === url);
-            const isRemoving = favorites.has(url);
-            
-            try {
-                if (isRemoving) {
-                    await apiFetch(`/api/favorites/${encodeURIComponent(url)}`, { method: 'DELETE' });
-                    favorites.delete(url);
-                } else if (property) {
-                    await apiFetch('/api/favorites', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            URL: property.url,
-                            Address: property.address,
-                            Price: property.price,
-                            travel_time_minutes: parseInt(property.travel_time) || 0,
-                            explanation: property.explanation,
-                            Images: property.images || []
-                        })
-                    });
-                    favorites.add(url);
-                }
-                
-                updateFavCount();
-                
-                // Refresh view if needed
-                const isSavedView = document.getElementById('btn-favorites').classList.contains('active');
-                if (isSavedView) loadFavorites();
-                else displayResults(currentResults);
-                
-            } catch (error) {
-                console.error('Favorite error:', error);
-            }
+        function buildFavoritePayload(rec) {
+            return {
+                user_id: getUserId(),
+                url: rec.url || '',
+                address: rec.address || '',
+                price: rec.price || '',
+                travel_time: rec.travel_time || '',
+                explanation: rec.explanation || '',
+                images: Array.isArray(rec.images) ? rec.images : [],
+                geo_location: rec.geo_location || '',
+                rank: rec.rank,
+                budget_status: rec.budget_status || '',
+                match_type: rec.match_type || ''
+            };
         }
-        
-        async function loadFavorites() {
-            const content = document.getElementById('resultsContent');
-            
-            // Only show loader if we are switching tabs, not toggling a heart
-            if (content.innerHTML === '') {
-                 content.innerHTML = '<div style="text-align:center;padding:60px;"><div class="spinner"></div></div>';
-            }
-            
+
+        // Normalise a stored favorite (lowercase-first, capitalized fallback) into a card rec.
+        function favToRec(fav, i) {
+            const tt = (fav.travel_time != null && fav.travel_time !== '')
+                ? fav.travel_time
+                : ((fav.travel_time_minutes != null ? fav.travel_time_minutes : 'N/A') + ' min');
+            return {
+                rank: fav.rank != null ? fav.rank : (i + 1),
+                address: fav.address || fav.Address || '',
+                price: fav.price || fav.Price || '',
+                travel_time: tt,
+                explanation: fav.explanation || '',
+                url: fav.url || fav.URL || '',
+                images: fav.images || fav.Images || [],
+                geo_location: fav.geo_location || '',
+                budget_status: fav.budget_status || '',
+                match_type: fav.match_type || ''
+            };
+        }
+
+        function favUrl(fav) { return fav.url || fav.URL || ''; }
+
+        async function fetchFavorites() {
             try {
-                // Use apiFetch instead of raw fetch
-                const response = await apiFetch('/api/favorites');
-                
-                // Check if the mock wrapper returned a valid ok response
+                const response = await apiFetch('/api/favorites', { method: 'GET' });
                 if (!response.ok) {
-                    throw new Error("API not available");
-                }
-                
-                const data = await response.json();
-                
-                if (data.favorites && data.favorites.length > 0) {
-                    favorites = new Set(data.favorites.map(f => f.URL));
-                    updateFavCount();
-                    
-                    const favsAsResults = data.favorites.map((fav, i) => ({
-                        rank: i + 1,
-                        address: fav.Address,
-                        price: fav.Price,
-                        travel_time: (fav.travel_time_minutes || 'N/A') + ' min',
-                        explanation: fav.explanation || '',
-                        url: fav.URL,
-                        images: fav.Images || [],
-                        geo_location: fav.geo_location || ''
-                    }));
-                    
-                    content.innerHTML = favsAsResults.map(rec => createPropertyCard(rec)).join('');
-                    
-                } else {
-                    content.innerHTML = `
-                        <div class="empty-state">
-                            <div class="empty-state-icon">${getIcon('heart', 'icon-lg')}</div>
-                            <h3>${t('empty_saved_title')}</h3>
-                            <p>${t('empty_saved_desc')}</p>
-                        </div>
-                    `;
+                    favoriteItems = [];
                     favorites.clear();
                     updateFavCount();
+                    return false;
                 }
+                const data = await response.json();
+                favoriteItems = Array.isArray(data.favorites) ? data.favorites : [];
+                favorites = new Set(favoriteItems.map(favUrl).filter(Boolean));
+                updateFavCount();
+                return true;
             } catch (error) {
-                console.warn("Could not load favorites:", error);
-                // Fallback UI instead of crash
-                content.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon" style="opacity:0.5">${getIcon('error', 'icon-lg')}</div>
-                        <h3>Backend Offline</h3>
-                        <p>Could not connect to the database to load favorites.</p>
-                    </div>
-                `;
+                if (error && error.name === 'AbortError') return false;
+                console.warn('Could not load favorites:', error);
+                return false;
             }
         }
-        
+
+        function renderFavorites() {
+            const content = document.getElementById('resultsContent');
+            content.innerHTML = '';
+            if (!favoriteItems.length) {
+                content.appendChild(buildEmptyState('heart', t('empty_saved_title'), t('empty_saved_desc')));
+                return;
+            }
+            favoriteItems.map(favToRec).forEach(rec => content.appendChild(createPropertyCard(rec)));
+        }
+
+        async function loadFavorites() {
+            const content = document.getElementById('resultsContent');
+            if (favoritesTabActive() && !favoriteItems.length) {
+                content.innerHTML = '<div style="text-align:center;padding:60px;"><div class="spinner"></div></div>';
+            }
+            const ok = await fetchFavorites();
+            if (!favoritesTabActive()) return;
+            if (!ok) {
+                content.innerHTML = '';
+                content.appendChild(buildEmptyState('error', t('backend_offline_title'), t('backend_offline_desc')));
+                return;
+            }
+            renderFavorites();
+        }
+
+        async function toggleFavorite(rec) {
+            const url = rec.url || '';
+            if (!url) return;
+            const isRemoving = favorites.has(url);
+
+            try {
+                if (isRemoving) {
+                    const response = await apiFetch('/api/favorites/' + encodeURIComponent(url), { method: 'DELETE' });
+                    if (!response.ok) { showToast(t('error_favorite'), 'error'); return; }
+                    favorites.delete(url);
+                    favoriteItems = favoriteItems.filter(f => favUrl(f) !== url);
+                } else {
+                    const payload = buildFavoritePayload(rec);
+                    const response = await apiFetch('/api/favorites', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) { showToast(t('error_favorite'), 'error'); return; }
+                    favorites.add(url);
+                    if (!favoriteItems.some(f => favUrl(f) === url)) favoriteItems.push(payload);
+                }
+
+                updateFavCount();
+                if (favoritesTabActive()) renderFavorites();
+                else displayResults(currentResults);
+            } catch (error) {
+                if (error && error.name === 'AbortError') return;
+                console.error('Favorite error:', error);
+                showToast(t('error_connection'), 'error');
+            }
+        }
+
         function updateFavCount() {
             document.getElementById('favCount').textContent = favorites.size;
         }
 
         /* -------------------------------------------------------------------------- */
-        /* MODAL & MAP                                       */
+        /* MODAL & MAP                                                                */
         /* -------------------------------------------------------------------------- */
         function openGallery(images, address) {
             if (!images || images.length === 0) return;
@@ -1661,57 +2244,446 @@
             document.getElementById('imageModal').style.display = 'flex';
             updateGalleryImage();
         }
-        
+
         function closeModal() { document.getElementById('imageModal').style.display = 'none'; }
-        
+
         function changeImage(direction) {
             currentImageIndex += direction;
             if (currentImageIndex < 0) currentImageIndex = currentGalleryImages.length - 1;
             if (currentImageIndex >= currentGalleryImages.length) currentImageIndex = 0;
             updateGalleryImage();
         }
-        
+
         function updateGalleryImage() {
-            document.getElementById('galleryMainImage').src = currentGalleryImages[currentImageIndex];
-            document.getElementById('galleryThumbnails').innerHTML = currentGalleryImages.map((img, i) => `
-                <img src="${img}" class="gallery-thumbnail ${i === currentImageIndex ? 'active' : ''}" onclick="currentImageIndex = ${i}; updateGalleryImage()">
-            `).join('');
+            document.getElementById('galleryMainImage').src = safeImgSrc(currentGalleryImages[currentImageIndex]);
+            const thumbs = document.getElementById('galleryThumbnails');
+            thumbs.innerHTML = '';
+            currentGalleryImages.forEach((img, i) => {
+                const thumb = document.createElement('img');
+                thumb.className = 'gallery-thumbnail' + (i === currentImageIndex ? ' active' : '');
+                thumb.src = safeImgSrc(img);
+                thumb.addEventListener('click', () => { currentImageIndex = i; updateGalleryImage(); });
+                thumbs.appendChild(thumb);
+            });
         }
 
-        async function openMap(address, geoLocation, price, travelTime) {
-            const btn = event.target.closest('button');
+        async function openMap(rec, btn) {
             const originalHTML = btn.innerHTML;
-            btn.innerHTML = t('loading_map'); btn.disabled = true;
+            btn.textContent = t('loading_map');
+            btn.disabled = true;
             try {
-                // Use apiFetch
                 const response = await apiFetch('/api/generate_map', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ address, geo_location: geoLocation, price, travel_time: travelTime })
+                    body: JSON.stringify({
+                        user_id: getUserId(),
+                        address: rec.address,
+                        geo_location: rec.geo_location || '',
+                        price: rec.price,
+                        travel_time: rec.travel_time
+                    })
                 });
-                if (response.ok) {
-                    const mapHtml = await response.text();
-                    const win = window.open('', '_blank');
-                    win.document.write(mapHtml);
-                    win.document.close();
+                if (!response.ok) { showToast(t('error_map'), 'error'); return; }
+                const mapHtml = await response.text();
+                const win = window.open('', '_blank');
+                if (win) { win.document.write(mapHtml); win.document.close(); }
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;
+                showToast(t('error_connection'), 'error');
+            } finally {
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* CONVERSATIONS                                                              */
+        /* -------------------------------------------------------------------------- */
+        function formatRelativeTime(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '';
+            const diff = (Date.now() - d.getTime()) / 1000;
+            if (diff < 60) return t('time_now');
+            if (diff < 3600) return Math.floor(diff / 60) + t('time_min');
+            if (diff < 86400) return Math.floor(diff / 3600) + t('time_hour');
+            if (diff < 604800) return Math.floor(diff / 86400) + t('time_day');
+            return d.toLocaleDateString();
+        }
+
+        function renderConversationList() {
+            const list = document.getElementById('convList');
+            list.innerHTML = '';
+            if (!conversations.length) {
+                const empty = el('div', 'conv-empty');
+                empty.textContent = t('no_conversations');
+                list.appendChild(empty);
+                return;
+            }
+            conversations.forEach(conv => {
+                const item = el('div', 'conv-item' + (conv.id === activeConversationId ? ' active' : ''));
+
+                const main = el('button', 'conv-item-main');
+                const title = el('span', 'conv-title');
+                title.textContent = conv.title || t('untitled_chat');
+                const meta = el('span', 'conv-meta');
+                meta.textContent = formatRelativeTime(conv.updated_at);
+                main.appendChild(title);
+                main.appendChild(meta);
+                main.addEventListener('click', () => switchConversation(conv.id));
+                item.appendChild(main);
+
+                const actionsWrap = el('div', 'conv-item-actions');
+                const renameBtn = el('button', 'conv-icon-btn');
+                renameBtn.title = t('rename');
+                renameBtn.setAttribute('aria-label', t('rename'));
+                renameBtn.innerHTML = getIcon('edit', 'icon-sm');
+                renameBtn.addEventListener('click', e => { e.stopPropagation(); promptRenameConversation(conv); });
+                const delBtn = el('button', 'conv-icon-btn');
+                delBtn.title = t('delete');
+                delBtn.setAttribute('aria-label', t('delete'));
+                delBtn.innerHTML = getIcon('trash', 'icon-sm');
+                delBtn.addEventListener('click', e => { e.stopPropagation(); promptDeleteConversation(conv); });
+                actionsWrap.appendChild(renameBtn);
+                actionsWrap.appendChild(delBtn);
+                item.appendChild(actionsWrap);
+
+                list.appendChild(item);
+            });
+        }
+
+        async function loadConversations(silent) {
+            try {
+                const response = await apiFetch('/api/conversations', { method: 'GET' });
+                if (!response.ok) {
+                    if (!silent) showToast(t('error_load_conversations'), 'error');
+                    return;
                 }
-            } catch (e) { alert(t('error_connection')); }
-            finally { btn.innerHTML = originalHTML; btn.disabled = false; }
+                const data = await response.json();
+                conversations = Array.isArray(data.conversations) ? data.conversations : [];
+                renderConversationList();
+            } catch (error) {
+                if (error && error.name === 'AbortError') return;
+                if (!silent) showToast(t('error_connection'), 'error');
+            }
         }
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML.replace(/"/g, '&quot;');
+        function renderStoredMessage(msg) {
+            if (msg.role === 'user') {
+                addMessage(msg.content || '', 'user');
+            } else {
+                let icon = null;
+                if (msg.response_type === 'clarification') icon = 'question';
+                else if (msg.response_type === 'error') icon = 'error';
+                addMessage(cleanRawResponse(msg.content || ''), 'alex', icon ? { icon: icon } : {});
+                if (Array.isArray(msg.recommendations) && msg.recommendations.length) {
+                    currentResults = msg.recommendations;
+                }
+            }
         }
 
-        // Initialization
-        (function init() {
-            setLanguage('en'); // Default to English
-            loadFavorites().catch(e => console.log("Init error handled"));
-        })();
-        
+        async function switchConversation(cid) {
+            activeConversationId = cid;
+            localStorage.setItem(LS_ACTIVE_CONV, cid);
+            renderConversationList();
+            closeSidebarMobile();
+
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner"></div></div>';
+            currentResults = [];
+            lastResponseType = null;
+            clearPropertyFocus();
+
+            try {
+                const response = await apiFetch('/api/conversations/' + encodeURIComponent(cid) + '/messages', { method: 'GET' });
+                if (!response.ok) {
+                    showToast(t('error_load_messages'), 'error');
+                    renderWelcomeMessage();
+                    return;
+                }
+                const data = await response.json();
+                const msgs = Array.isArray(data.messages) ? data.messages : [];
+                messagesDiv.innerHTML = '';
+                if (!msgs.length) {
+                    renderWelcomeMessage();
+                } else {
+                    msgs.forEach(renderStoredMessage);
+                    for (let k = msgs.length - 1; k >= 0; k--) {
+                        if (msgs[k].role === 'assistant' && msgs[k].response_type) {
+                            lastResponseType = msgs[k].response_type;
+                            break;
+                        }
+                    }
+                }
+                // Re-render property cards from the most recent stored recommendations.
+                displayResults(currentResults);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            } catch (error) {
+                if (error && error.name === 'AbortError') return;
+                showToast(t('error_connection'), 'error');
+                renderWelcomeMessage();
+            }
+        }
+
+        function startBlankConversation() {
+            activeConversationId = null;
+            localStorage.removeItem(LS_ACTIVE_CONV);
+            currentResults = [];
+            lastResponseType = null;
+            clearPropertyFocus();
+            renderWelcomeMessage();
+            displayResults([]);
+            renderConversationList();
+        }
+
+        async function newChat() {
+            closeSidebarMobile();
+            try {
+                const response = await apiFetch('/api/conversations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: getUserId(), title: t('new_chat_title') })
+                });
+                if (!response.ok) { showToast(t('error_create_conversation'), 'error'); return; }
+                const data = await response.json();
+                const conv = data.conversation || data;
+                if (!conv || !conv.id) { showToast(t('error_create_conversation'), 'error'); return; }
+                conversations.unshift(conv);
+                activeConversationId = conv.id;
+                localStorage.setItem(LS_ACTIVE_CONV, conv.id);
+                currentResults = [];
+                lastResponseType = null;
+                clearPropertyFocus();
+                renderWelcomeMessage();
+                displayResults([]);
+                renderConversationList();
+            } catch (error) {
+                if (error && error.name === 'AbortError') return;
+                // Offline fallback: start a local blank session; the backend will
+                // create a conversation implicitly on the first message.
+                startBlankConversation();
+                showToast(t('error_connection'), 'error');
+            }
+        }
+
+        function promptRenameConversation(conv) {
+            openDialog({
+                title: t('rename_conversation'),
+                withInput: true,
+                defaultValue: conv.title || '',
+                placeholder: t('conversation_title_placeholder'),
+                confirmLabel: t('save'),
+                onConfirm: async (val) => {
+                    try {
+                        const response = await apiFetch('/api/conversations/' + encodeURIComponent(conv.id), {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: getUserId(), title: val })
+                        });
+                        if (!response.ok) { showToast(t('error_rename'), 'error'); return; }
+                        const data = await response.json();
+                        const updated = (data && data.conversation) ? data.conversation : data;
+                        conv.title = (updated && updated.title) ? updated.title : val;
+                        if (updated && updated.updated_at) conv.updated_at = updated.updated_at;
+                        renderConversationList();
+                    } catch (error) {
+                        if (error && error.name === 'AbortError') return;
+                        showToast(t('error_connection'), 'error');
+                    }
+                }
+            });
+        }
+
+        function promptDeleteConversation(conv) {
+            openDialog({
+                title: t('delete_conversation'),
+                message: t('delete_conversation_confirm'),
+                confirmLabel: t('delete'),
+                onConfirm: async () => {
+                    try {
+                        const response = await apiFetch('/api/conversations/' + encodeURIComponent(conv.id), { method: 'DELETE' });
+                        if (!response.ok) { showToast(t('error_delete'), 'error'); return; }
+                        conversations = conversations.filter(c => c.id !== conv.id);
+                        if (activeConversationId === conv.id) {
+                            if (conversations.length) switchConversation(conversations[0].id);
+                            else startBlankConversation();
+                        } else {
+                            renderConversationList();
+                        }
+                    } catch (error) {
+                        if (error && error.name === 'AbortError') return;
+                        showToast(t('error_connection'), 'error');
+                    }
+                }
+            });
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* USER MENU                                                                  */
+        /* -------------------------------------------------------------------------- */
+        function updateUserNameLabel() {
+            const name = getUserName();
+            const label = document.getElementById('userNameLabel');
+            const avatar = document.getElementById('userAvatar');
+            if (label) label.textContent = name;
+            if (avatar) avatar.textContent = (name.trim()[0] || 'G');
+        }
+
+        function toggleUserDropdown() {
+            document.getElementById('userDropdown').classList.toggle('open');
+        }
+        function closeUserDropdown() {
+            document.getElementById('userDropdown').classList.remove('open');
+        }
+
+        function promptRenameUser() {
+            closeUserDropdown();
+            openDialog({
+                title: t('rename_user_title'),
+                withInput: true,
+                defaultValue: getUserName(),
+                placeholder: t('user_name_placeholder'),
+                confirmLabel: t('save'),
+                onConfirm: (val) => {
+                    localStorage.setItem(LS_USER_NAME, val);
+                    updateUserNameLabel();
+                }
+            });
+        }
+
+        function switchUser() {
+            closeUserDropdown();
+            openDialog({
+                title: t('switch_user'),
+                message: t('switch_user_confirm'),
+                confirmLabel: t('switch_user'),
+                onConfirm: async () => {
+                    const uid = uuidHex();
+                    localStorage.setItem(LS_USER_ID, uid);
+                    localStorage.setItem(LS_USER_NAME, 'Guest');
+                    localStorage.removeItem(LS_ACTIVE_CONV);
+                    activeConversationId = null;
+                    conversations = [];
+                    favorites.clear();
+                    favoriteItems = [];
+                    currentResults = [];
+                    updateUserNameLabel();
+                    updateFavCount();
+                    await loadConversations(true);
+                    startBlankConversation();
+                    await fetchFavorites();
+                    showToast(t('switched_user'), 'success');
+                }
+            });
+        }
+
+        function forgetMe() {
+            closeUserDropdown();
+            openDialog({
+                title: t('forget_me'),
+                message: t('forget_me_confirm'),
+                confirmLabel: t('forget_me'),
+                onConfirm: async () => {
+                    try {
+                        const response = await apiFetch('/api/forget_me', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: getUserId() })
+                        });
+                        if (!response.ok) { showToast(t('error_forget'), 'error'); return; }
+                        conversations = [];
+                        favorites.clear();
+                        favoriteItems = [];
+                        currentResults = [];
+                        activeConversationId = null;
+                        localStorage.removeItem(LS_ACTIVE_CONV);
+                        updateFavCount();
+                        startBlankConversation();
+                        showToast(t('forgotten'), 'success');
+                    } catch (error) {
+                        if (error && error.name === 'AbortError') return;
+                        showToast(t('error_connection'), 'error');
+                    }
+                }
+            });
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* MOBILE SIDEBAR                                                             */
+        /* -------------------------------------------------------------------------- */
+        function toggleSidebar() {
+            const sidebar = document.getElementById('convSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            const open = sidebar.classList.toggle('open');
+            backdrop.classList.toggle('open', open);
+        }
+        function closeSidebarMobile() {
+            if (window.innerWidth <= 1024) {
+                document.getElementById('convSidebar').classList.remove('open');
+                document.getElementById('sidebarBackdrop').classList.remove('open');
+            }
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* INITIALIZATION                                                             */
+        /* -------------------------------------------------------------------------- */
+        function wireEvents() {
+            // Language
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
+            });
+            // Send / cancel
+            document.getElementById('sendBtn').addEventListener('click', onSendButtonClick);
+            // Sidebar / conversations
+            document.getElementById('newChatBtn').addEventListener('click', newChat);
+            document.getElementById('menuToggle').addEventListener('click', toggleSidebar);
+            document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebarMobile);
+            // User menu
+            document.getElementById('userMenuBtn').addEventListener('click', e => { e.stopPropagation(); toggleUserDropdown(); });
+            document.getElementById('renameUserBtn').addEventListener('click', promptRenameUser);
+            document.getElementById('switchUserBtn').addEventListener('click', switchUser);
+            document.getElementById('forgetMeBtn').addEventListener('click', forgetMe);
+            // Close dropdown / dialog on outside interaction
+            document.addEventListener('click', e => {
+                if (!e.target.closest('#userMenuBtn') && !e.target.closest('#userDropdown')) {
+                    closeUserDropdown();
+                }
+            });
+            document.getElementById('dialogOverlay').addEventListener('click', e => {
+                if (e.target === document.getElementById('dialogOverlay')) closeDialog();
+            });
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape') {
+                    closeDialog();
+                    closeUserDropdown();
+                    if (document.getElementById('imageModal').style.display === 'flex') closeModal();
+                }
+            });
+        }
+
+        async function initApp() {
+            ensureIdentity();
+            wireEvents();
+            setLanguage('en');            // default language + static strings + welcome
+            updateUserNameLabel();
+
+            await loadConversations(true);
+
+            let target = null;
+            if (activeConversationId) target = conversations.find(c => c.id === activeConversationId);
+            if (!target && conversations.length) target = conversations[0];
+
+            if (target) {
+                await switchConversation(target.id);
+            } else {
+                startBlankConversation();
+            }
+
+            // Load favorites (updates the Saved count without hijacking the results panel).
+            await fetchFavorites();
+        }
+
+        initApp();
     </script>
 </body>
 </html>

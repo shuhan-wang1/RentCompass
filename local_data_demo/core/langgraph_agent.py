@@ -33,7 +33,7 @@ from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from uk_rent_agent.agent.state import AgentState, create_initial_state
 from uk_rent_agent.agent.contracts import ToolInvocation
-from uk_rent_agent.agent.critic import evaluate_grounding, safe_fallback
+from uk_rent_agent.agent.critic import enforce_grounding
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 
 logger = logging.getLogger(__name__)
@@ -140,6 +140,40 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
             result.setdefault('property_features', []).append(tag)
 
     return result
+
+
+def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) -> dict:
+    """D2: fold an explicit budget/commute change stated in THIS turn's raw message
+    into the accumulated criteria (raise OR lower), so the update survives even when
+    the turn produces no search. Returns the SAME object when nothing changed so the
+    caller can skip a redundant state write.
+
+    Parsing is delegated to the search tool's deterministic regex extractors, keeping
+    a single source of truth for phrasings ("budget is now X", "actually X max",
+    "£1000", "40 minute commute", "half an hour", week↔month). A weekly budget is
+    normalised to monthly because accumulated.max_budget is monthly.
+    """
+    if not current_message:
+        return accumulated
+    from core.tools.search_properties import _extract_budget, _extract_commute_minutes
+    from uk_rent_agent.domain import constants as C
+
+    result = dict(accumulated)
+    changed = False
+
+    amount, period = _extract_budget(current_message)
+    if amount:
+        monthly = int(round(amount * C.WEEKS_PER_MONTH)) if period == 'week' else int(amount)
+        if result.get('max_budget') != monthly:
+            result['max_budget'] = monthly
+            changed = True
+
+    minutes = _extract_commute_minutes(current_message)
+    if minutes and result.get('max_travel_time') != minutes:
+        result['max_travel_time'] = minutes
+        changed = True
+
+    return result if changed else accumulated
 
 
 def get_preferences_context(prefs: dict) -> str:
@@ -308,11 +342,24 @@ GROUNDING RULES:
 - Match the user's language (English question = English answer)
 
 SOURCES (when data unavailable):
-- Transport fares: tfl.gov.uk
+- London transport fares/journeys/line status: you CAN fetch these live from TfL — invite the user to ask (e.g. "how much is the tube from X to Y?")
 - Rent prices: rightmove.co.uk, zoopla.co.uk
-- Official stats: ons.gov.uk
+- Official statistics: you canNOT access ONS data — point users to ons.gov.uk
 
 Your response:"""
+
+# What the assistant can and cannot do — injected into direct (no-tool) answers so
+# capability questions ("what can you not do?") stay accurate as tools evolve.
+CAPABILITIES_NOTE = """=== YOUR ACTUAL CAPABILITIES (answer capability questions from THIS list, honestly) ===
+What I can do:
+- Search real rental listings and explain/compare them
+- Check area safety (police data), nearby amenities (OpenStreetMap), weather, web info
+- LIVE London transport via the official TfL API: journey planning, real Tube/rail
+  pay-as-you-go fares, weekly/monthly Travelcard prices, and live line status/delays
+What I cannot do:
+- Live transport data outside London — TfL covers London only (elsewhere: local operators or nationalrail.co.uk)
+- Access official statistics (ONS) — for ONS data I'll point you to ons.gov.uk
+- Book viewings, sign contracts, or make payments on your behalf"""
 
 # ═══════════════════════════════════════════════════════════════════
 # GRAPH NODES
@@ -325,7 +372,17 @@ def _make_extract_preferences_node():
             state["user_query"],
             state["user_preferences"]
         )
-        return {"user_preferences": prefs}
+        update = {"user_preferences": prefs}
+        # D2: apply explicit in-message budget/commute changes to the ACCUMULATED
+        # criteria every turn — even when this turn does not trigger a re-search — so
+        # a standalone "my budget is now £1000" overrides the old max and propagates
+        # to the next search and to budget_status labelling.
+        current_msg = (state.get("extracted_context") or {}).get("current_message") or ""
+        accumulated = state.get("accumulated_search_criteria") or {}
+        new_accumulated = _apply_explicit_criteria_updates(accumulated, current_msg)
+        if new_accumulated is not accumulated:
+            update["accumulated_search_criteria"] = new_accumulated
+        return update
     return extract_preferences_node
 
 
@@ -389,6 +446,29 @@ def _make_decide_tool_node(tool_registry, classification_llm):
                     "reason": "Property context detected - use database info"
                 }
 
+        # 1.5) Follow-ups ABOUT the existing search results (no frontend property
+        #      context). These are answerable from the conversation's own last
+        #      results, which each already carry price/commute/beds \u2014 routing them to
+        #      a commute/detail tool would either loop into clarification (D1) or read
+        #      stale demo-CSV data (D3). Answer from the real results instead.
+        last_results = extracted_context.get('last_results') or []
+        if last_results:
+            if _is_comparative_followup(user_query, extracted_context):  # D1
+                return {
+                    "tool": "direct_answer", "params": {},
+                    "observation": _format_results_for_comparison(last_results),
+                    "raw_data": {"compared_results": last_results},
+                    "reason": "Comparative/superlative question over existing results",
+                }
+            detail_record = _is_detail_followup(user_query, extracted_context)  # D3
+            if detail_record is not None:
+                return {
+                    "tool": "reasoning_property", "params": {},
+                    "observation": _format_single_result(detail_record),
+                    "raw_data": {"property": detail_record},
+                    "reason": "Detail question about a specific existing result",
+                }
+
         # 2) Simple greetings
         greetings = ['hi', 'hello', '\u4f60\u597d', '\u60a8\u597d', 'hey', 'thanks', '\u8c22\u8c22']
         if any(g == query_lower.strip() for g in greetings) or (
@@ -398,6 +478,14 @@ def _make_decide_tool_node(tool_registry, classification_llm):
                 "reason": "Simple greeting"
             }
 
+        # 2.5) Live-transport questions (tube/train fares, journeys, travelcards,
+        #      line status) have a dedicated TfL tool. Deterministic keywords beat
+        #      the LLM router for the unambiguous cases so they can't be mis-routed
+        #      to the static zone table or a web search.
+        if _is_transport_query(_current_message(user_query).lower()):
+            return _build_transport_params(user_query, extracted_context,
+                                           state["accumulated_search_criteria"])
+
         # 3) Majority voting
         return _majority_vote(user_query, extracted_context, classification_llm,
                               tool_registry, accumulated=state["accumulated_search_criteria"])
@@ -406,6 +494,21 @@ def _make_decide_tool_node(tool_registry, classification_llm):
             "execute_tool", "generate_response", "format_output", "dispatch_searches"]]:
         decision = _compute_decision(state)
         tool = decision["tool"]
+
+        # Pre-resolved answer over EXISTING results (D1 comparative / D3 detail): the
+        # observation was already assembled from the conversation's last results, so we
+        # skip execute_tool and let generate_response synthesize from it. reasoning_property
+        # -> REASONING_PROPERTY_PROMPT (single listing); direct_answer -> SYNTHESIS_PROMPT
+        # (compare across listings).
+        if decision.get("observation") is not None:
+            tool_decision = {k: decision[k] for k in ("tool", "params", "reason") if k in decision}
+            return Command(update={
+                "tool_decision": tool_decision,
+                "tool_observation": decision["observation"],
+                "tool_raw_data": decision.get("raw_data"),
+                "context_tainted": True,  # listing text is external/untrusted -> sanitize
+            }, goto="generate_response")
+
         if tool == "direct_answer":
             goto = "generate_response"
         elif tool == "clarification":
@@ -529,6 +632,174 @@ def _resolve_target_address(user_query, extracted_context):
     return extracted_context.get('property_address')
 
 
+def _current_msg_for_reference(user_query, extracted_context) -> str:
+    """The text a reference resolver should read: this turn's raw message, falling
+    back to the (memory/history-prefixed) user_query only if it is missing."""
+    return ((extracted_context.get('current_message') or user_query) or "")
+
+
+def _resolve_last_result(user_query, extracted_context) -> dict | None:
+    """Resolve which of the PREVIOUS search results the user is referring to and
+    return its FULL record (not just an address). Mirrors the ordinal/deictic/name
+    matching of ``_resolve_target_address`` but yields the record so the detail path
+    can answer from the real, city-correct listing instead of the demo CSV (D3)."""
+    results = extracted_context.get('last_results') or []
+    if not results:
+        return None
+    ql = _current_msg_for_reference(user_query, extracted_context).lower()
+
+    for word, idx in _ORDINAL_WORDS.items():
+        if re.search(rf'\b{word}\b', ql) and idx < len(results):
+            return results[idx]
+    # "#2" / "number 2" / "option 3" / "listing 1"
+    m = re.search(r'(?:#\s*|\b(?:no\.?|number|option|listing)\s+)(\d{1,2})\b', ql)
+    if m:
+        idx = int(m.group(1)) - 1
+        if 0 <= idx < len(results):
+            return results[idx]
+    if any(p in ql for p in ['that one', 'this one', 'that property', 'this property',
+                             'the property', 'the place', 'that place', 'the flat',
+                             'the studio', 'the apartment', 'the first', 'the last']):
+        return results[-1] if 'the last' in ql else results[0]
+    for r in results:
+        name = (r.get('name') or '').strip().lower()
+        if len(name) > 3 and name in ql:
+            return r
+        addr = (r.get('address') or '').strip().lower()
+        if addr:
+            street = addr.split(',')[0].strip()
+            street_nonum = re.sub(r'^\d+\s*', '', street)
+            for cand in (street, street_nonum):
+                if len(cand) >= 4 and cand in ql:
+                    return r
+    return None
+
+
+# Superlative/comparative words for "which of these is X" follow-ups (D1).
+_COMPARATIVE_KWS = [
+    'closest', 'nearest', 'cheapest', 'least expensive', 'most affordable', 'lowest price',
+    'most expensive', 'priciest', 'dearest', 'biggest', 'largest', 'smallest',
+    'best value', 'best option', 'best one', 'shortest commute', 'quickest', 'fastest',
+    'lowest', 'highest', 'most spacious', 'better',
+    # comparatives ("which is cheaper / closer / bigger")
+    'cheaper', 'closer', 'nearer', 'bigger', 'larger', 'smaller', 'more expensive',
+    'shorter commute',
+    '最近', '最便宜', '最贵', '最大', '最小',
+    '最好', '最划算', '性价比', '最快', '更便宜', '更近', '更大',
+]
+# References that scope a question to the EXISTING result set.
+_SET_REFERENCE_KWS = [
+    'these', 'those', 'them', 'of the ', 'one of', 'which one', 'which of', 'which is',
+    'listed', 'listing', 'above', 'you showed', 'you recommended', 'recommended',
+    'the options', 'the results', 'the ones', 'each of', 'among', 'compare',
+    '这些', '哪个', '哪一个', '其中', '列表',
+]
+# Location-specific intents that must NOT be swallowed by the comparative/detail
+# interception (they legitimately need their own tool).
+_LOCATION_INTENT_KWS = [
+    'nearby', 'near ', 'supermarket', 'station', 'gym', 'restaurant', 'cafe', 'park',
+    'tube', 'metro', 'pharmacy', 'bus stop', 'safe', 'safety', 'crime', 'dangerous',
+    'unsafe', 'commute cost', 'transport cost', 'how much is the commute',
+    '超市', '地铁', '车站', '附近', '安全', '治安',
+]
+# Explicit "tell me about this one" detail intents.
+_DETAIL_KWS = [
+    'tell me more', 'more about', 'tell me about', 'details', 'detail', 'more info',
+    'more information', 'information about', 'what about', 'describe', 'what is the',
+    "what's the", 'know about', 'learn more',
+    '详细', '介绍', '了解', '多说', '详情',
+]
+# New-search action verbs — a follow-up that asks to FIND more is not a detail/compare
+# question about the current set.
+_NEW_SEARCH_KWS = [
+    'find me', 'search for', 'look for', 'show me other', 'show me more', 'more options',
+    'different', 'somewhere else', 'another area', 'other cities', 'a cheaper one',
+    '找房', '搜房', '其他房',
+]
+
+
+def _is_comparative_followup(user_query, extracted_context) -> bool:
+    """D1: True for a superlative/comparative question about the EXISTING results
+    ("which of these is closest / cheapest / biggest?"). Requires previous results
+    and a set-reference so a genuinely-new search is never hijacked."""
+    if not (extracted_context.get('last_results')):
+        return False
+    ql = _current_msg_for_reference(user_query, extracted_context).lower()
+    if any(kw in ql for kw in _LOCATION_INTENT_KWS):
+        return False
+    if not any(kw in ql for kw in _COMPARATIVE_KWS):
+        return False
+    return any(kw in ql for kw in _SET_REFERENCE_KWS) or 'which' in ql
+
+
+def _is_detail_followup(user_query, extracted_context) -> dict | None:
+    """D3: return the referenced result RECORD when the user asks for details about a
+    specific previous listing ("tell me more about the second one"), else None. Never
+    fires for location-specific intents (safety/POIs/commute) or new-search requests."""
+    if not (extracted_context.get('last_results')):
+        return None
+    ql = _current_msg_for_reference(user_query, extracted_context).lower()
+    if any(kw in ql for kw in _LOCATION_INTENT_KWS):
+        return None
+    if any(kw in ql for kw in _NEW_SEARCH_KWS):
+        return None
+    record = _resolve_last_result(user_query, extracted_context)
+    if not record:
+        return None
+    is_detail_intent = any(kw in ql for kw in _DETAIL_KWS)
+    # A short bare reference ("the second one", "#2") is also a detail request.
+    is_bare_reference = len(ql.split()) <= 6
+    return record if (is_detail_intent or is_bare_reference) else None
+
+
+def _format_result_line(rank, r) -> str:
+    """One comparable line for a previous result (uses only real, city-correct fields)."""
+    parts = [f"{rank}. {r.get('name') or r.get('address') or 'Listing'}"]
+    if r.get('address'):
+        parts.append(f"address: {r['address']}")
+    if r.get('price'):
+        parts.append(f"price: {r['price']}")
+    if r.get('travel_time'):
+        parts.append(f"commute: {r['travel_time']}")
+    if r.get('bedrooms') not in (None, '', 'N/A'):
+        parts.append(f"bedrooms: {r['bedrooms']}")
+    if r.get('property_type'):
+        parts.append(f"type: {r['property_type']}")
+    if r.get('budget_status'):
+        parts.append(f"budget: {r['budget_status']}")
+    return " | ".join(parts)
+
+
+def _format_results_for_comparison(results) -> str:
+    """Evidence surface for a comparative follow-up: every previous listing with its
+    real price/commute/beds so the model can pick the closest/cheapest/biggest."""
+    lines = ["Previously recommended properties (use ONLY these to answer):"]
+    for i, r in enumerate(results, 1):
+        lines.append(_format_result_line(i, r))
+    return "\n".join(lines)
+
+
+def _format_single_result(record) -> str:
+    """Evidence surface for a detail follow-up: the referenced listing's real fields.
+    Only fields actually present are emitted, so the model honestly reports missing
+    details instead of inventing (or importing demo-CSV) data."""
+    label = [('address', 'Property'), ('price', 'Price'), ('travel_time', 'Commute'),
+             ('bedrooms', 'Bedrooms'), ('property_type', 'Type'),
+             ('budget_status', 'Budget status'), ('source', 'Source'),
+             ('explanation', 'Notes'), ('url', 'Listing URL')]
+    lines = []
+    for key, name in label:
+        val = record.get(key)
+        if val not in (None, '', 'N/A'):
+            lines.append(f"{name}: {val}")
+    body = "\n".join(lines) if lines else "Property: (no details captured)"
+    # Anchor the model on THIS exact listing so injected chat history (which may name
+    # a different result) cannot make it describe the wrong one.
+    header = ("This is the exact listing the user is asking about — describe ONLY this "
+              "one, using its own fields below:\n")
+    return header + body
+
+
 # Common student/work destinations -> geocodable full addresses. Short tokens like
 # "UCL" alone often fail geocoding, so we expand them to full addresses.
 _KNOWN_DESTINATIONS = {
@@ -565,6 +836,117 @@ def _resolve_destination_address(user_query, extracted_context, accumulated):
     return None
 
 
+# ── live TfL transport routing (get_transport_info) ─────────────────────────
+
+# TfL line names for a status question ("are there delays on the Victoria line").
+_TFL_LINE_RE = re.compile(
+    r"\b(bakerloo|central|circle|district|hammersmith\s*(?:&|and)\s*city|jubilee|"
+    r"metropolitan|northern|piccadilly|victoria|waterloo\s*(?:&|and)\s*city|"
+    r"elizabeth(?:\s+line)?|dlr|liberty|lioness|mildmay|suffragette|weaver|windrush)"
+    r"(?:\s+line)?\b", re.IGNORECASE)
+
+# Deictic journey starts that mean "the property under discussion".
+_TRANSPORT_DEICTIC = {
+    'there', 'here', 'it', 'home', 'the flat', 'the property', 'the place', 'the studio',
+    'the apartment', 'the house', 'that one', 'this one', 'that property', 'this property',
+    'that flat', 'this flat',
+}
+
+
+def _is_transport_query(ql: str) -> bool:
+    """Deterministic detector for live-TfL questions (fare / journey / travelcard /
+    line status). Conservative on purpose: monthly *commute-cost* questions keep
+    routing to calculate_commute_cost, plain 'how long to X' to calculate_commute."""
+    if any(kw in ql for kw in ['line status', 'delays on', 'any delays', 'line running',
+                               'travelcard', 'travel card', 'tube fare', 'train fare',
+                               'tfl', 'oyster fare', '地铁票价', '有没有延误']):
+        return True
+    transport_mode = any(kw in ql for kw in ['tube', 'underground', 'dlr', 'overground',
+                                             'elizabeth line', '地铁'])
+    fare_intent = any(kw in ql for kw in ['fare', 'how much', 'cost', 'price', '多少钱', '票价'])
+    journey_intent = any(kw in ql for kw in ['how do i get', 'how to get', 'how long',
+                                             'get from', 'get to', '怎么去', '怎么走', '要多久'])
+    delay_intent = any(kw in ql for kw in ['delay', 'disruption', 'suspended', 'running ok',
+                                           'running normally', '晚点', '延误', '停运'])
+    if transport_mode and (fare_intent or journey_intent or delay_intent):
+        return True
+    # "how do I get from X to Y / get to UCL" is a journey even with no mode word
+    # ("commute cost" questions keep their own tool - they lack these phrasings).
+    return any(kw in ql for kw in ['how do i get', 'how to get', '怎么去', '怎么走']) and \
+        (' to ' in ql or 'get to' in ql)
+
+
+def _build_transport_params(user_query, extracted_context, accumulated):
+    """Build get_transport_info params from the message.
+
+    Endpoints come from an explicit "from X to Y" (with deictic starts like
+    "from there / the flat" resolved to the property under discussion), falling
+    back to the same resolvers the commute tools use. Destinations are normalised
+    through _KNOWN_DESTINATIONS so "UCL" geocodes reliably. NOTE: every key set
+    here must be declared in the tool's parameters schema (pydantic extra='ignore'
+    silently drops undeclared kwargs)."""
+    msg = _current_msg_for_reference(user_query, extracted_context)
+    ml = msg.lower()
+    params = {"query_type": "auto", "user_query": msg}
+
+    line_m = _TFL_LINE_RE.search(msg)
+    if line_m:
+        params["line"] = re.sub(r'\s+', ' ', line_m.group(1)).strip()
+
+    zone_m = re.search(r"\bzones?\s*(?:1\s*(?:-|to)\s*)?([2-6])\b", ml)
+    if zone_m:
+        params["end_zone"] = int(zone_m.group(1))
+    if 'student' in ml:
+        params["travel_type"] = "student"
+
+    frm = to = None
+    m = re.search(r"\bfrom\s+(.{2,60}?)\s+(?:to|into)\s+(.{2,60}?)(?:\s+and\b|[?.!,;]|$)",
+                  msg, re.IGNORECASE)
+    if m:
+        frm, to = m.group(1).strip(), m.group(2).strip()
+    else:
+        m = re.search(r"(?:fare|cost|journey|travel|tube|train)\s+(?:from\s+)?"
+                      r"(.{2,60}?)\s+to\s+(.{2,60}?)(?:\s+and\b|[?.!,;]|$)",
+                      msg, re.IGNORECASE)
+        if m:
+            frm, to = m.group(1).strip(), m.group(2).strip()
+        else:
+            m = re.search(r"\b(?:to|get to|reach)\s+(.{2,60}?)(?:\s+and\b|[?.!,;]|$)",
+                          msg, re.IGNORECASE)
+            if m:
+                to = m.group(1).strip()
+
+    # Deictic / missing start -> the property (postcode/ordinal/frontend context).
+    if frm is None or frm.lower().strip() in _TRANSPORT_DEICTIC:
+        resolved = _resolve_target_address(user_query, extracted_context)
+        if resolved is None and frm is not None:
+            # "from there / the flat" with no other anchor: the property under
+            # discussion is the most recent search result.
+            results = extracted_context.get('last_results') or []
+            if results:
+                resolved = results[0].get('address') or results[0].get('name')
+        if resolved:
+            frm = resolved
+        elif frm is not None and frm.lower().strip() in _TRANSPORT_DEICTIC:
+            frm = None  # unresolvable deictic -> let the tool ask for endpoints
+    # Normalise the destination ("UCL" -> full geocodable address).
+    if to:
+        tl = to.lower()
+        for kw, addr in _KNOWN_DESTINATIONS.items():
+            if kw == tl or kw in tl:
+                to = addr
+                break
+    else:
+        to = _resolve_destination_address(user_query, extracted_context, accumulated)
+
+    if frm:
+        params["from_location"] = frm
+    if to:
+        params["to_location"] = to
+    return {"tool": "get_transport_info", "params": params,
+            "reason": "Live TfL transport question (fare/journey/travelcard/line status)"}
+
+
 def _heuristic_fallback(user_query, extracted_context, tool_registry, accumulated=None):
     """Fallback when no votes succeed."""
     ql = user_query.lower()
@@ -579,6 +961,8 @@ def _heuristic_fallback(user_query, extracted_context, tool_registry, accumulate
                 "reason": "Need address for safety check"}
     if any(k in ql for k in ['weather', '\u5929\u6c14']):
         return {"tool": "get_weather", "params": {"location": "London"}, "reason": "Heuristic: weather"}
+    if _is_transport_query(ql):
+        return _build_transport_params(user_query, extracted_context, accumulated)
     return {"tool": "web_search", "params": {"query": user_query}, "reason": "Heuristic: default web search"}
 
 
@@ -642,12 +1026,14 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         return {"tool": tool_name,
                 "params": {"property_address": address or "", "question": user_query},
                 "reason": f"Voted: {tool_name}"}
+    elif tool_name == 'get_transport_info':
+        return _build_transport_params(user_query, extracted_context, accumulated)
     elif tool_name == 'check_transport_cost':
         zone_match = re.search(r"\bzone\s*([1-9])\b", user_query, re.IGNORECASE)
         if not zone_match:
-            return {"tool": "clarification", "params": {},
-                    "clarification_message": "Which London fare zone is the destination in?",
-                    "reason": "transport cost needs destination zone"}
+            # No explicit zone: the live TfL tool can resolve places/postcodes itself
+            # (and answers travelcard questions from the same fare table).
+            return _build_transport_params(user_query, extracted_context, accumulated)
         return {"tool": tool_name, "params": {"end_zone": int(zone_match.group(1))},
                 "reason": f"Voted: {tool_name}"}
     elif tool_name == 'recall_memory':
@@ -711,7 +1097,10 @@ def _make_execute_tool_node(tool_registry):
         tool_name = decision["tool"]
         params = dict(decision.get("params", {}))
         if tool_name in {"recall_memory", "remember"}:
-            params["user_id"] = state.get("user_id", "default")
+            # PRIVACY: never fall back to the shared 'default' memory bucket — if the
+            # state somehow lacks a user_id, the memory layer must fail closed (empty
+            # recall / rejected write) rather than read another namespace.
+            params["user_id"] = state.get("user_id") or ""
             params["session_id"] = state.get("session_id", "default")
         accumulated = state["accumulated_search_criteria"]
         extracted_context = state["extracted_context"]
@@ -815,35 +1204,44 @@ def _make_execute_tool_node(tool_registry):
     return execute_tool_node
 
 
+def _build_generation_prompt(state: AgentState) -> str:
+    """Assemble the response-generation prompt from state.
+
+    Shared by ``generate_response`` and the critic's regeneration pass so both
+    speak to the LLM with an identical view of the observation and context.
+    """
+    observation = state.get("tool_observation")
+    user_query = state["user_query"]
+    decision = state.get("tool_decision") or {}
+    tool_name = decision.get("tool", "")
+    extracted_context = state["extracted_context"]
+    prefs = state["user_preferences"]
+
+    if observation:
+        obs = observation
+        if state.get("context_tainted"):
+            obs = sanitize_untrusted(str(obs)).text
+        if tool_name == 'reasoning_property':
+            return REASONING_PROPERTY_PROMPT.format(user_query=user_query, observation=obs)
+        ctx = build_context_info(extracted_context, tool_name, prefs)
+        return SYNTHESIS_PROMPT.format(context_info=ctx, user_query=user_query, observation=obs)
+
+    # Direct answer (no tool data)
+    ctx = build_context_info(extracted_context, tool_name, prefs)
+    return (f"You are a helpful assistant for UK student housing.\n\n{ctx}\n\n"
+            f"{CAPABILITIES_NOTE}\n\n"
+            f"User: {user_query}\n\nProvide a helpful response in the user's language.\n\n"
+            f"Your response:")
+
+
 def _make_generate_response_node():
     """Create the generate_response node."""
 
     async def generate_response_node(state: AgentState) -> dict:
         from core.llm_config import get_react_llm
 
-        observation = state.get("tool_observation")
-        user_query = state["user_query"]
-        decision = state["tool_decision"]
-        tool_name = decision.get("tool", "")
-        extracted_context = state["extracted_context"]
-        prefs = state["user_preferences"]
-
         llm = get_react_llm()
-
-        if observation:
-            if state.get("context_tainted"):
-                observation = sanitize_untrusted(str(observation)).text
-            if tool_name == 'reasoning_property':
-                prompt = REASONING_PROPERTY_PROMPT.format(
-                    user_query=user_query, observation=observation)
-            else:
-                ctx = build_context_info(extracted_context, tool_name, prefs)
-                prompt = SYNTHESIS_PROMPT.format(
-                    context_info=ctx, user_query=user_query, observation=observation)
-        else:
-            # Direct answer (no tool data)
-            ctx = build_context_info(extracted_context, tool_name, prefs)
-            prompt = f"You are a helpful assistant for UK student housing.\n\n{ctx}\n\nUser: {user_query}\n\nProvide a helpful response in the user's language.\n\nYour response:"
+        prompt = _build_generation_prompt(state)
 
         try:
             response = await llm.ainvoke([HumanMessage(content=prompt)])
@@ -856,23 +1254,94 @@ def _make_generate_response_node():
     return generate_response_node
 
 
+def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
+    """Everything the generator was shown, as an evidence surface for the critic.
+
+    F3 fix: the generator sees far more than ``tool_raw_data`` — it also receives
+    the observation text, the assembled context (previous results, comparison data,
+    current-property details) and the user's own budget. Quoting any of those must
+    count as grounded, so all of it is gathered here.
+    """
+    extracted_context = state.get("extracted_context") or {}
+    prefs = state.get("user_preferences") or {}
+    accumulated = state.get("accumulated_search_criteria") or {}
+
+    pieces: list = [
+        state.get("tool_raw_data"),
+        state.get("tool_observation"),
+        build_context_info(extracted_context, tool_name, prefs),
+        {
+            "max_budget": accumulated.get("max_budget"),
+            "max_travel_time": accumulated.get("max_travel_time"),
+        },
+    ]
+    for key in ("property_price", "property_travel_time"):
+        if extracted_context.get(key):
+            pieces.append({key: extracted_context[key]})
+    return pieces
+
+
+def _tool_errored(state: AgentState) -> bool:
+    """True when the executed tool reported an error (vs. a legitimately-empty result)."""
+    observation = state.get("tool_observation")
+    if observation is None:
+        return False
+    return str(observation).lstrip().lower().startswith("error")
+
+
 def _make_critic_node():
-    """Grounding-sensitive requests are checked before reaching the formatter."""
-    def critic_node(state: AgentState) -> dict:
-        tool_name = (state.get("tool_decision") or {}).get("tool", "")
+    """Grounding-sensitive requests are checked before reaching the formatter.
+
+    Never hard-replaces the answer: an unsupported figure triggers one corrective
+    regeneration pass (re-invoking the same generation LLM with a corrective
+    instruction); a persistently-failing answer is delivered with a caveat. The
+    recommendations payload (``tool_raw_data``) is left untouched so format_output
+    can still surface listings.
+    """
+
+    async def critic_node(state: AgentState) -> dict:
+        decision = state.get("tool_decision") or {}
+        tool_name = decision.get("tool", "")
         retrieval_expected = tool_name not in {"", "direct_answer", "clarification"}
-        verdict = evaluate_grounding(
-            state.get("final_response", ""),
-            state.get("tool_raw_data"),
+        response = state.get("final_response", "")
+        attempts_before = state.get("critic_attempts", 0)
+
+        evidence = _collect_grounding_evidence(state, tool_name) if retrieval_expected else None
+        tool_errored = _tool_errored(state) if retrieval_expected else False
+
+        async def _regenerate(correction: str) -> str:
+            from core.llm_config import get_react_llm
+
+            gen = get_react_llm()
+            prompt = _build_generation_prompt(state) + "\n\n" + correction
+            resp = await gen.ainvoke([HumanMessage(content=prompt)])
+            text = resp.content if hasattr(resp, "content") else str(resp)
+            return clean_response(text)
+
+        def _on_verdict(verdict, *, stage):
+            logger.info(
+                "critic.verdict stage=%s grounded=%s issues=%s",
+                stage, verdict.grounded, verdict.issues,
+                extra={"node": "critic", "tool": tool_name},
+            )
+
+        outcome = await enforce_grounding(
+            response,
+            evidence,
+            regenerate=_regenerate,
             retrieval_expected=retrieval_expected,
+            tool_errored=tool_errored,
+            on_verdict=_on_verdict,
         )
+
         update = {
-            "verdict": verdict.model_dump(),
-            "critic_attempts": state.get("critic_attempts", 0) + 1,
+            "verdict": outcome.verdict.model_dump(),
+            "critic_attempts": attempts_before + outcome.attempts,
         }
-        if not verdict.grounded:
-            update["final_response"] = safe_fallback(verdict)
+        if outcome.response != response:
+            update["final_response"] = outcome.response
         return update
+
     return critic_node
 
 

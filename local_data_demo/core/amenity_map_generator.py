@@ -5,12 +5,18 @@ Integrates OpenStreetMap visualization for property recommendations
 
 import folium
 from folium import plugins
-import requests
 import time
 from typing import Dict, List, Tuple, Optional
-import random
 import math
 from pathlib import Path
+
+from .maps_service import overpass_request, OverpassError
+from .cache_service import get_from_cache, set_to_cache, create_cache_key
+
+# Amenities change slowly, so POI results are cached for a week keyed by rounded
+# coordinates + radius. This keeps repeat map generations (and live tests) off
+# the shared Overpass servers.
+POI_CACHE_TTL_SECONDS = 7 * 24 * 3600
 
 
 class PropertyAmenityMapGenerator:
@@ -160,85 +166,196 @@ class PropertyAmenityMapGenerator:
             List of amenity dictionaries
         """
         config = self.amenity_config[amenity_type]
-        
-        # Build Overpass QL query using tags from config
-        query_parts = []
-        for key, value in config['tags'].items():
-            query_parts.append(f'  node["{key}"="{value}"](around:{self.radius_m},{lat},{lon});')
-            query_parts.append(f'  way["{key}"="{value}"](around:{self.radius_m},{lat},{lon});')
-        
-        overpass_query = f"""
-        [out:json][timeout:25];
-        (
-        {''.join(query_parts)}
-        );
-        out center;
-        """
-        
-        overpass_url = "https://overpass-api.de/api/interpreter"
-        
+
+        # Build Overpass QL query using tags from config (node+way+relation)
+        selector = ''.join(f'["{key}"="{value}"]' for key, value in config['tags'].items())
+        overpass_query = (
+            "[out:json][timeout:25];\n"
+            "(\n"
+            f"  nwr{selector}(around:{self.radius_m},{lat},{lon});\n"
+            ");\n"
+            "out center;"
+        )
+
+        # Routed through the shared, UA-carrying, mirror-rotating client. Provider
+        # failures raise OverpassError; callers that want an honest banner should
+        # prefer fetch_all_amenities (which propagates it). Here we keep the legacy
+        # list contract and return [] on total outage.
         try:
-            import time
-            time.sleep(1)  # Be respectful to Overpass API
-            response = requests.post(overpass_url, data={'data': overpass_query}, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            amenities = []
-            for element in data.get('elements', []):
-                tags = element.get('tags', {})
-                
-                # Filter by cuisine if specified
-                if cuisine_filter:
-                    cuisine = tags.get('cuisine', '').lower()
-                    if cuisine_filter not in cuisine:
-                        continue
-                
-                amenity = {
-                    'name': tags.get('name', 'Unnamed'),
-                }
-                
-                # Get coordinates based on element type
-                if element['type'] == 'node':
-                    amenity['lat'] = element['lat']
-                    amenity['lon'] = element['lon']
-                elif element['type'] == 'way' and 'center' in element:
-                    amenity['lat'] = element['center']['lat']
-                    amenity['lon'] = element['center']['lon']
-                else:
-                    continue
-                
-                # Add additional tags if available
-                if 'cuisine' in tags:
-                    amenity['cuisine'] = tags['cuisine']
-                if 'opening_hours' in tags:
-                    amenity['opening_hours'] = tags['opening_hours']
-                
-                # Calculate distance
-                import math
-                R = 6371000  # Earth's radius in meters
-                lat1_rad = math.radians(lat)
-                lat2_rad = math.radians(amenity['lat'])
-                delta_lat = math.radians(amenity['lat'] - lat)
-                delta_lng = math.radians(amenity['lon'] - lon)
-                
-                a = math.sin(delta_lat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2
-                c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-                amenity['distance_m'] = int(R * c)
-                
-                amenities.append(amenity)
-            
-            print(f"    Found {len(amenities)} {config['name']}")
-            return amenities
-            
-        except Exception as e:
+            data = overpass_request(overpass_query, timeout=25)
+        except OverpassError as e:
             print(f"    Error querying {config['name']}: {e}")
             return []
-    
-    def create_map_for_property(self, 
+
+        amenities = []
+        for element in data.get('elements', []):
+            amenity = self._element_to_amenity(element, lat, lon, cuisine_filter)
+            if amenity is not None:
+                amenities.append(amenity)
+
+        amenities.sort(key=lambda a: a.get('distance_m', 0))
+        print(f"    Found {len(amenities)} {config['name']}")
+        return amenities
+
+    def _element_to_amenity(self, element: dict, origin_lat: float, origin_lon: float,
+                            cuisine_filter: str = None) -> Optional[dict]:
+        """Convert one Overpass element into an amenity dict, or None if it should
+        be skipped (missing coords, or failing the cuisine filter)."""
+        tags = element.get('tags', {})
+
+        if cuisine_filter:
+            cuisine = (tags.get('cuisine', '') or '').lower()
+            if cuisine_filter not in cuisine:
+                return None
+
+        # Coordinates: nodes carry lat/lon directly; ways/relations carry 'center'.
+        if element.get('type') == 'node' and 'lat' in element:
+            a_lat, a_lon = element['lat'], element['lon']
+        elif 'center' in element:
+            a_lat, a_lon = element['center']['lat'], element['center']['lon']
+        else:
+            return None
+
+        amenity = {
+            'name': tags.get('name', 'Unnamed'),
+            'lat': a_lat,
+            'lon': a_lon,
+            'distance_m': self._distance_m(origin_lat, origin_lon, a_lat, a_lon),
+        }
+        if 'cuisine' in tags:
+            amenity['cuisine'] = tags['cuisine']
+        if 'opening_hours' in tags:
+            amenity['opening_hours'] = tags['opening_hours']
+        return amenity
+
+    @staticmethod
+    def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> int:
+        """Great-circle distance between two points in whole metres (Haversine)."""
+        R = 6371000
+        lat1_rad = math.radians(lat1)
+        lat2_rad = math.radians(lat2)
+        delta_lat = math.radians(lat2 - lat1)
+        delta_lng = math.radians(lon2 - lon1)
+        a = (math.sin(delta_lat / 2) ** 2
+             + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lng / 2) ** 2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return int(R * c)
+
+    @staticmethod
+    def _degradation_banner_html() -> str:
+        """Fixed-position warning banner shown when the amenity provider is down."""
+        return """
+        <div style="position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+                    background: #fff3cd; color: #856404; border: 2px solid #ffc107;
+                    padding: 10px 18px; border-radius: 6px; z-index: 10000;
+                    font-family: Arial, sans-serif; font-weight: bold; text-align: center;
+                    max-width: 90%; box-shadow: 0 2px 6px rgba(0,0,0,0.25);">
+            &#9888; Nearby amenity data is temporarily unavailable &mdash; showing property location only.
+        </div>
+        """
+
+    def _build_combined_query(self, lat: float, lon: float) -> str:
+        """Build ONE Overpass query unioning every distinct tag selector across
+        all amenity categories. The three restaurant categories share the same
+        ``amenity=restaurant`` selector and are split apart later by cuisine, so
+        the query stays compact (one union, one round-trip, no per-category
+        sleep)."""
+        seen = set()
+        parts = []
+        for config in self.amenity_config.values():
+            tag_items = tuple(sorted(config['tags'].items()))
+            if tag_items in seen:
+                continue
+            seen.add(tag_items)
+            selector = ''.join(f'["{k}"="{v}"]' for k, v in tag_items)
+            parts.append(f'  nwr{selector}(around:{self.radius_m},{lat},{lon});')
+        return (
+            "[out:json][timeout:25];\n"
+            "(\n" + "\n".join(parts) + "\n);\n"
+            "out center;"
+        )
+
+    def _classify_elements(self, elements: List[dict], lat: float, lon: float
+                           ) -> Dict[str, List[dict]]:
+        """Assign each returned element to every amenity category whose tag +
+        cuisine filter it satisfies (one restaurant can match at most one cuisine
+        category, but the loop is general). Returns the {category: [amenity]}
+        shape the map renderer expects, each list sorted by distance."""
+        result: Dict[str, List[dict]] = {key: [] for key in self.amenity_config}
+        for element in elements:
+            tags = element.get('tags', {})
+            for key, config in self.amenity_config.items():
+                if not all(tags.get(k) == v for k, v in config['tags'].items()):
+                    continue
+                amenity = self._element_to_amenity(
+                    element, lat, lon, config.get('cuisine_filter')
+                )
+                if amenity is not None:
+                    result[key].append(amenity)
+        for key in result:
+            result[key].sort(key=lambda a: a.get('distance_m', 0))
+        return result
+
+    def fetch_all_amenities(self, lat: float, lon: float) -> Dict[str, List[dict]]:
+        """Fetch every amenity category around (lat, lon) in a SINGLE batched
+        Overpass query, cached by rounded coords + radius (7-day TTL).
+
+        Returns {category_key: [amenity, ...]} for all configured categories
+        (empty lists are legitimate "none nearby"). Raises OverpassError if every
+        mirror is unreachable, so the caller can render an honest degradation
+        banner instead of a silently-empty map.
+        """
+        cache_key = create_cache_key(
+            'amenity_map_pois_v1', round(lat, 3), round(lon, 3), int(self.radius_m)
+        )
+        cached = get_from_cache(cache_key)
+        if cached and (time.time() - cached.get('fetched_at', 0)) < POI_CACHE_TTL_SECONDS:
+            cached_amenities = cached.get('amenities') or {}
+            cached_total = sum(len(v) for v in cached_amenities.values())
+            # Only trust a cached HIT that actually carries amenities. A cached
+            # all-zero result is almost certainly a poisoned entry from an earlier
+            # busy-mirror empty/remark 200 (a real UK address within 1.5km never
+            # has zero across all 8 selectors). Ignore it and re-fetch rather than
+            # serve a silently-empty map for the rest of the 7-day TTL.
+            if cached_total > 0:
+                print(f"  -> [Cache HIT] amenity POIs for {round(lat, 3)}, {round(lon, 3)}")
+                return cached_amenities
+
+        query = self._build_combined_query(lat, lon)
+        # expect_nonempty: this batched union spans 8 selectors around a populated
+        # UK address, so an empty 200 from a busy mirror is an outage, not reality.
+        # overpass_request rotates past such mirrors and only raises OverpassError
+        # if EVERY mirror fails/returns empty.
+        data = overpass_request(query, timeout=30, expect_nonempty=True)
+        amenities = self._classify_elements(data.get('elements', []), lat, lon)
+
+        total = sum(len(v) for v in amenities.values())
+        # A batched union of ALL 8 distinct selectors (supermarkets, convenience,
+        # restaurants, cafes, parks, pharmacies, banks, stations) within 1.5km of
+        # a real UK address returning ZERO is not a genuine "nothing nearby" -- it
+        # is a mirror that answered HTTP 200 with an empty/partial body but no
+        # remark. Never cache that (it would poison the cell for 7 days and render
+        # a marker-only map with no banner). Raise OverpassError instead so the
+        # handler shows an honest degradation banner and the next call retries a
+        # fresh mirror. (A truly-empty rural cell is a judgement call, but zero
+        # across all 8 categories in 1.5km of a geocoded UK property is
+        # effectively impossible in practice.)
+        if total == 0:
+            raise OverpassError(
+                f"Overpass returned 0 amenities across all {len(amenities)} "
+                f"categories for ({lat:.5f}, {lon:.5f}); treating as a provider "
+                f"failure and not caching."
+            )
+        print(f"  -> [Overpass] Batched fetch returned {total} amenities across "
+              f"{len(amenities)} categories")
+        set_to_cache(cache_key, {'fetched_at': time.time(), 'amenities': amenities})
+        return amenities
+
+    def create_map_for_property(self,
                                 property_data: dict,
                                 amenities_data: Dict[str, List[dict]],
-                                output_path: str) -> bool:
+                                output_path: str,
+                                amenities_unavailable: bool = False) -> bool:
         """
         Create an interactive map for a single property with amenity layers.
         
@@ -294,7 +411,10 @@ class PropertyAmenityMapGenerator:
             weight=2,
             tooltip=f'{self.radius_km}km search radius'
         ).add_to(m)
-        
+
+        if amenities_unavailable:
+            m.get_root().html.add_child(folium.Element(self._degradation_banner_html()))
+
         # Add amenities for each category
         print(f"  Adding amenity layers to map...")
         
@@ -405,14 +525,18 @@ class PropertyAmenityMapGenerator:
     
     def generate_map_html(self,
                          property_data: dict,
-                         amenities_data: Dict[str, List[dict]]) -> str:
+                         amenities_data: Dict[str, List[dict]],
+                         amenities_unavailable: bool = False) -> str:
         """
         Generate map HTML as a string (for embedding or direct serving).
-        
+
         Args:
             property_data: Dictionary containing property information
             amenities_data: Dictionary mapping amenity types to lists of amenity data
-            
+            amenities_unavailable: When True, the POI provider errored (all mirrors
+                down) rather than genuinely returning zero amenities; a visible
+                banner is shown so the user is never silently given a degraded map.
+
         Returns:
             HTML string of the generated map
         """
@@ -459,7 +583,12 @@ class PropertyAmenityMapGenerator:
             weight=2,
             tooltip=f'{self.radius_km}km search radius'
         ).add_to(m)
-        
+
+        # Honest degradation: if the POI provider errored, tell the user plainly
+        # instead of showing a marker-only map that looks like "nothing nearby".
+        if amenities_unavailable:
+            m.get_root().html.add_child(folium.Element(self._degradation_banner_html()))
+
         # Add amenities
         for amenity_type, config in self.amenity_config.items():
             amenities = amenities_data.get(amenity_type, [])

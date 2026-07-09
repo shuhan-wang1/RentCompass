@@ -5,6 +5,7 @@
 
 import os
 import re
+import time
 import requests
 from datetime import datetime
 import pandas as pd
@@ -16,9 +17,95 @@ from .cache_service import get_from_cache, set_to_cache, create_cache_key
 # Optional free TfL app key (register at api-portal.tfl.gov.uk) to raise rate limits;
 # the Journey Planner also works without a key at low volume.
 TFL_APP_KEY = os.getenv("TFL_APP_KEY", "")
-# Nominatim / OSM require a descriptive User-Agent.
+# Nominatim / OSM require a descriptive User-Agent. overpass-api.de returns HTTP
+# 406 for the default python-requests UA, so this header MUST be sent on every
+# Overpass request too (see overpass_request below).
 _OSM_HEADERS = {"User-Agent": "uk-rent-recommendation/1.0 (student-housing demo)"}
 _UK_POSTCODE_RE = re.compile(r"([A-Z]{1,2}[0-9]{1,2}[A-Z]?[ ]?[0-9][A-Z]{2})", re.IGNORECASE)
+
+# Public Overpass mirrors, tried in order. The first is the reference server;
+# the rest are independent/alternate front-ends we fall back to when it is busy
+# (504) or rate-limits us (429). This is the single Overpass HTTP entry point for
+# the whole app (maps_service, amenity_map_generator, tools/search_nearby_pois).
+OVERPASS_MIRRORS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.osm.ch/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
+]
+
+
+class OverpassError(RuntimeError):
+    """Raised when every Overpass mirror fails.
+
+    Callers that show maps must catch this and degrade honestly (visible banner)
+    rather than silently presenting a marker-only / empty result.
+    """
+
+
+def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
+                     expect_nonempty: bool = False) -> dict:
+    """POST an Overpass QL query and return the parsed JSON.
+
+    Sends the descriptive ``_OSM_HEADERS`` User-Agent on every request (the
+    reference server rejects the default python-requests UA with HTTP 406) and
+    rotates through ``OVERPASS_MIRRORS`` on any non-200 / invalid-body / network
+    error / server-side ``remark``, with exponential backoff between full rounds.
+    Raises ``OverpassError`` only after every mirror has failed across all rounds.
+
+    ``expect_nonempty`` controls how a HTTP 200 with an EMPTY ``elements`` list
+    (and no remark) is classified. Overpass mirrors under load (observed on
+    overpass.osm.ch and the reference server) sometimes answer such an empty 200
+    instead of a 429/504. For a single-type query an empty list is a legitimate
+    "none nearby", so the default (``False``) returns it. For a batched
+    multi-selector query near a populated address zero is implausible, so the
+    caller passes ``expect_nonempty=True`` and we treat the empty body as an
+    outage of THAT mirror and rotate to the next one -- finding a healthy mirror
+    that still has the data, instead of caching a silently-empty result.
+    """
+    last_err = None
+    for round_idx in range(max_rounds):
+        for url in OVERPASS_MIRRORS:
+            try:
+                resp = requests.post(
+                    url, data={"data": query}, headers=_OSM_HEADERS, timeout=timeout
+                )
+                if resp.status_code != 200:
+                    last_err = f"{url} -> HTTP {resp.status_code}"
+                    continue
+                try:
+                    payload = resp.json()
+                except ValueError as e:
+                    # 200 with an HTML/text error body (Overpass sometimes does this)
+                    last_err = f"{url} -> invalid JSON body: {e}"
+                    continue
+                # HTTP 200 does NOT guarantee a usable result. When a mirror
+                # runtime-times-out, runs out of memory, or rate-limits us
+                # mid-query it still answers 200 but embeds a top-level "remark"
+                # (e.g. 'runtime error: Query timed out ...') and returns an empty
+                # or partial "elements" list. A complete, healthy response carries
+                # no remark, so treat any remark as a retryable failure and rotate
+                # to the next mirror -- otherwise a busy-server body gets cached
+                # and silently degrades every future map for that cell.
+                remark = payload.get("remark") if isinstance(payload, dict) else None
+                if remark:
+                    last_err = f"{url} -> Overpass remark: {str(remark).strip()[:200]}"
+                    continue
+                # Empty-but-no-remark 200: only a failure when the caller expected
+                # results (see docstring). Rotate to give a healthy mirror a chance.
+                if expect_nonempty and not (payload.get("elements")
+                                            if isinstance(payload, dict) else None):
+                    last_err = f"{url} -> HTTP 200 but empty elements (expected results)"
+                    continue
+                return payload
+            except requests.exceptions.RequestException as e:
+                last_err = f"{url} -> {e}"
+                continue
+        # Exponential backoff before retrying the whole mirror pool.
+        if round_idx < max_rounds - 1:
+            time.sleep(1.0 * (2 ** round_idx))
+    raise OverpassError(f"All Overpass mirrors failed: {last_err}")
 
 # Map common landmarks to specific addresses that Google Maps API can route to
 LANDMARK_TO_ADDRESS = {
@@ -477,8 +564,7 @@ def get_nearby_supermarkets_detailed(address: str, radius: int = 2000,
     
     # ===== 方法1：OSM品牌查询 =====
     print(f"      方法1: OSM品牌查询...")
-    url = "https://overpass-api.de/api/interpreter"
-    
+
     for chain in chains:
         query = f"""
         [out:json][timeout:10];
@@ -492,15 +578,10 @@ def get_nearby_supermarkets_detailed(address: str, radius: int = 2000,
         """
         
         try:
-            import time as time_module
-            time_module.sleep(0.5)
-            response = requests.post(url, data={'data': query}, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                brand_results = _parse_osm_elements(data.get('elements', []), location, chain)
-                results.extend(brand_results)
-                print(f"        [OK] {chain}: 找到 {len(brand_results)} 家")
+            data = overpass_request(query, timeout=15)
+            brand_results = _parse_osm_elements(data.get('elements', []), location, chain)
+            results.extend(brand_results)
+            print(f"        [OK] {chain}: 找到 {len(brand_results)} 家")
         except Exception as e:
             print(f"        [WARN]  {chain} 搜索出错: {e}")
     
@@ -519,19 +600,14 @@ def get_nearby_supermarkets_detailed(address: str, radius: int = 2000,
         """
         
         try:
-            import time as time_module
-            time_module.sleep(1)
-            response = requests.post(url, data={'data': query}, timeout=15)
-            
-            if response.status_code == 200:
-                data = response.json()
-                generic_results = _parse_osm_elements(data.get('elements', []), location, 'generic')
-                
-                # 去重：只添加新的超市
-                existing_names = {r.get('name', '').lower() for r in results}
-                new_results = [r for r in generic_results if r.get('name', '').lower() not in existing_names]
-                results.extend(new_results)
-                print(f"        [OK] 通用搜索: 找到 {len(new_results)} 家新超市")
+            data = overpass_request(query, timeout=20)
+            generic_results = _parse_osm_elements(data.get('elements', []), location, 'generic')
+
+            # 去重：只添加新的超市
+            existing_names = {r.get('name', '').lower() for r in results}
+            new_results = [r for r in generic_results if r.get('name', '').lower() not in existing_names]
+            results.extend(new_results)
+            print(f"        [OK] 通用搜索: 找到 {len(new_results)} 家新超市")
         except Exception as e:
             print(f"        [WARN]  通用搜索出错: {e}")
     
@@ -725,16 +801,12 @@ def get_nearby_places_osm(address: str, amenity_type: str, radius_m: int = 1500)
 out center;"""
     
     print(f"     [OK] Using Overpass API for {amenity_type} search")
-    
-    overpass_url = "https://overpass-api.de/api/interpreter"
-    
+
     try:
-        response = requests.post(overpass_url, data=overpass_query, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
+        data = overpass_request(overpass_query, timeout=25)
+
         places = []
-        
+
         for element in data.get('elements', []):
             # Get coordinates - Overpass uses 'lon', not 'lng'
             if 'center' in element:
@@ -792,13 +864,13 @@ out center;"""
         print(f"     [OK] Found {len(places)} {amenity_type} locations within {radius_m}m")
         set_to_cache(cache_key, places)
         return places
-        
-    except requests.exceptions.Timeout:
-        print(f"     [WARN] Overpass API timeout - try again later")
-        return []
-    except requests.exceptions.RequestException as e:
-        print(f"     [WARN] Overpass API error: {e}")
-        print(f"     [INFO] This may be due to rate limiting. Returning empty results.")
+
+    except OverpassError as e:
+        # Every mirror failed. This single-type helper feeds agent tools that
+        # expect a list, so we preserve that contract and return [] here; the
+        # map pipeline (fetch_all_amenities) propagates OverpassError instead so
+        # the user gets an honest "data unavailable" banner.
+        print(f"     [WARN] Overpass unavailable for {amenity_type}: {e}")
         return []
     except Exception as e:
         print(f"     [WARN] Error processing Overpass data: {e}")

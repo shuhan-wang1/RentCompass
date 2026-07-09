@@ -18,6 +18,7 @@ from core.tool_system import Tool
 from typing import Optional, List, Dict
 import pandas as pd
 import asyncio
+import math
 from pathlib import Path
 import json
 import re
@@ -79,6 +80,87 @@ def _extract_commute_minutes(text: str):
     return None
 
 
+# Any address-based commute estimate above this (minutes) is treated as a
+# geocoding glitch and replaced by the coordinate-based estimate.
+_COMMUTE_SANITY_CAP = 240
+# Greater-London bounding box — inside it we trust TfL Journey Planner; outside
+# it (Manchester, Leeds, ...) TfL has no route and street-address geocoding is
+# unreliable, so we estimate from the listing's own exact lat/lon instead.
+_LONDON_BBOX = (51.28, 51.70, -0.55, 0.30)  # (lat_min, lat_max, lng_min, lng_max)
+
+
+def _parse_geo(geo) -> tuple[float, float] | None:
+    """'53.4415, -2.2159' -> (53.4415, -2.2159); tolerant of blanks/junk."""
+    if not geo:
+        return None
+    m = re.findall(r"-?\d+\.?\d*", str(geo))
+    if len(m) < 2:
+        return None
+    try:
+        lat, lng = float(m[0]), float(m[1])
+    except ValueError:
+        return None
+    if -90 <= lat <= 90 and -180 <= lng <= 180:
+        return (lat, lng)
+    return None
+
+
+def _in_london(coords: dict | None) -> bool:
+    if not coords:
+        return False
+    la, lo = coords.get("lat"), coords.get("lng")
+    if la is None or lo is None:
+        return False
+    return _LONDON_BBOX[0] <= la <= _LONDON_BBOX[1] and _LONDON_BBOX[2] <= lo <= _LONDON_BBOX[3]
+
+
+def _coord_commute_minutes(geo_str, dest_coords: dict | None) -> int | None:
+    """Distance-based transit estimate (minutes) from a listing's exact
+    coordinates to the destination. Mirrors maps_service.estimate_travel_time_simple
+    (1.3x route factor, 20 km/h transit, short wait) but uses the scraped lat/lon
+    directly, so it never depends on flaky street-address geocoding."""
+    o = _parse_geo(geo_str)
+    if not o or not dest_coords:
+        return None
+    dla, dlo = dest_coords.get("lat"), dest_coords.get("lng")
+    if dla is None or dlo is None:
+        return None
+    R = 6371.0
+    dlat = math.radians(dla - o[0])
+    dlng = math.radians(dlo - o[1])
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(o[0])) * math.cos(math.radians(dla)) * math.sin(dlng / 2) ** 2)
+    dist_km = R * 2 * math.asin(math.sqrt(a))
+    actual = dist_km * 1.3
+    return int((actual / 20.0) * 60 + min(10, dist_km * 2))
+
+
+_WORD_NUMS = {"studio": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def _extract_bedrooms(text: str):
+    """Pull an explicit bedroom count out of the current message.
+    Returns (min_beds, max_beds) or None. 'studio' -> (0, 0); 'N bed[room]' and
+    the spelled-out one..five -> (N, N). Deterministic so a Manchester 1-bed
+    query drives an exact min=max=1 filter on the live source (no studios/2-beds
+    leaking in, the original demo-data bug)."""
+    if not text:
+        return None
+    t = text.lower()
+    if re.search(r"\bstudio\b", t):
+        return (0, 0)
+    m = re.search(r"\b(\d)\s*(?:-)?\s*bed(?:room)?s?\b", t)
+    if m:
+        n = int(m.group(1))
+        if 0 <= n <= 6:
+            return (n, n)
+    m = re.search(r"\b(one|two|three|four|five)\s*(?:-)?\s*bed(?:room)?s?\b", t)
+    if m:
+        n = _WORD_NUMS[m.group(1)]
+        return (n, n)
+    return None
+
+
 def _commute_phrase(max_commute_time, location: str) -> str:
     """User-facing commute clause. Empty when the limit is the no-limit sentinel so
     we never print 'within 999 min'."""
@@ -129,21 +211,15 @@ def set_rag_coordinator(coordinator):
 
 
 def _get_rag_coordinator():
-    """Cached RAGCoordinator + FAISS index, built once and reused across searches —
-    avoids reloading sentence-transformers and rebuilding the index on every call
-    (which made each search ~15-20s slower)."""
+    """Cached RAGCoordinator (sentence-transformers model loaded once and reused —
+    reloading it cost ~15-20s per call). The FAISS index is intentionally NOT
+    pre-built from a bundled dataset here: each search rebuilds the index over the
+    real, city-correct listings it fetched on demand, so the semantic ranking and
+    the 'similar' fallback can never surface stale/other-city demo rows."""
     global _RAG_COORDINATOR
     if _RAG_COORDINATOR is None:
         from rag.rag_coordinator import RAGCoordinator
-        from core.data_loader import load_properties, parse_price
-        rc = RAGCoordinator()
-        props = load_properties()
-        for prop in props:
-            if 'parsed_price' not in prop:
-                prop['parsed_price'] = parse_price(prop.get('Price'))
-        if not getattr(rc.property_store, 'index', None):
-            rc.property_store.build_index(props)
-        _RAG_COORDINATOR = rc
+        _RAG_COORDINATOR = RAGCoordinator()
     return _RAG_COORDINATOR
 
 
@@ -478,27 +554,98 @@ async def search_properties_impl(
             print(f"\n💱 [BUDGET] 周租转月租: £{original_budget}/week → £{max_budget}/month")
         
         # ================================================================
-        # 步骤 2: 执行 RAG 搜索（带房产特征过滤）
+        # 步骤 1.6: 🆕 解析卧室数量（用于对真实来源做精确 beds 过滤）
         # ================================================================
-        print(f"\n🔍 [SEARCH] 执行 RAG 搜索...")
-        print(f"   📍 位置: {location}")
-        print(f"   💰 预算: £{max_budget}/month" + (f" (原始: £{original_budget}/week)" if budget_converted else ""))
-        print(f"   ⏱️ 最大通勤: {max_commute_time} 分钟")
-        print(f"   🏠 房产特征: {all_property_features}")
-        print(f"   💭 软性偏好: {all_soft_preferences}")
-        
-        from core.data_loader import get_property_source, load_properties, parse_price
+        min_beds, max_beds = 0, 2  # 默认放宽（未指定卧室时）
+        feats_lower = [str(f).lower() for f in all_property_features]
+        beds = _extract_bedrooms(current_message or user_query or "")
+        if beds is None:
+            for _v in kwargs.values():
+                beds = _extract_bedrooms(str(_v))
+                if beds is not None:
+                    break
+        if beds is not None:
+            min_beds, max_beds = beds
+        elif 'studio' in feats_lower:
+            min_beds, max_beds = 0, 0
+        _kw_beds = kwargs.get('bedrooms')
+        if isinstance(_kw_beds, int) and 0 <= _kw_beds <= 6:
+            min_beds = max_beds = _kw_beds
 
-        # 获取（缓存的）RAG Coordinator —— 仅首次加载模型+建索引，之后复用（大幅提速）
+        # ================================================================
+        # 步骤 2: 🆕 按需抓取真实的、城市正确的 OnTheMarket 房源（带持久缓存）
+        #   - 解析 location -> OnTheMarket 区域 slug
+        #   - 命中新鲜缓存直接返回；未命中/过期则在有限时间预算内实时抓取并落缓存
+        #   - 抓取失败但有旧缓存 -> 返回旧数据并标记 possibly_outdated
+        #   - 什么都没有 -> 诚实的"无实时房源"结果（绝不回退到 demo 假数据）
+        # ================================================================
+        from core.data_loader import parse_price
+        from core.scraping.on_demand import get_listings
+
+        # 抓取价格带：下限取 min_budget（若更低），上限放宽到软预算（+15%），
+        # 这样"轻微超预算"的候选也能进入 soft_violation 通道。
+        scrape_min = max(0, min(int(min_budget or 100), int(max_budget)))
+        scrape_max = int(max_budget * C.BUDGET_SOFT_MULTIPLIER)
+
+        print(f"\n🌐 [SEARCH] 抓取实时房源: location={location}, beds={min_beds}-{max_beds}, "
+              f"£{scrape_min}-{scrape_max}/month")
+        loop = asyncio.get_event_loop()
+        listing_result = await loop.run_in_executor(
+            None,
+            lambda: get_listings(location, min_beds, max_beds, scrape_min, scrape_max, limit=15),
+        )
+        live_rows = listing_result['rows']
+        listing_meta = listing_result['meta']
+        possibly_outdated = bool(listing_meta.get('stale'))
+        _src = listing_meta.get('source')
+        data_source = 'OnTheMarket' + (' (cached)' if _src in ('hit', 'stale-cache') else '')
+        print(f"   ✅ 实时房源 {listing_meta.get('count', 0)} 个 "
+              f"(source={_src}, {listing_meta.get('elapsed_s')}s)")
+
+        # 没有任何真实房源 —— 诚实返回，绝不使用 demo 假数据。
+        if not live_rows:
+            _bed_clause = f" for a {min_beds}-bed home" if min_beds == max_beds else ""
+            return {
+                'success': True,
+                'status': 'no_results',
+                'message': (
+                    f"I couldn't retrieve any live listings near {location}{_bed_clause} "
+                    f"within £{max_budget}/month right now. This usually means the listing "
+                    f"source is momentarily unavailable or has no current matches for these "
+                    f"exact criteria. Please try again shortly, widen the budget or bedrooms, "
+                    f"or try a nearby area."
+                ),
+                'recommendations': [],
+                'data_source': data_source,
+                'search_criteria': {
+                    'destination': location,
+                    'max_budget': max_budget,
+                    'max_travel_time': max_commute_time,
+                    'bedrooms': (min_beds if min_beds == max_beds else f"{min_beds}-{max_beds}"),
+                    'property_features': all_property_features,
+                    'soft_preferences': all_soft_preferences,
+                },
+            }
+
+        # 规范化真实行：解析价格、推断卧室/房型、标记过期。
+        for prop in live_rows:
+            prop['parsed_price'] = parse_price(prop.get('Price'))
+            _rt = str(prop.get('Room_Type_Category', ''))
+            prop.setdefault('Type', _rt or 'Flat')
+            _bm = re.search(r'(\d+)\s*bed', _rt, re.I)
+            if _bm:
+                prop['Bedrooms'] = int(_bm.group(1))
+            elif 'studio' in _rt.lower():
+                prop['Bedrooms'] = 'Studio'
+            if possibly_outdated:
+                prop['possibly_outdated'] = True
+
+        # 在"仅这些城市正确的真实行"上重建语义索引，使主排序与"相似房源"回退
+        # 都只会命中真实数据（不会泄漏其它城市/demo 数据）。
         rag_coordinator = _get_rag_coordinator()
+        rag_coordinator.property_store.build_index(live_rows)
+        all_properties = live_rows
 
-        # CSV 很小，加载便宜；用于价格解析（索引已在 singleton 内构建）
-        all_properties = load_properties()
-        data_source = get_property_source()
-        for prop in all_properties:
-            if 'parsed_price' not in prop:
-                prop['parsed_price'] = parse_price(prop.get('Price'))
-        
         # 🆕 构建包含房产特征的搜索查询
         search_query = f"Find flat near {location} under £{max_budget}"
         if all_property_features:
@@ -557,35 +704,50 @@ async def search_properties_impl(
         # ================================================================
         print(f"\n⏱️ [SEARCH] 计算通勤时间...")
         
-        from core.maps_service import calculate_travel_time
-        import asyncio
-        
+        from core.maps_service import calculate_travel_time, geocode_address
+
         top_candidates = ranked_properties[:15]
         loop = asyncio.get_event_loop()
-        
-        travel_time_tasks = [
-            loop.run_in_executor(
-                None,
-                calculate_travel_time,
-                prop.get('Address', ''),
-                location
-            )
-            for prop in top_candidates
-        ]
-        
-        travel_times = await asyncio.gather(*travel_time_tasks, return_exceptions=True)
-        
-        # 添加通勤时间并过滤
+
+        # Geocode the destination once. Inside Greater London we trust TfL Journey
+        # Planner; elsewhere TfL has no route and address geocoding is unreliable,
+        # so we estimate from each listing's own exact lat/lon (from the scrape).
+        dest_coords = await loop.run_in_executor(None, geocode_address, location)
+        london_dest = (listing_meta.get('requested_city') == 'london') or _in_london(dest_coords)
+
+        if london_dest:
+            travel_time_tasks = [
+                loop.run_in_executor(None, calculate_travel_time, prop.get('Address', ''), location)
+                for prop in top_candidates
+            ]
+            tfl_times = await asyncio.gather(*travel_time_tasks, return_exceptions=True)
+        else:
+            tfl_times = [None] * len(top_candidates)
+
+        # 添加通勤时间并过滤（真实来源坐标优先，避免街道地址地理编码抖动）
         candidates_with_travel = []
-        for prop, travel_time in zip(top_candidates, travel_times):
-            if isinstance(travel_time, Exception):
-                continue
+        for prop, tfl in zip(top_candidates, tfl_times):
+            if isinstance(tfl, Exception):
+                tfl = None
+            # Trust a sane TfL/address value; otherwise fall back to the exact-coord estimate.
+            travel_time = tfl if (isinstance(tfl, (int, float)) and 0 < tfl <= _COMMUTE_SANITY_CAP) else None
+            if travel_time is None:
+                travel_time = _coord_commute_minutes(
+                    prop.get('geo_location') or prop.get('Geo_Location'), dest_coords
+                )
+            if travel_time is None and not london_dest:
+                # Last resort: address-based estimate (may still be rough).
+                try:
+                    travel_time = calculate_travel_time(prop.get('Address', ''), location)
+                except Exception:
+                    travel_time = None
             if travel_time and travel_time <= max_commute_time:
                 prop['travel_time_minutes'] = travel_time
                 prop['travel_time'] = travel_time
                 candidates_with_travel.append(prop)
-        
-        print(f"   ✅ 通勤过滤后: {len(candidates_with_travel)} 个房源")
+
+        print(f"   ✅ 通勤过滤后: {len(candidates_with_travel)} 个房源 "
+              f"(dest_in_london={london_dest})")
         
         # ================================================================
         # 步骤 4: 应用价格过滤和评分
@@ -639,10 +801,15 @@ async def search_properties_impl(
                 similar_with_commute = []
                 for prop in similar_properties[:6]:  # 只处理前6个
                     try:
-                        travel_time = calculate_travel_time(
-                            prop.get('Address', ''),
-                            location
-                        )
+                        travel_time = None
+                        if london_dest:
+                            travel_time = calculate_travel_time(prop.get('Address', ''), location)
+                            if not (isinstance(travel_time, (int, float)) and 0 < travel_time <= _COMMUTE_SANITY_CAP):
+                                travel_time = None
+                        if travel_time is None:
+                            travel_time = _coord_commute_minutes(
+                                prop.get('geo_location') or prop.get('Geo_Location'), dest_coords
+                            )
                         if travel_time and travel_time <= max_commute_time * C.SIMILAR_COMMUTE_SLACK:  # 允许通勤时间超50%
                             prop['travel_time'] = travel_time
                             prop['price'] = prop.get('parsed_price', parse_price(prop.get('Price', '')))
@@ -764,27 +931,34 @@ async def search_properties_impl(
                 'bedrooms': prop.get('Bedrooms', prop.get('bedrooms', 'N/A')),
                 'match_type': prop.get('match_type', 'perfect'),
                 'source': data_source,
+                'possibly_outdated': bool(prop.get('possibly_outdated', False)),  # 🆕 stale-if-error 标记
                 'url': prop.get('URL', prop.get('url', '')),
                 'images': images,  # 🆕 添加图片列表
                 'geo_location': geo_location,  # 🆕 添加地理位置
                 'explanation': _clean_explanation(prop.get('Description', prop.get('description', '')), prop.get('travel_time'), location),  # 单一来源：真实 TfL 时间
             })
-        
+
+        _summary = _found_summary(len(perfect_match), len(soft_violation), max_budget, max_commute_time, location)
+        if possibly_outdated:
+            _summary += " (Showing recent cached listings — a live refresh wasn't available just now, so some may be outdated.)"
         return {
             'success': True,
             'status': 'found',
             'total_found': len(all_results),
+            'data_source': data_source,           # 🆕 真实来源标签（OnTheMarket）
+            'possibly_outdated': possibly_outdated,  # 🆕 结果集是否可能过期
             'search_criteria': {
                 'destination': location,
                 'max_budget': max_budget,
                 'max_travel_time': max_commute_time,
+                'bedrooms': (min_beds if min_beds == max_beds else f"{min_beds}-{max_beds}"),  # 🆕
                 'property_features': all_property_features,  # 🆕 包含房产特征
                 'soft_preferences': all_soft_preferences,     # 🆕 包含软性偏好
             },
             'recommendations': formatted_results,
             'perfect_count': len(perfect_match),
             'soft_count': len(soft_violation),
-            'summary': _found_summary(len(perfect_match), len(soft_violation), max_budget, max_commute_time, location),
+            'summary': _summary,
         }
 
     except Exception as e:
@@ -853,6 +1027,31 @@ For GENERAL INFORMATION questions about rent, use web_search instead.""",
                 'type': 'integer',
                 'description': 'Maximum number of results to return.',
                 'default': 10
+            },
+            # These are injected by the agent from conversational/accumulated state.
+            # They MUST be declared here: the tool's pydantic input model drops any
+            # undeclared kwarg (extra='ignore'), which previously silently discarded
+            # current_message — killing the in-message budget/commute override so a
+            # mid-conversation "my budget is now £1000" was ignored (D2).
+            'current_message': {
+                'type': 'string',
+                'description': 'The raw text of ONLY this turn\'s user message (no injected memory/history). Used to let an explicit budget/commute stated this turn override accumulated values.'
+            },
+            'property_features': {
+                'type': 'array',
+                'description': 'Accumulated property features (e.g. studio, en-suite) carried across turns.'
+            },
+            'accumulated_preferences': {
+                'type': 'array',
+                'description': 'Accumulated soft preferences carried across turns.'
+            },
+            'budget_period': {
+                'type': 'string',
+                'description': "Budget period: 'week' or 'month' (default month)."
+            },
+            'min_budget': {
+                'type': 'integer',
+                'description': 'Minimum monthly budget in GBP.'
             }
         },
         'required': []  # 没有必须参数 - 工具内部会处理

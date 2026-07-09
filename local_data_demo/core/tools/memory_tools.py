@@ -13,7 +13,13 @@ def _mem():
 
 
 async def recall_memory_impl(query: str, n: int = 6,
-                             session_id: str = "default", user_id: str = "default") -> dict:
+                             session_id: str = "default", user_id: str = None) -> dict:
+    # PRIVACY: no 'default' fallback — a missing user_id must return NOTHING, not
+    # the shared bucket every id-less call site used to read (cross-user leak).
+    from rag.agent_memory import _valid_user_id
+    if _valid_user_id(user_id) is None:
+        return {"success": False, "count": 0, "memories": [], "formatted": "",
+                "error": "user_id is required to recall per-user memory"}
     mems = _mem().retrieve(query, session_id=session_id, user_id=user_id, n=int(n))
     return {
         "success": True,
@@ -24,7 +30,11 @@ async def recall_memory_impl(query: str, n: int = 6,
 
 
 async def remember_impl(content: str, kind: str = "semantic",
-                        session_id: str = "default", user_id: str = "default") -> dict:
+                        session_id: str = "default", user_id: str = None) -> dict:
+    from rag.agent_memory import _valid_user_id
+    if _valid_user_id(user_id) is None:
+        return {"success": False, "id": None, "stored": None, "mtype": None,
+                "error": "user_id is required to store per-user memory"}
     mtype = kind if kind in ("episodic", "semantic", "reflection") else "semantic"
     mid = _mem().add(content, mtype, session_id=session_id, user_id=user_id)
     return {"success": bool(mid), "id": mid, "stored": content, "mtype": mtype}
@@ -44,7 +54,7 @@ recall_memory_tool = Tool(
         'properties': {
             'query': {'type': 'string', 'description': 'what to recall about the user'},
             'n': {'type': 'integer', 'description': 'max number of memories to return', 'default': 6},
-            'user_id': {'type': 'string', 'description': 'current user identity', 'default': 'default'},
+            'user_id': {'type': 'string', 'description': 'current user identity (REQUIRED for per-user memory; injected by the agent runtime)'},
             'session_id': {'type': 'string', 'description': 'current conversation identity', 'default': 'default'},
         },
         'required': ['query'],
@@ -65,7 +75,7 @@ remember_tool = Tool(
         'properties': {
             'content': {'type': 'string', 'description': 'the durable fact to remember about the user'},
             'kind': {'type': 'string', 'description': 'episodic, semantic, or reflection', 'default': 'semantic'},
-            'user_id': {'type': 'string', 'description': 'current user identity', 'default': 'default'},
+            'user_id': {'type': 'string', 'description': 'current user identity (REQUIRED for per-user memory; injected by the agent runtime)'},
             'session_id': {'type': 'string', 'description': 'current conversation identity', 'default': 'default'},
         },
         'required': ['content'],

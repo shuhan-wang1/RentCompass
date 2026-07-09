@@ -14,7 +14,7 @@ def test_tool_wraps_dict_once_and_propagates_logical_failure():
     assert result.data == {"success": False, "error": "expected", "payload": 1}
 
 
-def test_registry_has_all_eleven_tools_and_memory_identity_schema():
+def test_registry_has_all_twelve_tools_and_memory_identity_schema():
     from core.tool_system import create_tool_registry
 
     registry = create_tool_registry()
@@ -22,6 +22,7 @@ def test_registry_has_all_eleven_tools_and_memory_identity_schema():
         "search_properties", "calculate_commute", "calculate_commute_cost",
         "check_safety", "get_weather", "web_search", "search_nearby_pois",
         "get_property_details", "check_transport_cost", "recall_memory", "remember",
+        "get_transport_info",
     }
     for name in ("recall_memory", "remember"):
         properties = registry.get(name).parameters["properties"]

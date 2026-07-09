@@ -27,9 +27,16 @@ real search backend (SearXNG) instead of a dead `localhost:8080`.
 ## Run
 
 ```bash
+# First time only: create the SearXNG live config (a gitignored runtime file).
+cp deploy/searxng-settings.yml.example searxng/settings.yml
+
 docker compose up -d --build      # build the app image + start all three services
 docker compose ps                 # all should be Up / healthy
 ```
+
+`searxng/settings.yml` is gitignored on purpose — the container chowns it to its
+own uid, which would otherwise clash with git. `deploy/update.sh` recreates it
+from the example automatically if it's missing.
 
 Then open <http://localhost:5001>.
 

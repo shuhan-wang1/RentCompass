@@ -10,6 +10,13 @@
 set -euo pipefail
 cd /home/shuhan/uk_rent_recommendation
 
+# Bootstrap the SearXNG live config (gitignored runtime file) from the example.
+if [ ! -f searxng/settings.yml ]; then
+  mkdir -p searxng
+  cp deploy/searxng-settings.yml.example searxng/settings.yml
+  echo "==> Bootstrapped searxng/settings.yml from deploy/searxng-settings.yml.example"
+fi
+
 echo "==> Deploying version: $(git rev-parse --short HEAD 2>/dev/null || echo 'n/a') on $(git branch --show-current 2>/dev/null || echo '?')"
 
 echo "==> Rebuilding image + recreating app (code is baked into the image, so --build is required)..."

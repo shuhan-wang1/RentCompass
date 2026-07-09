@@ -58,6 +58,11 @@ REFACTOR_IMPLEMENTATION_PLAN.md
 .runtime/
 *.sqlite3
 
+# SearXNG live config: a runtime file the container mounts and chowns to its own
+# uid. Tracking it causes git-vs-container ownership conflicts, so it's ignored;
+# bootstrap from deploy/searxng-settings.yml.example (deploy/update.sh does this).
+/searxng/settings.yml
+
 # Local user credential store (password HASHES — never commit, even by mistake).
 # Default lives under .runtime/ (already ignored) but pin the filename anywhere it lands.
 users.json

@@ -7,6 +7,7 @@ An AI-powered rental housing recommendation system for international students in
 - [Features](#features)
 - [System Architecture](#system-architecture)
 - [LangGraph Agent Architecture](#langgraph-agent-architecture)
+- [Search Experience](#search-experience)
 - [Next-generation runtime](#next-generation-runtime)
 - [MCP Integration](#mcp-integration)
 - [Long-Term Agent Memory](#long-term-agent-memory)
@@ -25,7 +26,9 @@ An AI-powered rental housing recommendation system for international students in
 
 ## Features
 
-- **Live Property Data** — Real rental listings scraped from **OnTheMarket** with a hybrid TTL cache; transparently falls back to bundled sample data, so the app always has results
+- **Live Property Data** — Real, **city-correct** rental listings scraped from **OnTheMarket on demand** per query, behind a persistent SQLite cache with stale-if-error; when nothing can be retrieved it returns an honest empty result rather than fabricated data
+- **Flexible Search — No Fixed Workflow** — The system makes **zero assumptions** about a house hunt. Only a **search area** is required; budget, bedrooms, and commute are all optional. "Where you want to live" and "where you commute to" are separate concepts, and an explicit **"I don't commute"** intent (e.g. *"我不通勤，单纯住着"*) searches with no commute filter
+- **Structured Search Form + One-Click Re-Search** — An always-editable criteria panel (and an auto-popup modal when an area is still needed) posts straight to a deterministic search endpoint that **bypasses the LLM router** — so users never get stuck in a clarification loop and can tweak criteria and re-search anytime
 - **Semantic Property Search** — FAISS-based similarity matching over property descriptions using SentenceTransformer embeddings
 - **Three-Source RAG** — Retrieves and ranks results from property embeddings, conversation history, and area knowledge
 - **LangGraph StateGraph Agent** — A graph-based agent with conditional routing, voting-based tool selection, and cross-turn state persistence
@@ -37,7 +40,7 @@ An AI-powered rental housing recommendation system for international students in
 - **Commute Cost Calculator** — Travel time and cost estimation via TfL Journey Planner (free) or Google Maps (optional)
 - **Web Search Integration** — DuckDuckGo-based search with authoritative source filtering (gov.uk, Rightmove, Zoopla, BBC)
 - **Conversation Memory** — ChromaDB-backed persistent chat history for context-aware follow-up responses
-- **Budget-Aware Ranking** — Hybrid scoring (semantic similarity, travel time, budget match, soft preferences) with clear budget violation explanations
+- **Budget-Aware Ranking** — Hybrid scoring (semantic similarity, travel time, budget match, soft preferences) with clear budget violation explanations; **degrades gracefully** — an absent budget or commute constraint simply drops out of the score and filters instead of blocking the search
 - **Key-Free by Default** — Geocoding (Postcodes.io / Nominatim), transport (TfL), and POIs (OpenStreetMap Overpass) all run without API keys; the only required key is the LLM provider key
 
 ## Next-generation runtime
@@ -145,8 +148,8 @@ graph TD
 | Node | Purpose |
 |---|---|
 | **extract_preferences** | Parses the user message for hard/soft preferences, excluded areas, required amenities, and lifestyle signals |
-| **decide_tool** | Voting-based classification (LLM calls at high temperature) to map the query to a tool; includes heuristic fallback and tie-breaking |
-| **execute_tool** | Dispatches to the tool provider (MCP client, with in-process fallback); injects accumulated search criteria for `search_properties`; supports multi-search parallel execution |
+| **decide_tool** | Maps the query to a tool. Deterministic fast-paths handle unambiguous intents first (memory recall, follow-ups over existing results, live-transport questions, and an **"I don't commute" → search** shortcut) before falling back to LLM classification with heuristic tie-breaking — so a clear tool request routes straight to that tool |
+| **execute_tool** | Dispatches to the tool provider (MCP client, with in-process fallback); injects accumulated search criteria (`area`, `commute_destination`, `no_commute`, `bedrooms`, budget) for `search_properties`; supports multi-search parallel execution |
 | **generate_response** | LLM synthesizes a final answer from tool observations using the Alex persona prompt templates |
 | **format_output** | Structures the response for the frontend — sets `response_type`, formats safety/POI/commute data, applies preference filters |
 
@@ -178,6 +181,31 @@ class AgentState(TypedDict):
     response_type: str                       # answer | question | clarification
     tool_data: Dict[str, Any]                # Structured data for frontend
 ```
+
+`accumulated_search_criteria` carries the cross-turn search state with canonical keys — `area`, `commute_destination` (mirrored to a legacy `destination`), `no_commute`, `bedrooms`, `max_budget`, `max_travel_time`, `budget_period` — plus accumulated `property_features` / `soft_preferences`.
+
+## Search Experience
+
+Property search deliberately encodes **no fixed workflow** — the system never assumes a house hunt has to start with a destination, a budget, and a commute time. It works with whatever the user has given and degrades gracefully.
+
+### Design principles
+
+- **Only an area is required.** Budget, bedrooms, and commute are all optional. A missing budget searches a wide price band; a missing commute simply applies no commute filter.
+- **Area ≠ commute destination.** *Where you want to live* (`area`) and *where you commute to* (`commute_destination`) are distinct. A university named as a destination (e.g. `UCL`) also implies a sensible search area (Bloomsbury); an area named on its own (`Camden`) needs no commute target at all.
+- **Explicit "no commute" intent.** Messages like *"I just want to live there / work from home"* or *"我不通勤，单纯住着"* set `no_commute` and search with the commute logic fully disabled — the model never asks "where do you commute to?" again.
+- **Ask once, only for the area.** The single clarification the search can emit is *"which area would you like to live in?"* — and only when no area is resolvable. It is language-aware (Chinese question for a Chinese message) and never loops on budget or commute.
+- **Typo/glued-token tolerance.** Location resolution falls back to a substring match, so a glued token like `axocamden` still resolves to Camden.
+
+### Two entry points
+
+| Path | How it works |
+|---|---|
+| **Conversational** (`POST /api/alex`) | Natural-language messages flow through the LangGraph agent. When only the area is missing, the response carries a structured `missing_fields` / `known_criteria` payload instead of an open-ended question. |
+| **Direct / form** (`POST /api/search_direct`) | The frontend's criteria form posts structured criteria straight to the search tool, **bypassing the LLM router** entirely — deterministic, fast, and immune to extraction ambiguity. |
+
+### Frontend
+
+The right-hand panel hosts an **always-editable "Search criteria" card** (area, budget + period, bedrooms, commute destination + max minutes, and an *"I don't commute"* toggle). The **same form auto-opens as a modal** whenever the agent still needs an area, pre-filled with whatever is already known. Users can adjust any field and **re-search with one click** at any time. Both the conversational and direct paths share and persist the same per-conversation criteria, so the form, the chat, and the accumulated state stay in sync. Fully bilingual (EN/ZH).
 
 ## MCP Integration
 
@@ -312,10 +340,12 @@ uk_rent_recommendation/
 |   |   +-- amenity_map_generator.py  # Interactive map generation
 |   |   +-- user_session.py       # Session & favorites management
 |   |   +-- scraping/             # Real-scraper integration layer
-|   |   |   +-- provider.py       # Public entry: hybrid cache + scrape + fallback
-|   |   |   +-- openrent.py       # OpenRent scraper (working live source)
+|   |   |   +-- on_demand.py       # Live search path: on-demand scrape + SQLite cache + slug resolution
+|   |   |   +-- onthemarket.py     # OnTheMarket scraper (working live source)
+|   |   |   +-- provider.py       # Startup dataset: hybrid cache + scrape + fallback
+|   |   |   +-- openrent.py       # OpenRent scraper (legacy stub, endpoint dead)
 |   |   |   +-- rightmove.py      # Rightmove stub (endpoint dead / ToS-barred)
-|   |   |   +-- zoopla.py         # Zoopla scraper
+|   |   |   +-- zoopla.py         # Zoopla scraper (separate anti-bot setup)
 |   |   |   +-- normalize.py      # Scraper output -> project schema
 |   |   |   +-- config.py         # Sources, search tasks, cache TTL
 |   |   +-- tools/                # Tool implementations
@@ -471,10 +501,13 @@ USE_TRAVEL_SERVICE = 'google'
 1. Open the web interface at `http://localhost:5001`
 2. Describe your housing needs in natural language, e.g.:
    - *"I'm looking for a room near UCL under 1500/month with a gym"*
+   - *"Find me a place in Camden"* — an area alone is enough; budget and commute are optional
+   - *"我不通勤，单纯住着，帮我找房"* — searches with no commute filter
    - *"Find me a safe area near King's Cross with good transport links"*
    - *"What's the commute cost from Vauxhall to UCL?"*
-3. The AI agent will autonomously search live listings, check safety data, calculate commute times, and present ranked recommendations
-4. Follow up with questions — the system remembers your conversation context, accumulated search criteria, **and long-term facts about you** (budget, destination, constraints) across sessions
+3. Or use the **Search criteria** form on the right panel — fill in an area (everything else optional), toggle *"I don't commute"* if relevant, and **re-search with one click** anytime
+4. The AI agent (or the direct form path) searches live listings, checks safety data, calculates commute times, and presents ranked recommendations
+5. Follow up with questions — the system remembers your conversation context, accumulated search criteria, **and long-term facts about you** (budget, destination, constraints) across sessions
 
 ## Module Details
 
@@ -508,7 +541,7 @@ Properties within budget are ranked first; those with soft violations are includ
 The agent is implemented as a **LangGraph StateGraph** (`core/langgraph_agent.py`) with five nodes:
 
 1. **extract_preferences** — Parses the user message for hard requirements, soft preferences, excluded areas, amenity needs, and lifestyle signals
-2. **decide_tool** — Voting-based classification to map the query to a tool; includes heuristic fallback and tie-breaking logic
+2. **decide_tool** — Maps the query to a tool via deterministic intent fast-paths (memory recall, result follow-ups, live transport, "I don't commute" → search) with an LLM-classification fallback and tie-breaking logic
 3. **execute_tool** — Dispatches to the tool provider (MCP client, with in-process fallback); injects accumulated search criteria for `search_properties`; supports multi-search parallel execution
 4. **generate_response** — LLM synthesizes a final answer from tool observations using the Alex persona prompt templates
 5. **format_output** — Structures the response for the frontend (safety reports, POI lists, commute costs, property recommendations)
@@ -518,7 +551,8 @@ The LLM persona is "Alex" — a friendly rental assistant specialized for intern
 **Key design decisions:**
 - **Custom StateGraph over prebuilt `create_react_agent`** — The agent has custom nodes (reasoning_property, direct_answer, multi_search) that don't fit standard ReAct
 - **Provider-agnostic tool execution** — The agent only depends on `execute_tool`, so it works identically with the MCP client or the in-process registry
-- **Accumulated criteria injection** — Follow-up queries inherit budget, destination, and property features from earlier turns
+- **Accumulated criteria injection** — Follow-up queries inherit area, commute destination, budget, bedrooms, and property features from earlier turns
+- **No fixed search workflow** — Search never hard-requires a destination + budget + commute; only an area is needed, commute is optional and can be explicitly disabled (see [Search Experience](#search-experience))
 
 ### Tool System
 
@@ -535,7 +569,7 @@ All registered tools are served to the agent over MCP (with in-process fallback)
 
 | Tool | Description |
 |---|---|
-| `search_properties` | Search rentals from the unified repository and active cache |
+| `search_properties` | Search live rentals by area (budget/commute optional); returns an area-only clarification when no area is resolvable |
 | `calculate_commute_cost` | Calculate travel time and cost for a route |
 | `calculate_commute` | Basic commute time calculation |
 | `check_transport_cost` | Transport cost estimation |
@@ -549,12 +583,15 @@ All registered tools are served to the agent over MCP (with in-process fallback)
 
 ### Data Sources & Scraper
 
-Property listings come from a **real-scraper integration layer** (`core/scraping/`) that bridges live scrapers to the project's property schema, behind a single public entry (`provider.get_properties`):
+Property data flows through the **real-scraper integration layer** (`core/scraping/`) over two paths:
 
-- **Hybrid TTL cache** — If a fresh scraped cache CSV exists (younger than `SCRAPER_CACHE_TTL_HOURS`, default 24h), it's served directly. Otherwise the system scrapes live data, normalizes it, writes the cache, and serves the fresh results.
-- **Graceful fallback** — On any scrape failure or empty result, it falls back to a stale cache if present, then to the bundled `fake_property_listings.csv`, so the app always has data.
-- **Sources** — **OnTheMarket** is the default live source (`SCRAPER_SOURCES=onthemarket`). OpenRent and Rightmove are retained as opt-in legacy stubs; Zoopla requires its separate anti-bot setup.
-- **Search tasks** — Focused on student-dense London areas (UCL/Russell Square, King's Cross, Camden, Stratford, Mile End, etc.), de-duplicated by listing URL, since the travel-time/geocoding stack is London-optimized via TfL.
+**1. Live search path — `on_demand.get_listings` (what every user query hits).** The `search_properties` tool scrapes **OnTheMarket on demand**, scoped to the exact area the user asked for:
+
+- **City-correct by construction** — The requested location resolves to a specific OnTheMarket **area / university / city slug** (`resolve_location` / `classify_place`), so a Manchester query hits the Manchester page and a `UCL` query hits Bloomsbury. A last-resort substring match resolves glued typos (`axocamden` → `camden`), and a cross-contamination guard drops rows whose address names a different major city.
+- **Persistent SQLite cache** (`.runtime/listing_cache.sqlite3`, default 12h TTL) — a fresh hit serves in milliseconds; a miss scrapes live under a wall-clock budget, persists, and serves.
+- **Honest failure** — On a failed/timed-out scrape it serves an older cached set flagged *possibly outdated* (stale-if-error); with nothing at all it returns an **honest empty result** and never fabricates listings. The bundled fake CSV is reachable only behind `SEARCH_ALLOW_DEMO_FALLBACK` (off by default) for offline dev.
+
+**2. Startup dataset — `load_properties` / `provider.py` (seeds the FAISS index).** Selected by `PROPERTY_SOURCE` (`auto` | `csv` | `scraper`): serves a scraped cache CSV when present (younger than `SCRAPER_CACHE_TTL_HOURS`, default 24h) or the bundled `fake_property_listings.csv`, and never blocks startup on a live scrape unless `SCRAPE_ON_STARTUP` is set. OnTheMarket is the working live source; OpenRent and Rightmove remain as legacy stubs (endpoints dead / ToS-barred); Zoopla needs its own anti-bot setup.
 
 ### Map Visualization
 

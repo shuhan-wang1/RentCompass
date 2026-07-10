@@ -749,6 +749,85 @@
         .dialog-btn.primary { background: var(--primary-color); color: white; border-color: var(--primary-color); }
         .dialog-btn.primary:hover { background: var(--primary-hover); }
 
+        /* ============================================================= */
+        /* SEARCH CRITERIA PANEL + FORM (shared with modal)              */
+        /* ============================================================= */
+        .criteria-panel { padding: 16px 32px 0 32px; background: var(--bg-body); flex-shrink: 0; }
+        .criteria-card {
+            background: var(--bg-surface); border: 1px solid var(--border-medium);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden;
+        }
+        .criteria-header {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 12px 16px; cursor: pointer; user-select: none; outline: none;
+        }
+        .criteria-header:hover { background: var(--bg-hover); }
+        .criteria-header:focus-visible { box-shadow: inset 0 0 0 2px var(--primary-fade); }
+        .criteria-title {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 0.9rem; font-weight: 700; color: var(--text-main);
+        }
+        .criteria-title .icon { color: var(--primary-color); }
+        .criteria-chevron { color: var(--text-tertiary); transition: transform 0.2s ease; }
+        .criteria-panel.collapsed .criteria-chevron { transform: rotate(-90deg); }
+        .criteria-panel.collapsed .criteria-body { display: none; }
+        .criteria-body { padding: 4px 16px 16px 16px; }
+
+        /* Shared field grid (used by both the panel body and the modal) */
+        .criteria-form { display: block; }
+        .criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .criteria-field {
+            display: flex; flex-direction: column; gap: 5px; min-width: 0; margin: 0;
+        }
+        .criteria-field.col-span-2 { grid-column: 1 / -1; }
+        .criteria-label {
+            font-size: 11px; font-weight: 600; color: var(--text-secondary);
+            letter-spacing: 0.2px; display: inline-flex; align-items: center;
+        }
+        .criteria-label .req { color: var(--primary-color); }
+        .criteria-input, .criteria-select {
+            width: 100%; min-width: 0; padding: 8px 10px;
+            border: 1px solid var(--border-medium); border-radius: var(--radius-md);
+            font-size: 0.875rem; font-family: inherit; color: var(--text-main);
+            background: var(--bg-surface); outline: none; transition: var(--transition-base);
+        }
+        .criteria-input:focus, .criteria-select:focus {
+            border-color: var(--primary-color); box-shadow: var(--shadow-focus);
+        }
+        .criteria-input.input-error {
+            border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-fade);
+        }
+        .criteria-input:disabled, .criteria-select:disabled {
+            background: var(--bg-body); color: var(--text-tertiary); cursor: not-allowed;
+        }
+        .criteria-budget-row { display: flex; gap: 6px; min-width: 0; }
+        .criteria-budget-row .criteria-input { flex: 1 1 auto; }
+        .criteria-budget-row .criteria-select { flex: 0 0 auto; width: auto; padding: 8px 6px; }
+        .criteria-field.criteria-check {
+            flex-direction: row; align-items: center; gap: 8px; cursor: pointer;
+            align-self: end; padding-bottom: 8px;
+        }
+        .criteria-check input[type="checkbox"] {
+            width: 16px; height: 16px; accent-color: var(--primary-color);
+            cursor: pointer; flex-shrink: 0; margin: 0;
+        }
+        .criteria-check .criteria-label { font-size: 0.85rem; color: var(--text-main); cursor: pointer; }
+        .criteria-field.is-disabled .criteria-label { opacity: 0.5; }
+        .criteria-search-btn {
+            width: 100%; margin-top: 14px; padding: 10px 12px; border: none;
+            border-radius: var(--radius-md); background: var(--primary-color); color: white;
+            font-family: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: var(--transition-base);
+        }
+        .criteria-search-btn:hover { background: var(--primary-hover); }
+        .criteria-search-btn:disabled { background: var(--text-tertiary); cursor: not-allowed; }
+        .criteria-search-btn .icon { color: currentColor; }
+
+        /* Criteria modal (hosted inside #dialogOverlay, reusing .dialog-card) */
+        .dialog-card.criteria-modal-card { width: min(94vw, 460px); }
+        .criteria-modal-cancel { display: flex; justify-content: flex-end; margin-top: 10px; }
+
         .sidebar-backdrop { display: none; }
 
         /* ============================================================= */
@@ -761,6 +840,7 @@
             .navbar { padding: 0 16px; }
             .results-header { padding: 0 16px; }
             .results-content { padding: 16px; }
+            .criteria-panel { padding: 12px 16px 0 16px; }
 
             .menu-toggle { display: flex; }
             .conv-sidebar {
@@ -773,6 +853,12 @@
                 display: block; position: fixed; top: 60px; left: 0; right: 0; bottom: 0;
                 background: rgba(0,0,0,0.4); z-index: 110;
             }
+        }
+
+        /* Narrow screens: collapse the criteria grid to a single column */
+        @media (max-width: 600px) {
+            .criteria-grid { grid-template-columns: 1fr; }
+            .criteria-field.criteria-check { align-self: start; padding-bottom: 0; }
         }
     </style>
 </head>
@@ -890,6 +976,22 @@
                         <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
                         <span data-i18n="tab_saved">Saved</span> <span id="favCount" style="margin-left:4px; opacity:0.7; font-size:0.9em">0</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- Persistent, editable search-criteria card (Search tab only) -->
+            <div class="criteria-panel collapsed" id="criteriaPanel">
+                <div class="criteria-card">
+                    <div class="criteria-header" id="criteriaHeader" role="button" tabindex="0" aria-expanded="false">
+                        <span class="criteria-title">
+                            <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <span data-i18n="criteria_title">Search criteria</span>
+                        </span>
+                        <svg class="icon icon-sm criteria-chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                    <div class="criteria-body" id="criteriaBody">
+                        <!-- Form fields injected by JS (shared with the modal) -->
+                    </div>
                 </div>
             </div>
 
@@ -1173,6 +1275,34 @@
                 err_auth_generic: "Could not complete that request. Check your details and try again.",
                 err_fields_required: "Enter a username and a password.",
 
+                // Search criteria panel / modal
+                criteria_title: "Search criteria",
+                criteria_area: "Area",
+                criteria_area_ph: "e.g. Camden",
+                criteria_budget: "Budget",
+                criteria_budget_ph: "e.g. 1500",
+                per_month: "per month",
+                per_week: "per week",
+                criteria_bedrooms: "Bedrooms",
+                bedrooms_any: "Any",
+                bedrooms_studio: "Studio",
+                criteria_commute_dest: "Commute to",
+                criteria_commute_dest_ph: "e.g. UCL — optional",
+                criteria_max_commute: "Max commute (min)",
+                criteria_max_commute_ph: "e.g. 40",
+                criteria_no_commute: "I don't commute",
+                criteria_search_btn: "Search",
+                criteria_modal_title: "Where should I search?",
+                criteria_modal_desc: "Enter at least an area to see listings — everything else is optional.",
+                criteria_area_required: "Please enter an area.",
+                criteria_search_empty_hint: "No matches. Adjust your criteria and search again.",
+                criteria_edit_action: "Edit criteria",
+                per_mo_short: "/mo",
+                per_wk_short: "/wk",
+                bed_unit: "bed",
+                min_short: "min",
+                no_commute_summary: "no commute",
+
                 // Errors
                 error_load_conversations: "Could not load conversations.",
                 error_create_conversation: "Could not create a new chat.",
@@ -1293,6 +1423,34 @@
                 err_auth_generic: "无法完成请求，请检查信息后重试。",
                 err_fields_required: "请输入用户名和密码。",
 
+                // Search criteria panel / modal
+                criteria_title: "搜索条件",
+                criteria_area: "区域",
+                criteria_area_ph: "例如：Camden",
+                criteria_budget: "预算",
+                criteria_budget_ph: "例如：1500",
+                per_month: "每月",
+                per_week: "每周",
+                criteria_bedrooms: "卧室",
+                bedrooms_any: "不限",
+                bedrooms_studio: "单间(Studio)",
+                criteria_commute_dest: "通勤目的地",
+                criteria_commute_dest_ph: "例如：UCL（选填）",
+                criteria_max_commute: "最长通勤（分钟）",
+                criteria_max_commute_ph: "例如：40",
+                criteria_no_commute: "我不通勤",
+                criteria_search_btn: "搜索",
+                criteria_modal_title: "想在哪里找房？",
+                criteria_modal_desc: "至少填写一个区域即可查看房源，其余均为选填。",
+                criteria_area_required: "请填写区域。",
+                criteria_search_empty_hint: "没有匹配结果，请调整条件后重新搜索。",
+                criteria_edit_action: "修改条件",
+                per_mo_short: "/月",
+                per_wk_short: "/周",
+                bed_unit: "室",
+                min_short: "分钟",
+                no_commute_summary: "不通勤",
+
                 // Errors
                 error_load_conversations: "无法加载会话列表。",
                 error_create_conversation: "无法创建新会话。",
@@ -1350,6 +1508,12 @@
         let conversations = [];
         let activeConversationId = null;
 
+        // Structured search criteria (persistent panel + auto-popup modal share this)
+        let currentCriteria = null;      // last known canonical criteria for this conversation
+        let panelFormApi = null;         // the persistent criteria form instance
+        let modalFormApi = null;         // the modal criteria form instance (when open)
+        const activeCriteriaForms = new Set(); // all live form instances (for busy toggling)
+
         /* -------------------------------------------------------------------------- */
         /* LANGUAGE LOGIC                                                             */
         /* -------------------------------------------------------------------------- */
@@ -1370,6 +1534,10 @@
             });
             document.querySelectorAll('[data-i18n-title]').forEach(elm => {
                 elm.title = t(elm.getAttribute('data-i18n-title'));
+            });
+            // Placeholders for dynamically-built inputs (criteria panel/modal).
+            document.querySelectorAll('[data-i18n-ph]').forEach(elm => {
+                elm.placeholder = t(elm.getAttribute('data-i18n-ph'));
             });
 
             const input = document.getElementById('chatInput');
@@ -1730,6 +1898,9 @@
             const overlay = document.getElementById('dialogOverlay');
             overlay.style.display = 'none';
             overlay.innerHTML = '';
+            // If the criteria modal was the open dialog, drop its form instance so it
+            // no longer participates in busy toggling (Escape / outside-click path).
+            if (modalFormApi) { activeCriteriaForms.delete(modalFormApi); modalFormApi = null; }
         }
 
         /* -------------------------------------------------------------------------- */
@@ -1829,11 +2000,19 @@
                     } else if (data.response_type === 'clarification') {
                         addMessage(cleanRawResponse(data.message), 'alex', { icon: 'question' });
                         lastResponseType = 'clarification';
+                        // Keep the panel in sync with whatever the backend already knows.
+                        if (data.known_criteria) applyCriteria(data.known_criteria);
+                        // Only auto-popup the structured form when Area (the one required
+                        // field) is missing — not for address/safety/other clarifications.
+                        if (Array.isArray(data.missing_fields) && data.missing_fields.indexOf('area') !== -1) {
+                            openCriteriaModal(data.known_criteria || {});
+                        }
                     } else if (data.response_type === 'search' && data.recommendations) {
                         addMessage(cleanRawResponse(data.message || ''), 'alex');
                         currentResults = data.recommendations;
                         displayResults(data.recommendations);
                         lastResponseType = 'search';
+                        if (data.search_criteria) applyCriteria(data.search_criteria);
                     } else if (data.response_type === 'error') {
                         addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error' });
                         lastResponseType = 'error';
@@ -1847,6 +2026,7 @@
                         } else {
                             lastResponseType = 'answer';
                         }
+                        if (data.search_criteria) applyCriteria(data.search_criteria);
                     }
                     // Refresh the sidebar ordering / updated_at (and pick up an
                     // implicitly-created conversation).
@@ -1938,6 +2118,7 @@
             const id = view === 'favorites' ? 'btn-favorites' : 'btn-results';
             const btn = document.getElementById(id);
             if (btn) btn.classList.add('active');
+            updateCriteriaPanelVisibility(view);
         }
         function favoritesTabActive() {
             const b = document.getElementById('btn-favorites');
@@ -2449,6 +2630,7 @@
             currentResults = [];
             lastResponseType = null;
             clearPropertyFocus();
+            resetCriteria();
 
             try {
                 const response = await apiFetch('/api/conversations/' + encodeURIComponent(cid) + '/messages', { method: 'GET' });
@@ -2487,6 +2669,7 @@
             currentResults = [];
             lastResponseType = null;
             clearPropertyFocus();
+            resetCriteria();
             renderWelcomeMessage();
             displayResults([]);
             renderConversationList();
@@ -2510,6 +2693,7 @@
                 currentResults = [];
                 lastResponseType = null;
                 clearPropertyFocus();
+                resetCriteria();
                 renderWelcomeMessage();
                 displayResults([]);
                 renderConversationList();
@@ -2857,6 +3041,424 @@
         }
 
         /* -------------------------------------------------------------------------- */
+        /* SEARCH CRITERIA (structured input — panel + auto-popup modal)              */
+        /* Zero workflow priors: only Area is required; everything else optional.     */
+        /* -------------------------------------------------------------------------- */
+        function parseIntOrNull(v) {
+            if (v === null || v === undefined || v === '') return null;
+            const n = parseInt(v, 10);
+            return isNaN(n) ? null : n;
+        }
+
+        function defaultCriteria() {
+            return {
+                area: '', max_budget: null, budget_period: 'month', bedrooms: null,
+                commute_destination: '', max_commute_time: null, no_commute: false
+            };
+        }
+
+        // Accept either canonical shape (max_commute_time) or the clarification shape
+        // (max_travel_time); coerce everything to a single internal representation.
+        function normalizeCriteria(raw) {
+            raw = raw || {};
+            const c = defaultCriteria();
+            if (typeof raw.area === 'string') c.area = raw.area;
+            c.max_budget = parseIntOrNull(raw.max_budget);
+            c.budget_period = (raw.budget_period === 'week') ? 'week' : 'month';
+            c.bedrooms = parseIntOrNull(raw.bedrooms);   // null=Any, 0=Studio, 1/2/3
+            if (typeof raw.commute_destination === 'string') c.commute_destination = raw.commute_destination;
+            let mct = raw.max_commute_time;
+            if (mct === undefined || mct === null || mct === '') mct = raw.max_travel_time;
+            c.max_commute_time = parseIntOrNull(mct);
+            c.no_commute = !!raw.no_commute;
+            return c;
+        }
+
+        // Compact one-line echo, e.g. "Camden · ≤£1500/mo · 1 bed · → UCL ≤40min"
+        function summarizeCriteria(c) {
+            const parts = [];
+            if (c.area) parts.push(c.area);
+            if (c.max_budget != null) {
+                const per = (c.budget_period === 'week') ? t('per_wk_short') : t('per_mo_short');
+                parts.push('≤£' + c.max_budget + per);
+            }
+            if (c.bedrooms != null) {
+                parts.push(c.bedrooms === 0 ? t('bedrooms_studio') : (c.bedrooms + ' ' + t('bed_unit')));
+            }
+            if (c.no_commute) {
+                parts.push(t('no_commute_summary'));
+            } else if (c.commute_destination) {
+                let s = '→ ' + c.commute_destination;
+                if (c.max_commute_time != null) s += ' ≤' + c.max_commute_time + t('min_short');
+                parts.push(s);
+            }
+            return parts.join(' · ');
+        }
+
+        // Build one criteria form instance (used by BOTH the persistent panel and the
+        // modal). Returns an API to read/fill/focus/mark/busy. All text goes through
+        // textContent or placeholder — no innerHTML with dynamic data.
+        function createCriteriaForm(opts) {
+            opts = opts || {};
+            const form = el('form', 'criteria-form');
+            const grid = el('div', 'criteria-grid');
+
+            function labelField(key, required, full) {
+                const lab = el('label', 'criteria-field' + (full ? ' col-span-2' : ''));
+                const cap = el('span', 'criteria-label');
+                const capText = document.createElement('span');
+                capText.setAttribute('data-i18n', key);
+                capText.textContent = t(key);
+                cap.appendChild(capText);
+                if (required) { const r = el('span', 'req'); r.textContent = ' *'; cap.appendChild(r); }
+                lab.appendChild(cap);
+                return lab;
+            }
+
+            // Area (required, full width)
+            const areaField = labelField('criteria_area', true, true);
+            const areaInput = el('input', 'criteria-input');
+            areaInput.type = 'text';
+            areaInput.setAttribute('maxlength', '80');
+            areaInput.setAttribute('data-i18n-ph', 'criteria_area_ph');
+            areaInput.placeholder = t('criteria_area_ph');
+            areaField.appendChild(areaInput);
+            grid.appendChild(areaField);
+
+            // Budget + period
+            const budgetField = labelField('criteria_budget', false, false);
+            const budgetRow = el('div', 'criteria-budget-row');
+            const budgetInput = el('input', 'criteria-input');
+            budgetInput.type = 'number';
+            budgetInput.min = '0';
+            budgetInput.step = '50';
+            budgetInput.setAttribute('inputmode', 'numeric');
+            budgetInput.setAttribute('data-i18n-ph', 'criteria_budget_ph');
+            budgetInput.placeholder = t('criteria_budget_ph');
+            const periodSelect = el('select', 'criteria-select');
+            const optM = document.createElement('option');
+            optM.value = 'month'; optM.setAttribute('data-i18n', 'per_month'); optM.textContent = t('per_month');
+            const optW = document.createElement('option');
+            optW.value = 'week'; optW.setAttribute('data-i18n', 'per_week'); optW.textContent = t('per_week');
+            periodSelect.appendChild(optM); periodSelect.appendChild(optW);
+            budgetRow.appendChild(budgetInput); budgetRow.appendChild(periodSelect);
+            budgetField.appendChild(budgetRow);
+            grid.appendChild(budgetField);
+
+            // Bedrooms
+            const bedField = labelField('criteria_bedrooms', false, false);
+            const bedSelect = el('select', 'criteria-select');
+            [['', 'bedrooms_any', null], ['0', 'bedrooms_studio', null], ['1', null, '1'], ['2', null, '2'], ['3', null, '3+']]
+                .forEach(function (o) {
+                    const opt = document.createElement('option');
+                    opt.value = o[0];
+                    if (o[1]) { opt.setAttribute('data-i18n', o[1]); opt.textContent = t(o[1]); }
+                    else { opt.textContent = o[2]; }
+                    bedSelect.appendChild(opt);
+                });
+            bedField.appendChild(bedSelect);
+            grid.appendChild(bedField);
+
+            // Commute destination (full width)
+            const destField = labelField('criteria_commute_dest', false, true);
+            const destInput = el('input', 'criteria-input');
+            destInput.type = 'text';
+            destInput.setAttribute('maxlength', '80');
+            destInput.setAttribute('data-i18n-ph', 'criteria_commute_dest_ph');
+            destInput.placeholder = t('criteria_commute_dest_ph');
+            destField.appendChild(destInput);
+            grid.appendChild(destField);
+
+            // Max commute
+            const maxField = labelField('criteria_max_commute', false, false);
+            const maxInput = el('input', 'criteria-input');
+            maxInput.type = 'number';
+            maxInput.min = '0';
+            maxInput.step = '5';
+            maxInput.setAttribute('inputmode', 'numeric');
+            maxInput.setAttribute('data-i18n-ph', 'criteria_max_commute_ph');
+            maxInput.placeholder = t('criteria_max_commute_ph');
+            maxField.appendChild(maxInput);
+            grid.appendChild(maxField);
+
+            // "I don't commute"
+            const noField = el('label', 'criteria-field criteria-check');
+            const noInput = document.createElement('input');
+            noInput.type = 'checkbox';
+            const noText = el('span', 'criteria-label');
+            noText.setAttribute('data-i18n', 'criteria_no_commute');
+            noText.textContent = t('criteria_no_commute');
+            noField.appendChild(noInput); noField.appendChild(noText);
+            grid.appendChild(noField);
+
+            form.appendChild(grid);
+
+            const submitBtn = el('button', 'criteria-search-btn');
+            submitBtn.type = 'submit';
+            const btnIcon = document.createElement('span');
+            btnIcon.innerHTML = getIcon('search', 'icon-sm'); // trusted local icon
+            const btnText = document.createElement('span');
+            btnText.setAttribute('data-i18n', 'criteria_search_btn');
+            btnText.textContent = t('criteria_search_btn');
+            submitBtn.appendChild(btnIcon); submitBtn.appendChild(btnText);
+            form.appendChild(submitBtn);
+
+            function updateCommuteDisabled() {
+                const off = noInput.checked;
+                destInput.disabled = off;
+                maxInput.disabled = off;
+                destField.classList.toggle('is-disabled', off);
+                maxField.classList.toggle('is-disabled', off);
+            }
+            noInput.addEventListener('change', updateCommuteDisabled);
+            areaInput.addEventListener('input', function () { areaInput.classList.remove('input-error'); });
+
+            const api = {
+                form: form,
+                read: function () {
+                    return {
+                        area: areaInput.value.trim(),
+                        max_budget: parseIntOrNull(budgetInput.value),
+                        budget_period: periodSelect.value === 'week' ? 'week' : 'month',
+                        bedrooms: bedSelect.value === '' ? null : parseIntOrNull(bedSelect.value),
+                        commute_destination: destInput.value.trim(),
+                        max_commute_time: parseIntOrNull(maxInput.value),
+                        no_commute: noInput.checked
+                    };
+                },
+                // respectActive: skip inputs the user is currently editing (auto-fill only)
+                fill: function (c, respectActive) {
+                    c = c || defaultCriteria();
+                    const skip = function (node) { return respectActive && node === document.activeElement; };
+                    if (!skip(areaInput)) areaInput.value = c.area || '';
+                    if (!skip(budgetInput)) budgetInput.value = (c.max_budget != null ? String(c.max_budget) : '');
+                    if (!skip(periodSelect)) periodSelect.value = (c.budget_period === 'week' ? 'week' : 'month');
+                    if (!skip(bedSelect)) bedSelect.value = (c.bedrooms != null ? String(c.bedrooms) : '');
+                    if (!skip(destInput)) destInput.value = c.commute_destination || '';
+                    if (!skip(maxInput)) maxInput.value = (c.max_commute_time != null ? String(c.max_commute_time) : '');
+                    if (!skip(noInput)) noInput.checked = !!c.no_commute;
+                    updateCommuteDisabled();
+                    areaInput.classList.remove('input-error');
+                },
+                focusArea: function () { areaInput.focus(); if (typeof areaInput.select === 'function') areaInput.select(); },
+                markAreaError: function () { areaInput.classList.add('input-error'); },
+                setBusy: function (busy) { submitBtn.disabled = !!busy; }
+            };
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const criteria = api.read();
+                if (!criteria.area) {
+                    api.markAreaError();
+                    api.focusArea();
+                    showToast(t('criteria_area_required'), 'error');
+                    return;
+                }
+                if (typeof opts.onSubmit === 'function') opts.onSubmit(criteria, api);
+            });
+
+            activeCriteriaForms.add(api);
+            return api;
+        }
+
+        function setAllCriteriaBusy(busy) {
+            activeCriteriaForms.forEach(function (api) { api.setBusy(busy); });
+        }
+
+        /* --- Persistent panel --- */
+        function initCriteriaPanel() {
+            const body = document.getElementById('criteriaBody');
+            if (!body) return;
+            panelFormApi = createCriteriaForm({ variant: 'panel', onSubmit: submitCriteriaSearch });
+            body.appendChild(panelFormApi.form);
+
+            const header = document.getElementById('criteriaHeader');
+            if (header) {
+                header.addEventListener('click', toggleCriteriaPanel);
+                header.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCriteriaPanel(); }
+                });
+            }
+            currentCriteria = defaultCriteria();
+            panelFormApi.fill(currentCriteria, false);
+        }
+
+        function toggleCriteriaPanel() {
+            const panel = document.getElementById('criteriaPanel');
+            if (!panel) return;
+            const collapsed = panel.classList.toggle('collapsed');
+            const header = document.getElementById('criteriaHeader');
+            if (header) header.setAttribute('aria-expanded', String(!collapsed));
+        }
+        function expandCriteriaPanel() {
+            const panel = document.getElementById('criteriaPanel');
+            if (!panel) return;
+            panel.classList.remove('collapsed');
+            const header = document.getElementById('criteriaHeader');
+            if (header) header.setAttribute('aria-expanded', 'true');
+        }
+        function collapseCriteriaPanel() {
+            const panel = document.getElementById('criteriaPanel');
+            if (!panel) return;
+            panel.classList.add('collapsed');
+            const header = document.getElementById('criteriaHeader');
+            if (header) header.setAttribute('aria-expanded', 'false');
+        }
+        function updateCriteriaPanelVisibility(view) {
+            const panel = document.getElementById('criteriaPanel');
+            if (!panel) return;
+            panel.style.display = (view === 'favorites') ? 'none' : '';
+        }
+
+        // Update global criteria + panel from a backend response (or submitted values).
+        function applyCriteria(raw) {
+            const c = normalizeCriteria(raw);
+            currentCriteria = c;
+            if (panelFormApi) panelFormApi.fill(c, true);  // respect fields being edited
+            expandCriteriaPanel();
+        }
+
+        // Reset to defaults + collapse (a new/switched conversation = fresh context).
+        function resetCriteria() {
+            currentCriteria = defaultCriteria();
+            if (panelFormApi) panelFormApi.fill(currentCriteria, false);
+            collapseCriteriaPanel();
+        }
+
+        /* --- Auto-popup modal (only when backend says area is missing) --- */
+        function openCriteriaModal(knownRaw) {
+            // Clean any prior instance first.
+            if (modalFormApi) { activeCriteriaForms.delete(modalFormApi); modalFormApi = null; }
+
+            const overlay = document.getElementById('dialogOverlay');
+            overlay.innerHTML = '';
+            const card = el('div', 'dialog-card criteria-modal-card');
+
+            const title = el('div', 'dialog-title');
+            title.setAttribute('data-i18n', 'criteria_modal_title');
+            title.textContent = t('criteria_modal_title');
+            card.appendChild(title);
+
+            const desc = el('div', 'dialog-message');
+            desc.setAttribute('data-i18n', 'criteria_modal_desc');
+            desc.textContent = t('criteria_modal_desc');
+            card.appendChild(desc);
+
+            const formApi = createCriteriaForm({ variant: 'modal', onSubmit: submitCriteriaSearch });
+            card.appendChild(formApi.form);
+
+            const cancelRow = el('div', 'criteria-modal-cancel');
+            const cancelBtn = el('button', 'dialog-btn');
+            cancelBtn.type = 'button';
+            cancelBtn.setAttribute('data-i18n', 'cancel');
+            cancelBtn.textContent = t('cancel');
+            cancelBtn.addEventListener('click', closeCriteriaModal);
+            cancelRow.appendChild(cancelBtn);
+            card.appendChild(cancelRow);
+
+            overlay.appendChild(card);
+            overlay.style.display = 'flex';
+            modalFormApi = formApi;
+
+            formApi.fill(normalizeCriteria(knownRaw || {}), false);
+            formApi.focusArea();
+        }
+        function closeCriteriaModal() {
+            if (!modalFormApi) return;   // only act when our modal is the open dialog
+            activeCriteriaForms.delete(modalFormApi);
+            modalFormApi = null;
+            closeDialog();
+        }
+
+        /* --- Deterministic search submit (bypasses the LLM) --- */
+        async function submitCriteriaSearch(criteria, sourceApi) {
+            if (isProcessing) return;             // never race with chat send / another submit
+            if (!criteria || !criteria.area) {
+                if (sourceApi) { sourceApi.markAreaError(); sourceApi.focusArea(); }
+                showToast(t('criteria_area_required'), 'error');
+                return;
+            }
+
+            // Compose the request body per the /api/search_direct contract.
+            const reqCriteria = { area: criteria.area, no_commute: !!criteria.no_commute };
+            if (criteria.max_budget != null) {
+                reqCriteria.max_budget = criteria.max_budget;
+                reqCriteria.budget_period = criteria.budget_period || 'month';
+            }
+            if (criteria.bedrooms != null) reqCriteria.bedrooms = criteria.bedrooms;
+            if (!criteria.no_commute) {
+                if (criteria.commute_destination) reqCriteria.commute_destination = criteria.commute_destination;
+                if (criteria.max_commute_time != null) reqCriteria.max_commute_time = criteria.max_commute_time;
+            }
+            const body = { user_id: getUserId(), criteria: reqCriteria };
+            if (activeConversationId) body.conversation_id = activeConversationId;
+
+            isProcessing = true;
+            setProcessingUI(true);
+            setAllCriteriaBusy(true);
+
+            addMessage('🔍 ' + summarizeCriteria(criteria), 'user');
+            showTypingIndicator();
+
+            try {
+                const response = await apiFetch('/api/search_direct', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                removeTypingIndicator();
+
+                if (!response.ok) {
+                    let errMsg = t('error_connection');
+                    try { const ed = await response.json(); if (ed && ed.error) errMsg = ed.error; } catch (_) {}
+                    addMessage(errMsg, 'alex', { icon: 'error' });
+                    lastResponseType = 'error';
+                    showToast(errMsg, 'error');
+                } else {
+                    const data = await response.json();
+                    if (data.conversation_id) adoptConversationId(data.conversation_id);
+
+                    if (data.response_type === 'error') {
+                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error' });
+                        lastResponseType = 'error';
+                    } else {
+                        addMessage(cleanRawResponse(data.message || ''), 'alex');
+                        const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
+                        lastResponseType = 'search';
+                        if (recs.length) {
+                            currentResults = recs;
+                            displayResults(recs);
+                        } else {
+                            currentResults = [];
+                            displayResults([]);   // empty state on the Search tab
+                            showToast(t('criteria_search_empty_hint'), null, {
+                                label: t('criteria_edit_action'),
+                                onClick: expandCriteriaPanel
+                            });
+                        }
+                        applyCriteria(data.search_criteria || criteria);
+                        closeCriteriaModal();     // no-op if the search came from the panel
+                    }
+                    loadConversations(true);
+                }
+            } catch (error) {
+                removeTypingIndicator();
+                if (error && error.name === 'AbortError') {
+                    // silent — user navigated / cancelled
+                } else {
+                    addMessage(t('error_connection'), 'alex', { icon: 'error' });
+                    lastResponseType = 'error';
+                    showToast(t('error_connection'), 'error');
+                    console.error('search_direct error:', error);
+                }
+            } finally {
+                isProcessing = false;
+                setProcessingUI(false);
+                setAllCriteriaBusy(false);
+            }
+        }
+
+        /* -------------------------------------------------------------------------- */
         /* MOBILE SIDEBAR                                                             */
         /* -------------------------------------------------------------------------- */
         function toggleSidebar() {
@@ -2914,6 +3516,7 @@
         async function initApp() {
             ensureIdentity();
             wireEvents();
+            initCriteriaPanel();          // build the persistent criteria form before i18n
             setLanguage('en');            // default language + static strings + welcome
             updateUserNameLabel();
 

@@ -120,6 +120,19 @@ LANDMARK_SLUGS = {
 # whose address names a *different* one of these.
 _MAJOR_CITIES = set(CITY_SLUGS) | {"newcastle"}
 
+# LANDMARK_SLUGS keys that are universities. classify_place() uses this to tell a
+# university (whose legacy `location="UCL"` call should keep its commute annotation)
+# from a plain area landmark (Camden, Shoreditch, ...). Every entry here also exists
+# in LANDMARK_SLUGS above.
+UNIVERSITY_KEYS = frozenset({
+    "ucl", "university college london", "soas", "birkbeck",
+    "kcl", "king's college", "kings college", "king's college london",
+    "lse", "london school of economics",
+    "imperial college", "imperial college london",
+    "queen mary", "qmul", "city university",
+    "uel", "university of east london", "university of greenwich",
+})
+
 
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9'\s-]", " ", (text or "").lower()).strip()
@@ -131,34 +144,80 @@ def _slugify(text: str) -> str:
     return re.sub(r"-+", "-", s).strip("-")
 
 
+def _match_location(location: str) -> tuple[str, str | None, str | None, str | None]:
+    """Shared resolution core for resolve_location + classify_place.
+
+    Returns (slug, city, matched_key, source) where source is
+    'landmark' | 'city' | None and matched_key is the LANDMARK/CITY key that
+    matched (None when nothing matched -> slug is the slugified input). Exposing
+    the matched key lets classify_place distinguish universities from plain areas
+    without duplicating the (order-sensitive) match logic."""
+    n = _norm(location)
+    if not n:
+        return "", None, None, None
+
+    # 1) exact landmark, 2) exact city
+    if n in LANDMARK_SLUGS:
+        slug, city = LANDMARK_SLUGS[n]
+        return slug, city, n, "landmark"
+    if n in CITY_SLUGS:
+        return CITY_SLUGS[n], n, n, "city"
+
+    # 3) landmark substring (longest key first so specifics win)
+    for key in sorted(LANDMARK_SLUGS, key=len, reverse=True):
+        if key in n:
+            slug, city = LANDMARK_SLUGS[key]
+            return slug, city, key, "landmark"
+
+    # 4) city substring, word-boundary (e.g. "University of Manchester" -> manchester)
+    for key in sorted(CITY_SLUGS, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(key)}\b", n):
+            return CITY_SLUGS[key], key, key, "city"
+
+    # 5) LAST-RESORT plain-substring fallback for glued typos ("axomanchester" ->
+    #    manchester, "axocamden" -> camden). Ordered strictly AFTER the exact +
+    #    word-boundary steps so normal inputs are unchanged; only keys >= 5 chars are
+    #    eligible (shorter keys would false-positive), longest key first.
+    _fallback_keys = sorted(
+        (k for k in set(LANDMARK_SLUGS) | set(CITY_SLUGS) if len(k) >= 5),
+        key=len, reverse=True,
+    )
+    for key in _fallback_keys:
+        if key in n:
+            if key in LANDMARK_SLUGS:
+                slug, city = LANDMARK_SLUGS[key]
+                return slug, city, key, "landmark"
+            return CITY_SLUGS[key], key, key, "city"
+
+    # 6) unknown -> slugify and let the scraper decide
+    return _slugify(location), None, None, None
+
+
 def resolve_location(location: str) -> tuple[str, str | None]:
     """Map a user destination (city, university, landmark) to an OnTheMarket area
     slug and, when known, its canonical city (for the contamination guard).
 
     Unknown locations are slugified and tried as-is; an unrecognised slug simply
     404s -> zero rows -> honest empty result (never wrong-city data)."""
-    n = _norm(location)
-    if not n:
-        return "", None
+    slug, city, _key, _source = _match_location(location)
+    return slug, city
 
-    # 1) exact landmark, 2) exact city
-    if n in LANDMARK_SLUGS:
-        return LANDMARK_SLUGS[n]
-    if n in CITY_SLUGS:
-        return CITY_SLUGS[n], n
 
-    # 3) landmark substring (longest key first so specifics win)
-    for key in sorted(LANDMARK_SLUGS, key=len, reverse=True):
-        if key in n:
-            return LANDMARK_SLUGS[key]
+def classify_place(name: str) -> dict:
+    """Classify a place name for the search layer.
 
-    # 4) city substring (e.g. "University of Manchester" -> manchester)
-    for key in sorted(CITY_SLUGS, key=len, reverse=True):
-        if re.search(rf"\b{re.escape(key)}\b", n):
-            return CITY_SLUGS[key], key
-
-    # 5) unknown -> slugify and let the scraper decide
-    return _slugify(location), None
+    Returns {"kind": "university"|"area"|"unknown", "slug": str, "city": str|None}.
+    - "university": UCL, KCL, LSE, Imperial, Queen Mary, City University, UEL,
+      Greenwich, SOAS, Birkbeck, ... — a commute destination the caller should keep
+      annotating (legacy `location="UCL"` semantics).
+    - "area": any other known landmark (Camden, Shoreditch, ...) or city (Manchester).
+    - "unknown": nothing matched -> slug = slugified input, city = None.
+    """
+    slug, city, matched_key, source = _match_location(name)
+    if matched_key is None:
+        return {"kind": "unknown", "slug": slug, "city": city}
+    kind = "university" if (source == "landmark" and matched_key in UNIVERSITY_KEYS) else "area"
+    return {"kind": kind, "slug": slug, "city": city}
 
 
 def _wrong_city(address: str, requested_city: str | None) -> bool:

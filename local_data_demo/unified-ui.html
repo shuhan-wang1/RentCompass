@@ -794,7 +794,7 @@
         .criteria-input:focus, .criteria-select:focus {
             border-color: var(--primary-color); box-shadow: var(--shadow-focus);
         }
-        .criteria-input.input-error {
+        .criteria-input.input-error, .criteria-select.input-error {
             border-color: var(--primary-color); box-shadow: 0 0 0 3px var(--primary-fade);
         }
         .criteria-input:disabled, .criteria-select:disabled {
@@ -813,6 +813,11 @@
         }
         .criteria-check .criteria-label { font-size: 0.85rem; color: var(--text-main); cursor: pointer; }
         .criteria-field.is-disabled .criteria-label { opacity: 0.5; }
+        /* Error highlight for the checkbox row (inputs/selects use .input-error above). */
+        .criteria-field.field-error {
+            border-radius: var(--radius-md); box-shadow: 0 0 0 3px var(--primary-fade);
+        }
+        .criteria-field.field-error .criteria-label { color: var(--primary-color); }
         .criteria-search-btn {
             width: 100%; margin-top: 14px; padding: 10px 12px; border: none;
             border-radius: var(--radius-md); background: var(--primary-color); color: white;
@@ -1286,6 +1291,11 @@
                 criteria_bedrooms: "Bedrooms",
                 bedrooms_any: "Any",
                 bedrooms_studio: "Studio",
+                criteria_room_type: "Room type",
+                room_type_any: "Any",
+                room_type_studio: "Studio",
+                room_type_ensuite: "En-suite room",
+                room_type_shared: "Shared room",
                 criteria_commute_dest: "Commute to",
                 criteria_commute_dest_ph: "e.g. UCL — optional",
                 criteria_max_commute: "Max commute (min)",
@@ -1297,6 +1307,8 @@
                 criteria_area_required: "Please enter an area.",
                 criteria_search_empty_hint: "No matches. Adjust your criteria and search again.",
                 criteria_edit_action: "Edit criteria",
+                criteria_missing_hint: "You can fill the highlighted fields, or search anyway.",
+                criteria_search_anyway: "Search anyway",
                 per_mo_short: "/mo",
                 per_wk_short: "/wk",
                 bed_unit: "bed",
@@ -1434,6 +1446,11 @@
                 criteria_bedrooms: "卧室",
                 bedrooms_any: "不限",
                 bedrooms_studio: "单间(Studio)",
+                criteria_room_type: "房型",
+                room_type_any: "不限",
+                room_type_studio: "单间公寓(Studio)",
+                room_type_ensuite: "独立卫浴房间",
+                room_type_shared: "合租房间",
                 criteria_commute_dest: "通勤目的地",
                 criteria_commute_dest_ph: "例如：UCL（选填）",
                 criteria_max_commute: "最长通勤（分钟）",
@@ -1445,6 +1462,8 @@
                 criteria_area_required: "请填写区域。",
                 criteria_search_empty_hint: "没有匹配结果，请调整条件后重新搜索。",
                 criteria_edit_action: "修改条件",
+                criteria_missing_hint: "可以补充高亮条件，或直接继续搜索。",
+                criteria_search_anyway: "继续搜索",
                 per_mo_short: "/月",
                 per_wk_short: "/周",
                 bed_unit: "室",
@@ -2000,12 +2019,25 @@
                     } else if (data.response_type === 'clarification') {
                         addMessage(cleanRawResponse(data.message), 'alex', { icon: 'question' });
                         lastResponseType = 'clarification';
-                        // Keep the panel in sync with whatever the backend already knows.
-                        if (data.known_criteria) applyCriteria(data.known_criteria);
+                        const missing = Array.isArray(data.missing_fields) ? data.missing_fields : [];
+                        // Keep the panel in sync with whatever the backend already knows
+                        // (applyCriteria also expands the panel).
+                        if (data.known_criteria || missing.length) applyCriteria(data.known_criteria || {});
+                        const areaMissing = missing.indexOf('area') !== -1;
                         // Only auto-popup the structured form when Area (the one required
                         // field) is missing — not for address/safety/other clarifications.
-                        if (Array.isArray(data.missing_fields) && data.missing_fields.indexOf('area') !== -1) {
-                            openCriteriaModal(data.known_criteria || {});
+                        if (areaMissing) openCriteriaModal(data.known_criteria || {});
+                        // Highlight after the modal exists so BOTH panel + modal get marked.
+                        if (missing.length) highlightMissingFields(missing);
+                        // Soft-criteria clarification (or the heuristic fallback when the
+                        // backend omits clarification_kind): let the user proceed anyway.
+                        const isSoft = data.clarification_kind === 'soft_criteria' ||
+                            (!data.clarification_kind && missing.length > 0 && !areaMissing);
+                        if (isSoft) {
+                            showToast(t('criteria_missing_hint'), null, {
+                                label: t('criteria_search_anyway'),
+                                onClick: searchAnyway
+                            });
                         }
                     } else if (data.response_type === 'search' && data.recommendations) {
                         addMessage(cleanRawResponse(data.message || ''), 'alex');
@@ -3053,6 +3085,7 @@
         function defaultCriteria() {
             return {
                 area: '', max_budget: null, budget_period: 'month', bedrooms: null,
+                room_type: null,
                 commute_destination: '', max_commute_time: null, no_commute: false
             };
         }
@@ -3066,6 +3099,7 @@
             c.max_budget = parseIntOrNull(raw.max_budget);
             c.budget_period = (raw.budget_period === 'week') ? 'week' : 'month';
             c.bedrooms = parseIntOrNull(raw.bedrooms);   // null=Any, 0=Studio, 1/2/3
+            if (typeof raw.room_type === 'string' && raw.room_type) c.room_type = raw.room_type; // null=Any
             if (typeof raw.commute_destination === 'string') c.commute_destination = raw.commute_destination;
             let mct = raw.max_commute_time;
             if (mct === undefined || mct === null || mct === '') mct = raw.max_travel_time;
@@ -3159,6 +3193,21 @@
             bedField.appendChild(bedSelect);
             grid.appendChild(bedField);
 
+            // Room type (full width so it doesn't orphan a half-row before the
+            // full-width Commute field). Values match the /api/search_direct enum.
+            const roomField = labelField('criteria_room_type', false, true);
+            const roomSelect = el('select', 'criteria-select');
+            [['', 'room_type_any'], ['studio', 'room_type_studio'], ['ensuite', 'room_type_ensuite'], ['shared', 'room_type_shared']]
+                .forEach(function (o) {
+                    const opt = document.createElement('option');
+                    opt.value = o[0];
+                    opt.setAttribute('data-i18n', o[1]);
+                    opt.textContent = t(o[1]);
+                    roomSelect.appendChild(opt);
+                });
+            roomField.appendChild(roomSelect);
+            grid.appendChild(roomField);
+
             // Commute destination (full width)
             const destField = labelField('criteria_commute_dest', false, true);
             const destInput = el('input', 'criteria-input');
@@ -3211,7 +3260,27 @@
                 maxField.classList.toggle('is-disabled', off);
             }
             noInput.addEventListener('change', updateCommuteDisabled);
+
+            // --- Missing-field error highlighting (generalizes markAreaError) ---
+            // commute is a group: destination + max + the "don't commute" row share one
+            // highlight, cleared together when the user touches any of them.
+            function clearCommuteError() {
+                destInput.classList.remove('input-error');
+                maxInput.classList.remove('input-error');
+                noField.classList.remove('field-error');
+            }
+            function clearAllFieldErrors() {
+                [areaInput, budgetInput, roomSelect, destInput, maxInput]
+                    .forEach(function (n) { n.classList.remove('input-error'); });
+                noField.classList.remove('field-error');
+            }
+            // Auto-clear a field's error as soon as the user edits it (imitates area).
             areaInput.addEventListener('input', function () { areaInput.classList.remove('input-error'); });
+            budgetInput.addEventListener('input', function () { budgetInput.classList.remove('input-error'); });
+            roomSelect.addEventListener('change', function () { roomSelect.classList.remove('input-error'); });
+            destInput.addEventListener('input', clearCommuteError);
+            maxInput.addEventListener('input', clearCommuteError);
+            noInput.addEventListener('change', clearCommuteError);
 
             const api = {
                 form: form,
@@ -3221,6 +3290,7 @@
                         max_budget: parseIntOrNull(budgetInput.value),
                         budget_period: periodSelect.value === 'week' ? 'week' : 'month',
                         bedrooms: bedSelect.value === '' ? null : parseIntOrNull(bedSelect.value),
+                        room_type: roomSelect.value === '' ? null : roomSelect.value,
                         commute_destination: destInput.value.trim(),
                         max_commute_time: parseIntOrNull(maxInput.value),
                         no_commute: noInput.checked
@@ -3234,14 +3304,29 @@
                     if (!skip(budgetInput)) budgetInput.value = (c.max_budget != null ? String(c.max_budget) : '');
                     if (!skip(periodSelect)) periodSelect.value = (c.budget_period === 'week' ? 'week' : 'month');
                     if (!skip(bedSelect)) bedSelect.value = (c.bedrooms != null ? String(c.bedrooms) : '');
+                    if (!skip(roomSelect)) roomSelect.value = c.room_type || '';
                     if (!skip(destInput)) destInput.value = c.commute_destination || '';
                     if (!skip(maxInput)) maxInput.value = (c.max_commute_time != null ? String(c.max_commute_time) : '');
                     if (!skip(noInput)) noInput.checked = !!c.no_commute;
                     updateCommuteDisabled();
-                    areaInput.classList.remove('input-error');
+                    clearAllFieldErrors();
                 },
                 focusArea: function () { areaInput.focus(); if (typeof areaInput.select === 'function') areaInput.select(); },
                 markAreaError: function () { areaInput.classList.add('input-error'); },
+                // Highlight a single missing field by its canonical or legacy backend name.
+                markFieldError: function (key) {
+                    switch (key) {
+                        case 'area': areaInput.classList.add('input-error'); break;
+                        case 'budget': case 'max_budget': budgetInput.classList.add('input-error'); break;
+                        case 'room_type': roomSelect.classList.add('input-error'); break;
+                        case 'commute': case 'destination': case 'max_travel_time': case 'max_commute_time':
+                            destInput.classList.add('input-error');
+                            maxInput.classList.add('input-error');
+                            noField.classList.add('field-error');
+                            break;
+                    }
+                },
+                clearFieldErrors: clearAllFieldErrors,
                 setBusy: function (busy) { submitBtn.disabled = !!busy; }
             };
 
@@ -3263,6 +3348,28 @@
 
         function setAllCriteriaBusy(busy) {
             activeCriteriaForms.forEach(function (api) { api.setBusy(busy); });
+        }
+
+        // Highlight the fields the backend flagged as missing across every live form
+        // (panel + modal). Accepts canonical or legacy field names; clears first so the
+        // set is always exactly the current miss list.
+        function highlightMissingFields(fields) {
+            clearAllCriteriaErrors();
+            if (!Array.isArray(fields)) return;
+            activeCriteriaForms.forEach(function (api) {
+                fields.forEach(function (f) { if (api.markFieldError) api.markFieldError(f); });
+            });
+        }
+        function clearAllCriteriaErrors() {
+            activeCriteriaForms.forEach(function (api) { if (api.clearFieldErrors) api.clearFieldErrors(); });
+        }
+
+        // "Search anyway" affordance: run a deterministic search from the panel form,
+        // treated by the backend as explicit confirmation. Area is re-checked inside
+        // submitCriteriaSearch (existing markAreaError path handles a missing area).
+        function searchAnyway() {
+            if (isProcessing || !panelFormApi) return;
+            submitCriteriaSearch(panelFormApi.read(), panelFormApi);
         }
 
         /* --- Persistent panel --- */
@@ -3322,6 +3429,7 @@
         function resetCriteria() {
             currentCriteria = defaultCriteria();
             if (panelFormApi) panelFormApi.fill(currentCriteria, false);
+            clearAllCriteriaErrors();   // drop any missing-field highlights from a prior chat
             collapseCriteriaPanel();
         }
 
@@ -3386,6 +3494,7 @@
                 reqCriteria.budget_period = criteria.budget_period || 'month';
             }
             if (criteria.bedrooms != null) reqCriteria.bedrooms = criteria.bedrooms;
+            if (criteria.room_type) reqCriteria.room_type = criteria.room_type;
             if (!criteria.no_commute) {
                 if (criteria.commute_destination) reqCriteria.commute_destination = criteria.commute_destination;
                 if (criteria.max_commute_time != null) reqCriteria.max_commute_time = criteria.max_commute_time;

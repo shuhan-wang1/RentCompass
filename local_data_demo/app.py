@@ -941,6 +941,10 @@ Current user message: {user_message}"""
             payload["missing_fields"] = _tool_data['missing_fields']
         if 'known_criteria' in _tool_data:
             payload["known_criteria"] = _tool_data['known_criteria']
+        # clarification_kind distinguishes the hard area gate ('missing_area') from the
+        # soft recommended-criteria gate ('soft_criteria') for the frontend.
+        if 'clarification_kind' in _tool_data:
+            payload["clarification_kind"] = _tool_data['clarification_kind']
         return payload
 
     if response_type == 'answer':
@@ -1042,6 +1046,16 @@ async def api_search_direct():
     else:
         commute_destination = None
 
+    # room_type: canonical enum ('studio'|'ensuite'|'shared') or None (any). Unknown
+    # values are dropped so a bad form value never silently narrows the search.
+    room_type = criteria.get('room_type')
+    if isinstance(room_type, str):
+        room_type = room_type.strip().lower() or None
+        if room_type not in ('studio', 'ensuite', 'shared'):
+            room_type = None
+    else:
+        room_type = None
+
     # no_commute is authoritative: drop any commute constraint from the TOOL call (the
     # raw commute_destination is still mirrored into the accumulated criteria below).
     if no_commute:
@@ -1081,6 +1095,10 @@ async def api_search_direct():
                 no_commute=no_commute,
                 bedrooms=bedrooms,
                 budget_period=budget_period,
+                room_type=room_type,
+                # The panel Search button is an explicit user confirmation, so this path
+                # BYPASSES the soft criteria gate (never returns a soft clarification).
+                confirmed=True,
             )
         recommendations = result.get('recommendations') or []
         message = (result.get('summary') or result.get('message')
@@ -1127,6 +1145,7 @@ async def api_search_direct():
             'no_commute': no_commute,
             'bedrooms': bedrooms,
             'budget_period': budget_period,
+            'room_type': room_type,
         },
     )
 

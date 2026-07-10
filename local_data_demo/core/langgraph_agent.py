@@ -164,6 +164,17 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     elif isinstance(bd, str) and bd.isdigit():
         result['bedrooms'] = int(bd)
 
+    # room_type: canonical single value ('studio'|'ensuite'|'shared'); a None/blank
+    # never clobbers a previously-recorded choice.
+    rt = new_criteria.get('room_type')
+    if isinstance(rt, str) and rt.strip():
+        result['room_type'] = rt.strip().lower()
+
+    # criteria_gate_shown: sticky-True — the soft criteria gate fires at most once per
+    # conversation, so once the tool reports it was shown the flag never resets here.
+    if new_criteria.get('criteria_gate_shown') or result.get('criteria_gate_shown'):
+        result['criteria_gate_shown'] = True
+
     for field in ['property_features', 'soft_preferences', 'amenities_of_interest']:
         new_items = new_criteria.get(field, [])
         if isinstance(new_items, str) and new_items:
@@ -196,6 +207,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
         return accumulated
     from core.tools.search_properties import (
         _extract_budget, _extract_commute_minutes, _extract_no_commute,
+        _extract_room_type,
     )
     from uk_rent_agent.domain import constants as C
 
@@ -208,6 +220,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
         if result.get('max_budget') != monthly:
             result['max_budget'] = monthly
             changed = True
+
+    # Room type stated this turn (e.g. answering the soft gate "我要ensuite") folds into
+    # the accumulated criteria even without any find/search verb.
+    room_type = _extract_room_type(current_message)
+    if room_type and result.get('room_type') != room_type:
+        result['room_type'] = room_type
+        changed = True
 
     minutes = _extract_commute_minutes(current_message)
     if minutes and result.get('max_travel_time') != minutes:
@@ -353,17 +372,79 @@ def apply_preference_filter(recommendations: list, prefs: dict) -> list:
 # PROMPT TEMPLATES
 # ═══════════════════════════════════════════════════════════════════
 
-CLASSIFICATION_PROMPT = '''You are a tool router. Classify this query into ONE tool.
+# Static intent table (name, one-line description, few-shot cues). Built into the
+# router prompt so classification quality is IDENTICAL whether tools come from the
+# in-process registry or the MCP provider (which can't expose descriptions — see the
+# MCP pitfall). Covers every routable tool PLUS the pseudo-routes market_info (area
+# price/rent research -> web_search synthesis) and direct_answer (chat / answerable
+# from context). Keep the names in sync with _build_tool_params / _majority_vote.
+_INTENT_CATALOG = [
+    ("search_properties",
+     "Find/search actual rental LISTINGS the user can rent (wants specific flats/rooms).",
+     ["帮我找帝国理工附近的房子", "find me a 2-bed flat in Camden under 1500",
+      "show me studios near UCL", "搜索房源 / 找个合租房"]),
+    ("market_info",
+     "Research about rent PRICE LEVELS / market / rent trends / cost of living in an area "
+     "(NOT a request for specific listings).",
+     ["你能不能先帮我调查一下帝国理工附近的价格", "what's the average rent in Shoreditch",
+      "了解一下曼城的租金行情", "how expensive is it to live in Zone 2"]),
+    ("check_safety",
+     "How safe / crime levels of an area or a specific property.",
+     ["is Peckham safe", "这个地区安全吗", "crime rate near the first one"]),
+    ("search_nearby_pois",
+     "Nearby amenities/facilities: supermarket, gym, station, restaurants, park.",
+     ["supermarkets near the flat", "附近有超市吗", "what's around this property"]),
+    ("calculate_commute",
+     "Travel TIME between a property and a destination.",
+     ["how long to UCL from there", "commute time from the second one to Canary Wharf"]),
+    ("calculate_commute_cost",
+     "Monthly commute COST (time + fare) between a property and a destination.",
+     ["how much will commuting to UCL cost per month", "通勤费用大概多少"]),
+    ("get_transport_info",
+     "LIVE TfL info: tube/train fares, journeys, travelcards, line status/delays.",
+     ["tube fare from Stratford to UCL", "are there delays on the Victoria line",
+      "travelcard price for zones 1-2"]),
+    ("get_weather",
+     "Weather in a city.",
+     ["weather in London tomorrow", "曼彻斯特天气怎么样"]),
+    ("get_property_details",
+     "Facts/policies about ONE specific property already shown.",
+     ["what's the guest policy of that flat", "does the second one include bills"]),
+    ("recall_memory",
+     "Recall what we know / remember about THIS user.",
+     ["what do you remember about me", "我之前说过什么需求"]),
+    ("web_search",
+     "Any OTHER general web question about UK/London living, visas, process, guarantors, etc.",
+     ["how do I get a UK guarantor", "student visa requirements 2025"]),
+    ("direct_answer",
+     "Greeting, thanks, capability question, or anything answerable from the conversation itself.",
+     ["hi", "thanks", "what can you do", "can you help me find housing"]),
+]
 
-USER QUERY: "{user_query}"
 
-TOOLS (generated from the live registry; pseudo routes are marked):
-{tool_catalog}
-reasoning_property - pseudo route for a specific property already in context
-multi_search - pseudo route for multiple independent read-only questions
+def _intent_catalog_text() -> str:
+    lines = []
+    for name, desc, cues in _INTENT_CATALOG:
+        ex = " | ".join(cues[:3])
+        lines.append(f'- {name}: {desc} e.g. {ex}')
+    return "\n".join(lines)
 
-Output ONLY the tool name:
-Tool: '''
+
+INTENT_CLASSIFICATION_PROMPT = '''You are the intent router for a UK student-housing assistant. Classify the user's CURRENT message into exactly one route.
+
+CURRENT MESSAGE (classify THIS):
+"{current_message}"
+{history_block}
+ROUTES (choose one "name"):
+{catalog}
+
+Rules:
+- Classify the CURRENT message. Use the recent conversation ONLY to resolve pronouns/ellipsis, never as the thing to classify.
+- Wanting actual listings to rent ("find/搜/帮我找 a flat/room/房子") -> search_properties.
+- Researching an area's rent PRICE LEVELS / market / 行情 / average rent (not asking for listings) -> market_info.
+- Small talk or a question answerable from context -> direct_answer.
+
+Respond with ONLY a JSON object, no prose: {{"intent": "<route name>"}}'''
 
 REASONING_PROPERTY_PROMPT = """You are Alex, a friendly rental assistant helping explain property details from our DATABASE.
 
@@ -474,6 +555,31 @@ def _current_message(user_query: str) -> str:
     return q.strip()
 
 
+def _soft_gate_answer_intent(current_message: str) -> bool:
+    """True when, with a soft-criteria gate already shown, this turn should proceed to
+    the search: either an explicit "继续/continue" proceed phrase, or a criteria answer
+    that supplies a recommended field (budget / room type / commute time / no-commute).
+    Deterministic — reuses the search tool's own extractors so phrasings stay in sync."""
+    if not current_message:
+        return False
+    from core.tools.search_properties import (
+        _is_proceed_intent, _extract_budget, _extract_commute_minutes,
+        _extract_room_type, _extract_no_commute,
+    )
+    if _is_proceed_intent(current_message):
+        return True
+    amount, _period = _extract_budget(current_message)
+    if amount:
+        return True
+    if _extract_commute_minutes(current_message):
+        return True
+    if _extract_room_type(current_message):
+        return True
+    if _extract_no_commute(current_message):
+        return True
+    return False
+
+
 def _make_decide_tool_node(tool_registry, classification_llm):
     """Create the decide_tool node with majority voting.
 
@@ -563,6 +669,22 @@ def _make_decide_tool_node(tool_registry, classification_llm):
             return _build_transport_params(user_query, extracted_context,
                                            state["accumulated_search_criteria"])
 
+        # 2.6) Soft criteria gate follow-up (Deliverable 1). Once the gate has been
+        #      shown this conversation (criteria_gate_shown), a "继续/continue" proceed
+        #      phrase — OR a criteria answer that names a budget / room type / commute
+        #      time — must go straight back to the search (with confirmation) instead of
+        #      being re-classified. Placed AFTER transport so a genuine transport
+        #      question still wins, and BEFORE the LLM vote as specified.
+        accumulated = state["accumulated_search_criteria"] or {}
+        if accumulated.get('criteria_gate_shown'):
+            cm = extracted_context.get('current_message') or _current_message(user_query)
+            if _soft_gate_answer_intent(cm):
+                return {
+                    "tool": "search_properties",
+                    "params": {"user_query": user_query, "confirmed": True},
+                    "reason": "Soft criteria gate confirmed/answered — proceed to search",
+                }
+
         # 3) Majority voting
         return _majority_vote(user_query, extracted_context, classification_llm,
                               tool_registry, accumulated=state["accumulated_search_criteria"])
@@ -599,62 +721,122 @@ def _make_decide_tool_node(tool_registry, classification_llm):
     return decide_tool_node
 
 
+def _recent_history_block(user_query: str) -> str:
+    """The recent-conversation portion of the composed query ONLY \u2014 never the injected
+    long-term-memory block \u2014 to hand the router as clearly-separated secondary context
+    (used to resolve pronouns/ellipsis, not to classify)."""
+    q = user_query or ""
+    if q.startswith("What I remember about this user:"):
+        idx = q.find("\n\n")
+        if idx != -1:
+            q = q[idx + 2:]
+    if "Previous conversation" not in q:
+        return ""
+    tail = q[q.find("Previous conversation"):]
+    for marker in ("Current user message:", "User's answer to the clarification question:",
+                   "answer to the clarification question:"):
+        i = tail.find(marker)
+        if i != -1:
+            tail = tail[:i]
+    return tail.strip()[:800]
+
+
+def _parse_intent(text: str, valid_names) -> Optional[str]:
+    """Robustly parse the classifier output into one catalog intent, or None.
+
+    Ladder: (1) strict JSON {"intent": "..."} (also tolerating a JSON object embedded
+    in prose), then (2) longest-first substring match over the raw text. Returns None
+    when nothing matches so the caller can drop to the heuristic fallback."""
+    if not text:
+        return None
+    ordered = sorted(valid_names, key=len, reverse=True)
+
+    def _match(candidate: str):
+        c = (candidate or "").strip().lower()
+        if not c:
+            return None
+        for name in ordered:
+            if c == name or name in c or name.replace('_', ' ') in c:
+                return name
+        return None
+
+    obj = None
+    try:
+        obj = json.loads(text.strip())
+    except Exception:
+        m = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+        if m:
+            try:
+                obj = json.loads(m.group(0))
+            except Exception:
+                obj = None
+    if isinstance(obj, dict) and obj.get('intent') is not None:
+        hit = _match(str(obj.get('intent')))
+        if hit:
+            return hit
+
+    # Substring fallback over the whole response.
+    return _match(text)
+
+
+# Action verbs that force a listing search even if the classifier wavered (kept as a
+# deterministic tie-break; the primary fix is input hygiene + the static catalog).
+_SEARCH_ACTION_KWS = [
+    'find me', 'show me', 'get me', 'search for',
+    '\u5e2e\u6211\u627e\u623f', '\u641c\u7d22\u623f\u6e90', '\u627e\u4e2a\u623f\u5b50',
+    '\u627e\u4e2a\u5408\u79df', '\u641c\u623f\u6e90',
+]
+
+
 def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=1, accumulated=None):
-    """LLM tool selection. num_votes=1 by default: a cloud LLM (DeepSeek) is reliable
-    in one shot and each call has real network latency, so 5 sequential votes were the
-    main source of latency. Raise num_votes for more robustness with a weaker model."""
-    catalog_lines = []
-    for name in tool_registry.list_tool_names():
-        tool = tool_registry.get(name) if hasattr(tool_registry, "get") else None
-        description = getattr(tool, "description", "registered tool")
-        catalog_lines.append(f"- {name}: {description}")
-    catalog = "\n".join(catalog_lines)
-    prompt = CLASSIFICATION_PROMPT.format(user_query=user_query, tool_catalog=catalog)
-    votes = []
+    """Structured LLM intent classification (single call \u2014 a cloud LLM is reliable in one
+    shot and each call has real latency). Routes on the CURRENT stripped message (the old
+    code fed the whole memory/history-prefixed query, which mis-routed price-research
+    questions to search_properties); recent history is passed only as secondary context.
 
-    for i in range(num_votes):
-        try:
-            response = llm.invoke(prompt)
-            text = response.content.strip().lower() if hasattr(response, 'content') else str(response).strip().lower()
-            text = text.replace('tool:', '').replace('**', '').strip()
+    Output is strict JSON {"intent": "..."} parsed via a json -> substring -> heuristic
+    ladder ending at web_search. market_info maps to the web_search synthesis path;
+    direct_answer answers conversationally. num_votes is accepted for signature
+    compatibility (a single structured call replaces the old repeated voting)."""
+    current = _current_message(user_query)
+    history_block = _recent_history_block(user_query)
+    valid_names = {name for name, _, _ in _INTENT_CATALOG}
 
-            tool = None
-            # Priority matching (specific to general)
-            candidates = sorted(
-                set(tool_registry.list_tool_names()) | {"multi_search", "reasoning_property"},
-                key=len,
-                reverse=True,
-            )
-            for name in candidates:
-                if name in text or name.replace('_', ' ') in text:
-                    tool = name
-                    break
-            votes.append(tool or 'web_search')
-        except Exception as e:
-            logger.warning(f"Vote {i+1} failed: {e}")
-            continue
+    prompt = INTENT_CLASSIFICATION_PROMPT.format(
+        current_message=current,
+        history_block=(f"\nRECENT CONVERSATION (context only, do NOT classify this):\n{history_block}\n"
+                       if history_block else "\n"),
+        catalog=_intent_catalog_text(),
+    )
 
-    if not votes:
+    intent = None
+    try:
+        response = llm.invoke(prompt)
+        text = response.content if hasattr(response, 'content') else str(response)
+        intent = _parse_intent(text, valid_names)
+    except Exception as e:
+        logger.warning(f"Intent classification failed: {e}")
+        intent = None
+
+    if intent is None:
         return _heuristic_fallback(user_query, extracted_context, tool_registry, accumulated)
 
-    counter = Counter(votes)
-    winner, count = counter.most_common(1)[0]
-    logger.info(f"Vote result: {dict(counter)}, winner: {winner} ({count}/{len(votes)})")
+    # Deterministic tie-break on the STRIPPED current message (never the memory/history).
+    ql = current.lower()
+    if any(kw in ql for kw in _SEARCH_ACTION_KWS):
+        intent = 'search_properties'
 
-    # Tie-breaking
-    query_lower = user_query.lower()
-    consult_kws = ['should i', 'help me decide', 'which is better', 'worth it',
-                   '\u5e94\u8be5', '\u5e2e\u6211\u9009', '\u54ea\u4e2a\u597d',
-                   '\u503c\u5f97\u5417', '\u6bd4\u8f83']
-    if any(kw in query_lower for kw in consult_kws) and 'web_search' in counter:
-        winner = 'web_search'
+    logger.info(f"Intent routed: {current[:60]!r} -> {intent}")
 
-    action_kws = ['find me', 'show me', 'get me', 'search for',
-                  '\u5e2e\u6211\u627e\u623f', '\u641c\u7d22\u623f\u6e90']
-    if any(kw in query_lower for kw in action_kws) and 'search_properties' in counter:
-        winner = 'search_properties'
-
-    return _build_tool_params(winner, user_query, extracted_context, tool_registry, accumulated)
+    if intent == 'direct_answer':
+        return {"tool": "direct_answer", "params": {},
+                "reason": "Intent: direct_answer (chat / answerable from context)"}
+    if intent == 'market_info':
+        # Area price/market research -> web_search synthesis (web_search -> generate_response).
+        plan = _plan_web_searches(current, tool_registry)
+        plan["reason"] = "Intent: market_info (area rent/price research)"
+        return plan
+    return _build_tool_params(intent, user_query, extracted_context, tool_registry, accumulated)
 
 
 # UK postcode (full or outward+inward), e.g. "SW8 1RZ", "WC1E 6BT", "EC1A 1BB".
@@ -1228,6 +1410,12 @@ def _make_execute_tool_node(tool_registry):
                     params['no_commute'] = True
                 if accumulated.get('bedrooms') is not None and not params.get('bedrooms'):
                     params['bedrooms'] = accumulated['bedrooms']
+                if accumulated.get('room_type') and not params.get('room_type'):
+                    params['room_type'] = accumulated['room_type']
+                # Soft criteria gate: tell the tool whether the gate already fired this
+                # conversation so it fires at most once (persisted per-conversation).
+                if accumulated.get('criteria_gate_shown'):
+                    params['criteria_gate_shown'] = True
                 # Pure-legacy checkpoint (only the old ``destination`` exists, so no
                 # area/commute_destination got resolved above): feed it as the legacy
                 # ``location`` alias so the tool still has a search area. Omitted
@@ -1473,15 +1661,20 @@ def _make_format_output_node():
                 response = raw_data.get('question', 'Could you please provide more details?')
                 response_type = 'question'
                 # Surface the structured clarification payload so the API/frontend can
-                # render the single area-clarification form (Agent 3 reads tool_data).
+                # render the area form or the soft-criteria prompt (Agent 3 reads tool_data).
                 if raw_data.get('missing_fields') is not None:
                     tool_data['missing_fields'] = raw_data.get('missing_fields')
                 if raw_data.get('known_criteria') is not None:
                     tool_data['known_criteria'] = raw_data.get('known_criteria')
+                # clarification_kind lets the frontend distinguish the hard area gate
+                # ('missing_area') from the soft recommended-criteria gate ('soft_criteria').
+                if raw_data.get('clarification_kind') is not None:
+                    tool_data['clarification_kind'] = raw_data.get('clarification_kind')
             elif raw_data.get('status') == 'found' and raw_data.get('recommendations'):
                 recs = apply_preference_filter(raw_data['recommendations'], prefs)
-                summary = raw_data.get('summary', f"I found {len(recs)} properties.")
-                response = f"{summary}\n\nCheck out the listings on the right panel."
+                # The summary is now fully localized (zh/en) and already includes the
+                # right-panel hint, so it's used verbatim (no English-only suffix bolted on).
+                response = raw_data.get('summary') or f"I found {len(recs)} properties."
                 tool_data = {'recommendations': recs, 'search_criteria': raw_data.get('search_criteria', {})}
 
         elif tool_name == 'multi_search' and raw_data:

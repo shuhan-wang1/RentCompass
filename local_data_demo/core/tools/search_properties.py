@@ -58,6 +58,100 @@ def _extract_no_commute(text: str) -> bool:
     return any(p in t for p in _NO_COMMUTE_PHRASES)
 
 
+# Phrases meaning "just run the search with what we have" — used to bypass the soft
+# criteria gate (D1). CJK phrases match the raw text; English phrases match on word
+# boundaries so short tokens ('go on') can't fire mid-word. Kept deliberately small
+# and specific (a proceed signal, not a general affirmation).
+_PROCEED_PHRASES_ZH = (
+    "继续搜索", "继续搜", "继续找", "继续", "就这样吧", "就这样", "直接搜索", "直接搜",
+    "可以了", "没事", "不用了继续", "都行", "先搜", "随便搜",
+)
+_PROCEED_PATTERNS_EN = (
+    r"\bcontinue\b", r"\bgo ahead\b", r"\bsearch anyway\b", r"\bjust search\b",
+    r"\bsearch now\b", r"\bproceed\b", r"\bthat'?s fine\b", r"\bthat is fine\b",
+    r"\bgo on\b", r"\bkeep going\b", r"\bit'?s fine\b",
+)
+
+
+def _is_proceed_intent(text: str) -> bool:
+    """True when the user is telling us to go ahead and search despite missing
+    recommended criteria (soft gate bypass)."""
+    if not text:
+        return False
+    if any(p in text for p in _PROCEED_PHRASES_ZH):
+        return True
+    t = text.lower()
+    return any(re.search(p, t) for p in _PROCEED_PATTERNS_EN)
+
+
+# Room-type synonyms -> canonical value ('studio' | 'ensuite' | 'shared'). Substring
+# match (CJK + EN). 'studio' is a distinct property form (implies 0 bedrooms), so it is
+# checked first and never shadowed by the room-in-a-share types.
+_ROOM_TYPE_SYNONYMS = (
+    ("studio", ("studio", "单间公寓", "一室户", "开间")),
+    ("ensuite", ("ensuite", "en-suite", "en suite", "独立卫浴", "独卫", "套间", "带独卫")),
+    ("shared", ("shared room", "flatshare", "flat share", "house share", "houseshare",
+                "shared", "合租房", "合租", "共享房间")),
+)
+
+
+def _extract_room_type(text: str):
+    """Canonical room type from a message: 'studio' | 'ensuite' | 'shared' | None.
+    Deterministic so a chat answer after the soft gate ("我要ensuite") updates the
+    accumulated room_type even without any 'find'/'search' verb."""
+    if not text:
+        return None
+    t = text.lower()
+    for canonical, needles in _ROOM_TYPE_SYNONYMS:
+        if any(n in t for n in needles):
+            return canonical
+    return None
+
+
+def _normalize_room_type(value):
+    """Coerce an incoming room_type (from the form, accumulated state, or free text)
+    to a canonical value or None. Unknown/free-text values are run through the
+    synonym extractor so 'en-suite' or 'a studio please' still map correctly."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    v = value.strip().lower()
+    if v in ("studio", "ensuite", "shared"):
+        return v
+    return _extract_room_type(v)
+
+
+# Display labels for room type, localized (en, zh).
+_ROOM_TYPE_LABELS = {
+    "studio": ("Studio", "Studio 单间公寓"),
+    "ensuite": ("en-suite room", "独立卫浴房间"),
+    "shared": ("shared room", "合租房间"),
+}
+
+
+def _room_type_label(room_type, is_cjk: bool) -> str:
+    en, zh = _ROOM_TYPE_LABELS.get(room_type, (room_type, room_type))
+    return zh if is_cjk else en
+
+
+def _matches_room_type(prop: dict, room_type: str) -> bool:
+    """True when a listing satisfies the requested room type, inspecting the scraped
+    Room_Type_Category / Description / Detailed_Amenities. Mirrors the data's own
+    vocabulary (e.g. 'Studio', 'En-suite Room', 'Room (Shared)', '1 bed Flat share')."""
+    if not room_type:
+        return True
+    rt = str(prop.get('Room_Type_Category', '')).lower()
+    desc = str(prop.get('Description', '')).lower()
+    amen = str(prop.get('Detailed_Amenities', '')).lower()
+    blob = f"{rt} {desc} {amen}"
+    if room_type == 'studio':
+        return 'studio' in rt or 'studio' in desc
+    if room_type == 'ensuite':
+        return 'en-suite' in blob or 'ensuite' in blob or 'en suite' in blob
+    if room_type == 'shared':
+        return 'shar' in rt or 'shar' in desc or 'flatshare' in blob or 'flat share' in blob
+    return True
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:int, period:'week'|'month') or (None, None). Deterministic regex
@@ -75,6 +169,14 @@ def _extract_budget(text: str):
     # 3) budget keyword + amount: "budget is now 1800", "budget of 1800", "max budget 1800"
     if not m:
         m = re.search(r'budget\b[^£\d]{0,20}£?\s?(\d{3,5})\b', t)
+    # 4) budget-INTENT phrasing (esp. clarification answers): "under 1000", "up to 1200",
+    #    "max 900", "around 1500", and Chinese "1000以内/以下/左右", "预算1000", "月租1000".
+    if not m:
+        m = re.search(r'\b(?:under|below|max(?:imum)?|up\s+to|around|about|no\s+more\s+than|less\s+than)\s*£?\s?(\d{3,5})\b', t)
+    if not m:
+        m = re.search(r'(\d{3,5})\s*(?:以内|以下|左右|块|镑|元|英镑)', t)
+    if not m:
+        m = re.search(r'(?:预算|月租|租金|房租)\s*[^\d]{0,6}(\d{3,5})', t)
     if m:
         val = int(m.group(1))
         if 200 <= val <= 20000:
@@ -201,33 +303,104 @@ def _commute_phrase(max_commute_time, location: str) -> str:
     return f" within {int(max_commute_time)} min of {location}"
 
 
-def _found_summary(n_perfect: int, n_soft: int, max_budget, max_commute_time,
-                   area: str, commute_target: str = None) -> str:
-    """Accurate, non-contradictory result headline for EVERY combination of
-    optional criteria (budget yes/no × commute yes/no). Never emits '999 min',
-    '£None' or 'Great news! 0 within budget'."""
-    commute = _commute_phrase(max_commute_time, commute_target) if commute_target else ""
-    has_budget = bool(max_budget)
+def _price_stats(results):
+    """(min, median, max) monthly price across the returned listings, or None.
+    Reads the numeric ``price`` each candidate carries before formatting."""
+    prices = sorted(int(p.get('price')) for p in results
+                    if isinstance(p, dict) and p.get('price'))
+    if not prices:
+        return None
+    return prices[0], prices[len(prices) // 2], prices[-1]
 
-    if not has_budget:
-        # No budget filter: every returned listing is a match. Frame it as listings
-        # in the area, optionally annotated with the commute clause.
-        n_total = n_perfect + n_soft
-        s = f"I found {n_total} current listing{'s' if n_total != 1 else ''} in {area}"
-        if commute:
-            s += f", all{commute}"
-        return s + "."
 
-    if n_perfect:
-        s = f"I found {n_perfect} option{'s' if n_perfect != 1 else ''} within your £{max_budget}/month budget"
-        if n_soft:
-            s += f", plus {n_soft} more just over budget"
-    else:  # only over-budget ("soft") matches
-        s = (f"I couldn't find anything fully within your £{max_budget}/month budget, but "
-             f"{'here is' if n_soft == 1 else 'here are'} {n_soft} close option{'s' if n_soft != 1 else ''} just over budget")
-    if commute:
-        s += f", all{commute}"
-    return s + "."
+def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute_time,
+                   area: str, commute_target: str = None, room_type: str = None,
+                   is_cjk: bool = False) -> str:
+    """Informative, context-varying result headline (Deliverable 4): result count +
+    area, the price range of the returned listings (min–median–max), and a one-line
+    recap of the applied filters (budget / room type / commute). Localized zh/en and
+    including the right-panel hint, so callers use it verbatim (no English-only
+    suffix bolted on afterwards). Never emits '999 min' or '£None'."""
+    n_total = n_perfect + n_soft
+    stats = _price_stats(results)
+    rt_label = _room_type_label(room_type, is_cjk) if room_type else None
+    real_commute = commute_target and _commute_phrase(max_commute_time, commute_target)
+
+    # --- applied-filter recap (only the criteria actually in effect) ---
+    filt = []
+    if is_cjk:
+        if max_budget:
+            filt.append(f"预算 ≤£{max_budget}/月")
+        if rt_label:
+            filt.append(f"房型 {rt_label}")
+        if real_commute:
+            filt.append(f"通勤 ≤{int(max_commute_time)} 分钟到 {commute_target}")
+        elif commute_target:
+            filt.append(f"通勤至 {commute_target}")
+    else:
+        if max_budget:
+            filt.append(f"budget ≤£{max_budget}/month")
+        if rt_label:
+            filt.append(f"room type {rt_label}")
+        if real_commute:
+            filt.append(f"commute ≤{int(max_commute_time)} min to {commute_target}")
+        elif commute_target:
+            filt.append(f"commute to {commute_target}")
+
+    if is_cjk:
+        s = f"在 {area} 为你找到 {n_total} 套当前房源"
+        if rt_label:
+            s += f"（{rt_label}）"
+        s += "。"
+        if stats:
+            lo, mid, hi = stats
+            s += f"价格约 £{lo}/月。" if lo == hi else f"价格区间 £{lo}–£{hi}/月（中位约 £{mid}）。"
+        if filt:
+            s += "已应用筛选：" + "、".join(filt) + "。"
+        if n_soft and max_budget:
+            s += f"其中 {n_soft} 套略超预算。"
+        s += "完整房源见右侧列表。"
+        return s
+
+    s = f"I found {n_total} current listing{'s' if n_total != 1 else ''} in {area}"
+    if rt_label:
+        s += f" ({rt_label})"
+    s += "."
+    if stats:
+        lo, mid, hi = stats
+        s += f" Around £{lo}/month." if lo == hi else f" Prices range £{lo}–£{hi}/month (median ~£{mid})."
+    if filt:
+        s += " Filters applied: " + ", ".join(filt) + "."
+    if n_soft and max_budget:
+        s += f" {n_soft} of these are slightly over budget."
+    s += " See the full listings in the right-hand panel."
+    return s
+
+
+def _soft_gate_question(missing, is_cjk: bool) -> str:
+    """Localized soft-criteria clarification, listing ONLY the actually-missing
+    recommended fields (budget / room_type / commute)."""
+    if is_cjk:
+        bits = []
+        if 'room_type' in missing:
+            bits.append("您想要什么房型（Studio / 独立卫浴 ensuite / 合租 shared）？")
+        if 'budget' in missing:
+            bits.append("每月预算大概多少？")
+        if 'commute' in missing:
+            bits.append("需要考虑通勤吗？如果需要，请告诉我通勤到哪里、最多多少分钟；如果不需要，可以说“不通勤”。")
+        return ("在搜索之前，我想先确认几个条件：" + "".join(bits) +
+                "您也可以直接说“继续搜索”，或在右侧的搜索条件面板补充后点击搜索。")
+    bits = []
+    if 'room_type' in missing:
+        bits.append("what room type you'd like (studio / en-suite / shared)?")
+    if 'budget' in missing:
+        bits.append("what your monthly budget is?")
+    if 'commute' in missing:
+        bits.append("whether you need to consider a commute (if so, to where and the max "
+                    "minutes; if not, just say \"no commute\")?")
+    return ("Before I search, could you confirm a couple of things: " + " ".join(bits) +
+            " You can also just say \"continue\" to search anyway, or fill in the "
+            "search-criteria panel on the right and press Search.")
 
 
 def _no_results_message(area: str, is_cjk: bool) -> str:
@@ -419,6 +592,9 @@ async def search_properties_impl(
     accumulated_preferences: list = None,  # 🆕 累积的软性偏好
     budget_period: str = "month",     # 🆕 预算周期：'week' 或 'month'
     current_message: str = "",        # 🆕 仅本轮原始消息（用于显式预算/通勤覆盖，避免误抓注入记忆）
+    room_type: str = None,            # 🆕 房型：'studio' | 'ensuite' | 'shared' | None(不限)
+    confirmed: bool = False,          # 🆕 用户已确认/表单直搜 —— 跳过软性条件门
+    criteria_gate_shown: bool = False,  # 🆕 本会话软性条件门是否已出现过（至多触发一次）
     **kwargs  # 接受 LLM 可能传递的任何额外参数（如 property_type）
 ) -> dict:
     """
@@ -486,6 +662,10 @@ async def search_properties_impl(
         # 步骤 0: 本轮消息里的显式信号优先（预算/通勤/不通勤），但绝不重新引入门槛
         # ================================================================
         msg_for_extraction = current_message or user_query
+        # 房型：规范化传入值；缺失时从本轮消息里抽取（"我要ensuite" 亦生效）。
+        room_type = _normalize_room_type(room_type)
+        if not room_type:
+            room_type = _extract_room_type(msg_for_extraction)
         if not no_commute and _extract_no_commute(msg_for_extraction):
             no_commute = True
             print(f"   🔕 本轮消息判定为『不通勤』，禁用全部通勤逻辑")
@@ -594,7 +774,7 @@ async def search_properties_impl(
             if beds is not None:
                 min_beds, max_beds = beds
                 resolved_bedrooms = min_beds if min_beds == max_beds else None
-            elif 'studio' in feats_lower:
+            elif 'studio' in feats_lower or room_type == 'studio':
                 min_beds = max_beds = 0
                 resolved_bedrooms = 0
             else:
@@ -609,6 +789,7 @@ async def search_properties_impl(
                 'no_commute': no_commute,
                 'bedrooms': resolved_bedrooms,
                 'budget_period': budget_period,
+                'room_type': room_type,
                 # legacy（update_search_criteria / 旧 UI 仍在读）
                 'destination': commute_target or search_area,
                 'max_budget': max_budget,
@@ -616,6 +797,36 @@ async def search_properties_impl(
                 'property_features': all_property_features,
                 'soft_preferences': all_soft_preferences,
             }
+
+        # Full "what we know" snapshot for BOTH clarification gates (area + soft
+        # criteria). Includes room_type so the frontend panel can reflect it.
+        def _known_criteria():
+            return {
+                'area': search_area,
+                'commute_destination': commute_target,
+                'max_budget': max_budget,
+                'max_travel_time': max_commute_time,
+                'no_commute': no_commute,
+                'bedrooms': resolved_bedrooms,
+                'budget_period': budget_period,
+                'room_type': room_type,
+                'property_features': all_property_features,
+                'soft_preferences': all_soft_preferences,
+            }
+
+        # Legacy merge shape the graph folds back into accumulated criteria.
+        def _extracted_so_far(extra=None):
+            base = {
+                'destination': commute_target,
+                'max_budget': max_budget,
+                'max_travel_time': max_commute_time,
+                'room_type': room_type,
+                'property_features': all_property_features,
+                'soft_preferences': all_soft_preferences,
+            }
+            if extra:
+                base.update(extra)
+            return base
 
         # ================================================================
         # 步骤 2: 澄清 —— 仅当"搜索区域"无法确定时才追问（问『住哪』，绝不问『通勤去哪』）
@@ -631,26 +842,11 @@ async def search_properties_impl(
             return {
                 'success': False,
                 'status': 'need_clarification',
+                'clarification_kind': 'missing_area',
                 'question': question,
                 'missing_fields': ['area'],
-                'known_criteria': {
-                    'area': None,
-                    'commute_destination': commute_target,
-                    'max_budget': max_budget,
-                    'max_travel_time': max_commute_time,
-                    'no_commute': no_commute,
-                    'bedrooms': resolved_bedrooms,
-                    'budget_period': budget_period,
-                    'property_features': all_property_features,
-                    'soft_preferences': all_soft_preferences,
-                },
-                'extracted_so_far': {  # 保留旧 merge 代码期待的形状
-                    'destination': commute_target,
-                    'max_budget': max_budget,
-                    'max_travel_time': max_commute_time,
-                    'property_features': all_property_features,
-                    'soft_preferences': all_soft_preferences,
-                },
+                'known_criteria': _known_criteria(),
+                'extracted_so_far': _extracted_so_far(),  # 保留旧 merge 代码期待的形状
             }
 
         # ================================================================
@@ -671,6 +867,41 @@ async def search_properties_impl(
 
         commute_annotation_enabled = (not no_commute) and (commute_target is not None)
         commute_filter_enabled = commute_annotation_enabled and _real_commute_limit(max_commute_time)
+
+        # ================================================================
+        # 步骤 2.6: 软性条件门（Deliverable 1）—— 仅聊天路径，且至多触发一次
+        # ----------------------------------------------------------------
+        # 推荐但可选的条件：房型 room_type、预算 budget、通勤 commute（满足条件 =
+        # 有真实通勤目标+上限，或明确 no_commute）。区域 area 仍是上面的硬门。
+        # 触发：area 已确定 且 ≥1 推荐字段缺失 且 本会话尚未出现过此门 且 本轮未确认继续。
+        # 绕过：confirmed=True（表单直搜 /api/search_direct）、criteria_gate_shown=True、
+        #      或本轮消息含“继续/continue”等继续意图。缺失即列出，让用户补充或继续。
+        # 持久化：criteria_gate_shown 经 extracted_so_far → update_search_criteria →
+        #      _write_back_turn 落到 accumulated_search_criteria（按会话、可跨进程重启）。
+        commute_satisfied = bool(no_commute) or (
+            commute_target is not None and _real_commute_limit(max_commute_time))
+        soft_missing = []
+        if not has_budget:
+            soft_missing.append('budget')
+        if not room_type:
+            soft_missing.append('room_type')
+        if not commute_satisfied:
+            soft_missing.append('commute')
+
+        proceed_confirmed = bool(confirmed) or _is_proceed_intent(msg_for_extraction)
+        if soft_missing and not criteria_gate_shown and not proceed_confirmed:
+            print(f"   🚪 [SOFT GATE] 缺失推荐条件 {soft_missing}，先确认再搜索")
+            return {
+                'success': False,
+                'status': 'need_clarification',
+                'clarification_kind': 'soft_criteria',
+                'question': _soft_gate_question(soft_missing, is_cjk),
+                'missing_fields': soft_missing,
+                'known_criteria': _known_criteria(),
+                'search_criteria': _criteria(),
+                # 持久化“门已展示”标记（至多触发一次）。
+                'extracted_so_far': _extracted_so_far({'criteria_gate_shown': True}),
+            }
 
         # ================================================================
         # 步骤 3: 按需抓取真实、城市正确的 OnTheMarket 房源（带持久缓存）
@@ -751,25 +982,25 @@ async def search_properties_impl(
         )
         print(f"   ✅ RAG 返回 {len(ranked_properties)} 个候选房源")
 
-        # 🆕 根据房产特征过滤结果
+        # 🆕 根据房产特征过滤结果（注意：不要遮蔽函数级的 room_type 参数）
         if all_property_features:
             print(f"\n🔍 [SEARCH] 根据房产特征过滤: {all_property_features}")
             filtered_by_features = []
             for prop in ranked_properties:
-                room_type = prop.get('Room_Type_Category', '').lower()
+                prop_rt = prop.get('Room_Type_Category', '').lower()
                 description = prop.get('Description', '').lower()
                 amenities = prop.get('Detailed_Amenities', '').lower()
                 matches = True
                 for feature in all_property_features:
                     feature_lower = feature.lower()
                     if feature_lower in ['studio', 'private', 'en-suite', 'ensuite']:
-                        if feature_lower == 'studio' and 'studio' not in room_type:
+                        if feature_lower == 'studio' and 'studio' not in prop_rt:
                             matches = False
                             break
-                        if feature_lower == 'private' and 'private' not in room_type and 'private' not in description:
+                        if feature_lower == 'private' and 'private' not in prop_rt and 'private' not in description:
                             matches = False
                             break
-                        if feature_lower in ['en-suite', 'ensuite'] and 'en-suite' not in room_type and 'en-suite' not in amenities:
+                        if feature_lower in ['en-suite', 'ensuite'] and 'en-suite' not in prop_rt and 'en-suite' not in amenities:
                             matches = False
                             break
                 if matches:
@@ -779,6 +1010,16 @@ async def search_properties_impl(
                 ranked_properties = filtered_by_features
             else:
                 print(f"   ⚠️ 特征过滤后无结果，保留原始结果并在说明中提及")
+
+        # 🆕 根据房型过滤（studio / ensuite / shared）—— 复用 _matches_room_type
+        if room_type:
+            print(f"\n🔍 [SEARCH] 根据房型过滤: {room_type}")
+            rt_matched = [p for p in ranked_properties if _matches_room_type(p, room_type)]
+            if rt_matched:
+                print(f"   ✅ 房型过滤后剩余 {len(rt_matched)} 个房源")
+                ranked_properties = rt_matched
+            else:
+                print(f"   ⚠️ 房型过滤后无结果，保留原始结果并在说明中提及")
 
         # ================================================================
         # 步骤 4: 通勤时间（仅在有标注目标且未声明不通勤时计算/过滤）
@@ -1000,12 +1241,14 @@ async def search_properties_impl(
                 row['travel_time'] = f"{int(_tt)} min to {commute_target}"
             formatted_results.append(row)
 
-        _summary = _found_summary(len(perfect_match), len(soft_violation),
+        _summary = _found_summary(all_results, len(perfect_match), len(soft_violation),
                                   max_budget if has_budget else None,
                                   max_commute_time if commute_filter_enabled else None,
-                                  search_area, commute_target)
+                                  search_area, commute_target, room_type, is_cjk)
         if possibly_outdated:
-            _summary += " (Showing recent cached listings — a live refresh wasn't available just now, so some may be outdated.)"
+            _summary += (" （部分为近期缓存房源，实时刷新暂不可用，可能已过期。）" if is_cjk
+                         else " (Showing recent cached listings — a live refresh wasn't "
+                              "available just now, so some may be outdated.)")
 
         return {
             'success': True,
@@ -1136,6 +1379,25 @@ For GENERAL INFORMATION questions about rent, use web_search instead.""",
             'min_budget': {
                 'type': 'integer',
                 'description': 'Minimum monthly budget in GBP.'
+            },
+            'room_type': {
+                'type': 'string',
+                'description': "OPTIONAL preferred room type: 'studio', 'ensuite', or "
+                               "'shared' (omit for any). Studio also implies a 0-bedroom search."
+            },
+            'confirmed': {
+                'type': 'boolean',
+                'description': 'Set true when the user has explicitly confirmed to proceed '
+                               '(chat "continue"/"搜索") or when called from the criteria-panel '
+                               'Search button (/api/search_direct). Bypasses the soft criteria gate.',
+                'default': False
+            },
+            'criteria_gate_shown': {
+                'type': 'boolean',
+                'description': 'Injected by the agent from accumulated criteria: true once the '
+                               'soft criteria gate has already been shown in this conversation '
+                               '(so it fires at most once).',
+                'default': False
             }
         },
         'required': []  # 没有必须参数 - 工具内部会处理

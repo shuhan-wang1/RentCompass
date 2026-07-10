@@ -116,14 +116,53 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
 
 
 def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
-    """Merge new search criteria into accumulated state."""
+    """Merge new search criteria into accumulated state.
+
+    Backward compatible: the legacy scalar keys (destination/max_budget/
+    max_travel_time) are preserved, and the new keys introduced by the flexible
+    search tool are folded in too:
+      - area                : where the user wants to LIVE
+      - commute_destination : where they commute TO (mirrored into legacy destination)
+      - no_commute          : once True it stays True here (only an explicit
+                              commute mention in ``_apply_explicit_criteria_updates``
+                              resets it) so a search never re-adds a disowned filter
+      - bedrooms            : an explicit, single bedroom count (ranges are ignored)
+      - budget_period       : 'month' | 'week'
+    """
     result = {k: (list(v) if isinstance(v, list) else v) for k, v in accumulated.items()}
     if not new_criteria:
         return result
 
-    for field in ['destination', 'max_budget', 'max_travel_time']:
+    for field in ['destination', 'max_budget', 'max_travel_time', 'area', 'budget_period']:
         if new_criteria.get(field):
             result[field] = new_criteria[field]
+
+    # commute_destination is the new canonical key; mirror it into the legacy
+    # ``destination`` so old readers keep working (mirroring rule). An explicit
+    # None (the tool sends it under no_commute, where destination merely mirrors the
+    # search area) must NOT be overridden by the legacy fallback below.
+    cd = new_criteria.get('commute_destination')
+    if cd:
+        result['commute_destination'] = cd
+        result['destination'] = cd
+    elif 'commute_destination' not in new_criteria and new_criteria.get('destination'):
+        # Pure-legacy payload (no commute_destination key at all): mirror up.
+        result['commute_destination'] = new_criteria['destination']
+
+    # no_commute: never downgrade here (True is sticky); an explicit commute
+    # mention resets it in _apply_explicit_criteria_updates, not on a merge.
+    if 'no_commute' in new_criteria or result.get('no_commute'):
+        result['no_commute'] = bool(result.get('no_commute')) or bool(new_criteria.get('no_commute'))
+
+    # bedrooms: only accept a definite single count (ignore "0-2" range strings the
+    # tool emits when the user did not pin a bedroom number).
+    bd = new_criteria.get('bedrooms')
+    if isinstance(bd, bool):
+        pass
+    elif isinstance(bd, int):
+        result['bedrooms'] = bd
+    elif isinstance(bd, str) and bd.isdigit():
+        result['bedrooms'] = int(bd)
 
     for field in ['property_features', 'soft_preferences', 'amenities_of_interest']:
         new_items = new_criteria.get(field, [])
@@ -155,7 +194,9 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     """
     if not current_message:
         return accumulated
-    from core.tools.search_properties import _extract_budget, _extract_commute_minutes
+    from core.tools.search_properties import (
+        _extract_budget, _extract_commute_minutes, _extract_no_commute,
+    )
     from uk_rent_agent.domain import constants as C
 
     result = dict(accumulated)
@@ -172,6 +213,26 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     if minutes and result.get('max_travel_time') != minutes:
         result['max_travel_time'] = minutes
         changed = True
+
+    # No-commute vs. commute intent stated THIS turn. A fresh commute mention (an
+    # explicit time limit, or naming a known commute destination) wins and clears a
+    # previously-recorded "I don't commute"; otherwise an explicit "I don't commute /
+    # I just live there / WFH" sets the flag AND drops any stale travel-time limit so
+    # the next search never re-applies a filter the user has disowned.
+    ml = current_message.lower()
+    names_destination = any(re.search(rf'\b{re.escape(kw)}\b', ml) for kw in _KNOWN_DESTINATIONS)
+    commute_intent = bool(minutes) or names_destination
+    if commute_intent:
+        if result.get('no_commute'):
+            result['no_commute'] = False
+            changed = True
+    elif _extract_no_commute(current_message):
+        if not result.get('no_commute'):
+            result['no_commute'] = True
+            changed = True
+        if result.get('max_travel_time') is not None:
+            result['max_travel_time'] = None
+            changed = True
 
     return result if changed else accumulated
 
@@ -476,6 +537,22 @@ def _make_decide_tool_node(tool_registry, classification_llm):
             return {
                 "tool": "direct_answer", "params": {},
                 "reason": "Simple greeting"
+            }
+
+        # 2.4) Explicit "I don't commute / I just live there / work from home" — the
+        #      user has removed the commute dimension entirely. Route straight to the
+        #      search tool WITHOUT a commute filter rather than letting the LLM vote
+        #      (which historically mis-routed this into an endless "where do you
+        #      commute to?" clarification loop). Whether or not an area is known this
+        #      collapses to the same route: with an area (or a housing ask) the tool
+        #      searches immediately; with no area anywhere the tool emits its single
+        #      area-clarification form. Either way it must never reach the vote.
+        from core.tools.search_properties import _extract_no_commute
+        if _extract_no_commute(_current_message(user_query)):
+            return {
+                "tool": "search_properties",
+                "params": {"user_query": user_query},
+                "reason": "User explicitly does not commute — search without commute filter",
             }
 
         # 2.5) Live-transport questions (tube/train fares, journeys, travelcards,
@@ -818,15 +895,22 @@ _KNOWN_DESTINATIONS = {
 
 def _resolve_destination_address(user_query, extracted_context, accumulated):
     """Resolve the DESTINATION (to_address) for a commute query: a destination named
-    in THIS message wins, else the user's accumulated destination — both normalised
-    through the known-destination map so short tokens like 'UCL' geocode reliably."""
+    in THIS message wins, else the user's accumulated commute destination — both
+    normalised through the known-destination map so short tokens like 'UCL' geocode
+    reliably. Reads the new ``commute_destination`` key, falling back to the legacy
+    ``destination``. If the user has declared they do NOT commute and names no
+    destination this turn, return None so the commute tool asks for one (correct for
+    an explicit commute question posed against a no-commute profile)."""
     accumulated = accumulated or {}
     q = (extracted_context.get('current_message') or user_query) or ""
     ql = q.lower()
     for kw, addr in _KNOWN_DESTINATIONS.items():
         if kw in ql:
             return addr
-    dest = accumulated.get('destination')
+    # No destination named this turn: honour an explicit no-commute profile.
+    if accumulated.get('no_commute'):
+        return None
+    dest = accumulated.get('commute_destination') or accumulated.get('destination')
     if dest:
         dl = str(dest).lower()
         for kw, addr in _KNOWN_DESTINATIONS.items():
@@ -1128,13 +1212,29 @@ def _make_execute_tool_node(tool_registry):
                 # THIS message override the accumulated values injected just below.
                 if not params.get('current_message'):
                     params['current_message'] = extracted_context.get('current_message', '')
-                # Inject accumulated criteria
-                if not params.get('location') and accumulated.get('destination'):
-                    params['location'] = accumulated['destination']
+                # Inject accumulated criteria under the new area/commute keys.
+                if not params.get('area') and accumulated.get('area'):
+                    params['area'] = accumulated['area']
+                # Read rule: prefer commute_destination, fall back to legacy destination.
+                cd = accumulated.get('commute_destination') or accumulated.get('destination')
+                if not params.get('commute_destination') and cd and not accumulated.get('no_commute'):
+                    params['commute_destination'] = cd
                 if not params.get('max_budget') and accumulated.get('max_budget'):
                     params['max_budget'] = accumulated['max_budget']
-                if not params.get('max_commute_time') and accumulated.get('max_travel_time'):
+                if not params.get('max_commute_time') and accumulated.get('max_travel_time') \
+                        and not accumulated.get('no_commute'):
                     params['max_commute_time'] = accumulated['max_travel_time']
+                if accumulated.get('no_commute'):
+                    params['no_commute'] = True
+                if accumulated.get('bedrooms') is not None and not params.get('bedrooms'):
+                    params['bedrooms'] = accumulated['bedrooms']
+                # Pure-legacy checkpoint (only the old ``destination`` exists, so no
+                # area/commute_destination got resolved above): feed it as the legacy
+                # ``location`` alias so the tool still has a search area. Omitted
+                # entirely once a new-key area/commute_destination is present.
+                if not params.get('area') and not params.get('commute_destination') \
+                        and accumulated.get('destination'):
+                    params['location'] = accumulated['destination']
                 if accumulated.get('property_features'):
                     params['property_features'] = accumulated['property_features']
                 if accumulated.get('soft_preferences'):
@@ -1372,6 +1472,12 @@ def _make_format_output_node():
             if raw_data.get('status') == 'need_clarification':
                 response = raw_data.get('question', 'Could you please provide more details?')
                 response_type = 'question'
+                # Surface the structured clarification payload so the API/frontend can
+                # render the single area-clarification form (Agent 3 reads tool_data).
+                if raw_data.get('missing_fields') is not None:
+                    tool_data['missing_fields'] = raw_data.get('missing_fields')
+                if raw_data.get('known_criteria') is not None:
+                    tool_data['known_criteria'] = raw_data.get('known_criteria')
             elif raw_data.get('status') == 'found' and raw_data.get('recommendations'):
                 recs = apply_preference_filter(raw_data['recommendations'], prefs)
                 summary = raw_data.get('summary', f"I found {len(recs)} properties.")

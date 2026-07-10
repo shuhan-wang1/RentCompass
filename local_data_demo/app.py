@@ -37,6 +37,7 @@ from core.data_loader import load_mock_properties_from_csv, load_properties
 from rag.rag_coordinator import RAGCoordinator
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
+from core.tools.search_properties import search_properties_impl
 
 def _bool_env(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -592,6 +593,107 @@ def _derive_title(message: str) -> str:
     return text[:40] + ("…" if len(text) > 40 else "")
 
 
+# Sentinel for "argument not supplied" so a helper can distinguish "keep the current
+# cached value" (arg omitted) from "explicitly set it to this value" (incl. None).
+_UNSET = object()
+
+
+def _build_results_context(recommendations):
+    """Build the (prev_results_context, structured_results) pair that lets follow-up
+    turns resolve ordinal / name references ("the second one", "Maple Court").
+
+    Pure — touches NO shared state. Returns (None, None) when there are no recs.
+
+    D3: built ONLY from the real, city-correct tool recommendations. The old inlined
+    code enriched each row from the bundled London demo CSV, which leaked wrong-city
+    amenities/URLs into follow-up detail answers. Each structured record keeps the FULL
+    listing fields so an ordinal/name follow-up resolves to the ACTUAL listing and never
+    falls back to demo data.
+    """
+    if not recommendations:
+        return None, None
+    prev_results_context = "\n"
+    structured_results = []  # 结构化，供 _resolve_last_result / _resolve_target_address 解析
+    for i, rec in enumerate(recommendations[:6], 1):
+        addr = rec.get('address', 'Unknown')
+        price = rec.get('price', 'N/A')
+        travel = rec.get('travel_time', 'N/A')
+        property_name = addr.split(',')[0].strip()
+
+        structured_results.append({
+            'name': property_name,
+            'address': addr,
+            'price': price,
+            'travel_time': travel,
+            'bedrooms': rec.get('bedrooms'),
+            'property_type': rec.get('property_type'),
+            'budget_status': rec.get('budget_status'),
+            'source': rec.get('source'),
+            'url': rec.get('url'),
+            'explanation': rec.get('explanation'),
+            'geo_location': rec.get('geo_location'),
+        })
+
+        prev_results_context += f"{i}. **{property_name}**\n"
+        prev_results_context += f"   - Full Address: {addr}\n"
+        prev_results_context += f"   - Price: {price}\n"
+        prev_results_context += f"   - Commute: {travel}\n"
+        if rec.get('bedrooms') not in (None, '', 'N/A'):
+            prev_results_context += f"   - Bedrooms: {rec.get('bedrooms')}\n"
+        if rec.get('property_type'):
+            prev_results_context += f"   - Type: {rec.get('property_type')}\n"
+        if rec.get('budget_status'):
+            prev_results_context += f"   - Budget: {rec.get('budget_status')}\n"
+        if rec.get('url'):
+            prev_results_context += f"   - URL: {rec.get('url')}\n"
+        prev_results_context += "\n"
+    return prev_results_context, structured_results
+
+
+def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
+                     recommendations, *, user_preferences=_UNSET,
+                     accumulated_search_criteria=_UNSET, criteria_overwrite=None):
+    """Atomic phase-3 L2 write-back shared by the ReAct path (handle_with_react_agent)
+    and the deterministic /api/search_direct endpoint (pure refactor — the ReAct path's
+    behaviour is unchanged from the previously-inlined version).
+
+    Under the per-conversation turn lock — an in-place append + slice-trim keeps the
+    SAME list object, so a concurrent same-conversation turn's append is never clobbered
+    (the original defect this lock fixes):
+      • when supplied, REPLACE the user_preferences / accumulated_search_criteria
+        snapshots (ReAct path forwards the graph's final_state values; omit an arg to
+        keep the current cached value);
+      • when supplied, .update() the accumulated_search_criteria with criteria_overwrite
+        — a form submit is authoritative, so its scalar fields OVERWRITE while the list
+        fields (property_features / soft_preferences / amenities_of_interest) stay as-is;
+      • append this turn to history and slice-trim to MAX_HISTORY_LENGTH;
+      • when recommendations exist, cache last_results + the previous_search_results /
+        last_results context blocks so ordinal/name follow-ups resolve correctly.
+
+    Returns (prev_results_context, structured_results) for callers that want them.
+    """
+    prev_results_context, structured_results = _build_results_context(recommendations)
+    with _session_store.turn_lock(user_id, conversation_id):
+        _sess = _get_session(user_id, conversation_id)
+        if user_preferences is not _UNSET:
+            _sess.persistent_state['user_preferences'] = user_preferences
+        if accumulated_search_criteria is not _UNSET:
+            _sess.persistent_state['accumulated_search_criteria'] = accumulated_search_criteria
+        if criteria_overwrite:
+            _sess.persistent_state.setdefault('accumulated_search_criteria', {})
+            _sess.persistent_state['accumulated_search_criteria'].update(criteria_overwrite)
+        _sess.history.append({'user': user_message, 'assistant': (assistant_text or '')[:500]})
+        if len(_sess.history) > MAX_HISTORY_LENGTH:
+            del _sess.history[:-MAX_HISTORY_LENGTH]
+        if recommendations:
+            _sess.last_results = recommendations
+            _sess.persistent_state.setdefault('extracted_context', {})
+            _sess.persistent_state['extracted_context']['previous_search_results'] = prev_results_context
+            _sess.persistent_state['extracted_context']['last_results'] = structured_results
+            print(f"[state] 💾 已保存 {len(recommendations)} 个搜索结果到上下文")
+    return prev_results_context, structured_results
+
+
 async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool,
                                   user_id: str = "default", conversation_id: str = "default",
                                   request_id: str | None = None):
@@ -786,69 +888,17 @@ Current user message: {user_message}"""
 
     print(f"[LangGraph] Response Type: {response_type}")
 
-    # 构建搜索结果的上下文串（纯计算，不触碰共享状态）
-    # D3: build ONLY from the real, city-correct OnTheMarket recommendations. The old
-    # code enriched each row from `all_properties` (the bundled London demo CSV), which
-    # leaked wrong-city amenities/URLs into follow-up detail answers. Each stored record
-    # now keeps the FULL listing fields so an ordinal/name follow-up ("the second one")
-    # resolves to the ACTUAL listing (in-graph) and never falls back to demo data.
-    prev_results_context = None
-    structured_results = None
-    if recommendations:
-        prev_results_context = "\n"
-        structured_results = []  # 结构化，供 _resolve_last_result / _resolve_target_address 解析
-        for i, rec in enumerate(recommendations[:6], 1):
-            addr = rec.get('address', 'Unknown')
-            price = rec.get('price', 'N/A')
-            travel = rec.get('travel_time', 'N/A')
-            property_name = addr.split(',')[0].strip()
-
-            structured_results.append({
-                'name': property_name,
-                'address': addr,
-                'price': price,
-                'travel_time': travel,
-                'bedrooms': rec.get('bedrooms'),
-                'property_type': rec.get('property_type'),
-                'budget_status': rec.get('budget_status'),
-                'source': rec.get('source'),
-                'url': rec.get('url'),
-                'explanation': rec.get('explanation'),
-                'geo_location': rec.get('geo_location'),
-            })
-
-            prev_results_context += f"{i}. **{property_name}**\n"
-            prev_results_context += f"   - Full Address: {addr}\n"
-            prev_results_context += f"   - Price: {price}\n"
-            prev_results_context += f"   - Commute: {travel}\n"
-            if rec.get('bedrooms') not in (None, '', 'N/A'):
-                prev_results_context += f"   - Bedrooms: {rec.get('bedrooms')}\n"
-            if rec.get('property_type'):
-                prev_results_context += f"   - Type: {rec.get('property_type')}\n"
-            if rec.get('budget_status'):
-                prev_results_context += f"   - Budget: {rec.get('budget_status')}\n"
-            if rec.get('url'):
-                prev_results_context += f"   - URL: {rec.get('url')}\n"
-            prev_results_context += "\n"
-
-    # ── Phase 3: atomic write-back of L2 state under the per-conv lock ──
-    # In-place append + slice-trim keeps the SAME list object, so a concurrent
-    # same-conversation turn's append is never clobbered (the original defect).
-    with turn_lock:
-        _sess = _get_session(user_id, conversation_id)
-        _sess.persistent_state['user_preferences'] = final_state.get(
-            'user_preferences', _sess.persistent_state['user_preferences'])
-        _sess.persistent_state['accumulated_search_criteria'] = final_state.get(
-            'accumulated_search_criteria', _sess.persistent_state['accumulated_search_criteria'])
-        _sess.history.append({'user': user_message, 'assistant': response_text[:500]})
-        if len(_sess.history) > MAX_HISTORY_LENGTH:
-            del _sess.history[:-MAX_HISTORY_LENGTH]
-        if recommendations:
-            _sess.last_results = recommendations
-            _sess.persistent_state.setdefault('extracted_context', {})
-            _sess.persistent_state['extracted_context']['previous_search_results'] = prev_results_context
-            _sess.persistent_state['extracted_context']['last_results'] = structured_results
-            print(f"[LangGraph] 💾 已保存 {len(recommendations)} 个搜索结果到上下文")
+    # ── Phase 3: build the results context + atomic write-back of L2 state ──
+    # Extracted into _write_back_turn so the deterministic /api/search_direct endpoint
+    # reuses the EXACT same logic. Forward the graph's final_state snapshots (falling
+    # back to _UNSET → "keep the current cached value" when a key is absent, exactly as
+    # the previous inlined `final_state.get(key, <current>)` did). The prev-results
+    # context is cached inside the helper; this path doesn't need it returned.
+    _write_back_turn(
+        user_id, conversation_id, user_message, response_text, recommendations,
+        user_preferences=final_state.get('user_preferences', _UNSET),
+        accumulated_search_criteria=final_state.get('accumulated_search_criteria', _UNSET),
+    )
 
     # ── 写入长期记忆（后台线程: Mem0 式抽取+整合 / GA 反思，不阻塞响应）──
     # 记忆按 user_id 命名空间共享（跨会话），故 session_id 传 user_id。
@@ -865,20 +915,33 @@ Current user message: {user_message}"""
         print(f"[Memory] write skipped: {_e}")
 
     # ── 构建响应 payload（conversation_id 由调用方 api_alex 注入）──
+    _tool_data = tool_data if isinstance(tool_data, dict) else {}
     if recommendations:
+        # Frontend contract: forward the canonical search_criteria (Agent 2's
+        # format_output stores it in tool_data for found searches) so the search form
+        # can reflect what was actually searched. Defaults to {} when absent.
         return {
             "response_type": "search",
             "message": response_text,
             "recommendations": recommendations,
+            "search_criteria": _tool_data.get('search_criteria') or {},
         }
 
     if response_type == 'question' or response_type == 'clarification':
-        return {
+        # Frontend contract: on a search-criteria clarification, forward Agent 2's
+        # missing_fields / known_criteria (present in tool_data) so the form can
+        # highlight what's still needed. Only included when the graph supplied them.
+        payload = {
             "response_type": "clarification",
             "message": response_text,
             "agent_state": "waiting_for_input",
             "extracted_context": _whitelist_extracted_context(extracted_context),
         }
+        if 'missing_fields' in _tool_data:
+            payload["missing_fields"] = _tool_data['missing_fields']
+        if 'known_criteria' in _tool_data:
+            payload["known_criteria"] = _tool_data['known_criteria']
+        return payload
 
     if response_type == 'answer':
         return {
@@ -890,6 +953,196 @@ Current user message: {user_message}"""
         "response_type": "chat",
         "message": response_text or "I'm here to help! What would you like to know?",
     }
+
+
+# ============================================================================
+# Deterministic direct-search endpoint — bypasses the LLM router entirely
+# ----------------------------------------------------------------------------
+# The frontend search form submits structured criteria here; we call the
+# search_properties tool DIRECTLY (no LangGraph, no critic, no memory write) so a
+# form submit is fast and fully deterministic. The conversational L2 state is still
+# updated via the SAME _write_back_turn helper the ReAct path uses, so a follow-up
+# CHAT turn on /api/alex sees the form's criteria + results as context.
+# ============================================================================
+
+def _coerce_optional_int(value, field_name):
+    """Coerce an optional numeric criterion to a non-negative int, or None when absent.
+    Rejects non-numeric / negative values with ApiError(400)."""
+    if value is None or value == "":
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        raise ApiError(400, f"{field_name} must be an integer")
+    if n < 0:
+        raise ApiError(400, f"{field_name} must not be negative")
+    return n
+
+
+def _coerce_bool(value) -> bool:
+    """Coerce a JSON bool (or a common truthy string) to a real bool."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _compose_search_line(area, max_budget, budget_period, bedrooms,
+                         no_commute, commute_destination, max_commute_time) -> str:
+    """A compact, language-neutral one-liner describing a direct search — reused as the
+    conversation title, the persisted user turn, and the tool's user_query."""
+    parts = [f"🔍 Search: {area}"]
+    if max_budget is not None:
+        per = "wk" if budget_period == "week" else "mo"
+        parts.append(f"≤£{max_budget}/{per}")
+    if bedrooms is not None:
+        parts.append(f"{bedrooms} bed")
+    if no_commute:
+        parts.append("no commute")
+    elif commute_destination:
+        if max_commute_time is not None:
+            parts.append(f"≤{max_commute_time}min to {commute_destination}")
+        else:
+            parts.append(f"to {commute_destination}")
+    return " | ".join(parts)
+
+
+@app.route('/api/search_direct', methods=['POST'])
+async def api_search_direct():
+    """Deterministic structured search — the frontend form's backend path.
+
+    Bypasses the LLM router entirely: validates the submitted criteria, calls the
+    search_properties tool DIRECTLY, updates the same L2 conversational state a chat
+    turn would, and ALWAYS answers with response_type "search" (or "error" on a tool
+    failure). Identity + REQUIRE_AUTH gating are identical to /api/alex (path under /api/).
+    """
+    # --- parse + validate (ApiError → JSON 4xx, NOT 500) -----------------------
+    data = get_json_or_400()
+    user_id, _session_id = resolve_identity(data)
+
+    criteria = data.get('criteria')
+    if not isinstance(criteria, dict):
+        raise ApiError(400, "criteria must be an object")
+
+    area = criteria.get('area')
+    if not isinstance(area, str) or not area.strip():
+        raise ApiError(400, "area is required")
+    area = area.strip()
+
+    max_budget = _coerce_optional_int(criteria.get('max_budget'), "max_budget")
+    bedrooms = _coerce_optional_int(criteria.get('bedrooms'), "bedrooms")
+    max_commute_time = _coerce_optional_int(criteria.get('max_commute_time'), "max_commute_time")
+    no_commute = _coerce_bool(criteria.get('no_commute'))
+    budget_period = "week" if str(criteria.get('budget_period') or "month").strip().lower() == "week" else "month"
+
+    commute_destination = criteria.get('commute_destination')
+    if isinstance(commute_destination, str):
+        commute_destination = commute_destination.strip() or None
+    else:
+        commute_destination = None
+
+    # no_commute is authoritative: drop any commute constraint from the TOOL call (the
+    # raw commute_destination is still mirrored into the accumulated criteria below).
+    if no_commute:
+        max_commute_time = None
+    tool_commute_destination = None if no_commute else commute_destination
+
+    readable = _compose_search_line(
+        area, max_budget, budget_period, bedrooms,
+        no_commute, commute_destination, max_commute_time)
+
+    # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
+    conversation_id = data.get('conversation_id')
+    conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
+    if not conv:
+        conv = conversation_store.create_conversation(user_id, title=_derive_title(readable))
+        conversation_id = conv['id']
+        print(f"🆕 [SEARCH_DIRECT] implicitly created conversation {conversation_id}")
+
+    print(f"\n{'='*60}")
+    print(f"🔍 [SEARCH_DIRECT] {readable}")
+    print(f"👤 [SEARCH_DIRECT] user_id: {user_id} | 🧵 conversation_id: {conversation_id}")
+    print(f"{'='*60}")
+
+    # Persist the user turn up-front (survives a crash mid-search).
+    conversation_store.add_message(user_id, conversation_id, "user", readable)
+
+    request_id = new_request_id(request.headers.get("X-Request-Id"))
+    # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
+    try:
+        with request_context(request_id, user_id):
+            result = await search_properties_impl(
+                user_query=readable,
+                area=area,
+                commute_destination=tool_commute_destination,
+                max_budget=max_budget,
+                max_commute_time=max_commute_time,
+                no_commute=no_commute,
+                bedrooms=bedrooms,
+                budget_period=budget_period,
+            )
+        recommendations = result.get('recommendations') or []
+        message = (result.get('summary') or result.get('message')
+                   or (f"Found {len(recommendations)} matching properties." if recommendations
+                       else "No matching properties found. Try widening your criteria."))
+        payload = {
+            "response_type": "search",
+            "message": message,
+            "recommendations": recommendations,
+            "search_criteria": result.get('search_criteria') or {},
+        }
+    except Exception as e:
+        # Same convention as /api/alex: a tool-side error is a normal response_type the
+        # client renders, returned at HTTP 200 so the freshly-created conversation isn't
+        # orphaned and the frontend can still adopt conversation_id.
+        print(f"❌ [SEARCH_DIRECT] 错误: {e}")
+        traceback.print_exc()
+        recommendations = []
+        message = "抱歉，搜索房源时出错了。请稍后再试。"
+        payload = {
+            "response_type": "error",
+            "message": message,
+            "recommendations": [],
+            "search_criteria": {},
+        }
+
+    # conversation_id echoed in EVERY response (incl. errors + implicit creation).
+    payload["conversation_id"] = conversation_id
+
+    # --- L2 write-back — SAME helper the ReAct path uses (phase 3) --------------
+    # A form submit is authoritative, so OVERWRITE the scalar accumulated criteria (the
+    # list fields are kept as-is by _write_back_turn). user_preferences is left untouched
+    # (no LLM preference extraction on this path). Deliberately NO remember_turn_async:
+    # deterministic form input is not a conversational signal worth writing to long-term
+    # memory (unlike a chat turn on /api/alex).
+    _write_back_turn(
+        user_id, conversation_id, readable, message, recommendations,
+        criteria_overwrite={
+            'area': area,
+            'commute_destination': commute_destination,
+            'destination': commute_destination,   # legacy mirror consumed by older paths
+            'max_budget': max_budget,
+            'max_travel_time': max_commute_time,
+            'no_commute': no_commute,
+            'bedrooms': bedrooms,
+            'budget_period': budget_period,
+        },
+    )
+
+    # Persist the assistant reply (recommendations preserved verbatim for re-render).
+    try:
+        conversation_store.add_message(
+            user_id, conversation_id, "assistant", message,
+            response_type=payload.get("response_type"),
+            recommendations=recommendations,
+        )
+    except Exception as e:
+        print(f"[persist] assistant message failed: {e}")
+
+    response = jsonify(payload)
+    response.headers["X-Request-Id"] = request_id
+    return response
 
 
 # ============================================================================

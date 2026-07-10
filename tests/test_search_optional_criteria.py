@@ -101,6 +101,11 @@ def stub_env(monkeypatch):
 
 
 def _run(**kwargs):
+    # These tests exercise the SEARCH MECHANICS (filtering / annotation / no-results),
+    # which corresponds to the confirmed path (form direct-search or a user who has
+    # confirmed to proceed). Default confirmed=True so the soft criteria gate does not
+    # intercept them; the gate itself is covered explicitly in test_soft_criteria_gate.py.
+    kwargs.setdefault("confirmed", True)
     return asyncio.run(search_properties_impl(**kwargs))
 
 

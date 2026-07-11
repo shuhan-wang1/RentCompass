@@ -5,8 +5,8 @@ Everything tunable lives here:
   - the rich property schema (must match the columns of fake_property_listings.csv)
   - default search tasks (which locations / price bands to scrape)
   - cache file location + TTL
-  - a helper that makes the standalone scrapers in ``scrapped_data_demo/scrapper``
-    importable from inside ``local_data_demo``.
+  - a helper that makes the vendored standalone scrapers in ``legacy_scrapers/``
+    importable despite their bare cross-imports.
 """
 
 import os
@@ -19,21 +19,19 @@ from uk_rent_agent.domain.schema import RICH_COLUMNS
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-# .../local_data_demo/core/scraping/config.py
+# .../<app>/core/scraping/config.py
 #   parents[0] = scraping
 #   parents[1] = core
-#   parents[2] = local_data_demo
-#   parents[3] = <repo root>
+#   parents[2] = <app dir>
 _THIS = Path(__file__).resolve()
-LOCAL_DEMO_DIR = _THIS.parents[2]
-REPO_ROOT = _THIS.parents[3]
+APP_DIR = _THIS.parents[2]
 
-DATA_DIR = LOCAL_DEMO_DIR / "data"
+DATA_DIR = APP_DIR / "data"
 FAKE_CSV = DATA_DIR / "fake_property_listings.csv"
 CACHE_CSV = DATA_DIR / "scraped_property_listings.csv"
 
-# The legacy, working scrapers (Rightmove + Zoopla) live here.
-SCRAPPER_DIR = REPO_ROOT / "scrapped_data_demo" / "scrapper"
+# Vendored legacy scrapers (Rightmove + Zoopla opt-in stubs) live here.
+SCRAPPER_DIR = _THIS.parent / "legacy_scrapers"
 
 # ---------------------------------------------------------------------------
 # Rich schema — MUST stay column-identical to fake_property_listings.csv so the

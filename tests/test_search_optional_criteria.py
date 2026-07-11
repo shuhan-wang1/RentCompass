@@ -254,7 +254,9 @@ def test_classify_place_university():
 
 def test_classify_place_area():
     c = on_demand.classify_place("camden")
-    assert c == {"kind": "area", "slug": "camden", "city": "london"}
+    # classify_place now also returns 'address'/'source' keys (destination detector);
+    # assert the load-bearing fields rather than exact dict equality.
+    assert c["kind"] == "area" and c["slug"] == "camden" and c["city"] == "london"
     assert on_demand.classify_place("Manchester")["kind"] == "area"
 
 

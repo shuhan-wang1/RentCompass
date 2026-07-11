@@ -292,6 +292,210 @@ def _extract_bedrooms(text: str):
     return None
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Area / city extraction (conversational switch + bare place name + zh cities).
+# ─────────────────────────────────────────────────────────────────────────────
+# SINGLE SOURCE OF TRUTH for Chinese→English UK place names. Reused by the main
+# fresh-search area path so a first message like "曼彻斯特的公寓" resolves without an
+# LLM round-trip. Chinese place names are distinctive enough for a safe substring
+# match. Nonsense / non-UK names (火星/月球/瓦坎达 …) are deliberately absent -> None.
+_ZH_AREA_MAP = {
+    "曼彻斯特": "Manchester", "曼城": "Manchester", "伦敦": "London",
+    "利兹": "Leeds", "爱丁堡": "Edinburgh", "布里斯托尔": "Bristol",
+    "布里斯托": "Bristol", "格拉斯哥": "Glasgow", "卡迪夫": "Cardiff",
+    "伯明翰": "Birmingham", "利物浦": "Liverpool", "谢菲尔德": "Sheffield",
+    "纽卡斯尔": "Newcastle", "诺丁汉": "Nottingham", "莱斯特": "Leicester",
+    "考文垂": "Coventry", "牛津": "Oxford", "剑桥": "Cambridge",
+    "布莱顿": "Brighton", "约克": "York", "南安普顿": "Southampton",
+    "南安普敦": "Southampton", "阿伯丁": "Aberdeen", "邓迪": "Dundee",
+    "贝尔法斯特": "Belfast", "斯旺西": "Swansea", "诺里奇": "Norwich",
+    "埃克塞特": "Exeter", "普利茅斯": "Plymouth", "德比": "Derby",
+    "雷丁": "Reading", "巴斯": "Bath", "杜伦": "Durham",
+    "坎特伯雷": "Canterbury", "格林威治": "Greenwich", "卡姆登": "Camden",
+    "肯辛顿": "Kensington", "切尔西": "Chelsea",
+}
+
+# Curated set of well-known UK cities + London boroughs/areas (canonical spelling).
+# Deliberately NOT exhaustive: it EXCLUDES names that collide with common English
+# words (Bath, Reading, Angel, Bow, Kew…) so a bare "bath"/"reading" in a rental
+# chat is never mistaken for an area switch (a false switch is worse than a miss).
+# Chinese users still reach Bath/Reading via the unambiguous zh map above.
+_KNOWN_AREA_NAMES = [
+    # major UK cities
+    "London", "Manchester", "Birmingham", "Leeds", "Liverpool", "Sheffield",
+    "Bristol", "Glasgow", "Edinburgh", "Cardiff", "Newcastle", "Nottingham",
+    "Leicester", "Coventry", "Bradford", "Wolverhampton", "Sunderland",
+    "Brighton", "Oxford", "Cambridge", "York", "Southampton", "Portsmouth",
+    "Aberdeen", "Dundee", "Belfast", "Swansea", "Norwich", "Exeter",
+    "Plymouth", "Hull", "Derby", "Milton Keynes", "Preston", "Bournemouth",
+    "Middlesbrough", "Luton", "Northampton", "Ipswich", "Gloucester",
+    "Chester", "Canterbury", "Lancaster", "Durham", "Guildford", "Watford",
+    "Slough", "Salford", "Wigan", "Bolton", "Blackpool", "Huddersfield",
+    "Doncaster", "Peterborough",
+    # well-known London boroughs / areas
+    "Camden", "Islington", "Hackney", "Shoreditch", "Hoxton", "Dalston",
+    "Brixton", "Clapham", "Peckham", "Greenwich", "Ealing", "Wimbledon",
+    "Stratford", "Kensington", "Chelsea", "Fulham", "Hammersmith",
+    "Notting Hill", "Whitechapel", "Bethnal Green", "Bermondsey", "Deptford",
+    "Lewisham", "Wandsworth", "Battersea", "Vauxhall", "Pimlico", "Marylebone",
+    "Soho", "Mayfair", "Finsbury Park", "Tottenham", "Walthamstow", "Wembley",
+    "Harrow", "Barnet", "Enfield", "Richmond", "Kingston", "Putney", "Balham",
+    "Tooting", "Canary Wharf", "Elephant and Castle", "Highbury", "Highgate",
+    "Hampstead", "Kentish Town", "Holloway", "Stoke Newington", "Mile End",
+    "Clerkenwell", "Farringdon", "Acton", "Chiswick", "Streatham", "Catford",
+    "Leyton", "Leytonstone", "Hackney Wick", "New Cross", "Rotherhithe",
+    "Kilburn", "Willesden", "Croydon", "Bromley", "Ilford", "Woolwich",
+    "Camberwell", "Kennington", "Aldgate", "Southwark", "Wapping", "Limehouse",
+    "Blackheath", "Forest Hill", "Shepherd's Bush", "Earl's Court",
+    "King's Cross",
+]
+# key (lowercased, apostrophes removed) -> canonical spelling.
+_KNOWN_AREAS = {re.sub(r"[’']", "", n.lower()): n for n in _KNOWN_AREA_NAMES}
+
+# Switch / location cues that precede a place name in a conversational area change.
+# The captured span is VALIDATED against _KNOWN_AREAS, so even a weak cue can never
+# invent an area — only a recognised UK place is ever returned.
+_AREA_CUE_RE = re.compile(
+    r"\b(?:"
+    r"make it|switch(?:ing)?\s+to|change(?:\s+it)?\s+to|move(?:\s+it)?\s+to|"
+    r"relocat\w*\s+to|how about|what about|let[’']?s\s+try|lets\s+try|try|"
+    r"actually|instead|look(?:ing)?\s+(?:in|at|around)|search(?:ing)?\s+(?:in|around)|"
+    r"live\s+in|living\s+in|stay(?:ing)?\s+in|based\s+in|"
+    r"flats?\s+in|places?\s+in|rooms?\s+in|somewhere\s+in|"
+    r"property\s+in|properties\s+in|apartments?\s+in|"
+    r"want|prefer|choose|pick|go\s+(?:with|to|for)|"
+    r"around|near|in"
+    r")\s+([a-z][a-z’'\-\.\s]{1,30})",
+    re.IGNORECASE,
+)
+
+# Filler tokens stripped when testing whether a message is "essentially just a place".
+_AREA_BARE_FILLER = re.compile(
+    r"\b(?:please|thanks?|thank you|ok|okay|yeah?|yep|yes|sure|hi|hey|hello|"
+    r"the|a|an|to|in|at|of|for|let[’']?s|go|going|with|maybe|actually|now|"
+    r"move|switch|change|make|it|try|i|want|need|would|like|live|search|"
+    r"look|looking|flat|flats|place|places|room|rooms|apartment|apartments|"
+    r"area|city|somewhere|instead)\b",
+    re.IGNORECASE,
+)
+
+
+def _match_known_area(fragment: str):
+    """Canonical name of the LONGEST known UK city / London area that appears as a
+    whole word in ``fragment``, else None. Apostrophes are normalised away so
+    "shepherd's bush" matches; longest match wins so "notting hill" beats a stray
+    partial."""
+    if not fragment:
+        return None
+    t = re.sub(r"[’']", "", fragment.lower())
+    best_key = None
+    for key in _KNOWN_AREAS:
+        if re.search(r"\b" + re.escape(key) + r"\b", t):
+            if best_key is None or len(key) > len(best_key):
+                best_key = key
+    return _KNOWN_AREAS[best_key] if best_key else None
+
+
+def _extract_area(text: str) -> str | None:
+    """A NEW area/city the user is switching to (canonical ENGLISH name), else None.
+
+    Recognises (a) Chinese UK city names via _ZH_AREA_MAP, (b) a conversational
+    switch/location cue followed by a known place ("make it Manchester", "flats in
+    Glasgow", "actually London"), and (c) a bare message that is essentially just a
+    known UK place ("Manchester", "Shoreditch"). Deliberately CONSERVATIVE: only
+    places in the curated set are returned, so nonsense / non-UK names ("Mars",
+    "Wakanda", "火星") yield None and never trigger a bogus area switch. Always
+    returns the canonical English name so downstream geocoding works regardless of
+    the input language."""
+    if not text or not text.strip():
+        return None
+    # (a) Chinese city names — distinctive, safe substring match.
+    for zh, canon in _ZH_AREA_MAP.items():
+        if zh in text:
+            return canon
+    t = text.lower().strip()
+    # (b) explicit switch / location cue + a VALIDATED known place.
+    for m in _AREA_CUE_RE.finditer(t):
+        canon = _match_known_area(m.group(1))
+        if canon:
+            return canon
+    # (c) bare place: strip punctuation + filler; the remainder IS a known place.
+    bare = re.sub(r"[^a-z’'\-\s]", " ", t)
+    bare = _AREA_BARE_FILLER.sub(" ", bare)
+    bare = re.sub(r"[’']", "", bare)
+    bare = " ".join(bare.split())
+    if bare:
+        canon = _KNOWN_AREAS.get(bare)
+        if canon:
+            return canon
+    return None
+
+
+# Phrases meaning "remove/clear any budget limit" — English + Chinese. Distinct from
+# a normal budget statement ("budget is £1000", "under 1500"), which must NOT fire.
+_BUDGET_CLEAR_PHRASES = (
+    "no budget", "no price limit", "no budget limit", "no max budget",
+    "no maximum budget",
+    "remove the budget", "remove budget", "remove my budget",
+    "clear the budget", "clear budget", "drop the budget", "lift the budget",
+    "forget the budget", "forget budget", "forget about the budget",
+    "without a budget", "without budget", "budget-free", "budget free",
+    "any price", "any budget", "show all prices", "show me all prices",
+    "money is no object", "cost is no object", "regardless of price",
+    "regardless of budget", "whatever the price", "whatever the cost",
+    # Chinese
+    "预算不限", "不限预算", "没有预算限制", "无预算限制", "预算无上限",
+    "价格不限", "不限价格", "不限价", "预算无所谓", "预算不是问题",
+    "多少钱都行", "多少钱都可以", "价格无所谓", "不在乎预算", "不在乎价格",
+    "预算没有限制",
+)
+
+# Regex forms carrying an apostrophe / word gap ("budget doesn't matter",
+# "price is not a concern", "don't care about the budget", "no spending limit").
+_BUDGET_CLEAR_PATTERNS = (
+    r"\b(?:budget|price|cost)\s+(?:really\s+)?(?:does\s*n[’']?t|do\s*n[’']?t|does\s+not|do\s+not)\s+matter\b",
+    r"\b(?:budget|price|cost)\s+(?:is\s+not|isn[’']?t|is\s+n[’']?t)\s+(?:a\s+)?(?:concern|issue|problem)\b",
+    r"\bno\s+(?:budget|price|spending|cost)\s+(?:limit|cap|maximum|max)\b",
+    r"\bdo\s*n[’']?t\s+(?:care|worry)\s+about\s+(?:the\s+|my\s+)?(?:budget|price|cost)\b",
+)
+
+
+def _extract_budget_clear(text: str) -> bool:
+    """True when the user asks to REMOVE/CLEAR any budget limit ("no budget",
+    "any price", "budget doesn't matter", "预算不限"), letting the caller reset an
+    accumulated max_budget. Deterministic and precise: a normal budget statement
+    ("budget is £1000", "under 1500") returns False."""
+    if not text:
+        return False
+    t = text.lower()
+    if any(p in t for p in _BUDGET_CLEAR_PHRASES):
+        return True
+    return any(re.search(p, t) for p in _BUDGET_CLEAR_PATTERNS)
+
+
+def _strip_memory_block(text: str) -> str:
+    """Remove the long-term-memory block (and any conversation-history prefix) that
+    the agent PREPENDS to ``user_query`` before calling this tool, leaving only the
+    user's actual current-turn text.
+
+    HARD search filters (area / budget / room_type / bedrooms) must never be
+    extracted from a PRIOR conversation's remembered criteria — that is the
+    cross-conversation bleed defect. Mirrors ``langgraph_agent._current_message`` so
+    the phrasings stay in sync, and is kept LOCAL so the tool defends itself
+    regardless of caller (a plain query with no memory block passes through
+    unchanged)."""
+    q = text or ""
+    if q.startswith("What I remember about this user:"):
+        sep = "\n\n"
+        idx = q.find(sep)
+        if idx != -1:
+            q = q[idx + 2:]
+    for marker in ("Current user message:", "answer to the clarification question:"):
+        if marker in q:
+            q = q.split(marker)[-1]
+    return q.strip()
+
+
 def _commute_phrase(max_commute_time, location: str) -> str:
     """User-facing commute clause. Empty when the limit is the no-limit sentinel so
     we never print 'within 999 min'."""
@@ -618,8 +822,18 @@ async def search_properties_impl(
     Returns:
         包含搜索结果或（仅在 search_area 无法确定时）澄清问题的字典。
     """
+    # Memory-stripped view of user_query. The agent PREPENDS a long-term-memory
+    # block to user_query; a HARD search filter (area/budget/room_type/bedrooms)
+    # must NEVER be extracted from a prior conversation's remembered criteria
+    # (cross-conversation bleed). Every deterministic hard-criteria extraction below
+    # runs on THIS turn's real text only: current_message (this turn, memory-free)
+    # is preferred; stripped_query is the defensive fallback when the caller omits
+    # current_message. Long-term memory may still inform soft context elsewhere, but
+    # it can no longer SET a hard filter the user didn't state this conversation.
+    stripped_query = _strip_memory_block(user_query)
+
     # ── 语言：中文用户用中文回复（澄清/无结果文案） ──────────────────────
-    is_cjk = _has_cjk(current_message) or _has_cjk(user_query)
+    is_cjk = _has_cjk(current_message) or _has_cjk(stripped_query)
 
     # 🆕 初始化累积的特征和偏好
     # 修复：确保输入是列表，不是字符串
@@ -648,6 +862,25 @@ async def search_properties_impl(
 
     try:
         from core.scraping.on_demand import classify_place, get_listings
+        # 目的地判定（大学/公司）。契约由 on_demand 提供 is_destination；若并行 builder
+        # 尚未落地该符号，用与契约同义的本地兜底（university/workplace 即目的地），绝不因
+        # 导入缺失而让整个搜索工具崩溃。落地后自动改用真实实现。
+        try:
+            from core.scraping.on_demand import is_destination
+        except ImportError:
+            def is_destination(kind_or_result):
+                kind = (kind_or_result.get("kind")
+                        if isinstance(kind_or_result, dict) else kind_or_result)
+                return kind in ("university", "workplace")
+        # 消息级目的地扫描：当消息把"公司/工作地 + 裸城市"同时说出时（"Google office in
+        # London"），裸城市 area 抓取会短路掉逐名目的地判定，丢失通勤目标。此扫描在原始
+        # 消息上找回被命名的目的地并锁为通勤目标（详见步骤 1.4a）。若并行 builder 尚未
+        # 落地该符号，兜底为 None（绝不因导入缺失让搜索崩溃）。
+        try:
+            from core.scraping.on_demand import extract_destination_from_text
+        except ImportError:
+            def extract_destination_from_text(_text):
+                return None
 
         print(f"\n{'='*60}")
         print(f"🏠 [SEARCH TOOL] 开始执行房源搜索")
@@ -661,7 +894,9 @@ async def search_properties_impl(
         # ================================================================
         # 步骤 0: 本轮消息里的显式信号优先（预算/通勤/不通勤），但绝不重新引入门槛
         # ================================================================
-        msg_for_extraction = current_message or user_query
+        # 只在"本轮真实消息"上做硬条件抽取（memory-stripped），绝不从注入的长期记忆块里
+        # 抓取区域/预算/房型/卧室（跨会话泄漏修复）。
+        msg_for_extraction = current_message or stripped_query
         # 房型：规范化传入值；缺失时从本轮消息里抽取（"我要ensuite" 亦生效）。
         room_type = _normalize_room_type(room_type)
         if not room_type:
@@ -687,15 +922,29 @@ async def search_properties_impl(
             return v.strip() if isinstance(v, str) and v.strip() else None
 
         search_area = _clean_area(area) or _clean_area(location)
+        # 记录 search_area 是否由 commute_destination 推导（而非用户当作"住哪"输入的 token）。
+        # 由 commute_destination 推导出的 slug 绝不参与"区域即目的地"的重分类（步骤 1.4）。
+        search_area_from_commute_dest = False
         if not search_area and commute_destination:
             _slug = classify_place(commute_destination).get("slug")
             search_area = _slug or None
+            search_area_from_commute_dest = bool(search_area)
+
+        # 确定性区域识别（SINGLE SOURCE OF TRUTH，含 zh→English 城市映射），在 NL/LLM
+        # 回退之前：一个裸/切换式地名 —— 英文或中文（"曼彻斯特的公寓"）—— 无需 LLM
+        # 往返即可解析。仅在 memory-stripped 的本轮消息上运行，不会读取注入的记忆块。
+        if not search_area:
+            _area_guess = _extract_area(msg_for_extraction)
+            if _area_guess:
+                search_area = _area_guess
+                print(f"   🧭 确定性区域识别: {search_area}")
 
         # 仅当仍无法确定区域，且有自由文本时，才回退到 NL 抽取来"找回一个区域"。
         # （零先验：预算/通勤缺失不触发抽取；抽取只为补齐区域，顺带带回预算/通勤/特征。）
-        if not search_area and (user_query or current_message):
+        # 注意：使用 memory-stripped 文本，避免 LLM 从注入的长期记忆块里读取旧区域/预算。
+        if not search_area and (stripped_query or current_message):
             print(f"\n📝 [SEARCH] 无区域，使用 NL 抽取尝试找回位置...")
-            enhanced_query = user_query or current_message
+            enhanced_query = stripped_query or current_message
             if all_property_features:
                 enhanced_query = f"Looking for {', '.join(all_property_features)} property. {enhanced_query}"
             try:
@@ -736,9 +985,11 @@ async def search_properties_impl(
 
             # 重新解析区域
             search_area = _clean_area(area) or _clean_area(location)
+            search_area_from_commute_dest = False
             if not search_area and commute_destination:
                 _slug = classify_place(commute_destination).get("slug")
                 search_area = _slug or None
+                search_area_from_commute_dest = bool(search_area)
 
         # 0 是无效值（NL 抽取 JSON 模板的默认占位，调用方也可能传 0）——统一
         # 规范化为 None，使过滤逻辑与 known_criteria/search_criteria 载荷一致，
@@ -748,12 +999,73 @@ async def search_properties_impl(
         if not max_commute_time:
             max_commute_time = None
 
+        # ================================================================
+        # 步骤 1.4: 若"想住的区域"其实是一个目的地（大学/公司），锁为通勤目标
+        # ----------------------------------------------------------------
+        # 用户可能把一个目的地（"UCL"、某公司）当作"住哪"来说。此时应：锁定它为通勤
+        # 目标、默认通勤模式（下面步骤 2.6 绝不再问"是否通勤"），并清空 search_area 以
+        # 反问"想住哪"。真实居住区（Camden/Manchester → classify_place kind=="area"）
+        # 不受影响。仅重分类"用户当作住哪输入的"token，绝不动由 commute_destination
+        # 推导出的 slug（步骤 1 的 search_area_from_commute_dest 记录了这一点）。
+        # 位置：必须早于下面的硬门（步骤 2）与软门（步骤 2.6），故置于二者之前、且在
+        # commute_target 计算之前——这样锁定的目的地能被 commute_target 直接采用。
+        locked_commute_dest = None
+
+        # 步骤 1.4a: 消息里"命名"了一个目的地（公司/大学）时，其优先级高于裸城市 area 抓取。
+        # ----------------------------------------------------------------
+        # "find me a place near the Google office in London" 会被 _extract_area 抓成
+        # area="London"（裸城市），从而短路掉逐名目的地判定，丢失"Google 办公室"这个通勤
+        # 目标。此处在 memory-stripped 的本轮原始消息上做保守的目的地扫描（仅当 classify_place
+        # 确认为 university/workplace 才命中；纯居住区/裸城市绝不命中），命中即锁为通勤目标。
+        # 仅在用户未显式给出 commute_destination 且未声明 no_commute 时运行。
+        if (not no_commute and not commute_destination and msg_for_extraction):
+            _msg_dest = extract_destination_from_text(msg_for_extraction)
+            if _msg_dest and is_destination(_msg_dest):
+                _dest_name = _msg_dest.get("name") or search_area or "your destination"
+                commute_destination = _msg_dest.get("address") or _dest_name
+                no_commute = False
+                locked_commute_dest = _dest_name  # 人类可读目的地名，用于门文案
+                _dest_city = str(_msg_dest.get("city") or "").strip().lower()
+                # 区分"目的地自身的城市"（上下文，非用户选定的家 → 清空以反问住哪）与"用户
+                # 另给的、与目的地不同的真实居住区"（如 "...near the Google office, live in
+                # Camden" → 保留 Camden，只锁通勤）。仅动用户当作住哪输入的 token；由
+                # commute_destination 推导出的 slug 不在此列。
+                if search_area and not search_area_from_commute_dest:
+                    _sa = search_area.strip().lower()
+                    if is_destination(classify_place(search_area)) or _sa == _dest_city:
+                        search_area = None
+                print(f"   🎯 消息命名目的地：锁定通勤目标『{locked_commute_dest}』"
+                      f"(commute_destination={commute_destination})，改问住哪 "
+                      f"(residential={search_area})")
+
+        # 步骤 1.4b: 若"想住的区域"其实是一个目的地 token（用户把 UCL/某公司当住哪说），
+        # 且上面 1.4a 尚未锁定，则在此重分类为通勤目标。
+        if not locked_commute_dest and search_area and not search_area_from_commute_dest:
+            _place = classify_place(search_area)
+            if is_destination(_place):
+                _token = search_area
+                commute_destination = _place.get("address") or _token
+                no_commute = False
+                locked_commute_dest = _token  # 人类可读的目的地名（如 "UCL"），用于门文案
+                # 用户若另给了一个"不同的"真实居住区，保留之为 search_area；
+                # 否则清空，触发下方"想住哪"硬门。
+                _residential = None
+                for _cand in (_clean_area(area), _clean_area(location)):
+                    if (_cand and _cand != _token
+                            and not is_destination(classify_place(_cand))):
+                        _residential = _cand
+                        break
+                search_area = _residential
+                print(f"   🎯 区域即目的地：锁定通勤目标『{locked_commute_dest}』"
+                      f"(commute_destination={commute_destination})，改问住哪 "
+                      f"(residential={search_area})")
+
         # 通勤标注目标（no_commute 覆盖一切）
         commute_target = None
         if not no_commute:
             if commute_destination:
                 commute_target = commute_destination
-            elif location and classify_place(location).get("kind") == "university":
+            elif location and is_destination(classify_place(location)):
                 commute_target = location
 
         # ================================================================
@@ -765,7 +1077,7 @@ async def search_properties_impl(
             min_beds = max_beds = bedrooms
             resolved_bedrooms = bedrooms
         else:
-            beds = _extract_bedrooms(current_message or user_query or "")
+            beds = _extract_bedrooms(current_message or stripped_query or "")
             if beds is None:
                 for _v in kwargs.values():
                     beds = _extract_bedrooms(str(_v))
@@ -832,7 +1144,16 @@ async def search_properties_impl(
         # 步骤 2: 澄清 —— 仅当"搜索区域"无法确定时才追问（问『住哪』，绝不问『通勤去哪』）
         # ================================================================
         if not search_area:
-            if is_cjk:
+            if locked_commute_dest:
+                # 区域即目的地：默认通勤模式已锁定，只需再问"想住哪"（顺带 nudge 预算）。
+                if is_cjk:
+                    question = (f"好的 —— 我会按到 {locked_commute_dest} 的通勤来帮你找房。"
+                                f"你想住在哪个区域或城市？（有预算的话也一并告诉我）")
+                else:
+                    question = (f"Got it — I'll plan your commute to {locked_commute_dest}. "
+                                f"Which area or city would you like to live in? "
+                                f"(and your monthly budget, if you have one)")
+            elif is_cjk:
                 question = ("你想住在哪个区域或城市？（例如 Camden、Manchester，或大学如 UCL）。"
                             "也可以直接使用右侧的搜索表单。")
             else:
@@ -878,8 +1199,10 @@ async def search_properties_impl(
         #      或本轮消息含“继续/continue”等继续意图。缺失即列出，让用户补充或继续。
         # 持久化：criteria_gate_shown 经 extracted_so_far → update_search_criteria →
         #      _write_back_turn 落到 accumulated_search_criteria（按会话、可跨进程重启）。
-        commute_satisfied = bool(no_commute) or (
-            commute_target is not None and _real_commute_limit(max_commute_time))
+        # 已知通勤目标即视为满足（仅标注、不强制过滤）：一旦锁定/给出目的地，就绝不再
+        # 追问"是否通勤"。真实上限缺失时仍不过滤（commute_annotation_enabled 只标注，
+        # commute_filter_enabled 只有在有真实上限时才为 True）。预算/房型软门行为不变。
+        commute_satisfied = bool(no_commute) or (commute_target is not None)
         soft_missing = []
         if not has_budget:
             soft_missing.append('budget')
@@ -939,6 +1262,7 @@ async def search_properties_impl(
                 'recommendations': [],
                 'data_source': data_source,
                 'search_criteria': _criteria(),
+                'known_criteria': _known_criteria(),
             }
 
         # 规范化真实行：解析价格、推断卧室/房型、标记过期。
@@ -1184,6 +1508,7 @@ async def search_properties_impl(
                             'suggested_budget': suggested_budget,
                             'budget_increase_needed': budget_increase,
                             'search_criteria': _criteria(),
+                            'known_criteria': _known_criteria(),
                             'recommendations': similar_formatted,
                         }
 
@@ -1195,6 +1520,7 @@ async def search_properties_impl(
                 'recommendations': [],
                 'data_source': data_source,
                 'search_criteria': _criteria(),
+                'known_criteria': _known_criteria(),
             }
 
         # ================================================================
@@ -1257,6 +1583,10 @@ async def search_properties_impl(
             'data_source': data_source,
             'possibly_outdated': possibly_outdated,
             'search_criteria': _criteria(),
+            # Populated snapshot of the ACTUAL resolved criteria so the frontend can
+            # mirror state after a search (previously absent on the search path, so a
+            # consumer reading known_criteria on a found turn got {}).
+            'known_criteria': _known_criteria(),
             'recommendations': formatted_results,
             'perfect_count': len(perfect_match),
             'soft_count': len(soft_violation),

@@ -581,6 +581,29 @@
         .gallery-thumbnail { width: 60px; height: 40px; object-fit: cover; border-radius: 4px; opacity: 0.5; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
         .gallery-thumbnail.active { opacity: 1; border-color: var(--primary-color); transform: translateY(-4px); }
 
+        /* Map Modal (card-style preview of a property's location map) */
+        #mapModal { z-index: 2600; }
+        .map-modal-content {
+            width: 90vw; height: 85vh; max-width: 1100px;
+            background: var(--bg-surface); border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg); overflow: hidden;
+            display: flex; flex-direction: column; animation: slideIn 0.2s ease;
+        }
+        .map-modal-header {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            padding: 14px 16px; border-bottom: 1px solid var(--border-medium); flex-shrink: 0;
+        }
+        .map-modal-title {
+            font-size: 0.95rem; font-weight: 700; color: var(--text-main);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .map-modal-close {
+            position: static; flex-shrink: 0;
+            background: var(--bg-hover); border-color: var(--border-medium); color: var(--text-secondary);
+        }
+        .map-modal-close:hover { background: var(--border-medium); }
+        .map-modal-body { flex: 1; min-height: 0; background: var(--bg-body); }
+
         /* Alert Box */
         .alert-box {
             border: 1px solid;
@@ -1030,6 +1053,21 @@
         </div>
     </div>
 
+    <!-- Map Modal -->
+    <div id="mapModal" class="modal">
+        <div class="modal-content map-modal-content">
+            <div class="map-modal-header">
+                <span class="map-modal-title" id="mapModalTitle"></span>
+                <button class="modal-close-btn map-modal-close" onclick="closeMapModal()">
+                    <svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="map-modal-body">
+                <iframe id="mapFrame" data-i18n-title="map_frame_title" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style="border:0;width:100%;height:100%"></iframe>
+            </div>
+        </div>
+    </div>
+
     <script>
         /* -------------------------------------------------------------------------- */
         /* CONFIGURATION                                                              */
@@ -1214,6 +1252,8 @@
                 // System
                 focusing_on: "Focusing on:",
                 loading_map: "Loading...",
+                map_modal_title: "Map",
+                map_frame_title: "Property location map",
                 error_connection: "Connection error. Please check the server.",
                 request_cancelled: "Request cancelled.",
                 retry: "Retry",
@@ -1369,6 +1409,8 @@
                 // System
                 focusing_on: "当前关注：",
                 loading_map: "加载中...",
+                map_modal_title: "地图",
+                map_frame_title: "房源位置地图",
                 error_connection: "连接错误，请检查服务器。",
                 request_cancelled: "请求已取消。",
                 retry: "重试",
@@ -2516,6 +2558,17 @@
 
         function closeModal() { document.getElementById('imageModal').style.display = 'none'; }
 
+        function openMapModal(address, mapHtml) {
+            document.getElementById('mapModalTitle').textContent = address || t('map_modal_title');
+            document.getElementById('mapFrame').srcdoc = mapHtml;
+            document.getElementById('mapModal').style.display = 'flex';
+        }
+
+        function closeMapModal() {
+            document.getElementById('mapModal').style.display = 'none';
+            document.getElementById('mapFrame').srcdoc = ''; // tear down Leaflet/tiles, free memory
+        }
+
         function changeImage(direction) {
             currentImageIndex += direction;
             if (currentImageIndex < 0) currentImageIndex = currentGalleryImages.length - 1;
@@ -2554,8 +2607,7 @@
                 });
                 if (!response.ok) { showToast(t('error_map'), 'error'); return; }
                 const mapHtml = await response.text();
-                const win = window.open('', '_blank');
-                if (win) { win.document.write(mapHtml); win.document.close(); }
+                openMapModal(rec.address, mapHtml);
             } catch (e) {
                 if (e && e.name === 'AbortError') return;
                 showToast(t('error_connection'), 'error');
@@ -3613,11 +3665,15 @@
             document.getElementById('dialogOverlay').addEventListener('click', e => {
                 if (e.target === document.getElementById('dialogOverlay')) closeDialog();
             });
+            document.getElementById('mapModal').addEventListener('click', e => {
+                if (e.target === document.getElementById('mapModal')) closeMapModal();
+            });
             document.addEventListener('keydown', e => {
                 if (e.key === 'Escape') {
                     closeDialog();
                     closeUserDropdown();
                     if (document.getElementById('imageModal').style.display === 'flex') closeModal();
+                    if (document.getElementById('mapModal').style.display === 'flex') closeMapModal();
                 }
             });
         }

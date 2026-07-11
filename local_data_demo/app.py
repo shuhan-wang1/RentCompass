@@ -249,6 +249,24 @@ def get_json_or_400() -> dict:
     return data
 
 
+def _validate_conversation_id(data: dict):
+    """Validate the OPTIONAL conversation_id on a request body and return it (or None).
+
+    A list/dict/number conversation_id is truthy, so it slips past the `if conversation_id`
+    guard and reaches sqlite as a bind parameter, raising a 500 BEFORE the agent try/except
+    wrapper. Reject any present-but-not-a-non-empty-string value here as a 400 — this is
+    input validation performed BEFORE agent invocation, which the always-200-for-agent-errors
+    contract explicitly permits (that contract only covers agent/tool-side failures).
+
+    None / omitted → returns None (implicitly create a new conversation). A non-empty string
+    that names no existing conversation is still valid and returns as-is (→ 200 downstream).
+    """
+    cid = data.get('conversation_id')
+    if cid is not None and (not isinstance(cid, str) or not cid.strip()):
+        raise ApiError(400, "conversation_id must be a string")
+    return cid
+
+
 def _authed_user_id():
     """Return the authenticated user_id if the session is logged in, else None.
 
@@ -521,6 +539,7 @@ async def api_alex():
     """
     # --- parse + validate (these raise ApiError → JSON 4xx, NOT 500) -----------
     data = get_json_or_400()
+    _validate_conversation_id(data)  # reject list/dict/non-string cid before it hits sqlite
     user_id, _session_id = resolve_identity(data)
     try:
         user_message = normalize_message(data.get('message'))
@@ -586,8 +605,18 @@ async def api_alex():
 
 
 def _derive_title(message: str) -> str:
-    """Human-friendly conversation title from the first user message (implicit creation)."""
-    text = " ".join((message or "").split())
+    """Human-friendly conversation title from the first user message (implicit creation).
+
+    Defense-in-depth against stored XSS: this title is auto-generated server-side and
+    returned verbatim by GET /api/conversations, so it must not carry executable markup.
+    Strip whole HTML tags (<img ...>, </script>) then any stray angle brackets so a
+    payload like "<img src=x onerror=alert(1)>hello" survives only as inert plain text.
+    Stored message CONTENT is deliberately NOT altered — only this derived label.
+    """
+    raw = message or ""
+    no_tags = re.sub(r"<[^>]*>", "", raw)
+    plain = no_tags.replace("<", "").replace(">", "")
+    text = " ".join(plain.split())
     if not text:
         return "New chat"
     return text[:40] + ("…" if len(text) > 40 else "")
@@ -969,17 +998,38 @@ Current user message: {user_message}"""
 # CHAT turn on /api/alex sees the form's criteria + results as context.
 # ============================================================================
 
-def _coerce_optional_int(value, field_name):
-    """Coerce an optional numeric criterion to a non-negative int, or None when absent.
-    Rejects non-numeric / negative values with ApiError(400)."""
+def _coerce_optional_int(value, field_name, *, min_value, max_value):
+    """Coerce an optional numeric criterion to an int within the inclusive range
+    [min_value, max_value], or None when absent/blank. Rejects with ApiError(400):
+
+      • non-numeric values ("abc", objects) → "must be an integer";
+      • fractional numbers — a JSON float like 3.7 (or a numeric string "3.7") would
+        otherwise be silently floored by int(); reject it as "must be a whole number";
+      • out-of-range values (e.g. max_budget 0, bedrooms 1000, negatives, absurdly
+        large) → "must be between {min} and {max}".
+
+    Booleans are rejected too (JSON true/false are ints in Python and must not pass as
+    counts). None / "" → None ("unspecified"), which stays a valid criterion.
+    """
     if value is None or value == "":
         return None
-    try:
-        n = int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         raise ApiError(400, f"{field_name} must be an integer")
-    if n < 0:
-        raise ApiError(400, f"{field_name} must not be negative")
+    if isinstance(value, float):
+        # 3.7 -> reject; 3.0 -> accept as 3.
+        if not value.is_integer():
+            raise ApiError(400, f"{field_name} must be a whole number")
+        n = int(value)
+    elif isinstance(value, int):
+        n = value
+    else:
+        # Strings / other: parse strictly. "1500" -> 1500; "3.7"/"abc" -> ValueError.
+        try:
+            n = int(str(value).strip())
+        except (TypeError, ValueError):
+            raise ApiError(400, f"{field_name} must be an integer")
+    if n < min_value or n > max_value:
+        raise ApiError(400, f"{field_name} must be between {min_value} and {max_value}")
     return n
 
 
@@ -1023,6 +1073,7 @@ async def api_search_direct():
     """
     # --- parse + validate (ApiError → JSON 4xx, NOT 500) -----------------------
     data = get_json_or_400()
+    _validate_conversation_id(data)  # reject list/dict/non-string cid before it hits sqlite
     user_id, _session_id = resolve_identity(data)
 
     criteria = data.get('criteria')
@@ -1034,9 +1085,16 @@ async def api_search_direct():
         raise ApiError(400, "area is required")
     area = area.strip()
 
-    max_budget = _coerce_optional_int(criteria.get('max_budget'), "max_budget")
-    bedrooms = _coerce_optional_int(criteria.get('bedrooms'), "bedrooms")
-    max_commute_time = _coerce_optional_int(criteria.get('max_commute_time'), "max_commute_time")
+    # Sane inclusive ranges (documented on _coerce_optional_int):
+    #   max_budget      £[1, 100000]  — 0 is not a real limit; reject fractional/absurd.
+    #   bedrooms        [0, 20]       — 0 = studio/any; reject negative and >20.
+    #   max_commute_time [1, 300] min — reject 0/negative and absurdly large.
+    max_budget = _coerce_optional_int(
+        criteria.get('max_budget'), "max_budget", min_value=1, max_value=100000)
+    bedrooms = _coerce_optional_int(
+        criteria.get('bedrooms'), "bedrooms", min_value=0, max_value=20)
+    max_commute_time = _coerce_optional_int(
+        criteria.get('max_commute_time'), "max_commute_time", min_value=1, max_value=300)
     no_commute = _coerce_bool(criteria.get('no_commute'))
     budget_period = "week" if str(criteria.get('budget_period') or "month").strip().lower() == "week" else "month"
 
@@ -1227,9 +1285,14 @@ def clear_history():
     without one clears ALL of the user's conversations. The frontend routes clearing through
     DELETE /api/conversations/<cid> instead, but this stays for API completeness."""
     data = get_json_or_400()
+    cid = _validate_conversation_id(data)  # reject list/dict/non-string cid before sqlite
     user_id, _ = resolve_identity(data)
-    cid = data.get('conversation_id')
     if cid:
+        # Verify ownership first — mirrors DELETE /api/conversations/<cid>. Clearing an
+        # unowned/bogus cid used to return a misleading 200 {"success": true}; a
+        # conversation the caller doesn't own is a 404, not a silent no-op success.
+        if conversation_store.get_conversation(user_id, cid) is None:
+            raise ApiError(404, "conversation not found")
         conversation_store.clear_conversation_messages(user_id, cid)
         _session_store.clear(user_id, cid)
         _delete_checkpoint_thread(user_id, cid)

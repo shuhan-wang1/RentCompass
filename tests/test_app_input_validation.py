@@ -1,4 +1,4 @@
-"""Offline unit tests for the input-validation helpers in local_data_demo/app.py.
+"""Offline unit tests for the input-validation helpers in app/app.py.
 
 Importing app.py directly triggers heavy module-level startup (RAG/FAISS/property
 load), which is unsuitable for a fast unit test. Instead we parse app.py with `ast`
@@ -21,7 +21,7 @@ import re
 import pytest
 
 _APP_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "local_data_demo", "app.py"
+    os.path.dirname(os.path.dirname(__file__)), "app", "app.py"
 )
 
 _WANTED = {

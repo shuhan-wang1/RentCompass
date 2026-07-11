@@ -35,12 +35,12 @@ class Config:
 
     @property
     def data_dir(self) -> Path:
-        return self.project_root / "local_data_demo" / "data"
+        return self.project_root / "app" / "data"
 
     @classmethod
     def from_env(cls, *, require_secret: bool = False) -> "Config":
         root = Path(__file__).resolve().parents[2]
-        load_dotenv(root / "local_data_demo" / ".env", override=False)
+        load_dotenv(root / "app" / ".env", override=False)
         secret = os.getenv("FLASK_SECRET_KEY", "")
         if require_secret and not secret:
             raise RuntimeError("FLASK_SECRET_KEY is required for the production server")

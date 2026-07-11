@@ -11,7 +11,7 @@ Run with the project venv, e.g.::
 
     python -m pytest tests/test_critic_grounding.py -q
 
-``pythonpath = ["src", "local_data_demo"]`` in ``pyproject.toml`` puts both
+``pythonpath = ["src", "app"]`` in ``pyproject.toml`` puts both
 ``uk_rent_agent`` and ``core`` on the path.
 """
 
@@ -203,25 +203,25 @@ def test_append_caveat_is_idempotent():
 # ── node-level wiring (graph import required) ──────────────────────────────
 
 def _load_local_core():
-    """Import ``core.*`` from ``local_data_demo``.
+    """Import ``core.*`` from ``app``.
 
     ``tests/`` has no ``__init__.py`` so pytest prepends it to ``sys.path``, where
-    the unrelated ``tests/core`` package shadows the real ``local_data_demo/core``.
-    Put ``local_data_demo`` first and evict any shadowing ``core`` module.
+    the unrelated ``tests/core`` package shadows the real ``app/core``.
+    Put ``app`` first and evict any shadowing ``core`` module.
     """
     import importlib
     import os
     import sys
 
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    local = os.path.join(repo, "local_data_demo")
+    local = os.path.join(repo, "app")
     if local in sys.path:
         sys.path.remove(local)
     sys.path.insert(0, local)
     for name in list(sys.modules):
         if name == "core" or name.startswith("core."):
             path = (getattr(sys.modules[name], "__file__", "") or "").replace("\\", "/")
-            if "local_data_demo" not in path:
+            if "app" not in path:
                 del sys.modules[name]
     return importlib.import_module("core.llm_config"), importlib.import_module("core.langgraph_agent")
 

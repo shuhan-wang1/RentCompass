@@ -16,7 +16,7 @@ def create_app(config: Config | None = None) -> Flask:
     if config.flask_secret_key:
         os.environ["FLASK_SECRET_KEY"] = config.flask_secret_key
     os.environ["USE_MCP_TOOLS"] = "1" if config.use_mcp_tools else "0"
-    legacy_dir = config.project_root / "local_data_demo"
+    legacy_dir = config.project_root / "app"
     legacy_path = legacy_dir / "app.py"
     if not legacy_path.exists():
         raise RuntimeError(f"Legacy route module not found: {legacy_path}")

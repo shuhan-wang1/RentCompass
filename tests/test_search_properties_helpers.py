@@ -14,7 +14,7 @@ import sys
 # --- Pin the real source roots ahead of tests/ (which holds stale copies of
 # `core` that would otherwise shadow the app packages under prepend mode).
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _p in (os.path.join(_ROOT, "src"), os.path.join(_ROOT, "local_data_demo")):
+for _p in (os.path.join(_ROOT, "src"), os.path.join(_ROOT, "app")):
     if _p in sys.path:
         sys.path.remove(_p)
     sys.path.insert(0, _p)

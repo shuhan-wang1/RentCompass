@@ -12,10 +12,10 @@ import json
 import sys
 from pathlib import Path
 
-# The `core` package we test lives under local_data_demo/. A stale tests/core/
+# The `core` package we test lives under app/. A stale tests/core/
 # directory can otherwise shadow it (pytest prepends the tests dir), so pin the
 # real package dir at the front of sys.path before importing.
-_LOCAL_DATA_DEMO = str(Path(__file__).resolve().parents[1] / "local_data_demo")
+_LOCAL_DATA_DEMO = str(Path(__file__).resolve().parents[1] / "app")
 if _LOCAL_DATA_DEMO not in sys.path:
     sys.path.insert(0, _LOCAL_DATA_DEMO)
 elif sys.path[0] != _LOCAL_DATA_DEMO:

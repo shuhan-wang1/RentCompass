@@ -1,6 +1,7 @@
 # conversation_memory.py
 import chromadb
 import json
+from pathlib import Path
 
 
 class ConversationMemory:
@@ -14,7 +15,7 @@ class ConversationMemory:
     for the orchestrator to decide on cleanup.
     """
 
-    def __init__(self, db_path: str = "./chroma_db"):
+    def __init__(self, db_path: str = str(Path(__file__).resolve().parents[2] / "chroma_db")):
         print("    -> [DEBUG] Initializing ConversationMemory...")
         self.client = chromadb.PersistentClient(path=db_path)
 

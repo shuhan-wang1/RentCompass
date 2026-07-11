@@ -25,8 +25,8 @@ Thumbs.db
 # ChromaDB runtime data
 chroma_db/
 chroma_db_area/
-local_data_demo/chroma_db/
-local_data_demo/chroma_db_area/
+app/chroma_db/
+app/chroma_db_area/
 
 # Environment variables
 .env
@@ -41,12 +41,12 @@ local_data_demo/chroma_db_area/
 !requirements.txt
 
 # Scraped property cache (regenerable via build_scraped_dataset.py)
-local_data_demo/data/scraped_property_listings.csv
+app/data/scraped_property_listings.csv
 
 # Playwright MCP artifacts
 .playwright-mcp/
 chroma_db_agent_memory/
-local_data_demo/chroma_db_agent_memory/
+app/chroma_db_agent_memory/
 
 # Refactor implementation plan (local only)
 REFACTOR_IMPLEMENTATION_PLAN.md
@@ -70,7 +70,11 @@ users.json
 users.json.tmp
 **/users.json.tmp
 
+# Untracked junk archive (moved-aside legacy files)
+archive/
+
 # Local model weights and generated artifacts
+# (name-only patterns below also match files now living under archive/ and docs/archive/)
 student_model_lora/
 fine_tuning/student_model_lora/
 *.safetensors

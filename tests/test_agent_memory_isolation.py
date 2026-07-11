@@ -19,25 +19,25 @@ import sys
 import pytest
 
 
-def _pin_local_data_demo():
+def _pin_app():
     """``tests/`` has no ``__init__.py`` so pytest prepends it to ``sys.path``,
     where the stale scratch copies ``tests/core`` and ``tests/rag`` shadow the
-    real ``local_data_demo`` packages (same issue documented in
+    real ``app`` packages (same issue documented in
     test_critic_grounding._load_local_core). Pin the real root first and evict
     any shadowed module already imported."""
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    local = os.path.join(repo, "local_data_demo")
+    local = os.path.join(repo, "app")
     if local in sys.path:
         sys.path.remove(local)
     sys.path.insert(0, local)
     for name in list(sys.modules):
         if name in ("core", "rag") or name.startswith(("core.", "rag.")):
             path = (getattr(sys.modules[name], "__file__", "") or "").replace("\\", "/")
-            if "local_data_demo" not in path:
+            if "app" not in path:
                 del sys.modules[name]
 
 
-_pin_local_data_demo()
+_pin_app()
 
 am_mod = importlib.import_module("rag.agent_memory")
 AgentMemory = am_mod.AgentMemory
@@ -186,7 +186,7 @@ def test_conversation_memory_strict_user_filter(conv_mem):
 
 @pytest.mark.asyncio
 async def test_memory_tools_require_user_id(memory, monkeypatch):
-    _pin_local_data_demo()
+    _pin_app()
     mt = importlib.import_module("core.tools.memory_tools")
     monkeypatch.setattr(mt, "_mem", lambda: memory)
 

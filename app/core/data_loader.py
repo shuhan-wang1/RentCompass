@@ -45,7 +45,7 @@ def load_properties(force_refresh: bool = False) -> list[dict]:
       - 'auto'    : (default) serve the scraped cache if it has been built,
                     otherwise the fake CSV. Never blocks startup on a live scrape
                     unless SCRAPE_ON_STARTUP is truthy. Build/refresh the cache
-                    out-of-band with:  python build_scraped_dataset.py
+                    out-of-band with:  python scripts/build_scraped_dataset.py
 
     Always falls back to the fake CSV if the scraping layer is unavailable, so
     the app can never start with zero properties.

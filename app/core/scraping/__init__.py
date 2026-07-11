@@ -1,5 +1,5 @@
 """
-Real property-source layer for local_data_demo.
+Real property-source layer for app.
 
 Bridges the local scrapers in ``scrapped_data_demo/scrapper`` (Rightmove +
 Zoopla) into the rich property schema the RAG / agent pipeline expects, and

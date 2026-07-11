@@ -43,7 +43,7 @@ REFLECT_IMPORTANCE_THRESHOLD = 30  # accrued importance that triggers a reflecti
                                    # (paper uses 150 over game-days; scaled for short chats)
 
 _DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  # local_data_demo/
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  # app/
     "chroma_db_agent_memory",
 )
 _DEFAULT_IMPORTANCE = {"semantic": 7, "reflection": 8, "episodic": 5}

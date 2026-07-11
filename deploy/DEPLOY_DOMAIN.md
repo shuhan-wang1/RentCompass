@@ -110,7 +110,7 @@ Check renewal: `sudo certbot renew --dry-run`.
 
 ## Step 8 — Turn on secure cookies + allow the domain (after TLS is live)
 
-Add to `local_data_demo/.env`:
+Add to `app/.env`:
 ```bash
 SESSION_COOKIE_SECURE=1
 CORS_ORIGINS=https://rentcompass.co.uk,https://www.rentcompass.co.uk
@@ -131,7 +131,7 @@ Open `https://rentcompass.co.uk`, run a chat, confirm the answer **streams** in
 
 ### Optional: require login for everyone
 The login feature is additive (guests still work). To force auth on all `/api/*`
-(except `/api/auth/*`), add `REQUIRE_AUTH=1` to `local_data_demo/.env` and
+(except `/api/auth/*`), add `REQUIRE_AUTH=1` to `app/.env` and
 `docker compose up -d app`.
 
 ### Notes

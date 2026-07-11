@@ -4,7 +4,7 @@ from uk_rent_agent.domain.schema import RICH_COLUMNS
 
 
 def test_repository_normalizes_schema_and_metadata(tmp_path):
-    data = tmp_path / "local_data_demo" / "data"
+    data = tmp_path / "app" / "data"
     data.mkdir(parents=True)
     (data / "fake_property_listings.csv").write_text(
         ",".join(RICH_COLUMNS) + "\n"
@@ -22,7 +22,7 @@ def test_repository_normalizes_schema_and_metadata(tmp_path):
 
 
 def test_repository_auto_uses_scraped_cache(tmp_path):
-    data = tmp_path / "local_data_demo" / "data"
+    data = tmp_path / "app" / "data"
     data.mkdir(parents=True)
     header = ",".join(RICH_COLUMNS) + "\n"
     (data / "fake_property_listings.csv").write_text(header, encoding="utf-8")

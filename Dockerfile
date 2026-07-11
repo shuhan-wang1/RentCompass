@@ -3,7 +3,7 @@
 # Image for the UK-rent agent web app (ASGI/uvicorn on :5001).
 #
 # The installable package lives under src/ (uk_rent_agent). The domain tools and
-# RAG code live under local_data_demo/ and are added to sys.path at runtime by
+# RAG code live under app/ and are added to sys.path at runtime by
 # uk_rent_agent.web.app — so both trees must be present in the image, but only
 # the src package is pip-installed.
 #
@@ -44,7 +44,7 @@ RUN pip install -e .
 
 # --- Application code --------------------------------------------------------
 # The domain/RAG code the app imports at runtime via sys.path insertion.
-COPY local_data_demo ./local_data_demo
+COPY app ./app
 
 EXPOSE 5001
 

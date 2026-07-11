@@ -1,5 +1,6 @@
-# Filename: local_data_demo/area_knowledge.py
+# Filename: app/rag/area_knowledge.py
 import chromadb
+from pathlib import Path
 
 class AreaKnowledgeBase:
     """Store and retrieve curated area information"""
@@ -8,7 +9,9 @@ class AreaKnowledgeBase:
         print("    -> [DEBUG] Initializing AreaKnowledgeBase...")
         try:
             print("    -> [DEBUG] Creating ChromaDB client...")
-            self.client = chromadb.PersistentClient(path="./chroma_db_area")
+            self.client = chromadb.PersistentClient(
+                path=str(Path(__file__).resolve().parents[2] / "chroma_db_area")
+            )
             print("    -> [DEBUG] Client created successfully")
             
             print("    -> [DEBUG] Getting/creating collection...")

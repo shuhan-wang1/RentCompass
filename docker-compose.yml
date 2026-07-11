@@ -94,19 +94,19 @@ services:
       - "127.0.0.1:5001:5001"
     # Brings in LLM keys, FLASK_SECRET_KEY, PROPERTY_SOURCE, etc.
     env_file:
-      - ./local_data_demo/.env
+      - ./app/.env
     environment:
       # Point the web_search tool at the SearXNG service on the compose network.
       SEARXNG_URL: "http://searxng:8080"
       PYTHONUNBUFFERED: "1"
     volumes:
       # Secrets (also read directly by config.from_env via load_dotenv).
-      - ./local_data_demo/.env:/app/local_data_demo/.env:ro
+      - ./app/.env:/app/app/.env:ro
       # Pre-built + writable RAG indexes and runtime state, shared with the host.
       - ./chroma_db:/app/chroma_db
       - ./chroma_db_area:/app/chroma_db_area
-      - ./local_data_demo/chroma_db_agent_memory:/app/local_data_demo/chroma_db_agent_memory
-      - ./local_data_demo/data:/app/local_data_demo/data
+      - ./app/chroma_db_agent_memory:/app/app/chroma_db_agent_memory
+      - ./app/data:/app/app/data
       - ./.runtime:/app/.runtime
       # Embedding-model cache so it is downloaded only once.
       - hf_cache:/opt/hf-cache

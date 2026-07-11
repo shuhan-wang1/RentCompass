@@ -20,7 +20,7 @@ real search backend (SearXNG) instead of a dead `localhost:8080`.
 ## Prerequisites
 
 - Docker + Docker Compose v2 (`docker compose version`).
-- `local_data_demo/.env` present with at least `FLASK_SECRET_KEY` and your LLM
+- `app/.env` present with at least `FLASK_SECRET_KEY` and your LLM
   credentials (`DEEPSEEK_API_KEY` for the default `LLM_PROVIDER=deepseek`).
   It is mounted read-only into the container — nothing secret is baked into the image.
 
@@ -45,7 +45,7 @@ Then open <http://localhost:5001>.
 
 ## How the wiring works
 
-- The `web_search` tool reads `SEARXNG_URL` (see `local_data_demo/core/web_search.py`).
+- The `web_search` tool reads `SEARXNG_URL` (see `app/core/web_search.py`).
   Compose sets it to `http://searxng:8080`; on the host it defaults to
   `http://localhost:8080`, so the same code works both ways.
 - `searxng/settings.yml` enables the **JSON API** (`search.formats: [html, json]`)

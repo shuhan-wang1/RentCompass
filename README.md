@@ -4,9 +4,11 @@ A UK student rental recommendation application with a conversational search
 interface, structured search form, LangGraph agent workflow, MCP-compatible tool
 execution, persistent conversation state, and map-based amenity views.
 
-The current runtime is packaged under `src/uk_rent_agent/`. The web layer still
-loads the mature `local_data_demo` Flask routes through a compatibility wrapper
-while the production entry point runs through an ASGI shell.
+The codebase is organized as two cooperating trees: `src/uk_rent_agent/` is the
+installable package that owns the production ASGI entry point and shared
+infrastructure (state, persistence, auth, guardrails, LLM routing), while
+`app/` holds the domain application (Flask routes, LangGraph agent, tools,
+scraping, RAG) that the web layer loads at runtime.
 
 ## Contents
 
@@ -20,6 +22,7 @@ while the production entry point runs through an ASGI shell.
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
+- [Deployment](#deployment)
 - [Testing](#testing)
 - [Module Notes](#module-notes)
 
@@ -30,7 +33,8 @@ while the production entry point runs through an ASGI shell.
 - Conversational search through `/api/alex` and deterministic structured search
   through `/api/search_direct`.
 - Search criteria accumulation across turns: area, commute destination, no-commute
-  intent, budget, bedrooms, travel-time limit, amenities, and soft preferences.
+  intent, budget, bedrooms, room type, travel-time limit, amenities, and soft
+  preferences.
 - LangGraph StateGraph workflow with deterministic intent fast paths, LLM fallback
   classification, tool execution, parallel multi-search support, response
   generation, and grounding critic.
@@ -53,17 +57,17 @@ Browser UI
 Starlette ASGI shell (uk_rent_agent.web.asgi)
    |
    v
-Flask compatibility app (local_data_demo/app.py)
+Flask compatibility app (app/app.py)
    |
    +-- /api/alex
    |      |
    |      v
-   |   LangGraph agent (local_data_demo/core/langgraph_agent.py)
+   |   LangGraph agent (app/core/langgraph_agent.py)
    |      |
    |      v
    |   Tool provider
    |      |-- in-process ToolRegistry
-   |      +-- optional MCPToolClient -> local_data_demo/mcp_server.py
+   |      +-- optional MCPToolClient -> app/mcp_server.py
    |
    +-- /api/search_direct
           |
@@ -71,18 +75,18 @@ Flask compatibility app (local_data_demo/app.py)
        search_properties_impl directly, bypassing the LLM router
 
 Shared services:
-   - `src/uk_rent_agent/agent/*`: state, contracts, persistence, critic, guardrails
-   - `local_data_demo/core/tools/*`: domain tools
-   - `local_data_demo/core/scraping/*`: listing providers and cache
-   - `local_data_demo/rag/*`: embeddings, conversation memory, area knowledge,
+   - src/uk_rent_agent/agent/*: state, contracts, persistence, critic, guardrails
+   - app/core/tools/*: domain tools
+   - app/core/scraping/*: listing providers and cache
+   - app/rag/*: embeddings, conversation memory, area knowledge,
      and long-term user memory
-   - `.runtime/*`: SQLite checkpoints, listing cache, auth store, idempotency store
+   - .runtime/*: SQLite checkpoints, listing cache, auth store, idempotency store
 ```
 
 ## LangGraph Agent Architecture
 
 The active conversational path uses `build_agent_graph()` in
-`local_data_demo/core/langgraph_agent.py`. It is a compatibility graph that imports
+`app/core/langgraph_agent.py`. It is a compatibility graph that imports
 shared state, contracts, persistence, critic, and guardrail components from
 `src/uk_rent_agent/agent/`.
 
@@ -211,7 +215,7 @@ and `known_criteria` data so the UI can render a targeted clarification form.
 
 ## MCP Integration
 
-`local_data_demo/mcp_server.py` exposes the same registered domain tools over MCP
+`app/mcp_server.py` exposes the same registered domain tools over MCP
 stdio. The web process can use either:
 
 - the in-process `ToolRegistry`, or
@@ -221,7 +225,7 @@ stdio. The web process can use either:
 Standalone MCP server:
 
 ```bash
-cd local_data_demo
+cd app
 python mcp_server.py
 ```
 
@@ -232,10 +236,10 @@ mcpServers:
   uk-rent-tools:
     command: <path-to-python>
     args: [mcp_server.py]
-    cwd: <repo>/local_data_demo
+    cwd: <repo>/app
 ```
 
-See `local_data_demo/MCP.md` for protocol details.
+See `docs/MCP.md` for protocol details.
 
 ## Memory and Persistence
 
@@ -248,7 +252,7 @@ See `local_data_demo/MCP.md` for protocol details.
   `.runtime/users.json` by default. Passwords are stored as hashes.
 - Tool write operations use idempotency keys backed by
   `.runtime/idempotency.sqlite3`.
-- Long-term user memory is implemented in `local_data_demo/rag/agent_memory.py`
+- Long-term user memory is implemented in `app/rag/agent_memory.py`
   and stored in ChromaDB. It is namespaced by user identity and can be erased
   through the `/api/forget_me` route.
 
@@ -256,7 +260,7 @@ See `local_data_demo/MCP.md` for protocol details.
 
 ```text
 uk_rent_recommendation/
-|-- src/uk_rent_agent/
+|-- src/uk_rent_agent/         # Installable package (pip install -e .)
 |   |-- agent/                 # Shared state, contracts, critic, guardrails, persistence
 |   |-- data/                  # Cache and repository abstractions
 |   |-- domain/                # Domain schema and constants
@@ -265,26 +269,32 @@ uk_rent_recommendation/
 |   |-- tools/                 # Shared tool helpers
 |   `-- web/                   # ASGI shell and Flask compatibility wrapper
 |
-|-- local_data_demo/
-|   |-- app.py                 # Current Flask route implementation
+|-- app/                       # Domain application (loaded by the web layer)
+|   |-- app.py                 # Flask route implementation (dev entry point)
 |   |-- mcp_server.py          # MCP stdio server for domain tools
 |   |-- unified-ui.html        # Web UI
 |   |-- core/
 |   |   |-- langgraph_agent.py # Active conversational StateGraph
 |   |   |-- mcp_client.py      # MCP client with fallback registry
 |   |   |-- tool_system.py     # Tool registry and execution envelope
-|   |   |-- scraping/          # Listing provider integration and normalization
+|   |   |-- scraping/          # Listing providers, cache, vendored legacy scrapers
 |   |   `-- tools/             # Domain tool implementations
-|   `-- rag/                   # Property embeddings, memory, and area knowledge
+|   |-- rag/                   # Property embeddings, memory, and area knowledge
+|   `-- scripts/               # Offline utilities (dataset build, OSM prefetch)
 |
-|-- tests/                     # Legacy and integration-oriented tests
-|-- tests_refactor/            # Current architecture and contract tests
-|-- evals/                     # Evaluation thresholds
-|-- fine_tuning/               # Optional LoRA extraction experiments
-|-- map_visualization/         # Standalone Folium map tooling
-|-- scrapped_data_demo/        # Legacy scraping demo
+|-- tests/                     # Behavior and integration tests
+|-- tests_refactor/            # Architecture and contract tests
+|-- evals/                     # Evaluation thresholds and golden datasets
+|-- fine_tuning/               # Optional LoRA extraction pipeline (offline)
+|-- deploy/                    # nginx, TLS, and server update scripts
+|-- docs/                      # DOCKER.md, MCP.md; docs/archive/ holds historical reports
+|-- Dockerfile / docker-compose.yml
 `-- pyproject.toml
 ```
+
+Runtime data is written outside the tracked tree and is gitignored:
+`chroma_db/` and `chroma_db_area/` (repo root), `app/chroma_db_agent_memory/`,
+`app/data/` caches, and `.runtime/` SQLite stores.
 
 ## Tech Stack
 
@@ -324,7 +334,7 @@ pip install -e '.[dev]'
 
 ### Environment
 
-Create `local_data_demo/.env`:
+Create `app/.env`:
 
 ```env
 FLASK_SECRET_KEY=replace-with-a-long-random-value
@@ -354,11 +364,19 @@ REQUIRE_AUTH=0
 
 ### Run
 
+Production-style ASGI entry point:
+
 ```bash
 python -m uk_rent_agent.web
 ```
 
-The server listens on `http://127.0.0.1:5001`.
+Development Flask entry point:
+
+```bash
+python app/app.py
+```
+
+Both listen on `http://127.0.0.1:5001`.
 
 Health check:
 
@@ -369,7 +387,7 @@ curl http://127.0.0.1:5001/health
 ## Configuration
 
 Runtime configuration is read by `src/uk_rent_agent/config.py`, which loads
-`local_data_demo/.env`.
+`app/.env`.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -384,9 +402,24 @@ Runtime configuration is read by `src/uk_rent_agent/config.py`, which loads
 | `REQUIRE_AUTH` | `0` | Requires authenticated sessions for API routes when enabled. |
 | `CORS_ORIGINS` | localhost origins | Comma-separated allowed frontend origins. |
 
+## Deployment
+
+The repository ships a dockerized full stack (app + SearXNG + Valkey behind
+nginx):
+
+```bash
+docker compose up -d --build
+```
+
+The image pip-installs `src/uk_rent_agent` and copies `app/` alongside it;
+runtime data (Chroma indexes, `.env`, `.runtime` SQLite stores) is bind-mounted
+from the host rather than baked in. See `docs/DOCKER.md` for the container
+runbook and `deploy/` for nginx/TLS provisioning and the server update script.
+
 ## Testing
 
-Run the current architecture tests:
+Run the full suite (behavior tests in `tests/` plus architecture tests in
+`tests_refactor/`):
 
 ```bash
 python -m pytest -q
@@ -398,21 +431,24 @@ Apply evaluation thresholds to a generated report:
 uk-rent-eval-gate report.json
 ```
 
+Golden datasets for retrieval/e2e evaluation live in `evals/golden_set/`.
+
 ## Module Notes
 
 ### Property Search
 
-`local_data_demo/core/tools/search_properties.py` is the main search tool. It
+`app/core/tools/search_properties.py` is the main search tool. It
 resolves the target area, applies optional constraints, calls the on-demand listing
 provider, enriches results when needed, and returns structured recommendations or
 a targeted clarification payload.
 
 ### Scraping
 
-`local_data_demo/core/scraping/on_demand.py` is used by live search requests.
+`app/core/scraping/on_demand.py` is used by live search requests.
 `provider.py` handles startup dataset selection for embedding/index warm-up.
-OnTheMarket is the active live source. Other provider files remain as legacy or
-experimental integrations.
+OnTheMarket is the active live source. The Rightmove and Zoopla integrations are
+opt-in stubs backed by vendored legacy scrapers in
+`app/core/scraping/legacy_scrapers/`; do not expect live data from them.
 
 ### RAG
 

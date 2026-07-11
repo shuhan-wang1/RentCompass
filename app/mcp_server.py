@@ -12,7 +12,7 @@ share a single source of truth.
 
 Run standalone (speaks MCP over stdio):
 
-    cd local_data_demo
+    cd app
     python mcp_server.py
 
 Register in an external MCP client (e.g. Claude Desktop) with

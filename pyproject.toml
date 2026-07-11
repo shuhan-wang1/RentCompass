@@ -33,5 +33,5 @@ uk-rent-eval-gate = "uk_rent_agent.evals.ci_gate:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "local_data_demo"]
-testpaths = ["tests_refactor"]
+pythonpath = ["src", "app"]
+testpaths = ["tests", "tests_refactor"]

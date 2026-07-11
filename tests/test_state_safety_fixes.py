@@ -12,11 +12,11 @@ import os
 import sys
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for _p in (os.path.join(_ROOT, "src"), os.path.join(_ROOT, "local_data_demo")):
+for _p in (os.path.join(_ROOT, "src"), os.path.join(_ROOT, "app")):
     if _p in sys.path:
         sys.path.remove(_p)
     sys.path.insert(0, _p)
-# Drop any stale tests/core shadow copies so `core.*` resolves to local_data_demo.
+# Drop any stale tests/core shadow copies so `core.*` resolves to app.
 for _m in [m for m in list(sys.modules) if m == "core" or m.startswith("core.")]:
     if "tests" in (getattr(sys.modules[_m], "__file__", "") or "").replace("\\", "/").split("/"):
         del sys.modules[_m]

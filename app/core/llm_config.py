@@ -13,7 +13,7 @@ Per-task factories:
 import os
 from dotenv import load_dotenv
 
-# Load .env from local_data_demo/ regardless of the current working directory.
+# Load .env from app/ regardless of the current working directory.
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "deepseek").strip().lower()

@@ -24,10 +24,10 @@
 chroma_db/
 chroma_db_area/
 chroma_db_agent_memory/
-local_data_demo/chroma_db/
-local_data_demo/chroma_db_area/
-local_data_demo/chroma_db_agent_memory/
-local_data_demo/data/
+app/chroma_db/
+app/chroma_db_area/
+app/chroma_db_agent_memory/
+app/data/
 **/*.log
 
 # Docker + local model weights + heavy dirs not needed to run the web app
@@ -37,14 +37,12 @@ docker-compose.yml
 searxng/
 *.safetensors
 *.bin
-student_model_lora/
 fine_tuning/
 evals/
 tests/
 tests_refactor/
-map_visualization/
-maps/
-scrapped_data_demo/
 scrapped_data/
+archive/
+docs/archive/
 .playwright-mcp/
 *.md

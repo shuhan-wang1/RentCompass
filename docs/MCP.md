@@ -42,7 +42,7 @@ USE_MCP_TOOLS=0 python app.py
 ## Running the MCP server standalone
 
 ```bash
-cd local_data_demo
+cd app
 python mcp_server.py        # speaks MCP over stdio
 ```
 
@@ -62,7 +62,7 @@ Add to the client's MCP server config:
     "uk-rent-tools": {
       "command": "<path-to-python>",
       "args": ["mcp_server.py"],
-      "cwd": "<repo>/local_data_demo"
+      "cwd": "<repo>/app"
     }
   }
 }

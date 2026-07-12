@@ -25,15 +25,47 @@ FINETUNED_ADAPTER_PATH = os.path.join(
   # Default model if not using fine-tuned
 
 
+def _record_deepseek_eval(resp, latency_ms, success, error=None):
+    """Emit an offline-eval llm_call event for a raw DeepSeek call.
+
+    Additive; no-op unless RENTCOMPASS_EVAL is active. Covers the memory +
+    place-classify calls that bypass ModelRouter. Never logs secrets.
+    """
+    try:
+        from evaluation.metrics import collector
+
+        if not collector.is_active():
+            return
+        it = ot = cached = None
+        usage = getattr(resp, "usage", None) if resp is not None else None
+        if usage is not None:
+            it = getattr(usage, "prompt_tokens", None)
+            ot = getattr(usage, "completion_tokens", None)
+            details = getattr(usage, "prompt_tokens_details", None)
+            if details is not None:
+                cached = getattr(details, "cached_tokens", None)
+            if cached is None:
+                cached = getattr(usage, "prompt_cache_hit_tokens", None)
+        collector.record_llm_call(
+            provider="deepseek", model=DEEPSEEK_MODEL, purpose="memory",
+            input_tokens=it, output_tokens=ot, cached_tokens=cached,
+            latency_ms=latency_ms, success=success, error=error,
+        )
+    except Exception:
+        pass
+
+
 def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
                    temperature: float = 0.1, max_tokens: int = 4000) -> str:
     """Call DeepSeek's OpenAI-compatible chat API. Returns text, or None on error."""
     from openai import OpenAI
+    import time as _time
     client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=timeout)
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
+    _started = _time.perf_counter()
     try:
         resp = client.chat.completions.create(
             model=DEEPSEEK_MODEL,
@@ -41,8 +73,11 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        _record_deepseek_eval(resp, (_time.perf_counter() - _started) * 1000, True)
         return resp.choices[0].message.content
     except Exception as e:
+        _record_deepseek_eval(None, (_time.perf_counter() - _started) * 1000, False,
+                              error=type(e).__name__)
         print(f"❌ DeepSeek API error: {e}")
         return None
 

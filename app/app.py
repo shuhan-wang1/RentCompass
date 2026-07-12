@@ -661,6 +661,9 @@ def _build_results_context(recommendations):
             'url': rec.get('url'),
             'explanation': rec.get('explanation'),
             'geo_location': rec.get('geo_location'),
+            # 🆕 多区域来源 + OnTheMarket 完整描述（结构化保存完整文本，供后续问答解析）。
+            'area': rec.get('area'),
+            'description': rec.get('description'),
         })
 
         prev_results_context += f"{i}. **{property_name}**\n"
@@ -671,8 +674,17 @@ def _build_results_context(recommendations):
             prev_results_context += f"   - Bedrooms: {rec.get('bedrooms')}\n"
         if rec.get('property_type'):
             prev_results_context += f"   - Type: {rec.get('property_type')}\n"
+        if rec.get('area'):
+            prev_results_context += f"   - Area: {rec.get('area')}\n"
         if rec.get('budget_status'):
             prev_results_context += f"   - Budget: {rec.get('budget_status')}\n"
+        # 🆕 把真实房源描述喂给 Agent（截断到可控长度，避免 prompt 膨胀；完整文本在
+        # structured_results 里）。让后续"这套家具全吗/含账单吗/离地铁多远"能被真实回答。
+        _desc = (rec.get('description') or '').strip()
+        if _desc:
+            prev_results_context += (
+                f"   - Description: {_desc[:600]}{'…' if len(_desc) > 600 else ''}\n"
+            )
         if rec.get('url'):
             prev_results_context += f"   - URL: {rec.get('url')}\n"
         prev_results_context += "\n"
@@ -904,11 +916,27 @@ Current user message: {user_message}"""
 
     # ── Phase 2: the slow LLM call — NO turn lock held here ──────
     print(f"[LangGraph] ▶ 开始执行 graph.ainvoke() ...")
+    import time as _eval_time
+    _eval_turn_started = _eval_time.perf_counter()
     final_state = await agent_graph.ainvoke(
         initial_state,
         config=graph_config(user_id, conversation_id, request_id=request_id),
     )
     print(f"[LangGraph] ✓ 完成!")
+
+    # ── Offline-eval turn row (additive; no-op unless RENTCOMPASS_EVAL active) ──
+    try:
+        from evaluation.metrics import collector as _eval_collector
+        if _eval_collector.is_active():
+            _eval_collector.record_turn(
+                route=final_state.get('tool_decision'),
+                response_type=final_state.get('response_type', 'answer'),
+                critic_attempts=final_state.get('critic_attempts'),
+                verdict=final_state.get('verdict'),
+                latency_ms=(_eval_time.perf_counter() - _eval_turn_started) * 1000,
+            )
+    except Exception:
+        pass
 
     response_text = final_state.get('final_response', '')
     response_type = final_state.get('response_type', 'answer')
@@ -954,6 +982,8 @@ Current user message: {user_message}"""
             "message": response_text,
             "recommendations": recommendations,
             "search_criteria": _tool_data.get('search_criteria') or {},
+            # 🆕 目的地附近推荐居住区（可点击 chips → 多区域再搜）。
+            "area_recommendations": _tool_data.get('area_recommendations') or [],
         }
 
     if response_type == 'question' or response_type == 'clarification':
@@ -1080,10 +1110,25 @@ async def api_search_direct():
     if not isinstance(criteria, dict):
         raise ApiError(400, "criteria must be an object")
 
+    # 🆕 多区域：接受 areas 列表（与单 area 并存）。缺 area 但有 areas 时以 areas[0] 补齐；
+    # 既无 area/areas 又无通勤目的地时才报错——仅有通勤目的地时，工具会把居住区域默认为
+    # 目的地所在区域（非阻塞默认）。
+    raw_areas = criteria.get('areas')
+    areas = []
+    if isinstance(raw_areas, list):
+        for _a in raw_areas:
+            if isinstance(_a, str) and _a.strip() and _a.strip() not in areas:
+                areas.append(_a.strip())
     area = criteria.get('area')
-    if not isinstance(area, str) or not area.strip():
-        raise ApiError(400, "area is required")
-    area = area.strip()
+    area = area.strip() if isinstance(area, str) and area.strip() else None
+    if not area and areas:
+        area = areas[0]
+    elif area and area not in areas:
+        areas = [area] + areas
+    _cd = criteria.get('commute_destination')
+    _has_commute_dest = isinstance(_cd, str) and bool(_cd.strip())
+    if not area and not areas and not _has_commute_dest:
+        raise ApiError(400, "area or commute_destination is required")
 
     # Sane inclusive ranges (documented on _coerce_optional_int):
     #   max_budget      £[1, 100000]  — 0 is not a real limit; reject fractional/absurd.
@@ -1121,7 +1166,7 @@ async def api_search_direct():
     tool_commute_destination = None if no_commute else commute_destination
 
     readable = _compose_search_line(
-        area, max_budget, budget_period, bedrooms,
+        area or commute_destination or 'your area', max_budget, budget_period, bedrooms,
         no_commute, commute_destination, max_commute_time)
 
     # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
@@ -1147,6 +1192,7 @@ async def api_search_direct():
             result = await search_properties_impl(
                 user_query=readable,
                 area=area,
+                areas=areas or None,
                 commute_destination=tool_commute_destination,
                 max_budget=max_budget,
                 max_commute_time=max_commute_time,
@@ -1167,6 +1213,8 @@ async def api_search_direct():
             "message": message,
             "recommendations": recommendations,
             "search_criteria": result.get('search_criteria') or {},
+            # 🆕 目的地附近"已验证的推荐居住区"，前端渲染为可点击 chips → 一键多区域再搜。
+            "area_recommendations": result.get('area_recommendations') or [],
         }
     except Exception as e:
         # Same convention as /api/alex: a tool-side error is a normal response_type the
@@ -1196,6 +1244,7 @@ async def api_search_direct():
         user_id, conversation_id, readable, message, recommendations,
         criteria_overwrite={
             'area': area,
+            'areas': areas,   # 🆕 多区域：持久化提交的区域集合
             'commute_destination': commute_destination,
             'destination': commute_destination,   # legacy mirror consumed by older paths
             'max_budget': max_budget,

@@ -1,0 +1,131 @@
+{
+  "study": "retrieval_concurrency_ab",
+  "mode": "live",
+  "offline_mechanics_only": false,
+  "configs": [
+    "serial_retrieval",
+    "parallel_retrieval"
+  ],
+  "n_cases": 16,
+  "repeat_count": 3,
+  "per_config": {
+    "serial_retrieval": {
+      "n_runs": 48,
+      "total_input_tokens": 105346,
+      "total_output_tokens": 29665,
+      "total_tokens": 135011,
+      "strong_model_calls": 40,
+      "total_model_calls": 100,
+      "estimated_cost_usd": 0.011709846400000001,
+      "e2e_latency_ms": {
+        "mean": 9989.516008332885,
+        "p50": 5863.529500002187,
+        "p95": 33226.78630000228,
+        "spread": 10411.708457111248,
+        "n": 48
+      },
+      "retrieval_stage_latency_ms": {
+        "mean": 1359.0021895844682,
+        "p50": 3.957000000809785,
+        "p95": 5789.877205002628,
+        "spread": 4698.1072244877405
+      },
+      "grounded_rate": {
+        "num": 136,
+        "den": 174,
+        "display": "136/174",
+        "rate": 0.7816091954022989
+      },
+      "money_grounded_rate": {
+        "num": 115,
+        "den": 153,
+        "display": "115/153",
+        "rate": 0.7516339869281046
+      },
+      "task_completion": {
+        "num": 48,
+        "den": 48,
+        "display": "48/48",
+        "rate": 1.0
+      },
+      "critic_triggers": 40,
+      "critic_repairs": 7,
+      "critic_repair_success": {
+        "num": 7,
+        "den": 40,
+        "display": "7/40",
+        "rate": 0.175
+      },
+      "tool_success_rate": {
+        "num": 102,
+        "den": 105,
+        "display": "102/105",
+        "rate": 0.9714285714285714
+      }
+    },
+    "parallel_retrieval": {
+      "n_runs": 48,
+      "total_input_tokens": 93751,
+      "total_output_tokens": 25556,
+      "total_tokens": 119307,
+      "strong_model_calls": 37,
+      "total_model_calls": 97,
+      "estimated_cost_usd": 0.0105692552,
+      "e2e_latency_ms": {
+        "mean": 8549.382912499823,
+        "p50": 5619.08410000251,
+        "p95": 21813.00032499857,
+        "spread": 8676.311112803847,
+        "n": 48
+      },
+      "retrieval_stage_latency_ms": {
+        "mean": 582.3940187506196,
+        "p50": 4.32550000550691,
+        "p95": 3359.590034997379,
+        "spread": 1064.411851511104
+      },
+      "grounded_rate": {
+        "num": 130,
+        "den": 158,
+        "display": "130/158",
+        "rate": 0.8227848101265823
+      },
+      "money_grounded_rate": {
+        "num": 111,
+        "den": 139,
+        "display": "111/139",
+        "rate": 0.7985611510791367
+      },
+      "task_completion": {
+        "num": 48,
+        "den": 48,
+        "display": "48/48",
+        "rate": 1.0
+      },
+      "critic_triggers": 37,
+      "critic_repairs": 4,
+      "critic_repair_success": {
+        "num": 4,
+        "den": 37,
+        "display": "4/37",
+        "rate": 0.10810810810810811
+      },
+      "tool_success_rate": {
+        "num": 102,
+        "den": 105,
+        "display": "102/105",
+        "rate": 0.9714285714285714
+      }
+    }
+  },
+  "race_anomalies": {
+    "compared_pairs": 48,
+    "tool_count_mismatch": 0,
+    "completion_mismatch": 0,
+    "dropped_or_raced_results": 0
+  },
+  "stopped_reason": null,
+  "git_commit": "070675d",
+  "timestamp": "2026-07-12T05:01:34Z",
+  "caveat_offline": "OFFLINE run: fake tools return instantly, so serial-vs-parallel latency differences are negligible; this run PROVES the scheduling path works and detects dropped/raced results. Real retrieval-stage latency deltas are PENDING a LIVE run."
+}

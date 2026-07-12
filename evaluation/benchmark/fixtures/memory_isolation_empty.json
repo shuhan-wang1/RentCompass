@@ -1,0 +1,12 @@
+{
+  "description": "recall_memory for user_B: user_B has stored nothing, so the per-user bucket is empty. User_A's budget must never appear here.",
+  "tool_name": "recall_memory",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "count": 0,
+    "memories": [],
+    "formatted": ""
+  }
+}

@@ -538,6 +538,34 @@
             display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
         }
 
+        /* Area badge — which search area a listing came from */
+        .property-area-badge {
+            display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+            font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+            color: var(--primary-color); background: var(--primary-light);
+            border: 1px solid var(--primary-fade); border-radius: var(--radius-full);
+            padding: 3px 10px; margin-bottom: 8px; max-width: 100%;
+        }
+        .property-area-badge .icon { width: 12px; height: 12px; color: currentColor; flex-shrink: 0; }
+        .property-area-badge .area-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Expandable full description */
+        .property-details-toggle {
+            align-self: flex-start; background: none; border: none; padding: 0;
+            font-family: inherit; font-size: 0.8rem; font-weight: 600;
+            color: var(--text-secondary); cursor: pointer;
+            display: inline-flex; align-items: center; gap: 5px; margin: -8px 0 14px;
+        }
+        .property-details-toggle:hover { color: var(--primary-color); }
+        .property-details-toggle .caret { transition: transform 0.2s ease; font-size: 0.7em; }
+        .property-details-toggle.open .caret { transform: rotate(180deg); }
+        .property-description {
+            font-size: 0.85rem; color: var(--text-secondary); line-height: 1.65;
+            background: var(--bg-body); border: 1px solid var(--border-medium);
+            border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 16px;
+            max-height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+        }
+
         .property-actions { display: flex; gap: 10px; margin-top: auto; }
         .action-btn {
             flex: 1; padding: 9px;
@@ -851,6 +879,52 @@
         .criteria-search-btn:hover { background: var(--primary-hover); }
         .criteria-search-btn:disabled { background: var(--text-tertiary); cursor: not-allowed; }
         .criteria-search-btn .icon { color: currentColor; }
+
+        /* Selected search-area chips (multi-area) inside the criteria form */
+        .area-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+        .area-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: var(--primary-light); color: var(--primary-color);
+            border: 1px solid var(--primary-fade); border-radius: var(--radius-full);
+            padding: 3px 6px 3px 10px; font-size: 0.8rem; font-weight: 600; max-width: 100%;
+        }
+        .area-chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+        .area-chip-remove {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 16px; height: 16px; border: none; border-radius: 50%;
+            background: transparent; color: currentColor; cursor: pointer;
+            font-size: 15px; line-height: 1; padding: 0; flex-shrink: 0;
+        }
+        .area-chip-remove:hover { background: var(--primary-color); color: white; }
+
+        /* Recommended-area chips shown above the results */
+        .area-recos {
+            background: var(--bg-surface); border: 1px solid var(--border-medium);
+            border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 20px;
+            box-shadow: var(--shadow-xs);
+        }
+        .area-recos-label {
+            display: flex; align-items: center; gap: 4px;
+            font-size: 0.8rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px;
+        }
+        .area-recos-label .icon { color: var(--primary-color); }
+        .area-recos-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .area-reco-chip {
+            display: inline-flex; align-items: baseline;
+            background: white; border: 1px solid var(--border-medium);
+            border-radius: var(--radius-full); padding: 6px 14px;
+            font-family: inherit; font-size: 0.85rem; font-weight: 600;
+            color: var(--text-main); cursor: pointer; transition: var(--transition-base);
+        }
+        .area-reco-chip:hover { border-color: var(--primary-color); color: var(--primary-color); background: var(--primary-light); }
+        .area-reco-name { font-weight: 700; }
+        .area-reco-meta { color: var(--text-tertiary); font-weight: 500; }
+        .area-reco-chip:hover .area-reco-meta { color: var(--primary-color); }
+        .area-reco-chip.selected {
+            background: var(--primary-color); color: white; border-color: var(--primary-color); cursor: default;
+        }
+        .area-reco-chip.selected::before { content: "\2713"; margin-right: 5px; font-weight: 700; }
+        .area-reco-chip.selected .area-reco-meta { color: rgba(255,255,255,0.8); }
 
         /* Criteria modal (hosted inside #dialogOverlay, reusing .dialog-card) */
         .dialog-card.criteria-modal-card { width: min(94vw, 460px); }
@@ -1323,7 +1397,7 @@
                 // Search criteria panel / modal
                 criteria_title: "Search criteria",
                 criteria_area: "Area",
-                criteria_area_ph: "e.g. Camden",
+                criteria_area_ph: "e.g. Camden — Enter to add",
                 criteria_budget: "Budget",
                 criteria_budget_ph: "e.g. 1500",
                 per_month: "per month",
@@ -1354,6 +1428,13 @@
                 bed_unit: "bed",
                 min_short: "min",
                 no_commute_summary: "no commute",
+
+                // Multi-area + recommended areas + card details
+                area_recos_label: "Recommended areas nearby",
+                area_remove: "Remove area",
+                area_min_one: "Keep at least one area, or set a commute destination.",
+                card_details_show: "Details",
+                card_details_hide: "Hide details",
 
                 // Errors
                 error_load_conversations: "Could not load conversations.",
@@ -1480,7 +1561,7 @@
                 // Search criteria panel / modal
                 criteria_title: "搜索条件",
                 criteria_area: "区域",
-                criteria_area_ph: "例如：Camden",
+                criteria_area_ph: "例如：Camden，回车添加",
                 criteria_budget: "预算",
                 criteria_budget_ph: "例如：1500",
                 per_month: "每月",
@@ -1511,6 +1592,13 @@
                 bed_unit: "室",
                 min_short: "分钟",
                 no_commute_summary: "不通勤",
+
+                // Multi-area + recommended areas + card details
+                area_recos_label: "附近推荐区域",
+                area_remove: "移除该区域",
+                area_min_one: "请至少保留一个区域，或设置通勤目的地。",
+                card_details_show: "详情",
+                card_details_hide: "收起详情",
 
                 // Errors
                 error_load_conversations: "无法加载会话列表。",
@@ -1555,6 +1643,7 @@
         /* STATE                                                                      */
         /* -------------------------------------------------------------------------- */
         let currentResults = [];
+        let currentAreaRecommendations = [];   // backend-suggested nearby areas (chips row)
         let favorites = new Set();
         let favoriteItems = [];          // raw favorite objects from the backend
         let currentPropertyContext = null;
@@ -2084,6 +2173,7 @@
                     } else if (data.response_type === 'search' && data.recommendations) {
                         addMessage(cleanRawResponse(data.message || ''), 'alex');
                         currentResults = data.recommendations;
+                        currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
                         displayResults(data.recommendations);
                         lastResponseType = 'search';
                         if (data.search_criteria) applyCriteria(data.search_criteria);
@@ -2095,6 +2185,7 @@
                         addMessage(cleanRawResponse(rawText), 'alex');
                         if (data.recommendations && data.recommendations.length > 0) {
                             currentResults = data.recommendations;
+                            currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
                             displayResults(data.recommendations);
                             lastResponseType = 'search';
                         } else {
@@ -2234,6 +2325,11 @@
             const content = document.getElementById('resultsContent');
             content.innerHTML = '';
 
+            // Recommended nearby areas (rendered even on an empty result set — they give
+            // the user a next step when the current area returned nothing).
+            const recoRow = buildAreaRecommendations(currentAreaRecommendations);
+            if (recoRow) content.appendChild(recoRow);
+
             if (!recommendations || recommendations.length === 0) {
                 content.appendChild(buildEmptyState('search', t('no_results_title'), t('no_results_desc')));
                 return;
@@ -2243,6 +2339,64 @@
                 content.appendChild(buildSimilarAlert());
             }
             recommendations.forEach(rec => content.appendChild(createPropertyCard(rec)));
+        }
+
+        // Clickable "recommended areas nearby" chips. Clicking one adds the area to the
+        // current multi-area selection and fires a fresh /api/search_direct search.
+        // Areas already in the selection render as selected/disabled (no dupes).
+        function buildAreaRecommendations(list) {
+            if (!Array.isArray(list) || list.length === 0) return null;
+            const already = panelFormApi ? panelFormApi.getAreas().map(a => a.toLowerCase()) : [];
+
+            const wrap = el('div', 'area-recos');
+            const label = el('div', 'area-recos-label');
+            label.innerHTML = getIcon('mapPin', 'icon-sm');   // trusted local icon
+            const labelText = document.createElement('span');
+            labelText.textContent = ' ' + t('area_recos_label');
+            label.appendChild(labelText);
+            wrap.appendChild(label);
+
+            const chips = el('div', 'area-recos-chips');
+            let rendered = 0;
+            list.forEach(function (item) {
+                if (!item || !item.name) return;
+                const name = String(item.name);
+                const chip = el('button', 'area-reco-chip');
+                chip.type = 'button';
+                if (item.reason) chip.title = String(item.reason);   // tooltip
+
+                const nameEl = el('span', 'area-reco-name');
+                nameEl.textContent = name;
+                chip.appendChild(nameEl);
+
+                const mins = item.commute_minutes;
+                if (mins !== undefined && mins !== null && mins !== '' && !isNaN(mins)) {
+                    const meta = el('span', 'area-reco-meta');
+                    meta.textContent = ' · ' + mins + ' ' + t('min_short');
+                    chip.appendChild(meta);
+                }
+
+                if (already.indexOf(name.toLowerCase()) !== -1) {
+                    chip.classList.add('selected');
+                    chip.disabled = true;
+                }
+                chip.addEventListener('click', function () { onRecoAreaClick(name, chip); });
+                chips.appendChild(chip);
+                rendered++;
+            });
+            if (rendered === 0) return null;
+            wrap.appendChild(chips);
+            return wrap;
+        }
+
+        // Add a recommended area to the selection and re-run the search (dedupe-safe).
+        function onRecoAreaClick(name, chipEl) {
+            if (isProcessing || !panelFormApi) return;
+            const added = panelFormApi.addArea(name);
+            if (chipEl) { chipEl.classList.add('selected'); chipEl.disabled = true; }
+            if (!added) return;                 // was already selected — no re-search
+            expandCriteriaPanel();
+            submitCriteriaSearch(panelFormApi.read(), panelFormApi);
         }
 
         function buildBudgetBadge(rec) {
@@ -2312,6 +2466,17 @@
             const content = el('div', 'property-content');
             const top = document.createElement('div');
 
+            // Area badge — which search area this listing came from (optional).
+            const areaName = (typeof rec.area === 'string') ? rec.area.trim() : '';
+            if (areaName) {
+                const areaBadge = el('span', 'property-area-badge');
+                areaBadge.innerHTML = getIcon('mapPin', 'icon-sm');   // trusted local icon
+                const an = el('span', 'area-name');
+                an.textContent = areaName;
+                areaBadge.appendChild(an);
+                top.appendChild(areaBadge);
+            }
+
             const header = el('div', 'property-header');
             const addr = el('div', 'property-address');
             addr.textContent = rec.address || '';
@@ -2345,6 +2510,35 @@
             const expl = el('div', 'property-explanation');
             expl.textContent = rec.explanation || '';
             top.appendChild(expl);
+
+            // Optional full description — collapsed behind a "Details" toggle. Kept
+            // separate from the short `explanation` summary above. Skipped when it is
+            // empty or just a duplicate of the explanation.
+            const descText = (typeof rec.description === 'string') ? rec.description.trim() : '';
+            if (descText && descText !== (rec.explanation || '').trim()) {
+                const toggle = el('button', 'property-details-toggle');
+                toggle.type = 'button';
+                const caret = el('span', 'caret');
+                caret.textContent = '▾';
+                const tLabel = el('span', 'toggle-label');
+                tLabel.textContent = t('card_details_show');
+                toggle.appendChild(tLabel);
+                toggle.appendChild(caret);
+
+                const desc = el('div', 'property-description');
+                desc.textContent = descText;
+                desc.style.display = 'none';
+
+                toggle.addEventListener('click', function () {
+                    const open = desc.style.display === 'none';
+                    desc.style.display = open ? 'block' : 'none';
+                    toggle.classList.toggle('open', open);
+                    tLabel.textContent = t(open ? 'card_details_hide' : 'card_details_show');
+                });
+
+                top.appendChild(toggle);
+                top.appendChild(desc);
+            }
             content.appendChild(top);
 
             const actions = el('div', 'property-actions');
@@ -3136,10 +3330,24 @@
 
         function defaultCriteria() {
             return {
-                area: '', max_budget: null, budget_period: 'month', bedrooms: null,
+                area: '', areas: [], max_budget: null, budget_period: 'month', bedrooms: null,
                 room_type: null,
                 commute_destination: '', max_commute_time: null, no_commute: false
             };
+        }
+
+        // Dedupe a list of area names case-insensitively, preserving order + original case.
+        function dedupeAreas(list) {
+            const out = [], seen = {};
+            (Array.isArray(list) ? list : []).forEach(function (x) {
+                const s = (typeof x === 'string') ? x.trim() : '';
+                if (!s) return;
+                const k = s.toLowerCase();
+                if (seen[k]) return;
+                seen[k] = true;
+                out.push(s);
+            });
+            return out;
         }
 
         // Accept either canonical shape (max_commute_time) or the clarification shape
@@ -3148,6 +3356,11 @@
             raw = raw || {};
             const c = defaultCriteria();
             if (typeof raw.area === 'string') c.area = raw.area;
+            // Multi-area: prefer an explicit `areas` array, else fall back to single `area`.
+            let areas = Array.isArray(raw.areas) ? dedupeAreas(raw.areas) : [];
+            if (!areas.length && c.area && c.area.trim()) areas = [c.area.trim()];
+            c.areas = areas;
+            if ((!c.area || !c.area.trim()) && areas.length) c.area = areas[0];
             c.max_budget = parseIntOrNull(raw.max_budget);
             c.budget_period = (raw.budget_period === 'week') ? 'week' : 'month';
             c.bedrooms = parseIntOrNull(raw.bedrooms);   // null=Any, 0=Studio, 1/2/3
@@ -3163,7 +3376,8 @@
         // Compact one-line echo, e.g. "Camden · ≤£1500/mo · 1 bed · → UCL ≤40min"
         function summarizeCriteria(c) {
             const parts = [];
-            if (c.area) parts.push(c.area);
+            if (Array.isArray(c.areas) && c.areas.length) parts.push(c.areas.join(' / '));
+            else if (c.area) parts.push(c.area);
             if (c.max_budget != null) {
                 const per = (c.budget_period === 'week') ? t('per_wk_short') : t('per_mo_short');
                 parts.push('≤£' + c.max_budget + per);
@@ -3201,8 +3415,25 @@
                 return lab;
             }
 
-            // Area (required, full width)
-            const areaField = labelField('criteria_area', true, true);
+            // Area (required, full width). Supports MULTIPLE areas: each committed area
+            // renders as a removable chip; the text input adds a new area (Enter / comma /
+            // blur), and any pending typed value is also merged in at read() time so the
+            // single-input flow keeps working exactly as before.
+            let selectedAreas = [];
+
+            const areaField = el('div', 'criteria-field col-span-2');
+            const areaCap = el('span', 'criteria-label');
+            const areaCapText = document.createElement('span');
+            areaCapText.setAttribute('data-i18n', 'criteria_area');
+            areaCapText.textContent = t('criteria_area');
+            areaCap.appendChild(areaCapText);
+            const areaReq = el('span', 'req'); areaReq.textContent = ' *'; areaCap.appendChild(areaReq);
+            areaField.appendChild(areaCap);
+
+            const areaChips = el('div', 'area-chips');
+            areaChips.style.display = 'none';
+            areaField.appendChild(areaChips);
+
             const areaInput = el('input', 'criteria-input');
             areaInput.type = 'text';
             areaInput.setAttribute('maxlength', '80');
@@ -3210,6 +3441,65 @@
             areaInput.placeholder = t('criteria_area_ph');
             areaField.appendChild(areaInput);
             grid.appendChild(areaField);
+
+            function areaKey(s) { return (typeof s === 'string') ? s.trim().toLowerCase() : ''; }
+            function hasArea(name) { const k = areaKey(name); return selectedAreas.some(function (a) { return areaKey(a) === k; }); }
+            function renderAreaChips() {
+                areaChips.innerHTML = '';
+                if (!selectedAreas.length) { areaChips.style.display = 'none'; return; }
+                areaChips.style.display = 'flex';
+                selectedAreas.forEach(function (name) {
+                    const chip = el('span', 'area-chip');
+                    const lab = el('span', 'area-chip-label');
+                    lab.textContent = name;
+                    chip.appendChild(lab);
+                    const rm = el('button', 'area-chip-remove');
+                    rm.type = 'button';
+                    rm.setAttribute('aria-label', t('area_remove'));
+                    rm.textContent = '×';   // ×
+                    rm.addEventListener('click', function (e) { e.preventDefault(); removeArea(name); });
+                    chip.appendChild(rm);
+                    areaChips.appendChild(chip);
+                });
+            }
+            function addAreaLocal(name) {
+                name = (typeof name === 'string') ? name.trim() : '';
+                if (!name || hasArea(name)) return false;
+                selectedAreas.push(name);
+                renderAreaChips();
+                areaInput.classList.remove('input-error');
+                return true;
+            }
+            function removeArea(name) {
+                const k = areaKey(name);
+                // Keep at least one area — unless a commute destination is set, in which
+                // case the search can run purely commute-driven.
+                const hasCommuteDest = !noInput.checked && destInput.value.trim().length > 0;
+                if (selectedAreas.length <= 1 && !hasCommuteDest) {
+                    showToast(t('area_min_one'), null);
+                    return;
+                }
+                selectedAreas = selectedAreas.filter(function (a) { return areaKey(a) !== k; });
+                renderAreaChips();
+            }
+            function setAreas(list) {
+                selectedAreas = [];
+                (Array.isArray(list) ? list : []).forEach(function (x) {
+                    const n = (typeof x === 'string') ? x.trim() : '';
+                    if (n && !hasArea(n)) selectedAreas.push(n);
+                });
+                renderAreaChips();
+            }
+            function commitAreaInput() {
+                const v = areaInput.value.trim();
+                if (!v) return;
+                addAreaLocal(v);
+                areaInput.value = '';
+            }
+            areaInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitAreaInput(); }
+            });
+            areaInput.addEventListener('blur', commitAreaInput);
 
             // Budget + period
             const budgetField = labelField('criteria_budget', false, false);
@@ -3334,11 +3624,21 @@
             maxInput.addEventListener('input', clearCommuteError);
             noInput.addEventListener('change', clearCommuteError);
 
+            // Merge committed chips with any pending (un-committed) text in the input.
+            function currentAreas() {
+                const areas = selectedAreas.slice();
+                const pending = areaInput.value.trim();
+                if (pending && !hasArea(pending)) areas.push(pending);
+                return areas;
+            }
+
             const api = {
                 form: form,
                 read: function () {
+                    const areas = currentAreas();
                     return {
-                        area: areaInput.value.trim(),
+                        area: areas.length ? areas[0] : '',   // back-compat single area
+                        areas: areas,
                         max_budget: parseIntOrNull(budgetInput.value),
                         budget_period: periodSelect.value === 'week' ? 'week' : 'month',
                         bedrooms: bedSelect.value === '' ? null : parseIntOrNull(bedSelect.value),
@@ -3352,7 +3652,13 @@
                 fill: function (c, respectActive) {
                     c = c || defaultCriteria();
                     const skip = function (node) { return respectActive && node === document.activeElement; };
-                    if (!skip(areaInput)) areaInput.value = c.area || '';
+                    if (!skip(areaInput)) {
+                        const list = (Array.isArray(c.areas) && c.areas.length)
+                            ? c.areas
+                            : (c.area && c.area.trim() ? [c.area.trim()] : []);
+                        setAreas(list);
+                        areaInput.value = '';   // input is the "add area" field — keep it empty
+                    }
                     if (!skip(budgetInput)) budgetInput.value = (c.max_budget != null ? String(c.max_budget) : '');
                     if (!skip(periodSelect)) periodSelect.value = (c.budget_period === 'week' ? 'week' : 'month');
                     if (!skip(bedSelect)) bedSelect.value = (c.bedrooms != null ? String(c.bedrooms) : '');
@@ -3363,6 +3669,10 @@
                     updateCommuteDisabled();
                     clearAllFieldErrors();
                 },
+                // Add an area to this form's selection (used by recommended-area chips).
+                // Returns true if newly added, false if it was already selected.
+                addArea: function (name) { return addAreaLocal(name); },
+                getAreas: function () { return currentAreas(); },
                 focusArea: function () { areaInput.focus(); if (typeof areaInput.select === 'function') areaInput.select(); },
                 markAreaError: function () { areaInput.classList.add('input-error'); },
                 // Highlight a single missing field by its canonical or legacy backend name.
@@ -3385,7 +3695,9 @@
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
                 const criteria = api.read();
-                if (!criteria.area) {
+                // Area is required UNLESS a commute destination is set (commute-only search).
+                const hasCommute = !criteria.no_commute && !!(criteria.commute_destination && criteria.commute_destination.trim());
+                if ((!criteria.areas || !criteria.areas.length) && !hasCommute) {
                     api.markAreaError();
                     api.focusArea();
                     showToast(t('criteria_area_required'), 'error');
@@ -3480,6 +3792,7 @@
         // Reset to defaults + collapse (a new/switched conversation = fresh context).
         function resetCriteria() {
             currentCriteria = defaultCriteria();
+            currentAreaRecommendations = [];   // drop nearby-area suggestions from a prior chat
             if (panelFormApi) panelFormApi.fill(currentCriteria, false);
             clearAllCriteriaErrors();   // drop any missing-field highlights from a prior chat
             collapseCriteriaPanel();
@@ -3533,14 +3846,25 @@
         /* --- Deterministic search submit (bypasses the LLM) --- */
         async function submitCriteriaSearch(criteria, sourceApi) {
             if (isProcessing) return;             // never race with chat send / another submit
-            if (!criteria || !criteria.area) {
+            // Multi-area: send `areas` plus `area` = areas[0] for back-compat.
+            const areas = (criteria && Array.isArray(criteria.areas) && criteria.areas.length)
+                ? dedupeAreas(criteria.areas)
+                : (criteria && criteria.area ? [criteria.area] : []);
+            // Area is required UNLESS a commute destination is set (commute-only search).
+            const hasCommute = criteria && !criteria.no_commute
+                && !!(criteria.commute_destination && criteria.commute_destination.trim());
+            if (!criteria || (!areas.length && !hasCommute)) {
                 if (sourceApi) { sourceApi.markAreaError(); sourceApi.focusArea(); }
                 showToast(t('criteria_area_required'), 'error');
                 return;
             }
 
             // Compose the request body per the /api/search_direct contract.
-            const reqCriteria = { area: criteria.area, no_commute: !!criteria.no_commute };
+            const reqCriteria = { no_commute: !!criteria.no_commute };
+            if (areas.length) {
+                reqCriteria.area = areas[0];    // legacy single-area field
+                reqCriteria.areas = areas;      // multi-area list
+            }
             if (criteria.max_budget != null) {
                 reqCriteria.max_budget = criteria.max_budget;
                 reqCriteria.budget_period = criteria.budget_period || 'month';
@@ -3585,6 +3909,7 @@
                     } else {
                         addMessage(cleanRawResponse(data.message || ''), 'alex');
                         const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
+                        currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
                         lastResponseType = 'search';
                         if (recs.length) {
                             currentResults = recs;
@@ -3597,7 +3922,13 @@
                                 onClick: expandCriteriaPanel
                             });
                         }
-                        applyCriteria(data.search_criteria || criteria);
+                        // Keep the full multi-area selection even if the backend echoes
+                        // only a single `area` (the `areas` echo is optional per contract).
+                        const echoed = Object.assign({}, data.search_criteria || criteria);
+                        if ((!Array.isArray(echoed.areas) || !echoed.areas.length) && areas.length) {
+                            echoed.areas = areas;
+                        }
+                        applyCriteria(echoed);
                         closeCriteriaModal();     // no-op if the search came from the panel
                     }
                     loadConversations(true);

@@ -1,0 +1,63 @@
+{
+  "config": "routed_models",
+  "mode": "live",
+  "offline": false,
+  "repeats": 1,
+  "n_cases_selected": 98,
+  "n_runs": 98,
+  "passed": {
+    "num": 34,
+    "den": 98,
+    "display": "34/98",
+    "rate": 0.3469387755102041
+  },
+  "task_completion": {
+    "num": 98,
+    "den": 98,
+    "display": "98/98",
+    "rate": 1.0
+  },
+  "constraints": {
+    "num": 215,
+    "den": 321,
+    "display": "215/321",
+    "rate": 0.6697819314641744
+  },
+  "grounded_rate": {
+    "num": 152,
+    "den": 204,
+    "display": "152/204",
+    "rate": 0.7450980392156863
+  },
+  "money_grounded_rate": {
+    "num": 121,
+    "den": 152,
+    "display": "121/152",
+    "rate": 0.7960526315789473
+  },
+  "contradicted_claims": 1,
+  "source_coverage": {
+    "num": 120,
+    "den": 204,
+    "display": "120/204",
+    "rate": 0.5882352941176471
+  },
+  "critic_triggers": 73,
+  "critic_repairs": 11,
+  "latency_ms": {
+    "mean": 6431.966767345979,
+    "p50": 4310.569950001081,
+    "p95": 19932.817369991957,
+    "n": 98
+  },
+  "tokens": {
+    "input": 137553,
+    "output": 38156
+  },
+  "total_cost_usd": 0.014873247199999997,
+  "cost_cap_usd": 8.0,
+  "stopped_reason": null,
+  "git_commit": "070675d",
+  "timestamp": "2026-07-12T06:14:32Z",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

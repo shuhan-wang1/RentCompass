@@ -1,0 +1,12 @@
+{
+  "tool_name": "get_transport_info",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "coverage": "outside_london",
+    "query": "Manchester Piccadilly -> University of Manchester",
+    "message": "TfL (Transport for London) only covers London, so I can't pull live fares, journeys or line status for 'Manchester Piccadilly -> University of Manchester'. For public transport there, check the local operator (e.g. Transport for Greater Manchester at tfgm.com, or National Rail at nationalrail.co.uk).",
+    "source": "TfL Unified API (coverage check)"
+  }
+}

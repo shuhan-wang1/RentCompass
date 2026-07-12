@@ -1,0 +1,29 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 1,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+      {
+        "rank": 1,
+        "address": "Chapter Kings Cross, 30 Pentonville Road, London N1 9HJ, UK",
+        "price": "£400 per week",
+        "budget_status": "",
+        "score": 88,
+        "property_type": "Studio",
+        "bedrooms": 0,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/chapter-kings-cross/",
+        "explanation": "Student studio advertised at £400 pw. Rent quoted weekly by the operator."
+      }
+    ],
+    "summary": "Found 1 studio near King's Cross advertised at £400 per week.",
+    "search_criteria": { "area": "King's Cross", "room_type": "studio" }
+  }
+}

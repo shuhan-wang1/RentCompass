@@ -1,0 +1,7 @@
+{
+  "description": "calculate_commute reports success=true but the payload is malformed: 'data' came back as a raw, unparseable string instead of the expected object with a numeric duration_minutes. A correct answer must degrade gracefully (couldn't read the commute result / try again), NOT scrape a number like '35' out of the noise and present it as a real duration.",
+  "tool_name": "calculate_commute",
+  "success": true,
+  "error": null,
+  "data": "duration=35min? route:Walk 8 <<truncated malformed payload — expected an object with numeric duration_minutes but the journey planner returned a raw string>> to=Canary Wharf"
+}

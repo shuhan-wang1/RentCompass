@@ -211,59 +211,17 @@ def _extract_commute_minutes(text: str):
     return None
 
 
-# Any address-based commute estimate above this (minutes) is treated as a
-# geocoding glitch and replaced by the coordinate-based estimate.
-_COMMUTE_SANITY_CAP = 240
-# Greater-London bounding box — inside it we trust TfL Journey Planner; outside
-# it (Manchester, Leeds, ...) TfL has no route and street-address geocoding is
-# unreliable, so we estimate from the listing's own exact lat/lon instead.
-_LONDON_BBOX = (51.28, 51.70, -0.55, 0.30)  # (lat_min, lat_max, lng_min, lng_max)
-
-
-def _parse_geo(geo) -> tuple[float, float] | None:
-    """'53.4415, -2.2159' -> (53.4415, -2.2159); tolerant of blanks/junk."""
-    if not geo:
-        return None
-    m = re.findall(r"-?\d+\.?\d*", str(geo))
-    if len(m) < 2:
-        return None
-    try:
-        lat, lng = float(m[0]), float(m[1])
-    except ValueError:
-        return None
-    if -90 <= lat <= 90 and -180 <= lng <= 180:
-        return (lat, lng)
-    return None
-
-
-def _in_london(coords: dict | None) -> bool:
-    if not coords:
-        return False
-    la, lo = coords.get("lat"), coords.get("lng")
-    if la is None or lo is None:
-        return False
-    return _LONDON_BBOX[0] <= la <= _LONDON_BBOX[1] and _LONDON_BBOX[2] <= lo <= _LONDON_BBOX[3]
-
-
-def _coord_commute_minutes(geo_str, dest_coords: dict | None) -> int | None:
-    """Distance-based transit estimate (minutes) from a listing's exact
-    coordinates to the destination. Mirrors maps_service.estimate_travel_time_simple
-    (1.3x route factor, 20 km/h transit, short wait) but uses the scraped lat/lon
-    directly, so it never depends on flaky street-address geocoding."""
-    o = _parse_geo(geo_str)
-    if not o or not dest_coords:
-        return None
-    dla, dlo = dest_coords.get("lat"), dest_coords.get("lng")
-    if dla is None or dlo is None:
-        return None
-    R = 6371.0
-    dlat = math.radians(dla - o[0])
-    dlng = math.radians(dlo - o[1])
-    a = (math.sin(dlat / 2) ** 2
-         + math.cos(math.radians(o[0])) * math.cos(math.radians(dla)) * math.sin(dlng / 2) ** 2)
-    dist_km = R * 2 * math.asin(math.sqrt(a))
-    actual = dist_km * 1.3
-    return int((actual / 20.0) * 60 + min(10, dist_km * 2))
+# Commute-time primitives now live in core.commute (shared verbatim with the
+# area recommender). Re-exported under the historical private names so the rest
+# of this module — step 4 annotation, the similar-but-over-budget fallback — is
+# unchanged.
+from core.commute import (
+    COMMUTE_SANITY_CAP as _COMMUTE_SANITY_CAP,
+    LONDON_BBOX as _LONDON_BBOX,
+    parse_geo as _parse_geo,
+    in_london as _in_london,
+    coord_commute_minutes as _coord_commute_minutes,
+)
 
 
 _WORD_NUMS = {"studio": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
@@ -781,6 +739,7 @@ class PropertyFilter:
 async def search_properties_impl(
     user_query: str = "",
     area: str = None,                 # 🆕 想住/搜索的区域（首选）
+    areas: list = None,               # 🆕 多区域：一次搜索多个居住区域（含 area）
     location: str = None,             # 遗留别名：见下方解析规则
     commute_destination: str = None,  # 🆕 通勤目的地（可选）
     max_budget: int = None,
@@ -922,6 +881,18 @@ async def search_properties_impl(
             return v.strip() if isinstance(v, str) and v.strip() else None
 
         search_area = _clean_area(area) or _clean_area(location)
+        # 🆕 多区域：清洗/去重显式传入的 areas 列表。缺省单区域时以 areas[0] 作主区域，
+        # 使目的地判定/区域派生（步骤 1.4）照常在主区域上运行。最终搜索区域列表
+        # search_areas 在门通过、search_area 定稿后于步骤 3 前构建；此处先置空，供
+        # 早退路径上的 _criteria()/_known_criteria() 闭包安全引用。
+        req_areas: list = []
+        for _a in (areas or []):
+            _ca = _clean_area(_a)
+            if _ca and _ca.lower() not in {x.lower() for x in req_areas}:
+                req_areas.append(_ca)
+        if not search_area and req_areas:
+            search_area = req_areas[0]
+        search_areas: list = []
         # 记录 search_area 是否由 commute_destination 推导（而非用户当作"住哪"输入的 token）。
         # 由 commute_destination 推导出的 slug 绝不参与"区域即目的地"的重分类（步骤 1.4）。
         search_area_from_commute_dest = False
@@ -1010,6 +981,10 @@ async def search_properties_impl(
         # 位置：必须早于下面的硬门（步骤 2）与软门（步骤 2.6），故置于二者之前、且在
         # commute_target 计算之前——这样锁定的目的地能被 commute_target 直接采用。
         locked_commute_dest = None
+        # 🆕 目的地一旦锁定，记录它自身可搜索的居住 slug 与城市，供非阻塞默认（步骤 2）
+        # 把"住哪"默认为目的地所在区域、并供区域推荐器做城市污染防护。
+        locked_dest_slug = None
+        locked_dest_city = None
 
         # 步骤 1.4a: 消息里"命名"了一个目的地（公司/大学）时，其优先级高于裸城市 area 抓取。
         # ----------------------------------------------------------------
@@ -1026,14 +1001,24 @@ async def search_properties_impl(
                 no_commute = False
                 locked_commute_dest = _dest_name  # 人类可读目的地名，用于门文案
                 _dest_city = str(_msg_dest.get("city") or "").strip().lower()
-                # 区分"目的地自身的城市"（上下文，非用户选定的家 → 清空以反问住哪）与"用户
-                # 另给的、与目的地不同的真实居住区"（如 "...near the Google office, live in
+                locked_dest_slug = _msg_dest.get("slug")
+                locked_dest_city = _dest_city or None
+                # 区分"目的地自身的城市/token"（上下文，非用户选定的家 → 不作 search_area）与
+                # "用户另给的、与目的地不同的真实居住区"（如 "...near the Google office, live in
                 # Camden" → 保留 Camden，只锁通勤）。仅动用户当作住哪输入的 token；由
-                # commute_destination 推导出的 slug 不在此列。
+                # commute_destination 推导出的 slug 不在此列。清空时，若调用方另给了一个不同的
+                # 真实居住区（area/location），像步骤 1.4b 一样把它找回作 search_area。
                 if search_area and not search_area_from_commute_dest:
                     _sa = search_area.strip().lower()
                     if is_destination(classify_place(search_area)) or _sa == _dest_city:
-                        search_area = None
+                        _residential = None
+                        for _cand in (_clean_area(area), _clean_area(location)):
+                            _cl = _cand.strip().lower() if _cand else None
+                            if (_cl and _cl != _sa and _cl != _dest_city
+                                    and not is_destination(classify_place(_cand))):
+                                _residential = _cand
+                                break
+                        search_area = _residential
                 print(f"   🎯 消息命名目的地：锁定通勤目标『{locked_commute_dest}』"
                       f"(commute_destination={commute_destination})，改问住哪 "
                       f"(residential={search_area})")
@@ -1047,6 +1032,8 @@ async def search_properties_impl(
                 commute_destination = _place.get("address") or _token
                 no_commute = False
                 locked_commute_dest = _token  # 人类可读的目的地名（如 "UCL"），用于门文案
+                locked_dest_slug = _place.get("slug")
+                locked_dest_city = str(_place.get("city") or "").strip().lower() or None
                 # 用户若另给了一个"不同的"真实居住区，保留之为 search_area；
                 # 否则清空，触发下方"想住哪"硬门。
                 _residential = None
@@ -1097,6 +1084,7 @@ async def search_properties_impl(
             return {
                 # canonical（新消费者）
                 'area': search_area,
+                'areas': list(search_areas) if search_areas else ([search_area] if search_area else []),
                 'commute_destination': commute_target,
                 'no_commute': no_commute,
                 'bedrooms': resolved_bedrooms,
@@ -1115,6 +1103,7 @@ async def search_properties_impl(
         def _known_criteria():
             return {
                 'area': search_area,
+                'areas': list(search_areas) if search_areas else ([search_area] if search_area else []),
                 'commute_destination': commute_target,
                 'max_budget': max_budget,
                 'max_travel_time': max_commute_time,
@@ -1141,11 +1130,21 @@ async def search_properties_impl(
             return base
 
         # ================================================================
-        # 步骤 2: 澄清 —— 仅当"搜索区域"无法确定时才追问（问『住哪』，绝不问『通勤去哪』）
+        # 步骤 2: 澄清 —— 仅当"搜索区域"无法确定时才追问（问『住哪』，绝不问『通勤去哪』）。
+        # 🆕 非阻塞默认：若已锁定通勤目的地且知其可搜索的居住 slug，则不再追问，直接把
+        # "住哪"默认为目的地所在区域并开搜；步骤 3 会并发生成"附近推荐居住区"，供用户一键
+        # 添加（多区域）。仅当既无区域、又无可用默认时才追问。
         # ================================================================
+        default_area_from_dest = False
+        if not search_area and locked_commute_dest and locked_dest_slug:
+            search_area = locked_dest_slug
+            default_area_from_dest = True
+            print(f"   🏙️ 目的地『{locked_commute_dest}』已锁定但未选居住区 → "
+                  f"默认搜索目的地所在区域 '{search_area}'，并生成附近推荐区域")
+
         if not search_area:
             if locked_commute_dest:
-                # 区域即目的地：默认通勤模式已锁定，只需再问"想住哪"（顺带 nudge 预算）。
+                # 目的地已锁定但无法派生可搜索 slug（罕见）：仍回退到追问"想住哪"。
                 if is_cjk:
                     question = (f"好的 —— 我会按到 {locked_commute_dest} 的通勤来帮你找房。"
                                 f"你想住在哪个区域或城市？（有预算的话也一并告诉我）")
@@ -1238,20 +1237,91 @@ async def search_properties_impl(
             scrape_min = max(0, int(min_budget or 100))
             scrape_max = int(os.getenv("SEARCH_DEFAULT_MAX_PRICE", "10000"))
 
-        print(f"\n🌐 [SEARCH] 抓取实时房源: area={search_area}, beds={min_beds}-{max_beds}, "
-              f"£{scrape_min}-{scrape_max}/month")
+        # 🆕 定稿多区域搜索列表：主区域（可能是目的地默认）在前，其后接显式传入的其它
+        # 居住区域（去重、排除目的地类 token），上限 SEARCH_MAX_AREAS。
+        MAX_SEARCH_AREAS = int(os.getenv("SEARCH_MAX_AREAS", "4"))
+        search_areas = []
+        if search_area:
+            search_areas.append(search_area)
+        for _ca in req_areas:
+            if _ca.lower() in {x.lower() for x in search_areas}:
+                continue
+            if is_destination(classify_place(_ca)):
+                continue  # 目的地不是居住区域，不纳入搜索
+            search_areas.append(_ca)
+        search_areas = search_areas[:MAX_SEARCH_AREAS] or ([search_area] if search_area else [])
+
         loop = asyncio.get_event_loop()
-        listing_result = await loop.run_in_executor(
-            None,
-            lambda: get_listings(search_area, min_beds, max_beds, scrape_min, scrape_max, limit=15),
+
+        # 🆕 并发生成"附近推荐居住区"（web 搜索→LLM 推理→逐个校验→本地缓存）。仅在有通勤
+        # 目标时有意义；与抓取并行跑，首次未命中缓存会稍慢（用户已认可"首次慢、之后即时"）。
+        _reco_task = None
+        if commute_target and os.getenv("AREA_RECOS_ENABLED", "1") != "0":
+            try:
+                from core.recommend_areas import recommend_areas as _recommend_areas
+            except Exception as _e:
+                print(f"   ⚠️ 区域推荐器不可用: {_e}")
+                _recommend_areas = None
+            if _recommend_areas:
+                _reco_city = locked_dest_city
+                if not _reco_city and commute_destination:
+                    try:
+                        _reco_city = classify_place(commute_destination).get('city')
+                    except Exception:
+                        _reco_city = None
+                _reco_task = asyncio.create_task(_recommend_areas(
+                    commute_target,
+                    city=_reco_city,
+                    max_commute_time=max_commute_time,
+                    exclude_slugs={a.lower() for a in search_areas},
+                    limit=int(os.getenv("AREA_RECO_LIMIT", "4")),
+                ))
+
+        # 🆕 多区域并发抓取；每行打上来源区域标签（_search_area），合并后统一排序/标注/过滤。
+        print(f"\n🌐 [SEARCH] 抓取实时房源: areas={search_areas}, beds={min_beds}-{max_beds}, "
+              f"£{scrape_min}-{scrape_max}/month")
+
+        def _fetch_one(_a):
+            res = get_listings(_a, min_beds, max_beds, scrape_min, scrape_max, limit=15)
+            for _r in res.get('rows', []):
+                _r.setdefault('_search_area', _a)
+            return _a, res
+
+        _fetch_results = await asyncio.gather(
+            *[loop.run_in_executor(None, _fetch_one, _a) for _a in search_areas]
         )
-        live_rows = listing_result['rows']
-        listing_meta = listing_result['meta']
+
+        live_rows = []
+        _metas = []
+        for _a, res in _fetch_results:
+            live_rows.extend(res.get('rows', []))
+            _metas.append(res.get('meta', {}))
+        # 聚合 meta：主区域（search_areas[0]）的 city 用于步骤 4 的 London 判定；
+        # stale/source/count 做跨区域合并。
+        primary_meta = _metas[0] if _metas else {}
+        _any_scraped = any(m.get('source') == 'scraped' for m in _metas)
+        _all_cached = bool(_metas) and all(m.get('source') in ('hit', 'stale-cache') for m in _metas)
+        listing_meta = {
+            'requested_city': primary_meta.get('requested_city'),
+            'stale': any(m.get('stale') for m in _metas),
+            'source': primary_meta.get('source'),
+            'count': sum(int(m.get('count') or 0) for m in _metas),
+        }
         possibly_outdated = bool(listing_meta.get('stale'))
-        _src = listing_meta.get('source')
-        data_source = 'OnTheMarket' + (' (cached)' if _src in ('hit', 'stale-cache') else '')
+        data_source = 'OnTheMarket' + (' (cached)' if (_all_cached and not _any_scraped) else '')
         print(f"   ✅ 实时房源 {listing_meta.get('count', 0)} 个 "
-              f"(source={_src}, {listing_meta.get('elapsed_s')}s)")
+              f"(areas={len(search_areas)}, cached={_all_cached})")
+
+        # 🆕 收集区域推荐（有界等待；命中缓存即时返回，未命中最多等 AREA_RECO_INLINE_TIMEOUT）。
+        area_recommendations = []
+        if _reco_task is not None:
+            try:
+                area_recommendations = await asyncio.wait_for(
+                    _reco_task, timeout=float(os.getenv("AREA_RECO_INLINE_TIMEOUT", "30"))
+                ) or []
+            except Exception as _e:
+                print(f"   ⚠️ 区域推荐超时/失败（不阻塞搜索）: {_e}")
+                area_recommendations = []
 
         # 没有任何真实房源 —— 诚实返回（语言感知），绝不使用 demo 假数据。
         if not live_rows:
@@ -1263,6 +1333,7 @@ async def search_properties_impl(
                 'data_source': data_source,
                 'search_criteria': _criteria(),
                 'known_criteria': _known_criteria(),
+                'area_recommendations': area_recommendations,
             }
 
         # 规范化真实行：解析价格、推断卧室/房型、标记过期。
@@ -1488,6 +1559,7 @@ async def search_properties_impl(
                                     prop.get('travel_time') if commute_annotation_enabled else None,
                                     commute_target,
                                 ),
+                                'area': prop.get('_search_area'),
                             }
                             _tt = prop.get('travel_time')
                             if commute_annotation_enabled and _tt is not None:
@@ -1510,6 +1582,7 @@ async def search_properties_impl(
                             'search_criteria': _criteria(),
                             'known_criteria': _known_criteria(),
                             'recommendations': similar_formatted,
+                            'area_recommendations': area_recommendations,
                         }
 
             # 无预算，或相似回退也没结果 —— 诚实的 no_results（语言感知，提示表单）。
@@ -1521,6 +1594,7 @@ async def search_properties_impl(
                 'data_source': data_source,
                 'search_criteria': _criteria(),
                 'known_criteria': _known_criteria(),
+                'area_recommendations': area_recommendations,
             }
 
         # ================================================================
@@ -1529,6 +1603,25 @@ async def search_properties_impl(
         perfect_limited = perfect_match[:limit]
         soft_limited = soft_violation[:3]
         all_results = perfect_limited + soft_limited
+
+        # 🆕 用房源详情页的完整描述丰富"将要展示的候选"（有界=仅 top-N；并发；按 URL 缓存）。
+        # 让 Agent 拿到真实房源文本以回答后续问题（家具/账单/宠物/交通等）。
+        if os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and all_results:
+            try:
+                from core.scraping.onthemarket import fetch_listing_description as _fetch_desc
+            except Exception:
+                _fetch_desc = None
+            if _fetch_desc:
+                _to_enrich = all_results[:limit]
+                _desc_list = await asyncio.gather(*[
+                    loop.run_in_executor(None, _fetch_desc, (p.get('URL') or p.get('url') or ''))
+                    for p in _to_enrich
+                ])
+                for _p, _d in zip(_to_enrich, _desc_list):
+                    if _d:  # 非空串才算有效（"" = 已知无描述，避免每次重抓）
+                        _p['_full_description'] = _d
+                print(f"   📝 已丰富 {sum(1 for p in _to_enrich if p.get('_full_description'))}/"
+                      f"{len(_to_enrich)} 个房源的完整描述")
 
         formatted_results = []
         for i, prop in enumerate(all_results[:limit], 1):
@@ -1560,6 +1653,10 @@ async def search_properties_impl(
                     prop.get('travel_time') if commute_annotation_enabled else None,
                     commute_target,
                 ),
+                # 🆕 多区域：该房源来自哪个搜索区域（前端卡片徽标）。
+                'area': prop.get('_search_area'),
+                # 🆕 OnTheMarket 详情页完整描述（未截断；供 Agent 后续问答）。
+                'description': prop.get('_full_description', ''),
             }
             # 无通勤目标/无通勤时间时，完全省略 travel_time 字段（不出现 "0 min to None"）。
             _tt = prop.get('travel_time')
@@ -1591,6 +1688,7 @@ async def search_properties_impl(
             'perfect_count': len(perfect_match),
             'soft_count': len(soft_violation),
             'summary': _summary,
+            'area_recommendations': area_recommendations,
         }
 
     except Exception as e:
@@ -1649,6 +1747,11 @@ For GENERAL INFORMATION questions about rent, use web_search instead.""",
             'area': {
                 'type': 'string',
                 'description': 'Where the user wants to LIVE / the search area (e.g. Camden, Manchester, or a university like UCL). This (or commute_destination) is the only thing truly needed.'
+            },
+            'areas': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': 'OPTIONAL multiple residential areas to search at once (e.g. ["Camden", "Islington"]). Use when the user wants to compare several neighbourhoods. The single "area" is treated as the first of these; results are tagged with the area each listing came from.'
             },
             'location': {
                 'type': 'string',

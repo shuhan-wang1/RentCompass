@@ -1,0 +1,15 @@
+{
+  "tool_name": "web_search",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "query": "average studio rent near UCL Bloomsbury London 2025",
+    "results": "### Web Search: studio rent near UCL / Bloomsbury\nZoopla (market data): studios in the Bloomsbury / UCL area typically let for about £1,400 to £1,900 per month (roughly £320-£440 per week).\nRightmove: current Bloomsbury studio listings mostly range £1,450-£1,850 pcm.\nSpareRoom: purpose-built student studios near UCL are often quoted £320-£420 per week, bills included.\nNote: these are area asking-rent RANGES, not a single average figure.",
+    "detailed_data": {
+      "web_search_0": "Zoopla: studios ~£1,400-£1,900 pcm in Bloomsbury/UCL area",
+      "web_search_1": "Rightmove: Bloomsbury studios mostly £1,450-£1,850 pcm",
+      "web_search_2": "SpareRoom: student studios near UCL ~£320-£420 pw"
+    }
+  }
+}

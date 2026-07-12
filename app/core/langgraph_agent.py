@@ -137,6 +137,15 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
         if new_criteria.get(field):
             result[field] = new_criteria[field]
 
+    # 🆕 多区域：整体替换 areas 列表（工具已定稿的搜索区域集合），并同步 area 为首个，
+    # 使单值消费者与多值消费者保持一致。空列表不清除既有选择。
+    new_areas = new_criteria.get('areas')
+    if isinstance(new_areas, list):
+        cleaned_areas = [a.strip() for a in new_areas if isinstance(a, str) and a.strip()]
+        if cleaned_areas:
+            result['areas'] = cleaned_areas
+            result['area'] = cleaned_areas[0]
+
     # commute_destination is the new canonical key; mirror it into the legacy
     # ``destination`` so old readers keep working (mirroring rule). An explicit
     # None (the tool sends it under no_commute, where destination merely mirrors the
@@ -1626,6 +1635,10 @@ def _make_execute_tool_node(tool_registry):
                 # Inject accumulated criteria under the new area/commute keys.
                 if not params.get('area') and accumulated.get('area'):
                     params['area'] = accumulated['area']
+                # 🆕 多区域：注入累积的 areas 列表。但若本轮明确切换到单一新城市
+                # (_switched_area)，以该切换为准，不带回旧的多区域集合。
+                if not _switched_area and not params.get('areas') and accumulated.get('areas'):
+                    params['areas'] = accumulated['areas']
                 # Read rule: prefer commute_destination, fall back to legacy destination.
                 cd = accumulated.get('commute_destination') or accumulated.get('destination')
                 if not params.get('commute_destination') and cd and not accumulated.get('no_commute'):
@@ -1846,6 +1859,18 @@ def _make_critic_node():
                 stage, verdict.grounded, verdict.issues,
                 extra={"node": "critic", "tool": tool_name},
             )
+            # Offline-eval instrumentation (additive; no-op unless active).
+            try:
+                from evaluation.metrics import collector
+                if collector.is_active():
+                    collector.record_critic(
+                        stage=stage,
+                        grounded=getattr(verdict, "grounded", None),
+                        issues=getattr(verdict, "issues", None),
+                        critic_attempts=attempts_before,
+                    )
+            except Exception:
+                pass
 
         outcome = await enforce_grounding(
             response,
@@ -1909,7 +1934,9 @@ def _make_format_output_node():
                 # The summary is now fully localized (zh/en) and already includes the
                 # right-panel hint, so it's used verbatim (no English-only suffix bolted on).
                 response = raw_data.get('summary') or f"I found {len(recs)} properties."
-                tool_data = {'recommendations': recs, 'search_criteria': raw_data.get('search_criteria', {})}
+                tool_data = {'recommendations': recs, 'search_criteria': raw_data.get('search_criteria', {}),
+                             # 🆕 目的地附近推荐居住区，随搜索结果一并回传前端（可点击 chips）。
+                             'area_recommendations': raw_data.get('area_recommendations', [])}
 
         elif tool_name == 'multi_search' and raw_data:
             tool_data = {'multi_search_results': raw_data}
@@ -2114,16 +2141,28 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None):
 
     graph = StateGraph(AgentState)
 
+    # Offline-eval node instrumentation (additive; no-op unless RENTCOMPASS_EVAL
+    # is active). Wraps each node callable with node_span + collector.record_node
+    # without touching node bodies.
+    def _n(node_name, fn):
+        try:
+            from evaluation.metrics.collector import instrument_node, is_active
+            if is_active():
+                return instrument_node(node_name, fn, logger=logger)
+        except Exception:
+            pass
+        return fn
+
     # Register nodes
-    graph.add_node("extract_preferences", _make_extract_preferences_node())
-    graph.add_node("decide_tool", _make_decide_tool_node(tool_registry, classification_llm))
-    graph.add_node("execute_tool", _make_execute_tool_node(tool_registry))
-    graph.add_node("dispatch_searches", _make_dispatch_searches_node())
-    graph.add_node("search_worker", _make_search_worker_node(tool_registry))
-    graph.add_node("gather_searches", _make_gather_searches_node())
-    graph.add_node("generate_response", _make_generate_response_node())
-    graph.add_node("critic", _make_critic_node())
-    graph.add_node("format_output", _make_format_output_node())
+    graph.add_node("extract_preferences", _n("extract_preferences", _make_extract_preferences_node()))
+    graph.add_node("decide_tool", _n("decide_tool", _make_decide_tool_node(tool_registry, classification_llm)))
+    graph.add_node("execute_tool", _n("execute_tool", _make_execute_tool_node(tool_registry)))
+    graph.add_node("dispatch_searches", _n("dispatch_searches", _make_dispatch_searches_node()))
+    graph.add_node("search_worker", _n("search_worker", _make_search_worker_node(tool_registry)))
+    graph.add_node("gather_searches", _n("gather_searches", _make_gather_searches_node()))
+    graph.add_node("generate_response", _n("generate_response", _make_generate_response_node()))
+    graph.add_node("critic", _n("critic", _make_critic_node()))
+    graph.add_node("format_output", _n("format_output", _make_format_output_node()))
 
     # Edges
     graph.add_edge(START, "extract_preferences")

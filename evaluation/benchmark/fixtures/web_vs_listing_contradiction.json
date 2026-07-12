@@ -1,0 +1,19 @@
+{
+  "description": "A market_info web_search and a listing disagree on the average rent figure for the same area; a correct answer surfaces the discrepancy instead of silently picking one.",
+  "results": [
+    {
+      "tool_name": "web_search",
+      "success": true,
+      "error": null,
+      "data": {
+        "success": true,
+        "query": "average rent studio Shoreditch 2025",
+        "results": "### Web Search: average rent Shoreditch studio\nSource A (Zoopla market page): average studio rent in Shoreditch is about £1,650 pcm.\nSource B (a letting-agent blog): claims the Shoreditch studio average is £2,300 pcm.",
+        "detailed_data": {
+          "web_search_0": "Zoopla: ~£1650 pcm average studio",
+          "web_search_1": "agent blog: ~£2300 pcm average studio"
+        }
+      }
+    }
+  ]
+}

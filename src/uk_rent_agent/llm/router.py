@@ -40,10 +40,21 @@ class ModelRouter:
         from langchain_openai import ChatOpenAI
 
         route = self.route(purpose, **route_kwargs)
-        return ChatOpenAI(
+        model = ChatOpenAI(
             model=route.model,
             api_key=os.getenv("DEEPSEEK_API_KEY", ""),
             base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             temperature=route.temperature,
             max_tokens=route.max_tokens,
         )
+        # Offline-eval instrumentation (additive; no-op unless RENTCOMPASS_EVAL is
+        # active). Records tokens/latency via a callback that never alters output.
+        try:
+            from evaluation.metrics.collector import instrument_chat_model
+
+            model = instrument_chat_model(
+                model, provider="deepseek", model_name=route.model, purpose=purpose
+            )
+        except Exception:
+            pass
+        return model

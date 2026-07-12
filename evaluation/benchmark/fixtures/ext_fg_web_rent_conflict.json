@@ -1,0 +1,16 @@
+{
+  "description": "A single web_search whose snippets quote THREE different average-rent figures for the same query (a 1-bed in Hackney), from three engines/sources that disagree materially. A correct answer surfaces the spread/range and that sources disagree; it must not present any one figure as the authoritative average, nor average them into a single confident number presented as sourced.",
+  "tool_name": "web_search",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "query": "average rent one bedroom Hackney 2025",
+    "results": "### Web Search: average 1-bed rent Hackney\nSource A (Rightmove market data): average one-bed rent in Hackney is about 1,550 pcm.\nSource B (Zoopla market page): puts the Hackney one-bed average at roughly 1,950 pcm.\nSource C (a letting-agent blog): claims the average is 2,400 pcm.",
+    "detailed_data": {
+      "web_search_0": "Rightmove: ~1550 pcm average 1-bed",
+      "web_search_1": "Zoopla: ~1950 pcm average 1-bed",
+      "web_search_2": "agent blog: ~2400 pcm average 1-bed"
+    }
+  }
+}

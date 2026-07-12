@@ -1,0 +1,16 @@
+{
+  "description": "recall_memory for a returning user in a brand-new session (empty in-session history). Durable memory holds a full profile: area, commute limit, and a no-pets constraint. Used for session-recovery: the agent must recall these and not treat the user as new.",
+  "tool_name": "recall_memory",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "count": 3,
+    "memories": [
+      { "content": "User wants to live in Hackney.", "mtype": "semantic", "score": 0.9 },
+      { "content": "User needs a commute of at most 30 minutes to their workplace.", "mtype": "semantic", "score": 0.88 },
+      { "content": "User has no pets and does not need a pet-friendly rental.", "mtype": "semantic", "score": 0.83 }
+    ],
+    "formatted": "- User wants to live in Hackney.\n- User needs a commute of at most 30 minutes to their workplace.\n- User has no pets and does not need a pet-friendly rental."
+  }
+}

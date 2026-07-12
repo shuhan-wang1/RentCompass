@@ -1,0 +1,9 @@
+{
+  "tool_name": "calculate_commute",
+  "success": false,
+  "error": "无法计算通勤时间（地址解析失败）",
+  "data": {
+    "success": false,
+    "error": "无法计算通勤时间（地址解析失败）"
+  }
+}

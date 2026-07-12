@@ -1,0 +1,30 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "no_exact_match_but_similar",
+    "message": "没有找到同时满足月租1300镑以内、通勤到帝国理工30分钟内且附近有超市的单间。最接近的房源都略微超出预算。",
+    "suggestion": "最接近的房源为每月1450镑，是否可以将预算提高约150镑？",
+    "suggested_budget": 1450,
+    "budget_increase_needed": 150,
+    "similar_properties": [
+      {
+        "rank": 1,
+        "address": "Earls Court House, 18 Penywern Road, London SW5 9SU, UK",
+        "price": "£1450/month",
+        "price_raw": 1450,
+        "budget_status": "⚠️ 超预算 150 镑 (12%)",
+        "over_budget": 150,
+        "property_type": "Studio",
+        "bedrooms": 0,
+        "match_type": "similar_suggestion",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/earls-court-house/"
+      }
+    ],
+    "recommendations": [],
+    "search_criteria": { "area": "South Kensington", "max_budget": 1300, "room_type": "studio" }
+  }
+}

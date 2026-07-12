@@ -1,0 +1,29 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 1,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+      {
+        "rank": 1,
+        "address": "Scape Bloomsbury, 19-29 Woburn Place, London WC1H 0AQ, UK",
+        "price": "£1500/month",
+        "budget_status": "",
+        "score": 92,
+        "property_type": "Studio",
+        "bedrooms": 0,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/scape-bloomsbury/",
+        "explanation": "Modern purpose-built student studio near UCL. Bills included. All-inclusive rent."
+      }
+    ],
+    "summary": "Found 1 studio near Bloomsbury within your £1500/month budget.",
+    "search_criteria": { "area": "Bloomsbury", "max_budget": 1500, "room_type": "studio" }
+  }
+}

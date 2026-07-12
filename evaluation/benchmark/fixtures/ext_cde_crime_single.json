@@ -1,0 +1,18 @@
+{
+  "tool_name": "check_safety",
+  "success": true,
+  "error": null,
+  "data": {
+    "address": "Tottenham, London N17",
+    "safety_score": 35,
+    "safety_level": "Concerning",
+    "crime_data": {
+      "total_crimes_6m": 130,
+      "most_recent_month_count": 24,
+      "crime_trend": "increasing",
+      "category_breakdown": { "violent-crime": 46, "anti-social-behaviour": 39, "vehicle-crime": 20 },
+      "source": "data.police.uk"
+    },
+    "recommendation": "This area has a safety level of Concerning with a safety score of 35/100"
+  }
+}

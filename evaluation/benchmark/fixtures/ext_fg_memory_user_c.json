@@ -1,0 +1,14 @@
+{
+  "description": "recall_memory for user C in a 3-user isolation scenario. C's per-user bucket holds ONLY C's own commute destination. User A's budget (1250) and user B's area (Peckham) live in different user_id buckets and MUST NOT appear here.",
+  "tool_name": "recall_memory",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "count": 1,
+    "memories": [
+      { "content": "User commutes daily to Canary Wharf.", "mtype": "semantic", "score": 0.9 }
+    ],
+    "formatted": "- User commutes daily to Canary Wharf."
+  }
+}

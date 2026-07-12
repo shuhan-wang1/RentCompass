@@ -1,0 +1,33 @@
+# RentCompass eval config — Phase-5 config A ("serial retrieval").
+#
+# Forces the multi-search map-reduce workers to run SEQUENTIALLY (concurrency 1)
+# instead of the parallel Send fan-out.
+#
+# MECHANISM (what the runner actually changes): the graph's `fan_out_searches`
+# helper emits one LangGraph `Send("search_worker", ...)` per planned sub-search,
+# and LangGraph's Pregel executor runs those Sends concurrently within the
+# superstep. The runner honours `retrieval.concurrency: serial` by adding
+# `max_concurrency: 1` to the LangGraph RunnableConfig passed to `graph.ainvoke`.
+# This caps the executor to ONE task at a time, so the N search workers run as N
+# sequential awaits instead of concurrently. It is a pure scheduling change:
+#
+#   * SAME fan-out (same N Sends), SAME per-worker tool calls, params, and
+#     observations, SAME `gather_searches` reduction.
+#   * ONLY the wall-clock scheduling differs (serial vs concurrent), which is
+#     exactly the variable Phase-5 measures.
+#
+# No production code is modified — `max_concurrency` is a standard LangChain/
+# LangGraph config field. Compare latency against parallel_retrieval.yaml.
+name: serial_retrieval
+description: >-
+  Phase-5 config A. Retrieval workers forced to concurrency=1 via LangGraph
+  max_concurrency=1 on ainvoke. Same tool calls/results as parallel; only
+  scheduling changes. Compare against parallel_retrieval.yaml.
+
+model_router_override:
+  mode: none
+
+retrieval:
+  concurrency: serial       # runner sets max_concurrency=1 on graph.ainvoke
+
+env: {}

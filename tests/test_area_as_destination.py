@@ -4,8 +4,12 @@ When the user names a DESTINATION (university/workplace) as where they want to
 LIVE, the tool must:
   * lock it in as the commute destination and default to commute-mode
     (never ask "commute or not?"),
-  * NOT use it as the residential search_area — instead ask where to live,
-  * acknowledge the locked commute in the missing-area question.
+  * NON-BLOCKING DEFAULT: default the residential search_area to the destination's
+    OWN area (its searchable slug) and proceed — never hard-block with a
+    "where do you want to live?" (missing_area) question. A concurrent recommender
+    then surfaces verified nearby areas as clickable chips.
+  * so with nothing else known the SOFT gate fires for budget/room_type ONLY —
+    commute is already satisfied by the lock and is never re-asked.
 
 A genuine residential area (Camden) must keep the CURRENT flow: the soft gate
 still asks about commute when nothing is known.
@@ -82,38 +86,43 @@ def _run(**kwargs):
     return asyncio.run(search_properties_impl(**kwargs))
 
 
-# ── destination token: lock commute + ask where to live ────────────────────
-def test_destination_area_locks_commute_and_asks_where_to_live(classifier, monkeypatch):
-    _no_scrape(monkeypatch)
+# ── destination token: lock commute + DEFAULT area to the destination's own area ──
+def test_destination_area_locks_commute_and_defaults_area(classifier, monkeypatch):
+    # area="UCL" (a destination) with no residential area: lock commute to UCL AND
+    # default the search area to UCL's own slug (non-blocking). NOT the hard
+    # missing-area gate; commute is satisfied so the soft gate asks budget/room_type only.
+    _no_scrape(monkeypatch)  # the soft gate still fires before any scrape
     res = _run(area="UCL", current_message="places near UCL")
     assert res["status"] == "need_clarification"
-    assert res["clarification_kind"] == "missing_area"
-    assert res["missing_fields"] == ["area"]
-    # acknowledges the locked commute + nudges budget
-    assert "plan your commute to UCL" in res["question"]
+    assert res["clarification_kind"] == "soft_criteria"   # NOT missing_area anymore
+    assert "commute" not in res["missing_fields"]          # commute satisfied by the lock
     kc = res["known_criteria"]
-    assert kc["area"] is None                     # destination NOT used as residence
+    assert kc["area"] == "ucl"                     # defaulted to the destination's own slug
     assert kc["commute_destination"] == _UCL_ADDR  # locked, geocodable address
     assert kc["no_commute"] is False               # commute-mode defaulted on
     # the lock is persisted so it survives to the next turn
     assert res["extracted_so_far"]["destination"] == _UCL_ADDR
 
 
-def test_destination_area_zh_acknowledgment(classifier, monkeypatch):
+def test_destination_area_zh_soft_gate(classifier, monkeypatch):
+    # zh path: same non-blocking default; a soft-criteria clarification (zh) with the
+    # commute already locked — never the hard missing-area gate.
     _no_scrape(monkeypatch)
     res = _run(area="UCL", current_message="UCL 附近有什么房源")
-    assert res["clarification_kind"] == "missing_area"
-    assert "到 UCL 的通勤" in res["question"]   # zh acknowledgment branch
+    assert res["clarification_kind"] == "soft_criteria"
+    assert res["known_criteria"]["area"] == "ucl"
+    assert res["known_criteria"]["commute_destination"] == _UCL_ADDR
 
 
-def test_workplace_area_also_locks_commute(classifier, monkeypatch):
+def test_workplace_area_also_locks_and_defaults(classifier, monkeypatch):
     # Broadening the university-only check to is_destination covers workplaces too.
     _no_scrape(monkeypatch)
     res = _run(area="Google London", current_message="somewhere near Google London")
-    assert res["clarification_kind"] == "missing_area"
-    assert res["missing_fields"] == ["area"]
-    assert "plan your commute to Google London" in res["question"]
-    assert res["known_criteria"]["commute_destination"] == _GOOGLE_ADDR
+    assert res["clarification_kind"] == "soft_criteria"
+    assert "commute" not in res["missing_fields"]
+    kc = res["known_criteria"]
+    assert kc["area"] == "google-london"           # defaulted to the workplace's own slug
+    assert kc["commute_destination"] == _GOOGLE_ADDR
 
 
 # ── residential token: current flow intact, commute still asked ─────────────

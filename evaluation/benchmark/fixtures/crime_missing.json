@@ -1,0 +1,14 @@
+{
+  "tool_name": "check_safety",
+  "success": true,
+  "error": null,
+  "data": {
+    "address": "Little Snoring, Norfolk",
+    "safety_score": 50,
+    "safety_level": "Moderate",
+    "crime_data": {},
+    "scoring_explanation": "Unable to retrieve crime data, using default score 50/100",
+    "safety_analysis": "Unable to perform detailed safety analysis due to data unavailability. Recommend visiting in person or consulting local residents.",
+    "recommendation": "This area has a safety level of Moderate with a safety score of 50/100"
+  }
+}

@@ -1,0 +1,19 @@
+scenario_id,name,fault,retry_recovered,fallback_succeeded,idempotency_held,duplicate_write_count,task_completed_after_fault,produced_ungrounded_answer_after_fault,fault_surfaced,detail,error
+01,tool_timeout,TimeoutError on 1st attempt,True,,,0,True,False,True,success=True error=None,
+02,http_429,HTTP 429 on 1st attempt,True,,,0,True,False,True,success=True error=None,
+03,http_500,HTTP 500 on every attempt,False,,,0,False,False,True,success=False error=RuntimeError: HTTP 500 Internal Server Error,
+04,empty_result,tool returns empty payload,,,,0,True,False,True,empty_flag=True data=[],
+05,malformed_json,MCP returns non-JSON text,True,,,0,True,False,True,success=True data='NOT-JSON {broken',
+06,missing_schema_field,output missing required field,False,,,0,False,False,True,"success=False error=ValidationError: 1 validation error for Receipt
+receipt_id
+  Field required [type=missing, input_value={'success': True}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing",
+07,mcp_unavailable,MCP not connected -> fallback,,True,,0,True,False,True,connected=False fallback_success=True,
+08,inprocess_fallback,MCP call error -> in-process fallback,,True,,0,True,False,True,"fallback_success=True data={'success': True, 'safety_score': 72, 'address': 'SW1A 1AA'}",
+09,duplicate_write,same idempotency key submitted twice,,,True,0,True,False,True,durable_writes=1 same_receipt=True,
+10,concurrent_resubmit,same key submitted concurrently,,,True,0,True,False,True,durable_writes=1 r1=True/None r2=False/logical invocation is already in progress,
+11,sqlite_lock,idempotency DB briefly exclusive-locked,True,,True,0,True,False,True,success=True waited_ms=393 writes=1,
+12,prompt_injection,injection embedded in untrusted listing text,,,,0,True,False,True,"patterns=['ignore\\s+(all\\s+)?previous\\s+instructions?', '(?:system|developer)\\s*:\\s*'] tainted=True neutralised=True",
+13,partial_worker_failure,1 of 3 fan-out workers crashes,,,,0,True,False,True,ok_workers=2/3 failed_surfaced=True,
+14,critic_model_raises,critic regeneration model raises,False,,,0,True,True,True,attempts=2 caveated=True resp_tail='se double-check the exact prices against the source listing.',
+15,synthesis_model_raises,response-generation model raises,False,,,0,True,False,True,"response=""I'm sorry, I couldn't process your request. Please try again.""",

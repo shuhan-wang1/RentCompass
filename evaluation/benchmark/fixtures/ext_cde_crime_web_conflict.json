@@ -1,0 +1,34 @@
+{
+  "description": "check_safety (data.police.uk) and an uncited web_search snippet disagree on the crime count for Deptford. Used by D10.",
+  "results": [
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Deptford, London SE8",
+        "safety_score": 56,
+        "safety_level": "Moderate",
+        "crime_data": {
+          "total_crimes_6m": 88,
+          "most_recent_month_count": 15,
+          "crime_trend": "stable",
+          "category_breakdown": { "anti-social-behaviour": 30, "violent-crime": 24, "bicycle-theft": 12 },
+          "source": "data.police.uk"
+        },
+        "recommendation": "This area has a safety level of Moderate with a safety score of 56/100"
+      }
+    },
+    {
+      "tool_name": "web_search",
+      "success": true,
+      "error": null,
+      "data": {
+        "success": true,
+        "query": "Deptford SE8 crime statistics 2025",
+        "results": "### Web Search: Deptford crime\nAn unsourced property-forum post claims Deptford had 'more than 500 crimes in the last six months' and calls it a no-go area. No official data is cited.",
+        "detailed_data": { "web_search_0": "forum post claims 500+ crimes in 6 months, uncited" }
+      }
+    }
+  ]
+}

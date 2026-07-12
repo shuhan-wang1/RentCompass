@@ -1,0 +1,36 @@
+# RentCompass — model pricing config (standalone; NOT hardcoded in business logic).
+#
+# Prices are USD per 1,000,000 tokens. `null` means "price not confirmed" — in
+# that case evaluation/metrics/pricing.py returns cost=None and only the token
+# counts should be trusted.
+#
+# IMPORTANT: prices move. Re-confirm against `price_source` before quoting spend.
+price_source: "https://api-docs.deepseek.com/quick_start/pricing (official DeepSeek API pricing page)"
+price_as_of: "2026-07-11"
+
+# Notes on the DeepSeek entries below:
+#   * Confirmed 2026-07-11 from the official pricing page. As of that date the
+#     docs state `deepseek-chat` / `deepseek-reasoner` are the non-thinking /
+#     thinking modes of `deepseek-v4-flash` and share its rates, and that these
+#     aliases "will be deprecated on 2026/07/24 15:59 UTC" — re-verify after that
+#     date; if the alias→model mapping or price changes, update or null these out.
+#   * `cached_input` = DeepSeek "cache hit" input price (prompt_cache_hit_tokens).
+#     `input` = "cache miss" input price (prompt_cache_miss_tokens).
+currency: USD
+per_tokens: 1000000
+
+models:
+  deepseek-chat:
+    input: 0.14          # cache miss, per 1M input tokens
+    cached_input: 0.0028 # cache hit, per 1M input tokens
+    output: 0.28         # per 1M output tokens
+  deepseek-reasoner:
+    input: 0.14
+    cached_input: 0.0028
+    output: 0.28
+  # deepseek-v4-pro is referenced by ModelRouter (purpose="pro") but is unused on
+  # the hot path; price left null until confirmed.
+  deepseek-v4-pro:
+    input: null
+    cached_input: null
+    output: null

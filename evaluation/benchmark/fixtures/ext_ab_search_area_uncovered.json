@@ -1,0 +1,24 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "no_results",
+    "message": "I couldn't find any current listings in Inverness matching your criteria right now. The live source has little coverage for this area — try widening the area or adjusting the budget, or use the search form.",
+    "recommendations": [],
+    "data_source": "onthemarket_live",
+    "search_criteria": {
+      "area": "Inverness",
+      "max_budget": 900,
+      "budget_period": "month",
+      "bedrooms": 2,
+      "no_commute": true
+    },
+    "known_criteria": {
+      "area": "Inverness",
+      "max_budget": 900,
+      "bedrooms": 2
+    }
+  }
+}

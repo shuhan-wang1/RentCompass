@@ -1,0 +1,58 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 3,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+      {
+        "rank": 1,
+        "address": "Angel Gate, 326 City Road, London EC1V 2PT, UK",
+        "price": "£1650/month",
+        "price_raw": 1650,
+        "budget_status": "✅ Within budget",
+        "score": 88,
+        "property_type": "1 bed",
+        "bedrooms": 1,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/angel-gate-1bed/",
+        "explanation": "One-bed flat close to Angel. Modern block, concierge."
+      },
+      {
+        "rank": 2,
+        "address": "Highbury Quadrant, London N5 2TE, UK",
+        "price": "£1495/month",
+        "price_raw": 1495,
+        "budget_status": "✅ Within budget",
+        "score": 90,
+        "property_type": "1 bed",
+        "bedrooms": 1,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/highbury-quadrant-1bed/",
+        "explanation": "One-bed flat near Highbury Fields. Unfurnished."
+      },
+      {
+        "rank": 3,
+        "address": "Liverpool Road, London N1 0RW, UK",
+        "price": "£1580/month",
+        "price_raw": 1580,
+        "budget_status": "✅ Within budget",
+        "score": 86,
+        "property_type": "1 bed",
+        "bedrooms": 1,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/liverpool-road-1bed/",
+        "explanation": "One-bed period conversion off Liverpool Road."
+      }
+    ],
+    "summary": "Found 3 one-bed flats in Islington within your £1700/month budget.",
+    "search_criteria": { "area": "Islington", "max_budget": 1700, "room_type": "1 bed", "no_commute": true }
+  }
+}

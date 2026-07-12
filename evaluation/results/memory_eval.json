@@ -1,0 +1,95 @@
+{
+  "status": "ok",
+  "checks": {
+    "identity_gate": {
+      "num": 7,
+      "den": 7,
+      "display": "7/7",
+      "rate": 1.0
+    },
+    "extraction_precision": {
+      "num": 3,
+      "den": 3,
+      "display": "3/3",
+      "rate": 1.0
+    },
+    "update_correctness": {
+      "num": 1,
+      "den": 1,
+      "display": "1/1",
+      "rate": 1.0
+    },
+    "stale_replacement": {
+      "num": 1,
+      "den": 1,
+      "display": "1/1",
+      "rate": 1.0
+    },
+    "contradiction_handling": {
+      "num": 1,
+      "den": 1,
+      "display": "1/1",
+      "rate": 1.0
+    },
+    "user_isolation": {
+      "num": 5,
+      "den": 5,
+      "display": "5/5",
+      "rate": 1.0
+    },
+    "forget_delete": {
+      "num": 3,
+      "den": 3,
+      "display": "3/3",
+      "rate": 1.0
+    },
+    "restart_recovery": {
+      "num": 1,
+      "den": 1,
+      "display": "1/1",
+      "rate": 1.0
+    },
+    "retrieval_relevance": {
+      "num": 0,
+      "den": 1,
+      "display": "0/1",
+      "rate": 0.0
+    }
+  },
+  "rates": {
+    "memory_write_success_rate": {
+      "num": 4,
+      "den": 4,
+      "display": "4/4",
+      "rate": 1.0
+    },
+    "memory_retrieval_accuracy": {
+      "num": 4,
+      "den": 5,
+      "display": "4/5",
+      "rate": 0.8
+    },
+    "user_isolation_pass_rate": {
+      "num": 5,
+      "den": 5,
+      "display": "5/5",
+      "rate": 1.0
+    },
+    "forget_request_pass_rate": {
+      "num": 3,
+      "den": 3,
+      "display": "3/3",
+      "rate": 1.0
+    },
+    "restart_recovery_pass_rate": {
+      "num": 1,
+      "den": 1,
+      "display": "1/1",
+      "rate": 1.0
+    }
+  },
+  "framework": "memory_eval",
+  "chromadb_available": true,
+  "git_commit": "070675d",
+  "timestamp": "2026-07-12T06:18:58"
+}

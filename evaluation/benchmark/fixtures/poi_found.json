@@ -1,0 +1,18 @@
+{
+  "tool_name": "search_nearby_pois",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "address": "Scape Bloomsbury, 19-29 Woburn Place, London WC1H 0AQ, UK",
+    "radius_m": 300,
+    "summary": "Found 3 places within 300m:\n🛒 Tesco Express - 140m [Tesco]\n🛒 Sainsbury's Local - 220m [Sainsbury's]\n🛒 Waitrose - 280m",
+    "pois": {
+      "supermarket": [
+        { "name": "Tesco Express", "type": "Supermarket", "distance_m": 140, "distance_display": "140m", "brand": "Tesco" },
+        { "name": "Sainsbury's Local", "type": "Supermarket", "distance_m": 220, "distance_display": "220m", "brand": "Sainsbury's" },
+        { "name": "Waitrose", "type": "Supermarket", "distance_m": 280, "distance_display": "280m", "brand": "Waitrose" }
+      ]
+    }
+  }
+}

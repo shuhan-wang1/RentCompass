@@ -1,0 +1,17 @@
+{
+  "tool_name": "search_nearby_pois",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "address": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK",
+    "radius_m": 400,
+    "summary": "Found 2 places within 400m:\n💊 Boots - 90m [Boots]\n💊 Zafash Pharmacy - 180m",
+    "pois": {
+      "pharmacy": [
+        { "name": "Boots", "type": "Pharmacy", "distance_m": 90, "distance_display": "90m", "brand": "Boots" },
+        { "name": "Zafash Pharmacy", "type": "Pharmacy", "distance_m": 180, "distance_display": "180m", "brand": "" }
+      ]
+    }
+  }
+}

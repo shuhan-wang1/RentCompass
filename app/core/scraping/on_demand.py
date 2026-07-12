@@ -560,7 +560,7 @@ _PROPER_TOKEN = r"[A-Z][A-Za-z0-9'&.\-]*"
 # "Deloitte London"), optionally trailed by DESCRIPTOR words ("Google office"),
 # optionally with an "in <City>" tail ("Amazon office in Manchester").
 _DEST_CANDIDATE_RE = re.compile(
-    rf"(?P<run>{_PROPER_TOKEN}(?:\s+(?:of|and|&|{_PROPER_TOKEN}))*)"
+    rf"(?P<run>{_PROPER_TOKEN}(?:\s+(?:of\b|and\b|&|{_PROPER_TOKEN}))*)"
     rf"(?P<desc>(?:\s+(?:{_DEST_DESC_RE}))*)"
     rf"(?:\s+in\s+(?P<city>{_PROPER_TOKEN}(?:\s+{_PROPER_TOKEN})*))?"
 )

@@ -135,6 +135,27 @@ class MCPToolClient:
         return []
 
     async def execute_tool(self, name: str, **kwargs) -> ToolResult:
+        """Run ``name`` via the MCP server (offline-eval instrumented wrapper).
+
+        The wrapper is a no-op unless RENTCOMPASS_EVAL is active. When the MCP
+        call falls back in-process, the in-process registry also records the
+        call, so a fallback surfaces as two tool_call events distinguishable by
+        the ``mcp`` field (mcp=True here, mcp=False from the registry)."""
+        collector = None
+        try:
+            from evaluation.metrics import collector as _collector
+            collector = _collector if _collector.is_active() else None
+        except Exception:
+            collector = None
+        result = await self._execute_tool_impl(name, **kwargs)
+        if collector is not None:
+            try:
+                collector.record_tool_call(name, result, kwargs, mcp=True)
+            except Exception:
+                pass
+        return result
+
+    async def _execute_tool_impl(self, name: str, **kwargs) -> ToolResult:
         """Run ``name`` via the MCP server. Falls back to the in-process registry
         on any failure. Safe to call from any event loop."""
         if not self.connected:

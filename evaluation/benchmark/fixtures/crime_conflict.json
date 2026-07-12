@@ -1,0 +1,33 @@
+{
+  "description": "check_safety (data.police.uk) and a web_search snippet disagree on the crime count for the same area.",
+  "results": [
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Hackney Central, London",
+        "safety_score": 62,
+        "safety_level": "Safe",
+        "crime_data": {
+          "total_crimes_6m": 76,
+          "most_recent_month_count": 12,
+          "crime_trend": "stable",
+          "source": "data.police.uk"
+        },
+        "recommendation": "This area has a safety level of Safe with a safety score of 62/100"
+      }
+    },
+    {
+      "tool_name": "web_search",
+      "success": true,
+      "error": null,
+      "data": {
+        "success": true,
+        "query": "Hackney Central crime statistics 2025",
+        "results": "### Web Search: Hackney Central crime\nA local news blog claims Hackney Central saw 'over 300 crimes in the last six months', with no official source cited.",
+        "detailed_data": { "web_search_0": "blog claims 300+ crimes in 6 months, uncited" }
+      }
+    }
+  ]
+}

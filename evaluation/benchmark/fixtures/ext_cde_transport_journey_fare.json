@@ -1,0 +1,22 @@
+{
+  "tool_name": "get_transport_info",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "query_type": "fare",
+    "coverage": "london",
+    "from": { "input": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK", "resolved_station": "Vauxhall", "naptan": "940GZZLUVXL" },
+    "to": { "input": "Canary Wharf", "resolved_station": "Canary Wharf", "naptan": "940GZZLUCYF" },
+    "duration_minutes": 24,
+    "route_summary": "Victoria line to Green Park, Jubilee line to Canary Wharf",
+    "route_legs": [],
+    "fare_available": true,
+    "fare_pence": 280,
+    "fare_gbp": 2.8,
+    "fare_display": "£2.80",
+    "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard.",
+    "stations_used": "Vauxhall -> Canary Wharf",
+    "source": "TfL Unified API (live Journey Planner)"
+  }
+}

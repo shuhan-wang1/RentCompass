@@ -1,0 +1,15 @@
+{
+  "description": "recall_memory for user_A in a fresh session (session recovery): the previously stored budget/area preference is returned.",
+  "tool_name": "recall_memory",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "count": 2,
+    "memories": [
+      { "content": "User's maximum budget is £1400 per month.", "mtype": "semantic", "score": 0.91 },
+      { "content": "User wants to live near King's Cross and commute to UCL.", "mtype": "semantic", "score": 0.87 }
+    ],
+    "formatted": "- User's maximum budget is £1400 per month.\n- User wants to live near King's Cross and commute to UCL."
+  }
+}

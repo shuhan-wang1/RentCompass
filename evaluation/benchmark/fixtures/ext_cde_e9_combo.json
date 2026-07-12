@@ -1,0 +1,55 @@
+{
+  "description": "Three tool calls evaluating one already-shown property (Spring Mews, SE11 5AL): commute to UCL, safety (data.police.uk), and nearby supermarket (OSM). Used by E9.",
+  "results": [
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK",
+        "to_address": "UCL, Gower Street, London WC1E 6BT, UK",
+        "mode": "transit",
+        "duration_minutes": 26,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)",
+        "route_summary": "Victoria line from Vauxhall to Warren Street, then 7 min walk",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK",
+        "safety_score": 68,
+        "safety_level": "Safe",
+        "crime_data": {
+          "total_crimes_6m": 64,
+          "most_recent_month_count": 10,
+          "crime_trend": "stable",
+          "category_breakdown": { "anti-social-behaviour": 22, "violent-crime": 16, "theft-from-the-person": 12 },
+          "source": "data.police.uk"
+        },
+        "recommendation": "This area has a safety level of Safe with a safety score of 68/100"
+      }
+    },
+    {
+      "tool_name": "search_nearby_pois",
+      "success": true,
+      "error": null,
+      "data": {
+        "success": true,
+        "address": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK",
+        "radius_m": 400,
+        "summary": "Found 2 places within 400m:\n🛒 Tesco Express - 150m [Tesco]\n🛒 Sainsbury's Local - 300m [Sainsbury's]",
+        "pois": {
+          "supermarket": [
+            { "name": "Tesco Express", "type": "Supermarket", "distance_m": 150, "distance_display": "150m", "brand": "Tesco" },
+            { "name": "Sainsbury's Local", "type": "Supermarket", "distance_m": 300, "distance_display": "300m", "brand": "Sainsbury's" }
+          ]
+        }
+      }
+    }
+  ]
+}

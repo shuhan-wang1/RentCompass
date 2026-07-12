@@ -1,0 +1,37 @@
+{
+  "description": "Two check_safety calls comparing two areas: area A has data.police.uk data; area B (a brand-new development postcode) returns no crime data and the default score 50 with empty crime_data. Used by D9.",
+  "results": [
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Clapham, London SW4",
+        "safety_score": 60,
+        "safety_level": "Safe",
+        "crime_data": {
+          "total_crimes_6m": 80,
+          "most_recent_month_count": 14,
+          "crime_trend": "stable",
+          "category_breakdown": { "anti-social-behaviour": 27, "violent-crime": 22, "theft-from-the-person": 15 },
+          "source": "data.police.uk"
+        },
+        "recommendation": "This area has a safety level of Safe with a safety score of 60/100"
+      }
+    },
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Northolt New Wharf, London UB5",
+        "safety_score": 50,
+        "safety_level": "Moderate",
+        "crime_data": {},
+        "scoring_explanation": "Unable to retrieve crime data, using default score 50/100",
+        "safety_analysis": "Unable to perform detailed safety analysis due to data unavailability. Recommend visiting in person or consulting local residents.",
+        "recommendation": "This area has a safety level of Moderate with a safety score of 50/100"
+      }
+    }
+  ]
+}

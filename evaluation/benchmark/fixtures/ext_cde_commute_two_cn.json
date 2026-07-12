@@ -1,0 +1,35 @@
+{
+  "description": "Two calculate_commute calls comparing two addresses to Imperial College London, for a Chinese-language query. Used by C12.",
+  "results": [
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "12 Sinclair Road, London W14 0NH, UK",
+        "to_address": "Imperial College London, South Kensington, London SW7 2AZ, UK",
+        "mode": "transit",
+        "duration_minutes": 15,
+        "is_acceptable": true,
+        "duration_category": "Short (< 20 min)",
+        "route_summary": "District line from Kensington Olympia area to South Kensington",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "88 Camberwell Road, London SE5 0EG, UK",
+        "to_address": "Imperial College London, South Kensington, London SW7 2AZ, UK",
+        "mode": "transit",
+        "duration_minutes": 41,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)",
+        "route_summary": "Bus to Elephant & Castle, Bakerloo to Piccadilly, Piccadilly line to South Kensington",
+        "route_source": "tfl"
+      }
+    }
+  ]
+}

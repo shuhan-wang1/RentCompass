@@ -1,0 +1,15 @@
+{
+  "tool_name": "calculate_commute",
+  "success": true,
+  "error": null,
+  "data": {
+    "from_address": "Rivington Court, 12 Rivington Street, London EC2A 3DU, UK",
+    "to_address": "King's College London, Strand, London WC2R 2LS, UK",
+    "mode": "transit",
+    "duration_minutes": 24,
+    "is_acceptable": true,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Northern line from Old Street to Bank, then Waterloo & City / walk to Strand",
+    "route_source": "tfl"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 2,
+    "data_source": "onthemarket_live",
+    "recommendations": "£1500/month, £1600/month, Camden, studio  <<truncated malformed payload — expected a list of objects but the scraper returned a raw string>>",
+    "summary": null,
+    "search_criteria": { "area": "Camden" }
+  }
+}

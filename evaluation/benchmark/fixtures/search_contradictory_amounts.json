@@ -1,0 +1,29 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 1,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+      {
+        "rank": 1,
+        "address": "Vega Building, 6 Cook Road, London E15 2GN, UK",
+        "price": "£1500/month",
+        "budget_status": "",
+        "score": 90,
+        "property_type": "1 bed",
+        "bedrooms": 1,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/vega-building/",
+        "explanation": "One-bed flat. Headline rent £1500 pcm. NOTE: the listing body also states '£400 per week' in the description, which works out to about £1733 pcm — the two figures disagree."
+      }
+    ],
+    "summary": "Found 1 one-bed near Stratford. Listing quotes both £1500/month and £400/week.",
+    "search_criteria": { "area": "Stratford", "max_budget": 1600, "room_type": "1 bed" }
+  }
+}

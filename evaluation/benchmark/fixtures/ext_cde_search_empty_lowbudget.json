@@ -1,0 +1,23 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "no_results",
+    "message": "I couldn't find any 2-bed listings in Kensington within a £700/month budget right now. Kensington 2-beds typically start far above this; try widening the area or raising the budget, or use the search form.",
+    "recommendations": [],
+    "data_source": "onthemarket_live",
+    "search_criteria": {
+      "area": "Kensington",
+      "max_budget": 700,
+      "budget_period": "month",
+      "room_type": "2-bed"
+    },
+    "known_criteria": {
+      "area": "Kensington",
+      "max_budget": 700,
+      "room_type": "2-bed"
+    }
+  }
+}

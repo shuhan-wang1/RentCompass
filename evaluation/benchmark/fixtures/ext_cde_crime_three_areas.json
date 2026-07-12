@@ -1,0 +1,59 @@
+{
+  "description": "Three check_safety calls comparing three named areas, all backed by data.police.uk. Used by D7.",
+  "results": [
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Walthamstow, London E17",
+        "safety_score": 66,
+        "safety_level": "Safe",
+        "crime_data": {
+          "total_crimes_6m": 68,
+          "most_recent_month_count": 11,
+          "crime_trend": "stable",
+          "category_breakdown": { "anti-social-behaviour": 24, "violent-crime": 18, "vehicle-crime": 11 },
+          "source": "data.police.uk"
+        },
+        "recommendation": "This area has a safety level of Safe with a safety score of 66/100"
+      }
+    },
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Brixton, London SW9",
+        "safety_score": 48,
+        "safety_level": "Moderate",
+        "crime_data": {
+          "total_crimes_6m": 104,
+          "most_recent_month_count": 19,
+          "crime_trend": "increasing",
+          "category_breakdown": { "violent-crime": 34, "theft-from-the-person": 28, "drugs": 16 },
+          "source": "data.police.uk"
+        },
+        "recommendation": "This area has a safety level of Moderate with a safety score of 48/100"
+      }
+    },
+    {
+      "tool_name": "check_safety",
+      "success": true,
+      "error": null,
+      "data": {
+        "address": "Wimbledon, London SW19",
+        "safety_score": 82,
+        "safety_level": "Very Safe",
+        "crime_data": {
+          "total_crimes_6m": 36,
+          "most_recent_month_count": 6,
+          "crime_trend": "decreasing",
+          "category_breakdown": { "anti-social-behaviour": 12, "vehicle-crime": 9, "burglary": 7 },
+          "source": "data.police.uk"
+        },
+        "recommendation": "This area has a safety level of Very Safe with a safety score of 82/100"
+      }
+    }
+  ]
+}

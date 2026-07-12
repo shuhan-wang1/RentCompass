@@ -1,0 +1,135 @@
+{
+  "study": "model_routing_ab",
+  "mode": "live",
+  "offline_mechanics_only": false,
+  "configs": [
+    "baseline_all_strong",
+    "routed_models"
+  ],
+  "reasoner_model": "deepseek-reasoner",
+  "n_cases": 98,
+  "repeat": 1,
+  "per_config": {
+    "baseline_all_strong": {
+      "n_runs": 98,
+      "total_input_tokens": 141967,
+      "total_output_tokens": 56014,
+      "total_tokens": 197981,
+      "strong_model_calls": 165,
+      "total_model_calls": 170,
+      "estimated_cost_usd": 0.0210534184,
+      "e2e_latency_ms": {
+        "mean": 9338.124336734725,
+        "p50": 6600.832349999109,
+        "p95": 27871.61711000116,
+        "spread": 10307.195125612077,
+        "n": 98
+      },
+      "retrieval_stage_latency_ms": {
+        "mean": 997.0390193874274,
+        "p50": 1.3601499958895147,
+        "p95": 5368.222764995144,
+        "spread": 4130.781634138526
+      },
+      "grounded_rate": {
+        "num": 160,
+        "den": 207,
+        "display": "160/207",
+        "rate": 0.7729468599033816
+      },
+      "money_grounded_rate": {
+        "num": 129,
+        "den": 159,
+        "display": "129/159",
+        "rate": 0.8113207547169812
+      },
+      "task_completion": {
+        "num": 98,
+        "den": 98,
+        "display": "98/98",
+        "rate": 1.0
+      },
+      "critic_triggers": 78,
+      "critic_repairs": 15,
+      "critic_repair_success": {
+        "num": 15,
+        "den": 78,
+        "display": "15/78",
+        "rate": 0.19230769230769232
+      },
+      "tool_success_rate": {
+        "num": 113,
+        "den": 121,
+        "display": "113/121",
+        "rate": 0.9338842975206612
+      }
+    },
+    "routed_models": {
+      "n_runs": 98,
+      "total_input_tokens": 145599,
+      "total_output_tokens": 40013,
+      "total_tokens": 185612,
+      "strong_model_calls": 78,
+      "total_model_calls": 172,
+      "estimated_cost_usd": 0.0159401144,
+      "e2e_latency_ms": {
+        "mean": 5754.0495112247,
+        "p50": 3962.21240000159,
+        "p95": 17256.208800001677,
+        "spread": 6043.185341973333,
+        "n": 98
+      },
+      "retrieval_stage_latency_ms": {
+        "mean": 372.55897959195346,
+        "p50": 1.1695499997586012,
+        "p95": 2523.55943999828,
+        "spread": 1009.5281296739789
+      },
+      "grounded_rate": {
+        "num": 160,
+        "den": 207,
+        "display": "160/207",
+        "rate": 0.7729468599033816
+      },
+      "money_grounded_rate": {
+        "num": 128,
+        "den": 152,
+        "display": "128/152",
+        "rate": 0.8421052631578947
+      },
+      "task_completion": {
+        "num": 98,
+        "den": 98,
+        "display": "98/98",
+        "rate": 1.0
+      },
+      "critic_triggers": 78,
+      "critic_repairs": 15,
+      "critic_repair_success": {
+        "num": 15,
+        "den": 78,
+        "display": "15/78",
+        "rate": 0.19230769230769232
+      },
+      "tool_success_rate": {
+        "num": 124,
+        "den": 131,
+        "display": "124/131",
+        "rate": 0.9465648854961832
+      }
+    }
+  },
+  "deltas_routed_vs_baseline": {
+    "strong_call_reduction_pct": 0.5272727272727272,
+    "token_reduction_pct": 0.06247569211186932,
+    "cost_reduction_pct": 0.24287286286962306,
+    "latency_mean_change_ms": -3584.074825510025,
+    "grounding_change": 0.0,
+    "completion_change": 0.0,
+    "note": "Volume-driven: deepseek-chat and deepseek-reasoner share the SAME per-token rate, so cost/token reductions reflect fewer/shorter reasoner generations, not a cheaper rate."
+  },
+  "stopped_reason": null,
+  "git_commit": "070675d",
+  "timestamp": "2026-07-12T05:18:31Z",
+  "caveat_offline": "OFFLINE run: model is faked, so token/cost/strong-call numbers are identical across configs by construction. Real Phase-4 deltas are PENDING a LIVE run with a valid DeepSeek key."
+}

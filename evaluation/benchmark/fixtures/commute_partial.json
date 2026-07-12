@@ -1,0 +1,29 @@
+{
+  "description": "Two calculate_commute calls for a 2-listing comparison: listing A resolves, listing B fails to geocode.",
+  "results": [
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "Scape Bloomsbury, 19-29 Woburn Place, London WC1H 0AQ, UK",
+        "to_address": "UCL, Gower Street, London WC1E 6BT, UK",
+        "mode": "transit",
+        "duration_minutes": 12,
+        "is_acceptable": true,
+        "duration_category": "Short (< 20 min)",
+        "route_summary": "Walk 12 min via Russell Square",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "calculate_commute",
+      "success": false,
+      "error": "无法计算通勤时间（地址解析失败）",
+      "data": {
+        "success": false,
+        "error": "无法计算通勤时间（地址解析失败）"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tool_name": "search_nearby_pois",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "address": "Muker, North Yorkshire",
+    "message": "No pharmacy found within 400m of this address.",
+    "pois": {}
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "description": "recall_memory AFTER a selective-forget: the user asked to forget only their budget but keep the area. The bucket now holds the area (Camden) only; the old budget (1400) has been deleted and must not reappear.",
+  "tool_name": "recall_memory",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "count": 1,
+    "memories": [
+      { "content": "User wants to live in Camden.", "mtype": "semantic", "score": 0.9 }
+    ],
+    "formatted": "- User wants to live in Camden."
+  }
+}

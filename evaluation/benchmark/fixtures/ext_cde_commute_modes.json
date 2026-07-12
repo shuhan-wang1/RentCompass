@@ -1,0 +1,35 @@
+{
+  "description": "Two calculate_commute calls for the same origin/destination under different transport modes (transit vs bicycling). Used by C7.",
+  "results": [
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "12 Well Street, London E9 7QX, UK",
+        "to_address": "King's Cross Station, London N1C 4TB, UK",
+        "mode": "transit",
+        "duration_minutes": 30,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)",
+        "route_summary": "Bus 55 to Bloomsbury, then Tube one stop",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "12 Well Street, London E9 7QX, UK",
+        "to_address": "King's Cross Station, London N1C 4TB, UK",
+        "mode": "bicycling",
+        "duration_minutes": 19,
+        "is_acceptable": true,
+        "duration_category": "Short (< 20 min)",
+        "route_summary": "Cycle via Regent's Canal towpath (approx 5.1 km)",
+        "route_source": "osm_cycling"
+      }
+    }
+  ]
+}

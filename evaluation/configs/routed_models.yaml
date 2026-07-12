@@ -1,0 +1,17 @@
+# RentCompass eval config — Phase-4 System B ("routed"), the current default.
+#
+# No patch: uses the production ModelRouter route table unchanged (cheap
+# deepseek-chat for intent/planner/memory, strong deepseek-reasoner for
+# synthesis + critic regen). This is the default config for `run_benchmark`.
+name: routed_models
+description: >-
+  Phase-4 System B. Current production model routing (tiered: chat for
+  intent/planner/memory, reasoner for synthesis/critic). No monkeypatch applied.
+
+model_router_override:
+  mode: none                # no override — production routing stands
+
+retrieval:
+  concurrency: parallel
+
+env: {}

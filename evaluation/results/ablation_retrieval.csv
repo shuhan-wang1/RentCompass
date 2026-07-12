@@ -1,0 +1,11 @@
+metric,serial_retrieval,parallel_retrieval
+retrieval_stage_latency_mean_ms,1359.0021895844682,582.3940187506196
+retrieval_stage_latency_spread_ms,4698.1072244877405,1064.411851511104
+e2e_latency_mean_ms,9989.516008332885,8549.382912499823
+e2e_latency_p50_ms,5863.529500002187,5619.08410000251
+e2e_latency_p95_ms,33226.78630000228,21813.00032499857
+e2e_latency_spread_ms,10411.708457111248,8676.311112803847
+tool_success_rate,102/105,102/105
+grounded_rate,136/174,130/158
+task_completion,48/48,48/48
+n_runs,48,48

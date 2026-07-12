@@ -1,0 +1,15 @@
+{
+  "tool_name": "web_search",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "query": "average one-bed rent Clapham London 2025 per week per month",
+    "results": "### Web Search: one-bed rent in Clapham\nRightmove (market trends): one-bedroom flats in Clapham typically let for about £1,900-£2,600 per month (roughly £440-£600 per week).\nZoopla: median asking rent for a Clapham one-bed is around £2,100 pcm (about £485 per week).\nHomeLet rental index (SW London): average one-bed around £2,050 pcm.\nNote: these are area ranges / medians, not a quote for a specific flat.",
+    "detailed_data": {
+      "web_search_0": "Rightmove: Clapham 1-beds ~£1,900-£2,600 pcm (~£440-£600 pw)",
+      "web_search_1": "Zoopla: median Clapham 1-bed ~£2,100 pcm",
+      "web_search_2": "HomeLet: SW London 1-bed avg ~£2,050 pcm"
+    }
+  }
+}

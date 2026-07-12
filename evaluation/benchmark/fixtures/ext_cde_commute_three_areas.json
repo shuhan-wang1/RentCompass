@@ -1,0 +1,50 @@
+{
+  "description": "Three calculate_commute calls comparing three candidate areas to one university (UCL). All resolve. Used by C6.",
+  "results": [
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "45 Fairfield Road, London E3 2QB, UK",
+        "to_address": "UCL, Gower Street, London WC1E 6BT, UK",
+        "mode": "transit",
+        "duration_minutes": 32,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)",
+        "route_summary": "Central line from Bow Road to Holborn, then 8 min walk",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "20 Liverpool Road, London N1 0RW, UK",
+        "to_address": "UCL, Gower Street, London WC1E 6BT, UK",
+        "mode": "transit",
+        "duration_minutes": 19,
+        "is_acceptable": true,
+        "duration_category": "Short (< 20 min)",
+        "route_summary": "Bus 30 to Euston, then 6 min walk",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "80 Rye Lane, London SE15 4RZ, UK",
+        "to_address": "UCL, Gower Street, London WC1E 6BT, UK",
+        "mode": "transit",
+        "duration_minutes": 44,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)",
+        "route_summary": "Overground to Whitechapel, Hammersmith & City to Euston Square, 5 min walk",
+        "route_source": "tfl"
+      }
+    }
+  ]
+}

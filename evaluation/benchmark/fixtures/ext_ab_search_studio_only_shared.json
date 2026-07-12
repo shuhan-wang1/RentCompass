@@ -1,0 +1,44 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 2,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+      {
+        "rank": 1,
+        "address": "Caledonian Road, London N1 9DX, UK",
+        "price": "£950/month",
+        "price_raw": 950,
+        "budget_status": "✅ Within budget",
+        "score": 74,
+        "property_type": "Room (Shared)",
+        "bedrooms": 1,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/caledonian-road-room/",
+        "explanation": "Double room in a shared 4-bed house share. Shared kitchen and bathroom."
+      },
+      {
+        "rank": 2,
+        "address": "Pentonville Road, London N1 9JP, UK",
+        "price": "£1050/month",
+        "price_raw": 1050,
+        "budget_status": "✅ Within budget",
+        "score": 71,
+        "property_type": "Room (Shared)",
+        "bedrooms": 1,
+        "match_type": "perfect",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/pentonville-road-room/",
+        "explanation": "Ensuite room in a shared flat. Flatshare, communal lounge."
+      }
+    ],
+    "summary": "Found 2 shared rooms near King's Cross within £1200/month. Note: no self-contained studios matched.",
+    "search_criteria": { "area": "King's Cross", "max_budget": 1200, "room_type": "studio", "no_commute": true }
+  }
+}

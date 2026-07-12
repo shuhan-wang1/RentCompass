@@ -1,0 +1,43 @@
+{
+  "tool_name": "search_properties",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "status": "no_exact_match_but_similar",
+    "message": "No properties were found within your budget of £1200/month near Shoreditch.",
+    "suggestion": "However, I found 2 similar properties. The closest match is £1350/month. Would you consider increasing your budget by approximately £150 (to £1350/month)?",
+    "suggested_budget": 1350,
+    "budget_increase_needed": 150,
+    "similar_properties": [
+      {
+        "rank": 1,
+        "address": "Rivington Court, 12 Rivington Street, London EC2A 3DU, UK",
+        "price": "£1350/month",
+        "price_raw": 1350,
+        "budget_status": "⚠️ Over budget by £150 (12%)",
+        "over_budget": 150,
+        "property_type": "Studio",
+        "bedrooms": 0,
+        "match_type": "similar_suggestion",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/rivington-court/"
+      },
+      {
+        "rank": 2,
+        "address": "Pitfield Studios, 40 Pitfield Street, London N1 6EU, UK",
+        "price": "£1420/month",
+        "price_raw": 1420,
+        "budget_status": "⚠️ Over budget by £220 (18%)",
+        "over_budget": 220,
+        "property_type": "Studio",
+        "bedrooms": 0,
+        "match_type": "similar_suggestion",
+        "source": "onthemarket_live",
+        "url": "https://www.onthemarket.com/details/pitfield-studios/"
+      }
+    ],
+    "recommendations": [],
+    "search_criteria": { "area": "Shoreditch", "max_budget": 1200, "room_type": "studio" }
+  }
+}

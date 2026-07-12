@@ -422,7 +422,15 @@ class ToolRegistry:
             stats['failed_calls'] += 1
         if result.execution_time_ms:
             stats['total_time_ms'] += result.execution_time_ms
-        
+
+        # Offline-eval instrumentation (additive; no-op unless active).
+        try:
+            from evaluation.metrics import collector
+            if collector.is_active():
+                collector.record_tool_call(name, result, kwargs, mcp=False)
+        except Exception:
+            pass
+
         return result
     
     def get_stats(self) -> Dict:

@@ -1,0 +1,44 @@
+{
+  "description": "Three calculate_commute calls for a 3-listing comparison to Canary Wharf: listings A and B resolve, listing C fails to geocode. Used by C9.",
+  "results": [
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK",
+        "to_address": "Canary Wharf, London E14 5AB, UK",
+        "mode": "transit",
+        "duration_minutes": 22,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)",
+        "route_summary": "Walk to Vauxhall, Victoria line to Green Park, Jubilee line to Canary Wharf",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "calculate_commute",
+      "success": true,
+      "error": null,
+      "data": {
+        "from_address": "Vega Building, 6 Cook Road, London E15 2GN, UK",
+        "to_address": "Canary Wharf, London E14 5AB, UK",
+        "mode": "transit",
+        "duration_minutes": 18,
+        "is_acceptable": true,
+        "duration_category": "Short (< 20 min)",
+        "route_summary": "DLR from Stratford to Canary Wharf",
+        "route_source": "tfl"
+      }
+    },
+    {
+      "tool_name": "calculate_commute",
+      "success": false,
+      "error": "无法计算通勤时间（地址解析失败）",
+      "data": {
+        "success": false,
+        "error": "无法计算通勤时间（地址解析失败）"
+      }
+    }
+  ]
+}

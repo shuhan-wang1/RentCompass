@@ -1,0 +1,11 @@
+{
+  "tool_name": "search_nearby_pois",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "address": "Fen Drayton, Cambridgeshire",
+    "message": "No supermarket found within 300m of this address.",
+    "pois": {}
+  }
+}

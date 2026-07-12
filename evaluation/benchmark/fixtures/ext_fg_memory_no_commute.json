@@ -1,0 +1,15 @@
+{
+  "description": "recall_memory returns a partial profile: budget and area are stored, but NO commute destination was ever saved. When the user asks about their commute destination, the agent must note that nothing is stored and must not invent one.",
+  "tool_name": "recall_memory",
+  "success": true,
+  "error": null,
+  "data": {
+    "success": true,
+    "count": 2,
+    "memories": [
+      { "content": "User's maximum budget is £1300 per month.", "mtype": "semantic", "score": 0.9 },
+      { "content": "User wants to live in Walthamstow.", "mtype": "semantic", "score": 0.86 }
+    ],
+    "formatted": "- User's maximum budget is £1300 per month.\n- User wants to live in Walthamstow."
+  }
+}

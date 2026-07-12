@@ -1,0 +1,35 @@
+# RentCompass eval config — Phase-4 Baseline A ("all-strong").
+#
+# Forces EVERY replaceable node (intent, planner, memory, responder/synthesis,
+# critic) onto the strong reasoning model. The runner honours the
+# `model_router_override` patch by monkeypatching `ModelRouter.route` so that every
+# purpose returns the reasoner route (temperature/max_tokens preserved per purpose).
+#
+# Data-driven only: no business logic lives here. See configs/loader.py for how each
+# key is applied.
+name: baseline_all_strong
+description: >-
+  Phase-4 Baseline A. All replaceable nodes routed to the strong reasoner
+  (deepseek-reasoner) via a ModelRouter.route monkeypatch. Compare against
+  routed_models.yaml (System B) to measure the cost/quality delta of tiered routing.
+
+# Force every routing purpose onto the reasoner tier.
+model_router_override:
+  mode: all_strong          # loader maps this to force reasoner for every purpose
+  # Explicit per-purpose target tier (documents intent; loader uses `mode`).
+  purposes:
+    intent: reasoner
+    classification: reasoner
+    planner: reasoner
+    critic: reasoner
+    memory: reasoner
+    judge: reasoner
+    responder: reasoner
+    synthesis: reasoner
+
+# No retrieval-concurrency change for this config.
+retrieval:
+  concurrency: parallel
+
+# Extra env applied for the run (merged over the runner's isolation env).
+env: {}

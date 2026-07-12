@@ -1,0 +1,16 @@
+# RentCompass eval config — Phase-5 config B ("parallel retrieval"), current default.
+#
+# No patch: the production map-reduce fan-out runs, emitting one concurrent
+# LangGraph Send per planned sub-search.
+name: parallel_retrieval
+description: >-
+  Phase-5 config B. Current parallel map-reduce retrieval (concurrent Send
+  fan-out). No monkeypatch applied. Compare against serial_retrieval.yaml.
+
+model_router_override:
+  mode: none
+
+retrieval:
+  concurrency: parallel     # production default — no patch
+
+env: {}

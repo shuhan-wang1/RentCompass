@@ -115,6 +115,61 @@ LANDMARK_SLUGS = {
     "wembley": ("wembley-park", "london"),
     "mile end": ("mile-end", "london"),
     "bloomsbury": ("bloomsbury", "london"),
+    # --- Non-London universities -> (their city's OTM slug, canonical city) ----
+    # First-class curated entries so a NON-London campus resolves deterministically
+    # instead of by luck. "University of Manchester" previously only worked because
+    # the step-4 city-substring matched "manchester"; "University of Warwick" (city:
+    # Coventry — NO substring to match) slugified to a 404. Each maps to the city's
+    # searchable slug; the geocodable campus address lives in UNIVERSITY_ADDRESSES.
+    # Bare town/acronym forms are only added when unambiguous (see the notes below).
+    "university of manchester": ("manchester", "manchester"),
+    "manchester university": ("manchester", "manchester"),
+    "uom": ("manchester", "manchester"),
+    # Manchester Metropolitan is a DISTINCT institution — kept separate from UoM so
+    # "曼彻斯特城市大学"/"manchester metropolitan" never collapse into UoM.
+    "manchester metropolitan university": ("manchester", "manchester"),
+    "manchester metropolitan": ("manchester", "manchester"),
+    "mmu": ("manchester", "manchester"),
+    # Warwick's campus sits in COVENTRY, so only the unambiguous "…warwick" forms are
+    # curated. Bare "warwick" is deliberately OMITTED: "Warwick Avenue" (London W9),
+    # "Warwick Gardens/Road" and the Warwickshire town all contain it, and a bare
+    # landmark key would hijack them to Coventry via the substring matcher.
+    "university of warwick": ("coventry", "coventry"),
+    "warwick university": ("coventry", "coventry"),
+    "university of leeds": ("leeds", "leeds"),
+    "leeds university": ("leeds", "leeds"),
+    "university of sheffield": ("sheffield", "sheffield"),
+    "sheffield university": ("sheffield", "sheffield"),
+    "university of birmingham": ("birmingham", "birmingham"),
+    "birmingham university": ("birmingham", "birmingham"),
+    "university of bristol": ("bristol", "bristol"),
+    "bristol university": ("bristol", "bristol"),
+    "university of nottingham": ("nottingham", "nottingham"),
+    "nottingham university": ("nottingham", "nottingham"),
+    "university of glasgow": ("glasgow", "glasgow"),
+    "glasgow university": ("glasgow", "glasgow"),
+    "university of edinburgh": ("edinburgh", "edinburgh"),
+    "edinburgh university": ("edinburgh", "edinburgh"),
+    "durham university": ("durham", "durham"),
+    "university of durham": ("durham", "durham"),
+    "university of liverpool": ("liverpool", "liverpool"),
+    "liverpool university": ("liverpool", "liverpool"),
+    "university of southampton": ("southampton", "southampton"),
+    "southampton university": ("southampton", "southampton"),
+    "lancaster university": ("lancaster", "lancaster"),
+    "university of lancaster": ("lancaster", "lancaster"),
+    "loughborough university": ("loughborough", "loughborough"),
+    "university of loughborough": ("loughborough", "loughborough"),
+    "cardiff university": ("cardiff", "cardiff"),
+    "university of cardiff": ("cardiff", "cardiff"),
+    "newcastle university": ("newcastle-upon-tyne", "newcastle"),
+    "university of newcastle": ("newcastle-upon-tyne", "newcastle"),
+    "university of york": ("york", "york"),
+    "york university": ("york", "york"),
+    "university of exeter": ("exeter", "exeter"),
+    "exeter university": ("exeter", "exeter"),
+    "university of bath": ("bath", "bath"),
+    "bath university": ("bath", "bath"),
 }
 
 # Cross-contamination guard: if the requested city is one of these, drop any row
@@ -132,6 +187,28 @@ UNIVERSITY_KEYS = frozenset({
     "imperial college", "imperial college london",
     "queen mary", "qmul", "city university",
     "uel", "university of east london", "university of greenwich",
+    # Non-London universities (mirror the LANDMARK_SLUGS additions above). Every key
+    # here also exists in LANDMARK_SLUGS and has a UNIVERSITY_ADDRESSES entry.
+    "university of manchester", "manchester university", "uom",
+    "manchester metropolitan university", "manchester metropolitan", "mmu",
+    "university of warwick", "warwick university",
+    "university of leeds", "leeds university",
+    "university of sheffield", "sheffield university",
+    "university of birmingham", "birmingham university",
+    "university of bristol", "bristol university",
+    "university of nottingham", "nottingham university",
+    "university of glasgow", "glasgow university",
+    "university of edinburgh", "edinburgh university",
+    "durham university", "university of durham",
+    "university of liverpool", "liverpool university",
+    "university of southampton", "southampton university",
+    "lancaster university", "university of lancaster",
+    "loughborough university", "university of loughborough",
+    "cardiff university", "university of cardiff",
+    "newcastle university", "university of newcastle",
+    "university of york", "york university",
+    "university of exeter", "exeter university",
+    "university of bath", "bath university",
 })
 
 # ==========================================================================
@@ -170,6 +247,51 @@ UNIVERSITY_ADDRESSES = {
     "uel": "University Way, London E16 2RD",
     "university of east london": "University Way, London E16 2RD",
     "university of greenwich": "Old Royal Naval College, Park Row, London SE10 9LS",
+    # --- Non-London campuses (real, geocodable). Mirrors the LANDMARK_SLUGS /
+    # UNIVERSITY_KEYS additions so every non-London university hits tier 1 with a
+    # precise commute address and zero network calls. ------------------------------
+    "university of manchester": "Oxford Road, Manchester M13 9PL",
+    "manchester university": "Oxford Road, Manchester M13 9PL",
+    "uom": "Oxford Road, Manchester M13 9PL",
+    "manchester metropolitan university": "All Saints, Oxford Road, Manchester M15 6BH",
+    "manchester metropolitan": "All Saints, Oxford Road, Manchester M15 6BH",
+    "mmu": "All Saints, Oxford Road, Manchester M15 6BH",
+    "university of warwick": "University of Warwick, Coventry CV4 7AL",
+    "warwick university": "University of Warwick, Coventry CV4 7AL",
+    "university of leeds": "Woodhouse Lane, Leeds LS2 9JT",
+    "leeds university": "Woodhouse Lane, Leeds LS2 9JT",
+    "university of sheffield": "Western Bank, Sheffield S10 2TN",
+    "sheffield university": "Western Bank, Sheffield S10 2TN",
+    "university of birmingham": "Edgbaston, Birmingham B15 2TT",
+    "birmingham university": "Edgbaston, Birmingham B15 2TT",
+    "university of bristol": "Beacon House, Queens Road, Bristol BS8 1QU",
+    "bristol university": "Beacon House, Queens Road, Bristol BS8 1QU",
+    "university of nottingham": "University Park, Nottingham NG7 2RD",
+    "nottingham university": "University Park, Nottingham NG7 2RD",
+    "university of glasgow": "University Avenue, Glasgow G12 8QQ",
+    "glasgow university": "University Avenue, Glasgow G12 8QQ",
+    "university of edinburgh": "Old College, South Bridge, Edinburgh EH8 9YL",
+    "edinburgh university": "Old College, South Bridge, Edinburgh EH8 9YL",
+    "durham university": "Stockton Road, Durham DH1 3LE",
+    "university of durham": "Stockton Road, Durham DH1 3LE",
+    "university of liverpool": "Foundation Building, 765 Brownlow Hill, Liverpool L69 7ZX",
+    "liverpool university": "Foundation Building, 765 Brownlow Hill, Liverpool L69 7ZX",
+    "university of southampton": "University Road, Southampton SO17 1BJ",
+    "southampton university": "University Road, Southampton SO17 1BJ",
+    "lancaster university": "Bailrigg, Lancaster LA1 4YW",
+    "university of lancaster": "Bailrigg, Lancaster LA1 4YW",
+    "loughborough university": "Epinal Way, Loughborough LE11 3TU",
+    "university of loughborough": "Epinal Way, Loughborough LE11 3TU",
+    "cardiff university": "Park Place, Cardiff CF10 3AT",
+    "university of cardiff": "Park Place, Cardiff CF10 3AT",
+    "newcastle university": "Newcastle upon Tyne NE1 7RU",
+    "university of newcastle": "Newcastle upon Tyne NE1 7RU",
+    "university of york": "Heslington, York YO10 5DD",
+    "york university": "Heslington, York YO10 5DD",
+    "university of exeter": "Stocker Road, Exeter EX4 4PY",
+    "exeter university": "Stocker Road, Exeter EX4 4PY",
+    "university of bath": "Claverton Down, Bath BA2 7AY",
+    "bath university": "Claverton Down, Bath BA2 7AY",
 }
 
 # Curated NEW workplace names: major UK employers / office districts, keyed by a
@@ -246,6 +368,142 @@ _CLASSIFY_CACHE: dict = {}
 _CLASSIFY_CACHE_MAX = 4096
 
 
+# ==========================================================================
+# Tier 0: Chinese -> canonical-English place-name aliases
+# --------------------------------------------------------------------------
+# The customer criteria form (/api/search_direct) takes a free-text area, so a
+# Chinese place name ("曼彻斯特大学") flows straight into resolution. Everything
+# below normalizes to [a-z0-9'\s-] (_norm), which turns CJK into spaces -> an EMPTY
+# slug -> an empty OnTheMarket search -> zero rows. This curated table rewrites the
+# common Chinese city / university / landmark names to the EXACT canonical English
+# strings the tables above already understand, so every downstream tier (curated
+# slug, destination classify, commute address, contamination guard) just works and
+# the form path resolves identically to the chat path (whose LLM parser happened to
+# translate). Applied at the very top of _match_location AND classify_place's
+# normalization.
+#
+# CRITICAL: replacement is longest-Chinese-key-first (keys pre-sorted at import),
+# so "曼彻斯特大学" -> "university of manchester" (never 曼彻斯特 -> "manchester"
+# leaving a dangling 大学) and "曼彻斯特城市大学" -> "manchester metropolitan
+# university" (never collapsing into the shorter "曼彻斯特大学"). Any Chinese with no
+# curated mapping is left in place so the caller can detect it (_has_cjk) and defer
+# to the OSM long-tail tier rather than resolve to a wrong/empty slug.
+_ZH_ALIASES = {
+    # --- universities (each precedes its bare-city alias via length ordering) ---
+    "曼彻斯特城市大学": "manchester metropolitan university",
+    "曼彻斯特大学": "university of manchester",
+    "曼大": "university of manchester",
+    "伦敦大学学院": "university college london",
+    "帝国理工学院": "imperial college london",
+    "帝国理工": "imperial college london",
+    "伦敦国王学院": "king's college london",
+    "国王学院": "king's college london",
+    "伦敦政治经济学院": "london school of economics",
+    "伦敦政经": "london school of economics",
+    "伦敦玛丽女王大学": "queen mary",
+    "玛丽女王": "queen mary",
+    "亚非学院": "soas",
+    "爱丁堡大学": "university of edinburgh",
+    "利兹大学": "university of leeds",
+    "谢菲尔德大学": "university of sheffield",
+    "伯明翰大学": "university of birmingham",
+    "布里斯托尔大学": "university of bristol",
+    "布里斯托大学": "university of bristol",
+    "诺丁汉大学": "university of nottingham",
+    "格拉斯哥大学": "university of glasgow",
+    "华威大学": "university of warwick",
+    "杜伦大学": "durham university",
+    "利物浦大学": "university of liverpool",
+    "南安普顿大学": "university of southampton",
+    "兰卡斯特大学": "lancaster university",
+    "拉夫堡大学": "loughborough university",
+    "卡迪夫大学": "cardiff university",
+    "纽卡斯尔大学": "newcastle university",
+    "约克大学": "university of york",
+    "埃克塞特大学": "university of exeter",
+    "巴斯大学": "university of bath",
+    # --- London landmarks -------------------------------------------------------
+    "金丝雀码头": "canary wharf",
+    "国王十字": "king's cross",
+    "伦敦桥": "london bridge",
+    "卡姆登": "camden",
+    "肖尔迪奇": "shoreditch",
+    # --- cities (bare) ----------------------------------------------------------
+    "伦敦": "london",
+    "曼彻斯特": "manchester",
+    "曼城": "manchester",
+    "伯明翰": "birmingham",
+    "利兹": "leeds",
+    "利物浦": "liverpool",
+    "布里斯托尔": "bristol",
+    "布里斯托": "bristol",
+    "谢菲尔德": "sheffield",
+    "诺丁汉": "nottingham",
+    "莱斯特": "leicester",
+    "考文垂": "coventry",
+    "纽卡斯尔": "newcastle",
+    "格拉斯哥": "glasgow",
+    "爱丁堡": "edinburgh",
+    "卡迪夫": "cardiff",
+    "牛津": "oxford",
+    "剑桥": "cambridge",
+    "约克": "york",
+    "布莱顿": "brighton",
+    "雷丁": "reading",
+    "南安普顿": "southampton",
+    "朴茨茅斯": "portsmouth",
+    "巴斯": "bath",
+    "杜伦": "durham",
+    "埃克塞特": "exeter",
+    "诺里奇": "norwich",
+    "赫尔": "hull",
+    "普雷斯顿": "preston",
+    "普利茅斯": "plymouth",
+    "斯旺西": "swansea",
+    "阿伯丁": "aberdeen",
+    "邓迪": "dundee",
+    "贝尔法斯特": "belfast",
+    "德比": "derby",
+    "索尔福德": "salford",
+    "拉夫堡": "loughborough",
+    "兰卡斯特": "lancaster",
+}
+# Longest Chinese key first so a specific name (city+大学) wins over the bare city
+# it contains. Replacement order is driven by THIS list, not dict insertion order.
+_ZH_ALIAS_KEYS = sorted(_ZH_ALIASES, key=len, reverse=True)
+
+# CJK detection: after alias replacement, any leftover CJK means an UNCURATED
+# Chinese name (a tier-0 miss) that the OSM tier can still resolve — Nominatim is
+# multilingual. Covers CJK Unified + Ext-A + compatibility ideographs + CJK/
+# fullwidth punctuation.
+_CJK_RE = re.compile(
+    r"[㐀-䶿一-鿿豈-﫿　-〿＀-￯]"
+)
+
+
+def _has_cjk(text: str) -> bool:
+    return bool(_CJK_RE.search(text or ""))
+
+
+def _apply_zh_aliases(text: str) -> str:
+    """Tier 0: rewrite curated Chinese place names to their canonical English form.
+
+    Longest Chinese key first (see _ZH_ALIAS_KEYS) so "曼彻斯特大学" becomes
+    "university of manchester" rather than "manchester" + a dangling "大学", and
+    "曼彻斯特城市大学" becomes "manchester metropolitan university" rather than
+    collapsing into UoM. Replacements are space-padded so an English token never
+    glues onto adjacent text. Chinese characters with no curated mapping are left
+    untouched: the caller detects them (_has_cjk) and defers to the OSM long-tail
+    tier. No-op (identity) for pure-ASCII input, so the English path is unchanged."""
+    if not text or not _has_cjk(text):
+        return text or ""
+    out = text
+    for zh in _ZH_ALIAS_KEYS:
+        if zh in out:
+            out = out.replace(zh, f" {_ZH_ALIASES[zh]} ")
+    return out
+
+
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9'\s-]", " ", (text or "").lower()).strip()
 
@@ -260,12 +518,27 @@ def _match_location(location: str) -> tuple[str, str | None, str | None, str | N
     """Shared resolution core for resolve_location + classify_place.
 
     Returns (slug, city, matched_key, source) where source is
-    'landmark' | 'city' | None and matched_key is the LANDMARK/CITY key that
-    matched (None when nothing matched -> slug is the slugified input). Exposing
-    the matched key lets classify_place distinguish universities from plain areas
-    without duplicating the (order-sensitive) match logic."""
-    n = _norm(location)
+    'landmark' | 'city' | 'cjk' | None and matched_key is the LANDMARK/CITY key
+    that matched (None when nothing matched -> slug is the slugified input).
+    Exposing the matched key lets classify_place distinguish universities from
+    plain areas without duplicating the (order-sensitive) match logic.
+
+    Chinese input is first rewritten to canonical English via the tier-0 alias
+    table (_apply_zh_aliases), so a curated Chinese name resolves exactly like its
+    English form. An UNCURATED Chinese name that survives to an empty normalization
+    returns source='cjk' (with an empty slug): _match_location is deliberately
+    network-free, so it does not guess — the caller (resolve_location /
+    classify_place) defers to the OSM long-tail tier on the RAW string instead."""
+    original = location or ""
+    aliased = _apply_zh_aliases(original)
+    n = _norm(aliased)
     if not n:
+        # A non-empty ORIGINAL that normalizes to nothing but still carries CJK is
+        # an uncurated Chinese name -> signal 'cjk' so the OSM tier can resolve it
+        # (Nominatim is multilingual; accept-language=en returns a mappable city).
+        # Truly empty / punctuation-only input stays a plain miss.
+        if original.strip() and _has_cjk(aliased):
+            return "", None, None, "cjk"
         return "", None, None, None
 
     # 1) exact landmark, 2) exact city
@@ -275,9 +548,19 @@ def _match_location(location: str) -> tuple[str, str | None, str | None, str | N
     if n in CITY_SLUGS:
         return CITY_SLUGS[n], n, n, "city"
 
-    # 3) landmark substring (longest key first so specifics win)
+    # 3) landmark substring (longest key first so specifics win). Multi-word keys
+    #    match as plain substrings (they are specific). A SINGLE short token
+    #    (< 4 chars, e.g. an acronym like "mmu"/"ucl") must match at a WORD BOUNDARY
+    #    so it can't be swallowed by an unrelated word ("mmu" ⊂ "community", "ucl" ⊂
+    #    "nuclear"); glued typos with these acronyms are not resolved (correctly —
+    #    "communitymmu" is not an MMU search). Longer single tokens keep plain-
+    #    substring behavior (glued typos land in step 5).
     for key in sorted(LANDMARK_SLUGS, key=len, reverse=True):
-        if key in n:
+        if " " not in key and len(key) < 4:
+            matched = re.search(rf"\b{re.escape(key)}\b", n) is not None
+        else:
+            matched = key in n
+        if matched:
             slug, city = LANDMARK_SLUGS[key]
             return slug, city, key, "landmark"
 
@@ -301,8 +584,8 @@ def _match_location(location: str) -> tuple[str, str | None, str | None, str | N
                 return slug, city, key, "landmark"
             return CITY_SLUGS[key], key, key, "city"
 
-    # 6) unknown -> slugify and let the scraper decide
-    return _slugify(location), None, None, None
+    # 6) unknown -> slugify (the aliased form) and let the scraper decide
+    return _slugify(aliased), None, None, None
 
 
 def resolve_location(location: str) -> tuple[str, str | None]:
@@ -310,8 +593,22 @@ def resolve_location(location: str) -> tuple[str, str | None]:
     slug and, when known, its canonical city (for the contamination guard).
 
     Unknown locations are slugified and tried as-is; an unrecognised slug simply
-    404s -> zero rows -> honest empty result (never wrong-city data)."""
-    slug, city, _key, _source = _match_location(location)
+    404s -> zero rows -> honest empty result (never wrong-city data).
+
+    ONE exception to this being a no-network hot path: an uncurated Chinese name
+    (tier-0 alias miss, flagged source='cjk' by _match_location). get_listings — the
+    form/search_direct scrape path — calls resolve_location DIRECTLY with the raw
+    area, so if we returned an empty slug here EVERY uncurated Chinese area would be
+    unsearchable. We instead recover a real city slug through classify_place's
+    memoized OSM tier (accept-language=en, bounded by _OSM_TIMEOUT_S). The call is
+    memoized (repeat areas in a session are O(1)) and, on OSM failure, classify_place
+    also yields an empty slug -> we degrade to the same honest no-results, never a
+    wrong-city guess. Keeping the fallback here (rather than pushing it onto callers)
+    is required because only on_demand owns the slug contract."""
+    slug, city, _key, source = _match_location(location)
+    if source == "cjk":
+        place = classify_place(location)
+        return place.get("slug") or "", place.get("city")
     return slug, city
 
 
@@ -348,7 +645,10 @@ def _osm_classify(name: str):
 
     Reuses maps_service's descriptive User-Agent (the reference server rejects the
     default python-requests UA) and asks for jsonv2 + addressdetails so we can read
-    `category`/`type`/`addresstype`. Returns ``(kind, display_name)`` where kind is
+    `category`/`type`/`addresstype`. ``accept-language=en`` forces an ENGLISH
+    display_name even for a non-Latin query (Nominatim is multilingual), so an
+    uncurated Chinese name ("曼彻斯特大学") comes back as an English string the
+    caller can map through CITY_SLUGS. Returns ``(kind, display_name)`` where kind is
     "university" | "workplace" | "area" | None. ``None`` with a non-None
     display_name means "OSM found a place but its type is ambiguous" (a tier-3
     signal); ``(None, None)`` means not found / lookup failed. NEVER raises."""
@@ -362,7 +662,7 @@ def _osm_classify(name: str):
         resp = requests.get(
             "https://nominatim.openstreetmap.org/search",
             params={"q": name, "format": "jsonv2", "countrycodes": "gb",
-                    "limit": 1, "addressdetails": 1},
+                    "limit": 1, "addressdetails": 1, "accept-language": "en"},
             headers=_OSM_HEADERS, timeout=_OSM_TIMEOUT_S,
         )
         if resp.status_code != 200:
@@ -431,7 +731,9 @@ def _classify_uncached(name: str) -> dict:
     """The 3-tier decision for one name (see the module header). Memoized by
     classify_place(); this function itself does the network work when reached."""
     slug, city, matched_key, source = _match_location(name)
-    n = _norm(name)
+    # Normalize through the tier-0 alias layer too, so the keyword heuristics below
+    # see canonical English ("曼彻斯特大学" -> "...university...") not stripped CJK.
+    n = _norm(_apply_zh_aliases(name))
 
     # ---- Tier 1: curated tables + keyword heuristics (instant, no network) ----
     # 1a) curated university (legacy semantics preserved: kind stays "university").
@@ -466,6 +768,15 @@ def _classify_uncached(name: str) -> dict:
 
     # ---- Tier 2: OSM/Nominatim place type (only reached on a tier-1 miss) ----
     osm_kind, osm_display = _osm_classify(name)
+    # Uncurated Chinese name (source == 'cjk'): the curated tables gave us no slug/
+    # city, but Nominatim (queried with accept-language=en) returns an ENGLISH
+    # display we can re-run through _match_location to recover a real searchable slug
+    # + canonical city (mapping the returned English city through CITY_SLUGS). Only
+    # adopt it when it yields a non-empty slug; otherwise stay honest-empty.
+    if source == "cjk" and osm_display:
+        d_slug, d_city, _dk, _ds = _match_location(osm_display)
+        if d_slug:
+            slug, city = d_slug, d_city
     if osm_kind == "area":
         return {"kind": "area", "slug": slug, "city": city,
                 "address": None, "source": "osm"}
@@ -514,7 +825,11 @@ def classify_place(name: str) -> dict:
     Tier 1 (curated tables + keyword heuristics) is instant and never touches the
     network; only a tier-1 miss consults OSM (tier 2), and only an ambiguous OSM
     result consults the LLM (tier 3). Results are memoized per normalized name."""
-    key = _norm(name)
+    # Memo key runs through the tier-0 alias layer so a Chinese name and its English
+    # canonical share ONE entry ("曼彻斯特大学" == "university of manchester"). An
+    # uncurated Chinese name normalizes to "" (alias miss); key on the raw trimmed
+    # text instead so distinct Chinese names don't collide on the empty string.
+    key = _norm(_apply_zh_aliases(name)) or (name or "").strip().lower()
     cached = _CLASSIFY_CACHE.get(key)
     if cached is not None:
         return dict(cached)  # copy so callers can't mutate the shared cache entry

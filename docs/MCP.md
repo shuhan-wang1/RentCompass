@@ -2,9 +2,9 @@
 
 Every tool registered in `create_tool_registry()` is exposed over the
 **Model Context Protocol** by `mcp_server.py`, and the LangGraph agent consumes
-them through that server over **stdio**. That is currently 11 tools: the 9 domain
+them through that server over **stdio**. That is currently 12 tools: the 10 domain
 tools (`search_properties`, `check_safety`, `calculate_commute`,
-`calculate_commute_cost`, `check_transport_cost`, `search_nearby_pois`,
+`calculate_commute_cost`, `check_transport_cost`, `get_transport_info`, `search_nearby_pois`,
 `get_property_details`, `web_search`, `get_weather`) **plus** the two
 memory-as-tools (`recall_memory`, `remember`).
 

@@ -31,6 +31,7 @@ import time
 import hashlib
 import datetime
 import threading
+import tempfile
 
 import chromadb
 
@@ -42,10 +43,11 @@ RETRIEVE_CANDIDATES = 25         # vector top-K fetched before GA re-ranking
 REFLECT_IMPORTANCE_THRESHOLD = 30  # accrued importance that triggers a reflection
                                    # (paper uses 150 over game-days; scaled for short chats)
 
-_DB_PATH = os.path.join(
+_DEFAULT_DB_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  # app/
     "chroma_db_agent_memory",
 )
+_DB_PATH = os.getenv("AGENT_MEMORY_DB_PATH", _DEFAULT_DB_PATH)
 _DEFAULT_IMPORTANCE = {"semantic": 7, "reflection": 8, "episodic": 5}
 
 
@@ -400,5 +402,13 @@ _AGENT_MEMORY = None
 def get_agent_memory() -> AgentMemory:
     global _AGENT_MEMORY
     if _AGENT_MEMORY is None:
-        _AGENT_MEMORY = AgentMemory()
+        try:
+            _AGENT_MEMORY = AgentMemory()
+        except Exception as exc:
+            fallback_path = os.path.join(tempfile.gettempdir(), "uk-rent-agent", "agent_memory")
+            print(
+                f"[memory] store {_DB_PATH} is not writable ({exc}); "
+                f"using {fallback_path}"
+            )
+            _AGENT_MEMORY = AgentMemory(fallback_path)
     return _AGENT_MEMORY

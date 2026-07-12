@@ -29,6 +29,7 @@ import json
 import os
 import re
 import sqlite3
+import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
@@ -704,7 +705,29 @@ _CACHE: ListingCache | None = None
 def _cache() -> ListingCache:
     global _CACHE
     if _CACHE is None:
-        _CACHE = ListingCache()
+        try:
+            candidate = ListingCache()
+            with sqlite3.connect(candidate.path, timeout=1) as db:
+                db.execute("BEGIN IMMEDIATE")
+                db.rollback()
+            _CACHE = candidate
+        except (OSError, sqlite3.Error) as exc:
+            fallback_path = Path(tempfile.gettempdir()) / "uk-rent-agent" / "listing_cache.sqlite3"
+            print(
+                f"  [on_demand] listing cache {CACHE_PATH} is not writable ({exc}); "
+                f"using {fallback_path}"
+            )
+            _CACHE = ListingCache(fallback_path)
+    return _CACHE
+
+def _fallback_cache(exc: Exception) -> ListingCache:
+    global _CACHE
+    fallback_path = Path(tempfile.gettempdir()) / "uk-rent-agent" / "listing_cache.sqlite3"
+    print(
+        f"  [on_demand] listing cache {_CACHE.path if _CACHE else CACHE_PATH} failed during use ({exc}); "
+        f"switching to {fallback_path}"
+    )
+    _CACHE = ListingCache(fallback_path)
     return _CACHE
 
 
@@ -814,7 +837,10 @@ def get_listings(
     if scraped is not None:
         rows = _clean(scraped, city)
         if rows:
-            _cache().set(key, rows)
+            try:
+                _cache().set(key, rows)
+            except (OSError, sqlite3.Error) as exc:
+                _fallback_cache(exc).set(key, rows)
             meta.update(source="scraped", count=len(rows),
                         elapsed_s=round(time.time() - t0, 2))
             return {"rows": rows, "meta": meta}

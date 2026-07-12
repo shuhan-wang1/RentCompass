@@ -2,9 +2,9 @@
 MCP server for the UK rental recommendation tools.
 
 Exposes the same tools the LangGraph agent uses (search_properties, check_safety,
-calculate_commute, calculate_commute_cost, check_transport_cost, search_nearby_pois,
-get_property_details, web_search, get_weather) over the Model Context Protocol via
-**stdio**.
+calculate_commute, calculate_commute_cost, check_transport_cost, get_transport_info,
+search_nearby_pois, get_property_details, web_search, get_weather, recall_memory,
+remember) over the Model Context Protocol via **stdio**.
 
 The tool *implementations* are the existing ones in ``core/tools`` (reused through
 ``core.tool_system.create_tool_registry``), so this server and the in-process agent

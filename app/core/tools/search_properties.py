@@ -21,6 +21,7 @@ import asyncio
 import math
 import os
 from pathlib import Path
+from datetime import date
 import json
 import re
 from uk_rent_agent.domain import constants as C
@@ -251,6 +252,211 @@ def _extract_bedrooms(text: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Move-in / availability date (Deliverable: optional move-in criterion + fit).
+# ─────────────────────────────────────────────────────────────────────────────
+# 期望入住日期抽取 + 房源可入住日期归一化 + 匹配标注。全部确定性、仅 stdlib。
+# 约定（数据契约）：
+#   available_from      : ""(未知) | "Available now"(即可入住) | "YYYY-MM-DD"
+#   availability_status : ""(无期望入住或未知) | "✅ 可入住"(≤期望日) | "⚠️ YYYY-MM-DD 起租"(晚于期望日)
+# availability_status 采用与 budget_status 一致的"硬编码中文 emoji"约定。
+
+# 月份词 -> 月序号（英文；中文另表）。最长优先，避免 "sep" 抢在 "september" 前。
+_EN_MONTHS = {
+    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+    "august": 8, "aug": 8, "september": 9, "sept": 9, "sep": 9, "october": 10,
+    "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12,
+}
+_EN_MONTH_RE = "|".join(sorted(_EN_MONTHS, key=len, reverse=True))
+_ZH_MONTHS = {
+    "一月": 1, "二月": 2, "三月": 3, "四月": 4, "五月": 5, "六月": 6, "七月": 7,
+    "八月": 8, "九月": 9, "十月": 10, "十一月": 11, "十二月": 12,
+}
+
+# 入住/起租语境词。仅当出现语境词时才允许把"月份"解读为期望入住日（避免无关的
+# 裸月份/数字误触发）。英文 "may" 的裸月份路径额外要求前置介词，避免情态动词 "may" 误判。
+_MOVE_CTX_EN = re.compile(
+    r"\b(move[\s\-]?in|moving[\s\-]?in|move|start(?:ing)?|available|avail|from|"
+    r"occupy|tenancy)\b",
+    re.I,
+)
+_MOVE_CTX_ZH = ("入住", "搬", "起租", "入伙", "搬进", "搬入", "开始租")
+
+
+def _iso_or_none(y, m, d):
+    try:
+        return date(int(y), int(m), int(d)).isoformat()
+    except (ValueError, TypeError):
+        return None
+
+
+def _next_first_of_month(month: int, today: date) -> Optional[str]:
+    """First day of `month`'s NEXT occurrence relative to `today` (this year if still
+    upcoming, else next year)."""
+    cand = _iso_or_none(today.year, month, 1)
+    if cand and cand < today.isoformat():
+        return _iso_or_none(today.year + 1, month, 1)
+    return cand
+
+
+def _resolve_move_ymd(year, month, day, today: date) -> Optional[str]:
+    """(maybe-yearless) day/month -> ISO. With a year, that exact date; without one,
+    the next occurrence of that day/month relative to `today`."""
+    if year:
+        return _iso_or_none(year, month, day)
+    cand = _iso_or_none(today.year, month, day)
+    if cand and cand < today.isoformat():
+        return _iso_or_none(today.year + 1, month, day)
+    return cand
+
+
+def _extract_move_in_date(text: str, *, now: date | None = None) -> Optional[str]:
+    """Deterministic move-in / tenancy-start date from a user message -> ISO
+    'YYYY-MM-DD', or None. English + Chinese.
+
+    Fires ONLY when the text carries a move-in/start/available/from context word (EN)
+    or 入住/搬/起租 (ZH), so a bare month name in unrelated prose ("September") or a
+    stray number never becomes a criterion. A month with no year resolves to the FIRST
+    day of that month's NEXT occurrence relative to `now` (today); 下个月 = first of
+    next month. `now` is an injectable seam for deterministic testing; production uses
+    today. Exported (module level) so the router agent can accumulate per-turn updates."""
+    if not text or not str(text).strip():
+        return None
+    today = now or date.today()
+    t = str(text).strip()
+    tl = t.lower()
+
+    has_ctx_en = bool(_MOVE_CTX_EN.search(tl))
+    has_ctx_zh = any(w in t for w in _MOVE_CTX_ZH)
+
+    # 1) explicit full dates — strong, unambiguous signal (fire regardless of ctx).
+    m = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", t)
+    if m:
+        iso = _iso_or_none(m.group(1), m.group(2), m.group(3))
+        if iso:
+            return iso
+    m = re.search(r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]", t)
+    if m:
+        iso = _iso_or_none(m.group(1), m.group(2), m.group(3))
+        if iso:
+            return iso
+    m = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b", t)  # UK day-first
+    if m:
+        iso = _iso_or_none(m.group(3), m.group(2), m.group(1))
+        if iso:
+            return iso
+
+    # 2) Chinese month-level — requires a ZH move-in context word.
+    if has_ctx_zh:
+        if "下个月" in t or "下月" in t:
+            nm = today.month % 12 + 1
+            ny = today.year + (1 if today.month == 12 else 0)
+            iso = _iso_or_none(ny, nm, 1)
+            if iso:
+                return iso
+        m = re.search(r"(\d{1,2})\s*月", t)  # 9月
+        if m:
+            iso = _next_first_of_month(int(m.group(1)), today)
+            if iso:
+                return iso
+        for token, num in sorted(_ZH_MONTHS.items(), key=lambda kv: -len(kv[0])):
+            if token in t:
+                iso = _next_first_of_month(num, today)
+                if iso:
+                    return iso
+
+    # 3) English month-level — requires an EN move-in context word.
+    if has_ctx_en:
+        # day month [year]  e.g. "1 Sep", "moving in on 1st September 2026"
+        m = re.search(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_EN_MONTH_RE})\b\.?\s*(\d{{4}})?", tl)
+        if m:
+            iso = _resolve_move_ymd(m.group(3), _EN_MONTHS[m.group(2)], int(m.group(1)), today)
+            if iso:
+                return iso
+        # month day [year]  e.g. "from sept 1st", "September 15 2026"
+        m = re.search(rf"\b({_EN_MONTH_RE})\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?:\s*,?\s*(\d{{4}}))?", tl)
+        if m:
+            iso = _resolve_move_ymd(m.group(3), _EN_MONTHS[m.group(1)], int(m.group(2)), today)
+            if iso:
+                return iso
+        # month year  e.g. "available September 2026"
+        m = re.search(rf"\b({_EN_MONTH_RE})\s+(\d{{4}})\b", tl)
+        if m:
+            iso = _resolve_move_ymd(int(m.group(2)), _EN_MONTHS[m.group(1)], 1, today)
+            if iso:
+                return iso
+        # bare month — must be immediately preceded by a connector/context word so a
+        # modal "may" ("I may move in") never resolves to the month of May.
+        m = re.search(rf"\b(?:from|in|on|by|of|start(?:ing)?|available)\s+({_EN_MONTH_RE})\b", tl)
+        if m:
+            iso = _next_first_of_month(_EN_MONTHS[m.group(1)], today)
+            if iso:
+                return iso
+    return None
+
+
+def _valid_iso_date(value) -> Optional[str]:
+    """A strict 'YYYY-MM-DD' real-calendar date string, else None. Used to sanitise a
+    move_in_date arriving from accumulated state / the form before it is trusted."""
+    if not isinstance(value, str):
+        return None
+    v = value.strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+        return None
+    try:
+        date.fromisoformat(v)
+    except ValueError:
+        return None
+    return v
+
+
+def _resolve_available_from(prop: dict) -> str:
+    """Normalized availability for a formatted row: 'Available now', ISO 'YYYY-MM-DD',
+    or '' (unknown). Prefers the detail-page enrichment (_available_from) over the
+    rich-schema 'Available From' (normalize.py stores 'Contact agent' for unknown,
+    which maps to '')."""
+    v = str(prop.get('_available_from') or '').strip()
+    if not v:
+        rich = str(prop.get('Available From') or '').strip()
+        if rich and rich.lower() != 'contact agent':
+            v = rich
+    if not v:
+        return ''
+    low = v.lower()
+    if low in ('available now', 'now', 'immediately', 'asap', 'available immediately'):
+        return 'Available now'
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+        return v
+    # Defensive: a raw/legacy value that slipped through unparsed -> parse it once.
+    try:
+        from core.scraping.onthemarket import parse_availability_date as _pad
+        return _pad(v) or ''
+    except Exception:
+        return ''
+
+
+def _availability_status(available_from: str, move_in_date) -> str:
+    """Fit annotation vs. the desired move-in date (contract-exact, hardcoded-zh like
+    budget_status). '' when no move_in_date criterion or availability unknown;
+    '✅ 可入住' when available on/before the desired date (Available now counts);
+    '⚠️ YYYY-MM-DD 起租' when only available AFTER it."""
+    if not move_in_date or not available_from:
+        return ''
+    if available_from == 'Available now' or available_from <= move_in_date:
+        return '✅ 可入住'
+    return f'⚠️ {available_from} 起租'
+
+
+def _is_late_availability(available_from: str, move_in_date) -> bool:
+    """True when the listing is only available strictly AFTER the desired move-in date
+    (used to stably demote — never exclude — such listings). Unknown / 'Available now'
+    are never late."""
+    if not move_in_date or not available_from or available_from == 'Available now':
+        return False
+    return available_from > move_in_date
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Area / city extraction (conversational switch + bare place name + zh cities).
 # ─────────────────────────────────────────────────────────────────────────────
 # SINGLE SOURCE OF TRUTH for Chinese→English UK place names. Reused by the main
@@ -477,7 +683,7 @@ def _price_stats(results):
 
 def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute_time,
                    area: str, commute_target: str = None, room_type: str = None,
-                   is_cjk: bool = False) -> str:
+                   is_cjk: bool = False, move_in_date: str = None) -> str:
     """Informative, context-varying result headline (Deliverable 4): result count +
     area, the price range of the returned listings (min–median–max), and a one-line
     recap of the applied filters (budget / room type / commute). Localized zh/en and
@@ -499,6 +705,8 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
             filt.append(f"通勤 ≤{int(max_commute_time)} 分钟到 {commute_target}")
         elif commute_target:
             filt.append(f"通勤至 {commute_target}")
+        if move_in_date:
+            filt.append(f"期望入住 ≥{move_in_date}")
     else:
         if max_budget:
             filt.append(f"budget ≤£{max_budget}/month")
@@ -508,6 +716,8 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
             filt.append(f"commute ≤{int(max_commute_time)} min to {commute_target}")
         elif commute_target:
             filt.append(f"commute to {commute_target}")
+        if move_in_date:
+            filt.append(f"move-in ≥{move_in_date}")
 
     if is_cjk:
         s = f"在 {area} 为你找到 {n_total} 套当前房源"
@@ -539,9 +749,11 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
     return s
 
 
-def _soft_gate_question(missing, is_cjk: bool) -> str:
+def _soft_gate_question(missing, is_cjk: bool, move_in_missing: bool = False) -> str:
     """Localized soft-criteria clarification, listing ONLY the actually-missing
-    recommended fields (budget / room_type / commute)."""
+    recommended fields (budget / room_type / commute). When ``move_in_missing`` the
+    OPTIONAL move-in date is mentioned as skippable — it never triggers the gate on
+    its own, it only rides along when the gate already fires for a recommended field."""
     if is_cjk:
         bits = []
         if 'room_type' in missing:
@@ -550,6 +762,8 @@ def _soft_gate_question(missing, is_cjk: bool) -> str:
             bits.append("每月预算大概多少？")
         if 'commute' in missing:
             bits.append("需要考虑通勤吗？如果需要，请告诉我通勤到哪里、最多多少分钟；如果不需要，可以说“不通勤”。")
+        if move_in_missing:
+            bits.append("什么时候入住（可不填）？")
         return ("在搜索之前，我想先确认几个条件：" + "".join(bits) +
                 "您也可以直接说“继续搜索”，或在右侧的搜索条件面板补充后点击搜索。")
     bits = []
@@ -560,6 +774,8 @@ def _soft_gate_question(missing, is_cjk: bool) -> str:
     if 'commute' in missing:
         bits.append("whether you need to consider a commute (if so, to where and the max "
                     "minutes; if not, just say \"no commute\")?")
+    if move_in_missing:
+        bits.append("when you'd like to move in (optional)?")
     return ("Before I search, could you confirm a couple of things: " + " ".join(bits) +
             " You can also just say \"continue\" to search anyway, or fill in the "
             "search-criteria panel on the right and press Search.")
@@ -756,8 +972,10 @@ async def search_properties_impl(
     budget_period: str = "month",     # 🆕 预算周期：'week' 或 'month'
     current_message: str = "",        # 🆕 仅本轮原始消息（用于显式预算/通勤覆盖，避免误抓注入记忆）
     room_type: str = None,            # 🆕 房型：'studio' | 'ensuite' | 'shared' | None(不限)
+    move_in_date: str = None,         # 🆕 期望入住/起租日 'YYYY-MM-DD'|None（可选，永不阻塞搜索）
     confirmed: bool = False,          # 🆕 用户已确认/表单直搜 —— 跳过软性条件门
     criteria_gate_shown: bool = False,  # 🆕 本会话软性条件门是否已出现过（至多触发一次）
+    reply_language: str = None,       # 🆕 显式回复语言 'zh'|'en'：覆盖基于消息的 is_cjk 推断
     **kwargs  # 接受 LLM 可能传递的任何额外参数（如 property_type）
 ) -> dict:
     """
@@ -791,8 +1009,14 @@ async def search_properties_impl(
     # it can no longer SET a hard filter the user didn't state this conversation.
     stripped_query = _strip_memory_block(user_query)
 
-    # ── 语言：中文用户用中文回复（澄清/无结果文案） ──────────────────────
-    is_cjk = _has_cjk(current_message) or _has_cjk(stripped_query)
+    # ── 语言：中文用户用中文回复（澄清/无结果/摘要文案） ──────────────────
+    # 显式 reply_language（'zh'|'en'）优先，覆盖基于消息的推断：/api/search_direct 无消息、
+    # "search anyway" 路径也常无当前消息可判断语言，故由上游（app 按前端 UI 语言/本轮消息
+    # 定好回复语言）显式传入。未传时退回既有的按消息推断（保持旧测试/旧调用行为不变）。
+    if reply_language in ('zh', 'en'):
+        is_cjk = (reply_language == 'zh')
+    else:
+        is_cjk = _has_cjk(current_message) or _has_cjk(stripped_query)
 
     # 🆕 初始化累积的特征和偏好
     # 修复：确保输入是列表，不是字符串
@@ -860,6 +1084,14 @@ async def search_properties_impl(
         room_type = _normalize_room_type(room_type)
         if not room_type:
             room_type = _extract_room_type(msg_for_extraction)
+        # 期望入住日：先净化传入值（累积状态/表单）；再看本轮消息是否显式声明，显式声明优先
+        # （与预算"本轮覆盖累积"一致）。可选条件，绝不阻塞搜索。
+        move_in_date = _valid_iso_date(move_in_date)
+        _fresh_move_in = _extract_move_in_date(msg_for_extraction)
+        if _fresh_move_in and _fresh_move_in != move_in_date:
+            if move_in_date:
+                print(f"   🔄 当前消息更新期望入住日: {move_in_date} → {_fresh_move_in}")
+            move_in_date = _fresh_move_in
         if not no_commute and _extract_no_commute(msg_for_extraction):
             no_commute = True
             print(f"   🔕 本轮消息判定为『不通勤』，禁用全部通勤逻辑")
@@ -1090,6 +1322,7 @@ async def search_properties_impl(
                 'bedrooms': resolved_bedrooms,
                 'budget_period': budget_period,
                 'room_type': room_type,
+                'move_in_date': move_in_date,
                 # legacy（update_search_criteria / 旧 UI 仍在读）
                 'destination': commute_target or search_area,
                 'max_budget': max_budget,
@@ -1111,6 +1344,7 @@ async def search_properties_impl(
                 'bedrooms': resolved_bedrooms,
                 'budget_period': budget_period,
                 'room_type': room_type,
+                'move_in_date': move_in_date,
                 'property_features': all_property_features,
                 'soft_preferences': all_soft_preferences,
             }
@@ -1122,6 +1356,7 @@ async def search_properties_impl(
                 'max_budget': max_budget,
                 'max_travel_time': max_commute_time,
                 'room_type': room_type,
+                'move_in_date': move_in_date,
                 'property_features': all_property_features,
                 'soft_preferences': all_soft_preferences,
             }
@@ -1209,16 +1444,25 @@ async def search_properties_impl(
             soft_missing.append('room_type')
         if not commute_satisfied:
             soft_missing.append('commute')
+        # 期望入住日是"可选"字段：缺失时只搭车提示（不进入 missing_fields、绝不单独触发门），
+        # 单独缺失 move_in 时门不触发（保持既有行为与旧测试）。前端从 missing_optional_fields
+        # 读取该"可选缺失"标记。
+        move_in_missing = not bool(move_in_date)
 
         proceed_confirmed = bool(confirmed) or _is_proceed_intent(msg_for_extraction)
         if soft_missing and not criteria_gate_shown and not proceed_confirmed:
-            print(f"   🚪 [SOFT GATE] 缺失推荐条件 {soft_missing}，先确认再搜索")
+            print(f"   🚪 [SOFT GATE] 缺失推荐条件 {soft_missing}"
+                  f"{'（+可选 move_in）' if move_in_missing else ''}，先确认再搜索")
             return {
                 'success': False,
                 'status': 'need_clarification',
                 'clarification_kind': 'soft_criteria',
-                'question': _soft_gate_question(soft_missing, is_cjk),
+                'question': _soft_gate_question(soft_missing, is_cjk, move_in_missing),
                 'missing_fields': soft_missing,
+                # OPTIONAL missing fields exposed separately so the REQUIRED-recommended
+                # 'missing_fields' contract (asserted by tests) stays exactly as-is while
+                # the frontend can still surface the optional move-in prompt.
+                'missing_optional_fields': (['move_in'] if move_in_missing else []),
                 'known_criteria': _known_criteria(),
                 'search_criteria': _criteria(),
                 # 持久化“门已展示”标记（至多触发一次）。
@@ -1561,6 +1805,11 @@ async def search_properties_impl(
                                 ),
                                 'area': prop.get('_search_area'),
                             }
+                            # 🆕 可入住日期：相似回退房源同样诚实标注（这些行未做详情页丰富，
+                            # 仅取 rich-schema 的 'Available From'；未知则留空）。
+                            _sim_avail = _resolve_available_from(prop)
+                            row['available_from'] = _sim_avail
+                            row['availability_status'] = _availability_status(_sim_avail, move_in_date)
                             _tt = prop.get('travel_time')
                             if commute_annotation_enabled and _tt is not None:
                                 row['travel_time'] = f"{int(_tt)} min to {commute_target}"
@@ -1604,27 +1853,46 @@ async def search_properties_impl(
         soft_limited = soft_violation[:3]
         all_results = perfect_limited + soft_limited
 
-        # 🆕 用房源详情页的完整描述丰富"将要展示的候选"（有界=仅 top-N；并发；按 URL 缓存）。
-        # 让 Agent 拿到真实房源文本以回答后续问题（家具/账单/宠物/交通等）。
+        # 🆕 用房源详情页丰富"将要展示的候选"：完整描述 + 真实可入住日期（有界=仅 top-N；
+        # 并发；一次抓取取回两者，按 URL 缓存）。让 Agent 拿到真实房源文本以回答后续问题，
+        # 并让每套房都能诚实标注"何时可入住"。
         if os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and all_results:
             try:
-                from core.scraping.onthemarket import fetch_listing_description as _fetch_desc
+                from core.scraping.onthemarket import fetch_listing_details as _fetch_details
             except Exception:
-                _fetch_desc = None
-            if _fetch_desc:
+                _fetch_details = None
+            if _fetch_details:
                 _to_enrich = all_results[:limit]
-                _desc_list = await asyncio.gather(*[
-                    loop.run_in_executor(None, _fetch_desc, (p.get('URL') or p.get('url') or ''))
+                _details_list = await asyncio.gather(*[
+                    loop.run_in_executor(None, _fetch_details, (p.get('URL') or p.get('url') or ''))
                     for p in _to_enrich
                 ])
-                for _p, _d in zip(_to_enrich, _desc_list):
-                    if _d:  # 非空串才算有效（"" = 已知无描述，避免每次重抓）
-                        _p['_full_description'] = _d
+                for _p, _d in zip(_to_enrich, _details_list):
+                    if not isinstance(_d, dict):
+                        continue
+                    if _d.get('description'):  # 非空串才算有效（"" = 已知无描述，避免每次重抓）
+                        _p['_full_description'] = _d['description']
+                    if _d.get('available_from'):  # 真实可入住日期（"" = 未知，诚实留空）
+                        _p['_available_from'] = _d['available_from']
                 print(f"   📝 已丰富 {sum(1 for p in _to_enrich if p.get('_full_description'))}/"
-                      f"{len(_to_enrich)} 个房源的完整描述")
+                      f"{len(_to_enrich)} 个房源描述，"
+                      f"{sum(1 for p in _to_enrich if p.get('_available_from'))} 个含可入住日期")
+
+        # 🆕 入住日期：为每个待展示房源解析规范化可入住日期（供排序与卡片显示）。
+        for prop in all_results[:limit]:
+            prop['_resolved_available_from'] = _resolve_available_from(prop)
+
+        # 🆕 入住匹配降级：给定期望入住日期时，把"仅晚于期望日"的房源稳定下沉到末尾
+        # （在既有分数/预算排序之上做稳定排序：可入住或未知在前、晚于期望日在后），但绝不排除。
+        display_results = list(all_results[:limit])
+        if move_in_date:
+            display_results.sort(
+                key=lambda p: 1 if _is_late_availability(
+                    p.get('_resolved_available_from', ''), move_in_date) else 0
+            )
 
         formatted_results = []
-        for i, prop in enumerate(all_results[:limit], 1):
+        for i, prop in enumerate(display_results, 1):
             images = prop.get('Images', prop.get('images', []))
             if isinstance(images, str):
                 images = [images] if images else []
@@ -1634,6 +1902,7 @@ async def search_properties_impl(
                 if 'London' in address:
                     geo_location = '51.5074,-0.1278'  # London center fallback
 
+            _avail_from = prop.get('_resolved_available_from', '')
             row = {
                 'rank': i,
                 'address': prop.get('Address', prop.get('address', 'Unknown')),
@@ -1657,6 +1926,10 @@ async def search_properties_impl(
                 'area': prop.get('_search_area'),
                 # 🆕 OnTheMarket 详情页完整描述（未截断；供 Agent 后续问答）。
                 'description': prop.get('_full_description', ''),
+                # 🆕 可入住日期：""(未知→前端显示"Contact agent") | "Available now" | "YYYY-MM-DD"。
+                'available_from': _avail_from,
+                # 🆕 与期望入住日的匹配标注（无期望日/未知 → ""）。
+                'availability_status': _availability_status(_avail_from, move_in_date),
             }
             # 无通勤目标/无通勤时间时，完全省略 travel_time 字段（不出现 "0 min to None"）。
             _tt = prop.get('travel_time')
@@ -1667,7 +1940,8 @@ async def search_properties_impl(
         _summary = _found_summary(all_results, len(perfect_match), len(soft_violation),
                                   max_budget if has_budget else None,
                                   max_commute_time if commute_filter_enabled else None,
-                                  search_area, commute_target, room_type, is_cjk)
+                                  search_area, commute_target, room_type, is_cjk,
+                                  move_in_date)
         if possibly_outdated:
             _summary += (" （部分为近期缓存房源，实时刷新暂不可用，可能已过期。）" if is_cjk
                          else " (Showing recent cached listings — a live refresh wasn't "
@@ -1818,6 +2092,15 @@ For GENERAL INFORMATION questions about rent, use web_search instead.""",
                 'description': "OPTIONAL preferred room type: 'studio', 'ensuite', or "
                                "'shared' (omit for any). Studio also implies a 0-bedroom search."
             },
+            'move_in_date': {
+                'type': 'string',
+                'description': "OPTIONAL desired move-in / tenancy-start date as 'YYYY-MM-DD'. "
+                               "Never blocks the search: when omitted, every listing still "
+                               "shows its availability; when provided, listings are annotated "
+                               "for fit (available on/before it) and later-only ones are "
+                               "demoted but not excluded. The tool also parses an explicit "
+                               "move-in date stated in the current message."
+            },
             'confirmed': {
                 'type': 'boolean',
                 'description': 'Set true when the user has explicitly confirmed to proceed '
@@ -1831,6 +2114,15 @@ For GENERAL INFORMATION questions about rent, use web_search instead.""",
                                'soft criteria gate has already been shown in this conversation '
                                '(so it fires at most once).',
                 'default': False
+            },
+            'reply_language': {
+                'type': 'string',
+                'description': "OPTIONAL reply-language override: 'zh' or 'en'. When set it "
+                               "FORCES every user-facing string (found summary, gate question, "
+                               "no-results, similar-fallback) into that language instead of "
+                               "inferring from the current message. The app sets it from the "
+                               "reply-language policy (current message CJK, else the frontend UI "
+                               "language); omit to keep the message-based inference."
             }
         },
         'required': []  # 没有必须参数 - 工具内部会处理

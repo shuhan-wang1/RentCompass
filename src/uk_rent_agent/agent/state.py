@@ -31,6 +31,16 @@ class AgentState(TypedDict, total=False):
     verdict: Dict[str, Any]
     memory_context: str
     plan: list
+    # Bounded agent loop (decide -> tool -> reflect -> decide ...). loop_turn counts the
+    # loopable-tool executions completed THIS turn; observations records each one so the
+    # final synthesis can reason over every tool's output. Both are PER-TURN: they are
+    # plain (non-reducer) channels so the create_initial_state(loop_turn=0, observations=[])
+    # input cleanly RESETS them at the start of every turn even under the checkpointer.
+    # (A bounded_add reducer — as search_results uses — would instead MERGE across turns,
+    # because a []-input is a no-op for that reducer; reflect is the sole, sequential
+    # writer, so last-write-wins is safe and it returns the full per-turn list each time.)
+    loop_turn: int
+    observations: list
 
 
 def create_initial_state(
@@ -69,4 +79,6 @@ def create_initial_state(
         verdict={},
         memory_context="",
         plan=[],
+        loop_turn=0,
+        observations=[],
     )

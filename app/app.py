@@ -22,6 +22,7 @@ from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
 import json
 import traceback
 import re
+from datetime import datetime
 from uk_rent_agent.web.session_store import SessionStore
 from uk_rent_agent.web.conversation_store import ConversationStore
 from uk_rent_agent.web.identity import (
@@ -548,6 +549,8 @@ async def api_alex():
 
     context = data.get('context', {}) or {}
     is_continuation = data.get('is_continuation', False)
+    # 前端 UI 语言（并行 agent 发送 ui_language）；缺失/非法按 'en'。用于回复语言决策。
+    ui_language = _normalize_ui_language(data.get('ui_language'))
 
     # --- resolve / implicitly create the conversation --------------------------
     conversation_id = data.get('conversation_id')
@@ -572,14 +575,18 @@ async def api_alex():
         # 所有请求都通过 ReAct Agent 处理
         with request_context(request_id, user_id):
             payload = await handle_with_react_agent(
-                user_message, context, is_continuation, user_id, conversation_id, request_id
+                user_message, context, is_continuation, user_id, conversation_id, request_id,
+                ui_language=ui_language,
             )
     except Exception as e:
         print(f"❌ [ALEX] 错误: {e}")
         traceback.print_exc()
+        # 错误文案也遵循回复语言策略（本条消息含中文→中文，否则跟随 UI 语言）。
+        _err_zh = _resolve_reply_language(user_message, ui_language) == "zh"
         payload = {
             "response_type": "error",
-            "message": "抱歉，处理您的请求时出错了。请稍后再试。",
+            "message": ("抱歉，处理您的请求时出错了。请稍后再试。" if _err_zh
+                        else "Sorry, something went wrong while handling your request. Please try again."),
         }
 
     # conversation_id is echoed in EVERY response (incl. errors + implicit creation).
@@ -620,6 +627,116 @@ def _derive_title(message: str) -> str:
     if not text:
         return "New chat"
     return text[:40] + ("…" if len(text) > 40 else "")
+
+
+# ============================================================================
+# 回复语言策略（产品规则）
+# ----------------------------------------------------------------------------
+# reply_language 决策（"仅当 UI=en 且本条消息是英文时才用英文回复"）：
+#   1) 当前用户消息含中日韩字符 → 'zh'（无论前端 UI 语言）；
+#   2) 否则前端 UI 语言为 'en' → 'en'；
+#   3) 否则 → 'zh'。
+# 之前 /api/search_direct 与 "search anyway" 路径没有消息可推断语言，工具只按单条消息
+# 做 is_cjk，于是中文对话里搜索摘要却是英文。UI 语言由前端 ui_language 传入（缺失/非法
+# 一律按 'en' 英文界面处理）。
+# ============================================================================
+
+# 中日韩字符区间（与 search tool 的 _has_cjk 保持一致），用于"本条消息是否含中文"。
+_CJK_RE = re.compile(r"[㐀-鿿豈-﫿]")
+
+
+def _has_cjk(text) -> bool:
+    """本条文本是否含中日韩字符（主要判定中文），用于回复语言决策。"""
+    return bool(_CJK_RE.search(text or ""))
+
+
+def _normalize_ui_language(value) -> str:
+    """规范化前端 UI 语言：仅接受 'zh'|'en'，其它/缺失一律按 'en'（英文界面默认）。"""
+    if isinstance(value, str) and value.strip().lower() in ("zh", "en"):
+        return value.strip().lower()
+    return "en"
+
+
+def _resolve_reply_language(user_message, ui_language) -> str:
+    """回复语言决策（见上）：本条消息含中文→'zh'；否则 UI=en→'en'；否则→'zh'。"""
+    if _has_cjk(user_message):
+        return "zh"
+    return "en" if _normalize_ui_language(ui_language) == "en" else "zh"
+
+
+def _resolve_focus_listing(property_info, last_results, csv_properties):
+    """解析前端每张卡片 "Ask AI" 载荷 {property:{address,price,travel_time,url}} 对应的
+    真实房源，返回 (要并入 extracted_context 的字段 dict, 命中来源)。
+
+    解析顺序（Problem 2 修复 —— 删掉旧的子串/模糊匹配，那正是"实时抓取的曼城房源被
+    误匹配到伦敦 demo CSV、把错城市的设施/描述串进上下文"的 bug）：
+      ① 会话 last_results 里 URL 精确匹配（忽略大小写/首尾空白）；
+      ② 会话 last_results 里地址精确匹配（忽略大小写/首尾空白）；
+      ③ demo CSV all_properties 里地址精确匹配（仅 ==，无子串/模糊）；
+      ④ 都不中 → 只保留载荷标量（address/price/travel_time），与旧行为一致。
+
+    纯函数：不加锁、不读共享状态。调用方须在 phase-1 turn_lock 内先把"完整推荐列表"
+    （挂在 session 对象上的 _sess.last_results，非 extracted_context 里截断的 6 条）浅拷贝
+    传进来，解析对照的就是该快照。会话命中喂真实房源全量字段（键名与 agent 文件读取的
+    一致，缺失键被容忍）；CSV 命中沿用旧键（amenities/guest_policy/…）。"""
+    if not isinstance(property_info, dict):
+        property_info = {}
+    property_address = property_info.get('address') or ''
+    payload_url = property_info.get('url') or ''
+    # ④ 兜底标量（其它档命中后按需覆盖）
+    ctx = {
+        'property_address': property_address,
+        'property_price': property_info.get('price'),
+        'property_travel_time': property_info.get('travel_time'),
+    }
+    addr_key = property_address.lower().strip()
+    url_key = payload_url.lower().strip()
+
+    # ① URL 精确匹配 → ② 地址精确匹配（都对照完整 last_results 快照）
+    session_hit = None
+    if url_key:
+        for rec in (last_results or []):
+            if isinstance(rec, dict) and str(rec.get('url') or '').lower().strip() == url_key:
+                session_hit = rec
+                break
+    if session_hit is None and addr_key:
+        for rec in (last_results or []):
+            if isinstance(rec, dict) and str(rec.get('address') or '').lower().strip() == addr_key:
+                session_hit = rec
+                break
+
+    if session_hit is not None:
+        # 用真实完整记录填充 extracted_context（agent 文件按同名键读取）。
+        ctx['property_address'] = session_hit.get('address') or property_address
+        if session_hit.get('price') is not None:
+            ctx['property_price'] = session_hit.get('price')
+        if session_hit.get('travel_time') is not None:
+            ctx['property_travel_time'] = session_hit.get('travel_time')
+        ctx['property_url'] = session_hit.get('url') or ''
+        ctx['description'] = session_hit.get('description') or ''
+        ctx['available_from'] = session_hit.get('available_from') or ''
+        ctx['availability_status'] = session_hit.get('availability_status') or ''
+        ctx['bedrooms'] = session_hit.get('bedrooms')
+        ctx['property_type'] = session_hit.get('property_type')
+        ctx['area'] = session_hit.get('area')
+        ctx['budget_status'] = session_hit.get('budget_status') or ''
+        return ctx, 'session'
+
+    # ③ demo CSV 精确地址匹配（仅 ==；子串/模糊分支已删除）。
+    if addr_key:
+        for prop in (csv_properties or []):
+            if str(prop.get('Address') or '').lower().strip() == addr_key:
+                ctx['room_type'] = prop.get('Room_Type_Category', '')
+                ctx['amenities'] = prop.get('Detailed_Amenities', '')
+                ctx['guest_policy'] = prop.get('Guest_Policy', '')
+                ctx['payment_rules'] = prop.get('Payment_Rules', '')
+                ctx['excluded_features'] = prop.get('Excluded_Features', '')
+                ctx['description'] = prop.get('Description', '')
+                ctx['enhanced_description'] = prop.get('Enhanced_Description', '')
+                ctx['property_url'] = prop.get('URL', '')
+                return ctx, 'csv'
+
+    return ctx, 'scalar'
 
 
 # Sentinel for "argument not supplied" so a helper can distinguish "keep the current
@@ -664,6 +781,9 @@ def _build_results_context(recommendations):
             # 🆕 多区域来源 + OnTheMarket 完整描述（结构化保存完整文本，供后续问答解析）。
             'area': rec.get('area'),
             'description': rec.get('description'),
+            # 🆕 可入住日期 + 与期望入住日的匹配标注（供后续"这套几月能住"等问题解析）。
+            'available_from': rec.get('available_from'),
+            'availability_status': rec.get('availability_status'),
         })
 
         prev_results_context += f"{i}. **{property_name}**\n"
@@ -678,6 +798,11 @@ def _build_results_context(recommendations):
             prev_results_context += f"   - Area: {rec.get('area')}\n"
         if rec.get('budget_status'):
             prev_results_context += f"   - Budget: {rec.get('budget_status')}\n"
+        # 🆕 可入住日期喂给 Agent（非空才写；未知则省略，避免编造）。
+        if rec.get('available_from'):
+            prev_results_context += f"   - Available from: {rec.get('available_from')}\n"
+        if rec.get('availability_status'):
+            prev_results_context += f"   - Move-in fit: {rec.get('availability_status')}\n"
         # 🆕 把真实房源描述喂给 Agent（截断到可控长度，避免 prompt 膨胀；完整文本在
         # structured_results 里）。让后续"这套家具全吗/含账单吗/离地铁多远"能被真实回答。
         _desc = (rec.get('description') or '').strip()
@@ -737,7 +862,7 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
 
 async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool,
                                   user_id: str = "default", conversation_id: str = "default",
-                                  request_id: str | None = None):
+                                  request_id: str | None = None, ui_language: str = "en"):
     """
     使用 LangGraph Agent 处理所有用户请求 - 纯 LLM 驱动
 
@@ -760,6 +885,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         _sess = _get_session(user_id, conversation_id)
         persistent_snapshot = copy.deepcopy(_sess.persistent_state)
         history_snapshot = list(_sess.history)
+        # 🆕 Ask-AI 聚焦解析要对照"完整推荐列表"，它挂在 session 对象上（_sess.last_results，
+        # extracted_context 里只留 6 条）。在同一把锁内浅拷贝，避免跨慢速 LLM 调用再次加锁。
+        last_results_snapshot = list(_sess.last_results or [])
 
     # 确保 tool_registry 已初始化
     if tool_registry is None:
@@ -782,41 +910,15 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # ── 构建本轮 extracted_context ──────────────────────────────
     extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
 
-    # 如果有 property context，设置到 extracted_context 中并从数据库获取详细信息
+    # 如果有 property context（前端每张卡片的 "Ask AI"），解析到真实房源并注入上下文。
+    # 解析顺序：会话 last_results 的 URL/地址精确匹配 → demo CSV 地址精确匹配 → 载荷标量兜底。
+    # （删掉了旧的子串/模糊匹配：它会把实时抓取的外城房源误配到伦敦 demo CSV，串入错城市数据。）
     if context and context.get('property'):
-        property_info = context['property']
-        property_address = property_info.get('address', '')
-
-        extracted_context['property_address'] = property_address
-        extracted_context['property_price'] = property_info.get('price')
-        extracted_context['property_travel_time'] = property_info.get('travel_time')
-
-        print(f"[LangGraph] 📍 已设置 property context: {property_address}")
-        print(f"[LangGraph] 🔍 正在从数据库获取房产详细信息...")
-
-        # 在 all_properties 中查找匹配的房产
-        matched_property = None
-        for prop in all_properties:
-            if prop.get('Address', '').lower().strip() == property_address.lower().strip():
-                matched_property = prop
-                break
-            if property_address.lower() in prop.get('Address', '').lower() or prop.get('Address', '').lower() in property_address.lower():
-                matched_property = prop
-                break
-
-        if matched_property:
-            print(f"[LangGraph] ✅ 找到匹配房产，加载详细信息")
-            extracted_context['room_type'] = matched_property.get('Room_Type_Category', '')
-            extracted_context['amenities'] = matched_property.get('Detailed_Amenities', '')
-            extracted_context['guest_policy'] = matched_property.get('Guest_Policy', '')
-            extracted_context['payment_rules'] = matched_property.get('Payment_Rules', '')
-            extracted_context['excluded_features'] = matched_property.get('Excluded_Features', '')
-            extracted_context['description'] = matched_property.get('Description', '')
-            extracted_context['enhanced_description'] = matched_property.get('Enhanced_Description', '')
-            extracted_context['property_url'] = matched_property.get('URL', '')
-            print(f"[LangGraph] 🔗 房产 URL: {matched_property.get('URL', 'N/A')}")
-        else:
-            print(f"[LangGraph] ⚠️ 未在数据库中找到匹配房产: {property_address}")
+        focus_ctx, focus_source = _resolve_focus_listing(
+            context.get('property') or {}, last_results_snapshot, all_properties)
+        extracted_context.update(focus_ctx)
+        print(f"[LangGraph] 📍 Ask-AI 聚焦房源 [{focus_source}]: "
+              f"{extracted_context.get('property_address')}")
 
     # ── 检测对比查询 ─────────────────────────────────────────────
     comparison_keywords = ['compare', 'vs', 'versus', 'between', 'or', 'better', 'which one', 'deciding between']
@@ -900,6 +1002,10 @@ Current user message: {user_message}"""
     # 原始当前消息（不含记忆/历史前缀）——供工具做"仅基于本条消息"的解析
     # (预算/通勤正则、postcode/序数解析)，避免误抓注入记忆里的旧值。
     extracted_context['current_message'] = user_message
+    # 🆕 回复语言（产品规则）：本条消息含中文→'zh'；否则 UI=en→'en'；否则 'zh'。用 pristine
+    # user_message（早于记忆/历史前缀），图 agent 读取该键并转发给 search 工具，使 /api/alex
+    # 与 "search anyway" 路径不再中英混杂。
+    extracted_context['reply_language'] = _resolve_reply_language(user_message, ui_language)
 
     # ── 构建 AgentState 并调用 LangGraph ─────────────────────────
     # session_id passed to the graph/checkpointer IS the conversation_id, so the
@@ -918,9 +1024,14 @@ Current user message: {user_message}"""
     print(f"[LangGraph] ▶ 开始执行 graph.ainvoke() ...")
     import time as _eval_time
     _eval_turn_started = _eval_time.perf_counter()
+    # GRAPH_RECURSION_LIMIT 由 core.langgraph_agent 导出（并行 agent 落地，值 80）；防御式取值
+    # （getattr 默认 80），即便本文件先落地、常量尚未存在也可用。合并进 graph_config 的现有配置。
+    import core.langgraph_agent as _lga_mod
+    _graph_cfg = dict(graph_config(user_id, conversation_id, request_id=request_id))
+    _graph_cfg["recursion_limit"] = getattr(_lga_mod, "GRAPH_RECURSION_LIMIT", 80)
     final_state = await agent_graph.ainvoke(
         initial_state,
-        config=graph_config(user_id, conversation_id, request_id=request_id),
+        config=_graph_cfg,
     )
     print(f"[LangGraph] ✓ 完成!")
 
@@ -998,6 +1109,11 @@ Current user message: {user_message}"""
         }
         if 'missing_fields' in _tool_data:
             payload["missing_fields"] = _tool_data['missing_fields']
+        # Optional (never gate-triggering) fields the gate also mentions — currently
+        # just 'move_in'. Kept separate from missing_fields so the recommended-field
+        # contract (and its tests) stays frozen.
+        if 'missing_optional_fields' in _tool_data:
+            payload["missing_optional_fields"] = _tool_data['missing_optional_fields']
         if 'known_criteria' in _tool_data:
             payload["known_criteria"] = _tool_data['known_criteria']
         # clarification_kind distinguishes the hard area gate ('missing_area') from the
@@ -1072,11 +1188,50 @@ def _coerce_bool(value) -> bool:
     return bool(value)
 
 
+def _coerce_optional_iso_date(value, field_name):
+    """Coerce an optional move-in date to a strict 'YYYY-MM-DD' string, or None when
+    absent/blank. Rejects with ApiError(400): a non-string, a wrong shape, or a
+    well-formed-but-impossible calendar date (e.g. 2026-02-31). '' / None -> None."""
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise ApiError(400, f"{field_name} must be a date string (YYYY-MM-DD)")
+    v = value.strip()
+    if not v:
+        return None
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+        raise ApiError(400, f"{field_name} must be in YYYY-MM-DD format")
+    try:
+        datetime.strptime(v, "%Y-%m-%d")  # reject impossible calendar dates
+    except ValueError:
+        raise ApiError(400, f"{field_name} is not a valid calendar date")
+    return v
+
+
 def _compose_search_line(area, max_budget, budget_period, bedrooms,
-                         no_commute, commute_destination, max_commute_time) -> str:
-    """A compact, language-neutral one-liner describing a direct search — reused as the
-    conversation title, the persisted user turn, and the tool's user_query."""
-    parts = [f"🔍 Search: {area}"]
+                         no_commute, commute_destination, max_commute_time,
+                         move_in_date=None, reply_language="en") -> str:
+    """A compact one-liner describing a direct search — reused as the conversation title,
+    the persisted user turn, and the tool's user_query. Localized zh/en per reply_language
+    (表单直搜无消息，故按前端 UI 语言定回复语言)。无 emoji（对话面禁用 emoji）。"""
+    if reply_language == "zh":
+        parts = [f"搜索：{area}"]
+        if max_budget is not None:
+            per = "周" if budget_period == "week" else "月"
+            parts.append(f"≤£{max_budget}/{per}")
+        if bedrooms is not None:
+            parts.append(f"{bedrooms} 室")
+        if no_commute:
+            parts.append("不通勤")
+        elif commute_destination:
+            if max_commute_time is not None:
+                parts.append(f"≤{max_commute_time}分钟到{commute_destination}")
+            else:
+                parts.append(f"通勤至{commute_destination}")
+        if move_in_date:
+            parts.append(f"入住 ≥{move_in_date}")
+        return " | ".join(parts)
+    parts = [f"Search: {area}"]
     if max_budget is not None:
         per = "wk" if budget_period == "week" else "mo"
         parts.append(f"≤£{max_budget}/{per}")
@@ -1089,6 +1244,8 @@ def _compose_search_line(area, max_budget, budget_period, bedrooms,
             parts.append(f"≤{max_commute_time}min to {commute_destination}")
         else:
             parts.append(f"to {commute_destination}")
+    if move_in_date:
+        parts.append(f"move-in ≥{move_in_date}")
     return " | ".join(parts)
 
 
@@ -1105,6 +1262,11 @@ async def api_search_direct():
     data = get_json_or_400()
     _validate_conversation_id(data)  # reject list/dict/non-string cid before it hits sqlite
     user_id, _session_id = resolve_identity(data)
+
+    # 回复语言：表单直搜没有消息可推断，故直接采用前端 UI 语言（缺失/非法按 'en'）。
+    # 透传给 search 工具（覆盖其基于消息的 is_cjk 推断），并本地化本端点自己拼的文案。
+    ui_language = _normalize_ui_language(data.get('ui_language'))
+    reply_language = ui_language
 
     criteria = data.get('criteria')
     if not isinstance(criteria, dict):
@@ -1159,15 +1321,22 @@ async def api_search_direct():
     else:
         room_type = None
 
+    # move_in_date: OPTIONAL 'YYYY-MM-DD'. Strictly validated (format + real calendar
+    # date) — garbage is rejected with 400; ''/None is a valid "unspecified". Never
+    # blocks the search itself.
+    move_in_date = _coerce_optional_iso_date(criteria.get('move_in_date'), "move_in_date")
+
     # no_commute is authoritative: drop any commute constraint from the TOOL call (the
     # raw commute_destination is still mirrored into the accumulated criteria below).
     if no_commute:
         max_commute_time = None
     tool_commute_destination = None if no_commute else commute_destination
 
+    _area_label = area or commute_destination or ('你的区域' if reply_language == 'zh' else 'your area')
     readable = _compose_search_line(
-        area or commute_destination or 'your area', max_budget, budget_period, bedrooms,
-        no_commute, commute_destination, max_commute_time)
+        _area_label, max_budget, budget_period, bedrooms,
+        no_commute, commute_destination, max_commute_time, move_in_date,
+        reply_language=reply_language)
 
     # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
     conversation_id = data.get('conversation_id')
@@ -1200,14 +1369,22 @@ async def api_search_direct():
                 bedrooms=bedrooms,
                 budget_period=budget_period,
                 room_type=room_type,
+                move_in_date=move_in_date,
                 # The panel Search button is an explicit user confirmation, so this path
                 # BYPASSES the soft criteria gate (never returns a soft clarification).
                 confirmed=True,
+                # 表单直搜无消息可推断语言 → 显式透传回复语言，覆盖工具的 is_cjk 推断。
+                reply_language=reply_language,
             )
         recommendations = result.get('recommendations') or []
-        message = (result.get('summary') or result.get('message')
-                   or (f"Found {len(recommendations)} matching properties." if recommendations
-                       else "No matching properties found. Try widening your criteria."))
+        # 工具已按 reply_language 本地化 summary；仅兜底文案由本端点自己本地化。
+        if recommendations:
+            _fallback = (f"为你找到 {len(recommendations)} 套匹配房源。" if reply_language == 'zh'
+                         else f"Found {len(recommendations)} matching properties.")
+        else:
+            _fallback = ("没有找到符合条件的房源，试着放宽搜索条件。" if reply_language == 'zh'
+                         else "No matching properties found. Try widening your criteria.")
+        message = result.get('summary') or result.get('message') or _fallback
         payload = {
             "response_type": "search",
             "message": message,
@@ -1223,7 +1400,8 @@ async def api_search_direct():
         print(f"❌ [SEARCH_DIRECT] 错误: {e}")
         traceback.print_exc()
         recommendations = []
-        message = "抱歉，搜索房源时出错了。请稍后再试。"
+        message = ("抱歉，搜索房源时出错了。请稍后再试。" if reply_language == 'zh'
+                   else "Sorry, something went wrong while searching. Please try again.")
         payload = {
             "response_type": "error",
             "message": message,
@@ -1253,6 +1431,7 @@ async def api_search_direct():
             'bedrooms': bedrooms,
             'budget_period': budget_period,
             'room_type': room_type,
+            'move_in_date': move_in_date,   # 🆕 期望入住日持久化（表单值跨轮保留）
         },
     )
 

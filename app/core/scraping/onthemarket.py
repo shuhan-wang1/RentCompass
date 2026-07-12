@@ -30,6 +30,7 @@ import sqlite3
 import threading
 import requests
 from pathlib import Path
+from datetime import date
 
 from .normalize import normalize_property
 
@@ -58,6 +59,162 @@ _AMENITY_HINTS = [
     "unfurnished", "underfloor heating", "wifi", "broadband", "roof terrace",
     "swimming pool", "en-suite", "ensuite",
 ]
+
+
+# ==========================================================================
+# Availability-date parsing (stdlib only — no dateutil).
+# --------------------------------------------------------------------------
+# Empirically (verified live 2026-07) OTM carries the tenancy start date on the
+# detail page under initialReduxState.property.lettingDetails.items as an
+# "Availability date: 1 Aug 2026" bullet; the summary prose is a secondary source
+# ("Available from August 2026"). These parsers normalise whatever text we find to
+# a canonical value the search layer can compare and rank against:
+#   ""             -> unknown (shown honestly as "Contact agent" downstream)
+#   "Available now"-> immediate let
+#   "YYYY-MM-DD"   -> concrete start date
+# UK dates are day-first; a month with no year resolves to that month's NEXT
+# occurrence relative to `now` (today), so a stale "August" never resolves to a
+# date already in the past.
+# ==========================================================================
+
+# Month name / abbreviation -> month number. Longest-first regex alternation is
+# built from the keys so "september" wins over "sep".
+_MONTH_NUM = {
+    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+    "august": 8, "aug": 8, "september": 9, "sept": 9, "sep": 9, "october": 10,
+    "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12,
+}
+_MONTH_RE = "|".join(sorted(_MONTH_NUM, key=len, reverse=True))
+_AVAIL_NOW_RE = re.compile(r"\b(now|immediately|asap|today|straight\s*away)\b", re.I)
+
+
+def _safe_iso(year: int, month: int, day: int) -> str | None:
+    """date -> 'YYYY-MM-DD', or None if the (y, m, d) triple is not a real date."""
+    try:
+        return date(year, month, day).isoformat()
+    except (ValueError, TypeError):
+        return None
+
+
+def _resolve_ymd(year, month: int, day: int, today: date) -> str | None:
+    """Resolve a (maybe-yearless) date. With a year, that exact date; without one,
+    the given month/day's NEXT occurrence relative to `today` (this year if it is
+    still upcoming, else next year)."""
+    if year:
+        return _safe_iso(int(year), month, day)
+    cand = _safe_iso(today.year, month, day)
+    if cand is None:
+        return None
+    if cand < today.isoformat():
+        return _safe_iso(today.year + 1, month, day)
+    return cand
+
+
+def parse_availability_date(text, *, now: date | None = None) -> str:
+    """Fuzzy availability text -> 'YYYY-MM-DD' | 'Available now' | '' (unknown).
+
+    Handles "1 Aug 2026", "15th August", "August 2026", "Aug 2026", "01/09/2026"
+    (UK day-first), an explicit ISO date, and immediate-let phrasings ("now",
+    "immediately", "asap"). Never raises; anything unrecognised -> ''."""
+    if not text:
+        return ""
+    t = str(text).strip()
+    if not t:
+        return ""
+    today = now or date.today()
+    low = t.lower()
+
+    # 1) explicit ISO 2026-09-01
+    m = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", t)
+    if m:
+        iso = _safe_iso(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        if iso:
+            return iso
+    # 2) numeric dd/mm/yyyy — UK day-first
+    m = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b", t)
+    if m:
+        iso = _safe_iso(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        if iso:
+            return iso
+    # 3) day month [year]  e.g. "1 Aug 2026", "15th August"
+    m = re.search(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MONTH_RE})\b\.?\s*(\d{{4}})?", low)
+    if m:
+        iso = _resolve_ymd(m.group(3), _MONTH_NUM[m.group(2)], int(m.group(1)), today)
+        if iso:
+            return iso
+    # 4) month day [year]  e.g. "August 15th", "Aug 1 2026" (1-2 digit day only)
+    m = re.search(rf"\b({_MONTH_RE})\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?:\s*,?\s*(\d{{4}}))?", low)
+    if m:
+        iso = _resolve_ymd(m.group(3), _MONTH_NUM[m.group(1)], int(m.group(2)), today)
+        if iso:
+            return iso
+    # 5) month year  e.g. "August 2026"
+    m = re.search(rf"\b({_MONTH_RE})\s+(\d{{4}})\b", low)
+    if m:
+        iso = _resolve_ymd(int(m.group(2)), _MONTH_NUM[m.group(1)], 1, today)
+        if iso:
+            return iso
+    # 6) bare month, ONLY with an availability/from context word (avoid firing on a
+    #    stray month mention) -> first of that month's next occurrence.
+    if re.search(r"availab|\bavail\b|\bfrom\b", low):
+        m = re.search(rf"\b({_MONTH_RE})\b", low)
+        if m:
+            iso = _resolve_ymd(None, _MONTH_NUM[m.group(1)], 1, today)
+            if iso:
+                return iso
+    # 7) immediate let
+    if _AVAIL_NOW_RE.search(low):
+        return "Available now"
+    return ""
+
+
+def _extract_available_from(data: dict, description_text: str = "", *,
+                            now: date | None = None) -> str:
+    """Availability of a listing from its detail-page __NEXT_DATA__ (+ enriched
+    description): 'YYYY-MM-DD' | 'Available now' | ''.
+
+    Primary source (JSON key, defensive over several candidate shapes):
+    initialReduxState.property.lettingDetails.items carries an
+    "Availability date: <date>" bullet. Fallbacks: the property summary/description
+    prose and the enriched description text ("available from <date>")."""
+    candidates: list[str] = []
+    prop = None
+    try:
+        prop = data["props"]["initialReduxState"]["property"]
+    except (KeyError, TypeError):
+        prop = None
+    if isinstance(prop, dict):
+        # lettingDetails.items (primary), plus a couple of same-intent candidate keys
+        # so a schema tweak still yields the date.
+        for cand_key in ("lettingDetails", "letting-details", "lettings"):
+            ld = prop.get(cand_key)
+            if isinstance(ld, dict):
+                for item in ld.get("items") or []:
+                    if isinstance(item, str) and re.search(r"availab", item, re.I):
+                        candidates.append(item)
+            elif isinstance(ld, str) and re.search(r"availab", ld, re.I):
+                candidates.append(ld)
+        for direct_key in ("available-from", "availableFrom", "availability",
+                            "let-available-date", "letAvailableDate"):
+            val = prop.get(direct_key)
+            if isinstance(val, str) and val.strip():
+                candidates.append(val)
+        for prose_key in ("summary", "description"):
+            val = prop.get(prose_key)
+            if isinstance(val, str) and val:
+                candidates.append(val)
+    if description_text:
+        candidates.append(description_text)
+
+    for c in candidates:
+        # Focus on the availability clause so a later unrelated date in prose can't win.
+        mm = re.search(r"availab\w*[^.\n]{0,40}", c, re.I)
+        frag = mm.group(0) if mm else c
+        iso = parse_availability_date(frag, now=now)
+        if iso:
+            return iso
+    return ""
 
 
 def _new_session() -> requests.Session:
@@ -141,12 +298,24 @@ def _map_listing(listing: dict) -> dict:
     if isinstance(loc, dict) and loc.get("lat") is not None and loc.get("lon") is not None:
         geo = f"{loc['lat']}, {loc['lon']}"
 
+    # Cheap win: the search JSON usually omits availability, but occasionally a
+    # feature bullet (or the title) carries it ("Available from 1st September").
+    # Parse it to a canonical value; leave "" otherwise so normalize sets
+    # 'Contact agent'. Only bullets that actually mention availability are tried so
+    # an unrelated date in a bullet can never masquerade as the start date.
+    avail_from = ""
+    for bullet in features + [title]:
+        if bullet and re.search(r"availab", bullet, re.I):
+            avail_from = parse_availability_date(bullet)
+            if avail_from:
+                break
+
     return {
         "Price": _pcm_price(listing.get("price")),
         "Address": address or title,
         "Description": description or title,
         "URL": url,
-        "Available From": "",  # not in search JSON -> normalize sets 'Contact agent'
+        "Available From": avail_from,  # parsed if the search JSON carried it; else "" -> 'Contact agent'
         "Platform": "OnTheMarket",
         "Images": _images(listing),
         "geo_location": geo,
@@ -262,9 +431,18 @@ _DESC_FEE_HINTS = ("fee", "tenancy")
 
 
 class _DescCache:
-    """Per-URL description store. Mirrors on_demand.ListingCache: write-time
-    timestamp for a real TTL, and an empty string is a valid value meaning
-    "this page has no description" so we don't keep re-fetching it."""
+    """Per-URL detail store (description + availability). Mirrors
+    on_demand.ListingCache: one write-time timestamp for a real TTL, and an empty
+    string is a valid value meaning "known: this page has no description / no
+    availability" so we don't keep re-fetching it.
+
+    Design note on the availability column: description and availability are always
+    parsed from the SAME single page fetch, so ONE per-row `fetched` timestamp is
+    authoritative for both fields (no per-column freshness is needed). The column is
+    added in-place via ALTER TABLE guarded by a PRAGMA check, so cache DBs written by
+    the pre-availability schema keep working — their pre-existing rows simply report
+    available_from='' until their normal TTL lapses and the row is re-fetched with
+    both fields populated."""
 
     def __init__(self, path: Path = DESC_CACHE_PATH):
         self.path = Path(path)
@@ -275,31 +453,39 @@ class _DescCache:
                 "CREATE TABLE IF NOT EXISTS descriptions ("
                 "url TEXT PRIMARY KEY, description TEXT NOT NULL, fetched REAL NOT NULL)"
             )
+            # In-place migration: add available_from to any pre-existing schema.
+            cols = {r[1] for r in db.execute("PRAGMA table_info(descriptions)").fetchall()}
+            if "available_from" not in cols:
+                db.execute(
+                    "ALTER TABLE descriptions ADD COLUMN available_from TEXT NOT NULL DEFAULT ''"
+                )
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.path, timeout=10)
 
-    def get(self, url: str) -> tuple[str, float] | None:
-        """Return (description, fetched_epoch) or None if the URL was never
-        stored. A stored empty string is a real hit (known no-description)."""
+    def get(self, url: str) -> tuple[str, str, float] | None:
+        """Return (description, available_from, fetched_epoch) or None if the URL was
+        never stored. Stored empty strings are real hits (known no-value)."""
         with self._lock, self._connect() as db:
             row = db.execute(
-                "SELECT description, fetched FROM descriptions WHERE url = ?", (url,)
+                "SELECT description, available_from, fetched FROM descriptions WHERE url = ?",
+                (url,),
             ).fetchone()
         if not row:
             return None
         try:
-            return (row[0] or ""), float(row[1])
+            return (row[0] or ""), (row[1] or ""), float(row[2])
         except (TypeError, ValueError):
             return None
 
-    def set(self, url: str, description: str) -> None:
+    def set(self, url: str, description: str, available_from: str = "") -> None:
         with self._lock, self._connect() as db:
             db.execute(
-                "INSERT INTO descriptions(url, description, fetched) VALUES (?, ?, ?) "
+                "INSERT INTO descriptions(url, description, available_from, fetched) "
+                "VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(url) DO UPDATE SET description=excluded.description, "
-                "fetched=excluded.fetched",
-                (url, description or "", time.time()),
+                "available_from=excluded.available_from, fetched=excluded.fetched",
+                (url, description or "", available_from or "", time.time()),
             )
 
 
@@ -385,7 +571,12 @@ def fetch_listing_description(
 ) -> str | None:
     """Fetch ONE OnTheMarket detail page and return its full description as plain
     text (HTML stripped, whitespace-collapsed), or None on any failure.
-    Cache-first: per-URL sqlite cache. Never raises."""
+
+    This is the single network + parse + cache path: it also parses the listing's
+    availability date from the SAME page and stores both in the per-URL cache (so
+    fetch_listing_details can read availability without a second round-trip). Its
+    own return value stays the description string for every existing caller.
+    Cache-first; never raises."""
     if not isinstance(url, str):
         return None
     url = url.strip()
@@ -400,7 +591,7 @@ def fetch_listing_description(
             print(f"  [OTM_DESC] cache read failed: {e}")
             hit = None
         if hit is not None:
-            text, fetched = hit
+            text, _avail, fetched = hit
             if (time.time() - float(fetched)) < DESC_CACHE_TTL_HOURS * 3600:
                 # Fresh hit; an empty string is a real "known no-description".
                 print(f"  [OTM_DESC] cache hit ({len(text)} chars): {url}")
@@ -430,14 +621,49 @@ def fetch_listing_description(
         data = json.loads(m.group(1))
         raw = _find_description(data)
         text = _strip_html(raw)[:DESC_MAX_CHARS]
-        # Cache the outcome either way: "" records a real page with no prose so we
-        # don't keep re-fetching it for a week.
-        cache.set(url, text)
+        available_from = _extract_available_from(data, text)
+        # Cache the outcome either way: "" records a real page with no prose /
+        # unknown availability so we don't keep re-fetching it for a week.
+        cache.set(url, text, available_from)
         if text:
-            print(f"  [OTM_DESC] fetched {len(text)} chars: {url}")
+            print(f"  [OTM_DESC] fetched {len(text)} chars"
+                  f"{f', avail={available_from}' if available_from else ''}: {url}")
         else:
             print(f"  [OTM_DESC] no description on page (cached empty): {url}")
         return text
     except Exception as e:
         print(f"  [OTM_DESC] parse error: {url}: {e}")
         return None
+
+
+def fetch_listing_details(
+    url: str, *, budget_s: float | None = None, force_refresh: bool = False
+) -> dict | None:
+    """Fetch ONE OnTheMarket detail page and return BOTH its description and its
+    parsed availability::
+
+        {"description": <str>, "available_from": <str>}
+
+    where ``available_from`` is "" (unknown), "Available now" (immediate let), or an
+    ISO "YYYY-MM-DD" start date. Returns None only for an unusable URL. Never raises.
+
+    Design: the description is obtained via the module-level
+    ``fetch_listing_description`` (the single fetch + cache-of-both path), then the
+    availability is read from that same per-URL cache. Routing description extraction
+    through ``fetch_listing_description`` keeps every existing caller — and the
+    enrichment layer's monkeypatch of that name — working, while adding availability
+    at zero extra network cost."""
+    if not isinstance(url, str) or not url.strip():
+        return None
+    url = url.strip()
+    description = fetch_listing_description(
+        url, budget_s=budget_s, force_refresh=force_refresh
+    )
+    available_from = ""
+    try:
+        hit = _desc_cache().get(url)
+        if hit is not None:
+            available_from = hit[1] or ""
+    except Exception as e:  # a broken cache must never fail the details call
+        print(f"  [OTM_DESC] availability cache read failed: {e}")
+    return {"description": description or "", "available_from": available_from}

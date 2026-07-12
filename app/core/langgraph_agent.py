@@ -12,7 +12,12 @@ Graph Flow:
         - clarification   -> format_output
         - multi_search    -> dispatch_searches
         - any other tool  -> execute_tool
-    execute_tool routes via Command(goto=...) -> format_output | generate_response
+    execute_tool routes via Command(goto=...):
+        - a LOOPABLE tool (non-error)   -> reflect
+        - a structured card / else      -> format_output | generate_response
+    reflect (bounded agent loop, cap MAX_AGENT_TURNS) routes via Command(goto=...):
+        - one more tool needed          -> execute_tool
+        - answer now / hard stop        -> generate_response (or the single-tool terminal)
     multi_search map-reduce:
         dispatch_searches -(Send fan-out)-> search_worker x N -> gather_searches
         -> generate_response
@@ -37,6 +42,65 @@ from uk_rent_agent.agent.critic import enforce_grounding
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 
 logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════════
+# BOUNDED AGENT LOOP — module constants
+# ═══════════════════════════════════════════════════════════════════
+# The agent runs decide -> tool -> reflect -> (decide again) up to MAX_AGENT_TURNS
+# loopable-tool executions per user turn. GRAPH_RECURSION_LIMIT is the LangGraph
+# super-step budget app.py passes as invoke config: one loop iteration is TWO
+# super-steps (execute_tool + reflect), so 10 iterations plus the fixed start/end
+# nodes need well above the LangGraph default of 25 — 80 leaves generous headroom.
+MAX_AGENT_TURNS = 10
+GRAPH_RECURSION_LIMIT = 80
+
+# Tools that may participate in the loop: after they return, `reflect` gets to decide
+# whether the gathered evidence already answers the question or one more DIFFERENT tool
+# call is warranted. Everything NOT here keeps today's single-pass behaviour with zero
+# added latency (search_properties single search, the multi_search fan-out,
+# direct_answer, reasoning_property, clarification, and any tool ERROR path).
+LOOPABLE_TOOLS = frozenset({
+    "web_search", "check_safety", "search_nearby_pois", "calculate_commute",
+    "calculate_commute_cost", "get_transport_info", "get_weather",
+    "get_property_details", "recall_memory",
+})
+
+
+# ─── Emoji stripping (evidence + final-output layer) ────────────────
+# Product rule: no emoji anywhere in agent-visible text. This scrubs the pictographic
+# / symbol / emoticon Unicode blocks (✅⚠️❌🔍 …) but DELIBERATELY excludes the CJK
+# ranges, £, and ordinary punctuation, so Chinese text and prices are never touched.
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"   # symbols & pictographs, emoticons, transport, supplemental
+    "\U00002600-\U000027BF"   # misc symbols + dingbats (✅ 2705, ⚠ 26A0, ❌ 274C, ✂ …)
+    "\U00002B00-\U00002BFF"   # misc symbols and arrows (⭐ 2B50 …)
+    "\U00002300-\U000023FF"   # misc technical (⏱ ⏰ ⌚ …)
+    "\U0001F1E6-\U0001F1FF"   # regional-indicator (flag) letters
+    "\U0000FE00-\U0000FE0F"   # variation selectors (the ️ that trails ⚠️)
+    "\U0000200D"              # zero-width joiner (compound emoji)
+    "]+",
+    flags=re.UNICODE,
+)
+
+
+def _strip_emoji(text: str) -> str:
+    """Remove emoji/emoticons from agent-visible text WITHOUT touching CJK, £, or
+    punctuation. Collapses the whitespace an inline emoji leaves behind so a stripped
+    label reads cleanly (e.g. '✅ 在预算内' -> '在预算内')."""
+    if not text or not isinstance(text, str):
+        return text
+    out = _EMOJI_RE.sub("", text)
+    # Tidy the gap a mid-line emoji left, but preserve newlines/structure.
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    return out.strip()
+
+
+def _clean_evidence_value(value) -> str:
+    """Emoji-free rendering of a wire field (budget_status/availability_status carry
+    sentinels like '✅ 在预算内' for the FRONTEND; the evidence/prompt layer must not)."""
+    return _strip_emoji(str(value)).strip()
+
 
 # ─── POI Display Info ───────────────────────────────────────────────
 POI_TYPES = {
@@ -133,7 +197,11 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     if not new_criteria:
         return result
 
-    for field in ['destination', 'max_budget', 'max_travel_time', 'area', 'budget_period']:
+    # move_in_date is whitelisted here (like budget) so a value the search tool reports
+    # in extracted_so_far folds in AND persists across turns (the top-of-function copy
+    # already carries an existing accumulated move_in_date forward).
+    for field in ['destination', 'max_budget', 'max_travel_time', 'area', 'budget_period',
+                  'move_in_date']:
         if new_criteria.get(field):
             result[field] = new_criteria[field]
 
@@ -280,6 +348,20 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
             result['max_travel_time'] = None
             changed = True
 
+    # D (listing-advice contract): a move-in date stated THIS turn ("move in from
+    # September", "从9月1号起") folds into the accumulated criteria so it persists to the
+    # next search — mirroring the budget pattern. The deterministic extractor is being
+    # delivered by a parallel agent in search_properties.py; tolerate its absence so a
+    # missing symbol never breaks this whole update path.
+    try:
+        from core.tools.search_properties import _extract_move_in_date
+        move_in = _extract_move_in_date(current_message)
+        if move_in and result.get('move_in_date') != move_in:
+            result['move_in_date'] = move_in
+            changed = True
+    except ImportError:
+        pass
+
     return result if changed else accumulated
 
 
@@ -324,15 +406,33 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
 
     if extracted_context.get('property_address'):
         info.append("=== Current Property Context ===")
+        # C: a parallel agent resolves these extra fields from the REAL session listing
+        #    (bedrooms/property_type/area/budget_status/availability + the FULL description)
+        #    so focused-listing answers are grounded in the actual listing text. Tolerate
+        #    the absence of every key. budget_status/availability_status carry frontend
+        #    emoji sentinels — strip them at this evidence layer.
         for key, label in [
             ('property_address', 'Address'), ('property_price', 'Price'),
-            ('room_type', 'Room Type'), ('amenities', 'Amenities'),
+            ('room_type', 'Room Type'), ('bedrooms', 'Bedrooms'),
+            ('property_type', 'Property Type'), ('area', 'Area'),
+            ('budget_status', 'Budget Status'),
+            ('available_from', 'Available From'), ('availability_status', 'Availability'),
+            ('amenities', 'Amenities'),
             ('guest_policy', 'Guest Policy'), ('payment_rules', 'Payment Rules'),
-            ('excluded_features', 'NOT Included'), ('description', 'Description'),
+            ('excluded_features', 'NOT Included'),
             ('property_url', 'Booking URL'),
         ]:
-            if extracted_context.get(key):
-                info.append(f"{label}: {extracted_context[key]}")
+            val = extracted_context.get(key)
+            if val:
+                if key in ('budget_status', 'availability_status'):
+                    val = _clean_evidence_value(val)
+                info.append(f"{label}: {val}")
+        # Full description last, capped so an over-long listing can't blow the budget.
+        desc = str(extracted_context.get('description') or '').strip()
+        if desc:
+            if len(desc) > 1500:
+                desc = desc[:1500].rstrip() + '…'
+            info.append(f"Description: {desc}")
         info.append("=== End Property Context ===\n")
 
     return '\n'.join(info) if info else "No specific property context."
@@ -437,6 +537,8 @@ def _sanitize_final_response(text: str) -> str:
     cleaned = _TRACEBACK_RE.sub("", cleaned)
     for pat, repl in _SENTINEL_PATTERNS:
         cleaned = pat.sub(repl, cleaned)
+    # No emoji anywhere in the final reply (defense in depth on top of the prompt rule).
+    cleaned = _strip_emoji(cleaned)
     cleaned = cleaned.strip()
     if not cleaned:
         # The message was ENTIRELY an internal block/error — return a friendly ask
@@ -477,8 +579,10 @@ _INTENT_CATALOG = [
       "show me studios near UCL", "搜索房源 / 找个合租房"]),
     ("market_info",
      "Research about rent PRICE LEVELS / market / rent trends / cost of living in an area "
-     "(NOT a request for specific listings).",
-     ["你能不能先帮我调查一下帝国理工附近的价格", "what's the average rent in Shoreditch",
+     "(NOT a request for specific listings). An explicit 'don't search (yet) / just research' "
+     "instruction always lands here, never search_properties.",
+     ["请你帮我做一下调研，UCL附近房源的价格大概是多少？先不要搜索房源",
+      "你能不能先帮我调查一下帝国理工附近的价格", "what's the average rent in Shoreditch",
       "了解一下曼城的租金行情", "how expensive is it to live in Zone 2"]),
     ("check_safety",
      "How safe / crime levels of an area or a specific property.",
@@ -502,6 +606,12 @@ _INTENT_CATALOG = [
     ("get_property_details",
      "Facts/policies about ONE specific property already shown.",
      ["what's the guest policy of that flat", "does the second one include bills"]),
+    ("listing_advice",
+     "Opinion/suitability/recommendation question about listings ALREADY shown in this "
+     "conversation (not a request for new listings).",
+     ["如果我和我女朋友一块住的话你会推荐这个房源么",
+      "would you recommend the second one for a couple",
+      "这几个哪个更适合情侣住", "is the first one worth it"]),
     ("recall_memory",
      "Recall what we know / remember about THIS user.",
      ["what do you remember about me", "我之前说过什么需求"]),
@@ -534,11 +644,13 @@ Rules:
 - Classify the CURRENT message. Use the recent conversation ONLY to resolve pronouns/ellipsis, never as the thing to classify.
 - Wanting actual listings to rent ("find/搜/帮我找 a flat/room/房子") -> search_properties.
 - Researching an area's rent PRICE LEVELS / market / 行情 / average rent (not asking for listings) -> market_info.
+- An explicit instruction NOT to search yet (先不要搜索 / 先别搜 / 先调研 / don't search / just research) means the user wants RESEARCH: choose market_info, NEVER search_properties.
+- An opinion/suitability/recommendation question about listings ALREADY shown ("would you recommend this one for a couple", "推荐这个房源么", "哪个更适合情侣") is listing_advice, NEVER search_properties.
 - Small talk or a question answerable from context -> direct_answer.
 
 Respond with ONLY a JSON object, no prose: {{"intent": "<route name>"}}'''
 
-REASONING_PROPERTY_PROMPT = """You are Alex, a friendly rental assistant helping explain property details from our DATABASE.
+REASONING_PROPERTY_PROMPT = """You are Alex, a friendly rental assistant helping explain and assess a property from our DATABASE.
 
 User Question: {user_query}
 
@@ -550,9 +662,24 @@ User Question: {user_query}
 Answer the user's question using ONLY the property information above.
 - DO NOT call external APIs
 - Explain room types, policies, amenities clearly
-- If user asks "Why recommend this?", mention location, price, amenities, room type
-- If info is missing, say "This detail isn't in our database for this property"
-- If user asks in ENGLISH, reply in ENGLISH; if in CHINESE, reply in CHINESE
+- If the user asks "Why recommend this?", mention location, price, amenities, room type
+- If a plain fact is missing, say "This detail isn't in our database for this property"
+- Follow the REPLY LANGUAGE directive above for the language of your reply (do not mix zh/en); never use emoji or emoticons.
+
+SUITABILITY / RECOMMENDATION questions ("would you recommend this?", "is it good for a
+couple / me and my girlfriend?", "worth it?", "适合情侣住吗", "值得租吗", "推荐这个房源么"):
+- Reason from the Description and the listed fields about how well THIS listing fits the
+  user's stated situation. E.g. a couple sharing -> look at bedroom count and room type
+  (a studio / 1-bed double vs a single room in a shared house), and whether a double bed,
+  bills-included, or couples/sharers-welcome is mentioned; a tight budget -> the price and
+  budget status; a commute -> the travel time.
+- Give an HONEST, balanced recommendation: what fits, what doesn't, and the trade-offs.
+  Don't just say "yes" — justify it from the data.
+- Explicitly name the factors that are UNKNOWN from this data (e.g. "the listing doesn't
+  say whether the landlord allows couples, or whether the bed is a double") rather than
+  assuming them. Never invent facts, prices, policies, or amenities not shown above; if a
+  detail needed to judge fit is missing, say so and suggest confirming with the agent.
+- Follow the REPLY LANGUAGE directive above for the language of your reply (do not mix zh/en); never use emoji or emoticons.
 
 Your response:"""
 
@@ -573,7 +700,7 @@ GROUNDING RULES:
 - Only use information that appears in the search results above
 - Do NOT fabricate prices, area names, or policies not in the results
 - If data is missing, say "search results don't cover this" and suggest official sources
-- Match the user's language (English question = English answer)
+- Follow the REPLY LANGUAGE directive above for the language of your reply (do not mix zh/en); never use emoji or emoticons
 
 SOURCES (when data unavailable):
 - London transport fares/journeys/line status: you CAN fetch these live from TfL — invite the user to ask (e.g. "how much is the tube from X to Y?")
@@ -702,6 +829,90 @@ def _has_cjk(text: str) -> bool:
     return bool(re.search(r'[一-鿿]', text or ''))
 
 
+# ─── Reply-language policy (hard, no zh/en mixing) ──────────────────────────
+# A parallel agent computes extracted_context['reply_language'] in {'zh','en'}
+# (zh if THIS message has CJK; else en only when the UI language is en; else zh).
+# Every user-facing surface produced here — generation prompts, the fair-housing
+# refusal — obeys it. When it is absent (e.g. a legacy caller) we fall back to
+# inferring from the current message via _has_cjk, i.e. today's behaviour.
+def _reply_language_from_ctx(extracted_context: dict, fallback_text: str = "") -> str:
+    lang = (extracted_context or {}).get('reply_language')
+    if lang in ('zh', 'en'):
+        return lang
+    src = fallback_text or (extracted_context or {}).get('current_message') or ""
+    return 'zh' if _has_cjk(src) else 'en'
+
+
+def _reply_language(state: dict) -> str:
+    """Resolve the reply language for a generation prompt from state."""
+    ec = state.get("extracted_context") or {}
+    fallback = ec.get('current_message') or _current_message(state.get("user_query") or "")
+    return _reply_language_from_ctx(ec, fallback)
+
+
+def _language_directive(lang: str) -> str:
+    """Hard, non-negotiable reply-language + no-emoji rule injected into every
+    generation prompt. It OVERRIDES the softer 'match the user's language' lines in
+    the templates so a Chinese prompt yields an all-Chinese reply even when the UI is
+    English (product complaint: 不要中英混杂)."""
+    if lang == 'zh':
+        return ("=== REPLY LANGUAGE (hard, overrides every other language hint below) ===\n"
+                "Write the ENTIRE reply in Chinese. Do NOT mix English sentences or clauses "
+                "into it. Proper nouns (area names, universities, tube lines) may keep their "
+                "original Latin script. Never use emoji or emoticons.\n"
+                "=== END REPLY LANGUAGE ===")
+    return ("=== REPLY LANGUAGE (hard, overrides every other language hint below) ===\n"
+            "Write the ENTIRE reply in English. Do NOT mix Chinese into it. Never use emoji "
+            "or emoticons.\n"
+            "=== END REPLY LANGUAGE ===")
+
+
+# ─── market_info negative guard (deterministic, pre-vote) ───────────────────
+# An explicit "don't search (yet)" instruction, or a research verb paired with a
+# price-level noun (and no explicit request for listings), means the user wants
+# market RESEARCH — the web_search synthesis path — NOT the search tool or its soft
+# criteria gate. This is the reported failure: 「…UCL附近房源的价格大概是多少？先不要搜索房源」
+# was answered with the search gate. Deterministic English + Chinese.
+_DO_NOT_SEARCH_PHRASES = [
+    '先不要搜索', '先不搜', '不要搜索', '先别搜', '别搜索', '先不用搜', '先调研',
+    "don't search", "do not search", 'no search yet', 'without searching',
+    'just research', 'research first',
+]
+_RESEARCH_VERBS = ['调研', '了解', '研究', 'research', 'investigate', 'look into']
+_PRICE_LEVEL_NOUNS = [
+    '价格', '租金', '行情', '价位', '水平', 'average rent', 'price level',
+    'how expensive', 'rent level', 'cost of living',
+]
+# A housing/price research SUBJECT (used only to qualify the do-not-search clause).
+_HOUSING_RESEARCH_SUBJECT = ['房源', '房子', '房租', '租金', '价格', '价位', '行情',
+                             'rent', 'flat', 'room', 'housing', 'property', 'price']
+# An explicit request for actual listings — disqualifies the research route.
+_EXPLICIT_LISTINGS_KWS = [
+    '帮我找房', '帮我找', '找房', '找个房', '搜索房源', '找套', '找间',
+    'find me a flat', 'find me a', 'find a flat', 'find a room', 'find me listings',
+    'show me listings', 'show me a', 'show me flats',
+]
+
+
+def _is_market_research_request(message: str) -> bool:
+    """True when the message is a market/price RESEARCH request that must NOT go to the
+    search tool: an explicit do-not-search instruction over a housing/price subject, OR
+    a research verb + a price-level noun with no explicit listings request."""
+    if not message:
+        return False
+    ml = message.lower()
+    wants_listings = any(k in ml for k in _EXPLICIT_LISTINGS_KWS)
+    has_dns = any(p in ml for p in _DO_NOT_SEARCH_PHRASES)
+    has_subject = any(s in ml for s in _HOUSING_RESEARCH_SUBJECT)
+    has_price = any(n in ml for n in _PRICE_LEVEL_NOUNS)
+    if has_dns and (has_subject or has_price):
+        return True
+    has_research_verb = any(v in ml for v in _RESEARCH_VERBS)
+    if has_research_verb and has_price and not wants_listings:
+        return True
+    return False
+
+
 # Protected-characteristic DEMOGRAPHIC terms — about PEOPLE/communities. Places of
 # worship / amenities (mosque, church, synagogue, halal, 清真寺) are DELIBERATELY
 # excluded so amenity/POI queries always pass.
@@ -815,9 +1026,11 @@ def _make_decide_tool_node(tool_registry, classification_llm):
         #    message (never the injected memory/history) to avoid a stale false trigger.
         _cm_raw = extracted_context.get('current_message') or _current_message(user_query)
         if _fair_housing_violation(_cm_raw):
+            # D: pick the refusal language via reply_language (falls back to _has_cjk).
+            _fh_lang = _reply_language_from_ctx(extracted_context, _cm_raw)
             return {
                 "tool": "clarification", "params": {},
-                "clarification_message": (_FAIR_HOUSING_REFUSAL_ZH if _has_cjk(_cm_raw)
+                "clarification_message": (_FAIR_HOUSING_REFUSAL_ZH if _fh_lang == 'zh'
                                           else _FAIR_HOUSING_REFUSAL_EN),
                 "reason": "Discriminatory filter by protected characteristic — refused (Equality Act 2010)",
             }
@@ -830,13 +1043,18 @@ def _make_decide_tool_node(tool_registry, classification_llm):
                 "reason": "User is asking what we remember about them - answer from long-term memory"
             }
 
-        # 1) Property context check
+        # 1) Property context check (Ask-AI focus). A focused listing normally answers
+        #    from its own database record (reasoning_property) \u2014 EXCEPT when the message
+        #    is a location/amenity/safety/commute/transport question, which owns a proper
+        #    tool. We widen the old narrow poi-only escape to the full _LOCATION_INTENT_KWS
+        #    so "\u8fd9\u4e2a\u623f\u6e90\u9644\u8fd1\u5b89\u5168\u5417 / how far is the tube from here" escapes to check_safety /
+        #    transport instead of being answered from the static record. Those tools resolve
+        #    the focused property as their target via _resolve_target_address (its final
+        #    fallback is extracted_context['property_address']). Read the CURRENT message,
+        #    not the memory/history-prefixed user_query.
         if extracted_context.get('property_address'):
-            poi_kws = ['nearby', 'near', 'close to', 'supermarket', 'station', 'gym',
-                        'restaurant', 'cafe', 'park', 'tube', 'metro',
-                        '\u8d85\u5e02', '\u5730\u94c1', '\u8f66\u7ad9', '\u8ddd\u79bb',
-                        '\u9644\u8fd1', '\u65c1\u8fb9', '\u5468\u56f4']
-            if not any(kw in query_lower for kw in poi_kws):
+            _cm_low = _cm_raw.lower()
+            if not any(kw in _cm_low for kw in _LOCATION_INTENT_KWS):
                 return {
                     "tool": "reasoning_property", "params": {},
                     "reason": "Property context detected - use database info"
@@ -864,6 +1082,31 @@ def _make_decide_tool_node(tool_registry, classification_llm):
                     "raw_data": {"property": detail_record},
                     "reason": "Detail question about a specific existing result",
                 }
+            # listing-advice: an opinion / suitability / recommendation question about the
+            # shown listings ("would you recommend this if I live with my girlfriend?").
+            # This was the reported bug — such follow-ups were pattern-matched on 房源/房子
+            # and re-ran search_properties. Answer from the REAL shown listings instead: a
+            # specific referenced listing routes to reasoning_property (single-listing
+            # observation, tainted), a set-level "which suits a couple?" to direct_answer
+            # over the comparison. Placed after the comparative/detail checks per spec.
+            if _is_advice_followup(user_query, extracted_context) is not None:
+                return _build_listing_advice_decision(user_query, extracted_context)
+
+        # 1.7) market_info NEGATIVE GUARD (deterministic, pre-vote). An explicit
+        #      do-not-search research request (先不要搜索…) — or a research verb + a
+        #      price-level noun with no listings ask — is market RESEARCH, so route it to
+        #      the web_search synthesis path, NEVER search_properties or its soft gate.
+        #      PLACEMENT: after the last-results follow-up interception (1.5) so a genuine
+        #      detail/advice question about an EXISTING listing keeps its route, but BEFORE
+        #      the no-commute (2.4), transport (2.5), and — critically — the soft-gate
+        #      follow-up (2.6) and the LLM vote, so a research question asked right after
+        #      the gate can never be hijacked by _soft_gate_answer_intent / _is_proceed_intent
+        #      (e.g. '先搜') or mis-voted into the search tool.
+        if _is_market_research_request(_cm_raw):
+            plan = _plan_web_searches(_cm_raw, tool_registry)
+            plan["reason"] = ("Intent: market_info (explicit research / do-not-search "
+                              "request — web synthesis, not the search tool)")
+            return plan
 
         # 2) Simple greetings
         greetings = ['hi', 'hello', '\u4f60\u597d', '\u60a8\u597d', 'hey', 'thanks', '\u8c22\u8c22']
@@ -1048,6 +1291,20 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
         intent = None
 
     if intent is None:
+        # Classifier output was unparseable. Root-cause #3: defaulting to a fresh
+        # search_properties mid-conversation (with listings already on screen) was what
+        # bounced an advice follow-up into "found 15 properties". So only fall to the
+        # search/heuristic path when there is nothing to answer over OR the user
+        # explicitly asked to find/search more; otherwise answer OVER the shown listings.
+        cl = current.lower()
+        has_results = bool(extracted_context.get('last_results'))
+        wants_new_search = any(k in cl for k in _NEW_SEARCH_KWS) \
+            or bool(re.search(r'\b(?:find|search)\b', cl)) \
+            or '找' in cl or '搜' in cl
+        if has_results and not wants_new_search:
+            logger.info("Intent parse failed -> listing_advice fallback (answer over shown results)")
+            return _build_listing_advice_decision(user_query, extracted_context)
+        logger.info("Intent parse failed -> heuristic fallback (no results / new-search verb)")
         return _heuristic_fallback(user_query, extracted_context, tool_registry, accumulated)
 
     # Deterministic tie-break on the STRIPPED current message (never the memory/history).
@@ -1057,6 +1314,10 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
 
     logger.info(f"Intent routed: {current[:60]!r} -> {intent}")
 
+    if intent == 'listing_advice':
+        # Opinion/suitability over listings already shown — answer from them, never a
+        # fresh search. Mirrors the deterministic step-1.5 interception.
+        return _build_listing_advice_decision(user_query, extracted_context)
     if intent == 'direct_answer':
         return {"tool": "direct_answer", "params": {},
                 "reason": "Intent: direct_answer (chat / answerable from context)"}
@@ -1074,6 +1335,26 @@ _ORDINAL_WORDS = {
     'first': 0, '1st': 0, 'second': 1, '2nd': 1, 'third': 2, '3rd': 2,
     'fourth': 3, '4th': 3, 'fifth': 4, '5th': 4,
 }
+
+# listing-advice: Chinese ordinal references ("第二个 / 第2套 / 第三间") to the shown
+# result list. CJK has NO word boundary, so \b tricks used for the English ordinals do
+# not apply — resolve these by regex instead. A measure word (个/套/间/…) is REQUIRED
+# after a Chinese numeral so a plain "第一次/第一名" (first time/place) is not misread as
+# "the first listing"; a bare digit form (第2, 第3) is unambiguous on its own.
+_ZH_NUM_TO_IDX = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4,
+                  '1': 0, '2': 1, '3': 2, '4': 3, '5': 4}
+_ZH_ORDINAL_RE = re.compile(
+    r'第\s*([一二三四五1-5])\s*(?:个|套|间|处|号|栋|户)'   # 第一个 / 第2套 / 第三间
+    r'|第\s*([1-5])(?![0-9])'                               # bare digit: 第2, 第3
+)
+
+
+def _zh_ordinal_index(text: str):
+    """Map a Chinese ordinal reference in ``text`` to a 0-based result index, else None."""
+    m = _ZH_ORDINAL_RE.search(text or '')
+    if not m:
+        return None
+    return _ZH_NUM_TO_IDX.get(m.group(1) or m.group(2))
 
 
 def _resolve_target_address(user_query, extracted_context):
@@ -1099,6 +1380,11 @@ def _resolve_target_address(user_query, extracted_context):
             if re.search(rf'\b{word}\b', ql) and idx < len(results):
                 r = results[idx]
                 return r.get('address') or r.get('name')
+        # listing-advice: Chinese ordinal ("第二个附近有超市吗") resolves the same way.
+        zidx = _zh_ordinal_index(ql)
+        if zidx is not None and zidx < len(results):
+            r = results[zidx]
+            return r.get('address') or r.get('name')
         if any(p in ql for p in ['that one', 'this one', 'that property', 'this property',
                                  'the property', 'the place', 'that place', 'the flat', 'the studio']):
             r = results[0]
@@ -1136,19 +1422,34 @@ def _resolve_last_result(user_query, extracted_context) -> dict | None:
         return None
     ql = _current_msg_for_reference(user_query, extracted_context).lower()
 
+    # English ordinals ("the second one") — word boundaries are safe for ASCII.
     for word, idx in _ORDINAL_WORDS.items():
         if re.search(rf'\b{word}\b', ql) and idx < len(results):
             return results[idx]
+    # Chinese ordinals ("第二个 / 第2套 / 第三间") — CJK has no \b, resolve by regex.
+    zidx = _zh_ordinal_index(ql)
+    if zidx is not None and zidx < len(results):
+        return results[zidx]
     # "#2" / "number 2" / "option 3" / "listing 1"
     m = re.search(r'(?:#\s*|\b(?:no\.?|number|option|listing)\s+)(\d{1,2})\b', ql)
     if m:
         idx = int(m.group(1)) - 1
         if 0 <= idx < len(results):
             return results[idx]
+    # "the last one" (EN) / 最后一个 / 最后那个 / 最后 (ZH) -> the most-recent single referent.
+    if any(p in ql for p in ['the last', 'last one', '最后一个', '最后那个', '最后一套', '最后']):
+        return results[-1]
+    # Bare deictic "this/that one" -> results[0], matching the English 'this one'
+    # semantics. listing-advice adds the Chinese deictics the reported bug used
+    # (这个房源 / 这套房 / 那个房源 / 刚才那个 …) so a couple-suitability follow-up resolves
+    # to the referenced listing instead of being mis-read as a fresh search.
     if any(p in ql for p in ['that one', 'this one', 'that property', 'this property',
                              'the property', 'the place', 'that place', 'the flat',
-                             'the studio', 'the apartment', 'the first', 'the last']):
-        return results[-1] if 'the last' in ql else results[0]
+                             'the studio', 'the apartment', 'the first',
+                             '这个房源', '这套房', '这一套', '这套', '这间', '这个房子',
+                             '这房子', '这处', '那个房源', '那套', '那个房子', '那处',
+                             '刚才那个', '这个', '那个']):
+        return results[0]
     for r in results:
         name = (r.get('name') or '').strip().lower()
         if len(name) > 3 and name in ql:
@@ -1204,6 +1505,16 @@ _NEW_SEARCH_KWS = [
     'different', 'somewhere else', 'another area', 'other cities', 'a cheaper one',
     '找房', '搜房', '其他房',
 ]
+# listing-advice: opinion / suitability / recommendation cues. Tuned precisely so a
+# GENUINELY-new search is not hijacked — English 'couple' is deliberately EXCLUDED
+# ("find me a place for a couple" is a search), and the _NEW_SEARCH_KWS / _LOCATION_
+# INTENT_KWS guards in _is_advice_followup take precedence over these.
+_ADVICE_KWS = [
+    'recommend', 'would you', 'do you think', 'worth it', 'worth renting', 'good for',
+    'suitable', 'should i take', 'should i rent', 'pros and cons',
+    '推荐', '适合', '合适', '值得', '建议', '怎么样', '好不好', '靠谱',
+    '可以住', '一起住', '一块住', '情侣', '女朋友', '男朋友',
+]
 
 
 def _is_comparative_followup(user_query, extracted_context) -> bool:
@@ -1240,6 +1551,41 @@ def _is_detail_followup(user_query, extracted_context) -> dict | None:
     return record if (is_detail_intent or is_bare_reference) else None
 
 
+def _is_advice_followup(user_query, extracted_context):
+    """listing-advice: an opinion / suitability / recommendation question about listings
+    ALREADY shown ("would you recommend this for me and my girlfriend?", "哪个更适合情侣").
+
+    Returns ``{'record': <one record>}`` when a specific shown listing is referenced,
+    ``{'set': True}`` when the question is about the shown SET in general, else None.
+
+    Guards mirror _is_detail_followup so a genuinely-new search is never hijacked: it
+    requires last_results, requires an advice cue, and bails on any location/amenity/
+    safety intent or an explicit new-search verb (which own their routes).
+
+    The SET-level branch additionally requires a set reference (这些/哪个/which one/…):
+    weak advice cues like 怎么样/好不好/would you also appear in area/weather questions
+    ("曼彻斯特天气怎么样"), which must keep flowing to their own routes — only a message
+    that anchors itself to the shown listings (a resolvable single reference, or a set
+    reference) may be answered from them deterministically. Unanchored advice questions
+    fall through to the LLM vote, where the listing_advice catalog entry still covers
+    the genuinely listing-scoped ones."""
+    if not (extracted_context.get('last_results')):
+        return None
+    ql = _current_msg_for_reference(user_query, extracted_context).lower()
+    if any(kw in ql for kw in _LOCATION_INTENT_KWS):
+        return None
+    if any(kw in ql for kw in _NEW_SEARCH_KWS):
+        return None
+    if not any(kw in ql for kw in _ADVICE_KWS):
+        return None
+    record = _resolve_last_result(user_query, extracted_context)
+    if record is not None:
+        return {'record': record}
+    if any(kw in ql for kw in _SET_REFERENCE_KWS):
+        return {'set': True}
+    return None
+
+
 def _format_result_line(rank, r) -> str:
     """One comparable line for a previous result (uses only real, city-correct fields)."""
     parts = [f"{rank}. {r.get('name') or r.get('address') or 'Listing'}"]
@@ -1254,7 +1600,15 @@ def _format_result_line(rank, r) -> str:
     if r.get('property_type'):
         parts.append(f"type: {r['property_type']}")
     if r.get('budget_status'):
-        parts.append(f"budget: {r['budget_status']}")
+        # budget_status carries a frontend emoji sentinel ('✅ 在预算内') — strip it here.
+        parts.append(f"budget: {_clean_evidence_value(r['budget_status'])}")
+    # listing-advice: availability + a short description slice so a SET-level suitability
+    # question ("which of these suits a couple?") has real per-listing evidence to weigh.
+    if r.get('available_from'):
+        parts.append(f"available from: {r['available_from']}")
+    desc = (r.get('description') or '').strip()
+    if desc:
+        parts.append(f"desc: {desc[:250]}")
     return " | ".join(parts)
 
 
@@ -1273,19 +1627,68 @@ def _format_single_result(record) -> str:
     details instead of inventing (or importing demo-CSV) data."""
     label = [('address', 'Property'), ('price', 'Price'), ('travel_time', 'Commute'),
              ('bedrooms', 'Bedrooms'), ('property_type', 'Type'),
-             ('budget_status', 'Budget status'), ('source', 'Source'),
+             ('budget_status', 'Budget status'),
+             # listing-advice: availability fields (a parallel agent adds these keys to
+             # the records; tolerate their absence). Relevant to move-in / timing Qs.
+             ('available_from', 'Available from'),
+             ('availability_status', 'Availability'),
+             ('source', 'Source'),
              ('explanation', 'Notes'), ('url', 'Listing URL')]
     lines = []
     for key, name in label:
         val = record.get(key)
         if val not in (None, '', 'N/A'):
+            # budget_status/availability_status carry frontend emoji sentinels — the
+            # evidence surface must stay emoji-free (product rule).
+            if key in ('budget_status', 'availability_status'):
+                val = _clean_evidence_value(val)
             lines.append(f"{name}: {val}")
+    # listing-advice: surface the FULL OnTheMarket detail-page description so a
+    # suitability answer ("good for a couple?") can reason from the real amenity / bills
+    # / bed text rather than guessing. Capped so an over-long description can't blow the
+    # prompt budget; the record still holds the untruncated text.
+    desc = (record.get('description') or '').strip()
+    if desc:
+        if len(desc) > 1500:
+            desc = desc[:1500].rstrip() + '…'
+        lines.append(f"Description: {desc}")
     body = "\n".join(lines) if lines else "Property: (no details captured)"
     # Anchor the model on THIS exact listing so injected chat history (which may name
     # a different result) cannot make it describe the wrong one.
     header = ("This is the exact listing the user is asking about — describe ONLY this "
               "one, using its own fields below:\n")
     return header + body
+
+
+def _build_listing_advice_decision(user_query, extracted_context) -> dict:
+    """listing-advice route decision: answer a suitability/recommendation question over
+    the listings ALREADY shown. A specific referenced listing -> reasoning_property over
+    that one record (flows through the observation short-circuit like the D3 detail path,
+    tainted); a set-level question -> direct_answer over the whole comparison; nothing
+    shown yet -> a plain direct_answer so the model can say so and offer to search.
+
+    Shared by the deterministic step-1.5 interception and the LLM-router / parse-failure
+    fallback so every entry point produces the same decision."""
+    last_results = extracted_context.get('last_results') or []
+    if last_results:
+        record = _resolve_last_result(user_query, extracted_context)
+        if record is not None:
+            return {
+                "tool": "reasoning_property", "params": {},
+                "observation": _format_single_result(record),
+                "raw_data": {"property": record},
+                "reason": "listing-advice: suitability question about a specific shown listing",
+            }
+        return {
+            "tool": "direct_answer", "params": {},
+            "observation": _format_results_for_comparison(last_results),
+            "raw_data": {"compared_results": last_results},
+            "reason": "listing-advice: suitability question over the shown result set",
+        }
+    return {
+        "tool": "direct_answer", "params": {},
+        "reason": "listing-advice: opinion question but no listings shown yet",
+    }
 
 
 # Common student/work destinations -> geocodable full addresses. Short tokens like
@@ -1466,7 +1869,14 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
     if tool_name == 'reasoning_property':
         return {"tool": "reasoning_property", "params": {}, "reason": f"Voted: {tool_name}"}
     elif tool_name == 'search_properties':
-        return {"tool": "search_properties", "params": {"user_query": user_query}, "reason": f"Voted: {tool_name}"}
+        # D: pass reply_language through to the tool (it localises its summary/gate text).
+        # execute_tool re-injects it too, covering the deterministic-step decisions that
+        # bypass this builder; the guard there means no double-set.
+        params = {"user_query": user_query}
+        rl = (extracted_context or {}).get('reply_language')
+        if rl:
+            params['reply_language'] = rl
+        return {"tool": "search_properties", "params": params, "reason": f"Voted: {tool_name}"}
     elif tool_name == 'search_nearby_pois':
         addr = _resolve_target_address(user_query, extracted_context) or 'London'
         return {"tool": "search_nearby_pois",
@@ -1587,7 +1997,7 @@ def _make_execute_tool_node(tool_registry):
     """
 
     async def execute_tool_node(state: AgentState) -> Command[Literal[
-            "format_output", "generate_response"]]:
+            "format_output", "generate_response", "reflect"]]:
         decision = state["tool_decision"]
         tool_name = decision["tool"]
         params = dict(decision.get("params", {}))
@@ -1606,15 +2016,32 @@ def _make_execute_tool_node(tool_registry):
 
         try:
             if tool_name == 'reasoning_property':
-                # Assemble property info from context
+                # Assemble property info from context. C: a parallel agent now carries the
+                # REAL session listing's extra fields (bedrooms/property_type/area/
+                # budget_status/availability + full description) on extracted_context, so a
+                # focused-listing answer is grounded in the actual listing text. Every key
+                # is optional; budget_status/availability_status are emoji-stripped and the
+                # description is capped so an over-long listing can't blow the prompt budget.
                 parts = [f"Property: {extracted_context.get('property_address', 'N/A')}"]
                 for key, label in [('property_price', 'Price'), ('room_type', 'Room Type'),
+                                   ('bedrooms', 'Bedrooms'), ('property_type', 'Property Type'),
+                                   ('area', 'Area'), ('budget_status', 'Budget Status'),
                                    ('property_travel_time', 'Commute Time'),
-                                   ('description', 'Description'), ('amenities', 'Amenities'),
+                                   ('available_from', 'Available From'),
+                                   ('availability_status', 'Availability'),
+                                   ('amenities', 'Amenities'),
                                    ('guest_policy', 'Guest Policy'), ('payment_rules', 'Payment Rules'),
                                    ('excluded_features', 'NOT Included'), ('property_url', 'Booking URL')]:
-                    if extracted_context.get(key):
-                        parts.append(f"{label}: {extracted_context[key]}")
+                    val = extracted_context.get(key)
+                    if val:
+                        if key in ('budget_status', 'availability_status'):
+                            val = _clean_evidence_value(val)
+                        parts.append(f"{label}: {val}")
+                desc = str(extracted_context.get('description') or '').strip()
+                if desc:
+                    if len(desc) > 1500:
+                        desc = desc[:1500].rstrip() + '…'
+                    parts.append(f"Description: {desc}")
                 observation = '\n'.join(parts)
                 raw_data = {'property_info': observation}
 
@@ -1654,6 +2081,11 @@ def _make_execute_tool_node(tool_registry):
                     params['bedrooms'] = accumulated['bedrooms']
                 if accumulated.get('room_type') and not params.get('room_type'):
                     params['room_type'] = accumulated['room_type']
+                # Desired move-in date persists across turns like room_type; a date
+                # stated THIS turn (extracted by the tool from current_message) still
+                # wins over the accumulated one inside the tool itself.
+                if accumulated.get('move_in_date') and not params.get('move_in_date'):
+                    params['move_in_date'] = accumulated['move_in_date']
                 # Soft criteria gate: tell the tool whether the gate already fired this
                 # conversation so it fires at most once (persisted per-conversation).
                 if accumulated.get('criteria_gate_shown'):
@@ -1669,6 +2101,13 @@ def _make_execute_tool_node(tool_registry):
                     params['property_features'] = accumulated['property_features']
                 if accumulated.get('soft_preferences'):
                     params['accumulated_preferences'] = accumulated['soft_preferences']
+                # D: the tool localises its own summaries / gate messages. Pass the
+                # resolved reply_language so an all-Chinese reply is produced even when the
+                # UI is English. Only when present (a legacy state without it stays a no-op;
+                # the tool declares extra='ignore', so an unknown kwarg is harmless).
+                _rl = extracted_context.get('reply_language')
+                if _rl and not params.get('reply_language'):
+                    params['reply_language'] = _rl
 
                 invocation = ToolInvocation.create(
                     run_id=state.get("run_id", "legacy"), node_id="execute_tool",
@@ -1728,10 +2167,29 @@ def _make_execute_tool_node(tool_registry):
         update["context_tainted"] = state.get("context_tainted", False) or tool_name in {
             "web_search", "search_properties", "reasoning_property", "multi_search"
         }
-        goto = _route_after_execution(tool_name, raw_data)
+        # Bounded agent loop: a LOOPABLE tool that did NOT error hands off to `reflect`,
+        # which decides answer-now vs one-more-tool. Everything else keeps today's
+        # single-pass route (structured card -> format_output, else -> generate_response),
+        # so non-loopable tools and error paths add zero latency.
+        errored = observation is not None and str(observation).lstrip().lower().startswith("error")
+        if tool_name in LOOPABLE_TOOLS and not errored:
+            goto = "reflect"
+        else:
+            goto = _route_after_execution(tool_name, raw_data)
         return Command(update=update, goto=goto)
 
     return execute_tool_node
+
+
+def _combine_observations(observations: list) -> str:
+    """Concatenate every loop observation with a per-tool/turn header, so a multi-tool
+    answer is synthesised over ALL the evidence the loop gathered, not just the last."""
+    blocks = ["=== EVIDENCE GATHERED ACROSS TOOL CALLS (use ALL of it) ==="]
+    for e in observations:
+        blocks.append(f"--- [step {e.get('turn', 0)}] {e.get('tool', 'tool')} ---\n"
+                      f"{e.get('observation', '')}")
+    blocks.append("=== END EVIDENCE ===")
+    return "\n\n".join(blocks)
 
 
 def _build_generation_prompt(state: AgentState) -> str:
@@ -1739,14 +2197,34 @@ def _build_generation_prompt(state: AgentState) -> str:
 
     Shared by ``generate_response`` and the critic's regeneration pass so both
     speak to the LLM with an identical view of the observation and context.
+
+    When the bounded loop ran MORE THAN ONE tool, the synthesis evidence becomes ALL
+    observations concatenated (per-tool headers) rather than only the latest, so the
+    answer reasons over every tool's output. `tool_observation` is left as the latest
+    for the critic/grounding back-compat path.
     """
-    observation = state.get("tool_observation")
     user_query = state["user_query"]
     decision = state.get("tool_decision") or {}
     tool_name = decision.get("tool", "")
     extracted_context = state["extracted_context"]
     prefs = state["user_preferences"]
 
+    # D: hard reply-language + no-emoji directive, layered on the security guard. The
+    # templates' softer "match the user's language" lines defer to this.
+    directive = SECURITY_DIRECTIVE + "\n\n" + _language_directive(_reply_language(state))
+
+    # Multi-tool loop: synthesise over the combined evidence (a merged answer can't be a
+    # single property card, so it always uses the consultant SYNTHESIS_PROMPT).
+    loop_obs = state.get("observations") or []
+    if len(loop_obs) > 1:
+        obs = _combine_observations(loop_obs)
+        if state.get("context_tainted"):
+            obs = sanitize_untrusted(str(obs)).text
+        ctx = build_context_info(extracted_context, tool_name, prefs)
+        body = SYNTHESIS_PROMPT.format(context_info=ctx, user_query=user_query, observation=obs)
+        return directive + "\n\n" + body
+
+    observation = state.get("tool_observation")
     if observation:
         obs = observation
         if state.get("context_tainted"):
@@ -1756,17 +2234,16 @@ def _build_generation_prompt(state: AgentState) -> str:
         else:
             ctx = build_context_info(extracted_context, tool_name, prefs)
             body = SYNTHESIS_PROMPT.format(context_info=ctx, user_query=user_query, observation=obs)
-        # Prepend the non-negotiable security/scope guard so exfiltration, off-topic,
-        # and fabrication requests are refused across every generation path (2a-2d).
-        return SECURITY_DIRECTIVE + "\n\n" + body
+        return directive + "\n\n" + body
 
     # Direct answer (no tool data)
     ctx = build_context_info(extracted_context, tool_name, prefs)
     body = (f"You are a helpful assistant for UK student housing.\n\n{ctx}\n\n"
             f"{CAPABILITIES_NOTE}\n\n"
-            f"User: {user_query}\n\nProvide a helpful response in the user's language.\n\n"
+            f"User: {user_query}\n\nProvide a helpful response, following the REPLY LANGUAGE "
+            f"directive above (do not mix zh/en; no emoji).\n\n"
             f"Your response:")
-    return SECURITY_DIRECTIVE + "\n\n" + body
+    return directive + "\n\n" + body
 
 
 def _make_generate_response_node():
@@ -1787,6 +2264,190 @@ def _make_generate_response_node():
             return {"final_response": "I'm sorry, I couldn't process your request. Please try again."}
 
     return generate_response_node
+
+
+# ═══════════════════════════════════════════════════════════════════
+# REFLECT — the bounded-loop controller (execute_tool -> reflect -> …)
+# ═══════════════════════════════════════════════════════════════════
+
+# Volatile params that carry no information about WHAT a call did (raw passthrough text,
+# per-call idempotency token, identity) — excluded from the digest so two calls that
+# differ only in these read as "the same call" for the no-progress guard.
+_DIGEST_VOLATILE_KEYS = {
+    "idempotency_key", "user_query", "current_message", "user_id", "session_id",
+}
+
+
+def _params_digest(tool_name: str, params: dict) -> str:
+    """Stable short hash of (tool name + sorted, non-volatile params). Two loop steps
+    with the same digest are the SAME call — the no-progress guard uses this to stop the
+    loop repeating itself."""
+    import hashlib
+    stable = {k: v for k, v in (params or {}).items() if k not in _DIGEST_VOLATILE_KEYS}
+    payload = tool_name + "|" + json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _loop_catalog_text() -> str:
+    """The catalog the reflect controller may pick a next tool from — LOOPABLE routes
+    only, so it never proposes search_properties / a fan-out as a continuation."""
+    lines = []
+    for name, desc, cues in _INTENT_CATALOG:
+        if name in LOOPABLE_TOOLS:
+            lines.append(f"- {name}: {desc}")
+    return "\n".join(lines)
+
+
+def _build_loop_tool_decision(next_intent, next_query, extracted_context, tool_registry, accumulated):
+    """Build the execute_tool decision for a loop continuation. web_search becomes ONE
+    direct web_search call (NOT the multi_search fan-out, which would leave execute_tool),
+    so it runs through execute_tool -> reflect and can loop again; every other loopable
+    intent reuses the normal _build_tool_params resolver."""
+    if next_intent in ("web_search", "market_info"):
+        return {"tool": "web_search", "params": {"query": next_query or ""},
+                "reason": "reflect: continue with a refined web search"}
+    return _build_tool_params(next_intent, next_query or "", extracted_context,
+                              tool_registry, accumulated)
+
+
+REFLECT_PROMPT = '''You are the planning controller for a UK student-housing assistant. A tool just ran. Decide whether the evidence gathered SO FAR already answers the user's question, or whether exactly ONE more tool call is needed.
+
+USER QUESTION (answer THIS):
+"{user_question}"
+
+EVIDENCE GATHERED SO FAR (most recent last):
+{observations}
+
+You are on step {current_turn} of at most {max_turns}. Strongly PREFER to answer now: only continue if a concrete, DIFFERENT tool call would add information the user explicitly asked for that is clearly still missing above. Never repeat a call already made.
+
+AVAILABLE NEXT TOOLS (only for "continue"):
+{catalog}
+
+Respond with ONLY a JSON object, no prose:
+- Answer now:      {{"action": "answer"}}
+- One more step:   {{"action": "continue", "next_intent": "<tool name>", "next_query": "<refined sub-question>", "reason": "<why one more call is needed>"}}'''
+
+
+def _reflect_observations_block(observations: list) -> str:
+    """Render the loop observations for the reflect prompt, labelled per tool/turn and
+    truncated so the controller stays cheap (it can run up to MAX_AGENT_TURNS-1 times)."""
+    lines = []
+    for e in observations:
+        obs = str(e.get("observation") or "")
+        if len(obs) > 800:
+            obs = obs[:800].rstrip() + "…"
+        lines.append(f"[step {e.get('turn', 0)}] {e.get('tool', 'tool')}: {obs}")
+    return "\n".join(lines) if lines else "(none yet)"
+
+
+def _parse_reflect_action(text: str) -> dict:
+    """Parse the controller output into {'action': 'answer'|'continue', ...}. Fails
+    CLOSED to 'answer' on anything unparseable so a bad reflect reply ends the turn."""
+    if not text:
+        return {"action": "answer"}
+    obj = None
+    try:
+        obj = json.loads(text.strip())
+    except Exception:
+        m = re.search(r'\{.*\}', text, re.DOTALL)
+        if m:
+            try:
+                obj = json.loads(m.group(0))
+            except Exception:
+                obj = None
+    if not isinstance(obj, dict):
+        return {"action": "answer"}
+    if str(obj.get("action", "")).strip().lower() == "continue":
+        return {"action": "continue",
+                "next_intent": str(obj.get("next_intent") or "").strip(),
+                "next_query": obj.get("next_query") or "",
+                "reason": obj.get("reason") or ""}
+    return {"action": "answer"}
+
+
+def _make_reflect_node(tool_registry, reflect_llm):
+    """Create the reflect node: the bounded-loop controller between execute_tool and
+    generation. After a LOOPABLE tool returns it records the observation and decides
+    answer-now vs one-more-tool, subject to hard stops (turn cap, no-progress guard,
+    controller exception) that all fail CLOSED to answering."""
+
+    def reflect_node(state: AgentState) -> Command[Literal[
+            "execute_tool", "generate_response", "format_output"]]:
+        decision = state.get("tool_decision") or {}
+        tool_name = decision.get("tool", "")
+        params = decision.get("params") or {}
+        observation = state.get("tool_observation")
+        raw_data = state.get("tool_raw_data")
+        extracted_context = state.get("extracted_context") or {}
+        accumulated = state.get("accumulated_search_criteria") or {}
+
+        # loop_turn counts loopable-tool executions completed this turn (a fresh int each
+        # turn — see state.py). The tool that just ran is the (loop_turn+1)-th.
+        loop_turn = int(state.get("loop_turn", 0)) + 1
+
+        # Record the tool that just ran (append to the per-turn list; observations is a
+        # plain last-write-wins channel, so we return the FULL updated list).
+        prior_obs = list(state.get("observations") or [])
+        current_entry = {
+            "turn": loop_turn - 1, "tool": tool_name,
+            "observation": str(observation or ""),
+            "params_digest": _params_digest(tool_name, params),
+        }
+        all_obs = prior_obs + [current_entry]
+
+        def _answer(reason: str) -> Command:
+            # A single-observation answer keeps today's terminal (structured card ->
+            # format_output, else generate_response); a real multi-tool loop MUST
+            # synthesise (no single card can represent it) -> generate_response.
+            goto = ("generate_response" if len(all_obs) > 1
+                    else _route_after_execution(tool_name, raw_data))
+            logger.info("reflect -> answer (%s) turn=%s obs=%s", reason, loop_turn, len(all_obs))
+            return Command(update={"observations": all_obs, "loop_turn": loop_turn}, goto=goto)
+
+        # Hard stop: turn cap.
+        if loop_turn >= MAX_AGENT_TURNS:
+            return _answer("cap reached")
+
+        # Ask the controller. Any exception fails closed to answering.
+        try:
+            prompt = REFLECT_PROMPT.format(
+                user_question=_current_message(state.get("user_query") or ""),
+                observations=_reflect_observations_block(all_obs),
+                current_turn=loop_turn, max_turns=MAX_AGENT_TURNS,
+                catalog=_loop_catalog_text(),
+            )
+            resp = reflect_llm.invoke(prompt)
+            text = resp.content if hasattr(resp, "content") else str(resp)
+            verdict = _parse_reflect_action(text)
+        except Exception as e:
+            logger.warning("reflect controller failed -> answer: %s", e)
+            return _answer("controller exception")
+
+        if verdict.get("action") != "continue":
+            return _answer("controller: answer")
+
+        next_intent = verdict.get("next_intent")
+        if next_intent not in LOOPABLE_TOOLS and next_intent not in ("web_search", "market_info"):
+            return _answer("next_intent not loopable")
+        next_decision = _build_loop_tool_decision(
+            next_intent, verdict.get("next_query"), extracted_context, tool_registry, accumulated)
+        nd_tool = next_decision.get("tool", "")
+        # A continuation that degraded to a non-loopable route (e.g. check_safety with no
+        # resolvable address -> clarification) can't be a clean loop step -> answer.
+        if nd_tool not in LOOPABLE_TOOLS:
+            return _answer("next decision not loopable")
+        # No-progress guard: the proposed (tool, digest) already ran this turn.
+        next_digest = _params_digest(nd_tool, next_decision.get("params") or {})
+        if any(e["tool"] == nd_tool and e["params_digest"] == next_digest for e in all_obs):
+            return _answer("no-progress guard")
+
+        logger.info("reflect -> continue turn=%s next=%s", loop_turn, nd_tool)
+        return Command(update={
+            "observations": all_obs, "loop_turn": loop_turn,
+            "tool_decision": next_decision,
+        }, goto="execute_tool")
+
+    return reflect_node
 
 
 def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
@@ -1810,6 +2471,12 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
             "max_travel_time": accumulated.get("max_travel_time"),
         },
     ]
+    # Bounded loop: the generator was shown EVERY tool's observation (combined evidence),
+    # so grounding must validate against all of them, not only the latest tool_observation.
+    loop_obs = state.get("observations") or []
+    if len(loop_obs) > 1:
+        for e in loop_obs:
+            pieces.append(e.get("observation"))
     for key in ("property_price", "property_travel_time"):
         if extracted_context.get(key):
             pieces.append({key: extracted_context[key]})
@@ -1905,8 +2572,16 @@ def _make_format_output_node():
 
         response_type = "answer"
 
+        # A real multi-tool loop (>1 observation) was answered by the LLM synthesis over
+        # ALL observations; a single tool's structured card can't represent it, so pass the
+        # generated `response` through untouched rather than overwriting it with one card.
+        is_loop_synthesis = len(state.get("observations") or []) > 1
+
         # Format based on tool type
-        if tool_name == 'check_safety' and raw_data and isinstance(raw_data, dict) and raw_data.get('safety_score') is not None:
+        if is_loop_synthesis:
+            pass  # keep the generated multi-tool synthesis as the response
+
+        elif tool_name == 'check_safety' and raw_data and isinstance(raw_data, dict) and raw_data.get('safety_score') is not None:
             response, tool_data = _format_safety(raw_data)
 
         elif tool_name == 'search_nearby_pois' and raw_data and isinstance(raw_data, dict) and raw_data.get('pois'):
@@ -2126,11 +2801,13 @@ def _make_gather_searches_node():
 # GRAPH BUILDER
 # ═══════════════════════════════════════════════════════════════════
 
-def build_agent_graph(tool_registry, *, checkpointer=None, store=None):
+def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_llm=None):
     """Build and compile the LangGraph StateGraph.
 
     Args:
         tool_registry: ToolRegistry instance with all tools registered.
+        reflect_llm: optional LLM for the bounded-loop `reflect` controller; defaults to
+            the (cheap) classification LLM. Injectable for tests.
 
     Returns:
         Compiled LangGraph that can be invoked with AgentState.
@@ -2138,6 +2815,9 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None):
     from core.llm_config import get_classification_llm
 
     classification_llm = get_classification_llm()
+    # The loop controller is a cheap decision call — reuse the classification model
+    # unless a caller/test injects its own.
+    reflect_llm = reflect_llm if reflect_llm is not None else classification_llm
 
     graph = StateGraph(AgentState)
 
@@ -2157,6 +2837,8 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None):
     graph.add_node("extract_preferences", _n("extract_preferences", _make_extract_preferences_node()))
     graph.add_node("decide_tool", _n("decide_tool", _make_decide_tool_node(tool_registry, classification_llm)))
     graph.add_node("execute_tool", _n("execute_tool", _make_execute_tool_node(tool_registry)))
+    # Bounded agent loop controller (execute_tool -> reflect -> execute_tool | generation).
+    graph.add_node("reflect", _n("reflect", _make_reflect_node(tool_registry, reflect_llm)))
     graph.add_node("dispatch_searches", _n("dispatch_searches", _make_dispatch_searches_node()))
     graph.add_node("search_worker", _n("search_worker", _make_search_worker_node(tool_registry)))
     graph.add_node("gather_searches", _n("gather_searches", _make_gather_searches_node()))
@@ -2167,7 +2849,9 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None):
     # Edges
     graph.add_edge(START, "extract_preferences")
     graph.add_edge("extract_preferences", "decide_tool")
-    # decide_tool and execute_tool route via Command(goto=...) — no conditional edges needed
+    # decide_tool, execute_tool and reflect all route via Command(goto=...) — no
+    # conditional edges needed (execute_tool -> reflect for loopable tools; reflect ->
+    # execute_tool to loop, or -> generate_response/format_output to answer)
     graph.add_conditional_edges("dispatch_searches", fan_out_searches, ["search_worker", "gather_searches"])
     graph.add_edge("search_worker", "gather_searches")
     graph.add_edge("gather_searches", "generate_response")

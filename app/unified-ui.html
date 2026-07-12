@@ -532,6 +532,18 @@
         }
         .detail-item .icon { width: 14px; height: 14px; color: var(--text-secondary); }
 
+        /* Move-in / availability line — shown on EVERY card (date / now /
+           "ask the agent"), with an optional colored status chip alongside. */
+        .property-availability {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            margin: -4px 0 12px; min-width: 0;
+        }
+        .property-availability .avail-text {
+            display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+            font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);
+        }
+        .property-availability .avail-text .icon { width: 14px; height: 14px; color: var(--text-tertiary); flex-shrink: 0; }
+
         .property-explanation {
             font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6;
             margin-bottom: 20px; flex: 1;
@@ -1415,6 +1427,8 @@
                 criteria_max_commute: "Max commute (min)",
                 criteria_max_commute_ph: "e.g. 40",
                 criteria_no_commute: "I don't commute",
+                criteria_move_in: "Move-in date",
+                criteria_move_in_hint: "Optional — your preferred move-in date",
                 criteria_search_btn: "Search",
                 criteria_modal_title: "Where should I search?",
                 criteria_modal_desc: "Enter at least an area to see listings — everything else is optional.",
@@ -1429,12 +1443,29 @@
                 min_short: "min",
                 no_commute_summary: "no commute",
 
+                // Criteria echo (chat stream) — clean sentence, no emoji/glyph shorthand.
+                echo_prefix: "Search criteria: ",
+                echo_area_join: ", ",
+                echo_clause_join: ", ",
+                echo_commute_sep: " — ",
+                echo_commute_to: "commute to {dest}",
+                echo_commute_to_time: "commute to {dest} within {min} min",
+                echo_no_commute: "no commute needed",
+                echo_budget: "up to £{amount}{per}",
+
                 // Multi-area + recommended areas + card details
                 area_recos_label: "Recommended areas nearby",
                 area_remove: "Remove area",
                 area_min_one: "Keep at least one area, or set a commute destination.",
                 card_details_show: "Details",
                 card_details_hide: "Hide details",
+
+                // Move-in / availability (listing cards). {date} is a literal placeholder.
+                avail_now: "Available now",
+                avail_from_tpl: "Move-in from {date}",
+                avail_unknown: "Move-in date: contact agent",
+                avail_ready: "Available",
+                avail_later: "Available later",
 
                 // Errors
                 error_load_conversations: "Could not load conversations.",
@@ -1579,6 +1610,8 @@
                 criteria_max_commute: "最长通勤（分钟）",
                 criteria_max_commute_ph: "例如：40",
                 criteria_no_commute: "我不通勤",
+                criteria_move_in: "入住时间",
+                criteria_move_in_hint: "选填 — 期望入住日期",
                 criteria_search_btn: "搜索",
                 criteria_modal_title: "想在哪里找房？",
                 criteria_modal_desc: "至少填写一个区域即可查看房源，其余均为选填。",
@@ -1593,12 +1626,29 @@
                 min_short: "分钟",
                 no_commute_summary: "不通勤",
 
+                // 搜索条件回显（对话流）——干净句子，无表情/箭头等简写符号。
+                echo_prefix: "搜索条件：",
+                echo_area_join: "、",
+                echo_clause_join: "，",
+                echo_commute_sep: "，",
+                echo_commute_to: "通勤至 {dest}",
+                echo_commute_to_time: "通勤至 {dest}（{min} 分钟内）",
+                echo_no_commute: "无需通勤",
+                echo_budget: "预算 £{amount}{per}以内",
+
                 // Multi-area + recommended areas + card details
                 area_recos_label: "附近推荐区域",
                 area_remove: "移除该区域",
                 area_min_one: "请至少保留一个区域，或设置通勤目的地。",
                 card_details_show: "详情",
                 card_details_hide: "收起详情",
+
+                // 入住时间 / 房源卡可入住信息（{date} 为日期占位符，勿翻译）
+                avail_now: "可立即入住",
+                avail_from_tpl: "{date} 起可入住",
+                avail_unknown: "入住时间请咨询",
+                avail_ready: "可入住",
+                avail_later: "未来可入住",
 
                 // Errors
                 error_load_conversations: "无法加载会话列表。",
@@ -1624,6 +1674,7 @@
                 camera: `<svg class="icon ${size}" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
                 money: `<svg class="icon ${size}" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,
                 clock: `<svg class="icon ${size}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+                calendar: `<svg class="icon ${size}" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
                 building: `<svg class="icon ${size}" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l8-4 8 4v14M8 21v-2a4 4 0 0 1 4-4v0a4 4 0 0 1 4 4v2"/></svg>`,
                 mapPin: `<svg class="icon ${size}" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
                 chat: `<svg class="icon ${size}" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
@@ -1713,13 +1764,13 @@
             const container = document.getElementById('quickActions');
             container.innerHTML = '';
             const actions = currentLang === 'en' ? [
-                { label: `🎓 ${t('qa_ucl')}`, query: "Find flats near UCL under £1500" },
-                { label: `🛡️ ${t('qa_safe')}`, query: "Safe areas in London" },
-                { label: `📊 ${t('qa_stats')}`, query: "Average rent in Camden?" }
+                { label: t('qa_ucl'), query: "Find flats near UCL under £1500" },
+                { label: t('qa_safe'), query: "Safe areas in London" },
+                { label: t('qa_stats'), query: "Average rent in Camden?" }
             ] : [
-                { label: `🎓 ${t('qa_ucl')}`, query: "帮我找 UCL 附近的公寓，预算1500以下" },
-                { label: `🛡️ ${t('qa_safe')}`, query: "伦敦哪些区域比较安全？" },
-                { label: `📊 ${t('qa_stats')}`, query: "Camden 的平均租金是多少？" }
+                { label: t('qa_ucl'), query: "帮我找 UCL 附近的公寓，预算1500以下" },
+                { label: t('qa_safe'), query: "伦敦哪些区域比较安全？" },
+                { label: t('qa_stats'), query: "Camden 的平均租金是多少？" }
             ];
             actions.forEach(action => {
                 const btn = el('button', 'quick-action');
@@ -2121,7 +2172,8 @@
                     user_id: getUserId(),
                     context: currentPropertyContext ? { property: currentPropertyContext } : {},
                     is_continuation: isContinuation,
-                    language: currentLang
+                    language: currentLang,
+                    ui_language: currentLang
                 };
                 if (activeConversationId) body.conversation_id = activeConversationId;
 
@@ -2151,6 +2203,10 @@
                         addMessage(cleanRawResponse(data.message), 'alex', { icon: 'question' });
                         lastResponseType = 'clarification';
                         const missing = Array.isArray(data.missing_fields) ? data.missing_fields : [];
+                        // Optional fields the gate merely mentions (e.g. 'move_in') —
+                        // highlighted like the recommended ones, but they never drive
+                        // the modal/soft-gate logic below.
+                        const missingOptional = Array.isArray(data.missing_optional_fields) ? data.missing_optional_fields : [];
                         // Keep the panel in sync with whatever the backend already knows
                         // (applyCriteria also expands the panel).
                         if (data.known_criteria || missing.length) applyCriteria(data.known_criteria || {});
@@ -2159,7 +2215,7 @@
                         // field) is missing — not for address/safety/other clarifications.
                         if (areaMissing) openCriteriaModal(data.known_criteria || {});
                         // Highlight after the modal exists so BOTH panel + modal get marked.
-                        if (missing.length) highlightMissingFields(missing);
+                        if (missing.length || missingOptional.length) highlightMissingFields(missing.concat(missingOptional));
                         // Soft-criteria clarification (or the heuristic fallback when the
                         // backend omits clarification_kind): let the user proceed anyway.
                         const isSoft = data.clarification_kind === 'soft_criteria' ||
@@ -2423,6 +2479,34 @@
             return badge;
         }
 
+        // Move-in line text from `available_from` (always shown on a card so the
+        // tenancy start is never hidden). Returns a localized string for textContent.
+        //   "YYYY-MM-DD" -> "Move-in from 2025-08-01" / "2025-08-01 起可入住"
+        //   "Available now" -> t('avail_now')
+        //   ""/absent -> t('avail_unknown')  ("…contact agent")
+        function availabilityText(rec) {
+            const raw = (rec && typeof rec.available_from === 'string') ? rec.available_from.trim() : '';
+            if (!raw) return t('avail_unknown');
+            if (/^available\s*now$/i.test(raw)) return t('avail_now');
+            // ISO date (or any other non-empty value, defensively) → templated label.
+            return t('avail_from_tpl').replace('{date}', raw);
+        }
+
+        // Colored status chip from `availability_status` (same convention as
+        // budget_status: '✅ …' = ready/green, '⚠️ …' = later/amber). Null when empty.
+        function buildAvailabilityBadge(rec) {
+            const raw = (rec && typeof rec.availability_status === 'string') ? rec.availability_status.trim() : '';
+            if (!raw) return null;
+            const isReady = raw.indexOf('✅') !== -1;
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600;display:inline-block;'
+                + (isReady
+                    ? 'background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;'
+                    : 'background:#fffbeb;color:#b45309;border:1px solid #fcd34d;');
+            badge.textContent = isReady ? t('avail_ready') : t('avail_later');
+            return badge;
+        }
+
         // Built entirely with DOM APIs — dynamic listing/LLM values go through
         // textContent (never innerHTML), so they cannot inject markup.
         function createPropertyCard(rec) {
@@ -2507,6 +2591,20 @@
             if (badge) details.appendChild(badge);
             top.appendChild(details);
 
+            // Move-in availability — always rendered so every card states when the
+            // tenancy can start (date / now / "ask the agent"), plus an optional
+            // color-coded status chip. All text via textContent (XSS-safe).
+            const avail = el('div', 'property-availability');
+            const availText = el('span', 'avail-text');
+            availText.innerHTML = getIcon('calendar', 'icon-sm');   // trusted local icon
+            const availLabel = document.createElement('span');
+            availLabel.textContent = availabilityText(rec);
+            availText.appendChild(availLabel);
+            avail.appendChild(availText);
+            const availBadge = buildAvailabilityBadge(rec);
+            if (availBadge) avail.appendChild(availBadge);
+            top.appendChild(avail);
+
             const expl = el('div', 'property-explanation');
             expl.textContent = rec.explanation || '';
             top.appendChild(expl);
@@ -2565,7 +2663,7 @@
             askBtn.innerHTML = getIcon('chat', 'icon-sm');
             askBtn.appendChild(document.createTextNode(' ' + t('ask_ai_btn')));
             askBtn.addEventListener('click', () => askAboutProperty({
-                address: rec.address, price: rec.price, travel_time: rec.travel_time
+                address: rec.address, price: rec.price, travel_time: rec.travel_time, url: rec.url
             }));
             actions.appendChild(askBtn);
 
@@ -2631,7 +2729,9 @@
                 geo_location: rec.geo_location || '',
                 rank: rec.rank,
                 budget_status: rec.budget_status || '',
-                match_type: rec.match_type || ''
+                match_type: rec.match_type || '',
+                available_from: rec.available_from || '',
+                availability_status: rec.availability_status || ''
             };
         }
 
@@ -2650,7 +2750,9 @@
                 images: fav.images || fav.Images || [],
                 geo_location: fav.geo_location || '',
                 budget_status: fav.budget_status || '',
-                match_type: fav.match_type || ''
+                match_type: fav.match_type || '',
+                available_from: fav.available_from || '',
+                availability_status: fav.availability_status || ''
             };
         }
 
@@ -3332,7 +3434,8 @@
             return {
                 area: '', areas: [], max_budget: null, budget_period: 'month', bedrooms: null,
                 room_type: null,
-                commute_destination: '', max_commute_time: null, no_commute: false
+                commute_destination: '', max_commute_time: null, no_commute: false,
+                move_in_date: ''   // optional ISO "YYYY-MM-DD"; '' = unset
             };
         }
 
@@ -3370,29 +3473,53 @@
             if (mct === undefined || mct === null || mct === '') mct = raw.max_travel_time;
             c.max_commute_time = parseIntOrNull(mct);
             c.no_commute = !!raw.no_commute;
+            // Move-in date — only keep a well-formed ISO value (the backend 400s on
+            // malformed input, so we never round-trip junk).
+            if (typeof raw.move_in_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.move_in_date.trim())) {
+                c.move_in_date = raw.move_in_date.trim();
+            }
             return c;
         }
 
-        // Compact one-line echo, e.g. "Camden · ≤£1500/mo · 1 bed · → UCL ≤40min"
+        // Clean localized one-line echo, e.g.
+        //   en "Search criteria: Manchester, Fallowfield — commute to University of Manchester, up to £1500/mo, 1 bed"
+        //   zh "搜索条件：Manchester、Fallowfield，通勤至 University of Manchester，预算 £1500/月以内，1 室"
+        // No emoji / glyph shorthand — the output is inserted into the chat stream.
         function summarizeCriteria(c) {
-            const parts = [];
-            if (Array.isArray(c.areas) && c.areas.length) parts.push(c.areas.join(' / '));
-            else if (c.area) parts.push(c.area);
+            // Areas (support multi-area; single `area` kept for back-compat).
+            const areas = (Array.isArray(c.areas) && c.areas.length)
+                ? c.areas
+                : (c.area ? [c.area] : []);
+            const areaText = areas.join(t('echo_area_join'));
+
+            // Commute clause: explicit "no commute", a destination (+ optional time), or nothing.
+            let commute = '';
+            if (c.no_commute) {
+                commute = t('echo_no_commute');
+            } else if (c.commute_destination) {
+                commute = (c.max_commute_time != null)
+                    ? t('echo_commute_to_time').replace('{dest}', c.commute_destination).replace('{min}', c.max_commute_time)
+                    : t('echo_commute_to').replace('{dest}', c.commute_destination);
+            }
+
+            // Areas and commute share the language-specific commute separator
+            // (en " — ", zh "，"); a commute-only search drops straight to the clause.
+            let head = areaText;
+            if (commute) head = head ? (head + t('echo_commute_sep') + commute) : commute;
+
+            // Remaining clauses reuse the existing localized fragments.
+            const extras = [];
             if (c.max_budget != null) {
                 const per = (c.budget_period === 'week') ? t('per_wk_short') : t('per_mo_short');
-                parts.push('≤£' + c.max_budget + per);
+                extras.push(t('echo_budget').replace('{amount}', c.max_budget).replace('{per}', per));
             }
             if (c.bedrooms != null) {
-                parts.push(c.bedrooms === 0 ? t('bedrooms_studio') : (c.bedrooms + ' ' + t('bed_unit')));
+                extras.push(c.bedrooms === 0 ? t('bedrooms_studio') : (c.bedrooms + ' ' + t('bed_unit')));
             }
-            if (c.no_commute) {
-                parts.push(t('no_commute_summary'));
-            } else if (c.commute_destination) {
-                let s = '→ ' + c.commute_destination;
-                if (c.max_commute_time != null) s += ' ≤' + c.max_commute_time + t('min_short');
-                parts.push(s);
-            }
-            return parts.join(' · ');
+            if (c.move_in_date) extras.push(t('avail_from_tpl').replace('{date}', c.move_in_date));
+
+            const all = [head].concat(extras).filter(Boolean);
+            return t('echo_prefix') + all.join(t('echo_clause_join'));
         }
 
         // Build one criteria form instance (used by BOTH the persistent panel and the
@@ -3582,6 +3709,17 @@
             noField.appendChild(noInput); noField.appendChild(noText);
             grid.appendChild(noField);
 
+            // Move-in date (optional, full width). Native picker → value is ISO
+            // "YYYY-MM-DD" (or '' when unset); optional-ness shown via a title hint
+            // (a date input has no visible placeholder), mirroring the commute field.
+            const moveInField = labelField('criteria_move_in', false, true);
+            const moveInInput = el('input', 'criteria-input');
+            moveInInput.type = 'date';
+            moveInInput.setAttribute('data-i18n-title', 'criteria_move_in_hint');
+            moveInInput.title = t('criteria_move_in_hint');
+            moveInField.appendChild(moveInInput);
+            grid.appendChild(moveInField);
+
             form.appendChild(grid);
 
             const submitBtn = el('button', 'criteria-search-btn');
@@ -3612,7 +3750,7 @@
                 noField.classList.remove('field-error');
             }
             function clearAllFieldErrors() {
-                [areaInput, budgetInput, roomSelect, destInput, maxInput]
+                [areaInput, budgetInput, roomSelect, destInput, maxInput, moveInInput]
                     .forEach(function (n) { n.classList.remove('input-error'); });
                 noField.classList.remove('field-error');
             }
@@ -3623,6 +3761,8 @@
             destInput.addEventListener('input', clearCommuteError);
             maxInput.addEventListener('input', clearCommuteError);
             noInput.addEventListener('change', clearCommuteError);
+            moveInInput.addEventListener('change', function () { moveInInput.classList.remove('input-error'); });
+            moveInInput.addEventListener('input', function () { moveInInput.classList.remove('input-error'); });
 
             // Merge committed chips with any pending (un-committed) text in the input.
             function currentAreas() {
@@ -3645,7 +3785,8 @@
                         room_type: roomSelect.value === '' ? null : roomSelect.value,
                         commute_destination: destInput.value.trim(),
                         max_commute_time: parseIntOrNull(maxInput.value),
-                        no_commute: noInput.checked
+                        no_commute: noInput.checked,
+                        move_in_date: moveInInput.value || ''   // native date input → ISO or ''
                     };
                 },
                 // respectActive: skip inputs the user is currently editing (auto-fill only)
@@ -3666,6 +3807,7 @@
                     if (!skip(destInput)) destInput.value = c.commute_destination || '';
                     if (!skip(maxInput)) maxInput.value = (c.max_commute_time != null ? String(c.max_commute_time) : '');
                     if (!skip(noInput)) noInput.checked = !!c.no_commute;
+                    if (!skip(moveInInput)) moveInInput.value = c.move_in_date || '';
                     updateCommuteDisabled();
                     clearAllFieldErrors();
                 },
@@ -3685,6 +3827,9 @@
                             destInput.classList.add('input-error');
                             maxInput.classList.add('input-error');
                             noField.classList.add('field-error');
+                            break;
+                        case 'move_in': case 'move_in_date':
+                            moveInInput.classList.add('input-error');
                             break;
                     }
                 },
@@ -3875,14 +4020,19 @@
                 if (criteria.commute_destination) reqCriteria.commute_destination = criteria.commute_destination;
                 if (criteria.max_commute_time != null) reqCriteria.max_commute_time = criteria.max_commute_time;
             }
-            const body = { user_id: getUserId(), criteria: reqCriteria };
+            // Move-in date: only send a well-formed ISO value (backend 400s on junk);
+            // omit the key entirely when unset.
+            if (criteria.move_in_date && /^\d{4}-\d{2}-\d{2}$/.test(criteria.move_in_date)) {
+                reqCriteria.move_in_date = criteria.move_in_date;
+            }
+            const body = { user_id: getUserId(), criteria: reqCriteria, ui_language: currentLang };
             if (activeConversationId) body.conversation_id = activeConversationId;
 
             isProcessing = true;
             setProcessingUI(true);
             setAllCriteriaBusy(true);
 
-            addMessage('🔍 ' + summarizeCriteria(criteria), 'user');
+            addMessage(summarizeCriteria(criteria), 'user');
             showTypingIndicator();
 
             try {

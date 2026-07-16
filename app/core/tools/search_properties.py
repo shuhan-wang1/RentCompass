@@ -812,6 +812,26 @@ def _clean_explanation(desc, travel_min, location):
 _RAG_COORDINATOR = None
 
 
+class _DeterministicPropertyStore:
+    """Minimal in-process replacement used when optional RAG dependencies fail."""
+
+    def __init__(self):
+        self.rows = []
+
+    def build_index(self, rows):
+        self.rows = list(rows or [])
+
+
+class _DeterministicRAGCoordinator:
+    """Preserve the RAG interface while returning live listings in source order."""
+
+    def __init__(self):
+        self.property_store = _DeterministicPropertyStore()
+
+    def enhanced_search(self, _query, _criteria):
+        return list(self.property_store.rows), "", {}
+
+
 def set_rag_coordinator(coordinator):
     """Inject the process-wide coordinator built by the composition root."""
     global _RAG_COORDINATOR
@@ -826,8 +846,14 @@ def _get_rag_coordinator():
     the 'similar' fallback can never surface stale/other-city demo rows."""
     global _RAG_COORDINATOR
     if _RAG_COORDINATOR is None:
-        from rag.rag_coordinator import RAGCoordinator
-        _RAG_COORDINATOR = RAGCoordinator()
+        try:
+            from rag.rag_coordinator import RAGCoordinator
+            _RAG_COORDINATOR = RAGCoordinator()
+        except Exception as exc:
+            # A missing FAISS/embedding dependency must not turn a valid live
+            # listing response into a false "no results" outcome.
+            print(f"[search] RAG unavailable; using deterministic ranking: {exc}")
+            _RAG_COORDINATOR = _DeterministicRAGCoordinator()
     return _RAG_COORDINATOR
 
 

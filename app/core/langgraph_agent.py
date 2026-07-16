@@ -1005,12 +1005,15 @@ _FAIR_HOUSING_REFUSAL_ZH = (
 )
 
 
-def _make_decide_tool_node(tool_registry, classification_llm):
+def _make_decide_tool_node(tool_registry, classification_llm, search_entry="dispatch_searches"):
     """Create the decide_tool node with majority voting.
 
     Routes via Command(goto=...) based on the computed tool decision:
     direct_answer -> generate_response, clarification -> format_output,
-    multi_search -> dispatch_searches, anything else -> execute_tool.
+    multi_search -> ``search_entry``, anything else -> execute_tool.
+
+    ``search_entry`` is normally "dispatch_searches"; with HITL enabled it becomes
+    "confirm_search" so the expensive fan-out is gated behind a human approval.
     """
 
     def _compute_decision(state: AgentState) -> dict:
@@ -1163,6 +1166,9 @@ def _make_decide_tool_node(tool_registry, classification_llm):
 
     def decide_tool_node(state: AgentState) -> Command[Literal[
             "execute_tool", "generate_response", "format_output", "dispatch_searches"]]:
+        # NOTE: with HITL enabled, search_entry == "confirm_search"; the runtime Command(goto)
+        # jumps to that registered node even though it is intentionally kept OUT of the static
+        # Literal above, so the DEFAULT (no-HITL) graph topology stays byte-for-byte unchanged.
         decision = _compute_decision(state)
         tool = decision["tool"]
 
@@ -1185,7 +1191,7 @@ def _make_decide_tool_node(tool_registry, classification_llm):
         elif tool == "clarification":
             goto = "format_output"
         elif tool == "multi_search":
-            goto = "dispatch_searches"
+            goto = search_entry
         else:
             goto = "execute_tool"
         return Command(update={"tool_decision": decision}, goto=goto)
@@ -2748,6 +2754,14 @@ def _make_search_worker_node(tool_registry):
     async def search_worker_node(state) -> dict:
         s = state["search"]
         i = state["search_index"]
+        # Defensive: a malformed sub-search (e.g. from an HITL-edited plan) must degrade to
+        # an error observation, not crash the whole turn with an uncaught AttributeError.
+        if not isinstance(s, dict):
+            return {"search_results": [{
+                "index": i, "tool": "invalid", "params": {},
+                "obs": f"Error: malformed sub-search entry: {s!r}", "raw": None,
+                "run_id": state.get("run_id", "legacy"),
+            }]}
         tool_name = s.get("tool", "web_search")
         params = s.get("params", {})
         try:
@@ -2801,23 +2815,39 @@ def _make_gather_searches_node():
 # GRAPH BUILDER
 # ═══════════════════════════════════════════════════════════════════
 
-def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_llm=None):
+def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_llm=None,
+                      enable_hitl=False):
     """Build and compile the LangGraph StateGraph.
 
     Args:
         tool_registry: ToolRegistry instance with all tools registered.
+        checkpointer: optional per-thread checkpointer (thread_id keyed). Required for HITL.
+        store: optional cross-thread ``BaseStore``. When present, ``hydrate_prefs`` /
+            ``persist_prefs`` nodes are woven in to load & save the user's durable
+            structured criteria across conversations (see core.graph_advanced).
         reflect_llm: optional LLM for the bounded-loop `reflect` controller; defaults to
             the (cheap) classification LLM. Injectable for tests.
+        enable_hitl: when True (and a checkpointer is present) a ``confirm_search`` node
+            pauses the graph with interrupt() before the expensive multi-search fan-out.
 
     Returns:
         Compiled LangGraph that can be invoked with AgentState.
     """
     from core.llm_config import get_classification_llm
+    from core.graph_advanced import (
+        make_confirm_search_node, make_hydrate_prefs_node, make_persist_prefs_node,
+    )
 
     classification_llm = get_classification_llm()
     # The loop controller is a cheap decision call — reuse the classification model
     # unless a caller/test injects its own.
     reflect_llm = reflect_llm if reflect_llm is not None else classification_llm
+
+    # HITL needs a checkpointer to persist the interrupted state; silently degrade to the
+    # plain path if one was not provided rather than crashing at interrupt() time.
+    enable_hitl = bool(enable_hitl and checkpointer is not None)
+    search_entry = "confirm_search" if enable_hitl else "dispatch_searches"
+    use_store = store is not None
 
     graph = StateGraph(AgentState)
 
@@ -2835,7 +2865,7 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
 
     # Register nodes
     graph.add_node("extract_preferences", _n("extract_preferences", _make_extract_preferences_node()))
-    graph.add_node("decide_tool", _n("decide_tool", _make_decide_tool_node(tool_registry, classification_llm)))
+    graph.add_node("decide_tool", _n("decide_tool", _make_decide_tool_node(tool_registry, classification_llm, search_entry)))
     graph.add_node("execute_tool", _n("execute_tool", _make_execute_tool_node(tool_registry)))
     # Bounded agent loop controller (execute_tool -> reflect -> execute_tool | generation).
     graph.add_node("reflect", _n("reflect", _make_reflect_node(tool_registry, reflect_llm)))
@@ -2846,18 +2876,41 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
     graph.add_node("critic", _n("critic", _make_critic_node()))
     graph.add_node("format_output", _n("format_output", _make_format_output_node()))
 
+    # HITL confirm node (Command-routed to dispatch_searches / format_output — NOT
+    # generate_response, which would overwrite the cancel message). Only registered when
+    # enabled, so the default graph topology is unchanged.
+    if enable_hitl:
+        graph.add_node("confirm_search", _n("confirm_search", make_confirm_search_node()))
+    # Cross-thread Store hydrate/persist nodes — only woven in when a Store is compiled.
+    if use_store:
+        graph.add_node("hydrate_prefs", _n("hydrate_prefs", make_hydrate_prefs_node()))
+        graph.add_node("persist_prefs", _n("persist_prefs", make_persist_prefs_node()))
+
     # Edges
-    graph.add_edge(START, "extract_preferences")
+    # Entry: START -> [hydrate_prefs ->] extract_preferences. hydrate_prefs loads the user's
+    # durable criteria from the Store before this turn's per-message extraction runs.
+    if use_store:
+        graph.add_edge(START, "hydrate_prefs")
+        graph.add_edge("hydrate_prefs", "extract_preferences")
+    else:
+        graph.add_edge(START, "extract_preferences")
     graph.add_edge("extract_preferences", "decide_tool")
     # decide_tool, execute_tool and reflect all route via Command(goto=...) — no
     # conditional edges needed (execute_tool -> reflect for loopable tools; reflect ->
-    # execute_tool to loop, or -> generate_response/format_output to answer)
+    # execute_tool to loop, or -> generate_response/format_output to answer). confirm_search
+    # (when present) is likewise Command-routed to dispatch_searches / format_output.
     graph.add_conditional_edges("dispatch_searches", fan_out_searches, ["search_worker", "gather_searches"])
     graph.add_edge("search_worker", "gather_searches")
     graph.add_edge("gather_searches", "generate_response")
     graph.add_edge("generate_response", "critic")
     graph.add_edge("critic", "format_output")
-    graph.add_edge("format_output", END)
+    # Exit: format_output -> [persist_prefs ->] END. persist_prefs writes this turn's
+    # structured criteria back to the user's cross-conversation Store profile.
+    if use_store:
+        graph.add_edge("format_output", "persist_prefs")
+        graph.add_edge("persist_prefs", END)
+    else:
+        graph.add_edge("format_output", END)
 
     compile_options = {}
     if checkpointer is not None:

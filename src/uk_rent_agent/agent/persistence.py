@@ -8,6 +8,7 @@ from typing import Any
 
 _LOCK = threading.Lock()
 _CHECKPOINTERS: dict[Path, Any] = {}
+_STORE: Any = None
 
 
 def thread_id(user_id: str, session_id: str) -> str:
@@ -19,6 +20,27 @@ def graph_config(user_id: str, session_id: str, *, request_id: str | None = None
     if request_id:
         configurable["request_id"] = request_id
     return {"configurable": configurable, "metadata": {"user_id": user_id, "request_id": request_id}}
+
+
+def get_prefs_store() -> Any | None:
+    """Return a process-wide cross-thread Store for durable per-user criteria.
+
+    Unlike the checkpointer (per-thread), the Store is shared across ALL of a user's
+    conversations — that is the whole point. Uses an in-memory store here (the durable
+    facts are cheap to rebuild from the checkpointer / Chroma memory on restart); swap for
+    a Postgres/SQLite-backed BaseStore to survive process restarts. None keeps the optional
+    langgraph install importable.
+    """
+    global _STORE
+    with _LOCK:
+        if _STORE is not None:
+            return _STORE
+        try:
+            from langgraph.store.memory import InMemoryStore
+        except ImportError:
+            return None
+        _STORE = InMemoryStore()
+        return _STORE
 
 
 def get_sqlite_checkpointer(path: Path) -> Any | None:

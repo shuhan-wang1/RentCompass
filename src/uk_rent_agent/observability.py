@@ -46,6 +46,15 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(data, ensure_ascii=False, default=str)
 
 
+try:
+    # interrupt() (LangGraph HITL) signals a pause by raising GraphInterrupt; it is control
+    # flow, not an error, and must not be logged with an ERROR-level traceback.
+    from langgraph.errors import GraphInterrupt as _GraphInterrupt
+except Exception:  # pragma: no cover — keeps this module importable without langgraph
+    class _GraphInterrupt(BaseException):
+        pass
+
+
 @contextlib.contextmanager
 def node_span(logger: logging.Logger, node: str, **attributes: Any) -> Iterator[None]:
     """Local structured span; upgrades to OTel without changing node call sites."""
@@ -53,6 +62,12 @@ def node_span(logger: logging.Logger, node: str, **attributes: Any) -> Iterator[
     logger.info("node.start", extra={"node": node, **attributes})
     try:
         yield
+    except _GraphInterrupt:
+        logger.info(
+            "node.interrupt",
+            extra={"node": node, "latency_ms": (time.perf_counter() - started) * 1000, **attributes},
+        )
+        raise
     except Exception:
         logger.exception(
             "node.error",

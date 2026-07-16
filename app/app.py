@@ -797,6 +797,36 @@ def _resolve_focus_listing(property_info, last_results, csv_properties):
     return ctx, 'scalar'
 
 
+def _build_viewed_properties_context(properties, last_results, csv_properties, max_items=10):
+    if not isinstance(properties, list):
+        return ''
+    rows = []
+    seen = set()
+    for item in properties[-max_items:]:
+        if not isinstance(item, dict):
+            continue
+        resolved, _source = _resolve_focus_listing(item, last_results, csv_properties)
+        address = str(resolved.get('property_address') or '').strip()
+        url = str(resolved.get('property_url') or item.get('url') or '').strip()
+        key = ('url', url.lower()) if url else ('address', address.lower())
+        if not address or key in seen:
+            continue
+        seen.add(key)
+        rows.append((address[:500], str(resolved.get('property_price') or '').strip()[:100],
+                     str(resolved.get('property_travel_time') or '').strip()[:100], url[:2000]))
+
+    lines = []
+    for index, (address, price, travel_time, url) in enumerate(rows, 1):
+        lines.append(f'{index}. Address: {address}')
+        if price:
+            lines.append(f'   Price: {price}')
+        if travel_time:
+            lines.append(f'   Commute: {travel_time}')
+        if url:
+            lines.append(f'   Listing URL: {url}')
+    return '\n'.join(lines)
+
+
 # Sentinel for "argument not supplied" so a helper can distinguish "keep the current
 # cached value" (arg omitted) from "explicitly set it to this value" (incl. None).
 _UNSET = object()
@@ -986,6 +1016,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
               f"{extracted_context.get('property_address')}")
 
     # ── 检测对比查询 ─────────────────────────────────────────────
+    viewed_properties_context = _build_viewed_properties_context(
+        (context or {}).get('viewed_properties'), last_results_snapshot, all_properties)
+    if viewed_properties_context:
+        extracted_context['viewed_properties'] = viewed_properties_context
+
     comparison_keywords = ['compare', 'vs', 'versus', 'between', 'or', 'better', 'which one', 'deciding between']
     is_comparison_query = any(kw in user_message.lower() for kw in comparison_keywords)
 

@@ -1214,12 +1214,17 @@
         const LS_USER_ID = 'ukra_user_id';
         const LS_USER_NAME = 'ukra_user_name';
         const LS_ACTIVE_CONV = 'ukra_active_conversation';
+        const LS_VIEWED_PROPERTIES_PREFIX = 'ukra_viewed_properties:';
+        const MAX_VIEWED_PROPERTIES = 10;
 
         function getUserId() {
             return localStorage.getItem(LS_USER_ID) || '';
         }
         function getUserName() {
             return localStorage.getItem(LS_USER_NAME) || 'Guest';
+        }
+        function viewedPropertiesStorageKey() {
+            return LS_VIEWED_PROPERTIES_PREFIX + getUserId();
         }
 
         function ensureIdentity() {
@@ -1690,6 +1695,9 @@
         let favorites = new Set();
         let favoriteItems = [];          // raw favorite objects from the backend
         let currentPropertyContext = null;
+        // 房源卡的「AI 咨询」点击历史。它和当前聚焦房源分开维护：后者决定
+        // 本轮优先回答哪一套，前者让后端仍能看到用户此前咨询过的房源。
+        let viewedProperties = [];
         let currentGalleryImages = [];
         let currentImageIndex = 0;
         let isProcessing = false;
@@ -2161,7 +2169,10 @@
                 const isContinuation = lastResponseType === 'clarification';
                 const body = {
                     message: message,
-                    context: currentPropertyContext ? { property: currentPropertyContext } : {},
+                    context: currentPropertyContext ? {
+                        property: currentPropertyContext,
+                        viewed_properties: viewedProperties
+                    } : { viewed_properties: viewedProperties },
                     is_continuation: isContinuation,
                     language: currentLang,
                     ui_language: currentLang
@@ -2664,7 +2675,7 @@
         }
 
         function askAboutProperty(property) {
-            currentPropertyContext = property;
+            currentPropertyContext = recordViewedProperty(property);
             const indicator = document.getElementById('propertyFocusIndicator');
             indicator.style.display = 'flex';
             indicator.innerHTML = '';
@@ -2675,7 +2686,7 @@
             const span = document.createElement('span');
             span.textContent = t('focusing_on') + ' ';
             const strong = document.createElement('strong');
-            const addr = property.address || '';
+            const addr = currentPropertyContext.address || '';
             strong.textContent = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
             span.appendChild(strong);
             left.appendChild(span);
@@ -2697,6 +2708,60 @@
             currentPropertyContext = null;
             document.getElementById('propertyFocusIndicator').style.display = 'none';
             document.getElementById('chatInput').placeholder = t('placeholder_input');
+        }
+
+        function normalizePropertyContext(property) {
+            if (!property || typeof property !== 'object') return null;
+            const normalized = {
+                address: String(property.address || '').trim().slice(0, 500),
+                price: String(property.price || '').trim().slice(0, 100),
+                travel_time: String(property.travel_time || '').trim().slice(0, 100),
+                url: String(property.url || '').trim().slice(0, 2000)
+            };
+            return normalized.address || normalized.url ? normalized : null;
+        }
+
+        function propertyContextKey(property) {
+            const url = (property.url || '').toLowerCase();
+            if (url) return 'url:' + url;
+            return 'address:' + (property.address || '').toLowerCase();
+        }
+
+        function loadViewedProperties() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(viewedPropertiesStorageKey()) || '[]');
+                const unique = new Map();
+                if (Array.isArray(stored)) {
+                    stored.forEach(item => {
+                        const property = normalizePropertyContext(item);
+                        if (property) unique.set(propertyContextKey(property), property);
+                    });
+                }
+                viewedProperties = Array.from(unique.values()).slice(-MAX_VIEWED_PROPERTIES);
+            } catch (_) {
+                viewedProperties = [];
+            }
+        }
+
+        function persistViewedProperties() {
+            try {
+                localStorage.setItem(viewedPropertiesStorageKey(), JSON.stringify(viewedProperties));
+            } catch (_) {
+                // Storage can be unavailable (privacy mode / quota); the in-memory list
+                // still accompanies requests for the rest of this session.
+            }
+        }
+
+        function recordViewedProperty(property) {
+            const normalized = normalizePropertyContext(property);
+            if (!normalized) return property || {};
+            const key = propertyContextKey(normalized);
+            // Re-clicking a card refreshes its recency while keeping a single entry.
+            viewedProperties = viewedProperties.filter(item => propertyContextKey(item) !== key);
+            viewedProperties.push(normalized);
+            viewedProperties = viewedProperties.slice(-MAX_VIEWED_PROPERTIES);
+            persistViewedProperties();
+            return normalized;
         }
 
         function switchView(view) {
@@ -3172,6 +3237,7 @@
             conversations = [];
             favorites.clear();
             favoriteItems = [];
+            loadViewedProperties();
             currentResults = [];
             updateUserNameLabel();
             updateFavCount();
@@ -4160,6 +4226,7 @@
             // Sync to the authoritative server session BEFORE loading any per-user data,
             // so a logged-in user's conversations/favorites load under their account id.
             await refreshAuthState();
+            loadViewedProperties();
 
             await loadConversations(true);
 

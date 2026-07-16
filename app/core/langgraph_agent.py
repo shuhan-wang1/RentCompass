@@ -404,6 +404,11 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
         info.append(extracted_context['comparison_properties'])
         info.append("=== END COMPARISON DATA ===\n")
 
+    if extracted_context.get('viewed_properties'):
+        info.append('=== USER ASK-AI PROPERTY HISTORY ===')
+        info.append(extracted_context['viewed_properties'])
+        info.append('=== END ASK-AI PROPERTY HISTORY ===\n')
+
     if extracted_context.get('property_address'):
         info.append("=== Current Property Context ===")
         # C: a parallel agent resolves these extra fields from the REAL session listing

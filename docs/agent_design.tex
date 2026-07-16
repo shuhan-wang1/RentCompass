@@ -1,0 +1,1239 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------------------------------------------------------------------------
+%  RentCompass — UK Student Rental Recommendation Agent
+%  A complete architectural specification
+% ---------------------------------------------------------------------------
+
+% Compile with XeLaTeX (native UTF-8 + CJK support for the Chinese examples).
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\setCJKmainfont{Microsoft YaHei}
+\setCJKmonofont{Microsoft YaHei}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc,fit,backgrounds}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{hyperref}
+\emergencystretch=5em  % let TeX stretch as a last resort to avoid overfull lines
+\hbadness=2500          % silence minor underfull/overfull noise
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
+% ---- colours --------------------------------------------------------------
+\definecolor{ink}{HTML}{1A1A2E}
+\definecolor{accent}{HTML}{0F4C81}
+\definecolor{accent2}{HTML}{C1121F}
+\definecolor{soft}{HTML}{F2F4F8}
+\definecolor{codebg}{HTML}{F7F7F9}
+\definecolor{codekw}{HTML}{0F4C81}
+\definecolor{codecm}{HTML}{6A737D}
+\definecolor{nodefill}{HTML}{E7EEF6}
+\definecolor{nodeline}{HTML}{0F4C81}
+\definecolor{termfill}{HTML}{FBE7E9}
+\definecolor{termline}{HTML}{C1121F}
+
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=accent,citecolor=accent}
+
+% ---- headers --------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textsc{RentCompass}}
+\fancyhead[R]{\small Agent Architecture}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{ink}}{\thesubsubsection}{0.6em}{}
+
+% ---- code style -----------------------------------------------------------
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecm}\itshape,
+  stringstyle=\color{accent2},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{soft},
+  numbers=none,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=8pt,
+  framexleftmargin=6pt,
+}
+\lstset{style=py}
+
+% ---- callout box ----------------------------------------------------------
+\newtcolorbox{keybox}[1][]{
+  colback=soft,colframe=accent,boxrule=0.6pt,arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,
+  fonttitle=\bfseries\color{white},coltitle=white,
+  colbacktitle=accent,title=#1,breakable}
+
+\newtcolorbox{intuition}{
+  colback=white,colframe=accent2!70,boxrule=0.6pt,arc=2pt,
+  left=8pt,right=8pt,top=6pt,bottom=6pt,breakable,
+  overlay unbroken and first={\node[anchor=north west,font=\bfseries\color{accent2},
+    xshift=8pt,yshift=-4pt] at (frame.north west) {};}}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\gnode}[1]{\textsc{#1}}  % graph node names
+
+\newtheorem{definition}{Definition}
+
+% ===========================================================================
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\Huge\bfseries\color{accent} RentCompass\par}
+\vspace{0.6cm}
+{\LARGE A UK Student Rental Recommendation Agent\par}
+\vspace{0.4cm}
+{\large\itshape A Complete Architectural Specification\par}
+\vspace{2cm}
+\begin{tcolorbox}[colback=soft,colframe=accent,width=0.85\textwidth,arc=3pt]
+\centering\itshape
+This document explains \emph{every} design detail of the agent: how it thinks,
+how it remembers, how a message is routed to the right capability, and how its
+answers are kept truthful. It assumes a reader who is comfortable with
+mathematics and probability but new to language-model agents and to software
+engineering. Each mechanism is first stated intuitively, then specified exactly.
+\end{tcolorbox}
+\vspace{2cm}
+
+{\large A LangGraph state-machine agent with layered memory,\\ deterministic routing, and a grounding critic\par}
+\vfill
+{\small Generated from a direct reading of the production source tree\\
+\code{app/core/langgraph\_agent.py} and supporting packages\par}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ===========================================================================
+\section{What this system is, in one page}
+\label{sec:overview}
+
+RentCompass is a conversational assistant that helps international students find
+rental housing in the United Kingdom. A user types a message --- in English or
+Chinese --- such as \emph{``find me a studio near UCL under \pounds1500''} or
+\emph{``这个房源附近安全吗''} (``is the area around this
+listing safe?''). The system must decide what the user \emph{wants}, gather
+\emph{real} data (live rental listings, crime statistics, transit fares, maps),
+reason over it, and reply in the user's own language --- while never inventing a
+listing that does not exist and never leaking its own instructions.
+
+\begin{intuition}
+\textbf{The core idea.} A large language model (LLM) is very good at understanding
+language and writing fluent prose, but it is unreliable when asked to \emph{decide
+what to do} and it will happily \emph{fabricate} facts. So we do \emph{not} let the
+LLM run free. Instead we wrap it in a \textbf{state machine}: a fixed graph of small
+steps (``nodes''), where deterministic code (ordinary \code{if}-statements and
+regular expressions) makes the high-stakes control decisions, and the LLM is called
+only for the two things it is genuinely good at --- \emph{classifying intent} and
+\emph{writing the final answer from data we hand it}. Every LLM output is then
+checked by more deterministic code before the user ever sees it.
+\end{intuition}
+
+This architecture is built on \textbf{LangGraph}, a library for expressing an agent
+as a directed graph over a shared \emph{state} object. The rest of this document is
+organised as follows:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item Section~\ref{sec:mentalmodel} builds the mental model: state machines,
+        LLMs, and tools.
+  \item Section~\ref{sec:state} defines the \emph{state} --- the single data
+        structure that flows through the graph --- and its update rules (``reducers'').
+  \item Section~\ref{sec:graph} walks the \emph{graph}: every node, every edge,
+        and the exact flow of a turn.
+  \item Section~\ref{sec:routing} is the heart of the system: how a message is
+        \emph{routed} to a capability, mixing deterministic guards with an LLM
+        classifier.
+  \item Section~\ref{sec:loop} explains the \emph{bounded agent loop} (the
+        ``reflect'' controller) and the map--reduce fan-out for web research.
+  \item Section~\ref{sec:tools} catalogues the \emph{tools} --- the agent's hands ---
+        and how they are registered, versioned, and made idempotent.
+  \item Section~\ref{sec:memory} is the \emph{memory} system: short-term vs.
+        long-term, per-conversation vs. per-user, and the Generative-Agents scoring
+        that decides what to recall.
+  \item Section~\ref{sec:web} covers the \emph{web/session layer}: how an HTTP
+        request becomes a turn, and how many users and many conversations stay
+        isolated.
+  \item Section~\ref{sec:ranking} gives the \emph{multi-objective ranker} that
+        scores listings, and Section~\ref{sec:critic} the \emph{grounding critic}
+        that catches hallucinations.
+  \item Section~\ref{sec:safety} collects the \emph{safety and security} guards.
+\end{itemize}
+
+% ===========================================================================
+\section{Mental model: state machines, LLMs, and tools}
+\label{sec:mentalmodel}
+
+\subsection{A language model is a function}
+For our purposes an LLM is a function
+\[
+  f_\theta : \text{(text prompt)} \longmapsto \text{(text completion)},
+\]
+parameterised by fixed weights $\theta$, that returns a plausible continuation of
+its input. It has two properties we must engineer around:
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Stochasticity.} Sampling is controlled by a \emph{temperature}
+        $T\ge 0$. At $T=0$ the output is (nearly) deterministic --- the most likely
+        token each step; at $T>0$ it is diverse. We choose $T$ per task: $T=0$ for
+        classification and grounded generation, $T>0$ only where diversity helps.
+  \item \textbf{No ground truth.} $f_\theta$ has no access to the current rental
+        market, today's crime data, or live transit fares. Anything it ``knows'' is
+        frozen in $\theta$ and may be wrong or invented. Therefore \emph{facts must
+        come from tools}, and the LLM's job is to \emph{synthesise}, not to recall.
+\end{enumerate}
+
+The concrete models are served through DeepSeek's OpenAI-compatible API and chosen
+per role by a small \emph{router} (Section~\ref{sec:llmrouter}).
+
+\subsection{A tool is also a function --- but a truthful one}
+A \emph{tool} is a piece of ordinary code the agent may call, e.g. ``look up the
+crime score for postcode SW8'' or ``scrape live listings near UCL''. Formally a tool
+is a function
+\[
+  g : \text{(typed parameters)} \longmapsto \text{ToolResult},
+\]
+where \code{ToolResult} is a uniform envelope carrying \emph{success/data/error}
+(Section~\ref{sec:tools}). Tools talk to real external services --- \code{police.uk}
+for crime, OpenStreetMap for amenities, Transport for London (TfL) for fares,
+OnTheMarket for listings --- so their outputs are \emph{ground truth} that the LLM
+must not contradict.
+
+\subsection{A state machine ties them together}
+The agent is a \textbf{directed graph} $G=(V,E)$. Each vertex $v\in V$ is a
+\emph{node}: a function that reads the current state $s$ and returns an update
+$\Delta s$. Edges determine which node runs next. Some edges are \emph{static}
+(always the same successor); others are dynamic, chosen at runtime by the node
+itself via a \code{Command(goto=\dots)} return value. The state $s$ is a single
+dictionary that every node reads and writes; LangGraph merges each $\Delta s$ into
+$s$ using per-field \emph{reducers} (Section~\ref{sec:state}). A ``turn'' is one
+traversal of the graph from gnode{start} to gnode{end} for one user message.
+
+\begin{keybox}[Why not just let the LLM decide everything?]
+An LLM asked ``which of these 12 tools should I call, with which arguments?'' is
+right most of the time and catastrophically wrong the rest --- it invents tool
+names, loops forever, or re-runs a fresh property search when the user only asked
+``is the second one safe?''. By making the \emph{graph topology} and the
+\emph{high-stakes routing decisions} deterministic, we bound the agent's behaviour:
+it can only ever do things the graph permits, at most a fixed number of times, and
+every fact it states is checked against tool output.
+\end{keybox}
+
+% ===========================================================================
+\section{The state: the object that flows through the graph}
+\label{sec:state}
+
+Everything the agent knows \emph{during a single turn} lives in one typed
+dictionary, \code{AgentState} (defined in
+\code{src/uk\_rent\_agent/agent/state.py}). A node never calls another node
+directly; it only reads \code{AgentState} and returns a partial update. This makes
+the data flow explicit and, crucially, \emph{checkpointable}: LangGraph can freeze
+the whole state to disk between turns (Section~\ref{sec:web}).
+
+\subsection{Reducers: how updates are merged}
+When a node returns $\Delta s$, each key $k$ in $\Delta s$ is merged into the state
+by a \emph{reducer} $\rho_k$:
+\[
+  s'[k] = \rho_k\bigl(s[k],\ \Delta s[k]\bigr).
+\]
+By default $\rho_k$ is \textbf{last-write-wins} ($\rho_k(a,b)=b$). A field may
+instead declare a custom reducer via a Python \code{Annotated} type. Only two fields
+here use a non-trivial reducer:
+
+\begin{itemize}[leftmargin=1.4em]
+  \item \code{search\_results} uses \code{bounded\_add}, an \emph{append-with-cap}:
+  \[
+    \texttt{bounded\_add}(L,R) = (L \mathbin{\|} R)[-\text{limit}:],
+    \qquad \text{limit}=100,
+  \]
+  i.e. concatenate the old and new lists but keep only the last 100 elements, so a
+  checkpoint cannot grow without bound. This is the reducer used by the parallel
+  web-search workers, each of which appends its own result.
+  \item Every other field is last-write-wins.
+\end{itemize}
+
+\begin{intuition}
+\textbf{Why the loop counters are \emph{not} append-reduced.} The bounded agent loop
+(Section~\ref{sec:loop}) keeps a counter \code{loop\_turn} and a list
+\code{observations}. These are deliberately plain last-write-wins channels. Because
+each new turn starts by writing \code{loop\_turn=0} and \code{observations=[]}, a
+last-write-wins field \emph{resets} cleanly at the start of every turn --- even when
+the checkpointer restored the previous turn's value. An append-style reducer would
+instead \emph{merge across turns} (appending \code{[]} is a no-op), so the loop
+would never reset. The single node that writes them (gnode{reflect}) is sequential
+and returns the whole updated list each time, so last-write-wins is safe.
+\end{intuition}
+
+\subsection{Field-by-field specification}
+Table~\ref{tab:state} lists every channel of \code{AgentState}, its reducer, and its
+lifetime. ``Per-turn'' fields are reset each message by \code{create\_initial\_state};
+``carried'' fields are seeded from the conversation's persisted state.
+
+\begin{longtable}{@{}p{0.24\textwidth} p{0.20\textwidth} p{0.48\textwidth}@{}}
+\caption{The \code{AgentState} channels.}\label{tab:state}\\
+\toprule
+\textbf{Field} & \textbf{Reducer / lifetime} & \textbf{Meaning}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Field} & \textbf{Reducer / lifetime} & \textbf{Meaning}\\
+\midrule
+\endhead
+\code{user\_query} & last-write / per-turn & The composed prompt: long-term memory block $+$ recent history $+$ current message (Section~\ref{sec:web}).\\
+\code{user\_id} & last-write / carried & Stable identifier of the human. Namespaces long-term memory and durable preferences.\\
+\code{session\_id} & last-write / carried & The \emph{conversation} id (one chat thread). Used as the checkpointer thread key.\\
+\code{extracted\_context} & last-write / per-turn & Side-channel facts for this message: the pristine \code{current\_message}, the resolved \code{reply\_language}, any ``Ask-AI'' focused-listing fields, previous results, comparison data.\\
+\code{user\_preferences} & last-write / carried & Coarse preference buckets: \code{hard\_preferences}, \code{soft\_preferences}, \code{excluded\_areas}, \code{required\_amenities}, \code{safety\_concerns}.\\
+\code{accumulated\_search\_criteria} & last-write / carried & The structured search profile built up over the conversation: \code{area}/\code{areas}, \code{commute\_destination}, \code{max\_budget}, \code{max\_travel\_time}, \code{room\_type}, \code{bedrooms}, \code{no\_commute}, \code{move\_in\_date}, \code{criteria\_gate\_shown}, \dots\\
+\code{tool\_decision} & last-write / per-turn & The chosen route: \code{\{tool, params, reason, \dots\}}.\\
+\code{tool\_observation} & last-write / per-turn & The latest tool's output rendered as text (fed to the generator).\\
+\code{tool\_raw\_data} & last-write / per-turn & The latest tool's structured payload (fed to the formatter and critic).\\
+\code{search\_results} & \code{bounded\_add} (cap 100) / per-turn & Accumulator for the parallel web-search workers.\\
+\code{final\_response} & last-write / per-turn & The user-facing text.\\
+\code{response\_type} & last-write / per-turn & \code{answer} $\mid$ \code{question} $\mid$ \code{clarification}.\\
+\code{tool\_data} & last-write / per-turn & Structured payload for the frontend (listing cards, safety panel, POI list, \dots).\\
+\code{run\_id} & last-write / per-turn & Fresh UUID per turn; seeds tool idempotency keys and tags the fan-out workers.\\
+\code{request\_id} & last-write / per-turn & Correlates logs/telemetry for one HTTP request.\\
+\code{context\_tainted} & last-write / per-turn & \textbf{Taint bit}: true once any \emph{untrusted external text} (scraped listings, web results) has entered the state. Gates write-tools and triggers sanitisation (Section~\ref{sec:safety}).\\
+\code{critic\_attempts} & last-write / per-turn & How many corrective regenerations the grounding critic has spent.\\
+\code{verdict} & last-write / per-turn & The critic's structured judgement.\\
+\code{memory\_context} & last-write / per-turn & Reserved slot for a rendered memory block.\\
+\code{plan} & last-write / per-turn & Reserved slot for a planned search list.\\
+\code{loop\_turn} & last-write / per-turn (resets to 0) & Count of loopable-tool executions completed this turn.\\
+\code{observations} & last-write / per-turn (resets to []) & One record per loop step: \code{\{turn, tool, observation, params\_digest\}}.\\
+\bottomrule
+\end{longtable}
+
+\begin{keybox}[The three identity keys --- keep them straight]
+\textbf{\code{user\_id}} identifies a \emph{person} and scopes durable memory and
+preferences. \textbf{\code{session\_id}} identifies a \emph{single conversation
+thread} (a chat) and is the LangGraph checkpointer key. A third key,
+\textbf{\code{conversation\_id}}, is what the web layer calls the chat; here it is
+passed \emph{into} the graph as \code{session\_id}. The checkpointer thread is thus
+\code{f"\{user\_id\}:\{conversation\_id\}"} --- so two users, or two chats of the same
+user, can never read each other's state. This precise scoping is what fixed an early
+``memory bleed'' defect.
+\end{keybox}
+
+% ===========================================================================
+\section{The graph: nodes, edges, and the shape of a turn}
+\label{sec:graph}
+
+The agent is the compiled LangGraph in
+\code{app/core/langgraph\_agent.py}, function \code{build\_agent\_graph}. It has
+nine core nodes (plus three optional nodes woven in only when advanced features are
+enabled). Figure~\ref{fig:graph} shows the topology; the subsections then describe
+each node.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=8mm and 14mm,
+  every node/.style={font=\footnotesize},
+  proc/.style={rectangle, rounded corners=2pt, draw=nodeline, fill=nodefill,
+    text width=26mm, align=center, minimum height=8mm, thick},
+  term/.style={rectangle, rounded corners=8pt, draw=termline, fill=termfill,
+    align=center, minimum height=7mm, thick},
+  dec/.style={diamond, aspect=2, draw=nodeline, fill=nodefill, align=center,
+    text width=17mm, inner sep=1pt, thick},
+  arr/.style={-{Stealth[length=2.2mm]}, thick, draw=ink!70},
+  lbl/.style={font=\scriptsize\itshape, fill=white, inner sep=1pt},
+]
+\node[term] (start) {START};
+\node[proc, below=of start] (extract) {extract\_\-preferences};
+\node[proc, below=of extract] (decide) {decide\_tool\\{\scriptsize(router)}};
+\node[proc, below=8mm and 0mm of decide] (exec) {execute\_tool};
+\node[dec, left=20mm of exec] (reflect) {reflect};
+\node[proc, right=16mm of decide] (dispatch) {dispatch\_\-searches};
+\node[proc, below=of dispatch] (worker) {search\_worker\\{\scriptsize($\times N$, fan-out)}};
+\node[proc, below=of worker] (gather) {gather\_\-searches};
+\node[proc, below=20mm of exec] (gen) {generate\_\-response};
+\node[proc, below=of gen] (critic) {critic};
+\node[proc, below=of critic] (format) {format\_output};
+\node[term, below=of format] (end) {END};
+
+\draw[arr] (start) -- (extract);
+\draw[arr] (extract) -- (decide);
+\draw[arr] (decide) -- node[lbl,right]{tool} (exec);
+\draw[arr] (decide) -- node[lbl,above]{multi\_search} (dispatch);
+\draw[arr] (decide.west) to[out=180,in=90] node[lbl,left]{direct} (gen.north west);
+\draw[arr] (exec.west) -- node[lbl,above]{loopable} (reflect.east);
+\draw[arr] (reflect.south) to[out=270,in=180] node[lbl,left]{continue} (exec.south west);
+\draw[arr] (exec) -- node[lbl,right]{answer / card} (gen);
+\draw[arr] (reflect.south west) to[out=250,in=170] node[lbl,left]{answer} (gen.west);
+\draw[arr] (dispatch) -- (worker);
+\draw[arr] (worker) -- (gather);
+\draw[arr] (gather.south) to[out=270,in=0] (gen.east);
+\draw[arr] (gen) -- (critic);
+\draw[arr] (critic) -- (format);
+\draw[arr] (exec.east) to[out=0,in=0] node[lbl,right]{structured} (format.east);
+\draw[arr] (format) -- (end);
+\draw[arr] (decide.east) to[out=0,in=90] node[lbl,right]{clarify} (format.north);
+\end{tikzpicture}
+\caption{The compiled agent graph. Solid nodes are deterministic Python; only
+\gnode{decide\_tool} (intent classification), \gnode{reflect} (loop control), and
+\gnode{generate\_response} (answer writing) call the LLM. Branch labels name the
+routing condition. The dashed advanced nodes \gnode{hydrate\_prefs},
+\gnode{persist\_prefs}, and \gnode{confirm\_search} are omitted for clarity.}
+\label{fig:graph}
+\end{figure}
+
+\subsection{The nine core nodes}
+
+\begin{description}[leftmargin=0pt,itemsep=3pt]
+  \item[\gnode{extract\_preferences}.] Cheap, deterministic. Scans the raw message
+  for coarse preference cues (safety words, amenity keywords, exclusions, lifestyle
+  signals) and folds them into \code{user\_preferences}. It also applies any
+  \emph{explicit} in-message change to the accumulated search criteria --- a new
+  budget (``my budget is now \pounds1000''), a city switch (``actually
+  Manchester''), a room type, a commute-time limit, a ``no commute'' declaration, or
+  a move-in date --- via \code{\_apply\_explicit\_criteria\_updates}, reusing the
+  search tool's regular-expression extractors so a standalone correction survives
+  even in a turn that runs no search.
+
+  \item[\gnode{decide\_tool}.] The router (Section~\ref{sec:routing}). It computes a
+  \emph{decision} $\{$\code{tool}, \code{params}, \code{reason}, \dots$\}$ through a
+  deterministic ladder ending in an LLM classifier, then jumps to the appropriate
+  successor with \code{Command(goto=\dots)}: \code{direct\_answer} $\to$
+  \gnode{generate\_response}, \code{clarification} $\to$ \gnode{format\_output},
+  \code{multi\_search} $\to$ \gnode{dispatch\_searches}, any real tool $\to$
+  \gnode{execute\_tool}.
+
+  \item[\gnode{execute\_tool}.] Runs the chosen tool. It injects the accumulated
+  criteria into the tool's parameters (area, budget, commute destination, room type,
+  bedrooms, move-in date, \dots), attaches an idempotency key
+  (Section~\ref{sec:tools}), \code{await}s \code{tool\_registry.execute\_tool}, and
+  records the result as \code{tool\_observation} (text) and \code{tool\_raw\_data}
+  (structured). It then routes: a \emph{loopable} tool that did not error $\to$
+  \gnode{reflect}; a structured card (safety, POIs, commute cost, listings) $\to$
+  \gnode{format\_output}; otherwise $\to$ \gnode{generate\_response}. It also sets the
+  \code{context\_tainted} bit whenever the tool returned untrusted external text.
+
+  \item[\gnode{reflect}.] The bounded-loop controller (Section~\ref{sec:loop}). After
+  a loopable tool it decides ``answer now'' vs. ``one more different tool'', subject
+  to a hard turn cap and a no-progress guard, all failing \emph{closed} to answering.
+
+  \item[\gnode{dispatch\_searches} / \gnode{search\_worker} / \gnode{gather\_searches}.]
+  The map--reduce subgraph for multi-query web research: fan out one worker per
+  planned sub-search (LangGraph \code{Send}), run them concurrently, then fold their
+  results into one combined observation.
+
+  \item[\gnode{generate\_response}.] Calls the generation LLM to write the answer from
+  the assembled prompt (security directive $+$ language directive $+$ synthesis
+  template $+$ observation). This is the only node that produces free prose.
+
+  \item[\gnode{critic}.] The grounding critic (Section~\ref{sec:critic}). It checks
+  the drafted answer's monetary figures against the evidence and, if unsupported,
+  triggers exactly one corrective regeneration; a persistently-failing answer is
+  delivered with an appended caveat rather than being discarded.
+
+  \item[\gnode{format\_output}.] The single choke point before \gnode{end}. It turns
+  structured tool data into the frontend payload (\code{tool\_data}: listing cards,
+  safety panel, POI list, \dots) and applies the final output sanitiser
+  (Section~\ref{sec:safety}) to \emph{every} user-facing string.
+\end{description}
+
+\subsection{Static vs. dynamic edges}
+Most edges are static (\code{graph.add\_edge}): \gnode{extract\_preferences} $\to$
+\gnode{decide\_tool}; \gnode{generate\_response} $\to$ \gnode{critic} $\to$
+\gnode{format\_output} $\to$ \gnode{end}; and the map--reduce chain. The three
+control-heavy nodes --- \gnode{decide\_tool}, \gnode{execute\_tool}, \gnode{reflect}
+--- instead choose their own successor at runtime by returning
+\code{Command(goto=\dots)}. This is what lets one message flow through a variable
+number of tool calls while the graph's \emph{topology} stays fixed and analysable.
+
+\subsection{Three optional nodes}
+When advanced runtime flags are on, the builder weaves in
+\gnode{hydrate\_prefs}/\gnode{persist\_prefs} (durable cross-conversation preferences,
+Section~\ref{sec:web}) and \gnode{confirm\_search} (a human-in-the-loop pause before
+the expensive fan-out). By default all three are disabled, so the production topology
+is exactly Figure~\ref{fig:graph}.
+
+% ===========================================================================
+\section{Routing: how a message reaches the right capability}
+\label{sec:routing}
+
+Routing is the intellectual centre of the system. The function
+\code{\_compute\_decision} inside \gnode{decide\_tool} is a \emph{priority ladder}:
+a sequence of deterministic checks, each of which may short-circuit with a final
+decision, ending --- only if nothing fired --- in a single LLM classification call.
+The ordering is deliberate and load-bearing; each rung exists to stop a specific
+failure mode observed in testing.
+
+\begin{keybox}[Why deterministic-first?]
+An LLM classifier is excellent at open-ended intent but will occasionally re-run a
+fresh property search when the user asked ``is the second one safe?'', or normalise a
+discriminatory request into a bland clarification, or answer a ``don't search yet,
+just research prices'' message with a search form. Each such case is caught by a
+cheap, exact rule placed \emph{above} the classifier, so the classifier only ever
+sees the genuinely ambiguous remainder.
+\end{keybox}
+
+\subsection{The priority ladder}
+The rungs, in order (with the guard that fires each):
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=3pt]
+  \item \textbf{Fair-housing screen (Equality Act 2010).} \emph{Must be first.} If the
+  \emph{raw current message} asks to filter or avoid housing --- or to gauge an area's
+  ``safety'' --- by a protected characteristic (race, ethnicity, nationality,
+  immigration status, religion, disability, family status, sexual orientation), the
+  turn is refused deterministically with a bilingual message. Detection
+  (\code{\_fair\_housing\_violation}) requires an \emph{avoidance operator} near a
+  \emph{protected-group term}, or a racial-purity selector --- so positive
+  preferences (``near a Chinese community'', ``mosque nearby'') and crime-only
+  ``is E1 safe?'' pass through untouched. Placing this above search routing means a
+  search-shaped discriminatory request can never be laundered into a clarification.
+
+  \item \textbf{Memory-recall questions.} ``What do you remember about me?'' (and its
+  Chinese equivalents) $\to$ \code{direct\_answer}, answered from the injected
+  long-term-memory block already at the top of \code{user\_query}.
+
+  \item \textbf{Focused-listing context (``Ask AI'').} If the user clicked ``Ask AI''
+  on a specific card (\code{extracted\_context['property\_address']} is set) and the
+  message is \emph{not} a location/amenity/safety/commute question, answer from that
+  listing's own record (\code{reasoning\_property}). Location-type questions escape to
+  their proper tool.
+
+  \item \textbf{Follow-ups over the existing results.} With previous results in
+  context: a comparative/superlative question (``which of these is cheapest?'') $\to$
+  \code{direct\_answer} over a comparison table; a detail question (``tell me more
+  about the second one'') $\to$ \code{reasoning\_property} over that one record; a
+  suitability/opinion question (``would you recommend this for a couple?'') $\to$ the
+  \emph{listing-advice} route. These are answered from the conversation's own real
+  results, never a fresh search --- fixing a class of bugs where such follow-ups
+  bounced into ``found 15 properties''.
+
+  \item \textbf{market-info negative guard.} An explicit ``don't search (yet), just
+  research prices'' instruction, or a research verb paired with a price-level noun and
+  no listings request, is market \emph{research} $\to$ the web-search synthesis path,
+  never the search tool or its gate.
+
+  \item \textbf{Greetings} $\to$ \code{direct\_answer}.
+
+  \item \textbf{Explicit ``I don't commute''} $\to$ search with the commute filter
+  removed (never the endless ``where do you commute to?'' loop).
+
+  \item \textbf{Live-transport questions} (tube/train fares, journeys, travelcards,
+  line status) $\to$ the dedicated TfL tool \code{get\_transport\_info}.
+
+  \item \textbf{Soft-gate follow-up.} If the recommended-criteria gate has already
+  been shown this conversation and the user now supplies a budget/room-type/commute
+  answer or says ``continue'', proceed straight to the (confirmed) search.
+
+  \item \textbf{The LLM classifier} (\code{\_majority\_vote}). Only reached if nothing
+  above fired.
+\end{enumerate}
+
+\subsection{The LLM classifier}
+The classifier is a \emph{single} $T=0$ call over a \textbf{static intent catalog}
+(\code{\_INTENT\_CATALOG}) of thirteen routes, each with a one-line description and
+three few-shot cues (English and Chinese). Crucially it classifies the \emph{stripped
+current message} --- the injected memory and history are passed only as secondary
+context ``to resolve pronouns, never as the thing to classify'' --- because feeding
+the whole memory-prefixed query used to mis-route price-research questions into a
+property search. The model must return strict JSON \code{\{"intent": "\dots"\}}, parsed
+by a robust ladder:
+\[
+  \text{strict JSON} \;\to\; \text{embedded JSON in prose} \;\to\;
+  \text{longest-first substring match} \;\to\; \text{heuristic fallback}.
+\]
+Two post-processing rules follow: a deterministic tie-break forces
+\code{search\_properties} when unmistakable action verbs are present (``find me'',
+``帮我找房''); and if parsing fails entirely, the
+system prefers answering \emph{over the shown listings} rather than defaulting to a
+fresh search (the root cause of the ``found 15 properties'' regression).
+
+\begin{keybox}[The static catalog and MCP]
+The intent catalog is hard-coded rather than derived from the tools' own
+descriptions. This is deliberate: when tools are served over MCP
+(Section~\ref{sec:tools}), an external client sees only names and schemas, not the
+project's rich routing guidance. A static catalog makes classification quality
+\emph{identical} whether tools come from the in-process registry or the MCP provider.
+\end{keybox}
+
+\subsection{Reference resolution}
+Several routes need to know \emph{which} listing the user means. \code{\_resolve\_last\_result}
+and \code{\_resolve\_target\_address} implement a uniform resolver: an explicit UK
+postcode in the message wins; then an ordinal (``the second one'', and the Chinese
+第二个/第2套 --- resolved by a dedicated regex because
+CJK has no word boundaries); then ``\#2 / number 2 / the last one''; then a deictic
+(``this one'', 这个房源) mapping to the first result;
+then a fuzzy match on listing name or street; finally the frontend-provided focused
+address. All resolvers read the \emph{pristine} current message, never the
+memory/history-prefixed query, so a postcode from three turns ago cannot hijack this
+turn.
+
+% ===========================================================================
+\section{The bounded agent loop and web-research fan-out}
+\label{sec:loop}
+
+Most turns call exactly one tool. But some questions genuinely need several ---
+``is the area safe \emph{and} what's the commute cost \emph{and} what's nearby?''.
+For these the agent runs a \textbf{bounded loop}: after a \emph{loopable} tool
+returns, a controller node decides whether the evidence already answers the question
+or whether one more, \emph{different} tool call is warranted.
+
+\subsection{Loopable tools and the reflect controller}
+Only a fixed set of read-only tools may participate:
+\[
+  \mathcal{L} = \{\text{web\_search, check\_safety, search\_nearby\_pois,
+  calculate\_commute, calculate\_commute\_cost,}
+\]
+\[
+  \text{get\_transport\_info, get\_weather, get\_property\_details, recall\_memory}\}.
+\]
+Everything else --- a property search, the fan-out, a direct answer, or \emph{any}
+tool that errored --- keeps single-pass behaviour with zero added latency. After a
+loopable tool, \gnode{execute\_tool} routes to \gnode{reflect}, which:
+\begin{enumerate}[leftmargin=1.6em,itemsep=2pt]
+  \item appends the just-run tool's output to the per-turn \code{observations} list,
+        tagged with a \emph{parameter digest} (a stable hash of the tool name plus its
+        non-volatile parameters);
+  \item asks a cheap $T=0$ LLM whether to \code{answer} or \code{continue} with a
+        named next tool and a refined sub-question;
+  \item if \code{continue}, builds that tool's decision and loops back to
+        \gnode{execute\_tool}; otherwise routes to answer.
+\end{enumerate}
+
+\subsection{Three hard stops --- all failing closed}
+The loop cannot run away. It terminates (routes to answering) whenever any of these
+fires:
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Turn cap.} At most \code{MAX\_AGENT\_TURNS} $=10$ loopable executions
+        per user message. The LangGraph \code{recursion\_limit} is set to $80$ ---
+        each loop iteration is two super-steps, so $10$ iterations plus the fixed
+        start/end nodes stays well under budget.
+  \item \textbf{No-progress guard.} If the proposed next call has the \emph{same}
+        (tool, parameter-digest) as a call already made this turn, it is rejected ---
+        the loop can never repeat itself.
+  \item \textbf{Any controller failure} --- an unparseable reply, an exception, a
+        non-loopable proposed tool, or a proposed call that degraded to a clarification
+        --- ends the turn by answering.
+\end{itemize}
+When more than one tool ran, the final answer is synthesised over \emph{all}
+observations (each with a per-tool header), not just the last, and the grounding
+critic validates against every one of them.
+
+\begin{intuition}
+\textbf{Why ``fail closed''?} Every ambiguous situation resolves toward
+\emph{stopping and answering with what we have}, never toward more tool calls. This
+guarantees termination and bounds cost, at the acceptable price of occasionally
+answering with slightly less evidence than a perfect agent might have gathered.
+\end{intuition}
+
+\subsection{The map--reduce fan-out for web research}
+A market-research or general-knowledge question is planned into up to ten
+sub-searches by a planning LLM (\code{\_plan\_web\_searches}), then executed as a
+LangGraph \textbf{map--reduce}:
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Map} (\code{fan\_out\_searches}): emit one \code{Send} per sub-search,
+        spawning \gnode{search\_worker} instances that run \emph{concurrently}. Each
+        worker appends its result to the \code{search\_results} channel via the
+        \code{bounded\_add} reducer (Section~\ref{sec:state}), tagged with the turn's
+        \code{run\_id} so results from different turns never mix.
+  \item \textbf{Reduce} (\gnode{gather\_searches}): sort the workers' results by index,
+        fold them into one combined observation, and mark the context tainted (web
+        text is untrusted). The combined evidence then flows to
+        \gnode{generate\_response}.
+\end{itemize}
+
+% ===========================================================================
+\section{Tools: the agent's hands}
+\label{sec:tools}
+
+A tool is the only way the agent touches the real world. All tools share one
+contract, are registered in one place, and are made safe to retry through an
+idempotency ledger.
+
+\subsection{The uniform contract}
+Every tool is a \code{Tool} object (\code{app/core/tool\_system.py}) carrying a name,
+a natural-language description (shown to the LLM), a JSON-schema parameter
+specification, an implementation \code{func} (sync or async), and metadata:
+\code{version}, \code{side\_effect} $\in\{$\code{none},\code{write}$\}$, and
+\code{retry\_safe} (defaulting to ``true iff \code{side\_effect==none}''). Every call
+returns the same envelope:
+
+\begin{lstlisting}
+@dataclass
+class ToolResult:
+    success: bool          # logical success
+    data: Any = None       # structured payload
+    error: str | None = None
+    execution_time_ms: float | None = None
+    tool_name: str | None = None
+    version: str = "1"
+    idempotency_key: str | None = None
+\end{lstlisting}
+
+Note the distinction between \emph{logical} and \emph{transport} success: a tool that
+returns \code{\{'success': False, 'error': \dots\}} (the convention for a
+domain-level outcome such as ``I need more information'') is surfaced as
+\code{ToolResult(success=False)} even though no exception was raised. This lets
+routing treat ``need clarification'' as data, not as a crash.
+
+\begin{keybox}[The \code{extra='ignore'} pitfall]
+A tool's parameters are validated by a Pydantic model generated from its schema. Any
+argument the agent passes that is \emph{not declared} in the schema is
+\emph{silently dropped} before the implementation runs (Pydantic's default
+\code{extra='ignore'}). This once broke the mid-conversation budget override: the
+agent injected \code{current\_message}, but because it was undeclared it vanished. The
+rule, stated in-code, is now: \emph{every parameter the router injects must be
+declared in the tool's schema}.
+\end{keybox}
+
+\subsection{The registry}
+\code{create\_tool\_registry()} builds the single canonical \code{ToolRegistry} with
+twelve tools. The registry owns per-tool statistics, a shared idempotency store, and
+the dispatch method \code{execute\_tool(name, **kwargs)}. Async implementations are
+awaited; sync ones are pushed to a thread pool so they never block the event loop.
+Table~\ref{tab:tools} is the full catalogue with data sources.
+
+\begin{longtable}{@{}p{0.20\textwidth} p{0.34\textwidth} p{0.38\textwidth}@{}}
+\caption{The twelve registered tools and their real data sources.}\label{tab:tools}\\
+\toprule
+\textbf{Tool} & \textbf{Purpose} & \textbf{Live data source}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tool} & \textbf{Purpose} & \textbf{Live data source}\\
+\midrule
+\endhead
+\code{search\_properties} & Find real rental listings (the core tool). & \textbf{OnTheMarket} scraping (on-demand, sqlite-cached) $+$ TfL commute annotation $+$ FAISS/RAG re-rank.\\
+\code{calculate\_commute} & Travel time and route legs between two addresses. & \textbf{TfL Journey Planner}; straight-line estimate outside London.\\
+\code{calculate\_commute\_cost} & Time $+$ fare $+$ monthly cost. & TfL time; UK-postcode $\to$ zone inference; fares from a bundled TfL CSV.\\
+\code{check\_safety} & Crime/safety score for an address or area. & \textbf{UK Police API} (\code{police.uk}), last 6 months.\\
+\code{check\_transport\_cost} & Official 2025 Travelcard/PAYG prices by zone. & Hard-coded \code{TFL\_FARES\_2025} table.\\
+\code{get\_transport\_info} & Live journeys, fares, travelcards, line status. & \textbf{TfL Unified API}; London-only, honest ``outside London'' outside the bounding box.\\
+\code{get\_weather} & Current weather for a city. & \textbf{Open-Meteo} (no key required).\\
+\code{search\_nearby\_pois} & Nearby amenities (supermarket, gym, station, \dots). & \textbf{OpenStreetMap Overpass} $+$ Nominatim geocoding.\\
+\code{get\_property\_details} & Facts/policies about one already-shown listing. & Local property CSV database.\\
+\code{web\_search} & General web questions; also a sub-query coordinator. & Web snippet provider (DuckDuckGo/SearXNG-style).\\
+\code{recall\_memory} & Read the user's long-term memory. & Local ChromaDB (Section~\ref{sec:memory}).\\
+\code{remember} & Write a durable fact (\emph{the only write tool}). & Local ChromaDB; \code{side\_effect="write"}.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Idempotency: making retries safe}
+A tool call that times out or is replayed after a crash must not perform its side
+effect twice. The mechanism is a content-addressed key plus a durable ledger.
+
+The key is deterministic (\code{ToolInvocation.create}):
+\begin{lstlisting}
+canonical = json.dumps(params, sort_keys=True, ensure_ascii=False, default=str)
+idempotency_key = sha256(f"{run_id}:{node_id}:{tool}:{canonical}").hexdigest()
+\end{lstlisting}
+Because \code{sort\_keys=True}, the key is invariant to parameter ordering; the same
+$(\text{run\_id}, \text{node\_id}, \text{tool}, \text{params})$ always hashes
+identically. The ledger (\code{IdempotencyStore}, a SQLite table) supports
+\code{claim} (atomic ``I am running this''), \code{complete} (store the result), and
+\code{get} (return a prior completed result). For the one write tool, \code{execute}
+requires a key, returns a cached result on a repeat, and only runs the effect if it
+wins the \code{claim} race. The result is \emph{at-most-once on effect,
+exactly-once on observed result}.
+
+\subsection{search\_properties in depth}
+The core tool is a large async function whose schema declares \emph{no required
+parameters} --- it degrades gracefully, embodying the ``zero workflow prior''
+principle: a user need not answer a fixed questionnaire. Its behaviour:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=3pt]
+  \item \textbf{Memory stripping.} Before extracting hard filters it removes the
+        injected \code{What I remember about this user:} block, so a filter is never
+        pulled from a previous conversation's remembered criteria.
+  \item \textbf{This-turn overrides.} A budget, commute limit, room type, move-in
+        date, or ``no commute'' stated \emph{this turn} overrides the accumulated
+        value, via the deterministic extractors below.
+  \item \textbf{The hard area gate} (the \emph{only} blocking gate). If no living area
+        can be resolved --- even after regex extraction, a natural-language fallback,
+        and destination-derived defaults --- the tool returns
+        \code{status="need\_clarification"} with \code{clarification\_kind="missing\_area"}.
+  \item \textbf{The soft criteria gate.} The \emph{recommended} fields are budget,
+        room type, and commute. If the area is known but some recommended field is
+        missing, the gate fires \emph{at most once per conversation}
+        (\code{criteria\_gate\_shown} is sticky-true), asking a single friendly
+        question with a ``search anyway'' bypass. A move-in date is purely optional ---
+        it never triggers the gate alone; it only ``rides along'' when the gate fires
+        for a recommended field.
+  \item \textbf{Soft budget filtering.} Within budget is a perfect match; up to
+        $1.15\times$ budget is a flagged soft violation; above is excluded. A weekly
+        budget is normalised to monthly by $\times 4.33$.
+\end{itemize}
+
+\subsubsection*{Deterministic bilingual extractors}
+A family of regular-expression extractors is the shared source of truth for parsing,
+reused by the router, the preference node, and the tool itself. Each handles English
+\emph{and} Chinese:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item \code{\_extract\_budget} $\to$ (amount, period): \code{\pounds1800},
+        \code{1800 pcm/pw}, ``budget of 1800'', ``under/around 1200'', and Chinese
+        ``1000以内/左右/预算''; sanity range 200--20000.
+  \item \code{\_extract\_area}: Chinese city names via a $\sim$40-entry map
+        (曼彻斯特$\to$Manchester), or a switch cue (``make it \dots'', ``flats in \dots'')
+        validated against a curated UK-place list; deliberately conservative
+        (``Bath''/``Reading'' as bare words never trigger a switch; Mars/火星 $\to$ none).
+  \item \code{\_extract\_room\_type} $\to$ studio $\mid$ ensuite $\mid$ shared, via a
+        bilingual synonym table.
+  \item \code{\_extract\_commute\_minutes}: ``half an hour''$\to$30, ``an hour''$\to$60,
+        ``N minutes'', ``N hours''; clamped 1--180.
+  \item \code{\_extract\_no\_commute}: ``wfh''/``work from home''/``just living'' and
+        Chinese 不通勤/在家办公.
+  \item \code{\_is\_proceed\_intent}: ``continue''/``search anyway'' and 继续/直接搜.
+  \item \code{\_extract\_move\_in\_date} $\to$ \code{YYYY-MM-DD}: full dates always fire;
+        a bare month resolves to the first day of its next occurrence; guarded so the
+        modal ``may'' never becomes the month May.
+\end{itemize}
+
+\subsection{The model router}
+\label{sec:llmrouter}
+Different graph nodes need different model behaviour, so a small \code{ModelRouter}
+(\code{src/\allowbreak uk\_rent\_agent/\allowbreak llm/router.py}) maps a \emph{purpose} to a concrete
+DeepSeek model, temperature, and token budget:
+
+\begin{longtable}{@{}p{0.24\textwidth} p{0.24\textwidth} p{0.12\textwidth} p{0.32\textwidth}@{}}
+\toprule
+\textbf{Purpose} & \textbf{Model} & \textbf{Temp.} & \textbf{Used by}\\
+\midrule
+\code{intent} & \code{deepseek-chat} & $0.0$ & the router's classifier\\
+\code{planner}/\code{critic} & chat, or reasoner if complex & $0.0$ & search planning, loop controller\\
+\code{responder} & \code{deepseek-reasoner} & $0.1$ & \gnode{generate\_response}\\
+\code{memory}/\code{judge} & \code{deepseek-chat} & $0.0$ & memory extraction, grading\\
+\bottomrule
+\end{longtable}
+
+\noindent Classification and grounded generation run near-deterministic ($T\!\approx\!0$);
+only the reasoning responder is given room to think. The provider is swappable to a
+local Ollama server via an environment variable, so the whole system can run offline.
+
+% ===========================================================================
+\section{Memory: what the agent remembers, and for how long}
+\label{sec:memory}
+
+Memory is the feature users most anthropomorphise (``it remembers my budget!''), and
+the one with the sharpest correctness and privacy requirements. The system has two
+architecturally separate memory families plus the graph's own short-term state.
+
+\subsection{The three time-scales}
+\begin{description}[leftmargin=0pt,itemsep=3pt]
+  \item[Short-term (within a turn).] The \code{AgentState}
+        (Section~\ref{sec:state}). It exists only while one message is being processed
+        and is not a persisted ``memory'' at all --- it is the live working set.
+  \item[Medium-term (within a conversation).] The per-conversation
+        \emph{checkpoint} and the in-memory session cache. This is what makes ``the
+        second one'' resolvable three turns later. Keyed by the conversation thread
+        (Section~\ref{sec:web}).
+  \item[Long-term (across all of a user's conversations).] The layered
+        \code{AgentMemory} store (below) and the optional durable preference profile.
+        Keyed by \code{user\_id}, so a fact learned in one chat surfaces in another.
+\end{description}
+
+\subsection{The layered long-term memory}
+\code{AgentMemory} (\code{app/rag/agent\_memory.py}) is a single ChromaDB collection,
+\code{agent\_memory}, holding three kinds of item distinguished by a metadata field
+\code{mtype}. The design follows the \emph{Generative Agents} and \emph{Mem0} lines
+of work, with this codebase's own constants:
+
+\begin{description}[leftmargin=0pt,itemsep=2pt]
+  \item[Episodic] --- individual events (``User asked: \dots\ [assistant used
+        check\_safety]''). Written every turn.
+  \item[Semantic] --- distilled durable facts about the user (budget, destination,
+        constraints). Extracted from each turn and \emph{consolidated}.
+  \item[Reflection] --- higher-level insights synthesised periodically from the
+        accumulated memories.
+\end{description}
+
+\subsubsection*{Writing: extraction and consolidation (Mem0-style)}
+After each turn, on a background thread, \code{remember\_turn}:
+(1) writes an episodic record; (2) calls an LLM to extract up to eight atomic durable
+facts as strict JSON; (3) \emph{consolidates} each fact against the four nearest
+existing semantic memories, letting the LLM emit \code{ADD} / \code{UPDATE} /
+\code{DELETE} / \code{NOOP} operations --- so a refined budget \emph{replaces} the old
+one rather than piling up, and a contradiction deletes the stale fact. An MD5 hash
+of $(\text{mtype}\mid\text{user\_id}\mid\text{text})$ guards against exact duplicates.
+
+\subsubsection*{Importance and the reflection loop}
+Each memory carries an \emph{importance} in $[1,10]$: for episodic memories it is an
+LLM ``poignancy'' rating (a hard budget or fixed destination scores high; small talk
+low), defaulting to $5$; semantic and reflection memories take fixed defaults $7$ and
+$8$. Importance accrues per user; when the accumulated importance crosses a threshold
+of $30$, a \emph{reflection} pass distils one-to-three insights (importance $8$) from
+the user's last thirty memories and resets the counter. This is the Generative-Agents
+reflection mechanism, scaled down from the paper's game-day threshold of $150$.
+
+\subsubsection*{Retrieval: the Generative-Agents score}
+Given a query, retrieval fetches the top $K=25$ candidates by vector similarity
+(filtered to this \code{user\_id}), then re-ranks each candidate $m$ by three
+signals:
+\begin{align*}
+  \text{relevance}(m) &= 1 - \text{cosine\_distance}(q, m),\\
+  \text{recency}(m)   &= 0.995^{\,\Delta t_{\text{hours}}(m)}
+                         \quad(\Delta t \text{ from last access}),\\
+  \text{importance}(m)&= \text{rating}(m)/10.
+\end{align*}
+Each signal is independently min--max normalised to $[0,1]$ across the candidate set,
+and the final score is their \emph{unweighted sum}:
+\[
+  \mathrm{score}(m) = \widehat{\text{relevance}}(m) +
+  \widehat{\text{recency}}(m) + \widehat{\text{importance}}(m) \in [0,3].
+\]
+The top $n=6$ are returned and their \code{last\_access} is bumped to now --- so
+retrieving a memory makes it more retrievable next time (the paper's reinforcement
+effect). The embedding model is \code{all-MiniLM-L6-v2} (384-dimensional); property
+retrieval additionally uses an explicit FAISS inner-product index over
+L2-normalised vectors (equivalent to cosine).
+
+\begin{keybox}[Privacy: fail closed by design]
+Every read and write is gated by \code{\_valid\_user\_id}, which rejects a blank id
+\emph{and the literal ``default''} --- the implicit shared namespace that once let one
+user's budget leak to the next. With no valid id, writes are refused and reads return
+empty; there is never a global fallback. The Chroma query always carries
+\code{where=\{"user\_id": id\}}; legacy records written before namespacing carry no id
+and so can never match a user-scoped filter (inert, not leaked). \code{forget(user\_id)}
+is the GDPR erasure path, wired to \code{/api/forget\_me}.
+\end{keybox}
+
+\subsection{Memory as tools}
+The agent can also read and write memory explicitly, as tools: \code{recall\_memory}
+(returns both structured memories and a ready-to-paste prompt block) and
+\code{remember} (writes a fact of a given kind). Both re-check \code{\_valid\_user\_id}
+at the tool boundary --- defence in depth on top of the store's own gate --- and
+\code{remember} is the system's only \code{write} tool, hence the only one subject to
+the idempotency ledger and the taint gate.
+
+% ===========================================================================
+\section{From HTTP request to agent turn: the web and session layer}
+\label{sec:web}
+
+The agent is served by a Flask application (\code{app/app.py}). This section traces
+one request end-to-end and explains how many users and many conversations stay
+isolated.
+
+\subsection{The request lifecycle}
+The main conversational endpoint is \code{POST /api/alex}. In order:
+\begin{enumerate}[leftmargin=1.6em,itemsep=2pt]
+  \item \textbf{Middleware.} Optional authentication enforcement, then per-path
+        \emph{rate limiting} (a process-local sliding-window limiter: 12/min for
+        \code{/api/alex}, 20/min for \code{/api/search\_direct}, \dots).
+  \item \textbf{Parse and validate} the JSON body; a non-string
+        \code{conversation\_id} is rejected \emph{before} it can reach SQLite.
+  \item \textbf{Identity resolution} (\code{resolve\_identity}). A priority ladder:
+        an authenticated session wins; otherwise, only if explicitly allowed, a
+        client-supplied id (validated against \code{\^{}[A-Za-z0-9\_-]\{1,64\}\$});
+        otherwise the signed session cookie; otherwise a freshly minted UUID. A
+        logged-in session is \emph{authoritative} --- a client cannot impersonate an
+        account by spoofing a header.
+  \item \textbf{Conversation lookup} or implicit creation (title derived from the
+        message, HTML-stripped as a stored-XSS defence). The user turn is persisted
+        \emph{up front} so it survives a crash mid-generation.
+  \item \textbf{Compose the query} (below).
+  \item \textbf{Build \code{AgentState}} and invoke the graph asynchronously with a
+        config whose thread key is \code{f"\{user\_id\}:\{conversation\_id\}"} and whose
+        recursion limit is $80$.
+  \item \textbf{Extract} \code{final\_response} / \code{response\_type} /
+        \code{tool\_data} and \textbf{persist}: write back the conversation's cached
+        state, durably store the assistant message, and fire a background long-term
+        memory write.
+\end{enumerate}
+Agent-side outcomes always return HTTP 200 (an ``error'' response type is a normal
+renderable payload), so the frontend can adopt the freshly minted
+\code{conversation\_id}.
+
+\subsection{Composing the query: layered context injection}
+The single string handed to the graph as \code{user\_query} is built in layers,
+\emph{prepended} so the model reads them top-down:
+
+\begin{lstlisting}
+What I remember about this user:      <-- long-term memory, keyed by user_id
+[FACT] budget is about GBP 1500 pcm
+[INSIGHT] prioritises safety near campus
+
+Previous conversation:                <-- last 3 turns (or 5 for a clarification answer)
+User: ...
+Alex: ...
+
+Current user message: <the raw message>
+\end{lstlisting}
+
+Two invariants make this safe. First, the \emph{pristine} message (no memory/history
+prefix) is stashed separately at \code{extracted\_context['current\_message']}, so
+tools that parse ``only this message'' (budget/postcode/ordinal regexes) never scrape
+a stale value out of injected memory. Second, long-term memory is retrieved and
+namespaced by \code{user\_id} --- shared across all of that user's conversations, but
+never across users.
+
+\subsection{Two isolation axes, two persistence mechanisms}
+There are effectively two identity axes (a naming caveat: the code's
+\code{session\_id} is a vestigial alias --- the graph receives the
+\code{conversation\_id} under that parameter name):
+
+\begin{center}
+\begin{tabular}{@{}p{0.22\textwidth} p{0.34\textwidth} p{0.36\textwidth}@{}}
+\toprule
+\textbf{Axis} & \textbf{Identifies} & \textbf{Scopes}\\
+\midrule
+\code{user\_id} & a person, across logins/devices/chats & long-term memory, durable preferences, favourites, ownership of all conversations\\
+\code{conversation\_id} (= \code{thread\_id} part) & one chat thread & the transcript, the LangGraph checkpoint, the session hot-cache slice\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The two persistence mechanisms are distinct:
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+  \item \textbf{Short-term, per-conversation} --- a LangGraph \emph{checkpointer}
+        (a thread-safe SQLite saver) keyed by \code{f"\{user\_id\}:\{conversation\_id\}"}.
+        It holds the full per-conversation graph state and enables pause/resume and
+        time-travel.
+  \item \textbf{Long-term, per-user} --- an optional cross-thread \code{BaseStore}
+        keyed by the namespace \code{("user\_prefs", user\_id)}. Because the namespace
+        is per-\emph{user}, a preference saved in conversation A is visible in
+        conversation B --- the whole point of the store-vs-checkpointer split. Two
+        graph nodes, \gnode{hydrate\_prefs} (entry) and \gnode{persist\_prefs} (exit),
+        read and write it, persisting only the \emph{profile} (structured criteria),
+        never the transcript.
+\end{itemize}
+
+\begin{keybox}[How the ``memory bleed'' bug was fixed]
+The in-conversation working state was once bare module globals shared by every
+caller, so one chat's budget could surface in another. It is now a \code{SessionStore}
+keyed by the tuple \code{(user\_id, conversation\_id)}, each slice a fresh deep copy,
+each guarded by its own per-key turn lock. Durable preferences additionally
+\emph{fail closed} on sentinel ids \code{\{"default","anonymous"\}}, so two people who
+both present ``default'' can never share a bucket. Every conversation route checks
+ownership and returns 404 on a mismatch.
+\end{keybox}
+
+\subsection{Concurrency: snapshot--compute--commit}
+A single conversation may receive two overlapping requests (two browser tabs). Each
+turn (i) snapshots the cached state under the per-conversation lock, (ii) releases the
+lock across the slow LLM call, then (iii) re-acquires it to append the result
+\emph{in place}. So a concurrent turn's append is never clobbered, yet the expensive
+generation never holds the lock.
+
+% ===========================================================================
+\section{Ranking listings: a multi-objective utility}
+\label{sec:ranking}
+
+Once candidate listings are retrieved, they must be ordered. The ranker
+(\code{src/\allowbreak uk\_rent\_agent/\allowbreak agent/ranking.py}) is a transparent, hand-tuned utility ---
+deliberately not a learned black box, so its behaviour is auditable.
+
+\subsection{Hard constraints, then soft scoring}
+First, \emph{hard filters} drop (not penalise) any listing that violates a
+non-negotiable constraint:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item over budget: \code{price} $> $ \code{max\_budget} $\Rightarrow$ dropped with
+        reason \code{over\_budget};
+  \item in an excluded area: the address contains an excluded-area substring
+        $\Rightarrow$ dropped with reason \code{excluded\_area}.
+\end{itemize}
+
+Each surviving listing $\ell$ then receives a score
+\[
+  \mathrm{score}(\ell) = \underbrace{1.0}_{\text{base}}
+  \;+\; \underbrace{\max\!\Bigl(0,\ 1 - \tfrac{\mathrm{price}(\ell)}{B}\Bigr)}_{\text{budget affinity}}
+  \;+\; \underbrace{0.05\cdot\mathbf{1}[\text{source}=\texttt{local\_faiss}]}_{\text{provenance}},
+\]
+where $B$ is the budget. The budget-affinity term is a normalised ``cheaper is
+better'' objective in $[0,1]$: a listing at price $0$ contributes $+1$, one at exactly
+budget contributes $+0$ (and, since over-budget listings are already dropped, the term
+never goes negative). The provenance term gives a small edge to the trusted local
+index. Listings are sorted by score descending and truncated to a limit (default 10).
+For a budget-known listing the score lies in $[1.0, 2.05]$.
+
+\begin{intuition}
+This is a \emph{linear additive utility} $U = w_0 + w_1 x_1 + w_2 x_2$ with a constant
+base and two soft objectives, filtered by two hard constraints. The weights
+$(w_0,w_1,w_2)=(1,\,1,\,0.05)$ are fixed and legible; there is no training, so a
+product owner can reason about exactly why one listing outranks another. (A separate
+RAG re-ranker used inside the search tool adds semantic-similarity, commute, and
+safety-trend terms with weights $0.4/0.3/0.2/0.1$ for the in-tool ordering.)
+\end{intuition}
+
+% ===========================================================================
+\section{The grounding critic: catching hallucinated numbers}
+\label{sec:critic}
+
+An LLM asked to summarise listings will occasionally state a rent that appears nowhere
+in the data. The critic (\code{src/uk\_rent\_agent/agent/critic.py}) is a deterministic
+guard that catches fabricated \emph{monetary figures} while never destroying a
+legitimate answer.
+
+\subsection{What ``grounded'' means, precisely}
+The critic does not compare strings; it does arithmetic. It extracts every
+\emph{money mention} from the reply --- a number carrying a currency symbol, a
+\code{GBP} suffix, or a period marker (\code{pcm}/\code{pw}/\dots). A plain integer
+(``3 bedrooms'', ``12 months'') is deliberately \emph{not} treated as a price. For each
+evidence price it builds a \emph{supported set} of values that a correct answer may
+legitimately state:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item the value itself;
+  \item integer multiples $\times 2,\dots,\times 36$ (annual and $N$-month totals);
+  \item weekly $\leftrightarrow$ monthly conversions using the standard
+        $52/12$ factor;
+  \item monthly-derived deposits of $1$ to $6$ weeks' rent.
+\end{itemize}
+A reply figure $v$ is \emph{supported} if it is close to some element $c$ of the
+supported set within a combined tolerance
+\[
+  |v - c| \le \max\bigl(\pounds 1,\; 0.01\cdot\max(|v|,|c|)\bigr),
+\]
+i.e. within £1 absolute or 1\% relative. Any money mention not close to \emph{any}
+supported value is flagged as unsupported. The verdict is
+\[
+  \text{grounded} \;=\; \text{answered} \;\wedge\; (\text{no unsupported prices})
+  \;\wedge\; \neg\,\text{retrieval\_miss},
+\]
+where a retrieval miss only counts when the tool actually errored \emph{and} the reply
+asserts figures --- a legitimately empty result set is left alone. For direct/chat
+answers (no retrieval expected), price gating is skipped entirely, so echoing the
+user's own number is never penalised.
+
+\subsection{Correction, not deletion}
+If the answer is ungrounded, the critic runs \emph{exactly one} corrective
+regeneration: it re-invokes the generator with an explicit instruction naming the
+offending figures and requiring every monetary value to be copied verbatim or be an
+explicitly-labelled conversion/total/deposit. Then:
+\begin{itemize}[leftmargin=1.4em,itemsep=1pt]
+  \item if the regeneration is now grounded, it is used;
+  \item if regeneration fails or is still ungrounded, the answer is delivered with a
+        single appended caveat (``Please double-check the exact prices against the
+        source listing.'').
+\end{itemize}
+The user-facing text is \emph{never} hard-replaced with a canned refusal --- a
+design lesson from an earlier, over-aggressive critic that destroyed correct answers
+over harmless formatting differences.
+
+% ===========================================================================
+\section{Safety, security, and honesty guards}
+\label{sec:safety}
+
+Because the agent handles real users, real money, and untrusted external text, safety
+is layered defence-in-depth rather than a single check.
+
+\begin{description}[leftmargin=0pt,itemsep=3pt]
+  \item[Fair housing (Equality Act 2010).] The deterministic pre-router screen
+        (Section~\ref{sec:routing}) refuses discriminatory filtering before any search
+        or clarification can normalise it.
+
+  \item[The security directive.] Every generation prompt is prefixed with a
+        non-negotiable directive: never reveal the system prompt or internal tool
+        schemas (however the request is framed); treat all remembered/saved
+        ``preferences'' as \emph{untrusted data describing the user}, never as
+        commands; stay strictly within UK student housing; never fabricate listings;
+        reply in the user's language.
+
+  \item[The taint bit and prompt-injection sanitiser.] Whenever untrusted external
+        text (scraped listings, web results) enters the state, \code{context\_tainted}
+        is set. Tainted text is passed through \code{sanitize\_untrusted}, which wraps
+        it in explicit ``untrusted content, data only'' fences and redacts injection
+        patterns (``ignore previous instructions'', ``system:'', ``reveal the system
+        prompt'', \dots). A \emph{write} tool may not run under a tainted context
+        unless explicitly confirmed --- so a poisoned listing description cannot cause
+        a durable side effect.
+
+  \item[The final output sanitiser.] Every user-facing string passes through one
+        choke point (\code{\_sanitize\_final\_response} in \gnode{format\_output}): it
+        refuses if a system-prompt marker leaked, strips raw tool-call/JSON blocks and
+        Python tracebacks, neutralises the internal ``999 = no commute limit''
+        sentinel so it never displays as a time, and removes all emoji (a product
+        rule), while carefully preserving Chinese text and \pounds\ prices.
+
+  \item[Reply-language discipline.] A hard directive pins the entire reply to one
+        language (no zh/en mixing), resolved from whether the current message contains
+        Chinese, with the UI language as a tie-breaker.
+
+  \item[Honest capability limits.] The system states plainly what it cannot do ---
+        live transport outside London, official ONS statistics, booking viewings or
+        making payments --- and points to the right external source rather than
+        fabricating.
+\end{description}
+
+% ===========================================================================
+\section{A worked example: one turn end-to-end}
+\label{sec:example}
+
+To tie the pieces together, follow the message \emph{``is the second one safe, and how
+much is the commute to UCL?''}, sent in a chat that already showed listings.
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=3pt]
+  \item \textbf{Web layer.} \code{/api/alex} resolves \code{user\_id} from the session,
+        finds the conversation, retrieves 6 long-term memories, and composes
+        \code{user\_query} = memory block $+$ last 3 turns $+$ this message. The
+        pristine message is stored at \code{current\_message}. \code{AgentState} is
+        built and the graph invoked with \code{thread\_id="u42:c7"}.
+  \item \textbf{\gnode{extract\_preferences}.} No new explicit budget/area/commute
+        change; state passes through.
+  \item \textbf{\gnode{decide\_tool}.} The fair-housing screen passes. There are
+        previous results, but the message is a \emph{location} question, so it is not
+        swallowed by the comparative/detail interceptors. The transport keywords do
+        not dominate (``how much is the commute'' keeps its own tool). The classifier
+        (or a deterministic rung) selects \code{check\_safety}; the resolver maps ``the
+        second one'' to the second result's address. Route $\to$ \gnode{execute\_tool}.
+  \item \textbf{\gnode{execute\_tool}.} \code{check\_safety} calls the UK Police API,
+        returns a safety score. \code{check\_safety} is loopable and did not error, so
+        route $\to$ \gnode{reflect}.
+  \item \textbf{\gnode{reflect}.} Observation recorded (turn 1). The controller sees the
+        commute half of the question is still unanswered and returns
+        \code{\{action: continue, next\_intent: calculate\_commute\_cost\}}. The
+        no-progress guard passes (different tool). Route $\to$ \gnode{execute\_tool}.
+  \item \textbf{\gnode{execute\_tool} (again).} \code{calculate\_commute\_cost} resolves
+        the origin (second listing) and the destination (UCL, expanded to a full
+        geocodable address), calls TfL, returns time $+$ monthly fare. Loopable, no
+        error $\to$ \gnode{reflect}.
+  \item \textbf{\gnode{reflect}.} Both halves answered; controller returns
+        \code{answer}. Two observations exist, so route $\to$ \gnode{generate\_response}.
+  \item \textbf{\gnode{generate\_response}.} Builds the synthesis prompt (security $+$
+        language directives $+$ \emph{both} observations with per-tool headers) and
+        writes one coherent reply.
+  \item \textbf{\gnode{critic}.} Extracts the monthly fare figure, checks it against the
+        commute-cost evidence within tolerance --- grounded --- passes unchanged.
+  \item \textbf{\gnode{format\_output}.} The multi-tool synthesis is kept as prose (no
+        single card can represent it); the final sanitiser strips any stray artifacts
+        and emoji. \gnode{end}.
+  \item \textbf{Web layer.} The reply and updated criteria are written back under the
+        turn lock; a background thread updates long-term memory
+        (``asked about safety and commute of listing \#2'').
+\end{enumerate}
+
+\noindent In one message the agent made two real API calls, in the right order, kept
+the answer grounded, and never once risked an unbounded loop or a cross-user leak ---
+which is precisely what the architecture was built to guarantee.
+
+% ===========================================================================
+\section*{Glossary}
+\addcontentsline{toc}{section}{Glossary}
+\begin{description}[leftmargin=0pt,itemsep=2pt]
+  \item[Node] A function in the graph that reads state and returns an update.
+  \item[Edge] A permitted transition between nodes; static or chosen at runtime.
+  \item[Reducer] The rule that merges a node's update into a state field.
+  \item[Route] The decision of which capability handles a message.
+  \item[Tool] External-world code returning a uniform \code{ToolResult}.
+  \item[Taint] A flag that untrusted external text has entered the turn.
+  \item[Idempotency key] A content hash making a retried write safe.
+  \item[Checkpointer] Per-conversation persisted graph state (thread-keyed).
+  \item[Store] Per-user durable preference profile (namespace-keyed).
+  \item[Grounding] The property that every stated figure traces to evidence.
+  \item[LangGraph] The library expressing the agent as a graph over shared state.
+\end{description}
+
+\end{document}

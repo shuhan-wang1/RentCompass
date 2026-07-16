@@ -464,6 +464,8 @@ def _is_late_availability(available_from: str, move_in_date) -> bool:
 # LLM round-trip. Chinese place names are distinctive enough for a safe substring
 # match. Nonsense / non-UK names (火星/月球/瓦坎达 …) are deliberately absent -> None.
 _ZH_AREA_MAP = {
+    "\u8c61\u5821": "Elephant and Castle",
+    "\u5927\u8c61\u57ce\u5821": "Elephant and Castle",
     "曼彻斯特": "Manchester", "曼城": "Manchester", "伦敦": "London",
     "利兹": "Leeds", "爱丁堡": "Edinburgh", "布里斯托尔": "Bristol",
     "布里斯托": "Bristol", "格拉斯哥": "Glasgow", "卡迪夫": "Cardiff",
@@ -1594,6 +1596,55 @@ async def search_properties_impl(
                 area_recommendations = []
 
         # 没有任何真实房源 —— 诚实返回（语言感知），绝不使用 demo 假数据。
+        # Provider area pages are candidate generators, not proof of proximity.
+        # Validate every listing against the requested area's centroid before it
+        # can enter RAG, ranking, the similar fallback, or the UI.
+        geo_rejected = []
+        geo_validation_enabled = os.getenv("SEARCH_GEO_VALIDATION_ENABLED", "1") != "0"
+        if live_rows and geo_validation_enabled:
+            from core.geography import (
+                filter_properties_by_radius,
+                known_area_centroid,
+                parse_coordinates,
+            )
+            from core.maps_service import geocode_address
+
+            area_centres = {}
+            for _idx, _a in enumerate(search_areas):
+                _centre = known_area_centroid(_a)
+                if _centre is None:
+                    _city = (_metas[_idx].get('requested_city')
+                             if _idx < len(_metas) else None)
+                    _query = str(_a).replace('-', ' ')
+                    if _city and _city.lower() not in _query.lower():
+                        _query = f"{_query}, {_city}, UK"
+                    try:
+                        _geo = await loop.run_in_executor(None, geocode_address, _query)
+                    except Exception as _geo_exc:
+                        print(f"   [GEO] Could not resolve search area '{_a}': {_geo_exc}")
+                        _geo = None
+                    _centre = parse_coordinates(_geo)
+                area_centres[_a] = _centre
+
+            try:
+                _geo_radius = float(radius_miles)
+            except (TypeError, ValueError):
+                _geo_radius = 2.0
+            if not math.isfinite(_geo_radius) or _geo_radius <= 0:
+                _geo_radius = 2.0
+
+            _before_geo = len(live_rows)
+            live_rows, geo_rejected = filter_properties_by_radius(
+                live_rows, area_centres, _geo_radius
+            )
+            listing_meta['count'] = len(live_rows)
+            listing_meta['location_filtered_count'] = len(geo_rejected)
+            print(
+                f"   [GEO] Verified {len(live_rows)}/{_before_geo} listings within "
+                f"{_geo_radius:g} miles of requested area(s); "
+                f"rejected {len(geo_rejected)}"
+            )
+
         if not live_rows:
             return {
                 'success': True,
@@ -1853,6 +1904,7 @@ async def search_properties_impl(
                                 'url': prop.get('URL', prop.get('url', '')),
                                 'images': images,
                                 'geo_location': geo_location,
+                                'distance_miles': prop.get('distance_miles'),
                                 'explanation': _clean_explanation(
                                     prop.get('Description', ''),
                                     prop.get('travel_time') if commute_annotation_enabled else None,
@@ -1952,10 +2004,6 @@ async def search_properties_impl(
             if isinstance(images, str):
                 images = [images] if images else []
             geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
-            if not geo_location:
-                address = prop.get('Address', prop.get('address', ''))
-                if 'London' in address:
-                    geo_location = '51.5074,-0.1278'  # London center fallback
 
             _avail_from = prop.get('_resolved_available_from', '')
             row = {
@@ -1973,6 +2021,7 @@ async def search_properties_impl(
                 'url': prop.get('URL', prop.get('url', '')),
                 'images': images,
                 'geo_location': geo_location,
+                'distance_miles': prop.get('distance_miles'),
                 'explanation': _clean_explanation(
                     prop.get('Description', prop.get('description', '')),
                     prop.get('travel_time') if commute_annotation_enabled else None,

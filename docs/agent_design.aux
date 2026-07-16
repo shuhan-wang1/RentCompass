@@ -1,0 +1,82 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand*\HyPL@Entry[1]{}
+\HyPL@Entry{0<</S/D>>}
+\HyPL@Entry{1<</S/D>>}
+\@writefile{toc}{\contentsline {section}{\numberline {1}What this system is, in one page}{3}{section.1}\protected@file@percent }
+\newlabel{sec:overview}{{1}{3}{What this system is, in one page}{section.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Mental model: state machines, LLMs, and tools}{3}{section.2}\protected@file@percent }
+\newlabel{sec:mentalmodel}{{2}{3}{Mental model: state machines, LLMs, and tools}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}A language model is a function}{3}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}A tool is also a function --- but a truthful one}{4}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}A state machine ties them together}{4}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}The state: the object that flows through the graph}{4}{section.3}\protected@file@percent }
+\newlabel{sec:state}{{3}{4}{The state: the object that flows through the graph}{section.3}{}}
+\gdef \LT@i {\LT@entry 
+    {1}{114.71478pt}\LT@entry 
+    {1}{102.5922pt}\LT@entry 
+    {1}{223.42265pt}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Reducers: how updates are merged}{5}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Field-by-field specification}{5}{subsection.3.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{The \texttt  {\small  AgentState} channels.}}{5}{table.1}\protected@file@percent }
+\newlabel{tab:state}{{1}{5}{The \code {AgentState} channels}{table.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}The graph: nodes, edges, and the shape of a turn}{7}{section.4}\protected@file@percent }
+\newlabel{sec:graph}{{4}{7}{The graph: nodes, edges, and the shape of a turn}{section.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The compiled agent graph. Solid nodes are deterministic Python; only \textsc  {decide\_tool} (intent classification), \textsc  {reflect} (loop control), and \textsc  {generate\_response} (answer writing) call the LLM. Branch labels name the routing condition. The dashed advanced nodes \textsc  {hydrate\_prefs}, \textsc  {persist\_prefs}, and \textsc  {confirm\_search} are omitted for clarity.}}{7}{figure.1}\protected@file@percent }
+\newlabel{fig:graph}{{1}{7}{The compiled agent graph. Solid nodes are deterministic Python; only \gnode {decide\_tool} (intent classification), \gnode {reflect} (loop control), and \gnode {generate\_response} (answer writing) call the LLM. Branch labels name the routing condition. The dashed advanced nodes \gnode {hydrate\_prefs}, \gnode {persist\_prefs}, and \gnode {confirm\_search} are omitted for clarity}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}The nine core nodes}{7}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Static vs. dynamic edges}{8}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Three optional nodes}{8}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Routing: how a message reaches the right capability}{9}{section.5}\protected@file@percent }
+\newlabel{sec:routing}{{5}{9}{Routing: how a message reaches the right capability}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}The priority ladder}{9}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}The LLM classifier}{10}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Reference resolution}{10}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}The bounded agent loop and web-research fan-out}{10}{section.6}\protected@file@percent }
+\newlabel{sec:loop}{{6}{10}{The bounded agent loop and web-research fan-out}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Loopable tools and the reflect controller}{11}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Three hard stops --- all failing closed}{11}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}The map--reduce fan-out for web research}{11}{subsection.6.3}\protected@file@percent }
+\gdef \LT@ii {\LT@entry 
+    {1}{96.5922pt}\LT@entry 
+    {1}{166.00742pt}\LT@entry 
+    {1}{178.13pt}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Tools: the agent's hands}{12}{section.7}\protected@file@percent }
+\newlabel{sec:tools}{{7}{12}{Tools: the agent's hands}{section.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}The uniform contract}{12}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}The registry}{12}{subsection.7.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{The twelve registered tools and their real data sources.}}{12}{table.2}\protected@file@percent }
+\newlabel{tab:tools}{{2}{12}{The twelve registered tools and their real data sources}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Idempotency: making retries safe}{13}{subsection.7.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.4}search\_properties in depth}{13}{subsection.7.4}\protected@file@percent }
+\gdef \LT@iii {\LT@entry 
+    {1}{114.71478pt}\LT@entry 
+    {1}{120.71478pt}\LT@entry 
+    {1}{66.35393pt}\LT@entry 
+    {1}{150.95303pt}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.5}The model router}{14}{subsection.7.5}\protected@file@percent }
+\newlabel{sec:llmrouter}{{7.5}{14}{The model router}{subsection.7.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Memory: what the agent remembers, and for how long}{15}{section.8}\protected@file@percent }
+\newlabel{sec:memory}{{8}{15}{Memory: what the agent remembers, and for how long}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}The three time-scales}{15}{subsection.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}The layered long-term memory}{15}{subsection.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Memory as tools}{16}{subsection.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}From HTTP request to agent turn: the web and session layer}{16}{section.9}\protected@file@percent }
+\newlabel{sec:web}{{9}{16}{From HTTP request to agent turn: the web and session layer}{section.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}The request lifecycle}{16}{subsection.9.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}Composing the query: layered context injection}{17}{subsection.9.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.3}Two isolation axes, two persistence mechanisms}{17}{subsection.9.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.4}Concurrency: snapshot--compute--commit}{18}{subsection.9.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {10}Ranking listings: a multi-objective utility}{18}{section.10}\protected@file@percent }
+\newlabel{sec:ranking}{{10}{18}{Ranking listings: a multi-objective utility}{section.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {10.1}Hard constraints, then soft scoring}{18}{subsection.10.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {11}The grounding critic: catching hallucinated numbers}{19}{section.11}\protected@file@percent }
+\newlabel{sec:critic}{{11}{19}{The grounding critic: catching hallucinated numbers}{section.11}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {11.1}What ``grounded'' means, precisely}{19}{subsection.11.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {11.2}Correction, not deletion}{19}{subsection.11.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {12}Safety, security, and honesty guards}{19}{section.12}\protected@file@percent }
+\newlabel{sec:safety}{{12}{19}{Safety, security, and honesty guards}{section.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {13}A worked example: one turn end-to-end}{20}{section.13}\protected@file@percent }
+\newlabel{sec:example}{{13}{20}{A worked example: one turn end-to-end}{section.13}{}}
+\@writefile{toc}{\contentsline {section}{Glossary}{21}{Item.33}\protected@file@percent }
+\gdef \@abspage@last{22}

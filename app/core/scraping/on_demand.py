@@ -107,6 +107,7 @@ LANDMARK_SLUGS = {
     "camden": ("camden", "london"),
     "shoreditch": ("shoreditch", "london"),
     "elephant and castle": ("elephant-and-castle", "london"),
+    "elephant & castle": ("elephant-and-castle", "london"),
     "central london": ("london", "london"),
     "oxford street": ("london", "london"),
     "oxford circus": ("london", "london"),
@@ -389,6 +390,8 @@ _CLASSIFY_CACHE_MAX = 4096
 # curated mapping is left in place so the caller can detect it (_has_cjk) and defer
 # to the OSM long-tail tier rather than resolve to a wrong/empty slug.
 _ZH_ALIASES = {
+    "\u8c61\u5821": "elephant and castle",
+    "\u5927\u8c61\u57ce\u5821": "elephant and castle",
     # --- universities (each precedes its bare-city alias via length ordering) ---
     "曼彻斯特城市大学": "manchester metropolitan university",
     "曼彻斯特大学": "university of manchester",

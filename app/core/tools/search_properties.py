@@ -1689,6 +1689,20 @@ async def search_properties_impl(
         # ================================================================
         # 步骤 4: 通勤时间（仅在有标注目标且未声明不通勤时计算/过滤）
         # ================================================================
+        # A requested room type is an explicit constraint. Do not show another
+        # type merely to fill the result page.
+        if room_type and not rt_matched:
+            return {
+                'success': True,
+                'status': 'no_results',
+                'message': _no_results_message(search_area, is_cjk),
+                'recommendations': [],
+                'data_source': data_source,
+                'search_criteria': _criteria(),
+                'known_criteria': _known_criteria(),
+                'area_recommendations': area_recommendations,
+            }
+
         candidates = ranked_properties[:15]
         dest_coords = None
         london_dest = False
@@ -1756,6 +1770,21 @@ async def search_properties_impl(
 
         perfect_match.sort(key=lambda p: -p.get('recommendation_score', 0))
         soft_violation.sort(key=lambda p: -p.get('recommendation_score', 0))
+        # RAG is useful for candidate recall, but the final page needs a single
+        # transparent objective. Re-score eligible listings with continuous
+        # price/commute utilities, evidence-aware normalisation, and light MMR
+        # diversification. RANKER_V2_ENABLED=0 restores the previous ordering.
+        if os.getenv('RANKER_V2_ENABLED', '1') != '0':
+            from core.ranking import rank_and_diversify
+
+            rank_kwargs = {
+                'max_budget': max_budget if has_budget else None,
+                'max_commute': max_commute_time if commute_filter_enabled else None,
+                'requested_features': all_property_features,
+                'move_in_date': move_in_date,
+            }
+            perfect_match = rank_and_diversify(perfect_match, **rank_kwargs)
+            soft_violation = rank_and_diversify(soft_violation, **rank_kwargs)
 
         # ================================================================
         # 步骤 5.5: 无匹配时的回退
@@ -1935,6 +1964,7 @@ async def search_properties_impl(
                 'price': f"£{int(prop.get('price', 0))}/month",
                 'budget_status': prop.get('budget_status', ''),
                 'score': prop.get('recommendation_score', 0),
+                'score_breakdown': prop.get('score_breakdown', {}),
                 'property_type': prop.get('Type', prop.get('type', 'Flat')),
                 'bedrooms': prop.get('Bedrooms', prop.get('bedrooms', 'N/A')),
                 'match_type': prop.get('match_type', 'perfect'),

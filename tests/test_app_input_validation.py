@@ -29,6 +29,7 @@ _WANTED = {
     "_validate_conversation_id",
     "_coerce_optional_int",
     "_derive_title",
+    "_search_result_failed",
 }
 
 
@@ -55,6 +56,7 @@ ApiError = _H["ApiError"]
 _validate_conversation_id = _H["_validate_conversation_id"]
 _coerce_optional_int = _H["_coerce_optional_int"]
 _derive_title = _H["_derive_title"]
+_search_result_failed = _H["_search_result_failed"]
 
 
 # ---------------------------------------------------------------------------
@@ -182,3 +184,10 @@ def test_derive_title_truncation():
     out = _derive_title(long)
     assert out.endswith("…")
     assert len(out) == 41  # 40 chars + ellipsis
+
+
+def test_structured_search_failure_is_not_an_empty_result():
+    assert _search_result_failed({"success": False, "status": "error"})
+    assert _search_result_failed({"status": "error"})
+    assert not _search_result_failed({"success": True, "status": "no_results"})
+    assert not _search_result_failed({"success": True, "recommendations": []})

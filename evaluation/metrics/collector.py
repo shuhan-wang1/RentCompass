@@ -407,6 +407,15 @@ def instrument_node(name: str, fn, logger=None):
     except Exception:
         node_span = None
 
+    # interrupt() (HITL) works by raising GraphInterrupt — normal control flow, not a node
+    # failure. It must be re-raised untouched and must NOT be recorded as a node error, or
+    # every legitimate pause pollutes the offline error metrics.
+    try:
+        from langgraph.errors import GraphInterrupt
+    except Exception:  # pragma: no cover — langgraph is a hard dependency in practice
+        class GraphInterrupt(BaseException):
+            pass
+
     def _span_cm():
         if logger is not None and node_span is not None:
             return node_span(logger, name)
@@ -419,6 +428,8 @@ def instrument_node(name: str, fn, logger=None):
             try:
                 with _span_cm():
                     return await fn(state, *args, **kwargs)
+            except GraphInterrupt:
+                raise  # normal HITL pause — recorded below with err=None
             except Exception as exc:
                 err = type(exc).__name__
                 raise
@@ -433,6 +444,8 @@ def instrument_node(name: str, fn, logger=None):
         try:
             with _span_cm():
                 return fn(state, *args, **kwargs)
+        except GraphInterrupt:
+            raise  # normal HITL pause — recorded below with err=None
         except Exception as exc:
             err = type(exc).__name__
             raise

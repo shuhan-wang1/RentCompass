@@ -15,7 +15,7 @@ dependencies = [
   "requests",
   "waitress",
   "chromadb", "sentence-transformers", "faiss-cpu", "geopy", "folium", "ddgs",
-  "langgraph", "langgraph-checkpoint-sqlite", "langchain", "langchain-core", "langchain-ollama",
+  "langgraph>=1.2,<2", "langgraph-checkpoint-sqlite", "langchain", "langchain-core", "langchain-ollama",
   "langchain-openai", "openai", "mcp",
   "pydantic>=2.7", "starlette", "uvicorn[standard]",
 ]

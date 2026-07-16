@@ -32,10 +32,10 @@ from uk_rent_agent.web.auth_store import (
     AuthStore, AuthError, InvalidUsername, WeakPassword, UsernameTaken,
 )
 from uk_rent_agent.config import Config
-from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, graph_config
+from uk_rent_agent.web.rate_limit import SlidingWindowRateLimiter
+from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, get_prefs_store, graph_config
 from uk_rent_agent.observability import new_request_id, request_context
 from core.data_loader import load_mock_properties_from_csv, load_properties
-from rag.rag_coordinator import RAGCoordinator
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
 from core.tools.search_properties import search_properties_impl
@@ -53,6 +53,7 @@ _runtime_config = Config.from_env()
 # authenticated identity) survives cross-origin requests when the UI is opened over a
 # different origin (e.g. file://). Same-origin (render_template at :5001) works regardless.
 CORS(app, origins=list(_runtime_config.cors_origins), supports_credentials=True)
+_api_rate_limiter = SlidingWindowRateLimiter()
 
 # Secret key — needed for the server-side `session` cookie used as a per-browser
 # identity fallback (priority (c) in resolve_identity). Read from env first so a real
@@ -67,8 +68,9 @@ if not app.secret_key:
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=_bool_env("SESSION_COOKIE_SECURE", False),
+    SESSION_COOKIE_SECURE=_runtime_config.session_cookie_secure,
     PERMANENT_SESSION_LIFETIME=_runtime_config.session_ttl_seconds,
+    MAX_CONTENT_LENGTH=_runtime_config.max_request_bytes,
 )
 
 # ============================================================================
@@ -166,6 +168,19 @@ def _get_session(user_id, conversation_id):
             if not sess.history:
                 sess.history = conversation_store.rehydrate_history(
                     user_id, conversation_id, MAX_HISTORY_LENGTH)
+            # Rehydrate the last structured search as well as text history. A browser
+            # refresh must not make property follow-ups lose their target merely because
+            # the in-memory cache was evicted.
+            if not sess.last_results:
+                for message in reversed(conversation_store.get_messages(user_id, conversation_id)):
+                    recommendations = message.get('recommendations')
+                    if message.get('role') == 'assistant' and isinstance(recommendations, list) and recommendations:
+                        sess.last_results = recommendations
+                        previous, structured = _build_results_context(recommendations)
+                        sess.persistent_state.setdefault('extracted_context', {})
+                        sess.persistent_state['extracted_context']['previous_search_results'] = previous
+                        sess.persistent_state['extracted_context']['last_results'] = structured
+                        break
         except Exception as e:
             print(f"[rehydrate] failed ({user_id}:{conversation_id}): {e}")
         sess.rehydrated = True
@@ -297,13 +312,14 @@ def resolve_identity(data=None):
     authed = _authed_user_id()
     if authed is not None:
         return authed, authed
-    body_uid = data.get('user_id') if isinstance(data, dict) else None
+    allow_legacy_id = _runtime_config.allow_legacy_client_user_id
+    body_uid = data.get('user_id') if allow_legacy_id and isinstance(data, dict) else None
     try:
-        header_uid = request.headers.get('X-User-Id')
+        header_uid = request.headers.get('X-User-Id') if allow_legacy_id else None
     except Exception:
         header_uid = None
     try:
-        query_uid = request.args.get('user_id')
+        query_uid = request.args.get('user_id') if allow_legacy_id else None
     except Exception:
         query_uid = None
     try:
@@ -385,7 +401,11 @@ if _os.environ.get("USE_MCP_TOOLS", "0").lower() not in ("0", "false", "no"):
 # --- RAG Setup as per markdown ---
 # Initialize the coordinator and build the index at startup
 print("[STARTUP] Initializing RAG Coordinator...")
+rag_coordinator = None
 try:
+    # Import lazily: optional embedding dependencies must not prevent the
+    # deterministic listing search from serving real results.
+    from rag.rag_coordinator import RAGCoordinator
     rag_coordinator = RAGCoordinator()
     print("✓ [STARTUP] RAGCoordinator initialized successfully")
 except Exception as e:
@@ -394,14 +414,15 @@ except Exception as e:
     print(f"   Error message: {str(e)}")
     import traceback
     traceback.print_exc()
-    raise  # Re-raise to see full stack trace
+    # RAG is optional. Search falls back to deterministic ranking.
+    rag_coordinator = None
 
 print("[STARTUP] Loading properties (PROPERTY_SOURCE=%s)..." % _os.getenv("PROPERTY_SOURCE", "auto"))
 all_properties = load_properties()
 print(f"✓ [STARTUP] Loaded {len(all_properties)} properties")
 
 # ✅ FIXED: 确保在建立索引前处理所有属性，添加 parsed_price
-if all_properties:
+if all_properties and rag_coordinator is not None:
     from core.data_loader import parse_price
     for prop in all_properties:
         if 'parsed_price' not in prop:
@@ -418,7 +439,7 @@ if all_properties:
         print(f"❌ ERROR building FAISS index: {e}")
         import traceback
         traceback.print_exc()
-        raise
+        rag_coordinator = None
 else:
     print("⚠️  WARNING: No properties loaded from CSV. RAG search may not work properly.")
 # ------------------------------------
@@ -471,6 +492,43 @@ def _enforce_auth():
     if session.get('authenticated'):
         return None
     return jsonify({"error": "authentication required"}), 401
+
+
+def _rate_limit_subject() -> str:
+    user_id = _authed_user_id()
+    if user_id:
+        return f"user:{user_id}"
+    remote = request.remote_addr or "unknown"
+    if remote in {"127.0.0.1", "::1"}:
+        forwarded = request.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+        if forwarded:
+            remote = forwarded
+    return f"ip:{remote}"
+
+
+@app.before_request
+def _limit_expensive_api_requests():
+    if request.method == 'OPTIONS' or not request.path.startswith('/api/'):
+        return None
+    limits = {
+        '/api/alex': 12,
+        '/api/search_direct': 20,
+        '/api/generate_map': 6,
+        '/api/auth/login': 10,
+        '/api/auth/register': 5,
+    }
+    limit = limits.get(request.path, 120)
+    allowed, retry_after = _api_rate_limiter.allow(
+        f"{request.path}:{_rate_limit_subject()}",
+        limit=limit,
+        window_seconds=_runtime_config.rate_limit_window_seconds,
+    )
+    if allowed:
+        return None
+    response = jsonify({"error": "too many requests; please try again shortly"})
+    response.status_code = 429
+    response.headers['Retry-After'] = str(retry_after)
+    return response
 
 
 @app.route('/api/auth/register', methods=['POST'])
@@ -904,7 +962,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         checkpointer = None
         if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
             checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
-        agent_graph = build_agent_graph(agent_tool_provider, checkpointer=checkpointer)
+        # Cross-thread Store + HITL are opt-in (default off): identical topology when disabled.
+        store = get_prefs_store() if _runtime_config.enable_store else None
+        agent_graph = build_agent_graph(
+            agent_tool_provider,
+            checkpointer=checkpointer,
+            store=store,
+            enable_hitl=_runtime_config.enable_hitl,
+        )
         print("[LangGraph] ✓ LangGraph agent 编译完成")
 
     # ── 构建本轮 extracted_context ──────────────────────────────
@@ -1029,11 +1094,44 @@ Current user message: {user_message}"""
     import core.langgraph_agent as _lga_mod
     _graph_cfg = dict(graph_config(user_id, conversation_id, request_id=request_id))
     _graph_cfg["recursion_limit"] = getattr(_lga_mod, "GRAPH_RECURSION_LIMIT", 80)
+    # HITL resume wiring: if this thread is paused at confirm_search, a clear yes/no reply
+    # resumes the interrupted run with Command(resume=...). Any other reply falls through to
+    # fresh input, which (verified on langgraph 1.2.8) cleanly restarts from START and
+    # deliberately abandons the pending confirmation — the user changed topic.
+    graph_input = initial_state
+    if _runtime_config.enable_hitl:
+        try:
+            _snap = await agent_graph.aget_state(_graph_cfg)
+            _pending_confirm = bool(_snap.next) and "confirm_search" in _snap.next
+        except Exception:
+            _pending_confirm = False
+        if _pending_confirm:
+            from core.graph_advanced import parse_confirmation_reply
+            _decision = parse_confirmation_reply(user_message)
+            if _decision is not None:
+                from langgraph.types import Command as _LGCommand
+                graph_input = _LGCommand(
+                    resume=(True if _decision == "proceed" else {"action": "cancel"})
+                )
+                print(f"[LangGraph] ⏯ HITL resume: {_decision}")
     final_state = await agent_graph.ainvoke(
-        initial_state,
+        graph_input,
         config=_graph_cfg,
     )
     print(f"[LangGraph] ✓ 完成!")
+
+    # HITL safety net: if the graph paused at confirm_search (enable_hitl), ainvoke returns
+    # with __interrupt__ set and no final_response. Surface the confirmation prompt instead
+    # of crashing; resuming (graph.ainvoke(Command(resume=...), config)) is exercised in the
+    # demo/tests, not this single-shot endpoint.
+    _intr = final_state.get("__interrupt__") if isinstance(final_state, dict) else None
+    if _intr and not final_state.get("final_response"):
+        _payload = getattr(_intr[0], "value", {}) if _intr else {}
+        final_state["final_response"] = (
+            (_payload.get("question") if isinstance(_payload, dict) else None)
+            or "I'm about to run some property searches — please confirm to proceed."
+        )
+        final_state["response_type"] = "answer"
 
     # ── Offline-eval turn row (additive; no-op unless RENTCOMPASS_EVAL active) ──
     try:
@@ -1249,6 +1347,12 @@ def _compose_search_line(area, max_budget, budget_period, bedrooms,
     return " | ".join(parts)
 
 
+def _search_result_failed(result) -> bool:
+    """Distinguish an empty successful search from a structured tool failure."""
+    return (not isinstance(result, dict) or result.get('success') is False
+            or result.get('status') == 'error')
+
+
 @app.route('/api/search_direct', methods=['POST'])
 async def api_search_direct():
     """Deterministic structured search — the frontend form's backend path.
@@ -1376,6 +1480,10 @@ async def api_search_direct():
                 # 表单直搜无消息可推断语言 → 显式透传回复语言，覆盖工具的 is_cjk 推断。
                 reply_language=reply_language,
             )
+        if _search_result_failed(result):
+            # The tool returns structured failures instead of raising. Do not turn a
+            # provider/RAG failure into the misleading "no matching properties" state.
+            raise RuntimeError((result or {}).get('error', 'property search failed'))
         recommendations = result.get('recommendations') or []
         # 工具已按 reply_language 本地化 summary；仅兜底文案由本端点自己本地化。
         if recommendations:
@@ -1671,7 +1779,7 @@ def generate_property_map():
     except Exception as e:
         print(f"❌ Error generating map: {e}")
         traceback.print_exc()
-        return jsonify({"error": f"Map generation failed: {str(e)}"}), 500
+        return jsonify({"error": "Map generation is temporarily unavailable"}), 500
 
 
 if __name__ == '__main__':

@@ -27,11 +27,24 @@ class Config:
     session_ttl_seconds: int = 7 * 24 * 3600
     checkpoint_path: Path | None = None
     enable_checkpointer: bool = True
+    # HITL: pause before the expensive multi-search fan-out for human approval. Requires a
+    # checkpointer. Off by default — the graph runs end-to-end without pausing.
+    enable_hitl: bool = False
+    # Cross-thread Store: persist the user's durable structured criteria across conversations.
+    # Off by default — the existing Chroma AgentMemory remains the long-term memory of record.
+    enable_store: bool = False
     # Local username/password credential store (JSON, gitignored). See web/auth_store.py.
     auth_db_path: Path | None = None
     # When True, every /api/* route except /api/auth/* requires an authenticated session
     # (401 otherwise). Default False keeps the guest flow working for the local demo.
     require_auth: bool = False
+    session_cookie_secure: bool = False
+    # Client-provided user IDs are not an authorization mechanism. Keep this opt-in
+    # only for controlled legacy migrations; guest identities otherwise live in the
+    # signed session cookie minted by the server.
+    allow_legacy_client_user_id: bool = False
+    max_request_bytes: int = 256 * 1024
+    rate_limit_window_seconds: int = 60
 
     @property
     def data_dir(self) -> Path:
@@ -68,8 +81,14 @@ class Config:
                 os.getenv("CHECKPOINT_PATH", str(root / ".runtime" / "checkpoints.sqlite3"))
             ),
             enable_checkpointer=_bool("ENABLE_CHECKPOINTER", True),
+            enable_hitl=_bool("ENABLE_HITL", False),
+            enable_store=_bool("ENABLE_STORE", False),
             auth_db_path=Path(
                 os.getenv("AUTH_DB_PATH", str(root / ".runtime" / "users.json"))
             ),
             require_auth=_bool("REQUIRE_AUTH", False),
+            session_cookie_secure=_bool("SESSION_COOKIE_SECURE", False),
+            allow_legacy_client_user_id=_bool("ALLOW_LEGACY_CLIENT_USER_ID", False),
+            max_request_bytes=int(os.getenv("MAX_REQUEST_BYTES", str(256 * 1024))),
+            rate_limit_window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
         )

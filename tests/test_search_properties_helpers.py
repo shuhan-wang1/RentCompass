@@ -59,3 +59,23 @@ def test_coord_commute_minutes_is_reliable_and_bounded():
     # Missing coordinates degrade gracefully.
     assert _coord_commute_minutes("", dest) is None
     assert _coord_commute_minutes("53.4, -2.2", None) is None
+
+
+def test_missing_rag_dependency_falls_back_to_live_listing_order(monkeypatch):
+    import builtins
+    import core.tools.search_properties as search_properties
+
+    monkeypatch.setattr(search_properties, "_RAG_COORDINATOR", None)
+    real_import = builtins.__import__
+
+    def missing_rag(name, *args, **kwargs):
+        if name == "rag.rag_coordinator":
+            raise ModuleNotFoundError("No module named 'faiss'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_rag)
+    coordinator = search_properties._get_rag_coordinator()
+    rows = [{"Address": "1 Camden Rd"}, {"Address": "2 Camden Rd"}]
+    coordinator.property_store.build_index(rows)
+    ranked, _context, _area = coordinator.enhanced_search("Camden", {})
+    assert ranked == rows

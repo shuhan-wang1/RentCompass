@@ -99,6 +99,12 @@ services:
       # Point the web_search tool at the SearXNG service on the compose network.
       SEARXNG_URL: "http://searxng:8080"
       PYTHONUNBUFFERED: "1"
+      # The container is deployed only behind TLS nginx. Keep public API data tied
+      # to authenticated, Secure session cookies rather than client-supplied IDs.
+      REQUIRE_AUTH: "true"
+      SESSION_COOKIE_SECURE: "true"
+      ALLOW_LEGACY_CLIENT_USER_ID: "false"
+      MAX_REQUEST_BYTES: "262144"
     volumes:
       # Secrets (also read directly by config.from_env via load_dotenv).
       - ./app/.env:/app/app/.env:ro

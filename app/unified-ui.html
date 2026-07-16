@@ -1236,8 +1236,7 @@
 
         /* -------------------------------------------------------------------------- */
         /* API FETCH WRAPPER                                                          */
-        /* - injects X-User-Id header + credentials:'include' on every request        */
-        /* - adds ?user_id= for GET/DELETE (contract identity priority c)             */
+        /* - credentials:'include' sends the server-issued signed identity cookie      */
         /* - AbortController + 240s timeout; links an optional external signal        */
         /* - THROWS on network/abort so callers can surface toasts (no silent swallow)*/
         /* -------------------------------------------------------------------------- */
@@ -1254,13 +1253,6 @@
             let url = resolveUrl(endpoint);
 
             const headers = Object.assign({}, options.headers || {});
-            headers['X-User-Id'] = getUserId();
-
-            // For GET/DELETE the identity travels as a query param too (contract).
-            if (method === 'GET' || method === 'DELETE') {
-                const sep = url.indexOf('?') === -1 ? '?' : '&';
-                url = url + sep + 'user_id=' + encodeURIComponent(getUserId());
-            }
 
             const controller = new AbortController();
             const timeoutId = setTimeout(function () {
@@ -2169,7 +2161,6 @@
                 const isContinuation = lastResponseType === 'clarification';
                 const body = {
                     message: message,
-                    user_id: getUserId(),
                     context: currentPropertyContext ? { property: currentPropertyContext } : {},
                     is_continuation: isContinuation,
                     language: currentLang,
@@ -4025,7 +4016,7 @@
             if (criteria.move_in_date && /^\d{4}-\d{2}-\d{2}$/.test(criteria.move_in_date)) {
                 reqCriteria.move_in_date = criteria.move_in_date;
             }
-            const body = { user_id: getUserId(), criteria: reqCriteria, ui_language: currentLang };
+            const body = { criteria: reqCriteria, ui_language: currentLang };
             if (activeConversationId) body.conversation_id = activeConversationId;
 
             isProcessing = true;

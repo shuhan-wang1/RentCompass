@@ -305,7 +305,7 @@ lifetime. ``Per-turn'' fields are reset each message by \code{create\_initial\_s
 \code{session\_id} & last-write / carried & The \emph{conversation} id (one chat thread). Used as the checkpointer thread key.\\
 \code{extracted\_context} & last-write / per-turn & Side-channel facts for this message: the pristine \code{current\_message}, the resolved \code{reply\_language}, any ``Ask-AI'' focused-listing fields, previous results, comparison data.\\
 \code{user\_preferences} & last-write / carried & Coarse preference buckets: \code{hard\_preferences}, \code{soft\_preferences}, \code{excluded\_areas}, \code{required\_amenities}, \code{safety\_concerns}.\\
-\code{accumulated\_search\_criteria} & last-write / carried & The structured search profile built up over the conversation: \code{area}/\code{areas}, \code{commute\_destination}, \code{max\_budget}, \code{max\_travel\_time}, \code{room\_type}, \code{bedrooms}, \code{no\_commute}, \code{move\_in\_date}, \code{criteria\_gate\_shown}, \dots\\
+\code{accumulated\_\allowbreak search\_\allowbreak criteria} & last-write / carried & The structured search profile built up over the conversation: \code{area}/\code{areas}, \code{commute\_destination}, \code{max\_budget}, \code{max\_travel\_time}, \code{room\_type}, \code{bedrooms}, \code{no\_commute}, \code{move\_in\_date}, \code{criteria\_gate\_shown}, \dots\\
 \code{tool\_decision} & last-write / per-turn & The chosen route: \code{\{tool, params, reason, \dots\}}.\\
 \code{tool\_observation} & last-write / per-turn & The latest tool's output rendered as text (fed to the generator).\\
 \code{tool\_raw\_data} & last-write / per-turn & The latest tool's structured payload (fed to the formatter and critic).\\
@@ -361,14 +361,14 @@ each node.
   lbl/.style={font=\scriptsize\itshape, fill=white, inner sep=1pt},
 ]
 \node[term] (start) {START};
-\node[proc, below=of start] (extract) {extract\_\-preferences};
+\node[proc, below=of start] (extract) {extract\_\\preferences};
 \node[proc, below=of extract] (decide) {decide\_tool\\{\scriptsize(router)}};
 \node[proc, below=8mm and 0mm of decide] (exec) {execute\_tool};
 \node[dec, left=20mm of exec] (reflect) {reflect};
-\node[proc, right=16mm of decide] (dispatch) {dispatch\_\-searches};
+\node[proc, right=16mm of decide] (dispatch) {dispatch\_\\searches};
 \node[proc, below=of dispatch] (worker) {search\_worker\\{\scriptsize($\times N$, fan-out)}};
 \node[proc, below=of worker] (gather) {gather\_\-searches};
-\node[proc, below=20mm of exec] (gen) {generate\_\-response};
+\node[proc, below=20mm of exec] (gen) {generate\_\\response};
 \node[proc, below=of gen] (critic) {critic};
 \node[proc, below=of critic] (format) {format\_output};
 \node[term, below=of format] (end) {END};

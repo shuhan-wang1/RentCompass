@@ -1,0 +1,24 @@
+# Pre-commit hooks. Install once with:  pre-commit install
+# Run against all files with:           pre-commit run --all-files
+#
+# Rev pins are intentional — bump deliberately, not via auto-update, so hook
+# behaviour is reproducible across contributors and CI.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      # Scans staged changes for secrets (working tree only, not full history).
+      # This is the local mirror of the `secrets` CI job.
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # Guard against re-committing bulky model weights / datasets like the
+        # ones just untracked. 1 MB ceiling; live fixtures under app/data are
+        # smaller than this.
+        args: ["--maxkb=1024"]

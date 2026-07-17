@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to keep CI fast.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    env:
+      # Windows dev consoles are gbk; the suite emits non-ASCII (zh place names).
+      # Pin UTF-8 so decode behaviour matches local runs. Harmless on Linux.
+      PYTHONIOENCODING: utf-8
+      # Belt-and-suspenders: the test suite never instantiates the embedding
+      # model (rag coordinator is lazy + mocked in tests), so no weights are
+      # fetched. Forcing offline mode makes a regression fail loudly instead of
+      # silently downloading ~90MB from the Hub.
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # pyproject requires-python is >=3.10,<3.13; 3.11 is a stable, fully
+          # wheel-supported target for all deps (faiss-cpu, chromadb,
+          # sentence-transformers, langgraph).
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package (runtime + dev extras)
+        # Installs the src/ package editable plus the [dev] extra (pytest,
+        # pytest-asyncio, import-linter). Deliberately does NOT install the
+        # [finetune] extra (torch/torchvision/torchaudio/transformers/peft/
+        # accelerate) — training deps are not needed to run the test suite.
+        # (CPU torch still arrives transitively via sentence-transformers; that
+        # is a legitimate runtime dependency, not the finetune stack.)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run test suite
+        # testpaths in pyproject runs both tests/ and tests_refactor/. sys.path
+        # roots (src, app, .) come from pyproject pythonpath + tests/conftest.py.
+        # Live tests are env-gated OFF (RUN_LIVE_OSM / RUN_LIVE_SCRAPE unset), so
+        # no network is touched.
+        run: python -m pytest -q
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Working tree only. Do NOT deepen history here: a full-history scan
+          # is known-dirty (secrets exist in past commits) until the separate
+          # history rewrite lands, and would permanently fail CI.
+          fetch-depth: 1
+
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION=8.18.4
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan working tree (no git history)
+        # --no-git scans files on disk only, matching the pre-commit hook's
+        # scope. This catches secrets in the current checkout without failing on
+        # the known-dirty history.
+        run: gitleaks detect --no-git --source . --redact --verbose

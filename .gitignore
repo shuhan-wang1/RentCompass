@@ -89,3 +89,16 @@ ZOOPLA_REPAIR_GUIDE.md
 
 # Next-gen architecture design doc (local only)
 NEXT_GEN_AGENT_ARCHITECTURE.md
+
+# Fine-tuning datasets (regenerable via fine_tuning/generate_data.py).
+# The LoRA weights dir (fine_tuning/student_model_lora/) is already ignored above.
+fine_tuning/train.jsonl
+fine_tuning/val.jsonl
+fine_tuning/test.jsonl
+fine_tuning/dataset_raw.json
+
+# Frozen one-off evaluation run artifacts (large events/raw-run streams + CSVs).
+# Small summary/report files (*.json, *.md, .gitkeep) under evaluation/results/
+# stay tracked as provenance; only the bulky run streams are ignored.
+evaluation/results/**/*.jsonl
+evaluation/results/**/*.csv

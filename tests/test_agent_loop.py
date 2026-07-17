@@ -181,7 +181,7 @@ def _build_loop_graph(lga, monkeypatch, reflect_llm, registry, intent="get_weath
     from core import llm_config
     monkeypatch.setattr(llm_config, "get_classification_llm", lambda: _JsonLLM(intent))
     gen = _GenLLM()
-    monkeypatch.setattr(llm_config, "get_react_llm", lambda: gen)
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: gen)
     graph = lga.build_agent_graph(registry, reflect_llm=reflect_llm)
     return graph, gen
 
@@ -203,7 +203,10 @@ def test_loop_continue_once_then_answer(lga, monkeypatch):
     ])
     reg = _CountingRegistry()
     graph, gen = _build_loop_graph(lga, monkeypatch, reflect, reg)
-    out = _run_turn(lga, graph, "what is the weather in London")
+    # Multi-intent message (safety + weather, joined by "and") so the reflect controller
+    # is genuinely consulted on turn 1 — a single-intent message would hit the one-shot
+    # short-circuit and answer after the first tool without ever calling reflect.
+    out = _run_turn(lga, graph, "is London safe and what is the weather there")
 
     assert reg.calls == 2                                   # get_weather + one web_search
     obs = out["observations"]
@@ -228,7 +231,10 @@ def test_loop_cap_forces_answer(lga, monkeypatch):
 
     reg = _CountingRegistry()
     graph, gen = _build_loop_graph(lga, monkeypatch, _AlwaysContinueUnique(), reg)
-    out = _run_turn(lga, graph, "what is the weather in London")
+    # Multi-intent message (safety + weather, joined by "and") so the reflect controller
+    # is genuinely consulted on turn 1 — a single-intent message would hit the one-shot
+    # short-circuit and answer after the first tool without ever calling reflect.
+    out = _run_turn(lga, graph, "is London safe and what is the weather there")
 
     assert reg.calls == lga.MAX_AGENT_TURNS
     assert len(out["observations"]) == lga.MAX_AGENT_TURNS
@@ -247,7 +253,10 @@ def test_loop_no_progress_guard_breaks(lga, monkeypatch):
 
     reg = _CountingRegistry()
     graph, gen = _build_loop_graph(lga, monkeypatch, _AlwaysSame(), reg)
-    out = _run_turn(lga, graph, "what is the weather in London")
+    # Multi-intent message (safety + weather, joined by "and") so the reflect controller
+    # is genuinely consulted on turn 1 — a single-intent message would hit the one-shot
+    # short-circuit and answer after the first tool without ever calling reflect.
+    out = _run_turn(lga, graph, "is London safe and what is the weather there")
 
     # get_weather (turn 0) -> web_search 'identical' (turn 1) -> the SAME proposal is
     # caught by the no-progress guard -> answer. Well short of the cap.

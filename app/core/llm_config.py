@@ -51,11 +51,17 @@ def _ollama_llm(temperature: float, num_predict: int, num_ctx: int,
     return ChatOllama(**kwargs)
 
 
-def get_react_llm():
-    """LLM for agent reasoning and response generation (low temperature)."""
+def get_react_llm(low_latency: bool = False):
+    """LLM for agent reasoning and response generation (low temperature).
+
+    low_latency=True routes to the cheap chat model (deepseek-chat) — used for
+    greetings, direct answers and single-observation syntheses that gain nothing
+    from chain-of-thought. The default reserves the (slower, pricier) reasoner
+    (deepseek-reasoner) for genuine multi-evidence synthesis.
+    """
     if LLM_PROVIDER == "deepseek":
         from uk_rent_agent.llm.router import ModelRouter
-        return ModelRouter().create("responder")
+        return ModelRouter().create("responder", low_latency=low_latency)
     return _ollama_llm(temperature=0.1, num_predict=4000, num_ctx=8192, top_p=0.9)
 
 

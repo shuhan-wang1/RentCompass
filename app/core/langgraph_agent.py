@@ -653,7 +653,7 @@ Rules:
 - An opinion/suitability/recommendation question about listings ALREADY shown ("would you recommend this one for a couple", "推荐这个房源么", "哪个更适合情侣") is listing_advice, NEVER search_properties.
 - Small talk or a question answerable from context -> direct_answer.
 
-Respond with ONLY a JSON object, no prose: {{"intent": "<route name>"}}'''
+Respond with ONLY a json object, no prose: {{"intent": "<route name>"}}'''
 
 REASONING_PROPERTY_PROMPT = """You are Alex, a friendly rental assistant helping explain and assess a property from our DATABASE.
 
@@ -1271,7 +1271,22 @@ _SEARCH_ACTION_KWS = [
 ]
 
 
-def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=1, accumulated=None):
+def _bind_json_mode(llm):
+    """Constrain a DeepSeek/OpenAI chat client to emit a JSON object (DeepSeek supports
+    response_format={"type":"json_object"}). This makes the router/reflect controller
+    return parseable JSON instead of prose, so the existing parse ladder rarely has to
+    recover from malformed output. Defensive: if the client cannot be bound (unexpected
+    wrapper), return it unchanged and lean on the parse ladder as before.
+
+    NOTE: DeepSeek's JSON mode requires the literal word "json" somewhere in the prompt —
+    both INTENT_CLASSIFICATION_PROMPT and REFLECT_PROMPT satisfy this."""
+    try:
+        return llm.bind(response_format={"type": "json_object"})
+    except Exception:
+        return llm
+
+
+def _majority_vote(user_query, extracted_context, llm, tool_registry, accumulated=None):
     """Structured LLM intent classification (single call \u2014 a cloud LLM is reliable in one
     shot and each call has real latency). Routes on the CURRENT stripped message (the old
     code fed the whole memory/history-prefixed query, which mis-routed price-research
@@ -1279,8 +1294,8 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
 
     Output is strict JSON {"intent": "..."} parsed via a json -> substring -> heuristic
     ladder ending at web_search. market_info maps to the web_search synthesis path;
-    direct_answer answers conversationally. num_votes is accepted for signature
-    compatibility (a single structured call replaces the old repeated voting)."""
+    direct_answer answers conversationally. A single structured call replaces the old
+    repeated voting."""
     current = _current_message(user_query)
     history_block = _recent_history_block(user_query)
     valid_names = {name for name, _, _ in _INTENT_CATALOG}
@@ -1294,7 +1309,7 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, num_votes=
 
     intent = None
     try:
-        response = llm.invoke(prompt)
+        response = _bind_json_mode(llm).invoke(prompt)
         text = response.content if hasattr(response, 'content') else str(response)
         intent = _parse_intent(text, valid_names)
     except Exception as e:
@@ -2257,13 +2272,22 @@ def _build_generation_prompt(state: AgentState) -> str:
     return directive + "\n\n" + body
 
 
+def _synthesis_needs_reasoner(state: AgentState) -> bool:
+    """Cost/latency gate for response generation. The chain-of-thought reasoner
+    (deepseek-reasoner) is reserved for genuine multi-evidence synthesis — i.e. when the
+    bounded loop gathered MORE THAN ONE tool observation. Greetings, direct answers and
+    single-observation answers use the cheap chat model instead. Mirrors the evidence test
+    in _build_generation_prompt so model choice tracks prompt complexity."""
+    return len(state.get("observations") or []) > 1
+
+
 def _make_generate_response_node():
     """Create the generate_response node."""
 
     async def generate_response_node(state: AgentState) -> dict:
         from core.llm_config import get_react_llm
 
-        llm = get_react_llm()
+        llm = get_react_llm(low_latency=not _synthesis_needs_reasoner(state))
         prompt = _build_generation_prompt(state)
 
         try:
@@ -2297,6 +2321,44 @@ def _params_digest(tool_name: str, params: dict) -> str:
     stable = {k: v for k, v in (params or {}).items() if k not in _DIGEST_VOLATILE_KEYS}
     payload = tool_name + "|" + json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
+# Keyword groups per loopable follow-up intent, used ONLY to detect whether the CURRENT
+# message packs two distinct asks (e.g. "is it safe AND how long is the commute"). Kept
+# deliberately small/high-precision: a false negative just means one cheap reflect call.
+_MULTI_INTENT_CUES = {
+    "safety": ["safe", "safety", "crime", "安全", "治安", "犯罪"],
+    "commute": ["commute", "how long", "how far", "travel time", "通勤", "多久", "多远", "距离"],
+    "cost": ["fare", "how much", "cost of", "车费", "多少钱", "费用"],
+    "transport": ["tube", "train", "bus", "line status", "delay", "地铁", "公交"],
+    "weather": ["weather", "rain", "天气"],
+    "poi": ["supermarket", "gym", "park", "restaurant", "nearby", "附近", "超市", "健身"],
+    "details": ["policy", "bills", "deposit", "guest policy", "pet", "政策", "押金", "宠物"],
+    "web": ["visa", "guarantor", "签证", "担保"],
+}
+
+# Conjunctions that plausibly join two separate asks in one message.
+_MULTI_INTENT_CONJUNCTIONS = (
+    " and ", " also ", " then ", " plus ", " as well as ", " along with ",
+    "以及", "还有", "并且", "然后", "而且", "、",
+)
+
+
+def _current_message_has_multi_intent(message: str) -> bool:
+    """True when the CURRENT message joins two DISTINCT recognized follow-up intents with a
+    conjunction (or asks two separate questions). Used by reflect to decide whether the
+    one-shot short-circuit is safe: a single-intent message can answer immediately, a
+    genuinely multi-intent one must go through full reflection so the second ask isn't
+    dropped. High-precision by design (requires >= 2 distinct intent groups)."""
+    if not message:
+        return False
+    low = message.lower()
+    groups = {g for g, kws in _MULTI_INTENT_CUES.items() if any(kw in low for kw in kws)}
+    if len(groups) < 2:
+        return False
+    has_conjunction = any(c in low for c in _MULTI_INTENT_CONJUNCTIONS)
+    has_two_questions = (low.count("?") + message.count("？")) >= 2
+    return has_conjunction or has_two_questions
 
 
 def _loop_catalog_text() -> str:
@@ -2334,7 +2396,7 @@ You are on step {current_turn} of at most {max_turns}. Strongly PREFER to answer
 AVAILABLE NEXT TOOLS (only for "continue"):
 {catalog}
 
-Respond with ONLY a JSON object, no prose:
+Respond with ONLY a json object, no prose:
 - Answer now:      {{"action": "answer"}}
 - One more step:   {{"action": "continue", "next_intent": "<tool name>", "next_query": "<refined sub-question>", "reason": "<why one more call is needed>"}}'''
 
@@ -2419,6 +2481,16 @@ def _make_reflect_node(tool_registry, reflect_llm):
         if loop_turn >= MAX_AGENT_TURNS:
             return _answer("cap reached")
 
+        # One-shot short-circuit: the FIRST loopable tool has run (exactly one observation)
+        # and the current message carries no multi-intent signal — so the controller would
+        # only ever say "answer". Skip that mandatory classification round-trip and answer
+        # now. Full reflection is preserved for later turns (loop_turn >= 2) and for
+        # multi-intent messages, which may legitimately warrant one more tool.
+        current_msg = _current_message(state.get("user_query") or "")
+        if (loop_turn == 1 and len(all_obs) == 1
+                and not _current_message_has_multi_intent(current_msg)):
+            return _answer("single-intent one-shot")
+
         # Ask the controller. Any exception fails closed to answering.
         try:
             prompt = REFLECT_PROMPT.format(
@@ -2427,7 +2499,7 @@ def _make_reflect_node(tool_registry, reflect_llm):
                 current_turn=loop_turn, max_turns=MAX_AGENT_TURNS,
                 catalog=_loop_catalog_text(),
             )
-            resp = reflect_llm.invoke(prompt)
+            resp = _bind_json_mode(reflect_llm).invoke(prompt)
             text = resp.content if hasattr(resp, "content") else str(resp)
             verdict = _parse_reflect_action(text)
         except Exception as e:
@@ -2525,7 +2597,7 @@ def _make_critic_node():
         async def _regenerate(correction: str) -> str:
             from core.llm_config import get_react_llm
 
-            gen = get_react_llm()
+            gen = get_react_llm(low_latency=not _synthesis_needs_reasoner(state))
             prompt = _build_generation_prompt(state) + "\n\n" + correction
             resp = await gen.ainvoke([HumanMessage(content=prompt)])
             text = resp.content if hasattr(resp, "content") else str(resp)

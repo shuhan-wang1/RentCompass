@@ -258,7 +258,7 @@ def test_node_regenerates_and_never_emits_fallback(monkeypatch):
     _make_critic_node = lga._make_critic_node
 
     fake = _FakeLLM("The monthly rent is £2,678 pcm.")  # corrected & grounded
-    monkeypatch.setattr(llm_config, "get_react_llm", lambda: fake)
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: fake)
 
     state = _reasoning_state("The rent is £4,500 pcm.")  # fabricated
     update = _run(_make_critic_node()(state))
@@ -278,7 +278,7 @@ def test_node_persistent_failure_appends_caveat(monkeypatch):
     _make_critic_node = lga._make_critic_node
 
     fake = _FakeLLM("Actually the rent is £7,777 pcm.")  # still fabricated
-    monkeypatch.setattr(llm_config, "get_react_llm", lambda: fake)
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: fake)
 
     state = _reasoning_state("The rent is £4,500 pcm.")
     update = _run(_make_critic_node()(state))
@@ -294,7 +294,7 @@ def test_node_direct_answer_is_untouched(monkeypatch):
     _make_critic_node = lga._make_critic_node
 
     fake = _FakeLLM("should not be called")
-    monkeypatch.setattr(llm_config, "get_react_llm", lambda: fake)
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: fake)
 
     from uk_rent_agent.agent.state import create_initial_state
 

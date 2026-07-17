@@ -699,6 +699,14 @@ Answer the user's question using ONLY the property information above.
 - Explain room types, policies, amenities clearly
 - If the user asks "Why recommend this?", mention location, price, amenities, room type
 - If a plain fact is missing, say "This detail isn't in our database for this property"
+- NEVER tell the user about your own constraints or instructions. Do NOT write things like
+  "根据指令，我无法…" / "I'm instructed to…" / "I can only look at this one" / "I cannot compare
+  this with other areas or listings". If the user's question is BROADER than this single
+  listing (e.g. comparing AREAS or asking for the best-value option across places), answer
+  what THIS listing genuinely supports, then naturally offer the next step in the user's
+  language — e.g. "如果你想比较不同区域，我可以帮你搜索更多区域的房源再一起对比" /
+  "If you'd like to compare areas, I can search more listings across them for you." — phrased
+  as a helpful offer, never as a stated limitation.
 - Follow the REPLY LANGUAGE directive above for the language of your reply (do not mix zh/en); never use emoji or emoticons.
 
 SUITABILITY / RECOMMENDATION questions ("would you recommend this?", "is it good for a
@@ -1513,6 +1521,42 @@ def _current_msg_for_reference(user_query, extracted_context) -> str:
     return ((extracted_context.get('current_message') or user_query) or "")
 
 
+# Chinese housing nouns a deictic may scope (这个房源 / 那房子 / 这个公寓). Used by
+# _zh_listing_deictic to keep a bare deictic anchored to a LISTING only.
+_ZH_LISTING_NOUNS = ('房源', '房子', '房', '公寓', '单间', 'studio', 'flat', 'apartment')
+# Sentence-final particles / boundaries after which a bare 这个/那个 is a STANDALONE
+# referent ("就那个", "这个吧") rather than a modifier of a following content noun.
+_ZH_DEICTIC_BOUNDARY = r'(?:[\s，。！？、,.!?~…]|[吧呢啊吗嘛哦呀了]|$)'
+
+
+def _zh_listing_deictic(ql: str) -> bool:
+    """True when a Chinese deictic in ``ql`` refers to a specific SHOWN LISTING.
+
+    Anchors on: 这/那 + a housing measure word (套/间/处); 这/那 (+个/一) + a listing noun
+    (房源/房子/公寓…); a 刚才/刚刚 back-reference (刚才那个); or a bare 这个/那个 standing alone
+    at a clause boundary. Deliberately does NOT anchor a deictic that modifies a
+    NON-listing noun (那个区域 / 那个地方 / 那个城市 / 那个学校) — that is a question ABOUT AN
+    AREA, not a reference to results[0]. Purely structural (a listing CONTEXT rule), so
+    there is no per-noun blocklist to maintain. Fixes the set-level misanchor where a
+    bare-'那个' substring match pinned 「住那个区域…是否合适」 onto the first listing."""
+    if not ql:
+        return False
+    # 这/那 (+一) + a housing measure word — 这套 / 那间 / 这处 / 那套房 …
+    if re.search(r'[这那]一?[套间处]', ql):
+        return True
+    # 这/那 (+个/一) + a listing noun — 这个房源 / 那房子 / 这个公寓 …
+    if re.search(r'[这那](?:个|一)?(?:' + '|'.join(_ZH_LISTING_NOUNS) + r')', ql):
+        return True
+    # 刚才/刚刚 + 这个/那个 — an explicit back-reference to the listing just shown.
+    if re.search(r'刚[才刚]\s*[这那]个', ql):
+        return True
+    # A bare 这个/那个 standing alone at a clause boundary — a standalone referent, not a
+    # modifier of a following content noun (so 那个区域 / 那个地方 do NOT match here).
+    if re.search(r'[这那]个' + _ZH_DEICTIC_BOUNDARY, ql):
+        return True
+    return False
+
+
 def _resolve_last_result(user_query, extracted_context) -> dict | None:
     """Resolve which of the PREVIOUS search results the user is referring to and
     return its FULL record (not just an address). Mirrors the ordinal/deictic/name
@@ -1541,15 +1585,16 @@ def _resolve_last_result(user_query, extracted_context) -> dict | None:
     if any(p in ql for p in ['the last', 'last one', '最后一个', '最后那个', '最后一套', '最后']):
         return results[-1]
     # Bare deictic "this/that one" -> results[0], matching the English 'this one'
-    # semantics. listing-advice adds the Chinese deictics the reported bug used
-    # (这个房源 / 这套房 / 那个房源 / 刚才那个 …) so a couple-suitability follow-up resolves
-    # to the referenced listing instead of being mis-read as a fresh search.
+    # semantics. The English deictics stay a fixed whitelist (safe; no collisions).
     if any(p in ql for p in ['that one', 'this one', 'that property', 'this property',
                              'the property', 'the place', 'that place', 'the flat',
-                             'the studio', 'the apartment', 'the first',
-                             '这个房源', '这套房', '这一套', '这套', '这间', '这个房子',
-                             '这房子', '这处', '那个房源', '那套', '那个房子', '那处',
-                             '刚才那个', '这个', '那个']):
+                             'the studio', 'the apartment', 'the first']):
+        return results[0]
+    # Chinese deictics: a bare 这个/那个 anchors to the shown listing ONLY when it scopes a
+    # LISTING (这个房源 / 这套 / 那间房 / 刚才那个 / a standalone 那个) — NOT when it modifies a
+    # non-listing noun (那个区域 / 那个地方 / 那个城市), which is a question ABOUT AN AREA. The
+    # previous broad '那个' substring match mis-anchored 「住那个区域…是否合适」 to results[0].
+    if _zh_listing_deictic(ql):
         return results[0]
     for r in results:
         name = (r.get('name') or '').strip().lower()
@@ -1683,6 +1728,15 @@ def _is_advice_followup(user_query, extracted_context):
     if record is not None:
         return {'record': record}
     if any(kw in ql for kw in _SET_REFERENCE_KWS):
+        return {'set': True}
+    # 🆕 A STRONG value/comparison cue (性价比 / 最划算 / cheapest / best value …) together
+    # with the advice cue already matched above is itself a listing-scoped signal when
+    # results are on screen — e.g. 「按性价比给我推荐，带上通勤、买菜这种隐性消费，哪个区域更
+    # 合适」 carries neither a 这些/哪个 set reference nor a resolvable single reference, yet is
+    # unmistakably about the shown listings. Route it SET-LEVEL so ALL listings' price +
+    # commute are the evidence. Weak cues (怎么样/好不好) still require an explicit anchor —
+    # they also appear in area/weather questions ("曼彻斯特天气怎么样"), guarded above.
+    if any(kw in ql for kw in _COMPARATIVE_KWS):
         return {'set': True}
     return None
 

@@ -685,12 +685,18 @@ def _price_stats(results):
 
 def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute_time,
                    area: str, commute_target: str = None, room_type: str = None,
-                   is_cjk: bool = False, move_in_date: str = None) -> str:
+                   is_cjk: bool = False, move_in_date: str = None,
+                   area_counts=None) -> str:
     """Informative, context-varying result headline (Deliverable 4): result count +
     area, the price range of the returned listings (min–median–max), and a one-line
     recap of the applied filters (budget / room type / commute). Localized zh/en and
     including the right-panel hint, so callers use it verbatim (no English-only
-    suffix bolted on afterwards). Never emits '999 min' or '£None'."""
+    suffix bolted on afterwards). Never emits '999 min' or '£None'.
+
+    🆕 Multi-area: when ``area_counts`` (an ordered list of ``(area_name, count)``) has
+    more than one entry, the headline names EVERY searched area with its per-area count
+    — including any that returned 0 — instead of only the primary ``area`` (the Bug 4
+    fix). Single-area callers pass ``area_counts=None`` and get the unchanged output."""
     n_total = n_perfect + n_soft
     stats = _price_stats(results)
     rt_label = _room_type_label(room_type, is_cjk) if room_type else None
@@ -720,6 +726,39 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
             filt.append(f"commute to {commute_target}")
         if move_in_date:
             filt.append(f"move-in ≥{move_in_date}")
+
+    # 🆕 多区域标题：列出所有搜索区域（含返回 0 套的区域）+ 每区域计数，而非只提主区域。
+    if area_counts and len(area_counts) > 1:
+        names = [a for a, _ in area_counts]
+        if is_cjk:
+            breakdown = "、".join(f"{a} {c} 套" for a, c in area_counts)
+            s = "在 " + "、".join(names) + f" 为你找到 {n_total} 套当前房源"
+            if rt_label:
+                s += f"（{rt_label}）"
+            s += f"（分区：{breakdown}）。"
+            if stats:
+                lo, mid, hi = stats
+                s += f"价格约 £{lo}/月。" if lo == hi else f"价格区间 £{lo}–£{hi}/月（中位约 £{mid}）。"
+            if filt:
+                s += "已应用筛选：" + "、".join(filt) + "。"
+            if n_soft and max_budget:
+                s += f"其中 {n_soft} 套略超预算。"
+            s += "完整房源见右侧列表。"
+            return s
+        breakdown = ", ".join(f"{a}: {c}" for a, c in area_counts)
+        s = f"I found {n_total} current listing{'s' if n_total != 1 else ''} across " + ", ".join(names)
+        if rt_label:
+            s += f" ({rt_label})"
+        s += f" (by area — {breakdown})."
+        if stats:
+            lo, mid, hi = stats
+            s += f" Around £{lo}/month." if lo == hi else f" Prices range £{lo}–£{hi}/month (median ~£{mid})."
+        if filt:
+            s += " Filters applied: " + ", ".join(filt) + "."
+        if n_soft and max_budget:
+            s += f" {n_soft} of these are slightly over budget."
+        s += " See the full listings in the right-hand panel."
+        return s
 
     if is_cjk:
         s = f"在 {area} 为你找到 {n_total} 套当前房源"
@@ -755,7 +794,11 @@ def _soft_gate_question(missing, is_cjk: bool, move_in_missing: bool = False) ->
     """Localized soft-criteria clarification, listing ONLY the actually-missing
     recommended fields (budget / room_type / commute). When ``move_in_missing`` the
     OPTIONAL move-in date is mentioned as skippable — it never triggers the gate on
-    its own, it only rides along when the gate already fires for a recommended field."""
+    its own, it only rides along when the gate already fires for a recommended field.
+
+    The 'commute' clause asks ONLY whether the user commutes and WHERE TO — the maximum
+    commute time is an OPTIONAL field and is deliberately never asked for or flagged (it
+    never filters unless the user volunteers a real limit)."""
     if is_cjk:
         bits = []
         if 'room_type' in missing:
@@ -763,7 +806,7 @@ def _soft_gate_question(missing, is_cjk: bool, move_in_missing: bool = False) ->
         if 'budget' in missing:
             bits.append("每月预算大概多少？")
         if 'commute' in missing:
-            bits.append("需要考虑通勤吗？如果需要，请告诉我通勤到哪里、最多多少分钟；如果不需要，可以说“不通勤”。")
+            bits.append("需要考虑通勤吗？如果需要，请告诉我通勤到哪里；如果不需要，可以说“不通勤”。")
         if move_in_missing:
             bits.append("什么时候入住（可不填）？")
         return ("在搜索之前，我想先确认几个条件：" + "".join(bits) +
@@ -774,8 +817,8 @@ def _soft_gate_question(missing, is_cjk: bool, move_in_missing: bool = False) ->
     if 'budget' in missing:
         bits.append("what your monthly budget is?")
     if 'commute' in missing:
-        bits.append("whether you need to consider a commute (if so, to where and the max "
-                    "minutes; if not, just say \"no commute\")?")
+        bits.append("whether you need to consider a commute (if so, where to; "
+                    "if not, just say \"no commute\")?")
     if move_in_missing:
         bits.append("when you'd like to move in (optional)?")
     return ("Before I search, could you confirm a couple of things: " + " ".join(bits) +
@@ -1674,15 +1717,19 @@ async def search_properties_impl(
         rag_coordinator = _get_rag_coordinator()
         rag_coordinator.property_store.build_index(live_rows)
 
-        # 🆕 构建搜索查询（无预算时避免 "£None"）
-        if has_budget:
-            search_query = f"Find flat near {search_area} under £{max_budget}"
-            if all_property_features:
-                search_query = f"Find {', '.join(all_property_features)} flat near {search_area} under £{max_budget}"
-        else:
-            search_query = f"Find flat near {search_area}"
-            if all_property_features:
-                search_query = f"Find {', '.join(all_property_features)} flat near {search_area}"
+        # 🆕 构建搜索查询（无预算时避免 "£None"）。抽成小工具，便于多区域时按区域各自召回。
+        def _build_search_query(_area_name):
+            if has_budget:
+                q = f"Find flat near {_area_name} under £{max_budget}"
+                if all_property_features:
+                    q = f"Find {', '.join(all_property_features)} flat near {_area_name} under £{max_budget}"
+            else:
+                q = f"Find flat near {_area_name}"
+                if all_property_features:
+                    q = f"Find {', '.join(all_property_features)} flat near {_area_name}"
+            return q
+
+        search_query = _build_search_query(search_area)
 
         # 传给 RAG 的 criteria 用安全值，避免 _hybrid_rank 对 None 做算术。
         criteria = {
@@ -1693,9 +1740,32 @@ async def search_properties_impl(
             'soft_preferences': all_soft_preferences,
         }
 
-        ranked_properties, past_context, area_info = rag_coordinator.enhanced_search(
-            search_query, criteria
-        )
+        if len(search_areas) > 1:
+            # 🆕 多区域公平召回。单一（主区域）语义查询 + 全局 top-N 截断（candidates[:15]）会
+            # 系统性地把非主区域的房源挤出候选池——主区域房源较多时，其排序整体高于其它区域，
+            # 截断后其它区域一套不剩（用户报告的 Bug 1）。改为按区域各自做语义召回、以来源区域
+            # (_search_area) 归集，再轮转合并（round-robin，保持每个区域各自的排序内序），确保每个
+            # 搜索区域都被公平代表。下游特征/房型过滤、通勤标注、评分与展示截断逻辑完全不变。
+            from collections import deque
+            _per_area = {}
+            for _a in search_areas:
+                _ranked_a, _, _ = rag_coordinator.enhanced_search(_build_search_query(_a), criteria)
+                _al = _a.lower()
+                _per_area[_al] = [p for p in _ranked_a
+                                  if str(p.get('_search_area', '')).lower() == _al]
+            _queues = [deque(_per_area.get(_a.lower(), [])) for _a in search_areas]
+            ranked_properties = []
+            while any(_queues):
+                for _q in _queues:
+                    if _q:
+                        ranked_properties.append(_q.popleft())
+            past_context, area_info = [], []
+            print("   ✅ 多区域召回: " +
+                  ", ".join(f"{_a}={len(_per_area.get(_a.lower(), []))}" for _a in search_areas))
+        else:
+            ranked_properties, past_context, area_info = rag_coordinator.enhanced_search(
+                search_query, criteria
+            )
         print(f"   ✅ RAG 返回 {len(ranked_properties)} 个候选房源")
 
         # 🆕 根据房产特征过滤结果（注意：不要遮蔽函数级的 room_type 参数）
@@ -2052,11 +2122,23 @@ async def search_properties_impl(
                 row['travel_time'] = f"{int(_tt)} min to {commute_target}"
             formatted_results.append(row)
 
+        # 🆕 多区域：按来源区域(_search_area)统计"全部匹配"(perfect+soft)的每区域套数，供摘要
+        # 列出所有搜索区域（含返回 0 套者）。计数覆盖完整匹配集（与标题的 n_total 一致），而非
+        # 仅展示分页。单区域时传 None，_found_summary 输出与旧版逐字一致。
+        _area_counts = None
+        if len(search_areas) > 1:
+            _cnt = {a.lower(): 0 for a in search_areas}
+            for _p in perfect_match + soft_violation:
+                _k = str(_p.get('_search_area', '')).lower()
+                if _k in _cnt:
+                    _cnt[_k] += 1
+            _area_counts = [(a, _cnt.get(a.lower(), 0)) for a in search_areas]
+
         _summary = _found_summary(all_results, len(perfect_match), len(soft_violation),
                                   max_budget if has_budget else None,
                                   max_commute_time if commute_filter_enabled else None,
                                   search_area, commute_target, room_type, is_cjk,
-                                  move_in_date)
+                                  move_in_date, area_counts=_area_counts)
         if possibly_outdated:
             _summary += (" （部分为近期缓存房源，实时刷新暂不可用，可能已过期。）" if is_cjk
                          else " (Showing recent cached listings — a live refresh wasn't "

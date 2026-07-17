@@ -237,6 +237,53 @@ def test_unanchored_weather_reaches_the_vote(lga):
     assert cmd.update["tool_decision"]["tool"] == "get_weather"
 
 
+def test_value_for_money_recommendation_routes_set_level(lga):
+    """Bug 5: a 性价比 / value-for-money recommendation over the shown set — carrying
+    hidden costs (通勤/买菜) and a bare 那个区域 — must route SET-LEVEL (direct_answer over
+    ALL listings), NOT a single-listing analysis of results[0]. The bare '那个' inside
+    「住那个区域」 must not anchor to the first listing."""
+    recs = _records()
+    msg = ("你能不能给我按照性价比给我进行推荐，带上通勤，买菜这种隐形消费之后"
+           "你觉得住那个区域价格还有通勤时间都是比较合适的")
+    # The bare '那个' (modifying 区域) does not anchor to a specific listing.
+    assert lga._resolve_last_result(msg, {"last_results": recs}) is None
+    cmd = _decide(lga, msg, _NoVoteLLM(), extra_ctx={"last_results": recs})
+    d = cmd.update["tool_decision"]
+    assert d["tool"] == "direct_answer"                       # set-level, not reasoning_property
+    assert cmd.update["tool_raw_data"]["compared_results"] is recs
+    obs = cmd.update.get("tool_observation")
+    assert "Previously recommended properties" in obs
+    assert "Maple Court" in obs and "Elm House" in obs        # every listing is evidence
+
+
+def test_area_deictic_does_not_anchor_to_a_listing(lga):
+    """Bug 5 (a): 那个/这个 followed by a NON-listing noun (区域/地区/地方/城市) is a question
+    ABOUT AN AREA, never a reference to results[0]."""
+    recs = _records()
+    for msg in ("住那个区域合适吗", "那个区域怎么样", "这个地方好不好", "那个城市适合学生吗"):
+        assert lga._resolve_last_result(msg, {"last_results": recs}) is None, msg
+        assert lga._zh_listing_deictic(msg) is False, msg
+
+
+def test_listing_scoped_deictics_still_anchor(lga):
+    """Bug 5 (a) must NOT regress the genuine single-listing deictics: 这个房源 / 那套 /
+    那间房 / 刚才那个 / a standalone 那个 still resolve to the referenced listing."""
+    recs = _records()
+    for msg in ("这个房源怎么样", "那套适合情侣吗", "那间房含账单吗", "刚才那个", "就那个吧"):
+        assert lga._resolve_last_result(msg, {"last_results": recs}) is recs[0], msg
+    # And the record-level advice route still fires for a deictic-anchored suitability Q.
+    ctx = {"last_results": recs, "current_message": "那套适合情侣吗"}
+    assert lga._is_advice_followup("那套适合情侣吗", ctx) == {"record": recs[0]}
+
+
+def test_city_value_question_without_advice_cue_not_hijacked(lga):
+    """The new value-cue set-level branch requires an ADVICE cue too: a bare comparison
+    with no advice/recommendation cue (更便宜的有吗) is a search/other intent, not advice."""
+    recs = _records()
+    ctx = {"last_results": recs, "current_message": "更便宜的有吗"}
+    assert lga._is_advice_followup("更便宜的有吗", ctx) is None
+
+
 def test_set_reference_still_required_only_for_set_level(lga):
     """Anchoring rules: a resolvable single reference fires record-level advice with no
     set reference; a set reference fires set-level; an anchored-to-nothing strong cue

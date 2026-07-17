@@ -29,7 +29,11 @@ for _m in [m for m in sys.modules if m == "core" or m.startswith("core.")]:
 import pytest
 
 from core.scraping import on_demand
-from core.tools.search_properties import search_properties_impl, set_rag_coordinator
+from core.tools.search_properties import (
+    search_properties_impl,
+    set_rag_coordinator,
+    _soft_gate_question,
+)
 
 
 # --------------------------------------------------------------------------
@@ -102,6 +106,32 @@ def test_gate_triggers_when_all_recommended_missing(stub_env, monkeypatch):
     assert "room_type" in res["known_criteria"]
     # the "gate already shown" flag is persisted through the merge path
     assert res["extracted_so_far"]["criteria_gate_shown"] is True
+
+
+def test_gate_never_asks_for_max_commute_time():
+    """Bug 6: max commute time is OPTIONAL — the gate must never ask for it. The commute
+    clause asks only whether the user commutes and WHERE TO, never for a maximum minutes."""
+    for is_cjk in (True, False):
+        q = _soft_gate_question(['budget', 'room_type', 'commute'], is_cjk, move_in_missing=True)
+        # No max-commute-time solicitation, either language.
+        assert '分钟' not in q
+        assert 'max minutes' not in q.lower()
+        assert 'maximum commute' not in q.lower()
+        assert 'commute time' not in q.lower()
+        assert '多少分钟' not in q
+    # It still asks the destination side of the commute (zh: 通勤到哪里 ; en: where to).
+    assert '通勤到哪里' in _soft_gate_question(['commute'], True)
+    assert 'where to' in _soft_gate_question(['commute'], False).lower()
+
+
+def test_gate_missing_fields_never_include_max_commute(stub_env, monkeypatch):
+    """The structured missing_fields contract must never surface a max-commute field —
+    only budget / room_type / commute(-destination) are recommended."""
+    _no_scrape(monkeypatch)
+    res = _run(area="Camden", current_message="find me a place in Camden")
+    for bad in ('max_commute_time', 'max_travel_time'):
+        assert bad not in res['missing_fields']
+        assert bad not in res.get('missing_optional_fields', [])
 
 
 def test_gate_lists_only_missing_fields(stub_env, monkeypatch):

@@ -866,6 +866,20 @@
         .criteria-budget-row { display: flex; gap: 6px; min-width: 0; }
         .criteria-budget-row .criteria-input { flex: 1 1 auto; }
         .criteria-budget-row .criteria-select { flex: 0 0 auto; width: auto; padding: 8px 6px; }
+
+        /* Move-in date: the native <input type=date> placeholder (e.g. 年/月/日) is
+           locale-bound and can't be i18n'd, so when the field is empty & unfocused we
+           blank the browser's placeholder and render our own localized one on top.
+           Focusing the field restores the native edit so keyboard entry stays visible;
+           the calendar picker icon is unaffected. */
+        .criteria-date-wrap { position: relative; display: block; width: 100%; }
+        .criteria-date-wrap.is-empty .criteria-date-native:not(:focus)::-webkit-datetime-edit { color: transparent; }
+        .criteria-date-ph {
+            position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+            pointer-events: none; font-size: 0.875rem; color: var(--text-tertiary);
+            background: var(--bg-surface); padding-right: 4px; display: none;
+        }
+        .criteria-date-wrap.is-empty .criteria-date-native:not(:focus) ~ .criteria-date-ph { display: block; }
         .criteria-field.criteria-check {
             flex-direction: row; align-items: center; gap: 8px; cursor: pointer;
             align-self: end; padding-bottom: 8px;
@@ -1431,6 +1445,7 @@
                 criteria_no_commute: "I don't commute",
                 criteria_move_in: "Move-in date",
                 criteria_move_in_hint: "Optional — your preferred move-in date",
+                criteria_move_in_ph: "YYYY-MM-DD",
                 criteria_search_btn: "Search",
                 criteria_modal_title: "Where should I search?",
                 criteria_modal_desc: "Enter at least an area to see listings — everything else is optional.",
@@ -1614,6 +1629,7 @@
                 criteria_no_commute: "我不通勤",
                 criteria_move_in: "入住时间",
                 criteria_move_in_hint: "选填 — 期望入住日期",
+                criteria_move_in_ph: "年/月/日",
                 criteria_search_btn: "搜索",
                 criteria_modal_title: "想在哪里找房？",
                 criteria_modal_desc: "至少填写一个区域即可查看房源，其余均为选填。",
@@ -2426,6 +2442,9 @@
                 const name = String(item.name);
                 const chip = el('button', 'area-reco-chip');
                 chip.type = 'button';
+                // Normalized key so the chip's highlight can be re-derived from the
+                // criteria areas on every mutation (see syncAreaRecoChips).
+                chip.dataset.areaKey = name.trim().toLowerCase();
                 if (item.reason) chip.title = String(item.reason);   // tooltip
 
                 const nameEl = el('span', 'area-reco-name');
@@ -2452,11 +2471,29 @@
             return wrap;
         }
 
+        // Single source of truth for the recommended-area chip highlight: derive it
+        // straight from the criteria areas. Called on every criteria area mutation
+        // (add/remove/fill) so removing an area un-highlights (and re-enables) its chip
+        // immediately, with no search round-trip. Matching normalizes case so a display
+        // name ("Watford") matches a stored area ("watford").
+        function syncAreaRecoChips() {
+            const selected = panelFormApi
+                ? panelFormApi.getAreas().map(function (a) { return String(a).trim().toLowerCase(); })
+                : [];
+            document.querySelectorAll('.area-reco-chip').forEach(function (chip) {
+                const key = chip.dataset.areaKey || '';
+                const on = !!key && selected.indexOf(key) !== -1;
+                chip.classList.toggle('selected', on);
+                chip.disabled = on;
+            });
+        }
+
         // Add a recommended area to the selection and re-run the search (dedupe-safe).
+        // The chip highlight is handled by syncAreaRecoChips via the form's onAreasChanged
+        // hook, so no manual chip mutation is needed here.
         function onRecoAreaClick(name, chipEl) {
             if (isProcessing || !panelFormApi) return;
             const added = panelFormApi.addArea(name);
-            if (chipEl) { chipEl.classList.add('selected'); chipEl.disabled = true; }
             if (!added) return;                 // was already selected — no re-search
             expandCriteriaPanel();
             submitCriteriaSearch(panelFormApi.read(), panelFormApi);
@@ -3633,9 +3670,14 @@
 
             function areaKey(s) { return (typeof s === 'string') ? s.trim().toLowerCase() : ''; }
             function hasArea(name) { const k = areaKey(name); return selectedAreas.some(function (a) { return areaKey(a) === k; }); }
+            // Notify listeners (e.g. the recommended-area chip highlight) whenever the
+            // committed area set changes, so dependent UI stays in lockstep with state.
+            function notifyAreasChanged() {
+                if (typeof opts.onAreasChanged === 'function') opts.onAreasChanged();
+            }
             function renderAreaChips() {
                 areaChips.innerHTML = '';
-                if (!selectedAreas.length) { areaChips.style.display = 'none'; return; }
+                if (!selectedAreas.length) { areaChips.style.display = 'none'; notifyAreasChanged(); return; }
                 areaChips.style.display = 'flex';
                 selectedAreas.forEach(function (name) {
                     const chip = el('span', 'area-chip');
@@ -3650,6 +3692,7 @@
                     chip.appendChild(rm);
                     areaChips.appendChild(chip);
                 });
+                notifyAreasChanged();
             }
             function addAreaLocal(name) {
                 name = (typeof name === 'string') ? name.trim() : '';
@@ -3775,12 +3818,25 @@
             // "YYYY-MM-DD" (or '' when unset); optional-ness shown via a title hint
             // (a date input has no visible placeholder), mirroring the commute field.
             const moveInField = labelField('criteria_move_in', false, true);
-            const moveInInput = el('input', 'criteria-input');
+            const moveInWrap = el('div', 'criteria-date-wrap is-empty');
+            const moveInInput = el('input', 'criteria-input criteria-date-native');
             moveInInput.type = 'date';
             moveInInput.setAttribute('data-i18n-title', 'criteria_move_in_hint');
             moveInInput.title = t('criteria_move_in_hint');
-            moveInField.appendChild(moveInInput);
+            // Localized placeholder overlay: the native date picker's empty-state text
+            // (年/月/日) follows the browser locale, not the app language. data-i18n keeps
+            // this span in sync with the language switch (see setLanguage).
+            const moveInPh = el('span', 'criteria-date-ph');
+            moveInPh.setAttribute('data-i18n', 'criteria_move_in_ph');
+            moveInPh.textContent = t('criteria_move_in_ph');
+            moveInWrap.appendChild(moveInInput);
+            moveInWrap.appendChild(moveInPh);
+            moveInField.appendChild(moveInWrap);
             grid.appendChild(moveInField);
+            // Toggle the overlay purely from the field's value (single source of truth).
+            function syncMoveInPlaceholder() {
+                moveInWrap.classList.toggle('is-empty', !moveInInput.value);
+            }
 
             form.appendChild(grid);
 
@@ -3823,8 +3879,8 @@
             destInput.addEventListener('input', clearCommuteError);
             maxInput.addEventListener('input', clearCommuteError);
             noInput.addEventListener('change', clearCommuteError);
-            moveInInput.addEventListener('change', function () { moveInInput.classList.remove('input-error'); });
-            moveInInput.addEventListener('input', function () { moveInInput.classList.remove('input-error'); });
+            moveInInput.addEventListener('change', function () { moveInInput.classList.remove('input-error'); syncMoveInPlaceholder(); });
+            moveInInput.addEventListener('input', function () { moveInInput.classList.remove('input-error'); syncMoveInPlaceholder(); });
 
             // Merge committed chips with any pending (un-committed) text in the input.
             function currentAreas() {
@@ -3869,7 +3925,7 @@
                     if (!skip(destInput)) destInput.value = c.commute_destination || '';
                     if (!skip(maxInput)) maxInput.value = (c.max_commute_time != null ? String(c.max_commute_time) : '');
                     if (!skip(noInput)) noInput.checked = !!c.no_commute;
-                    if (!skip(moveInInput)) moveInInput.value = c.move_in_date || '';
+                    if (!skip(moveInInput)) { moveInInput.value = c.move_in_date || ''; syncMoveInPlaceholder(); }
                     updateCommuteDisabled();
                     clearAllFieldErrors();
                 },
@@ -3885,9 +3941,13 @@
                         case 'area': areaInput.classList.add('input-error'); break;
                         case 'budget': case 'max_budget': budgetInput.classList.add('input-error'); break;
                         case 'room_type': roomSelect.classList.add('input-error'); break;
-                        case 'commute': case 'destination': case 'max_travel_time': case 'max_commute_time':
+                        case 'commute': case 'destination':
+                            // The soft gate nudges the user to state a commute destination
+                            // (or tick "I don't commute"). Max commute time is OPTIONAL and
+                            // must NEVER be flagged/validated — so max_travel_time /
+                            // max_commute_time are deliberately not handled here, and the
+                            // Max-commute input is left out of the commute-group highlight.
                             destInput.classList.add('input-error');
-                            maxInput.classList.add('input-error');
                             noField.classList.add('field-error');
                             break;
                         case 'move_in': case 'move_in_date':
@@ -3947,7 +4007,7 @@
         function initCriteriaPanel() {
             const body = document.getElementById('criteriaBody');
             if (!body) return;
-            panelFormApi = createCriteriaForm({ variant: 'panel', onSubmit: submitCriteriaSearch });
+            panelFormApi = createCriteriaForm({ variant: 'panel', onSubmit: submitCriteriaSearch, onAreasChanged: syncAreaRecoChips });
             body.appendChild(panelFormApi.form);
 
             const header = document.getElementById('criteriaHeader');

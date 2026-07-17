@@ -209,6 +209,80 @@ def test_multi_area_merge_and_tagging(monkeypatch):
     assert res["known_criteria"]["areas"] == ["Camden", "Islington"]
 
 
+# Geos pinned near each area's curated centroid so per-area geo validation keeps them
+# (Camden 51.5390,-0.1426 ; Islington 51.5380,-0.1027) without needing a geocode mock.
+_CAMDEN_GEO = "51.5390,-0.1426"
+_ISLINGTON_GEO = "51.5380,-0.1027"
+
+
+def test_multi_area_primary_pool_does_not_starve_secondary(monkeypatch):
+    """Bug 1 regression: when the PRIMARY area alone returns enough listings to fill the
+    candidate pool (>=15), the secondary area must STILL appear. Previously the single
+    (primary) semantic query + global ``candidates[:15]`` truncation dropped every
+    non-primary listing; per-area recall + round-robin merge fixes it."""
+    _all_areas_classifier(monkeypatch)
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "0")
+    monkeypatch.setenv("AREA_RECOS_ENABLED", "0")
+    rows = {
+        "Camden": [_row(f"{i} Camden Rd", 1500 + i * 10, "Camden", geo=_CAMDEN_GEO)
+                   for i in range(15)],
+        "Islington": [_row(f"{i} Upper St", 1400 + i * 10, "Islington", geo=_ISLINGTON_GEO)
+                      for i in range(5)],
+    }
+    monkeypatch.setattr(on_demand, "get_listings", _fake_get_listings(rows))
+    res = _run(area="Camden", areas=["Camden", "Islington"],
+               no_commute=True, confirmed=True, max_budget=3000, bedrooms=1)
+    assert res["status"] == "found"
+    recs = res["recommendations"]
+    areas_present = {r.get("area") for r in recs}
+    # BOTH areas represented — the secondary is never fully starved by the primary.
+    assert areas_present == {"Camden", "Islington"}, areas_present
+    assert sum(1 for r in recs if r.get("area") == "Islington") > 0
+
+
+def test_multi_area_summary_names_all_searched_areas(monkeypatch):
+    """Bug 4 regression: the reply summary must enumerate EVERY searched area with its
+    per-area count, not only the primary one."""
+    _all_areas_classifier(monkeypatch)
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "0")
+    monkeypatch.setenv("AREA_RECOS_ENABLED", "0")
+    rows = {
+        "Camden": [_row(f"{i} Camden Rd", 1500 + i * 10, "Camden", geo=_CAMDEN_GEO)
+                   for i in range(15)],
+        "Islington": [_row(f"{i} Upper St", 1400 + i * 10, "Islington", geo=_ISLINGTON_GEO)
+                      for i in range(5)],
+    }
+    monkeypatch.setattr(on_demand, "get_listings", _fake_get_listings(rows))
+    res = _run(area="Camden", areas=["Camden", "Islington"],
+               no_commute=True, confirmed=True, max_budget=3000, bedrooms=1,
+               reply_language="en")
+    summary = res["summary"]
+    assert "Camden" in summary and "Islington" in summary, summary
+    assert "by area" in summary                     # per-area breakdown present
+    assert "Islington: 5" in summary, summary       # secondary count reported
+
+
+def test_multi_area_summary_reports_zero_result_area(monkeypatch):
+    """An area that returned 0 listings is still named in the summary (per-area, honest)
+    rather than being silently omitted."""
+    _all_areas_classifier(monkeypatch)
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "0")
+    monkeypatch.setenv("AREA_RECOS_ENABLED", "0")
+    rows = {
+        "Camden": [_row(f"{i} Camden Rd", 1500 + i * 10, "Camden", geo=_CAMDEN_GEO)
+                   for i in range(8)],
+        "Islington": [],   # nothing available in the secondary area
+    }
+    monkeypatch.setattr(on_demand, "get_listings", _fake_get_listings(rows))
+    res = _run(area="Camden", areas=["Camden", "Islington"],
+               no_commute=True, confirmed=True, max_budget=3000, bedrooms=1,
+               reply_language="en")
+    assert res["status"] == "found"
+    summary = res["summary"]
+    assert "Islington: 0" in summary, summary       # zero-result area named with 0
+    assert {r.get("area") for r in res["recommendations"]} == {"Camden"}
+
+
 def test_description_enrichment_on_shortlist(monkeypatch):
     _all_areas_classifier(monkeypatch)
     rows = {"Camden": [_row("1 Camden Rd", 1500, "Camden", url="https://x/1"),

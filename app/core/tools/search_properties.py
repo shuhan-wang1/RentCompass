@@ -1970,8 +1970,18 @@ async def search_properties_impl(
                 _fetch_details = None
             if _fetch_details:
                 _to_enrich = all_results[:limit]
+                # Bound concurrency to a few workers; the actual OTM politeness is
+                # enforced by the shared rate limiter inside fetch_listing_details
+                # (>=1.2s between detail GETs across ALL threads). The semaphore just
+                # caps how many executor threads/sessions are live at once.
+                _enrich_sema = asyncio.Semaphore(3)
+
+                async def _enrich_one(_url):
+                    async with _enrich_sema:
+                        return await loop.run_in_executor(None, _fetch_details, _url)
+
                 _details_list = await asyncio.gather(*[
-                    loop.run_in_executor(None, _fetch_details, (p.get('URL') or p.get('url') or ''))
+                    _enrich_one(p.get('URL') or p.get('url') or '')
                     for p in _to_enrich
                 ])
                 for _p, _d in zip(_to_enrich, _details_list):

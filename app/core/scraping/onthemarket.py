@@ -49,6 +49,30 @@ _HEADERS = {
 # robots.txt asks for Crawl-delay: 1 — stay above that.
 _CRAWL_DELAY = (1.2, 1.8)
 
+# Shared, process-wide rate limiter for OTM detail-page GETs. The enrichment layer
+# fires several fetch_listing_details calls CONCURRENTLY (executor threads); a
+# per-thread ``time.sleep`` would let their sleeps overlap so ~N GETs land inside
+# one delay window, breaking the Crawl-delay we claim to honour. This lock +
+# monotonic last-request timestamp guarantees >= _MIN_DETAIL_INTERVAL_S between
+# detail GETs across ALL threads (the lock is held across the wait, so callers are
+# paced one after another).
+_MIN_DETAIL_INTERVAL_S = 1.2
+_RATE_LOCK = threading.Lock()
+_LAST_DETAIL_TS = 0.0  # time.monotonic() of the last detail GET released
+
+
+def _rate_limited_detail_wait() -> None:
+    """Block until at least _MIN_DETAIL_INTERVAL_S has elapsed since the previous
+    detail GET was released, then claim the slot. Thread-safe and global."""
+    global _LAST_DETAIL_TS
+    with _RATE_LOCK:
+        now = time.monotonic()
+        wait = _MIN_DETAIL_INTERVAL_S - (now - _LAST_DETAIL_TS)
+        if wait > 0:
+            time.sleep(wait)
+            now = time.monotonic()
+        _LAST_DETAIL_TS = now
+
 _NEXT_DATA_RE = re.compile(
     r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S
 )
@@ -223,16 +247,41 @@ def _new_session() -> requests.Session:
     return s
 
 
+class OTMSchemaDriftError(RuntimeError):
+    """A 200 OnTheMarket page no longer matches the expected __NEXT_DATA__ shape:
+    the script tag is absent, its JSON does not parse, or the
+    props.initialReduxState.results.list path is missing.
+
+    This is raised (rather than returning an empty list) so the caller can tell
+    SCHEMA DRIFT — an OTM markup change that would otherwise make the WHOLE product
+    silently return 0 listings — apart from an honest "0 results for this search".
+    on_demand treats the raised error as a scrape FAILURE, composing with its
+    stale-if-error path instead of caching a bogus empty result."""
+
+
 def _extract_listings(html: str) -> list[dict]:
-    """Pull the server-rendered listing list out of the __NEXT_DATA__ blob."""
+    """Pull the server-rendered listing list out of the __NEXT_DATA__ blob.
+
+    Returns the (possibly empty) listing list on an HONEST parse — the page parsed
+    and the results path exists but genuinely holds 0 listings. Raises
+    OTMSchemaDriftError when the page shape itself no longer matches (missing script
+    tag / unparseable JSON / absent results path), which is drift, not empty."""
     m = _NEXT_DATA_RE.search(html)
     if not m:
-        return []
+        print("  [onthemarket] SCHEMA DRIFT: __NEXT_DATA__ script tag absent on a 200 response")
+        raise OTMSchemaDriftError("__NEXT_DATA__ script tag not found")
     try:
         data = json.loads(m.group(1))
-        return data["props"]["initialReduxState"]["results"]["list"] or []
-    except (json.JSONDecodeError, KeyError, TypeError):
-        return []
+    except json.JSONDecodeError as e:
+        print(f"  [onthemarket] SCHEMA DRIFT: __NEXT_DATA__ JSON did not parse: {e}")
+        raise OTMSchemaDriftError(f"__NEXT_DATA__ JSON parse failed: {e}") from e
+    try:
+        listings = data["props"]["initialReduxState"]["results"]["list"]
+    except (KeyError, TypeError) as e:
+        print(f"  [onthemarket] SCHEMA DRIFT: results.list path missing ({e})")
+        raise OTMSchemaDriftError(f"results.list path missing: {e}") from e
+    # Path present but null/empty -> honest empty (a real 0-result search).
+    return listings or []
 
 
 def _pcm_price(raw) -> str:
@@ -364,7 +413,18 @@ def find_rich_onthemarket(
             print(f"  [onthemarket] search failed for '{slug}' p{page}: {e}")
             break
 
-        listings = _extract_listings(resp.text)
+        try:
+            listings = _extract_listings(resp.text)
+        except OTMSchemaDriftError:
+            # Drift on the FIRST page (nothing gathered yet) is a hard scrape
+            # failure: propagate so on_demand does stale-if-error rather than
+            # treating a broken page as an honest empty. If we already have rows
+            # from earlier pages, keep those and stop paging.
+            if not results:
+                raise
+            print(f"  [onthemarket] schema drift on p{page} for '{slug}'; "
+                  f"returning {len(results)} rows from earlier pages")
+            break
         if not listings:
             if page == 1:
                 print(f"  [onthemarket] no listings for '{slug}'")
@@ -490,7 +550,12 @@ class _DescCache:
 
 
 _DESC_CACHE: _DescCache | None = None
-_DESC_SESSION: requests.Session | None = None
+# One requests.Session PER THREAD. requests.Session is not documented thread-safe,
+# and the enrichment layer calls fetch_listing_details from several executor
+# threads at once; a shared Session would then be mutated concurrently. threading
+# .local gives each worker its own keep-alive session (still polite: same headers /
+# User-Agent), sidestepping the shared-mutable-state hazard entirely.
+_DESC_THREAD_LOCAL = threading.local()
 
 
 def _desc_cache() -> _DescCache:
@@ -501,12 +566,14 @@ def _desc_cache() -> _DescCache:
 
 
 def _desc_session() -> requests.Session:
-    """Reuse one keep-alive session (same headers/User-Agent as the search
-    scraper) across enrichment calls so a batch looks like one polite client."""
-    global _DESC_SESSION
-    if _DESC_SESSION is None:
-        _DESC_SESSION = _new_session()
-    return _DESC_SESSION
+    """Return this thread's own keep-alive session (same headers/User-Agent as the
+    search scraper), creating it on first use. Per-thread so concurrent enrichment
+    workers never share one non-thread-safe requests.Session."""
+    s = getattr(_DESC_THREAD_LOCAL, "session", None)
+    if s is None:
+        s = _new_session()
+        _DESC_THREAD_LOCAL.session = s
+    return s
 
 
 def _strip_html(raw: str | None) -> str:
@@ -600,9 +667,11 @@ def fetch_listing_description(
     # --- live fetch (cache miss / stale / forced) -----------------------------
     try:
         session = _desc_session()
-        # Honour the robots Crawl-delay between live detail fetches, exactly like
-        # find_rich_onthemarket does between search pages.
-        time.sleep(random.uniform(*_CRAWL_DELAY))
+        # Honour the robots Crawl-delay between live detail fetches. This uses a
+        # SHARED, process-wide limiter (not a bare per-thread sleep) so concurrent
+        # enrichment workers are paced >=1.2s apart in aggregate, not each sleeping
+        # in parallel and then hitting the site together.
+        _rate_limited_detail_wait()
         timeout = budget_s if (budget_s and budget_s > 0) else 25
         resp = session.get(url, timeout=timeout)
         resp.raise_for_status()

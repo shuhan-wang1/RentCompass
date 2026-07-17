@@ -12,33 +12,27 @@ Tool: Get Property Details
 """
 
 import pandas as pd
-from pathlib import Path
 from typing import Optional, Dict, List
 from core.tool_system import Tool, ToolResult
 import re
 
-# 数据文件路径（fallback：未启用 scraper 时用 bundled 假数据）
-DATA_PATH = Path(__file__).parent.parent.parent / "data" / "fake_property_listings.csv"
-
-
-def _active_data_path() -> Path:
-    """解析当前实际供数的 CSV：scraper 缓存存在则用缓存，否则用假数据。
-    保证详情工具与列表/搜索读取的是同一份数据。"""
-    try:
-        from core.scraping.provider import get_active_property_csv
-        return get_active_property_csv()
-    except Exception:
-        return DATA_PATH
-
 
 def load_property_database() -> pd.DataFrame:
-    """加载房产数据库"""
+    """加载房产数据库。
+
+    直接读取 on-demand 抓取缓存（listing_cache.sqlite3）—— 与列表/搜索路径
+    （core.scraping.on_demand.get_listings）完全相同的数据源，因此用户询问
+    "介绍一下某套房" 时看到的是同一批真实房源，而不是离线批处理 CSV / 假数据。
+    缓存为空或不可用时返回空 DataFrame（诚实地表示"暂无可查数据"）。"""
     try:
-        df = pd.read_csv(_active_data_path())
-        return df
+        from core.scraping.on_demand import iter_cached_listings
+        rows = iter_cached_listings()
     except Exception as e:
         print(f"❌ 加载房产数据失败: {e}")
         return pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
 
 
 def normalize_text(text: str) -> str:
@@ -198,8 +192,24 @@ async def get_property_details_impl(
             "message": "请提供您想查询的房产名称或地址。"
         }
     
-    # 查找匹配的房产
-    matches = find_property_by_name_or_address(search_query, df)
+    # 精确优先：若查询本身就是一条房源 URL（如前端 "Ask AI" 传入的 focus URL），
+    # 直接按 URL 命中缓存中的那一条，避免模糊匹配歧义。
+    matches: List[Dict] = []
+    if re.search(r"https?://|onthemarket\.com", search_query, re.I):
+        try:
+            from core.scraping.on_demand import find_cached_listing_by_url
+            for token in search_query.split():
+                if re.search(r"https?://|onthemarket\.com", token, re.I):
+                    hit = find_cached_listing_by_url(token)
+                    if hit:
+                        matches = [hit]
+                        break
+        except Exception as e:
+            print(f"  [PROPERTY DETAILS] URL 直查失败: {e}")
+
+    # 查找匹配的房产（模糊名称/地址匹配）
+    if not matches:
+        matches = find_property_by_name_or_address(search_query, df)
     
     if not matches:
         # 尝试更宽松的搜索

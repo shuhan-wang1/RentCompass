@@ -957,20 +957,52 @@ def extract_destination_from_text(text: str) -> dict | None:
     return None
 
 
+# A UK postcode OUTWARD code ("N1C", "M3", "SW1", "EC4A"): 1-2 letters, a digit,
+# then an optional trailing letter/digit. Used to recognise the "city position"
+# in an address (the token a city name sits in front of, e.g. "London N1C").
+_POSTCODE_OUT = r"[a-z]{1,2}\d[a-z\d]?"
+
+
+def _in_city_position(addr: str, city: str) -> bool:
+    """True when `city` appears in a genuine CITY position within `addr` (already
+    lower-cased) rather than as a street name. A city position is either:
+
+      (a) the last comma-separated segment of the address ("..., Manchester" or
+          "..., Manchester M3"), or
+      (b) immediately in front of a UK postcode outward code ("Manchester M3",
+          "London NW1").
+
+    A bare mid-address occurrence (a STREET name such as "York Way" or "Reading
+    Road") is deliberately NOT a city position, so those rows are never dropped by
+    the contamination guard. The downstream radius filter remains the real
+    geographic guard."""
+    c = re.escape(city)
+    last_seg = addr.rsplit(",", 1)[-1]
+    if re.search(rf"\b{c}\b", last_seg):
+        return True
+    if re.search(rf"\b{c}\b[\s,]+{_POSTCODE_OUT}\b", addr):
+        return True
+    return False
+
+
 def _wrong_city(address: str, requested_city: str | None) -> bool:
     """True if `address` clearly belongs to a major UK city other than the one
-    requested. Only fires when both sides are recognised major cities, so local
-    suburbs (e.g. Feltham for a London search) are never dropped."""
+    requested. Only fires when both sides are recognised major cities AND the other
+    city appears in an actual CITY position (last segment / before a postcode), so a
+    common street-name token that happens to be a city name elsewhere in the UK
+    ("York Way, N1C" or "Reading Road" in a London search) is never dropped."""
     if not requested_city or requested_city not in _MAJOR_CITIES:
         return False
     addr = (address or "").lower()
+    # If the requested city itself is named in a city position, trust the row
+    # (handles shared area names / addresses that carry both).
+    if _in_city_position(addr, requested_city):
+        return False
     for city in _MAJOR_CITIES:
         if city == requested_city:
             continue
-        if re.search(rf"\b{re.escape(city)}\b", addr):
-            # ...unless the requested city is also named (shared area names).
-            if not re.search(rf"\b{re.escape(requested_city)}\b", addr):
-                return True
+        if _in_city_position(addr, city):
+            return True
     return False
 
 
@@ -1037,6 +1069,54 @@ def _cache() -> ListingCache:
             )
             _CACHE = ListingCache(fallback_path)
     return _CACHE
+
+def iter_cached_listings() -> list[dict]:
+    """Return every listing row currently held in the persistent listing cache,
+    de-duplicated by URL (the most-recently-written copy wins on a collision).
+
+    This is the SAME store the customer search path (`get_listings`) writes to and
+    serves from, so a detail lookup and a search always see one dataset. Never
+    raises: a broken/locked cache degrades to an empty list."""
+    try:
+        cache = _cache()
+        with cache._lock, cache._connect() as db:
+            raw = db.execute("SELECT rows, fetched FROM listings").fetchall()
+    except (OSError, sqlite3.Error) as exc:
+        print(f"  [on_demand] listing cache read failed: {exc}")
+        return []
+    seen: dict[str, dict] = {}
+    ordered: list[str] = []
+    # Newest entries first so a newer row wins when the same URL is cached under
+    # several query keys (e.g. overlapping price bands).
+    for rows_json, fetched in sorted(raw, key=lambda r: float(r[1] or 0), reverse=True):
+        try:
+            rows = json.loads(rows_json)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        for r in rows or []:
+            if not isinstance(r, dict):
+                continue
+            url = (r.get("URL") or "").strip()
+            key = url or f"_noindex_{len(ordered)}"
+            if key in seen:
+                continue
+            seen[key] = r
+            ordered.append(key)
+    return [seen[k] for k in ordered]
+
+
+def find_cached_listing_by_url(url: str) -> dict | None:
+    """Return the cached listing row whose URL matches `url` (trailing-slash
+    insensitive), or None. Backs the exact-listing detail lookup."""
+    if not url or not str(url).strip():
+        return None
+    target = str(url).strip().rstrip("/")
+    for r in iter_cached_listings():
+        u = (r.get("URL") or "").strip().rstrip("/")
+        if u and u == target:
+            return r
+    return None
+
 
 def _fallback_cache(exc: Exception) -> ListingCache:
     global _CACHE

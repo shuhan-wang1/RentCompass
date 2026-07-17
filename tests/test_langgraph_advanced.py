@@ -183,6 +183,7 @@ class _MiniState(TypedDict, total=False):
     accumulated_search_criteria: Dict[str, Any]
     clears: List[str]  # fields the user explicitly cleared THIS turn (mirrors extract's job)
     tool_decision: Dict[str, Any]
+    task_plan: List[dict]
     tool_observation: str
     search_results: Annotated[List[dict], operator.add]
     final_response: str
@@ -209,16 +210,16 @@ def _build_mini(*, checkpointer=None, store=None, enable_hitl=False):
     def plan(state):
         crit = state.get("accumulated_search_criteria") or {}
         areas = crit.get("property_features") or ["Zone 2"]
-        return {"tool_decision": {"tool": "multi_search",
-                                  "params": {"searches": [{"tool": "search_properties",
-                                                           "params": {"area": a}} for a in areas]}}}
+        return {"task_plan": [{"id": f"t{i}", "index": i, "tool": "search_properties",
+                               "params": {"area": a}, "depends_on": []}
+                              for i, a in enumerate(areas)]}
 
     def fan_out(state):
-        searches = (state["tool_decision"].get("params") or {}).get("searches") or []
-        return [Send("search_worker", {"search": s}) for s in searches] or "gather_searches"
+        tasks = state.get("task_plan") or []
+        return [Send("task_worker", {"task": t}) for t in tasks] or "gather_wave"
 
     def worker(state):
-        return {"search_results": [{"area": state["search"]["params"]["area"]}]}
+        return {"search_results": [{"area": state["task"]["params"]["area"]}]}
 
     def gather(state):
         areas = ", ".join(r["area"] for r in state.get("search_results", []))
@@ -235,9 +236,9 @@ def _build_mini(*, checkpointer=None, store=None, enable_hitl=False):
     g.add_node("hydrate_prefs", ga.make_hydrate_prefs_node())
     g.add_node("extract", extract)
     g.add_node("plan", plan)
-    g.add_node("dispatch_searches", lambda s: {})
-    g.add_node("search_worker", worker)
-    g.add_node("gather_searches", gather)
+    g.add_node("dispatch_tasks", lambda s: {})
+    g.add_node("task_worker", worker)
+    g.add_node("gather_wave", gather)
     g.add_node("generate_response", generate_response)
     g.add_node("format_output", format_output)
     g.add_node("persist_prefs", ga.make_persist_prefs_node())
@@ -246,10 +247,10 @@ def _build_mini(*, checkpointer=None, store=None, enable_hitl=False):
     g.add_edge(START, "hydrate_prefs")
     g.add_edge("hydrate_prefs", "extract")
     g.add_edge("extract", "plan")
-    g.add_edge("plan", "confirm_search" if enable_hitl else "dispatch_searches")
-    g.add_conditional_edges("dispatch_searches", fan_out, ["search_worker", "gather_searches"])
-    g.add_edge("search_worker", "gather_searches")
-    g.add_edge("gather_searches", "generate_response")
+    g.add_edge("plan", "confirm_search" if enable_hitl else "dispatch_tasks")
+    g.add_conditional_edges("dispatch_tasks", fan_out, ["task_worker", "gather_wave"])
+    g.add_edge("task_worker", "gather_wave")
+    g.add_edge("gather_wave", "generate_response")
     g.add_edge("generate_response", "format_output")
     g.add_edge("format_output", "persist_prefs")
     g.add_edge("persist_prefs", END)
@@ -271,7 +272,7 @@ def test_hitl_interrupt_then_approve():
     initial = {"user_id": "u1", "accumulated_search_criteria": {"property_features": ["Camden", "Islington"]}}
     paused = g.invoke(initial, cfg)
     assert paused.get("__interrupt__"), "graph should pause at confirm_search"
-    assert len(paused["__interrupt__"][0].value["planned_searches"]) == 2
+    assert len(paused["__interrupt__"][0].value["task_list"]) == 2
     resumed = g.invoke(Command(resume=True), cfg)
     assert "Camden" in resumed["final_response"] and "Islington" in resumed["final_response"]
 
@@ -309,8 +310,8 @@ def test_hitl_abandon_with_fresh_input_restarts_cleanly():
         {"user_id": "u1", "accumulated_search_criteria": {"property_features": ["Soho"]}}, cfg
     )
     # The new turn pauses again, now proposing the NEW plan — the old one was abandoned.
-    planned = second["__interrupt__"][0].value["planned_searches"]
-    assert [s["params"]["area"] for s in planned] == ["Soho"]
+    planned = second["__interrupt__"][0].value["task_list"]
+    assert [t["params"]["area"] for t in planned] == ["Soho"]
 
 
 def test_store_hydrates_new_thread_cross_conversation():

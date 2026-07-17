@@ -37,10 +37,26 @@ class AgentState(TypedDict, total=False):
     # plain (non-reducer) channels so the create_initial_state(loop_turn=0, observations=[])
     # input cleanly RESETS them at the start of every turn even under the checkpointer.
     # (A bounded_add reducer — as search_results uses — would instead MERGE across turns,
-    # because a []-input is a no-op for that reducer; reflect is the sole, sequential
-    # writer, so last-write-wins is safe and it returns the full per-turn list each time.)
+    # because a []-input is a no-op for that reducer; reflect and gather_wave are the only,
+    # strictly-sequential writers, so last-write-wins is safe and each returns the full
+    # per-turn list.)
     loop_turn: int
     observations: list
+    # Multi-intent execution plan (build_execution_plan -> dispatch_tasks -> task_worker x N
+    # -> gather_wave). task_plan is the resolved task list [{id,index,tool,params,depends_on}];
+    # plan_origin is "multi_search" (degenerate single-intent web fan-out, ends at
+    # generate_response) or "plan" (multi-intent, ends at reflect as ONE loop step);
+    # plan_notes carries synthetic observations for tasks dropped at build time (missing
+    # info) so generate_response can surface them inline; plan_just_completed tells reflect a
+    # WHOLE plan just finished (its per-task observations + loop_turn are already recorded, so
+    # reflect must NOT append/increment again). All are PLAIN per-turn channels reset by
+    # create_initial_state, mirroring loop_turn/observations. task_results uses the SAME
+    # bounded_add reducer + run_id filtering as search_results so wave workers merge safely.
+    task_plan: list
+    plan_origin: str
+    plan_notes: list
+    plan_just_completed: bool
+    task_results: Annotated[list, bounded_add]
 
 
 def create_initial_state(
@@ -81,4 +97,9 @@ def create_initial_state(
         plan=[],
         loop_turn=0,
         observations=[],
+        task_plan=[],
+        plan_origin="",
+        plan_notes=[],
+        plan_just_completed=False,
+        task_results=[],
     )

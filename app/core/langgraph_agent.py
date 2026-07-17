@@ -8,20 +8,28 @@ Alex persona prompts, preference extraction, and response formatting.
 Graph Flow:
     START -> extract_preferences -> decide_tool
     decide_tool routes via Command(goto=...):
+        - a CURRENT message with >= 2 distinct PLANNABLE intents -> build_execution_plan
         - direct_answer   -> generate_response
         - clarification   -> format_output
-        - multi_search    -> dispatch_searches
+        - multi_search    -> [confirm_search ->] dispatch_tasks   (degenerate 1-intent plan)
         - any other tool  -> execute_tool
+    build_execution_plan (multi-intent): LLM plans PLANNABLE_TOOLS tasks (+ "market
+        research" -> web_search), deterministically resolves params, dedups, clamps, then
+        routes to [confirm_search ->] dispatch_tasks; a planner failure / < 2 surviving
+        tasks falls closed to the original single-tool decision.
     execute_tool routes via Command(goto=...):
         - a LOOPABLE tool (non-error)   -> reflect
         - a structured card / else      -> format_output | generate_response
     reflect (bounded agent loop, cap MAX_AGENT_TURNS) routes via Command(goto=...):
         - one more tool needed          -> execute_tool
         - answer now / hard stop        -> generate_response (or the single-tool terminal)
-    multi_search map-reduce:
-        dispatch_searches -(Send fan-out)-> search_worker x N -> gather_searches
-        -> generate_response
-    generate_response -> format_output -> END
+    Unified wave executor (both the degenerate multi_search fan-out and the multi-intent
+    plan share ONE engine):
+        dispatch_tasks -(Send ready set)-> task_worker x N -> gather_wave
+        gather_wave loops back to dispatch_tasks while dependency waves remain, then:
+            - plan_origin == "multi_search" -> generate_response  (today's semantics)
+            - plan_origin == "plan"         -> reflect (the WHOLE plan is ONE loop step)
+    generate_response -> critic -> format_output -> END
 """
 
 import asyncio
@@ -49,10 +57,23 @@ logger = logging.getLogger(__name__)
 # The agent runs decide -> tool -> reflect -> (decide again) up to MAX_AGENT_TURNS
 # loopable-tool executions per user turn. GRAPH_RECURSION_LIMIT is the LangGraph
 # super-step budget app.py passes as invoke config: one loop iteration is TWO
-# super-steps (execute_tool + reflect), so 10 iterations plus the fixed start/end
-# nodes need well above the LangGraph default of 25 — 80 leaves generous headroom.
+# super-steps (execute_tool + reflect). The multi-intent plan adds a wave executor whose
+# every wave costs THREE super-steps (dispatch_tasks + task_worker + gather_wave), bounded
+# by MAX_PLAN_WAVES; the whole plan then counts as ONE reflect step, after which up to
+# (MAX_AGENT_TURNS - 1) serial loop iterations may still follow. Worst case is well under
+# 80: build_execution_plan(1) + 3 waves x 3 (9) + reflect(1) + ~9 serial iters x 2 (18) +
+# the fixed start/critic/format/end nodes (~6) ~= 35. 80 leaves generous headroom.
 MAX_AGENT_TURNS = 10
 GRAPH_RECURSION_LIMIT = 80
+
+# Multi-intent execution plan budgets (build_execution_plan). MAX_PLAN_TASKS caps the fan-out
+# width (truncate in plan order); MAX_PLAN_WAVES caps dependency depth (a task whose depth
+# would need more waves is dropped at build time). TOOL_TIMEOUTS bounds each worker call so a
+# hung tool degrades to an error observation instead of stalling the wave.
+MAX_PLAN_TASKS = 8
+MAX_PLAN_WAVES = 3
+TOOL_TIMEOUTS = {"web_search": 25}
+TOOL_TIMEOUT_DEFAULT = 30
 
 # Tools that may participate in the loop: after they return, `reflect` gets to decide
 # whether the gathered evidence already answers the question or one more DIFFERENT tool
@@ -64,6 +85,15 @@ LOOPABLE_TOOLS = frozenset({
     "calculate_commute_cost", "get_transport_info", "get_weather",
     "get_property_details", "recall_memory",
 })
+
+# Tools build_execution_plan may fan out CONCURRENTLY for a multi-intent message. This is the
+# LOOPABLE catalog MINUS recall_memory: a memory read mid-plan cannot influence params that
+# were already resolved deterministically at plan-build time, so it adds nothing to a parallel
+# wave. Also DELIBERATELY excluded (never plannable): search_properties (on-demand scraping —
+# parallel hits trip the source WAF / rate limits), remember (a write tool), reasoning_property
+# / listing_advice (answer from an already-shown listing, not a fan-out), and the pseudo-routes
+# clarification / direct_answer. The pseudo-intent "market research" is planned as web_search.
+PLANNABLE_TOOLS = LOOPABLE_TOOLS - {"recall_memory"}
 
 
 # ─── Emoji stripping (evidence + final-output layer) ────────────────
@@ -1010,14 +1040,61 @@ _FAIR_HOUSING_REFUSAL_ZH = (
 )
 
 
-def _make_decide_tool_node(tool_registry, classification_llm, search_entry="dispatch_searches"):
+def _degenerate_tasks_from_searches(decision: dict) -> list:
+    """Convert a multi_search decision's ``params.searches`` into the unified task shape
+    (one web_search task each, no dependencies). This is the DEGENERATE single-intent plan
+    that flows through the same dispatch_tasks -> task_worker -> gather_wave engine as a
+    multi-intent plan, so there is exactly one execution engine."""
+    searches = (decision.get("params") or {}).get("searches") or []
+    tasks = []
+    for i, s in enumerate(searches):
+        if not isinstance(s, dict):
+            continue
+        tasks.append({
+            "id": f"s{i}", "index": i, "tool": s.get("tool", "web_search"),
+            "params": dict(s.get("params") or {}), "depends_on": [],
+        })
+    return tasks
+
+
+def _route_base_decision(decision: dict, search_entry: str) -> Command:
+    """Route a single-tool decision exactly as decide_tool has always done. Factored out so
+    build_execution_plan can FALL CLOSED to today's behaviour when planning is not warranted
+    or fails. Mirrors the decide_tool_node terminal routing byte-for-byte."""
+    tool = decision["tool"]
+    # Pre-resolved answer over EXISTING results (D1 comparative / D3 detail).
+    if decision.get("observation") is not None:
+        tool_decision = {k: decision[k] for k in ("tool", "params", "reason") if k in decision}
+        return Command(update={
+            "tool_decision": tool_decision,
+            "tool_observation": decision["observation"],
+            "tool_raw_data": decision.get("raw_data"),
+            "context_tainted": True,  # listing text is external/untrusted -> sanitize
+        }, goto="generate_response")
+    if tool == "direct_answer":
+        return Command(update={"tool_decision": decision}, goto="generate_response")
+    if tool == "clarification":
+        return Command(update={"tool_decision": decision}, goto="format_output")
+    if tool == "multi_search":
+        return Command(update={
+            "tool_decision": decision,
+            "task_plan": _degenerate_tasks_from_searches(decision),
+            "plan_origin": "multi_search",
+        }, goto=search_entry)
+    return Command(update={"tool_decision": decision}, goto="execute_tool")
+
+
+def _make_decide_tool_node(tool_registry, classification_llm, search_entry="dispatch_tasks"):
     """Create the decide_tool node with majority voting.
 
     Routes via Command(goto=...) based on the computed tool decision:
     direct_answer -> generate_response, clarification -> format_output,
-    multi_search -> ``search_entry``, anything else -> execute_tool.
+    multi_search -> ``search_entry`` (degenerate plan), anything else -> execute_tool.
+    A CURRENT message that packs >= 2 distinct PLANNABLE intents is instead routed to
+    build_execution_plan (unless the base decision is a deterministic terminal), where it
+    becomes a concurrent multi-tool plan; single-intent messages keep exactly today's path.
 
-    ``search_entry`` is normally "dispatch_searches"; with HITL enabled it becomes
+    ``search_entry`` is normally "dispatch_tasks"; with HITL enabled it becomes
     "confirm_search" so the expensive fan-out is gated behind a human approval.
     """
 
@@ -1170,36 +1247,34 @@ def _make_decide_tool_node(tool_registry, classification_llm, search_entry="disp
                               tool_registry, accumulated=state["accumulated_search_criteria"])
 
     def decide_tool_node(state: AgentState) -> Command[Literal[
-            "execute_tool", "generate_response", "format_output", "dispatch_searches"]]:
+            "execute_tool", "generate_response", "format_output",
+            "dispatch_tasks", "build_execution_plan"]]:
         # NOTE: with HITL enabled, search_entry == "confirm_search"; the runtime Command(goto)
         # jumps to that registered node even though it is intentionally kept OUT of the static
         # Literal above, so the DEFAULT (no-HITL) graph topology stays byte-for-byte unchanged.
         decision = _compute_decision(state)
         tool = decision["tool"]
 
-        # Pre-resolved answer over EXISTING results (D1 comparative / D3 detail): the
-        # observation was already assembled from the conversation's last results, so we
-        # skip execute_tool and let generate_response synthesize from it. reasoning_property
-        # -> REASONING_PROPERTY_PROMPT (single listing); direct_answer -> SYNTHESIS_PROMPT
-        # (compare across listings).
-        if decision.get("observation") is not None:
-            tool_decision = {k: decision[k] for k in ("tool", "params", "reason") if k in decision}
-            return Command(update={
-                "tool_decision": tool_decision,
-                "tool_observation": decision["observation"],
-                "tool_raw_data": decision.get("raw_data"),
-                "context_tainted": True,  # listing text is external/untrusted -> sanitize
-            }, goto="generate_response")
+        # Multi-intent EXECUTION-PLAN trigger. AFTER the base routing decision is computed, a
+        # CURRENT message that joins >= 2 distinct PLANNABLE intents (safety + commute +
+        # research …) is diverted to build_execution_plan for a concurrent multi-tool plan.
+        # Guarded so single-intent messages — and every deterministic terminal — keep exactly
+        # today's path: skip when the base decision already carries a pre-resolved observation
+        # (comparative/detail answer over existing results), when it is a refusal/greeting
+        # (clarification / direct_answer), or when it is a listings search (search_properties
+        # stays primary; the plan engine excludes it and would drop the user's listings).
+        cm = state["extracted_context"].get("current_message") or _current_message(state["user_query"])
+        if (decision.get("observation") is None
+                and tool not in ("clarification", "direct_answer", "search_properties")
+                and _current_message_has_multi_intent(cm)
+                and len(_plannable_intents_in_message(cm)) >= 2):
+            # tool_decision carries the base decision so build_execution_plan can fall closed
+            # to it (via _route_base_decision) if planning is not warranted or fails.
+            return Command(update={"tool_decision": decision}, goto="build_execution_plan")
 
-        if tool == "direct_answer":
-            goto = "generate_response"
-        elif tool == "clarification":
-            goto = "format_output"
-        elif tool == "multi_search":
-            goto = search_entry
-        else:
-            goto = "execute_tool"
-        return Command(update={"tool_decision": decision}, goto=goto)
+        # Pre-resolved answer over EXISTING results / direct / clarification / multi_search /
+        # single tool — routed identically to before via the shared helper.
+        return _route_base_decision(decision, search_entry)
 
     return decide_tool_node
 
@@ -2014,12 +2089,256 @@ JSON:"""
             "reason": "Fallback search"}
 
 
+# ═══════════════════════════════════════════════════════════════════
+# MULTI-INTENT EXECUTION PLAN — build_execution_plan
+# ═══════════════════════════════════════════════════════════════════
+# A compound message (safety + commute + research …) is turned into a small set of PLANNABLE
+# tasks that run through the SAME wave executor as the degenerate multi_search fan-out. The
+# LLM plans WHICH intents; params are resolved DETERMINISTICALLY here (so ordinals / addresses
+# are pinned at build time, not in the worker); unresolved tasks drop with a synthetic note.
+
+# Planner tool names that mean "market research" (expanded to web_search tasks, no nested
+# fan-out). Kept liberal so a JSON-mode planner's phrasing variants all map through.
+_MARKET_INTENT_ALIASES = {"market research", "market_research", "market-research", "market_info"}
+
+
+def _plannable_catalog_text() -> str:
+    """The catalog build_execution_plan may pick tasks from: PLANNABLE routes only, plus the
+    'market research' pseudo-intent (which build_execution_plan expands to web_search tasks)."""
+    lines = [f"- {name}: {desc}" for name, desc, _cues in _INTENT_CATALOG
+             if name in PLANNABLE_TOOLS]
+    lines.append("- market research: rent PRICE LEVELS / market / rent trends / cost of "
+                 "living for an area (NOT specific listings). Expands to web searches.")
+    return "\n".join(lines)
+
+
+BUILD_PLAN_PROMPT = '''You are the execution planner for a UK student-housing assistant. The user's CURRENT message asks for SEVERAL things at once. Break it into a small set of tool tasks that together answer everything asked — one task per distinct thing, and no invented asks.
+
+CURRENT MESSAGE (plan for THIS):
+"{current_message}"
+
+AVAILABLE TOOLS (use ONLY these names):
+{catalog}
+
+Rules:
+- Emit one task per distinct thing the user asked for; do not add asks that are not in the message.
+- Each task "query" is a short, self-contained sub-question in the user's own words for that ONE thing — keep any ordinal ("the second one", "第二套") and any place/postcode inside it.
+- Use "market research" for questions about rent PRICE LEVELS / market / trends / 行情 (not specific listings).
+- Tasks are usually independent (empty depends_on); only set depends_on when one task genuinely must run after another.
+- At most {max_tasks} tasks.
+
+Respond with ONLY a json object, no prose:
+{{"tasks": [{{"id": "t1", "tool": "<tool name or 'market research'>", "params_hint": {{"query": "<sub-question>"}}, "depends_on": []}}]}}'''
+
+
+def _parse_plan_tasks(text: str):
+    """Parse the planner output into a list of raw task dicts, or None if unparseable."""
+    if not text:
+        return None
+    text = ''.join(c for c in text if ord(c) >= 32 or c in '\n\t')
+    obj = None
+    try:
+        obj = json.loads(text.strip())
+    except Exception:
+        m = re.search(r'\{[\s\S]*\}', text)
+        if m:
+            try:
+                obj = json.loads(m.group(0).replace('\n', ' '))
+            except Exception:
+                obj = None
+    if not isinstance(obj, dict):
+        return None
+    tasks = obj.get("tasks")
+    return tasks if isinstance(tasks, list) else None
+
+
+def _plan_wave_depths(tasks: list) -> dict:
+    """Longest dependency-chain depth per task id (0 = no deps). A task caught in a cycle or
+    depending on an unknown id gets depth None so the caller can bound waves without hanging."""
+    by_id = {t["id"]: t for t in tasks}
+    depth: dict = {}
+
+    def _dfs(tid, stack):
+        if tid in depth:
+            return depth[tid]
+        t = by_id.get(tid)
+        if t is None:
+            return None  # dependency on an unknown id -> unresolvable
+        deps = [d for d in (t.get("depends_on") or []) if d != tid]
+        if not deps:
+            depth[tid] = 0
+            return 0
+        if tid in stack:
+            return None  # cycle
+        stack.add(tid)
+        best = None
+        for d in deps:
+            dd = _dfs(d, stack)
+            if dd is None:
+                stack.discard(tid)
+                return None
+            best = dd + 1 if best is None else max(best, dd + 1)
+        stack.discard(tid)
+        depth[tid] = best
+        return best
+
+    for t in tasks:
+        _dfs(t["id"], set())
+    return {t["id"]: depth.get(t["id"]) for t in tasks}
+
+
+def _resolve_plan_task(tool: str, query: str, extracted_context, tool_registry, accumulated):
+    """Deterministically resolve ONE plan task's params at BUILD time, reusing the single-tool
+    resolvers (ordinals, addresses, endpoints). The task's own sub-query is injected as the
+    current_message so per-task ordinals ("第二套") resolve against the shared last_results.
+
+    Returns ({"tool":.., "params":..}, None) on success, or (None, clarification_message)
+    when the resolver degraded to a clarification (missing info) so the task must be dropped."""
+    if tool == "web_search":
+        return {"tool": "web_search", "params": {"query": query or ""}}, None
+    task_ec = dict(extracted_context or {})
+    task_ec["current_message"] = query or task_ec.get("current_message") or ""
+    decision = _build_tool_params(tool, query or "", task_ec, tool_registry, accumulated)
+    if decision.get("tool") == "clarification":
+        return None, (decision.get("clarification_message") or f"missing information for {tool}")
+    return {"tool": decision.get("tool", tool), "params": decision.get("params") or {}}, None
+
+
+def _make_build_execution_plan_node(tool_registry, search_entry):
+    """build_execution_plan: turn a multi-intent CURRENT message into a concurrent task plan.
+
+    LLM plans WHICH intents (restricted to PLANNABLE_TOOLS + 'market research'); params are
+    resolved deterministically here; unresolved tasks drop with a synthetic note; the plan is
+    deduped by tool-call digest and clamped to MAX_PLAN_TASKS width / MAX_PLAN_WAVES depth.
+    Fails CLOSED to the base single-tool decision when planning is not warranted or fails."""
+
+    def build_execution_plan_node(state: AgentState) -> Command[Literal[
+            "dispatch_tasks", "execute_tool", "generate_response", "format_output"]]:
+        base_decision = state.get("tool_decision") or {}
+        extracted_context = state.get("extracted_context") or {}
+        accumulated = state.get("accumulated_search_criteria") or {}
+        cm = extracted_context.get("current_message") or _current_message(state.get("user_query") or "")
+
+        def _fallback():
+            return _route_base_decision(base_decision, search_entry)
+
+        # 1) LLM planner (restricted catalog). Any failure / unparseable output -> fallback.
+        try:
+            from core.llm_config import get_planning_llm
+            prompt = BUILD_PLAN_PROMPT.format(current_message=cm,
+                                              catalog=_plannable_catalog_text(),
+                                              max_tasks=MAX_PLAN_TASKS)
+            resp = _bind_json_mode(get_planning_llm()).invoke(prompt)
+            text = resp.content if hasattr(resp, "content") else str(resp)
+            raw_tasks = _parse_plan_tasks(text)
+        except Exception as e:
+            logger.warning("build_execution_plan: planner failed -> single-tool fallback: %s", e)
+            return _fallback()
+        if not raw_tasks:
+            return _fallback()
+
+        # 2) Expand "market research" pseudo-intents into web_search tasks (flattened into the
+        #    same plan — no nested fan-out). Non-market tasks stay for deterministic resolution.
+        expanded = []
+        for i, rt in enumerate(raw_tasks):
+            if not isinstance(rt, dict):
+                continue
+            tool = str(rt.get("tool") or "").strip()
+            hint = rt.get("params_hint")
+            query = str(hint.get("query")).strip() if isinstance(hint, dict) and hint.get("query") else ""
+            if not query:
+                query = cm
+            rid = str(rt.get("id") or f"t{i}")
+            deps = [str(d) for d in (rt.get("depends_on") or []) if isinstance(d, (str, int))]
+            if tool.lower() in _MARKET_INTENT_ALIASES:
+                sub = _plan_web_searches(query, tool_registry)
+                searches = (sub.get("params") or {}).get("searches") or []
+                if not searches:
+                    searches = [{"tool": "web_search", "params": {"query": query}}]
+                for k, s in enumerate(searches[:5]):
+                    p = dict(s.get("params") or {})
+                    expanded.append({"id": f"{rid}_w{k}", "tool": "web_search",
+                                     "params": {"query": p.get("query") or query},
+                                     "depends_on": list(deps), "_resolved": True})
+            else:
+                expanded.append({"id": rid, "tool": tool, "query": query,
+                                 "depends_on": list(deps), "_resolved": False})
+
+        # 3) Deterministic param resolution + drop-with-note; dedup by tool-call digest (also
+        #    against any call already executed this turn).
+        prior_digests = {e.get("params_digest") for e in (state.get("observations") or [])}
+        seen_digests, tasks, notes = set(), [], []
+        for t in expanded:
+            if t.get("_resolved"):
+                tool_name, params = t["tool"], t["params"]
+            else:
+                if t["tool"] not in PLANNABLE_TOOLS:
+                    logger.warning("build_execution_plan: dropping non-plannable tool %r", t["tool"])
+                    continue
+                resolved, clar = _resolve_plan_task(t["tool"], t.get("query"),
+                                                    extracted_context, tool_registry, accumulated)
+                if resolved is None:
+                    notes.append(f"Could not run '{t['tool']}' for \"{t.get('query')}\": {clar}")
+                    continue
+                tool_name, params = resolved["tool"], resolved["params"]
+            digest = _params_digest(tool_name, params)
+            if digest in seen_digests or digest in prior_digests:
+                continue
+            seen_digests.add(digest)
+            tasks.append({"id": t["id"], "tool": tool_name, "params": params,
+                          "depends_on": list(t["depends_on"])})
+
+        # 4) Budget clamps: MAX_PLAN_TASKS width (keep plan order), then MAX_PLAN_WAVES depth.
+        if len(tasks) > MAX_PLAN_TASKS:
+            logger.warning("build_execution_plan: clamped %s tasks to MAX_PLAN_TASKS=%s",
+                           len(tasks), MAX_PLAN_TASKS)
+            tasks = tasks[:MAX_PLAN_TASKS]
+        live_ids = {t["id"] for t in tasks}
+        for t in tasks:
+            t["depends_on"] = [d for d in t["depends_on"] if d in live_ids]
+        depths = _plan_wave_depths(tasks)
+        kept = []
+        for t in tasks:
+            d = depths.get(t["id"])
+            if d is not None and d >= MAX_PLAN_WAVES:
+                logger.warning("build_execution_plan: dropping task %s (dependency depth %s "
+                               ">= MAX_PLAN_WAVES=%s)", t["id"], d, MAX_PLAN_WAVES)
+                continue
+            kept.append(t)
+        tasks = kept
+
+        # 5) Finalise. < 2 surviving tasks -> fall closed (a plan of one adds no concurrency).
+        #    If EVERY task dropped for missing info, surface a single clarification instead.
+        if len(tasks) < 2:
+            if not tasks and notes:
+                msg = "I need a bit more detail before I can look into that:\n- " + "\n- ".join(notes)
+                return Command(update={
+                    "tool_decision": {"tool": "clarification", "params": {},
+                                      "clarification_message": msg,
+                                      "reason": "multi-intent plan: all tasks needed missing info"},
+                }, goto="format_output")
+            return _fallback()
+
+        plan = [{"id": t["id"], "index": idx, "tool": t["tool"],
+                 "params": t["params"], "depends_on": t["depends_on"]}
+                for idx, t in enumerate(tasks)]
+
+        return Command(update={
+            "tool_decision": base_decision,
+            "task_plan": plan,
+            "plan_origin": "plan",
+            "plan_notes": notes,
+        }, goto=search_entry)
+
+    return build_execution_plan_node
+
+
 def _make_execute_tool_node(tool_registry):
     """Create the execute_tool node.
 
-    multi_search no longer reaches here (it runs through the dispatch_searches ->
-    search_worker -> gather_searches map-reduce subgraph). This node routes via
-    Command(goto=...) to format_output or generate_response.
+    multi_search / a multi-intent plan no longer reach here (they run through the
+    dispatch_tasks -> task_worker -> gather_wave wave executor). This node routes via
+    Command(goto=...) to reflect (loopable tool), format_output or generate_response.
     """
 
     async def execute_tool_node(state: AgentState) -> Command[Literal[
@@ -2361,6 +2680,31 @@ def _current_message_has_multi_intent(message: str) -> bool:
     return has_conjunction or has_two_questions
 
 
+# Cue-group -> the PLANNABLE tool that group maps to. Used by the multi-intent plan trigger
+# to count DISTINCT plannable intents in a message. Every group here maps to a tool in
+# PLANNABLE_TOOLS; "market research" (a research verb + price noun, or an explicit
+# do-not-search instruction) is the pseudo-intent that build_execution_plan expands to
+# web_search tasks, so it counts as one plannable intent too.
+_INTENT_GROUP_TO_TOOL = {
+    "safety": "check_safety", "commute": "calculate_commute",
+    "cost": "calculate_commute_cost", "transport": "get_transport_info",
+    "weather": "get_weather", "poi": "search_nearby_pois",
+    "details": "get_property_details", "web": "web_search",
+}
+
+
+def _plannable_intents_in_message(message: str) -> set:
+    """The set of DISTINCT plannable intents a message asks for (by mapped tool name), plus
+    'market research' when the message is a price/market research request. Used to gate the
+    multi-intent plan trigger: >= 2 means a concurrent plan is worthwhile."""
+    low = (message or "").lower()
+    hits = {tool for g, tool in _INTENT_GROUP_TO_TOOL.items()
+            if tool in PLANNABLE_TOOLS and any(kw in low for kw in _MULTI_INTENT_CUES[g])}
+    if _is_market_research_request(message):
+        hits.add("market_research")
+    return hits
+
+
 def _loop_catalog_text() -> str:
     """The catalog the reflect controller may pick a next tool from — LOOPABLE routes
     only, so it never proposes search_properties / a fan-out as a continuation."""
@@ -2454,19 +2798,25 @@ def _make_reflect_node(tool_registry, reflect_llm):
         extracted_context = state.get("extracted_context") or {}
         accumulated = state.get("accumulated_search_criteria") or {}
 
-        # loop_turn counts loopable-tool executions completed this turn (a fresh int each
-        # turn — see state.py). The tool that just ran is the (loop_turn+1)-th.
-        loop_turn = int(state.get("loop_turn", 0)) + 1
-
-        # Record the tool that just ran (append to the per-turn list; observations is a
-        # plain last-write-wins channel, so we return the FULL updated list).
-        prior_obs = list(state.get("observations") or [])
-        current_entry = {
-            "turn": loop_turn - 1, "tool": tool_name,
-            "observation": str(observation or ""),
-            "params_digest": _params_digest(tool_name, params),
-        }
-        all_obs = prior_obs + [current_entry]
+        # A WHOLE multi-intent plan may have just finished (gather_wave): its per-task
+        # observations and the single loop_turn bump are ALREADY recorded, so reflect must NOT
+        # append/increment again — it only decides answer-now vs one more SERIAL tool over the
+        # plan's combined evidence. Otherwise a single loopable tool just ran (execute_tool).
+        plan_completed = bool(state.get("plan_just_completed"))
+        if plan_completed:
+            all_obs = list(state.get("observations") or [])
+            loop_turn = int(state.get("loop_turn", 0))
+        else:
+            # loop_turn counts loopable-tool executions completed this turn (a fresh int each
+            # turn — see state.py). The tool that just ran is the (loop_turn+1)-th.
+            loop_turn = int(state.get("loop_turn", 0)) + 1
+            prior_obs = list(state.get("observations") or [])
+            current_entry = {
+                "turn": loop_turn - 1, "tool": tool_name,
+                "observation": str(observation or ""),
+                "params_digest": _params_digest(tool_name, params),
+            }
+            all_obs = prior_obs + [current_entry]
 
         def _answer(reason: str) -> Command:
             # A single-observation answer keeps today's terminal (structured card ->
@@ -2475,7 +2825,10 @@ def _make_reflect_node(tool_registry, reflect_llm):
             goto = ("generate_response" if len(all_obs) > 1
                     else _route_after_execution(tool_name, raw_data))
             logger.info("reflect -> answer (%s) turn=%s obs=%s", reason, loop_turn, len(all_obs))
-            return Command(update={"observations": all_obs, "loop_turn": loop_turn}, goto=goto)
+            # plan_just_completed is consumed here (and on any continuation) so a later serial
+            # reflect entry records its tool normally.
+            return Command(update={"observations": all_obs, "loop_turn": loop_turn,
+                                   "plan_just_completed": False}, goto=goto)
 
         # Hard stop: turn cap.
         if loop_turn >= MAX_AGENT_TURNS:
@@ -2484,10 +2837,10 @@ def _make_reflect_node(tool_registry, reflect_llm):
         # One-shot short-circuit: the FIRST loopable tool has run (exactly one observation)
         # and the current message carries no multi-intent signal — so the controller would
         # only ever say "answer". Skip that mandatory classification round-trip and answer
-        # now. Full reflection is preserved for later turns (loop_turn >= 2) and for
-        # multi-intent messages, which may legitimately warrant one more tool.
+        # now. Never fires for a completed plan (>= 2 observations, multi-intent by
+        # construction), which always consults the controller for a possible serial follow-up.
         current_msg = _current_message(state.get("user_query") or "")
-        if (loop_turn == 1 and len(all_obs) == 1
+        if (not plan_completed and loop_turn == 1 and len(all_obs) == 1
                 and not _current_message_has_multi_intent(current_msg)):
             return _answer("single-intent one-shot")
 
@@ -2527,7 +2880,7 @@ def _make_reflect_node(tool_registry, reflect_llm):
         logger.info("reflect -> continue turn=%s next=%s", loop_turn, nd_tool)
         return Command(update={
             "observations": all_obs, "loop_turn": loop_turn,
-            "tool_decision": next_decision,
+            "tool_decision": next_decision, "plan_just_completed": False,
         }, goto="execute_tool")
 
     return reflect_node
@@ -2803,89 +3156,155 @@ def _route_after_execution(tool: str, raw) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════
-# MULTI-SEARCH MAP-REDUCE (dispatch -> Send fan-out -> gather)
+# UNIFIED WAVE EXECUTOR (dispatch_tasks -> Send ready set -> task_worker -> gather_wave)
 # ═══════════════════════════════════════════════════════════════════
+# One engine for BOTH the degenerate multi_search fan-out (plan_origin="multi_search") and a
+# multi-intent plan (plan_origin="plan"). dispatch_tasks Sends the ready set (deps satisfied);
+# task_worker runs one task under a timeout; gather_wave reduces the wave and either loops back
+# for the next dependency wave or finalizes — to generate_response (multi_search) or reflect
+# (plan). run_id keying + the bounded_add reducer on task_results mirror search_results exactly.
 
-def _make_dispatch_searches_node():
-    """Create the dispatch_searches node.
-
-    No-op node; its conditional edge (fan_out_searches) does the Send fan-out."""
-    def dispatch_searches_node(state: AgentState) -> dict:
+def _make_dispatch_tasks_node():
+    """No-op node; its conditional edge (fan_out_tasks) Sends this wave's ready task set."""
+    def dispatch_tasks_node(state: AgentState) -> dict:
         return {}
-    return dispatch_searches_node
+    return dispatch_tasks_node
 
 
-def fan_out_searches(state: AgentState):
-    """MAP: one Send per planned sub-search."""
-    searches = (state["tool_decision"].get("params") or {}).get("searches") or []
-    if not searches:
-        return "gather_searches"   # nothing to fan out
-    return [Send("search_worker", {
-                "search": s, "search_index": i, "run_id": state.get("run_id", "legacy")
-            })
-            for i, s in enumerate(searches)]
+def _completed_task_ids(state: AgentState) -> set:
+    """Ids of tasks whose worker result has already merged for THIS run_id."""
+    run_id = state.get("run_id", "legacy")
+    return {r.get("id") for r in state.get("task_results", []) if r.get("run_id") == run_id}
 
 
-def _make_search_worker_node(tool_registry):
-    """Create the search_worker node (runs one sub-search; results reducer-merged)."""
-    async def search_worker_node(state) -> dict:
-        s = state["search"]
-        i = state["search_index"]
-        # Defensive: a malformed sub-search (e.g. from an HITL-edited plan) must degrade to
-        # an error observation, not crash the whole turn with an uncaught AttributeError.
-        if not isinstance(s, dict):
-            return {"search_results": [{
-                "index": i, "tool": "invalid", "params": {},
-                "obs": f"Error: malformed sub-search entry: {s!r}", "raw": None,
-                "run_id": state.get("run_id", "legacy"),
+def fan_out_tasks(state: AgentState):
+    """MAP: Send every task whose depends_on is fully satisfied and which has not run yet. An
+    empty ready set (all done, or an unsatisfiable/cyclic remainder) routes to gather_wave,
+    which finalizes or fails the remainder rather than deadlocking."""
+    plan = state.get("task_plan") or []
+    completed = _completed_task_ids(state)
+    run_id = state.get("run_id", "legacy")
+    ready = [t for t in plan
+             if t.get("id") not in completed and set(t.get("depends_on") or []) <= completed]
+    if not ready:
+        return "gather_wave"
+    return [Send("task_worker", {"task": t, "run_id": run_id}) for t in ready]
+
+
+def _make_task_worker_node(tool_registry):
+    """Run ONE plan task under a per-tool timeout; result reducer-merged into task_results.
+    Degrade-don't-crash: a timeout or exception becomes an honest error observation so one
+    failed task never kills its siblings or the wave."""
+    async def task_worker_node(state) -> dict:
+        t = state["task"]
+        run_id = state.get("run_id", "legacy")
+        if not isinstance(t, dict):
+            return {"task_results": [{
+                "id": None, "index": 0, "tool": "invalid", "params": {},
+                "obs": f"Error: malformed task entry: {t!r}", "raw": None, "run_id": run_id,
             }]}
-        tool_name = s.get("tool", "web_search")
-        params = s.get("params", {})
+        tool_name = t.get("tool", "web_search")
+        params = t.get("params", {}) or {}
+        idx = t.get("index", 0)
+        tid = t.get("id")
+        timeout = TOOL_TIMEOUTS.get(tool_name, TOOL_TIMEOUT_DEFAULT)
         try:
-            result = await tool_registry.execute_tool(tool_name, **params)
+            result = await asyncio.wait_for(
+                tool_registry.execute_tool(tool_name, **params), timeout)
             if result.success:
                 obs = (result.data.get('results', json.dumps(result.data, ensure_ascii=False))
                        if isinstance(result.data, dict) else str(result.data))
                 raw = result.data
             else:
                 obs, raw = f"Error: {result.error}", None
+        except asyncio.TimeoutError:
+            obs, raw = f"Error: {tool_name} timed out after {timeout}s", None
         except Exception as e:
             obs, raw = f"Error: {e}", None
-        return {"search_results": [{
-            "index": i, "tool": tool_name, "params": params,
-            "obs": obs if isinstance(obs, str) else str(obs), "raw": raw,
-            "run_id": state.get("run_id", "legacy"),
+        return {"task_results": [{
+            "id": tid, "index": idx, "tool": tool_name, "params": params,
+            "obs": obs if isinstance(obs, str) else str(obs), "raw": raw, "run_id": run_id,
         }]}
-    return search_worker_node
+    return task_worker_node
 
 
-def _make_gather_searches_node():
-    """REDUCE: fold worker results into one observation, preserving the old
-    _execute_multi_search combined-string format."""
-    def gather_searches_node(state: AgentState) -> dict:
+def _make_gather_wave_node():
+    """REDUCE one wave. If a dependency wave still has ready tasks -> loop to dispatch_tasks.
+    Otherwise finalize the combined observation (same per-sub-search labelled format the old
+    gather_searches produced, so enforce_grounding / generate_response keep working) and route:
+    plan_origin=="multi_search" -> generate_response; plan_origin=="plan" -> reflect (the WHOLE
+    plan counts as ONE loop step). A remainder with NO ready task (cycle / unsatisfiable dep) is
+    failed with honest error observations instead of deadlocking."""
+    def gather_wave_node(state: AgentState) -> Command[Literal[
+            "dispatch_tasks", "generate_response", "reflect"]]:
         run_id = state.get("run_id", "legacy")
-        items = sorted(
-            (item for item in state.get("search_results", []) if item.get("run_id") == run_id),
-            key=lambda item: item.get("index", 0),
-        )
+        results = [r for r in state.get("task_results", []) if r.get("run_id") == run_id]
+        completed = {r.get("id") for r in results}
+        plan = state.get("task_plan") or []
+        pending = [t for t in plan if t.get("id") not in completed]
+        if pending:
+            ready = [t for t in pending if set(t.get("depends_on") or []) <= completed]
+            if ready:
+                return Command(goto="dispatch_tasks")   # run the next dependency wave
+            # No ready task remains: cycle / unsatisfiable dependency. Fail the remainder.
+            for t in pending:
+                results.append({
+                    "id": t.get("id"), "index": t.get("index", 0),
+                    "tool": t.get("tool", "unknown"), "params": t.get("params", {}),
+                    "obs": (f"Error: task '{t.get('id')}' skipped — dependencies "
+                            f"{t.get('depends_on')} could not be satisfied (cycle or "
+                            f"unavailable)."),
+                    "raw": None, "run_id": run_id,
+                })
+
+        items = sorted(results, key=lambda it: it.get("index", 0))
         all_obs, all_raw = [], {}
         for it in items:
             all_obs.append(
-                f"### Sub-search {it['index']+1}: {it['tool']}\n"
+                f"### Sub-search {it.get('index', 0) + 1}: {it.get('tool')}\n"
                 f"Params: {json.dumps(it.get('params', {}), ensure_ascii=False)}\n"
-                f"Result:\n{it['obs']}"
+                f"Result:\n{it.get('obs')}"
             )
             if it.get("raw"):
-                all_raw[f"{it['tool']}_{it['index']+1}"] = it["raw"]
+                all_raw[f"{it.get('tool')}_{it.get('index', 0) + 1}"] = it["raw"]
+        notes = state.get("plan_notes") or []
         combined = "\n" + "=" * 50 + "\n## Combined Results\n" + "=" * 50 + "\n\n"
         combined += "\n---\n".join(all_obs)
+        if notes:
+            combined += ("\n---\n### Notes (asks I could not complete)\n"
+                         + "\n".join(f"- {n}" for n in notes))
         combined += f"\n\nTotal: {len(items)} tools executed.\n"
-        return {
-            "tool_observation": combined,
-            "tool_raw_data": all_raw,
-            "context_tainted": True,
-        }
-    return gather_searches_node
+
+        # Taint only when the PLAN contains web content; a structured-tool-only plan does not.
+        web_in_plan = any(t.get("tool") == "web_search" for t in plan)
+        tainted = state.get("context_tainted", False) or web_in_plan
+
+        if (state.get("plan_origin") or "multi_search") == "plan":
+            # The whole plan is ONE loop step: append per-task (and per-note) observations, bump
+            # loop_turn once, and hand to reflect (answer-now vs one more SERIAL tool).
+            loop_turn = int(state.get("loop_turn", 0)) + 1
+            step = loop_turn - 1
+            obs_entries = list(state.get("observations") or [])
+            for it in items:
+                obs_entries.append({
+                    "turn": step, "tool": it.get("tool", "tool"),
+                    "observation": str(it.get("obs") or ""),
+                    "params_digest": _params_digest(it.get("tool", ""), it.get("params") or {}),
+                })
+            for n in notes:
+                obs_entries.append({"turn": step, "tool": "planner_note",
+                                    "observation": str(n), "params_digest": ""})
+            return Command(update={
+                "tool_observation": combined, "tool_raw_data": all_raw,
+                "context_tainted": tainted, "observations": obs_entries,
+                "loop_turn": loop_turn, "plan_just_completed": True,
+            }, goto="reflect")
+
+        # Degenerate multi_search: straight to generate_response — today's latency/semantics.
+        return Command(update={
+            "tool_observation": combined, "tool_raw_data": all_raw, "context_tainted": tainted,
+        }, goto="generate_response")
+    return gather_wave_node
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -2905,7 +3324,7 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
         reflect_llm: optional LLM for the bounded-loop `reflect` controller; defaults to
             the (cheap) classification LLM. Injectable for tests.
         enable_hitl: when True (and a checkpointer is present) a ``confirm_search`` node
-            pauses the graph with interrupt() before the expensive multi-search fan-out.
+            pauses the graph with interrupt() before the expensive task-wave fan-out.
 
     Returns:
         Compiled LangGraph that can be invoked with AgentState.
@@ -2923,7 +3342,7 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
     # HITL needs a checkpointer to persist the interrupted state; silently degrade to the
     # plain path if one was not provided rather than crashing at interrupt() time.
     enable_hitl = bool(enable_hitl and checkpointer is not None)
-    search_entry = "confirm_search" if enable_hitl else "dispatch_searches"
+    search_entry = "confirm_search" if enable_hitl else "dispatch_tasks"
     use_store = store is not None
 
     graph = StateGraph(AgentState)
@@ -2946,14 +3365,17 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
     graph.add_node("execute_tool", _n("execute_tool", _make_execute_tool_node(tool_registry)))
     # Bounded agent loop controller (execute_tool -> reflect -> execute_tool | generation).
     graph.add_node("reflect", _n("reflect", _make_reflect_node(tool_registry, reflect_llm)))
-    graph.add_node("dispatch_searches", _n("dispatch_searches", _make_dispatch_searches_node()))
-    graph.add_node("search_worker", _n("search_worker", _make_search_worker_node(tool_registry)))
-    graph.add_node("gather_searches", _n("gather_searches", _make_gather_searches_node()))
+    # Multi-intent planner (Command-routed to the wave executor / single-tool fallback).
+    graph.add_node("build_execution_plan", _n("build_execution_plan", _make_build_execution_plan_node(tool_registry, search_entry)))
+    # Unified wave executor (dispatch_tasks -> Send ready set -> task_worker x N -> gather_wave).
+    graph.add_node("dispatch_tasks", _n("dispatch_tasks", _make_dispatch_tasks_node()))
+    graph.add_node("task_worker", _n("task_worker", _make_task_worker_node(tool_registry)))
+    graph.add_node("gather_wave", _n("gather_wave", _make_gather_wave_node()))
     graph.add_node("generate_response", _n("generate_response", _make_generate_response_node()))
     graph.add_node("critic", _n("critic", _make_critic_node()))
     graph.add_node("format_output", _n("format_output", _make_format_output_node()))
 
-    # HITL confirm node (Command-routed to dispatch_searches / format_output — NOT
+    # HITL confirm node (Command-routed to dispatch_tasks / format_output — NOT
     # generate_response, which would overwrite the cancel message). Only registered when
     # enabled, so the default graph topology is unchanged.
     if enable_hitl:
@@ -2972,13 +3394,15 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
     else:
         graph.add_edge(START, "extract_preferences")
     graph.add_edge("extract_preferences", "decide_tool")
-    # decide_tool, execute_tool and reflect all route via Command(goto=...) — no
-    # conditional edges needed (execute_tool -> reflect for loopable tools; reflect ->
-    # execute_tool to loop, or -> generate_response/format_output to answer). confirm_search
-    # (when present) is likewise Command-routed to dispatch_searches / format_output.
-    graph.add_conditional_edges("dispatch_searches", fan_out_searches, ["search_worker", "gather_searches"])
-    graph.add_edge("search_worker", "gather_searches")
-    graph.add_edge("gather_searches", "generate_response")
+    # decide_tool, build_execution_plan, execute_tool, reflect and gather_wave all route via
+    # Command(goto=...) — no conditional edges needed (decide_tool -> build_execution_plan for
+    # multi-intent; execute_tool -> reflect for loopable tools; reflect -> execute_tool to
+    # loop or -> generate_response/format_output to answer; gather_wave -> dispatch_tasks for
+    # the next wave, else -> generate_response/reflect). confirm_search (when present) is
+    # likewise Command-routed to dispatch_tasks / format_output. Only dispatch_tasks needs a
+    # conditional edge, for its Send fan-out of the ready task set.
+    graph.add_conditional_edges("dispatch_tasks", fan_out_tasks, ["task_worker", "gather_wave"])
+    graph.add_edge("task_worker", "gather_wave")
     graph.add_edge("generate_response", "critic")
     graph.add_edge("critic", "format_output")
     # Exit: format_output -> [persist_prefs ->] END. persist_prefs writes this turn's

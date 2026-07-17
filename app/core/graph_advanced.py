@@ -5,8 +5,8 @@ enabled the main graph topology and behaviour are byte-for-byte unchanged. The f
 capabilities, and the interview concept each one demonstrates:
 
   1. HITL (human-in-the-loop) — ``confirm_search`` pauses the graph with ``interrupt()``
-     right before the expensive multi-search fan-out, so a human can approve / edit / cancel
-     the planned scrapes. Resumed with ``Command(resume=...)``. Requires a checkpointer.
+     right before the expensive task-wave fan-out, so a human can approve / edit / cancel the
+     planned tasks. Resumed with ``Command(resume=...)``. Requires a checkpointer.
 
   2. Store (cross-thread memory) — ``hydrate_prefs`` / ``persist_prefs`` read & write the
      user's DURABLE structured criteria (budget, destination, must-haves) to a LangGraph
@@ -148,16 +148,43 @@ def _merge_into_accumulated(accumulated: Dict[str, Any], persisted: Dict[str, An
     return merged
 
 
-# ── HITL: confirm the expensive multi-search fan-out ─────────────────────────────────
+# ── HITL: confirm the expensive task-wave fan-out ────────────────────────────────────
+def _plan_tasks_of(state) -> list:
+    """The task list this confirm gate is gating: the unified ``task_plan`` (both the
+    degenerate multi_search fan-out and a multi-intent plan set it), falling back to a
+    legacy ``tool_decision.params.searches`` shape for back-compat."""
+    plan = state.get("task_plan")
+    if plan:
+        return list(plan)
+    searches = ((state.get("tool_decision") or {}).get("params") or {}).get("searches") or []
+    return _tasks_from_items(searches)
+
+
+def _tasks_from_items(items) -> list:
+    """Normalise a list of task/search dicts into the canonical task shape
+    ({id,index,tool,params,depends_on}); malformed entries (no tool) are dropped."""
+    tasks = []
+    for i, s in enumerate(items):
+        if not isinstance(s, dict) or not s.get("tool"):
+            continue
+        tasks.append({
+            "id": s.get("id") or f"t{i}", "index": i, "tool": s.get("tool"),
+            "params": s.get("params") or {}, "depends_on": s.get("depends_on") or [],
+        })
+    return tasks
+
+
 def make_confirm_search_node():
-    """Node inserted between decide_tool and dispatch_searches when HITL is enabled.
+    """Node inserted between decide_tool/build_execution_plan and dispatch_tasks when HITL is
+    enabled.
 
-    It pauses with ``interrupt(payload)`` where payload lists the planned sub-searches, and
-    blocks until the caller resumes with ``Command(resume=decision)``:
+    It pauses with ``interrupt(payload)`` where payload lists the planned TASKS
+    (id/tool/params/depends_on), and blocks until the caller resumes with
+    ``Command(resume=decision)``:
 
-      * truthy / "proceed" / {"action": "proceed"}      -> run the searches as planned
-      * {"action": "edit", "searches": [...]}           -> run the EDITED search plan
-      * falsey / "cancel" / {"action": "cancel"}        -> skip searching, answer politely
+      * truthy / "proceed" / {"action": "proceed"}          -> run the plan as-is
+      * {"action": "edit", "tasks": [...]} (or "searches")  -> run the EDITED plan
+      * falsey / "cancel" / {"action": "cancel"}            -> skip, answer politely
 
     re-execution gotcha (the interview point): when the graph resumes, the ENTIRE
     confirm_search node re-runs from the top — ``interrupt()`` replays and returns the resume
@@ -165,21 +192,22 @@ def make_confirm_search_node():
     idempotent; never do a side effect before it.
     """
 
-    def confirm_search_node(state) -> Command[Literal["dispatch_searches", "format_output"]]:
-        decision = state.get("tool_decision") or {}
-        searches = (decision.get("params") or {}).get("searches") or []
+    def confirm_search_node(state) -> Command[Literal["dispatch_tasks", "format_output"]]:
+        plan = _plan_tasks_of(state)
 
         # Nothing to fan out — behave exactly like the no-HITL path.
-        if not searches:
-            return Command(goto="dispatch_searches")
+        if not plan:
+            return Command(goto="dispatch_tasks")
 
         # PAUSE. On resume this returns the value passed to Command(resume=...).
         decision_in = interrupt(
             {
                 "type": "confirm_search",
-                "question": "About to run these property searches — proceed?",
-                "planned_searches": [
-                    {"tool": s.get("tool"), "params": s.get("params", {})} for s in searches
+                "question": "About to run these tasks — proceed?",
+                "task_list": [
+                    {"id": t.get("id"), "tool": t.get("tool"),
+                     "params": t.get("params", {}), "depends_on": t.get("depends_on", [])}
+                    for t in plan
                 ],
             }
         )
@@ -201,24 +229,22 @@ def make_confirm_search_node():
             )
 
         if action == "edit" and edited:
-            new_decision = dict(decision)
-            new_params = dict(new_decision.get("params") or {})
-            new_params["searches"] = edited
-            new_decision["params"] = new_params
-            return Command(update={"tool_decision": new_decision}, goto="dispatch_searches")
+            return Command(update={"task_plan": _tasks_from_items(edited)},
+                           goto="dispatch_tasks")
 
-        return Command(goto="dispatch_searches")
+        return Command(goto="dispatch_tasks")
 
     return confirm_search_node
 
 
 def _parse_resume(value: Any) -> tuple[str, Optional[list]]:
-    """Normalise a Command(resume=...) payload to (action, edited_searches).
+    """Normalise a Command(resume=...) payload to (action, edited_tasks).
 
     Fail CLOSED: anything unrecognised cancels rather than silently launching the expensive
-    fan-out. An edit whose searches are all malformed likewise cancels — running the ORIGINAL
+    fan-out. An edit whose entries are all malformed likewise cancels — running the ORIGINAL
     plan against an explicit (if broken) edit request would defy the user's intent, and the
-    malformed entries themselves must never reach search_worker.
+    malformed entries themselves must never reach task_worker. Accepts the new ``tasks`` key
+    and the legacy ``searches`` key (both are lists of {tool, params, ...} dicts).
     """
     if value in (None, False, "", "cancel", "no", "abort"):
         return "cancel", None
@@ -229,7 +255,9 @@ def _parse_resume(value: Any) -> tuple[str, Optional[list]]:
         if action == "cancel":
             return "cancel", None
         if action == "edit":
-            raw = value.get("searches") or []
+            raw = value.get("tasks")
+            if raw is None:
+                raw = value.get("searches") or []
             valid = [s for s in raw if isinstance(s, dict) and s.get("tool")]
             return ("edit", valid) if valid else ("cancel", None)
         if action == "proceed":

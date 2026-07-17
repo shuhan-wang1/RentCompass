@@ -15,8 +15,9 @@ NODE_LABELS = {
     "responder": "Writing the response",
     # Compatibility labels while the legacy graph is incrementally split.
     "decide_tool": "Understanding your request",
-    "dispatch_searches": "Planning searches",
-    "gather_searches": "Combining search results",
+    "build_execution_plan": "Planning the work",
+    "dispatch_tasks": "Running tasks",
+    "gather_wave": "Combining results",
     "generate_response": "Writing the response",
 }
 

@@ -52,9 +52,22 @@ CREATE TABLE IF NOT EXISTS favorites (
 """
 
 
+_NOW_LOCK = threading.Lock()
+_LAST_NOW = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+
 def _now_iso() -> str:
     # ISO-8601 UTC with microseconds → lexicographically sortable for updated_at DESC.
-    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # Strictly monotonic within the process: Windows clock granularity can return the
+    # same instant for consecutive calls, which would make ORDER BY updated_at ties
+    # (and thus list_conversations order) nondeterministic.
+    global _LAST_NOW
+    with _NOW_LOCK:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if now <= _LAST_NOW:
+            now = _LAST_NOW + datetime.timedelta(microseconds=1)
+        _LAST_NOW = now
+        return now.isoformat()
 
 
 class ConversationStore:

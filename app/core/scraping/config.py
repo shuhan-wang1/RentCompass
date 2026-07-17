@@ -30,7 +30,7 @@ DATA_DIR = APP_DIR / "data"
 FAKE_CSV = DATA_DIR / "fake_property_listings.csv"
 CACHE_CSV = DATA_DIR / "scraped_property_listings.csv"
 
-# Vendored legacy scrapers (Rightmove + Zoopla opt-in stubs) live here.
+# Vendored legacy Zoopla scraper (opt-in, needs FlareSolverr) lives here.
 SCRAPPER_DIR = _THIS.parent / "legacy_scrapers"
 
 # ---------------------------------------------------------------------------
@@ -58,66 +58,54 @@ DEFAULT_MAX_BEDROOMS = int(os.getenv("SCRAPER_MAX_BEDROOMS", "2"))
 # Which sources to run, in order. Comma-separated env override.
 #   onthemarket -> works out of the box (server-rendered __NEXT_DATA__ JSON,
 #                  robots-permitted); the current primary source.
-#   openrent  -> DEAD as of 2026-07: listing pages now sit behind an AWS WAF
-#                "Human Verification" challenge (GET returns HTTP 405 + bot
-#                interstitial). Kept as an opt-in stub; don't expect data.
 #   zoopla    -> needs a local FlareSolverr Docker container on :8191
-#   rightmove -> DEAD: Rightmove decommissioned /api/_search and prohibits
-#                scraping; kept only as an opt-in stub. Don't expect data.
+# (OpenRent and Rightmove scrapers were removed: OpenRent sits behind an AWS WAF
+#  challenge and Rightmove decommissioned its search endpoint — neither revivable.)
 DEFAULT_SOURCES = [
     s.strip().lower()
     for s in os.getenv("SCRAPER_SOURCES", "onthemarket").split(",")
     if s.strip()
 ]
 
-# Each task carries the per-source location handle it needs. OpenRent resolves a
-# free-text term server-side, so openrent_term is just the area/landmark name.
-# Focused on student-dense London areas (the app's travel-time/geocoding is
-# London-optimised via TfL). Overlapping central areas are de-duplicated by URL.
+# Each task carries the per-source location handle it needs (onthemarket_slug,
+# optional zoopla_slug). Focused on student-dense London areas (the app's
+# travel-time/geocoding is London-optimised via TfL). Overlapping central areas
+# are de-duplicated by URL.
 DEFAULT_SEARCH_TASKS = [
     {
         "name": "Russell Square / UCL",
         "onthemarket_slug": "bloomsbury",
-        "openrent_term": "University College London",
-        "rightmove_id": "STATION^7877",          # (legacy; endpoint is dead)
         "zoopla_slug": "station/tube/russell-square",
         "radius": 1.0,
     },
     {
         "name": "King's Cross",
         "onthemarket_slug": "kings-cross",
-        "openrent_term": "King's Cross",
         "radius": 1.0,
     },
     {
         "name": "Camden Town",
         "onthemarket_slug": "camden",
-        "openrent_term": "Camden Town",
         "radius": 1.0,
     },
     {
         "name": "Stratford (UEL / QMUL)",
         "onthemarket_slug": "stratford-london",
-        "openrent_term": "Stratford London",
         "radius": 1.5,
     },
     {
         "name": "Mile End (QMUL)",
         "onthemarket_slug": "mile-end",
-        "openrent_term": "Mile End",
         "radius": 1.0,
     },
     {
         "name": "Elephant & Castle (LSE / UAL)",
         "onthemarket_slug": "elephant-and-castle",
-        "openrent_term": "Elephant and Castle",
         "radius": 1.0,
     },
     {
         "name": "Wembley Park",
         "onthemarket_slug": "wembley-park",
-        "openrent_term": "Wembley Park",
-        "rightmove_id": "STATION^9782",           # (legacy; endpoint is dead)
         "zoopla_slug": "wembley-park",
         "radius": 1.5,
     },
@@ -128,11 +116,11 @@ DEFAULT_SEARCH_TASKS = [
 # Legacy scraper loader
 # ---------------------------------------------------------------------------
 def load_legacy(module_name: str):
-    """Import a module from scrapped_data_demo/scrapper by name.
+    """Import a vendored standalone scraper from ``legacy_scrapers/`` by name.
 
-    The standalone scrapers import each other with bare names
-    (``from rightmove_scraper import ...``), so we add their directory to
-    sys.path before importing. Raises ImportError if the scrapper dir is missing.
+    These scrapers are written to run standalone, so we add their directory to
+    sys.path before importing. Currently only ``scrape_zoopla_listings`` remains
+    (loaded by zoopla.py). Raises ImportError if the scrapper dir is missing.
     """
     if not SCRAPPER_DIR.exists():
         raise ImportError(f"scrapper directory not found at {SCRAPPER_DIR}")

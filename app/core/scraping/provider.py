@@ -3,7 +3,7 @@ Property provider — the single public entry the rest of the app talks to.
 
 Hybrid cache with TTL:
   - If the scraped-cache CSV exists and is fresh (< TTL), serve it (fast).
-  - Otherwise scrape (Rightmove + optional Zoopla), normalise, write the cache,
+  - Otherwise scrape (OnTheMarket + optional Zoopla), normalise, write the cache,
     and serve the fresh results.
   - On any scrape failure / empty result, fall back to a stale cache if present,
     else to the bundled fake CSV — so the app always has data.
@@ -22,7 +22,7 @@ from .config import (
     DEFAULT_MAX_PRICE,
 )
 from .normalize import read_csv, write_csv
-# NOTE: source modules (openrent/rightmove/zoopla) import bs4/requests and are
+# NOTE: source modules (onthemarket/zoopla) import bs4/requests and are
 # imported lazily inside _run_source, so that simply SERVING the cached CSV
 # (the common startup path) only needs pandas — never bs4.
 
@@ -52,14 +52,6 @@ def _run_source(source: str, task: dict, radius, min_price, max_price,
         return onthemarket.find_rich_onthemarket(
             slug, radius, min_price, max_price, limit=limit_per_task
         )
-    if source == "openrent":
-        term = task.get("openrent_term")
-        if not term:
-            return []
-        from . import openrent
-        return openrent.find_rich_openrent(
-            term, radius, min_price, max_price, limit=limit_per_task
-        )
     if source == "zoopla":
         slug = task.get("zoopla_slug")
         if not slug:
@@ -67,14 +59,6 @@ def _run_source(source: str, task: dict, radius, min_price, max_price,
         from . import zoopla
         return zoopla.find_rich_zoopla(
             slug, radius, min_price, max_price, limit=limit_per_task
-        )
-    if source == "rightmove":
-        rm_id = task.get("rightmove_id")
-        if not rm_id:
-            return []
-        from . import rightmove
-        return rightmove.find_rich_rightmove(
-            rm_id, radius, min_price, max_price, limit=limit_per_task
         )
     print(f"  [provider] unknown source '{source}', skipping")
     return []
@@ -84,7 +68,7 @@ def scrape_all(
     tasks: list[dict] | None = None,
     limit_per_task: int | None = None,
     sources: list[str] | None = None,
-    rightmove_only: bool = False,  # back-compat; equivalent to sources=['rightmove']
+    rightmove_only: bool = False,  # legacy no-op: Rightmove source removed (dead endpoint)
 ) -> list[dict]:
     """Run every search task across the enabled sources, returning de-duplicated
     rich-schema property dicts. Per-source failures are logged, not fatal."""

@@ -2,7 +2,7 @@
 """
 Build / refresh the scraped property cache.
 
-Runs the local Rightmove (+ optional Zoopla) scrapers, normalises every listing
+Runs the OnTheMarket (+ optional Zoopla) scrapers, normalises every listing
 to the rich schema used by the RAG/agent pipeline, and writes
 ``data/scraped_property_listings.csv`` — the cache the app serves when
 PROPERTY_SOURCE=scraper (or auto, once built).
@@ -10,7 +10,7 @@ PROPERTY_SOURCE=scraper (or auto, once built).
 Examples:
     python build_scraped_dataset.py                 # default tasks, capped per task
     python build_scraped_dataset.py --limit 25      # up to 25 listings per task
-    python build_scraped_dataset.py --rightmove-only
+    python build_scraped_dataset.py --sources onthemarket,zoopla
     python build_scraped_dataset.py --min-price 800 --max-price 2200
 
 Zoopla needs a local FlareSolverr container:
@@ -42,10 +42,10 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=None,
                     help="Max listings per task (default: SCRAPER_LIMIT_PER_TASK env / 15).")
     ap.add_argument("--sources", type=str, default=None,
-                    help="Comma list of sources to run (e.g. 'openrent' or "
-                         "'openrent,zoopla'). Default: SCRAPER_SOURCES env / openrent.")
+                    help="Comma list of sources to run (e.g. 'onthemarket' or "
+                         "'onthemarket,zoopla'). Default: SCRAPER_SOURCES env / onthemarket.")
     ap.add_argument("--rightmove-only", action="store_true",
-                    help="(legacy) only Rightmove — note its endpoint is dead.")
+                    help="(legacy no-op) Rightmove source was removed; produces no data.")
     ap.add_argument("--min-price", type=int, default=None,
                     help=f"Override min monthly price (default {DEFAULT_MIN_PRICE}).")
     ap.add_argument("--max-price", type=int, default=None,
@@ -77,7 +77,7 @@ def main() -> int:
 
     if not props:
         print("\n/!\\ No properties scraped. Cache NOT written. /!\\")
-        print("    - Check network / Rightmove availability.")
+        print("    - Check network / OnTheMarket availability.")
         print("    - For Zoopla, ensure FlareSolverr is running on :8191.")
         return 1
 

@@ -6,7 +6,7 @@ import ast # Used to safely parse the string representation of the image list
 import os
 
 from uk_rent_agent.config import Config
-from uk_rent_agent.data.parsing import extract_postcode, filter_by_budget, parse_price
+from uk_rent_agent.data.parsing import parse_price  # noqa: F401 (re-exported: app.py & search_properties import parse_price from here)
 from uk_rent_agent.data.repository import PropertyRepository
 
 _repository = PropertyRepository(Config.from_env())
@@ -60,32 +60,3 @@ def load_properties(force_refresh: bool = False) -> list[dict]:
 def get_property_source() -> str:
     """Return the source label for the same repository snapshot used by search."""
     return _repository.load().source
-
-# --- This function is now modified to call the local loader instead of the scraper ---
-def get_live_properties(location_id: str, radius: float, min_price: int, max_price: int, limit: int | None = None) -> list[dict]:
-    """
-    MODIFIED: This function no longer scrapes live data.
-    It loads properties from a local CSV file, making it legit and clean for demos.
-    The function signature is kept the same to ensure compatibility with the rest of the app.
-    """
-    print("\n--- In Demo Mode: Loading properties from local CSV ---")
-
-    # Call the new function to get data from the CSV
-    all_properties = load_mock_properties_from_csv()
-
-    if not all_properties:
-        return []
-
-    # Process properties (this part remains the same)
-    processed_properties = []
-    for prop in all_properties:
-        prop['parsed_price'] = parse_price(prop.get('Price'))
-        prop['postcode'] = extract_postcode(prop.get('Address'))
-        if prop['parsed_price'] is not None:
-             processed_properties.append(prop)
-
-    # Apply the limit if one was provided
-    if limit:
-        return processed_properties[:limit]
-
-    return processed_properties

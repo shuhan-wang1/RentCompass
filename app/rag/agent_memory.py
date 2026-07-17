@@ -42,13 +42,79 @@ RECENCY_DECAY = 0.995            # per-hour exponential decay of recency
 RETRIEVE_CANDIDATES = 25         # vector top-K fetched before GA re-ranking
 REFLECT_IMPORTANCE_THRESHOLD = 30  # accrued importance that triggers a reflection
                                    # (paper uses 150 over game-days; scaled for short chats)
+REFLECT_CORPUS_SIZE = 30         # newest-by-created_at records fed into a reflection
 
-_DEFAULT_DB_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  # app/
-    "chroma_db_agent_memory",
-)
-_DB_PATH = os.getenv("AGENT_MEMORY_DB_PATH", _DEFAULT_DB_PATH)
+# Per-user cap on auto-logged episodic records. remember_turn appends one every
+# turn forever, so without a cap the episodic layer grows unbounded. Enforced
+# opportunistically on write: keep the newest N per user by created_at, delete the
+# overflow. Semantic + reflection layers are deliberately uncapped (they are small,
+# deduped/consolidated, and represent durable distilled knowledge).
+EPISODIC_MAX_PER_USER = 500
+
+# Static importance assigned to auto-episodic turn logs so remember_turn does NOT
+# burn an LLM call rating a raw query log every turn. Explicit remember() writes
+# (importance=None) still get an LLM poignancy rating.
+_AUTO_EPISODIC_IMPORTANCE = 5
+
+# Persist dir is configurable via RAG_DB_ROOT (a root directory). Default resolves
+# to app/chroma_db_agent_memory so existing on-disk user data keeps working.
+# AGENT_MEMORY_DB_PATH remains an absolute-path override (highest precedence) for
+# back-compat with any caller that set it. run_benchmark rebinds am._DB_PATH
+# directly, so this module-level name must persist.
+_DEFAULT_DB_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # app/
+_DB_ROOT = os.getenv("RAG_DB_ROOT", _DEFAULT_DB_ROOT)
+_DB_PATH = os.getenv("AGENT_MEMORY_DB_PATH", os.path.join(_DB_ROOT, "chroma_db_agent_memory"))
 _DEFAULT_IMPORTANCE = {"semantic": 7, "reflection": 8, "episodic": 5}
+
+# Bilingual triviality gate for the fact-extraction path. A very short message, a
+# pure greeting/ack, or a bypass command carries nothing durable to remember, so we
+# skip the (expensive) LLM extract+consolidate for it. Anything plausibly
+# informational still goes through extraction.
+_TRIVIAL_MIN_LEN = 15
+_GREETING_PATTERNS = {
+    "hi", "hii", "hey", "hello", "helo", "yo", "hiya", "sup",
+    "thanks", "thank you", "thankyou", "thx", "ty", "cheers",
+    "ok", "okay", "k", "kk", "okey", "cool", "nice", "great", "sure",
+    "yes", "yeah", "yep", "no", "nope", "nah", "good", "fine",
+    "bye", "goodbye", "gg", "np",
+    "你好", "您好", "哈喽", "嗨", "谢谢", "多谢", "感谢", "好", "好的",
+    "好吧", "行", "行吧", "嗯", "对", "是", "是的", "不", "不是", "没有",
+    "可以", "收到", "了解", "明白", "再见", "拜拜", "棒", "赞",
+}
+_BYPASS_PATTERNS = {
+    "search anyway", "just search", "search now", "go ahead", "proceed",
+    "先不要搜索", "不要搜索", "先别搜索", "别搜索", "直接搜索", "现在搜索", "继续搜索",
+}
+
+
+def _normalize_trivial(text: str) -> str:
+    """Lowercase, strip surrounding whitespace and trailing punctuation/emoji-ish
+    filler so 'Hi!!!' / '好的。' collapse onto the pattern list."""
+    t = (text or "").strip().lower()
+    return t.strip(" .!?,~。！？，、…").strip()
+
+
+def _is_trivial_for_extraction(user_msg: str) -> bool:
+    """True when the user message is not worth running fact extraction on."""
+    raw = (user_msg or "").strip()
+    if not raw:
+        return True
+    norm = _normalize_trivial(raw)
+    if not norm:
+        return True
+    if norm in _GREETING_PATTERNS or norm in _BYPASS_PATTERNS:
+        return True
+    # Bypass commands may carry trailing words ("search anyway please").
+    for phrase in _BYPASS_PATTERNS:
+        if norm.startswith(phrase) or norm == phrase:
+            return True
+    # Short messages with no CJK are almost always acks/greetings. Keep short CJK
+    # messages (a few Chinese characters can be fully informational, e.g. a place
+    # name or budget) unless they matched a pattern above.
+    has_cjk = any("一" <= ch <= "鿿" for ch in norm)
+    if not has_cjk and len(norm) < _TRIVIAL_MIN_LEN:
+        return True
+    return False
 
 
 def _now_iso():
@@ -276,14 +342,46 @@ class AgentMemory:
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
             if tool_used:
                 ep += f"  [assistant used: {tool_used}]"
+            # Static importance for the auto-episodic turn log: never rate a raw
+            # query log with an LLM call (see _AUTO_EPISODIC_IMPORTANCE).
             self.add(
                 ep, "episodic", session_id, user_id, role="user",
+                importance=_AUTO_EPISODIC_IMPORTANCE,
                 idempotency_key=idempotency_key,
             )
-            self._consolidate(self._extract_facts(user_msg, assistant_msg), session_id, user_id)
+            # Opportunistically bound the per-user episodic layer.
+            self._enforce_episodic_cap(user_id)
+            # Triviality gate: skip the LLM extract+consolidate for greetings/acks/
+            # bypass commands and very short messages — they carry nothing durable.
+            if not _is_trivial_for_extraction(user_msg):
+                self._consolidate(self._extract_facts(user_msg, assistant_msg), session_id, user_id)
             self.maybe_reflect(session_id, user_id)
         except Exception as e:
             print(f"[memory] remember_turn error: {e}")
+
+    def _enforce_episodic_cap(self, user_id, cap: int = EPISODIC_MAX_PER_USER):
+        """Keep only the newest ``cap`` episodic records for one user (by created_at);
+        delete the overflow. No-op below the cap. Semantic/reflection are untouched."""
+        try:
+            with self._lock:
+                existing = self.col.get(
+                    where={"$and": [{"user_id": user_id}, {"mtype": "episodic"}]}
+                )
+                ids = list(existing.get("ids") or [])
+                if len(ids) <= cap:
+                    return
+                metas = existing.get("metadatas") or []
+                # newest first by created_at; blank created_at sorts oldest.
+                order = sorted(
+                    range(len(ids)),
+                    key=lambda i: (metas[i] or {}).get("created_at", ""),
+                    reverse=True,
+                )
+                overflow = [ids[i] for i in order[cap:]]
+                if overflow:
+                    self.col.delete(ids=overflow)
+        except Exception as e:
+            print(f"[memory] episodic cap error: {e}")
 
     def remember_turn_async(self, *args, **kwargs):
         threading.Thread(target=self.remember_turn, args=args, kwargs=kwargs, daemon=True).start()
@@ -299,9 +397,17 @@ class AgentMemory:
         try:
             recent = self.col.get(where={"user_id": user_id})
             docs = recent.get("documents", []) or []
+            metas = recent.get("metadatas", []) or []
             if len(docs) < 4:
                 return
-            corpus = "\n".join(f"- {d}" for d in docs[-30:])
+            # Chroma .get() has NO ordering guarantee, so "recent" must be derived
+            # explicitly: sort by created_at and take the newest REFLECT_CORPUS_SIZE.
+            order = sorted(
+                range(len(docs)),
+                key=lambda i: (metas[i] or {}).get("created_at", "") if i < len(metas) else "",
+            )
+            newest = order[-REFLECT_CORPUS_SIZE:]
+            corpus = "\n".join(f"- {docs[i]}" for i in newest)
             prompt = (
                 "Given the following memories about a user's housing search, synthesise 1-3 concise, "
                 "higher-level insights about what this user really wants or needs (patterns, priorities, "

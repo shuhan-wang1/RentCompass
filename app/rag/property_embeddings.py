@@ -1,4 +1,6 @@
 # property_embeddings.py
+import hashlib
+
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import faiss
@@ -11,14 +13,25 @@ class PropertyEmbeddingStore:
         self.index = None
         self.properties = []
         self.property_name_index = {}  # 🆕 按名称索引，用于直接查找
+        # Embedding memo: stable-row-identity hash -> raw (un-normalised) vector.
+        # build_index is called once per search request (search_properties rebuilds
+        # the index on the freshly scraped rows), so without this every unchanged
+        # row is re-encoded on every request. The key is a hash of the exact text
+        # fed to the encoder (address/listing id + description + amenities + ...),
+        # so identical rows reuse their vector and any content change re-encodes.
+        self._embedding_cache = {}
         print("    -> [DEBUG] PropertyEmbeddingStore initialized successfully.")
-    
+
+    @staticmethod
+    def _row_key(text: str) -> str:
+        return hashlib.md5(text.encode("utf-8")).hexdigest()
+
     def build_index(self, properties: list[dict]):
         """Create FAISS index from property descriptions"""
         if not properties:
             print("    -> [WARNING] No properties provided for indexing!")
             return
-        
+
         texts = []
         for prop in properties:
             # Combine relevant fields into rich text - 🆕 使用增强描述
@@ -55,10 +68,23 @@ class PropertyEmbeddingStore:
         if not texts:
             print("    -> [WARNING] No valid text to embed!")
             return
-        
-        print(f"    -> [DEBUG] Encoding {len(texts)} property texts...")
-        embeddings = self.model.encode(texts, show_progress_bar=False)
-        
+
+        # Reuse cached vectors for unchanged rows; only encode texts we haven't
+        # embedded before. FAISS is rebuilt from the assembled (cached + new) matrix.
+        keys = [self._row_key(t) for t in texts]
+        missing_idx = [i for i, k in enumerate(keys) if k not in self._embedding_cache]
+        if missing_idx:
+            print(f"    -> [DEBUG] Encoding {len(missing_idx)} of {len(texts)} property texts "
+                  f"({len(texts) - len(missing_idx)} reused from cache)...")
+            new_vecs = self.model.encode([texts[i] for i in missing_idx], show_progress_bar=False)
+            new_vecs = np.asarray(new_vecs, dtype=np.float32)
+            for pos, i in enumerate(missing_idx):
+                self._embedding_cache[keys[i]] = new_vecs[pos]
+        else:
+            print(f"    -> [DEBUG] All {len(texts)} property vectors reused from cache.")
+
+        embeddings = np.array([self._embedding_cache[k] for k in keys], dtype=np.float32)
+
         # FAISS index for fast similarity search
         dimension = embeddings.shape[1]
         self.index = faiss.IndexFlatIP(dimension)  # Inner product (cosine)

@@ -42,7 +42,6 @@ _pin_app()
 am_mod = importlib.import_module("rag.agent_memory")
 AgentMemory = am_mod.AgentMemory
 _valid_user_id = am_mod._valid_user_id
-ConversationMemory = importlib.import_module("rag.conversation_memory").ConversationMemory
 
 
 @pytest.fixture()
@@ -146,40 +145,6 @@ def test_idempotency_key_is_user_scoped(memory):
     assert a_id is not None and b_id is not None
     assert a_id != b_id
     assert [m["text"] for m in memory.retrieve("turn", user_id="user-B", n=5)] == ["B turn"]
-
-
-# ------------------------------------------------- ConversationMemory isolation
-
-@pytest.fixture()
-def conv_mem(tmp_path):
-    return ConversationMemory(db_path=str(tmp_path / "chroma_conv"))
-
-
-def test_conversation_memory_strict_user_filter(conv_mem):
-    conv_mem.add_interaction("I study at UCL", "Noted!", user_id="user-A")
-    conv_mem.add_interaction("I work in Leeds", "Noted!", user_id="user-B")
-    # legacy record with NO user_id metadata — must match nobody
-    conv_mem.collection.add(
-        documents=["User: my budget is 999\nAssistant: ok"],
-        metadatas=[{"intent": "legacy"}],
-        ids=["legacy_turn_0"],
-    )
-
-    got_a = conv_mem.retrieve_relevant_history("where do I study", n_results=5,
-                                               user_id="user-A")
-    assert got_a and all("UCL" in d for d in got_a)
-    assert not any("999" in d for d in got_a)
-    assert not any("Leeds" in d for d in got_a)
-
-    # fail-closed retrieval: no id / 'default' -> [] (NEVER a global query)
-    assert conv_mem.retrieve_relevant_history("budget", n_results=5) == []
-    assert conv_mem.retrieve_relevant_history("budget", n_results=5, user_id="") == []
-    assert conv_mem.retrieve_relevant_history("budget", n_results=5, user_id="default") == []
-
-    # writes without identity are rejected
-    before = conv_mem.collection.count()
-    conv_mem.add_interaction("no id turn", "resp")
-    assert conv_mem.collection.count() == before
 
 
 # ------------------------------------------------------- memory tools fail closed

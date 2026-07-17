@@ -10,6 +10,13 @@ from typing import Dict, List, Tuple, Optional
 import math
 from pathlib import Path
 
+# Leaflet renders popup/tooltip content as innerHTML, so every value we
+# interpolate into popup HTML must be HTML-escaped. Both the client-supplied
+# address and the OSM-derived amenity fields (name/cuisine/opening_hours) are
+# attacker-controllable (OSM POI names are publicly editable), so an unescaped
+# f-string here is a stored-XSS sink. markupsafe.escape ships with Flask/Jinja.
+from markupsafe import escape
+
 from .maps_service import overpass_request, OverpassError
 from .cache_service import get_from_cache, set_to_cache, create_cache_key
 
@@ -385,19 +392,23 @@ class PropertyAmenityMapGenerator:
         )
         
         # Add the property marker (always visible)
+        prop_price = escape(property_data.get('Price', property_data.get('price', 'N/A')))
+        prop_address = escape(property_data.get('Address', property_data.get('address', 'N/A')))
+        prop_travel = escape(property_data.get('travel_time_minutes', property_data.get('travel_time', 'N/A')))
+        prop_tooltip = escape(str(property_data.get('Address', property_data.get('address', 'Unknown')))[:40])
         property_popup = f"""
         <div style="font-family: Arial; min-width: 200px;">
             <h4 style="margin-bottom: 10px; color: #2c3e50;">🏠 Property</h4>
-            <b>Price:</b> {property_data.get('Price', property_data.get('price', 'N/A'))}<br>
-            <b>Address:</b> {property_data.get('Address', property_data.get('address', 'N/A'))}<br>
-            <b>Travel Time:</b> {property_data.get('travel_time_minutes', property_data.get('travel_time', 'N/A'))} min<br>
+            <b>Price:</b> {prop_price}<br>
+            <b>Address:</b> {prop_address}<br>
+            <b>Travel Time:</b> {prop_travel} min<br>
         </div>
         """
-        
+
         folium.Marker(
             location=[lat, lon],
             popup=folium.Popup(property_popup, max_width=300),
-            tooltip=f"Property: {property_data.get('Address', property_data.get('address', 'Unknown'))[:40]}...",
+            tooltip=f"Property: {prop_tooltip}...",
             icon=folium.Icon(color='red', icon='home', prefix='fa')
         ).add_to(m)
         
@@ -426,29 +437,31 @@ class PropertyAmenityMapGenerator:
                 feature_group = folium.FeatureGroup(name=config['name'], show=True)
                 
                 for amenity in amenities:
-                    # Build popup HTML
+                    # Build popup HTML. Every interpolated value is OSM-derived
+                    # (publicly editable) or client-supplied, so escape it all.
+                    amenity_name = escape(amenity.get('name', 'Unknown'))
                     popup_html = f"""
                     <div style="font-family: Arial; min-width: 150px;">
                         <h4 style="margin-bottom: 10px; color: {config['color']};">
-                            {amenity.get('name', 'Unknown')}
+                            {amenity_name}
                         </h4>
                     """
-                    
+
                     if 'distance_m' in amenity:
-                        popup_html += f"<b>Distance:</b> {amenity.get('distance_m')}m<br>"
+                        popup_html += f"<b>Distance:</b> {escape(amenity.get('distance_m'))}m<br>"
                     if 'cuisine' in amenity:
-                        popup_html += f"<b>Cuisine:</b> {amenity['cuisine']}<br>"
+                        popup_html += f"<b>Cuisine:</b> {escape(amenity['cuisine'])}<br>"
                     if 'opening_hours' in amenity:
-                        popup_html += f"<b>Hours:</b> {amenity['opening_hours']}<br>"
+                        popup_html += f"<b>Hours:</b> {escape(amenity['opening_hours'])}<br>"
                     if 'address' in amenity and not amenity['address'].startswith('('):
-                        popup_html += f"<b>Address:</b> {amenity['address']}<br>"
-                    
+                        popup_html += f"<b>Address:</b> {escape(amenity['address'])}<br>"
+
                     popup_html += "</div>"
-                    
+
                     folium.Marker(
                         location=[amenity['lat'], amenity.get('lon', amenity.get('lng'))],
                         popup=folium.Popup(popup_html, max_width=250),
-                        tooltip=amenity.get('name', 'Unknown'),
+                        tooltip=amenity_name,
                         icon=folium.Icon(
                             color=config['color'],
                             icon=config['icon'],
@@ -557,12 +570,15 @@ class PropertyAmenityMapGenerator:
         )
         
         # Add the property marker
+        prop_price = escape(property_data.get('Price', property_data.get('price', 'N/A')))
+        prop_address = escape(property_data.get('Address', property_data.get('address', 'N/A')))
+        prop_travel = escape(property_data.get('travel_time_minutes', property_data.get('travel_time', 'N/A')))
         property_popup = f"""
         <div style="font-family: Arial; min-width: 200px;">
             <h4 style="margin-bottom: 10px; color: #2c3e50;">🏠 Property</h4>
-            <b>Price:</b> {property_data.get('Price', property_data.get('price', 'N/A'))}<br>
-            <b>Address:</b> {property_data.get('Address', property_data.get('address', 'N/A'))}<br>
-            <b>Travel Time:</b> {property_data.get('travel_time_minutes', property_data.get('travel_time', 'N/A'))} min<br>
+            <b>Price:</b> {prop_price}<br>
+            <b>Address:</b> {prop_address}<br>
+            <b>Travel Time:</b> {prop_travel} min<br>
         </div>
         """
         
@@ -597,23 +613,25 @@ class PropertyAmenityMapGenerator:
                 feature_group = folium.FeatureGroup(name=config['name'], show=True)
                 
                 for amenity in amenities:
+                    # OSM-derived values are publicly editable; escape all of them.
+                    amenity_name = escape(amenity.get('name', 'Unknown'))
                     popup_html = f"""
                     <div style="font-family: Arial; min-width: 150px;">
                         <h4 style="margin-bottom: 10px; color: {config['color']};">
-                            {amenity.get('name', 'Unknown')}
+                            {amenity_name}
                         </h4>
-                        <b>Distance:</b> {amenity.get('distance_m', 'N/A')}m<br>
+                        <b>Distance:</b> {escape(amenity.get('distance_m', 'N/A'))}m<br>
                     """
-                    
+
                     if 'cuisine' in amenity:
-                        popup_html += f"<b>Cuisine:</b> {amenity['cuisine']}<br>"
-                    
+                        popup_html += f"<b>Cuisine:</b> {escape(amenity['cuisine'])}<br>"
+
                     popup_html += "</div>"
-                    
+
                     folium.Marker(
                         location=[amenity['lat'], amenity.get('lon', amenity.get('lng'))],
                         popup=folium.Popup(popup_html, max_width=250),
-                        tooltip=amenity.get('name', 'Unknown'),
+                        tooltip=amenity_name,
                         icon=folium.Icon(
                             color=config['color'],
                             icon=config['icon'],

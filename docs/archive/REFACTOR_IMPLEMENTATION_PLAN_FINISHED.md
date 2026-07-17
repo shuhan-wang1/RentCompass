@@ -74,9 +74,9 @@
 - `.git` 体积：**562 MB**（`du -sh .git`）。
 - 被跟踪的 `.pyc`：**51 个**（`git ls-files '*.pyc' | wc -l`），如 `__pycache__/cache_service.cpython-310.pyc`、`__pycache__/rightmove_scraper.cpython-3{9,10,11,12}.pyc` 等。
 - git 历史中的 `.env` blob（`git rev-list --all --objects | grep '\.env$'`）：
-  - `c6b3b011cd5040470e2aced584af260b0785375b`  → `fine_tuning/.env`（含 `GEMINI_API_KEY="AIzaS…"` 真实 key）
-  - `62b38ae688ec26b18e26fc8caaac8627934e31a0` → `local_data_demo/.env`（含 `GEMINI_API_KEY="AIzaS…"`、`GOOGLE_MAPS_API_KEY="AIzaS…"`、`OPENROUTESERVICE_API_KEY="eyJvc…"` 真实值）
-  - `c094e4568…`（`fine_tuning/.env`）与 `b9a34ecf9…`（`scrapped_data_demo/.env`）为占位值 `"your_…"`。
+  - `[REDACTED]`  → `fine_tuning/.env`（含 `GEMINI_API_KEY="[REDACTED]"` 真实 key）
+  - `[REDACTED]` → `local_data_demo/.env`（含 `GEMINI_API_KEY="[REDACTED]"`、`GOOGLE_MAPS_API_KEY="[REDACTED]"`、`OPENROUTESERVICE_API_KEY="[REDACTED]"` 真实值）
+  - `[REDACTED]`（`fine_tuning/.env`）与 `[REDACTED]`（`scrapped_data_demo/.env`）为占位值 `"your_…"`。
 - **⚠️ 审计校正 1**：审计称「HEAD clean」。实际 `git ls-files` 显示 HEAD **仍在跟踪** `fine_tuning/.env`、`scrapped_data_demo/.env`、`tests/.env`——只是这些 HEAD 版本疑似为占位值。因此「HEAD 无真实 key」大体成立，但「HEAD 无被跟踪 .env」**不成立**，Phase 0 需一并 `git rm --cached` 这些 `.env`。
 - **⚠️ 审计校正 2**：审计称 chroma sqlite「committed ~12×」。实际 `git rev-list --all --objects | grep 'chroma.*\.sqlite3' | wc -l` = **36** 个 sqlite blob（分布在 `chroma_db/`、`chroma_db_area/`、`local_data_demo/chroma_db/`、`local_data_demo/chroma_db_area/`）。是低估，不是高估。
 - 历史最大 blob（`git rev-list --all --objects | git cat-file --batch-check` 排序）：`fine_tuning/student_model_lora/tokenizer.json`（10.9 MB）、`vocab.json`（2.6 MB）、`dataset_raw.json`（2.6 MB）、`train.jsonl`（1.8 MB）、`merges.txt`（1.6 MB）、多份 `chroma.sqlite3`（各 1.4 MB）与 `data_level0.bin`（1.6 MB）。

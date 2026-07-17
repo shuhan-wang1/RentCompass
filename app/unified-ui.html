@@ -1149,7 +1149,12 @@
                 </button>
             </div>
             <div class="map-modal-body">
-                <iframe id="mapFrame" data-i18n-title="map_frame_title" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" style="border:0;width:100%;height:100%"></iframe>
+                <!-- sandbox: allow-scripts is needed by Leaflet; allow-popups lets any
+                     in-map external link open in a new tab. allow-popups-to-escape-sandbox
+                     was removed on purpose (it let injected script open UNsandboxed windows,
+                     a phishing/redirect vector). Popups now inherit the sandbox, which is
+                     acceptable for the read-only OSM map links. -->
+                <iframe id="mapFrame" data-i18n-title="map_frame_title" sandbox="allow-scripts allow-popups" style="border:0;width:100%;height:100%"></iframe>
             </div>
         </div>
     </div>

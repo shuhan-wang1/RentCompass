@@ -500,7 +500,13 @@ def _rate_limit_subject() -> str:
         return f"user:{user_id}"
     remote = request.remote_addr or "unknown"
     if remote in {"127.0.0.1", "::1"}:
-        forwarded = request.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+        # Behind our own nginx (which binds the app to loopback and APPENDS the
+        # real client IP as the last X-Forwarded-For entry). Trust exactly one
+        # proxy hop: take the RIGHTMOST XFF value, not the leftmost. A guest can
+        # forge leading XFF entries to rotate their rate-limit bucket, but cannot
+        # forge the final entry our own nginx writes.
+        xff = request.headers.get("X-Forwarded-For", "")
+        forwarded = xff.rsplit(",", 1)[-1].strip() if xff else ""
         if forwarded:
             remote = forwarded
     return f"ip:{remote}"

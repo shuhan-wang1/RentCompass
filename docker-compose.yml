@@ -45,8 +45,12 @@ services:
     environment:
       # Public URL SearXNG advertises for itself.
       SEARXNG_BASE_URL: "http://localhost:8080/"
-      # Overrides server.secret_key in settings.yml.
-      SEARXNG_SECRET: "739038e174f59b462a203f8533a2719285164b373c507d9e6cc89c1502a7621c"
+      # Overrides server.secret_key in settings.yml. Never hardcode this: Compose
+      # reads it from the root-level .env (its default env file) or the shell
+      # environment at `docker compose` time. `:?` makes the stack refuse to start
+      # if it is unset, so an empty/placeholder secret can never ship silently.
+      # Generate one with:  openssl rand -hex 32   (see .env.example)
+      SEARXNG_SECRET: "${SEARXNG_SECRET:?SEARXNG_SECRET must be set in .env (openssl rand -hex 32)}"
     healthcheck:
       # Verifies the instance is up AND that the JSON API (the whole point) is
       # actually enabled — a default install would 403 here.

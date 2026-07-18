@@ -199,7 +199,8 @@ class AgentMemory:
 
     # ------------------------------------------------------------------ writing
     def add(self, text, mtype, session_id="default", user_id=None,
-            role="", importance=None, idempotency_key=None) -> str | None:
+            role="", importance=None, idempotency_key=None,
+            extra_meta=None) -> str | None:
         user_id = _valid_user_id(user_id)
         if user_id is None:
             print("[memory] add rejected: missing/shared user_id (memory must be per-user)")
@@ -237,6 +238,13 @@ class AgentMemory:
             }
             if idempotency_key:
                 meta["idempotency_key"] = idempotency_key
+            # Optional provenance (e.g. branch scoping). Chroma metadata values must
+            # be str/int/float/bool — never None — so absent keys are simply omitted.
+            if extra_meta:
+                for k, v in extra_meta.items():
+                    if v is None:
+                        continue
+                    meta[k] = v if isinstance(v, (str, int, float, bool)) else str(v)
             try:
                 self.col.add(documents=[text], metadatas=[meta], ids=[mem_id])
             except Exception as e:
@@ -327,8 +335,17 @@ class AgentMemory:
             print(f"[memory] consolidate error: {e}")
 
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
-                      user_id=None, tool_used=None, idempotency_key=None):
-        """After-turn entry point (run this in the background — it makes LLM calls)."""
+                      user_id=None, tool_used=None, idempotency_key=None,
+                      conversation_id=None, turn_id=None, turn_started_at=None):
+        """After-turn entry point (run this in the background — it makes LLM calls).
+
+        Branch scoping: conversation_id / turn_id / turn_started_at are recorded on
+        the auto-EPISODIC turn log only, so retrieve() can restrict a forked
+        conversation to the episodic memories it actually inherited. They are NOT
+        attached to the distilled semantic/reflection records, which stay GLOBAL
+        (per-user, all branches). Absent (None) values are omitted from metadata —
+        chroma rejects None — so legacy call sites keep behaving exactly as before.
+        """
         user_id = _valid_user_id(user_id)
         if user_id is None:
             print("[memory] remember_turn rejected: missing/shared user_id")
@@ -342,12 +359,19 @@ class AgentMemory:
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
             if tool_used:
                 ep += f"  [assistant used: {tool_used}]"
+            # Branch provenance for the episodic layer only (semantic/reflection global).
+            episodic_meta = {
+                "conversation_id": conversation_id,
+                "turn_id": turn_id,
+                "turn_started_at": turn_started_at,
+            }
             # Static importance for the auto-episodic turn log: never rate a raw
             # query log with an LLM call (see _AUTO_EPISODIC_IMPORTANCE).
             self.add(
                 ep, "episodic", session_id, user_id, role="user",
                 importance=_AUTO_EPISODIC_IMPORTANCE,
                 idempotency_key=idempotency_key,
+                extra_meta=episodic_meta,
             )
             # Opportunistically bound the per-user episodic layer.
             self._enforce_episodic_cap(user_id)
@@ -422,12 +446,47 @@ class AgentMemory:
             print(f"[memory] reflect error: {e}")
 
     # ---------------------------------------------------------------- retrieval
-    def retrieve(self, query, session_id="default", user_id=None, n=6) -> list:
+    @staticmethod
+    def _visible_in_lineage(meta, branch_lineage) -> bool:
+        """Branch-scoped visibility for a single candidate memory.
+
+        semantic/reflection (and any non-episodic) records are GLOBAL → always
+        visible. Episodic records are branch-scoped:
+          * WITH conversation_id metadata → visible iff some lineage entry matches
+            that conversation_id AND the memory was written at/before that entry's
+            cutoff (entry.before is None → no cutoff; a memory with no
+            turn_started_at is treated as inherited);
+          * WITHOUT conversation_id (legacy rows written before branch scoping) →
+            visible (documented back-compat).
+        """
+        meta = meta or {}
+        if meta.get("mtype") != "episodic":
+            return True
+        cid = meta.get("conversation_id")
+        if not cid:
+            return True
+        started = meta.get("turn_started_at")
+        for entry in branch_lineage or []:
+            if not isinstance(entry, dict) or entry.get("conversation_id") != cid:
+                continue
+            before = entry.get("before")
+            if before is None or not started or str(started) <= str(before):
+                return True
+        return False
+
+    def retrieve(self, query, session_id="default", user_id=None, n=6,
+                 branch_lineage=None) -> list:
         """Generative-Agents scored retrieval: relevance + recency + importance.
 
         STRICT per-user isolation: the where-filter is always applied with a real
         user_id. A missing/blank/'default' id fails CLOSED (returns []) — there is
         no global fallback, and records written without a user_id can never match.
+
+        Branch scoping: when ``branch_lineage`` is provided (the store's
+        get_branch_lineage output — a list of {"conversation_id", "before"}),
+        candidates are post-filtered in Python BEFORE GA scoring so a forked
+        conversation only sees the episodic memories it inherited (semantic /
+        reflection stay global). ``branch_lineage=None`` → behaviour unchanged.
         """
         user_id = _valid_user_id(user_id)
         if user_id is None:
@@ -446,6 +505,16 @@ class AgentMemory:
         dists = (res.get("distances") or [[]])[0]
         if not docs:
             return []
+        # Branch-scoped post-filter (before scoring). None → global behaviour.
+        if branch_lineage is not None:
+            keep = [i for i in range(len(docs))
+                    if self._visible_in_lineage(metas[i], branch_lineage)]
+            docs = [docs[i] for i in keep]
+            metas = [metas[i] for i in keep]
+            ids = [ids[i] for i in keep]
+            dists = [dists[i] for i in keep]
+            if not docs:
+                return []
         relevance = [1.0 - float(d) for d in dists]
         recency = [RECENCY_DECAY ** _hours_since(m.get("last_access") or m.get("created_at") or _now_iso())
                    for m in metas]

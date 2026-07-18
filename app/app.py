@@ -24,7 +24,10 @@ import traceback
 import re
 from datetime import datetime
 from uk_rent_agent.web.session_store import SessionStore
-from uk_rent_agent.web.conversation_store import ConversationStore
+from uk_rent_agent.web.conversation_store import (
+    ConversationStore, ConversationNotFound, NoCompletedTurn, TurnNotFound,
+    TurnNotInConversation, TurnNotCompleted,
+)
 from uk_rent_agent.web.identity import (
     resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
 )
@@ -39,6 +42,24 @@ from core.data_loader import load_mock_properties_from_csv, load_properties
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
 from core.tools.search_properties import search_properties_impl
+from core.context_assembler import (
+    assemble as assemble_context,
+    build_turn_snapshot,
+    snapshot_to_session_patch,
+    SnapshotSchemaError,
+    update_rolling_summary,
+)
+from core.llm_interface import call_ollama
+
+
+def _llm_complete(prompt: str) -> str:
+    """Sync completion used by the rolling-summary folder (dependency-injected into
+    context_assembler.update_rolling_summary). Never raises — an empty string makes the
+    summary folder keep the prior summary unchanged."""
+    try:
+        return call_ollama(prompt) or ""
+    except Exception:
+        return ""
 
 def _bool_env(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -164,6 +185,33 @@ def _get_session(user_id, conversation_id):
     from the durable sqlite store on a cache miss (fresh slice / after a restart)."""
     sess = _session_store.get(user_id, conversation_id)
     if not sess.rehydrated:
+        # Durable snapshot rehydrate (Section 4.3): the latest completed turn's snapshot
+        # is the authoritative source of user_preferences / accumulated_search_criteria /
+        # last_results / rolling_summary — this is what makes criteria survive a restart
+        # (the old message-only rehydrate lost them). Falls back cleanly on any failure.
+        try:
+            snap = conversation_store.latest_snapshot(user_id, conversation_id)
+            if snap:
+                patch = snapshot_to_session_patch(snap)  # SnapshotSchemaError on old ver
+                ps = sess.persistent_state
+                if patch.get("user_preferences"):
+                    ps["user_preferences"] = patch["user_preferences"]
+                if patch.get("accumulated_search_criteria"):
+                    ps["accumulated_search_criteria"] = patch["accumulated_search_criteria"]
+                ec = ps.setdefault("extracted_context", {})
+                if patch.get("rolling_summary"):
+                    ec["rolling_summary"] = patch["rolling_summary"]
+                if patch.get("rolling_summary_through_turn_id"):
+                    ec["rolling_summary_through_turn_id"] = patch["rolling_summary_through_turn_id"]
+                if patch.get("last_results") and not sess.last_results:
+                    sess.last_results = patch["last_results"]
+                    previous, structured = _build_results_context(patch["last_results"])
+                    ec["previous_search_results"] = previous
+                    ec["last_results"] = structured
+        except SnapshotSchemaError:
+            pass  # unknown schema → fall through to the legacy message-only rehydrate
+        except Exception as e:
+            print(f"[rehydrate] snapshot skipped ({user_id}:{conversation_id}): {e}")
         try:
             if not sess.history:
                 sess.history = conversation_store.rehydrate_history(
@@ -631,20 +679,31 @@ async def api_alex():
     print(f"📋 [ALEX] context: {context}")
     print(f"{'='*60}")
 
-    # Persist the user turn up-front (survives a crash mid-generation).
-    conversation_store.add_message(user_id, conversation_id, "user", user_message)
-
     request_id = new_request_id(request.headers.get("X-Request-Id"))
+
+    # Persist the user turn up-front (survives a crash mid-generation) and open a turn.
+    # begin_turn needs the user message's rowid, so the user row is written first; the turn
+    # then spans this request. (The user row's turn_id column stays NULL — the frozen store
+    # exposes no message-turn_id update and the turns table records user_message_id, which
+    # is what fork/lineage rely on; the assistant row below carries the turn_id.)
+    _user_msg = conversation_store.add_message(user_id, conversation_id, "user", user_message)
+    turn = conversation_store.begin_turn(
+        user_id, conversation_id, request_id=request_id,
+        user_message_id=_user_msg.get("id"))
+    turn_id = turn["id"]
+
+    _turn_crashed = False
     try:
         # 所有请求都通过 ReAct Agent 处理
         with request_context(request_id, user_id):
             payload = await handle_with_react_agent(
                 user_message, context, is_continuation, user_id, conversation_id, request_id,
-                ui_language=ui_language,
+                ui_language=ui_language, turn=turn,
             )
     except Exception as e:
         print(f"❌ [ALEX] 错误: {e}")
         traceback.print_exc()
+        _turn_crashed = True
         # 错误文案也遵循回复语言策略（本条消息含中文→中文，否则跟随 UI 语言）。
         _err_zh = _resolve_reply_language(user_message, ui_language) == "zh"
         payload = {
@@ -653,19 +712,32 @@ async def api_alex():
                         else "Sorry, something went wrong while handling your request. Please try again."),
         }
 
-    # conversation_id is echoed in EVERY response (incl. errors + implicit creation).
+    # conversation_id + turn_id are echoed in EVERY response (incl. errors + implicit creation).
     payload["conversation_id"] = conversation_id
+    payload["turn_id"] = turn_id
 
-    # Persist the assistant reply (recommendations preserved verbatim for re-render).
+    # Persist the assistant reply (tagged with turn_id; recommendations preserved verbatim).
+    _asst_msg_id = None
     try:
-        conversation_store.add_message(
+        _asst = conversation_store.add_message(
             user_id, conversation_id, "assistant",
             payload.get("message", ""),
             response_type=payload.get("response_type"),
             recommendations=payload.get("recommendations"),
+            turn_id=turn_id,
         )
+        _asst_msg_id = _asst.get("id")
     except Exception as e:
         print(f"[persist] assistant message failed: {e}")
+
+    # Finalize the turn: an agent-side error (or a crash) fails the turn; a real answer
+    # completes it and snapshots the post-turn context (built AFTER _write_back_turn ran
+    # inside handle_with_react_agent). A failed turn is never a valid fork target.
+    if _turn_crashed or payload.get("response_type") == "error":
+        conversation_store.fail_turn(user_id, turn_id)
+    else:
+        conversation_store.complete_turn(user_id, turn_id, assistant_message_id=_asst_msg_id)
+        _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id)
 
     # Always HTTP 200: an agent-side "error" is a normal response_type the client renders,
     # and returning 200 lets the frontend adopt conversation_id + persist the turn even when
@@ -910,9 +982,69 @@ def _build_results_context(recommendations):
     return prev_results_context, structured_results
 
 
+def _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
+    """Build + persist the post-turn context snapshot AFTER _write_back_turn ran.
+
+    Runs under the per-conversation turn lock so the read of _sess.persistent_state is
+    consistent with the just-completed write-back. Best-effort — a snapshot failure must
+    never turn a successful turn into an error (the durable transcript still persisted).
+
+    context_revision: a monotonic per-conversation counter = previous snapshot's
+    context_revision + 1 (starting at 1). complete_turn has already marked THIS turn
+    completed but its snapshot row does not exist yet, so latest_snapshot() returns the
+    PREVIOUS turn's snapshot — the revision keeps climbing across turns and across a fork
+    (the child inherits the copied snapshots and continues from their revision).
+    """
+    try:
+        prev = conversation_store.latest_snapshot(user_id, conversation_id)
+        if isinstance(prev, dict):
+            try:
+                context_revision = int(prev.get("context_revision", 0)) + 1
+            except (TypeError, ValueError):
+                context_revision = 1
+        else:
+            context_revision = 1
+        with _session_store.turn_lock(user_id, conversation_id):
+            _sess = _get_session(user_id, conversation_id)
+            snapshot = build_turn_snapshot(
+                turn_id=turn_id,
+                persistent_state=_sess.persistent_state,
+                context_revision=context_revision,
+            )
+        conversation_store.save_turn_snapshot(user_id, conversation_id, turn_id, snapshot)
+    except Exception as e:
+        print(f"[snapshot] save skipped ({user_id}:{conversation_id}): {e}")
+
+
+def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
+                                  through_turn_id, reply_language):
+    """Fold the turns just trimmed out of the hot history into the rolling summary on a
+    daemon background thread (an LLM call — must never block or break the turn). The
+    result is written under the turn lock into extracted_context so the NEXT turn's
+    snapshot captures it. Any failure is swallowed (update_rolling_summary itself keeps
+    the prior summary on error)."""
+    def _run():
+        try:
+            lock = _session_store.turn_lock(user_id, conversation_id)
+            with lock:
+                _s = _get_session(user_id, conversation_id)
+                prior = (_s.persistent_state.get("extracted_context") or {}).get("rolling_summary")
+            new_summary = update_rolling_summary(
+                _llm_complete, prior, dropped_turns, reply_language)
+            with lock:
+                _s = _get_session(user_id, conversation_id)
+                ec = _s.persistent_state.setdefault("extracted_context", {})
+                ec["rolling_summary"] = new_summary
+                ec["rolling_summary_through_turn_id"] = through_turn_id
+        except Exception as e:
+            print(f"[summary] rolling update skipped ({user_id}:{conversation_id}): {e}")
+    threading.Thread(target=_run, daemon=True).start()
+
+
 def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
                      recommendations, *, user_preferences=_UNSET,
-                     accumulated_search_criteria=_UNSET, criteria_overwrite=None):
+                     accumulated_search_criteria=_UNSET, criteria_overwrite=None,
+                     turn_id=None, reply_language="en"):
     """Atomic phase-3 L2 write-back shared by the ReAct path (handle_with_react_agent)
     and the deterministic /api/search_direct endpoint (pure refactor — the ReAct path's
     behaviour is unchanged from the previously-inlined version).
@@ -933,6 +1065,7 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
     Returns (prev_results_context, structured_results) for callers that want them.
     """
     prev_results_context, structured_results = _build_results_context(recommendations)
+    dropped_turns = []
     with _session_store.turn_lock(user_id, conversation_id):
         _sess = _get_session(user_id, conversation_id)
         if user_preferences is not _UNSET:
@@ -944,6 +1077,9 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
             _sess.persistent_state['accumulated_search_criteria'].update(criteria_overwrite)
         _sess.history.append({'user': user_message, 'assistant': (assistant_text or '')[:500]})
         if len(_sess.history) > MAX_HISTORY_LENGTH:
+            # Capture the turns about to fall out of the hot window so they can be folded
+            # into the rolling summary (background) — otherwise their context is lost.
+            dropped_turns = [dict(h) for h in _sess.history[:-MAX_HISTORY_LENGTH]]
             del _sess.history[:-MAX_HISTORY_LENGTH]
         if recommendations:
             _sess.last_results = recommendations
@@ -951,12 +1087,18 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
             _sess.persistent_state['extracted_context']['previous_search_results'] = prev_results_context
             _sess.persistent_state['extracted_context']['last_results'] = structured_results
             print(f"[state] 💾 已保存 {len(recommendations)} 个搜索结果到上下文")
+    # Rolling-summary fold happens OUTSIDE the lock (spawns its own thread). Gated on a
+    # real trim + a turn_id (the through-turn marker); legacy callers without turn_id skip.
+    if dropped_turns and turn_id:
+        _spawn_rolling_summary_update(
+            user_id, conversation_id, dropped_turns, turn_id, reply_language)
     return prev_results_context, structured_results
 
 
 async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool,
                                   user_id: str = "default", conversation_id: str = "default",
-                                  request_id: str | None = None, ui_language: str = "en"):
+                                  request_id: str | None = None, ui_language: str = "en",
+                                  turn: dict | None = None):
     """
     使用 LangGraph Agent 处理所有用户请求 - 纯 LLM 驱动
 
@@ -1056,54 +1198,35 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             extracted_context['comparison_properties'] = comparison_context
             print(f"[LangGraph] 📊 已加载 {len(mentioned_properties)} 个房产的对比数据")
 
-    # ── 构建包含历史的查询 ───────────────────────────────────────
-    query_with_history = user_message
+    # ── 构建包含历史 + 长期记忆 + 滚动摘要的查询（统一走 context_assembler）──
     has_property_context = bool(extracted_context.get('property_address'))
-
     if has_property_context:
         print(f"[LangGraph] 📍 用户正在询问关于特定房产的问题，将使用房产上下文回答")
-    elif history_snapshot:
-        last_response = history_snapshot[-1].get('assistant', '') if history_snapshot else ''
-        is_clarification_answer = any(q in last_response.lower() for q in [
-            'what is your', 'could you tell me', 'what\'s the maximum',
-            'please provide', 'how many', 'which area', '?'
-        ])
 
-        if is_clarification_answer and len(user_message.split()) <= 5:
-            print(f"[LangGraph] 🔄 检测到澄清回复，保持完整上下文")
-            history_text = "\n".join([
-                f"User: {h['user']}\nAlex: {h['assistant']}"
-                for h in history_snapshot[-5:]
-            ])
-            query_with_history = f"""Previous conversation (IMPORTANT - user is answering a clarification question):
-{history_text}
-
-User's answer to the clarification question: {user_message}
-
-INSTRUCTIONS: The user just answered your clarification question. Use their answer to complete the ORIGINAL request. Do NOT ask more questions about the same thing. Do NOT treat their answer as a confusing new command."""
-        else:
-            history_text = "\n".join([
-                f"User: {h['user']}\nAlex: {h['assistant']}"
-                for h in history_snapshot[-3:]
-            ])
-            query_with_history = f"""Previous conversation:
-{history_text}
-
-Current user message: {user_message}"""
-
-    # ── 注入长期记忆（Generative-Agents 评分检索: relevance+recency+importance）──
+    # 长期记忆（Generative-Agents 评分检索）——按 user_id 命名空间共享（跨会话），branch_lineage
+    # 让分叉会话只看到它真正继承的 episodic 记忆（semantic/reflection 仍全局）。
+    _mem_block = ""
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
-        # Long-term memory is per-USER (shared across the user's conversations), so it is
-        # namespaced by user_id — NOT by conversation_id.
-        _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6)
+        _lineage = conversation_store.get_branch_lineage(user_id, conversation_id)
+        _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6,
+                             branch_lineage=_lineage)
         _mem_block = _am.format_for_prompt(_mems)
         if _mem_block:
-            query_with_history = f"{_mem_block}\n\n{query_with_history}"
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
         print(f"[Memory] retrieve skipped: {_e}")
+
+    # 装配最终查询：历史分支选择 / 记忆前缀 / 滚动摘要插入 / token 预算裁剪都由 assemble 负责，
+    # 无裁剪时与旧的手拼字符串逐字节一致。滚动摘要取自本会话 extracted_context（后台线程写入）。
+    query_with_history = assemble_context(
+        user_message=user_message,
+        history=history_snapshot,
+        memory_block=_mem_block,
+        has_property_context=has_property_context,
+        rolling_summary=(persistent_snapshot.get('extracted_context') or {}).get('rolling_summary'),
+    )
 
     # 原始当前消息（不含记忆/历史前缀）——供工具做"仅基于本条消息"的解析
     # (预算/通勤正则、postcode/序数解析)，避免误抓注入记忆里的旧值。
@@ -1205,6 +1328,8 @@ Current user message: {user_message}"""
         user_id, conversation_id, user_message, response_text, recommendations,
         user_preferences=final_state.get('user_preferences', _UNSET),
         accumulated_search_criteria=final_state.get('accumulated_search_criteria', _UNSET),
+        turn_id=(turn.get("id") if isinstance(turn, dict) else None),
+        reply_language=extracted_context.get('reply_language', 'en'),
     )
 
     # ── 写入长期记忆（后台线程: Mem0 式抽取+整合 / GA 反思，不阻塞响应）──
@@ -1217,6 +1342,9 @@ Current user message: {user_message}"""
             user_message, response_text,
             session_id=user_id, user_id=user_id, tool_used=_tool_used,
             idempotency_key=f"turn:{request_id}" if request_id else None,
+            conversation_id=conversation_id,
+            turn_id=(turn.get("id") if isinstance(turn, dict) else None),
+            turn_started_at=(turn.get("started_at") if isinstance(turn, dict) else None),
         )
     except Exception as _e:
         print(f"[Memory] write skipped: {_e}")
@@ -1496,10 +1624,17 @@ async def api_search_direct():
     print(f"👤 [SEARCH_DIRECT] user_id: {user_id} | 🧵 conversation_id: {conversation_id}")
     print(f"{'='*60}")
 
-    # Persist the user turn up-front (survives a crash mid-search).
-    conversation_store.add_message(user_id, conversation_id, "user", readable)
-
     request_id = new_request_id(request.headers.get("X-Request-Id"))
+
+    # Persist the user turn up-front (survives a crash mid-search) and open a turn spanning
+    # this request. (See /api/alex: the user row's turn_id stays NULL; the turns table holds
+    # user_message_id and the assistant row below carries the turn_id.)
+    _user_msg = conversation_store.add_message(user_id, conversation_id, "user", readable)
+    turn = conversation_store.begin_turn(
+        user_id, conversation_id, request_id=request_id,
+        user_message_id=_user_msg.get("id"))
+    turn_id = turn["id"]
+
     # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
     try:
         with request_context(request_id, user_id):
@@ -1558,8 +1693,9 @@ async def api_search_direct():
             "search_criteria": {},
         }
 
-    # conversation_id echoed in EVERY response (incl. errors + implicit creation).
+    # conversation_id + turn_id echoed in EVERY response (incl. errors + implicit creation).
     payload["conversation_id"] = conversation_id
+    payload["turn_id"] = turn_id
 
     # --- L2 write-back — SAME helper the ReAct path uses (phase 3) --------------
     # A form submit is authoritative, so OVERWRITE the scalar accumulated criteria (the
@@ -1582,17 +1718,30 @@ async def api_search_direct():
             'room_type': room_type,
             'move_in_date': move_in_date,   # 🆕 期望入住日持久化（表单值跨轮保留）
         },
+        turn_id=turn_id,
+        reply_language=reply_language,
     )
 
-    # Persist the assistant reply (recommendations preserved verbatim for re-render).
+    # Persist the assistant reply (tagged with turn_id; recommendations preserved verbatim).
+    _asst_msg_id = None
     try:
-        conversation_store.add_message(
+        _asst = conversation_store.add_message(
             user_id, conversation_id, "assistant", message,
             response_type=payload.get("response_type"),
             recommendations=recommendations,
+            turn_id=turn_id,
         )
+        _asst_msg_id = _asst.get("id")
     except Exception as e:
         print(f"[persist] assistant message failed: {e}")
+
+    # Finalize the turn: a tool-side error fails it; a real search completes it and
+    # snapshots the post-turn context (built AFTER _write_back_turn cached the criteria).
+    if payload.get("response_type") == "error":
+        conversation_store.fail_turn(user_id, turn_id)
+    else:
+        conversation_store.complete_turn(user_id, turn_id, assistant_message_id=_asst_msg_id)
+        _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id)
 
     response = jsonify(payload)
     response.headers["X-Request-Id"] = request_id
@@ -1653,6 +1802,72 @@ def get_conversation_messages(cid):
     if conversation_store.get_conversation(user_id, cid) is None:
         raise ApiError(404, "conversation not found")
     return jsonify({"messages": conversation_store.get_messages(user_id, cid)})
+
+
+# fork_conversation errors → (http status, stable error code, client message). Returned
+# directly (not via ApiError) so the fork response can carry a stable "code" field without
+# altering the global ApiError JSON shape used by every other route.
+_FORK_ERROR_MAP = (
+    (ConversationNotFound, 404, "conversation_not_found", "conversation not found"),
+    (NoCompletedTurn, 400, "no_completed_turn", "no completed turn to fork from"),
+    (TurnNotFound, 400, "turn_not_found", "turn not found"),
+    (TurnNotInConversation, 400, "turn_not_in_conversation",
+     "turn does not belong to this conversation"),
+    (TurnNotCompleted, 400, "turn_not_completed", "turn is not completed"),
+)
+
+
+@app.route('/api/conversations/<cid>/fork', methods=['POST'])
+def fork_conversation(cid):
+    """Branch a NEW conversation from a completed turn of <cid>. It inherits all context
+    up to and including that turn; afterwards parent and child are fully independent.
+
+    Body (all optional): {after_turn_id?, title?, idempotency_key?}. Header 'Idempotency-Key'
+    takes precedence over the body key. after_turn_id omitted → the latest completed turn.
+    Returns {"conversation": {...}, "idempotent": bool}: 201 on create, 200 on an idempotent
+    replay. Fork validation failures return {"error", "code"} at 404/400 (see _FORK_ERROR_MAP).
+    """
+    data = _request_body() or {}
+    user_id, _ = resolve_identity(data)
+
+    after_turn_id = data.get('after_turn_id')
+    if after_turn_id is not None and (not isinstance(after_turn_id, str) or not after_turn_id.strip()):
+        raise ApiError(400, "after_turn_id must be a string")
+    title = data.get('title')
+    if title is not None and not isinstance(title, str):
+        raise ApiError(400, "title must be a string")
+    try:
+        idem = request.headers.get('Idempotency-Key')
+    except Exception:
+        idem = None
+    if not idem:
+        _body_idem = data.get('idempotency_key')
+        idem = _body_idem if isinstance(_body_idem, str) and _body_idem.strip() else None
+
+    try:
+        child = conversation_store.fork_conversation(
+            user_id, cid, after_turn_id=(after_turn_id.strip() if after_turn_id else None),
+            title=title, idempotency_key=idem)
+    except Exception as e:
+        for exc_type, status, code, msg in _FORK_ERROR_MAP:
+            if isinstance(e, exc_type):
+                return jsonify({"error": msg, "code": code}), status
+        raise  # non-fork error → global handler (500)
+
+    idempotent = bool(child.pop("idempotent", False))
+    # The store also mirrors forked_from_turn_id at the top level of the returned dict; it is
+    # already part of the conversation dict shape, so nothing extra to strip.
+    return jsonify({"conversation": child, "idempotent": idempotent}), (200 if idempotent else 201)
+
+
+@app.route('/api/conversations/<cid>/turns', methods=['GET'])
+def list_conversation_turns(cid):
+    """Turn history for a conversation (started_at ASC). Additive helper — the frontend
+    forks off message turn_id, but this makes the lifecycle inspectable. 404 if not owned."""
+    user_id, _ = _identity_from_request()
+    if conversation_store.get_conversation(user_id, cid) is None:
+        raise ApiError(404, "conversation not found")
+    return jsonify({"turns": conversation_store.list_turns(user_id, cid)})
 
 
 @app.route('/api/clear_history', methods=['POST'])

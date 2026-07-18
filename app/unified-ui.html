@@ -255,6 +255,19 @@
         .message.alex .bubble a { color: var(--primary-color); text-decoration: none; border-bottom: 1px solid transparent; }
         .message.alex .bubble a:hover { border-bottom-color: var(--primary-color); }
 
+        /* Per-message fork ("Branch from here") — revealed on hover, mirrors conv actions */
+        .message-actions { margin-top: 4px; margin-left: 2px; opacity: 0; transition: var(--transition-base); }
+        .message.alex:hover .message-actions { opacity: 1; }
+        .msg-branch-btn {
+            display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px;
+            background: transparent; border: 1px solid var(--border-medium); border-radius: var(--radius-sm);
+            color: var(--text-tertiary); cursor: pointer; font-family: inherit; font-size: 11px;
+            transition: var(--transition-base);
+        }
+        .msg-branch-btn:hover { border-color: var(--primary-color); color: var(--primary-color); background: var(--primary-light); }
+        .msg-branch-btn:disabled { opacity: 0.5; cursor: default; }
+        .msg-branch-btn .icon { width: 13px; height: 13px; }
+
         /* 表格样式 */
         .message.alex .bubble table {
             width: 100%;
@@ -712,6 +725,10 @@
             padding: 9px 10px; background: none; border: none; cursor: pointer; text-align: left;
             font-family: inherit;
         }
+        .conv-title-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+        .conv-branch-glyph { flex-shrink: 0; display: inline-flex; color: var(--text-tertiary); }
+        .conv-branch-glyph .icon { width: 12px; height: 12px; }
+        .conv-item.active .conv-branch-glyph { color: var(--primary-color); }
         .conv-title { font-size: 0.85rem; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .conv-meta { font-size: 11px; color: var(--text-tertiary); }
         .conv-item-actions { display: flex; gap: 2px; padding-right: 6px; opacity: 0; transition: var(--transition-base); }
@@ -1484,6 +1501,14 @@
                 avail_ready: "Available",
                 avail_later: "Available later",
 
+                // Branch / fork (session fork). {title} is a literal placeholder.
+                branch_from_here: "Branch from here",
+                branch_action: "Branch",
+                branched_from_tpl: "Branched from: {title}",
+                branch_fallback_title: "branch",
+                branch_created: "Branch created.",
+                error_fork: "Could not create the branch.",
+
                 // Errors
                 error_load_conversations: "Could not load conversations.",
                 error_create_conversation: "Could not create a new chat.",
@@ -1668,6 +1693,14 @@
                 avail_ready: "可入住",
                 avail_later: "未来可入住",
 
+                // 分支 / 会话分叉（{title} 为占位符，勿翻译）
+                branch_from_here: "从此处创建分支",
+                branch_action: "创建分支",
+                branched_from_tpl: "分支自：{title}",
+                branch_fallback_title: "分支",
+                branch_created: "已创建分支。",
+                error_fork: "无法创建分支。",
+
                 // Errors
                 error_load_conversations: "无法加载会话列表。",
                 error_create_conversation: "无法创建新会话。",
@@ -1703,7 +1736,8 @@
                 edit: `<svg class="icon ${size}" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
                 trash: `<svg class="icon ${size}" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
                 stop: `<svg class="icon ${size}" style="fill:currentColor;stroke:none" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`,
-                send: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`
+                send: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
+                branch: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`
             };
             return icons[name] || '';
         }
@@ -2218,12 +2252,15 @@
                 } else {
                     const data = await response.json();
                     if (data.conversation_id) adoptConversationId(data.conversation_id);
+                    // turn_id (when the backend supports fork) tags the assistant bubble so
+                    // it can offer "Branch from here"; absent → no fork affordance.
+                    const turnId = (data.turn_id != null) ? data.turn_id : null;
 
                     if (data.error) {
-                        addMessage(cleanRawResponse(String(data.error)), 'alex', { icon: 'error' });
+                        addMessage(cleanRawResponse(String(data.error)), 'alex', { icon: 'error', turnId: turnId });
                         lastResponseType = 'error';
                     } else if (data.response_type === 'clarification') {
-                        addMessage(cleanRawResponse(data.message), 'alex', { icon: 'question' });
+                        addMessage(cleanRawResponse(data.message), 'alex', { icon: 'question', turnId: turnId });
                         lastResponseType = 'clarification';
                         const missing = Array.isArray(data.missing_fields) ? data.missing_fields : [];
                         // Optional fields the gate merely mentions (e.g. 'move_in') —
@@ -2250,18 +2287,18 @@
                             });
                         }
                     } else if (data.response_type === 'search' && data.recommendations) {
-                        addMessage(cleanRawResponse(data.message || ''), 'alex');
+                        addMessage(cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
                         currentResults = data.recommendations;
                         currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
                         displayResults(data.recommendations);
                         lastResponseType = 'search';
                         if (data.search_criteria) applyCriteria(data.search_criteria);
                     } else if (data.response_type === 'error') {
-                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error' });
+                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
                         lastResponseType = 'error';
                     } else {
                         const rawText = data.message || data.response || t('error_connection');
-                        addMessage(cleanRawResponse(rawText), 'alex');
+                        addMessage(cleanRawResponse(rawText), 'alex', { turnId: turnId });
                         if (data.recommendations && data.recommendations.length > 0) {
                             currentResults = data.recommendations;
                             currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
@@ -2325,6 +2362,22 @@
                 bubble.innerHTML = inner;
                 messageDiv.appendChild(senderEl);
                 messageDiv.appendChild(bubble);
+                // Per-message fork affordance. Only shown when the turn is known and we
+                // are inside a saved conversation (fork targets a stored conversation).
+                if (opts.turnId != null && opts.turnId !== '' && activeConversationId) {
+                    const sourceCid = activeConversationId;
+                    const turnId = opts.turnId;
+                    const actions = el('div', 'message-actions');
+                    const branchBtn = el('button', 'msg-branch-btn');
+                    branchBtn.type = 'button';
+                    branchBtn.title = t('branch_from_here');
+                    branchBtn.setAttribute('aria-label', t('branch_from_here'));
+                    branchBtn.innerHTML = getIcon('branch', 'icon-sm') +
+                        '<span>' + escapeHtml(t('branch_from_here')) + '</span>';
+                    branchBtn.addEventListener('click', () => forkConversation(sourceCid, turnId, branchBtn));
+                    actions.appendChild(branchBtn);
+                    messageDiv.appendChild(actions);
+                }
             } else {
                 const bubble = el('div', 'bubble');
                 bubble.textContent = text; // user echo — escaped by textContent
@@ -3026,6 +3079,17 @@
             return d.toLocaleDateString();
         }
 
+        // Tooltip text for a forked conversation's branch glyph. Resolves the parent
+        // title from the loaded list; falls back to a short id, then a generic label.
+        function branchedFromLabel(conv) {
+            const parent = conversations.find(c => c.id === conv.parent_conversation_id);
+            let name;
+            if (parent && parent.title) name = parent.title;
+            else if (conv.parent_conversation_id) name = String(conv.parent_conversation_id).slice(0, 8);
+            else name = t('branch_fallback_title');
+            return t('branched_from_tpl').replace('{title}', name);
+        }
+
         function renderConversationList() {
             const list = document.getElementById('convList');
             list.innerHTML = '';
@@ -3037,18 +3101,36 @@
             }
             conversations.forEach(conv => {
                 const item = el('div', 'conv-item' + (conv.id === activeConversationId ? ' active' : ''));
+                // Keep flat updated_at ordering; only hint lineage with a subtle indent
+                // (capped at depth 3) so the list never becomes a tree in v1.
+                const depth = Math.min(Number(conv.branch_depth) || 0, 3);
+                if (depth > 0) item.style.marginLeft = (depth * 10) + 'px';
 
                 const main = el('button', 'conv-item-main');
+                const titleRow = el('div', 'conv-title-row');
+                if (conv.parent_conversation_id) {
+                    const glyph = el('span', 'conv-branch-glyph');
+                    glyph.innerHTML = getIcon('branch', 'icon-sm');
+                    glyph.title = branchedFromLabel(conv);
+                    titleRow.appendChild(glyph);
+                }
                 const title = el('span', 'conv-title');
                 title.textContent = conv.title || t('untitled_chat');
+                titleRow.appendChild(title);
                 const meta = el('span', 'conv-meta');
                 meta.textContent = formatRelativeTime(conv.updated_at);
-                main.appendChild(title);
+                main.appendChild(titleRow);
                 main.appendChild(meta);
                 main.addEventListener('click', () => switchConversation(conv.id));
                 item.appendChild(main);
 
                 const actionsWrap = el('div', 'conv-item-actions');
+                const branchBtn = el('button', 'conv-icon-btn');
+                branchBtn.title = t('branch_action');
+                branchBtn.setAttribute('aria-label', t('branch_action'));
+                branchBtn.innerHTML = getIcon('branch', 'icon-sm');
+                branchBtn.addEventListener('click', e => { e.stopPropagation(); forkConversation(conv.id, null, branchBtn); });
+                actionsWrap.appendChild(branchBtn);
                 const renameBtn = el('button', 'conv-icon-btn');
                 renameBtn.title = t('rename');
                 renameBtn.setAttribute('aria-label', t('rename'));
@@ -3090,7 +3172,10 @@
                 let icon = null;
                 if (msg.response_type === 'clarification') icon = 'question';
                 else if (msg.response_type === 'error') icon = 'error';
-                addMessage(cleanRawResponse(msg.content || ''), 'alex', icon ? { icon: icon } : {});
+                const opts = {};
+                if (icon) opts.icon = icon;
+                if (msg.turn_id != null) opts.turnId = msg.turn_id;
+                addMessage(cleanRawResponse(msg.content || ''), 'alex', opts);
                 if (Array.isArray(msg.recommendations) && msg.recommendations.length) {
                     currentResults = msg.recommendations;
                 }
@@ -3234,6 +3319,43 @@
                     }
                 }
             });
+        }
+
+        // Session fork. afterTurnId=null → the backend forks from the latest completed
+        // turn (sidebar "Branch"); a turn id → fork from that assistant message
+        // ("Branch from here"). Idempotency key is generated per click; the disabled
+        // trigger prevents a second in-flight request for the same click.
+        async function forkConversation(sourceCid, afterTurnId, triggerEl) {
+            if (!sourceCid) return;
+            if (triggerEl && triggerEl.disabled) return;
+            if (triggerEl) triggerEl.disabled = true;
+            const idempotencyKey = uuidHex();
+            try {
+                const body = {};
+                if (afterTurnId != null && afterTurnId !== '') body.after_turn_id = afterTurnId;
+                const uid = getUserId();
+                if (uid) body.user_id = uid;
+                const response = await apiFetch('/api/conversations/' + encodeURIComponent(sourceCid) + '/fork', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': idempotencyKey
+                    },
+                    body: JSON.stringify(body)
+                });
+                if (!response.ok) { showToast(t('error_fork'), 'error'); return; }
+                const data = await response.json();
+                const conv = (data && data.conversation) ? data.conversation : data;
+                if (!conv || !conv.id) { showToast(t('error_fork'), 'error'); return; }
+                showToast(t('branch_created'), 'success');
+                await loadConversations(true);
+                await switchConversation(conv.id);
+            } catch (error) {
+                if (error && error.name === 'AbortError') return;
+                showToast(t('error_fork'), 'error');
+            } finally {
+                if (triggerEl) triggerEl.disabled = false;
+            }
         }
 
         /* -------------------------------------------------------------------------- */
@@ -4174,12 +4296,13 @@
                 } else {
                     const data = await response.json();
                     if (data.conversation_id) adoptConversationId(data.conversation_id);
+                    const turnId = (data.turn_id != null) ? data.turn_id : null;
 
                     if (data.response_type === 'error') {
-                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error' });
+                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
                         lastResponseType = 'error';
                     } else {
-                        addMessage(cleanRawResponse(data.message || ''), 'alex');
+                        addMessage(cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
                         const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
                         currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
                         lastResponseType = 'search';

@@ -19,6 +19,7 @@ Public API
     SnapshotSchemaError
     build_turn_snapshot(*, turn_id, persistent_state, context_revision=0) -> dict
     snapshot_to_session_patch(snapshot) -> dict
+    render_recommended_index(registry, max_items=200) -> str
     assemble(*, user_message, history, memory_block="", has_property_context=False,
              rolling_summary=None, token_budget=6000) -> str
     estimate_tokens(text) -> int
@@ -89,6 +90,8 @@ def build_turn_snapshot(*, turn_id: Any, persistent_state: Dict[str, Any],
         "accumulated_search_criteria": deepcopy(
             persistent_state.get("accumulated_search_criteria", {})),
         "last_results": deepcopy(ec.get("last_results")) or [],
+        # 累计推荐注册表：轻量条目（historical recommendations index），随快照存活重启/fork。
+        "recommended_registry": deepcopy(ec.get("recommended_registry")) or [],
         "summary": ec.get("rolling_summary") or None,
         "summary_through_turn_id": ec.get("rolling_summary_through_turn_id") or None,
         "open_questions": [],   # reserved for v2
@@ -125,6 +128,10 @@ def snapshot_to_session_patch(snapshot: Any) -> Dict[str, Any]:
     if not isinstance(last_results, list):
         last_results = []
 
+    recommended_registry = snapshot.get("recommended_registry")
+    if not isinstance(recommended_registry, list):
+        recommended_registry = []
+
     summary = snapshot.get("summary")
     if not (isinstance(summary, str) and summary.strip()):
         summary = None
@@ -137,9 +144,56 @@ def snapshot_to_session_patch(snapshot: Any) -> Dict[str, Any]:
         "user_preferences": deepcopy(user_preferences),
         "accumulated_search_criteria": deepcopy(accumulated),
         "last_results": deepcopy(last_results),
+        "recommended_registry": deepcopy(recommended_registry),
         "rolling_summary": summary,
         "rolling_summary_through_turn_id": summary_through,
     }
+
+
+# ---------------------------------------------------------------------------
+# Recommended-listings index (accumulated registry -> compact prompt block)
+# ---------------------------------------------------------------------------
+
+def render_recommended_index(registry: Optional[List[Dict[str, Any]]],
+                             max_items: int = 200) -> str:
+    """Render the accumulated recommended-listings registry as a COMPACT numbered index
+    for the agent prompt — ONE line per listing, SUMMARIES ONLY (address / price / area /
+    commute / available-from / URL).
+
+    The block carries an explicit instruction: full details (description, amenities, bills,
+    policies) of any listing are NOT inline and MUST be fetched with ``get_property_details``
+    using that listing's exact URL. This keeps the whole search history addressable in
+    context without ever inlining large per-listing description text. Returns ``''`` for an
+    empty/missing registry."""
+    if not registry:
+        return ""
+    lines = [
+        "=== RECOMMENDED LISTINGS INDEX (every listing shown so far; summaries only) ===",
+        "Each line is a SUMMARY. For a listing's full details (description, amenities, "
+        "bills, guest/payment policy) call the get_property_details tool with that "
+        "listing's exact URL below. Never invent details that are not shown here.",
+    ]
+    for e in registry[:max_items]:
+        if not isinstance(e, dict):
+            continue
+        idx = e.get("index", "?")
+        addr = str(e.get("address") or "Unknown").strip()
+        seg = [f"[{idx}] {addr}"]
+        if e.get("price") not in (None, "", "N/A"):
+            seg.append(f"price {e['price']}")
+        if e.get("area"):
+            seg.append(f"area {e['area']}")
+        if e.get("travel_time") not in (None, "", "N/A"):
+            seg.append(f"commute {e['travel_time']}")
+        if e.get("available_from"):
+            seg.append(f"available {e['available_from']}")
+        line = " | ".join(seg)
+        url = str(e.get("url") or "").strip()
+        if url:
+            line += f" | {url}"
+        lines.append(line)
+    lines.append("=== END RECOMMENDED LISTINGS INDEX ===")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

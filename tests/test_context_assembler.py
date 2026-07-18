@@ -215,6 +215,10 @@ def _persistent_state_with_transients():
         "accumulated_search_criteria": {"budget": 1500, "area": "camden"},
         "extracted_context": {
             "last_results": [{"id": 1}, {"id": 2}],
+            "recommended_registry": [
+                {"index": 1, "address": "1 Main St", "url": "https://otm/1", "price": "£1000"},
+                {"index": 2, "address": "2 Oak Rd", "url": "https://otm/2", "price": "£1200"},
+            ],
             "rolling_summary": "Goals: find a flat",
             "rolling_summary_through_turn_id": "turn-abc",
             # transient keys that MUST NOT leak:
@@ -251,6 +255,10 @@ def test_snapshot_whitelist_blacklist():
     assert snap["user_preferences"] == {"lang": "zh", "pets": True}
     assert snap["accumulated_search_criteria"] == {"budget": 1500, "area": "camden"}
     assert snap["last_results"] == [{"id": 1}, {"id": 2}]
+    assert snap["recommended_registry"] == [
+        {"index": 1, "address": "1 Main St", "url": "https://otm/1", "price": "£1000"},
+        {"index": 2, "address": "2 Oak Rd", "url": "https://otm/2", "price": "£1200"},
+    ]
     assert snap["summary"] == "Goals: find a flat"
     assert snap["summary_through_turn_id"] == "turn-abc"
     assert snap["open_questions"] == []
@@ -258,7 +266,7 @@ def test_snapshot_whitelist_blacklist():
 
     allowed = {
         "schema_version", "turn_id", "user_preferences",
-        "accumulated_search_criteria", "last_results", "summary",
+        "accumulated_search_criteria", "last_results", "recommended_registry", "summary",
         "summary_through_turn_id", "open_questions", "active_property",
         "context_revision",
     }
@@ -303,6 +311,10 @@ def test_snapshot_round_trip():
     assert patch["user_preferences"] == {"lang": "zh", "pets": True}
     assert patch["accumulated_search_criteria"] == {"budget": 1500, "area": "camden"}
     assert patch["last_results"] == [{"id": 1}, {"id": 2}]
+    assert patch["recommended_registry"] == [
+        {"index": 1, "address": "1 Main St", "url": "https://otm/1", "price": "£1000"},
+        {"index": 2, "address": "2 Oak Rd", "url": "https://otm/2", "price": "£1200"},
+    ]
     assert patch["rolling_summary"] == "Goals: find a flat"
     assert patch["rolling_summary_through_turn_id"] == "turn-abc"
 
@@ -336,6 +348,7 @@ def test_snapshot_patch_tolerates_missing_keys():
         "user_preferences": {},
         "accumulated_search_criteria": {},
         "last_results": [],
+        "recommended_registry": [],
         "rolling_summary": None,
         "rolling_summary_through_turn_id": None,
     }

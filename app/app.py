@@ -48,6 +48,7 @@ from core.context_assembler import (
     snapshot_to_session_patch,
     SnapshotSchemaError,
     update_rolling_summary,
+    render_recommended_index,
 )
 from core.llm_interface import call_ollama
 
@@ -208,6 +209,9 @@ def _get_session(user_id, conversation_id):
                     previous, structured = _build_results_context(patch["last_results"])
                     ec["previous_search_results"] = previous
                     ec["last_results"] = structured
+                # 累计推荐注册表随快照存活重启/fork（轻量条目，体积可控）。
+                if patch.get("recommended_registry") and not ec.get("recommended_registry"):
+                    ec["recommended_registry"] = patch["recommended_registry"]
         except SnapshotSchemaError:
             pass  # unknown schema → fall through to the legacy message-only rehydrate
         except Exception as e:
@@ -800,7 +804,8 @@ def _resolve_reply_language(user_message, ui_language) -> str:
     return "en" if _normalize_ui_language(ui_language) == "en" else "zh"
 
 
-def _resolve_focus_listing(property_info, last_results, csv_properties):
+def _resolve_focus_listing(property_info, last_results, csv_properties,
+                           registry=None, cache_lookup=None):
     """解析前端每张卡片 "Ask AI" 载荷 {property:{address,price,travel_time,url}} 对应的
     真实房源，返回 (要并入 extracted_context 的字段 dict, 命中来源)。
 
@@ -808,13 +813,17 @@ def _resolve_focus_listing(property_info, last_results, csv_properties):
     误匹配到伦敦 demo CSV、把错城市的设施/描述串进上下文"的 bug）：
       ① 会话 last_results 里 URL 精确匹配（忽略大小写/首尾空白）；
       ② 会话 last_results 里地址精确匹配（忽略大小写/首尾空白）；
+      ②.5 累计推荐注册表（历史所有轮次的推荐）URL/地址精确匹配 → 命中后用注入的 cache_lookup
+          （find_cached_listing_by_url 等价物）取完整字段（描述/设施/政策），让"点历史轮次
+          推荐房源的 Ask AI"也能解析出真实完整数据；cache 未命中时退回注册表轻量字段；
       ③ demo CSV all_properties 里地址精确匹配（仅 ==，无子串/模糊）；
       ④ 都不中 → 只保留载荷标量（address/price/travel_time），与旧行为一致。
 
-    纯函数：不加锁、不读共享状态。调用方须在 phase-1 turn_lock 内先把"完整推荐列表"
-    （挂在 session 对象上的 _sess.last_results，非 extracted_context 里截断的 6 条）浅拷贝
-    传进来，解析对照的就是该快照。会话命中喂真实房源全量字段（键名与 agent 文件读取的
-    一致，缺失键被容忍）；CSV 命中沿用旧键（amenities/guest_policy/…）。"""
+    纯函数：不加锁、不读共享状态。``registry`` 是每会话累计推荐注册表（轻量条目列表），
+    ``cache_lookup`` 是注入的 ``callable(url) -> 完整房源 dict | None``（便于测试）。调用方须在
+    phase-1 turn_lock 内先把"完整推荐列表"（挂在 session 对象上的 _sess.last_results，非
+    extracted_context 里截断的 6 条）浅拷贝传进来，解析对照的就是该快照。会话命中喂真实房源全量
+    字段（键名与 agent 文件读取的一致，缺失键被容忍）；CSV 命中沿用旧键（amenities/guest_policy/…）。"""
     if not isinstance(property_info, dict):
         property_info = {}
     property_address = property_info.get('address') or ''
@@ -827,6 +836,7 @@ def _resolve_focus_listing(property_info, last_results, csv_properties):
     }
     addr_key = property_address.lower().strip()
     url_key = payload_url.lower().strip()
+    url_key_norm = url_key.rstrip('/')
 
     # ① URL 精确匹配 → ② 地址精确匹配（都对照完整 last_results 快照）
     session_hit = None
@@ -857,6 +867,60 @@ def _resolve_focus_listing(property_info, last_results, csv_properties):
         ctx['area'] = session_hit.get('area')
         ctx['budget_status'] = session_hit.get('budget_status') or ''
         return ctx, 'session'
+
+    # ②.5 累计推荐注册表命中（历史所有轮次的推荐，不只最近一轮）。URL 优先、地址次之精确匹配；
+    #     命中后用注入的 cache_lookup 按 URL 取 sqlite 缓存里的完整房源（描述/设施/政策等大字段），
+    #     缓存未命中则退回注册表轻量字段（地址/价格/通勤/区域/可入住日）。
+    reg_hit = None
+    if registry:
+        if url_key_norm:
+            for e in registry:
+                if isinstance(e, dict) and str(e.get('url') or '').lower().strip().rstrip('/') == url_key_norm:
+                    reg_hit = e
+                    break
+        if reg_hit is None and addr_key:
+            for e in registry:
+                if isinstance(e, dict) and str(e.get('address') or '').lower().strip() == addr_key:
+                    reg_hit = e
+                    break
+    if reg_hit is not None:
+        ctx['property_address'] = reg_hit.get('address') or property_address
+        if reg_hit.get('price') is not None:
+            ctx['property_price'] = reg_hit.get('price')
+        if reg_hit.get('travel_time') is not None:
+            ctx['property_travel_time'] = reg_hit.get('travel_time')
+        reg_url = reg_hit.get('url') or payload_url
+        ctx['property_url'] = reg_url
+        if reg_hit.get('area'):
+            ctx['area'] = reg_hit.get('area')
+        if reg_hit.get('available_from'):
+            ctx['available_from'] = reg_hit.get('available_from')
+        full = None
+        if cache_lookup is not None and reg_url:
+            try:
+                full = cache_lookup(reg_url)
+            except Exception:
+                full = None
+        if isinstance(full, dict):
+            # 缓存房源是抓取"富 schema"（首字母大写键），与 demo CSV 同形 —— 沿用相同映射。
+            if full.get('Address'):
+                ctx['property_address'] = full.get('Address')
+            if full.get('Price') not in (None, ''):
+                ctx['property_price'] = full.get('Price')
+            ctx['description'] = full.get('Description') or ctx.get('description') or ''
+            ctx['room_type'] = full.get('Room_Type_Category', '')
+            ctx['amenities'] = full.get('Detailed_Amenities', '')
+            ctx['guest_policy'] = full.get('Guest_Policy', '')
+            ctx['payment_rules'] = full.get('Payment_Rules', '')
+            ctx['excluded_features'] = full.get('Excluded_Features', '')
+            if full.get('URL'):
+                ctx['property_url'] = full.get('URL')
+            if full.get('Available From'):
+                ctx['available_from'] = full.get('Available From')
+            if full.get('geo_location'):
+                ctx['geo_location'] = full.get('geo_location')
+            return ctx, 'registry+cache'
+        return ctx, 'registry'
 
     # ③ demo CSV 精确地址匹配（仅 ==；子串/模糊分支已删除）。
     if addr_key:
@@ -903,6 +967,93 @@ def _build_viewed_properties_context(properties, last_results, csv_properties, m
         if url:
             lines.append(f'   Listing URL: {url}')
     return '\n'.join(lines)
+
+
+# ── 累计推荐注册表（recommended registry）──────────────────────────────────────
+# 每次搜索产出推荐时把本轮推荐 merge 进每会话累计注册表，轻量条目仅
+# {index(首见顺序，稳定), address, price, area, travel_time, url, available_from}，
+# 按 url（无 url 用地址）去重，首见 index 不变，上限 _REGISTRY_MAX_ENTRIES。用户可追问任何
+# 历史轮次推荐过的房源；完整信息（描述/设施/政策）不塞进注册表，由 get_property_details 按 URL
+# 命中 sqlite 缓存取回。
+_REGISTRY_MAX_ENTRIES = 200
+
+
+def _registry_entry_key(url, address):
+    """去重键：优先规范化后的 url（小写/去首尾空白/去尾斜杠），无 url 用规范化地址；都空 → None。"""
+    u = str(url or '').strip().lower().rstrip('/')
+    if u:
+        return ('url', u)
+    a = str(address or '').strip().lower()
+    return ('address', a) if a else None
+
+
+def _merge_recommended_registry(existing, recommendations, max_items=_REGISTRY_MAX_ENTRIES):
+    """把本轮 recommendations merge 进累计注册表（纯函数，返回新列表，不改动入参）。
+
+    去重：按 _registry_entry_key（url 优先、地址次之）；已存在的条目原样保留（首见 index 稳定）；
+    新条目 index = 现有最大 index + 1（单调递增，不复用/不冲突）。达到 max_items 后不再追加新条目。"""
+    registry = [dict(e) for e in (existing or []) if isinstance(e, dict)]
+    seen = {}
+    max_index = 0
+    for e in registry:
+        key = _registry_entry_key(e.get('url'), e.get('address'))
+        if key is not None:
+            seen[key] = e
+        try:
+            max_index = max(max_index, int(e.get('index', 0)))
+        except (TypeError, ValueError):
+            pass
+    for rec in (recommendations or []):
+        if not isinstance(rec, dict):
+            continue
+        key = _registry_entry_key(rec.get('url'), rec.get('address'))
+        if key is None or key in seen:
+            continue
+        if len(registry) >= max_items:
+            break
+        max_index += 1
+        entry = {
+            'index': max_index,
+            'address': rec.get('address') or '',
+            'price': rec.get('price'),
+            'area': rec.get('area'),
+            'travel_time': rec.get('travel_time'),
+            'url': rec.get('url') or '',
+            'available_from': rec.get('available_from'),
+        }
+        registry.append(entry)
+        seen[key] = entry
+    return registry
+
+
+def _build_focus_stack_records(focus_items, last_results, csv_properties,
+                               registry=None, cache_lookup=None):
+    """把前端 focus_stack（旧→新，最后一个为当前聚焦）逐个解析成结构化房源记录，供指代锚定
+    （langgraph 读 extracted_context['focus_stack']）+ 上下文渲染。每条走 _resolve_focus_listing
+    （会话快照 → 注册表+缓存 → demo CSV → 标量兜底），返回与 last_results 记录同形的 dict 列表
+    （name/address/price/travel_time/url/description/…）。纯函数。"""
+    records = []
+    for item in (focus_items or []):
+        if not isinstance(item, dict):
+            continue
+        ctx, _src = _resolve_focus_listing(
+            item, last_results, csv_properties, registry=registry, cache_lookup=cache_lookup)
+        addr = ctx.get('property_address') or ''
+        records.append({
+            'name': addr.split(',')[0].strip() if addr else '',
+            'address': addr,
+            'price': ctx.get('property_price'),
+            'travel_time': ctx.get('property_travel_time'),
+            'url': ctx.get('property_url') or item.get('url') or '',
+            'description': ctx.get('description'),
+            'available_from': ctx.get('available_from'),
+            'availability_status': ctx.get('availability_status'),
+            'bedrooms': ctx.get('bedrooms'),
+            'property_type': ctx.get('property_type'),
+            'area': ctx.get('area'),
+            'budget_status': ctx.get('budget_status'),
+        })
+    return records
 
 
 # Sentinel for "argument not supplied" so a helper can distinguish "keep the current
@@ -1084,9 +1235,17 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
         if recommendations:
             _sess.last_results = recommendations
             _sess.persistent_state.setdefault('extracted_context', {})
-            _sess.persistent_state['extracted_context']['previous_search_results'] = prev_results_context
-            _sess.persistent_state['extracted_context']['last_results'] = structured_results
-            print(f"[state] 💾 已保存 {len(recommendations)} 个搜索结果到上下文")
+            _ec = _sess.persistent_state['extracted_context']
+            _ec['previous_search_results'] = prev_results_context
+            _ec['last_results'] = structured_results
+            # 累计推荐注册表：把本轮推荐 merge 进历史注册表（去重/首见 index 稳定/上限），
+            # 让后续可追问任何历史轮次推荐过的房源。持久化经 build_turn_snapshot 白名单存活重启/fork。
+            # 注意：喂完整 recommendations（前端展示多少就登记多少），不能用截断到 6 条的
+            # structured_results —— 否则第 7 条以后展示过的房源永远进不了注册表。
+            _ec['recommended_registry'] = _merge_recommended_registry(
+                _ec.get('recommended_registry'), recommendations)
+            print(f"[state] 💾 已保存 {len(recommendations)} 个搜索结果到上下文"
+                  f"（注册表 {len(_ec['recommended_registry'])} 条）")
     # Rolling-summary fold happens OUTSIDE the lock (spawns its own thread). Gated on a
     # real trim + a turn_id (the through-turn marker); legacy callers without turn_id skip.
     if dropped_turns and turn_id:
@@ -1153,15 +1312,52 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # ── 构建本轮 extracted_context ──────────────────────────────
     extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
 
-    # 如果有 property context（前端每张卡片的 "Ask AI"），解析到真实房源并注入上下文。
-    # 解析顺序：会话 last_results 的 URL/地址精确匹配 → demo CSV 地址精确匹配 → 载荷标量兜底。
-    # （删掉了旧的子串/模糊匹配：它会把实时抓取的外城房源误配到伦敦 demo CSV，串入错城市数据。）
-    if context and context.get('property'):
-        focus_ctx, focus_source = _resolve_focus_listing(
-            context.get('property') or {}, last_results_snapshot, all_properties)
-        extracted_context.update(focus_ctx)
-        print(f"[LangGraph] 📍 Ask-AI 聚焦房源 [{focus_source}]: "
+    # focus 栈（多聚焦）：优先读 context.focus_stack（数组，旧→新，最后一个=当前聚焦），缺失时
+    # 退化为 [context.property]（向后兼容旧前端）。逐个用 _resolve_focus_listing 解析（会话 last_results
+    # 快照 → 累计推荐注册表+sqlite 缓存 → demo CSV → 标量兜底），结构化记录挂 extracted_context['focus_stack']
+    # 供 langgraph 指代锚定；栈顶继续填充既有 property_* 单聚焦键，保证下游不回归。
+    _accum_registry = extracted_context.get('recommended_registry') or []
+    # 注册表 URL → sqlite 完整房源的注入式查询，加每轮 memo 避免同 URL 重复全表扫描。
+    _focus_cache_memo = {}
+
+    def _memo_cache_lookup(url):
+        key = str(url or '').strip().lower().rstrip('/')
+        if not key:
+            return None
+        if key not in _focus_cache_memo:
+            try:
+                from core.scraping.on_demand import find_cached_listing_by_url
+                _focus_cache_memo[key] = find_cached_listing_by_url(url)
+            except Exception:
+                _focus_cache_memo[key] = None
+        return _focus_cache_memo[key]
+
+    focus_items = None
+    if context:
+        _fs = context.get('focus_stack')
+        if isinstance(_fs, list) and _fs:
+            focus_items = [f for f in _fs if isinstance(f, dict)]
+        elif context.get('property'):
+            focus_items = [context.get('property')]
+    if focus_items:
+        focus_records = _build_focus_stack_records(
+            focus_items, last_results_snapshot, all_properties,
+            registry=_accum_registry, cache_lookup=_memo_cache_lookup)
+        if focus_records:
+            extracted_context['focus_stack'] = focus_records
+        # 栈顶（当前聚焦）填充既有 property_* 单聚焦键（含 CSV-only 键，故单独解析一次，走 memo 免重复扫描）。
+        top_ctx, focus_source = _resolve_focus_listing(
+            focus_items[-1], last_results_snapshot, all_properties,
+            registry=_accum_registry, cache_lookup=_memo_cache_lookup)
+        extracted_context.update(top_ctx)
+        print(f"[LangGraph] 📍 Ask-AI 聚焦栈 {len(focus_records)} 项，当前聚焦 [{focus_source}]: "
               f"{extracted_context.get('property_address')}")
+
+    # 累计推荐注册表 → 紧凑编号索引块注入上下文（仅摘要；完整信息由 get_property_details 按 URL 取）。
+    if _accum_registry:
+        _idx_block = render_recommended_index(_accum_registry)
+        if _idx_block:
+            extracted_context['recommended_index'] = _idx_block
 
     # ── 检测对比查询 ─────────────────────────────────────────────
     viewed_properties_context = _build_viewed_properties_context(

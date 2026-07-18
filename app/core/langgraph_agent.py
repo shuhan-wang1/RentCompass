@@ -200,7 +200,8 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
         'quiet': 'Prefers quiet neighborhood', 'vibrant': 'Likes vibrant area',
         'social': 'Values social facilities', 'study': 'Needs good study environment',
         'cooking': 'Wants to cook', 'guest': 'Will have guests',
-        'couple': 'Living as a couple', 'female': 'Female student - safety priority',
+        # 值只记录用户自己说过的事实，不外推身份（如不得因 'female' 推断是学生）。
+        'couple': 'Living as a couple', 'female': 'Female tenant - safety priority',
     }
     for kw, pref in lifestyle.items():
         if kw in user_lower:
@@ -439,6 +440,35 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
         info.append(extracted_context['viewed_properties'])
         info.append('=== END ASK-AI PROPERTY HISTORY ===\n')
 
+    # Recommended-listings index: a compact, numbered summary of EVERY listing shown so far
+    # (accumulated registry). Full per-listing details are NOT inline — the block itself tells
+    # the model to fetch them via get_property_details by URL. Pre-rendered in app.py.
+    if extracted_context.get('recommended_index'):
+        info.append(extracted_context['recommended_index'])
+        info.append("")
+
+    # Focus stack (multi-focus): the listings the user has focused, oldest -> newest, with the
+    # LAST marked as CURRENT FOCUS. A singular near reference (this one / 这个房源 / 这套) means
+    # the CURRENT FOCUS; 'the previous focus / 上一个聚焦的' means the one before it.
+    focus_stack = extracted_context.get('focus_stack') or []
+    if isinstance(focus_stack, list) and focus_stack:
+        info.append("=== FOCUS STACK (listings the user focused, oldest -> newest) ===")
+        for _i, _rec in enumerate(focus_stack, 1):
+            if not isinstance(_rec, dict):
+                continue
+            _marker = " [CURRENT FOCUS]" if _i == len(focus_stack) else ""
+            info.append(f"{_i}. {_rec.get('address') or _rec.get('name') or 'Listing'}{_marker}")
+            if _rec.get('price') not in (None, '', 'N/A'):
+                info.append(f"   Price: {_rec['price']}")
+            if _rec.get('travel_time') not in (None, '', 'N/A'):
+                info.append(f"   Commute: {_rec['travel_time']}")
+            if _rec.get('url'):
+                info.append(f"   Listing URL: {_rec['url']}")
+        info.append("A singular near reference (this one / this listing / 这个房源 / 这套) means "
+                    "the CURRENT FOCUS (the last one above). 'the previous focus / 上一个聚焦的' "
+                    "means the one before it.")
+        info.append("=== END FOCUS STACK ===\n")
+
     if extracted_context.get('property_address'):
         info.append("=== Current Property Context ===")
         # C: a parallel agent resolves these extra fields from the REAL session listing
@@ -644,9 +674,9 @@ _INTENT_CATALOG = [
     ("listing_advice",
      "Opinion/suitability/recommendation question about listings ALREADY shown in this "
      "conversation (not a request for new listings).",
-     ["如果我和我女朋友一块住的话你会推荐这个房源么",
-      "would you recommend the second one for a couple",
-      "这几个哪个更适合情侣住", "is the first one worth it"]),
+     ["如果我和室友一块住的话你会推荐这个房源么",
+      "would you recommend the second one for two people",
+      "这几个哪个更适合两个人住", "is the first one worth it"]),
     ("recall_memory",
      "Recall what we know / remember about THIS user.",
      ["what do you remember about me", "我之前说过什么需求"]),
@@ -680,7 +710,7 @@ Rules:
 - Wanting actual listings to rent ("find/搜/帮我找 a flat/room/房子") -> search_properties.
 - Researching an area's rent PRICE LEVELS / market / 行情 / average rent (not asking for listings) -> market_info.
 - An explicit instruction NOT to search yet (先不要搜索 / 先别搜 / 先调研 / don't search / just research) means the user wants RESEARCH: choose market_info, NEVER search_properties.
-- An opinion/suitability/recommendation question about listings ALREADY shown ("would you recommend this one for a couple", "推荐这个房源么", "哪个更适合情侣") is listing_advice, NEVER search_properties.
+- An opinion/suitability/recommendation question about listings ALREADY shown ("would you recommend this one for two people", "推荐这个房源么", "哪个更适合两个人") is listing_advice, NEVER search_properties.
 - Small talk or a question answerable from context -> direct_answer.
 
 Respond with ONLY a json object, no prose: {{"intent": "<route name>"}}'''
@@ -709,19 +739,23 @@ Answer the user's question using ONLY the property information above.
   as a helpful offer, never as a stated limitation.
 - Follow the REPLY LANGUAGE directive above for the language of your reply (do not mix zh/en); never use emoji or emoticons.
 
-SUITABILITY / RECOMMENDATION questions ("would you recommend this?", "is it good for a
-couple / me and my girlfriend?", "worth it?", "适合情侣住吗", "值得租吗", "推荐这个房源么"):
-- Reason from the Description and the listed fields about how well THIS listing fits the
-  user's stated situation. E.g. a couple sharing -> look at bedroom count and room type
+SUITABILITY / RECOMMENDATION questions ("would you recommend this?", "is it a good fit
+for us?", "worth it?", "适合我们住吗", "值得租吗", "推荐这个房源么"):
+- Do NOT assume the user's household make-up, relationship status, gender, occupation or
+  age. Reason ONLY from what the user has actually told you plus the listing data; never
+  volunteer or imply such private details. If a fact like how many people will live there
+  matters, ask for it neutrally rather than guessing.
+- Reason from the Description and the listed fields about how well THIS listing fits what
+  the user has stated. E.g. more than one occupant -> look at bedroom count and room type
   (a studio / 1-bed double vs a single room in a shared house), and whether a double bed,
-  bills-included, or couples/sharers-welcome is mentioned; a tight budget -> the price and
+  bills-included, or sharers-welcome is mentioned; a tight budget -> the price and
   budget status; a commute -> the travel time.
 - Give an HONEST, balanced recommendation: what fits, what doesn't, and the trade-offs.
   Don't just say "yes" — justify it from the data.
 - Explicitly name the factors that are UNKNOWN from this data (e.g. "the listing doesn't
-  say whether the landlord allows couples, or whether the bed is a double") rather than
-  assuming them. Never invent facts, prices, policies, or amenities not shown above; if a
-  detail needed to judge fit is missing, say so and suggest confirming with the agent.
+  say how many occupants it allows, or whether the bed is a double") rather than assuming
+  them. Never invent facts, prices, policies, or amenities not shown above; if a detail
+  needed to judge fit is missing, say so and suggest confirming with the agent.
 - Follow the REPLY LANGUAGE directive above for the language of your reply (do not mix zh/en); never use emoji or emoticons.
 
 Your response:"""
@@ -1483,6 +1517,14 @@ def _resolve_target_address(user_query, extracted_context):
         return re.sub(r'\s+', ' ', m.group(1)).upper()
 
     ql = q.lower()
+    # focus stack override (runs even with no last_results): a location question about the focused
+    # listing ("这个房源附近安全吗") targets the CURRENT (top) focus, not results[0]; 'the previous
+    # focus' targets the one below it. Placed after the explicit-postcode check (which still wins),
+    # before ordinals — a no-op without a focus stack, so existing resolution is unchanged. Ordinals
+    # like "第二个"/"the second" never match a focus deictic, so they still resolve over last_results.
+    _focus_rec = _resolve_focus_reference(ql, extracted_context)
+    if _focus_rec is not None:
+        return _focus_rec.get('address') or _focus_rec.get('name')
     results = extracted_context.get('last_results') or []
     if results:
         for word, idx in _ORDINAL_WORDS.items():
@@ -1557,6 +1599,54 @@ def _zh_listing_deictic(ql: str) -> bool:
     return False
 
 
+# ── focus stack 指代锚定（结构性规则）──────────────────────────────────────────
+# 前端可发多聚焦 focus_stack（旧→新，最后一个=当前聚焦）；app.py 解析成结构化记录挂
+# extracted_context['focus_stack']。规则：栈非空时，「这个房源/this one/这套」等单数近指 → 栈顶
+# （最近聚焦），优先级高于 last_results[0]；「上一个聚焦的/之前那个 focus」→ 栈中前一个。栈为空时
+# 保持现有回退（现有 test_listing_advice 在无栈上下文时不受影响）。
+# 单数近指白名单（英文）——刻意不含 'the first'（那是序数，仍指 results[0]，不是当前聚焦）。
+_EN_FOCUS_DEICTICS = ('that one', 'this one', 'that property', 'this property',
+                      'the property', 'the place', 'that place', 'the flat',
+                      'the studio', 'the apartment')
+# 「上一个聚焦 / previous focus」类表达：显式带"聚焦/关注/focus/看的"限定，避免裸"上一个"误伤。
+_PREVIOUS_FOCUS_PHRASES = (
+    'previous focus', 'previously focused', 'the previous one i looked at',
+    'earlier focus', 'the one before', 'the earlier one i focused',
+)
+_PREV_FOCUS_RE = re.compile(
+    r'(?:上一个|上一套|上个|之前|前一个|先前)[^。！？!?]{0,6}(?:聚焦|关注|focus|看的|看过)',
+    re.IGNORECASE)
+
+
+def _is_focus_top_deictic(ql: str) -> bool:
+    """True 当 ``ql`` 是一个指向"当前聚焦"（栈顶）的单数近指。"""
+    if any(p in ql for p in _EN_FOCUS_DEICTICS):
+        return True
+    return _zh_listing_deictic(ql)
+
+
+def _is_previous_focus_reference(ql: str) -> bool:
+    """True 当 ``ql`` 明确指向"上一个聚焦的/之前那个 focus"（栈中前一个）。"""
+    if any(p in ql for p in _PREVIOUS_FOCUS_PHRASES):
+        return True
+    return bool(_PREV_FOCUS_RE.search(ql or ""))
+
+
+def _resolve_focus_reference(ql, extracted_context) -> dict | None:
+    """focus 栈非空时解析单数近指：「上一个聚焦」→ 栈中前一个；单数近指 → 栈顶（优先于 results[0]）。
+    栈为空或无此类指代 → None（调用方回退到既有 last_results 解析）。"""
+    focus_stack = extracted_context.get('focus_stack') or []
+    if not (isinstance(focus_stack, list) and focus_stack):
+        return None
+    if len(focus_stack) >= 2 and _is_previous_focus_reference(ql):
+        _prev = focus_stack[-2]
+        return _prev if isinstance(_prev, dict) else None
+    if _is_focus_top_deictic(ql):
+        _top = focus_stack[-1]
+        return _top if isinstance(_top, dict) else None
+    return None
+
+
 def _resolve_last_result(user_query, extracted_context) -> dict | None:
     """Resolve which of the PREVIOUS search results the user is referring to and
     return its FULL record (not just an address). Mirrors the ordinal/deictic/name
@@ -1584,6 +1674,13 @@ def _resolve_last_result(user_query, extracted_context) -> dict | None:
     # "the last one" (EN) / 最后一个 / 最后那个 / 最后 (ZH) -> the most-recent single referent.
     if any(p in ql for p in ['the last', 'last one', '最后一个', '最后那个', '最后一套', '最后']):
         return results[-1]
+    # focus stack override: a bare singular near-deictic (this one / 这个房源 / 这套) anchors to the
+    # CURRENT (top) focus ahead of results[0]; 'the previous focus / 上一个聚焦的' to the one below
+    # it. Placed AFTER ordinals so "the second one" still resolves over last_results; a no-op when
+    # there is no focus stack (existing behaviour preserved).
+    _focus_rec = _resolve_focus_reference(ql, extracted_context)
+    if _focus_rec is not None:
+        return _focus_rec
     # Bare deictic "this/that one" -> results[0], matching the English 'this one'
     # semantics. The English deictics stay a fixed whitelist (safe; no collisions).
     if any(p in ql for p in ['that one', 'this one', 'that property', 'this property',
@@ -2415,34 +2512,47 @@ def _make_execute_tool_node(tool_registry):
 
         try:
             if tool_name == 'reasoning_property':
-                # Assemble property info from context. C: a parallel agent now carries the
-                # REAL session listing's extra fields (bedrooms/property_type/area/
-                # budget_status/availability + full description) on extracted_context, so a
-                # focused-listing answer is grounded in the actual listing text. Every key
-                # is optional; budget_status/availability_status are emoji-stripped and the
-                # description is capped so an over-long listing can't blow the prompt budget.
-                parts = [f"Property: {extracted_context.get('property_address', 'N/A')}"]
-                for key, label in [('property_price', 'Price'), ('room_type', 'Room Type'),
-                                   ('bedrooms', 'Bedrooms'), ('property_type', 'Property Type'),
-                                   ('area', 'Area'), ('budget_status', 'Budget Status'),
-                                   ('property_travel_time', 'Commute Time'),
-                                   ('available_from', 'Available From'),
-                                   ('availability_status', 'Availability'),
-                                   ('amenities', 'Amenities'),
-                                   ('guest_policy', 'Guest Policy'), ('payment_rules', 'Payment Rules'),
-                                   ('excluded_features', 'NOT Included'), ('property_url', 'Booking URL')]:
-                    val = extracted_context.get(key)
-                    if val:
-                        if key in ('budget_status', 'availability_status'):
-                            val = _clean_evidence_value(val)
-                        parts.append(f"{label}: {val}")
-                desc = str(extracted_context.get('description') or '').strip()
-                if desc:
-                    if len(desc) > 1500:
-                        desc = desc[:1500].rstrip() + '…'
-                    parts.append(f"Description: {desc}")
-                observation = '\n'.join(parts)
-                raw_data = {'property_info': observation}
+                # focus stack: 'the previous focus / 上一个聚焦的' asks about the focus BELOW the top.
+                # The property_* keys carry the CURRENT (top) focus, so a previous-focus question is
+                # instead grounded on focus_stack[-2]'s real record (falls through the normal
+                # observation/goto path below, so tainting + routing stay identical).
+                _fs = extracted_context.get('focus_stack') or []
+                _ql_ref = _current_msg_for_reference(
+                    state.get('user_query', ''), extracted_context).lower()
+                _prev_focus = (_fs[-2] if (isinstance(_fs, list) and len(_fs) >= 2
+                                           and _is_previous_focus_reference(_ql_ref)) else None)
+                if isinstance(_prev_focus, dict):
+                    observation = _format_single_result(_prev_focus)
+                    raw_data = {'property_info': observation}
+                else:
+                    # Assemble property info from context. C: a parallel agent now carries the
+                    # REAL session listing's extra fields (bedrooms/property_type/area/
+                    # budget_status/availability + full description) on extracted_context, so a
+                    # focused-listing answer is grounded in the actual listing text. Every key
+                    # is optional; budget_status/availability_status are emoji-stripped and the
+                    # description is capped so an over-long listing can't blow the prompt budget.
+                    parts = [f"Property: {extracted_context.get('property_address', 'N/A')}"]
+                    for key, label in [('property_price', 'Price'), ('room_type', 'Room Type'),
+                                       ('bedrooms', 'Bedrooms'), ('property_type', 'Property Type'),
+                                       ('area', 'Area'), ('budget_status', 'Budget Status'),
+                                       ('property_travel_time', 'Commute Time'),
+                                       ('available_from', 'Available From'),
+                                       ('availability_status', 'Availability'),
+                                       ('amenities', 'Amenities'),
+                                       ('guest_policy', 'Guest Policy'), ('payment_rules', 'Payment Rules'),
+                                       ('excluded_features', 'NOT Included'), ('property_url', 'Booking URL')]:
+                        val = extracted_context.get(key)
+                        if val:
+                            if key in ('budget_status', 'availability_status'):
+                                val = _clean_evidence_value(val)
+                            parts.append(f"{label}: {val}")
+                    desc = str(extracted_context.get('description') or '').strip()
+                    if desc:
+                        if len(desc) > 1500:
+                            desc = desc[:1500].rstrip() + '…'
+                        parts.append(f"Description: {desc}")
+                    observation = '\n'.join(parts)
+                    raw_data = {'property_info': observation}
 
             elif tool_name == 'search_properties':
                 # Raw current message so the tool can let an explicit budget/commute in

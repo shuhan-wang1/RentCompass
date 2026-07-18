@@ -385,20 +385,82 @@
         .send-btn.is-stop { background: var(--text-main); }
         .send-btn.is-stop:hover { background: #000; }
 
-        /* --- 焦点指示器 (Context Focus) --- */
+        /* --- 焦点指示器 (Context Focus) — 聚焦栈：可同时关注多套房源 --- */
         #propertyFocusIndicator {
-            display: none; /* JS 控制 */
+            display: none; /* JS 控制 (flex column) */
+            flex-direction: column;
+            gap: 8px;
             padding: 10px 16px;
             background: #eff6ff;
             border: 1px solid #bfdbfe;
             margin: 0 24px 12px 24px;
             border-radius: var(--radius-md);
-            align-items: center;
-            justify-content: space-between;
             color: #1e40af;
             font-size: 13px;
             animation: slideIn 0.2s ease;
         }
+        /* 头部：计数标签 + 清除全部 */
+        #propertyFocusIndicator .focus-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        #propertyFocusIndicator .focus-head-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+        #propertyFocusIndicator .focus-clear-all {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #1e40af;
+            font-size: 12px;
+            padding: 2px 4px;
+            border-radius: var(--radius-sm);
+            text-decoration: underline;
+        }
+        #propertyFocusIndicator .focus-clear-all:hover { color: #1e3a8a; }
+        /* 每套房源一个 chip；末位（栈顶）= 当前聚焦，视觉加强 */
+        #propertyFocusIndicator .focus-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        #propertyFocusIndicator .focus-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: #ffffff;
+            border: 1px solid #bfdbfe;
+            border-radius: var(--radius-full);
+            color: #1e40af;
+            font-size: 12px;
+            max-width: 100%;
+        }
+        #propertyFocusIndicator .focus-chip.is-current {
+            border-color: #2563eb;
+            background: #dbeafe;
+            font-weight: 700;
+            box-shadow: 0 0 0 1px #2563eb;
+        }
+        #propertyFocusIndicator .focus-chip-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #propertyFocusIndicator .focus-chip-remove {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: currentColor;
+            display: inline-flex;
+            padding: 0;
+        }
+        #propertyFocusIndicator .focus-chip-remove:hover { color: var(--primary-color); }
         @keyframes slideIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -1370,6 +1432,11 @@
 
                 // System
                 focusing_on: "Focusing on:",
+                focus_count_one: "Focusing on 1 property",
+                focus_count_many: "Focusing on {n} properties",
+                focus_current: "Current focus",
+                focus_remove: "Remove from focus",
+                focus_clear_all: "Clear all",
                 loading_map: "Loading...",
                 map_modal_title: "Map",
                 map_frame_title: "Property location map",
@@ -1562,6 +1629,11 @@
 
                 // System
                 focusing_on: "当前关注：",
+                focus_count_one: "聚焦 1 套房源",
+                focus_count_many: "聚焦 {n} 套房源",
+                focus_current: "当前聚焦",
+                focus_remove: "移出聚焦",
+                focus_clear_all: "清除全部",
                 loading_map: "加载中...",
                 map_modal_title: "地图",
                 map_frame_title: "房源位置地图",
@@ -1749,9 +1821,12 @@
         let currentAreaRecommendations = [];   // backend-suggested nearby areas (chips row)
         let favorites = new Set();
         let favoriteItems = [];          // raw favorite objects from the backend
-        let currentPropertyContext = null;
-        // 房源卡的「AI 咨询」点击历史。它和当前聚焦房源分开维护：后者决定
-        // 本轮优先回答哪一套，前者让后端仍能看到用户此前咨询过的房源。
+        // 聚焦栈：用户可同时关注多套房源，顺序=点击先后（旧→新）。末位=当前聚焦。
+        // 只存本会话内存（不做 localStorage 持久化），切换会话/分支时清空以防泄漏。
+        let focusStack = [];
+        const MAX_FOCUS_STACK = 8;
+        // 房源卡的「AI 咨询」点击历史。它和聚焦栈分开维护：后者决定本轮优先
+        // 回答哪几套，前者让后端仍能看到用户此前咨询过的房源。
         let viewedProperties = [];
         let currentGalleryImages = [];
         let currentImageIndex = 0;
@@ -1797,7 +1872,7 @@
             });
 
             const input = document.getElementById('chatInput');
-            input.placeholder = currentPropertyContext ? t('placeholder_focus') : t('placeholder_input');
+            input.placeholder = focusStack.length ? t('placeholder_focus') : t('placeholder_input');
 
             renderQuickActions();
             renderConversationList();
@@ -2222,12 +2297,16 @@
 
             try {
                 const isContinuation = lastResponseType === 'clarification';
+                // 聚焦栈载荷：focus_stack 顺序为旧→新，末位=当前聚焦。
+                // property 保留向后兼容 = 栈顶（末位）；栈空时两者都不传。
+                const context = { viewed_properties: viewedProperties };
+                if (focusStack.length) {
+                    context.focus_stack = focusStack.slice();
+                    context.property = focusStack[focusStack.length - 1];
+                }
                 const body = {
                     message: message,
-                    context: currentPropertyContext ? {
-                        property: currentPropertyContext,
-                        viewed_properties: viewedProperties
-                    } : { viewed_properties: viewedProperties },
+                    context: context,
                     is_continuation: isContinuation,
                     language: currentLang,
                     ui_language: currentLang
@@ -2770,38 +2849,97 @@
         }
 
         function askAboutProperty(property) {
-            currentPropertyContext = recordViewedProperty(property);
-            const indicator = document.getElementById('propertyFocusIndicator');
-            indicator.style.display = 'flex';
-            indicator.innerHTML = '';
-
-            const left = document.createElement('div');
-            left.style.cssText = 'display:flex;align-items:center;gap:8px;';
-            left.innerHTML = getIcon('mapPin', 'icon-sm');
-            const span = document.createElement('span');
-            span.textContent = t('focusing_on') + ' ';
-            const strong = document.createElement('strong');
-            const addr = currentPropertyContext.address || '';
-            strong.textContent = addr.length > 30 ? addr.substring(0, 30) + '...' : addr;
-            span.appendChild(strong);
-            left.appendChild(span);
-
-            const close = document.createElement('button');
-            close.style.cssText = 'background:none;border:none;cursor:pointer;color:currentColor;display:flex;';
-            close.innerHTML = getIcon('close', 'icon-sm');
-            close.addEventListener('click', clearPropertyFocus);
-
-            indicator.appendChild(left);
-            indicator.appendChild(close);
+            const normalized = recordViewedProperty(property);
+            const key = propertyContextKey(normalized);
+            // 重复点击已在栈内的房源 → 移到栈顶；否则新入栈。栈满丢最旧。
+            focusStack = focusStack.filter(item => propertyContextKey(item) !== key);
+            focusStack.push(normalized);
+            focusStack = focusStack.slice(-MAX_FOCUS_STACK);
+            renderFocusIndicator();
 
             const input = document.getElementById('chatInput');
             input.placeholder = t('placeholder_focus');
             input.focus();
         }
 
+        // 单套移出聚焦栈；移除后若栈非空，指示条保留并让新栈顶获得高亮。
+        function removeFocusItem(key) {
+            focusStack = focusStack.filter(item => propertyContextKey(item) !== key);
+            if (!focusStack.length) {
+                clearPropertyFocus();
+            } else {
+                renderFocusIndicator();
+            }
+        }
+
+        // 依据 focusStack 重绘指示条：计数头部 + 每套一个 chip（末位=当前聚焦）。
+        function renderFocusIndicator() {
+            const indicator = document.getElementById('propertyFocusIndicator');
+            if (!focusStack.length) {
+                indicator.style.display = 'none';
+                indicator.innerHTML = '';
+                return;
+            }
+            indicator.style.display = 'flex';
+            indicator.innerHTML = '';
+
+            // 头部：图标 + 计数 + 清除全部
+            const head = document.createElement('div');
+            head.className = 'focus-head';
+            const label = document.createElement('div');
+            label.className = 'focus-head-label';
+            label.innerHTML = getIcon('mapPin', 'icon-sm');
+            const labelText = document.createElement('span');
+            labelText.textContent = focusStack.length === 1
+                ? t('focus_count_one')
+                : t('focus_count_many').replace('{n}', focusStack.length);
+            label.appendChild(labelText);
+            head.appendChild(label);
+
+            const clearAll = document.createElement('button');
+            clearAll.type = 'button';
+            clearAll.className = 'focus-clear-all';
+            clearAll.textContent = t('focus_clear_all');
+            clearAll.addEventListener('click', clearPropertyFocus);
+            head.appendChild(clearAll);
+            indicator.appendChild(head);
+
+            // Chips：旧→新，末位（栈顶）标记为当前聚焦。
+            const chips = document.createElement('div');
+            chips.className = 'focus-chips';
+            focusStack.forEach((item, idx) => {
+                const isCurrent = idx === focusStack.length - 1;
+                const chip = document.createElement('div');
+                chip.className = 'focus-chip' + (isCurrent ? ' is-current' : '');
+                if (isCurrent) chip.title = t('focus_current');
+
+                const text = document.createElement('span');
+                text.className = 'focus-chip-text';
+                const addr = item.address || item.url || '';
+                text.textContent = addr.length > 24 ? addr.substring(0, 24) + '...' : addr;
+                chip.appendChild(text);
+
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'focus-chip-remove';
+                remove.title = t('focus_remove');
+                remove.setAttribute('aria-label', t('focus_remove'));
+                remove.innerHTML = getIcon('close', 'icon-sm');
+                const itemKey = propertyContextKey(item);
+                remove.addEventListener('click', () => removeFocusItem(itemKey));
+                chip.appendChild(remove);
+
+                chips.appendChild(chip);
+            });
+            indicator.appendChild(chips);
+        }
+
+        // 清空整个聚焦栈（切换会话 / 分支 / 清除全部）。
         function clearPropertyFocus() {
-            currentPropertyContext = null;
-            document.getElementById('propertyFocusIndicator').style.display = 'none';
+            focusStack = [];
+            const indicator = document.getElementById('propertyFocusIndicator');
+            indicator.style.display = 'none';
+            indicator.innerHTML = '';
             document.getElementById('chatInput').placeholder = t('placeholder_input');
         }
 

@@ -145,20 +145,22 @@ def format_property_details(property_data: Dict) -> str:
 async def get_property_details_impl(
     property_name: str = "",
     property_address: str = "",
+    property_url: str = "",
     question: Optional[str] = None,
     **kwargs
 ) -> dict:
     """
     获取特定房产的详细信息
-    
+
     当用户询问数据库中某个房产的具体信息时使用此工具。
-    支持通过房产名称或地址进行模糊匹配。
-    
+    优先通过 URL 精确命中 sqlite 缓存；否则通过房产名称或地址进行模糊匹配。
+
     Args:
         property_name: 房产名称（如 "Scape Bloomsbury"）
         property_address: 房产地址或部分地址（如 "Woburn Place"）
+        property_url: 房产 URL（推荐！推荐索引/结果里每条都带 URL，直接传它可精确命中缓存里那一条）
         question: 用户关于这个房产的具体问题（可选）
-        
+
     Returns:
         包含房产详细信息的字典
     """
@@ -166,6 +168,7 @@ async def get_property_details_impl(
     print(f"🏠 [PROPERTY DETAILS] 查询房产详情")
     print(f"   property_name: {property_name}")
     print(f"   property_address: {property_address}")
+    print(f"   property_url: {property_url}")
     print(f"   question: {question}")
     print(f"{'='*60}")
     
@@ -178,18 +181,20 @@ async def get_property_details_impl(
             "message": "抱歉，无法访问房产数据库。请稍后重试。"
         }
     
-    # 构建查询字符串
+    # 构建查询字符串（URL 放最前，触发下方按 URL 精确命中缓存的直查分支）。
     search_query = ""
+    if property_url:
+        search_query = property_url
     if property_name:
-        search_query = property_name
+        search_query = f"{search_query} {property_name}".strip()
     if property_address:
         search_query = f"{search_query} {property_address}".strip()
-    
+
     if not search_query:
         return {
             "success": False,
-            "error": "需要提供房产名称或地址",
-            "message": "请提供您想查询的房产名称或地址。"
+            "error": "需要提供房产名称、地址或 URL",
+            "message": "请提供您想查询的房产名称、地址或 URL。"
         }
     
     # 精确优先：若查询本身就是一条房源 URL（如前端 "Ask AI" 传入的 focus URL），
@@ -296,24 +301,32 @@ async def get_property_details_impl(
 # 创建工具实例
 get_property_details_tool = Tool(
     name="get_property_details",
-    description="""获取数据库中特定房产的详细信息。
+    description="""获取数据库中特定房产的完整详细信息（描述/设施/访客政策/付款规则等）。
 
 当用户询问某个特定房产的详情时使用此工具，包括：
 - 询问某个房产是什么房型（studio/ensuite/shared等）
 - 询问某个房产的价格、设施、政策等
 - 用户点击 "Ask AI" 按钮询问特定房产
-- 用户对之前推荐过的房产提出具体问题
+- 用户对之前推荐过的（含任何历史轮次的）房产提出具体问题
 
-此工具直接查询本地数据库，比网络搜索更准确。
+重要：上下文里的"RECOMMENDED LISTINGS INDEX / 推荐索引"只含每套房源的摘要（地址/价格/通勤/URL），
+不含完整描述。要获取某套房源的完整信息时，优先把该条的 URL 传给 property_url —— 这会精确命中缓存里
+的那一条，最准确，避免同名/同街道歧义。没有 URL 时再用名称或地址。
+
+此工具直接查询本地缓存（与搜索同一数据源），比网络搜索更准确。
 
 示例查询：
+- 传 property_url="https://www.onthemarket.com/details/12345/" 精确取该房源详情
 - "Scape Bloomsbury 是 studio 吗？"
 - "告诉我 Woburn Place 那个房子的详细信息"
-- "iQ Bloomsbury 的访客政策是什么？"
 """,
     parameters={
         "type": "object",
         "properties": {
+            "property_url": {
+                "type": "string",
+                "description": "房产 URL（首选）。推荐索引/搜索结果里每条都带 URL，直接传它可精确命中缓存里那一条房源。"
+            },
             "property_name": {
                 "type": "string",
                 "description": "房产名称，如 'Scape Bloomsbury', 'iQ Bloomsbury', 'Tufnell House' 等"
@@ -327,7 +340,7 @@ get_property_details_tool = Tool(
                 "description": "用户关于这个房产的具体问题（可选），如 '是不是studio？' 或 '访客政策是什么？'"
             }
         },
-        "required": []  # 至少需要 property_name 或 property_address 之一
+        "required": []  # 至少需要 property_url / property_name / property_address 之一
     },
     func=get_property_details_impl
 )

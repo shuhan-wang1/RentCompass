@@ -523,6 +523,106 @@ def test_branch_lineage_missing_parent_terminates(store):
     assert [e["conversation_id"] for e in lineage] == [child["id"]]
 
 
+# ------------------------------------------------ branch_for_edit (message edit)
+def test_edit_inherits_strictly_before_turn(store):
+    cid, turns, _ = _build_four_turns(store)
+    # Edit T3 → inherit T1+T2 only (strictly before), NOT T3 or T4.
+    child = store.branch_for_edit("u1", cid, turns[2]["id"])
+    assert child["parent_conversation_id"] == cid
+    assert child["root_conversation_id"] == cid
+    assert child["branch_depth"] == 1
+    assert child["fork_reason"] == "edit"
+    assert child["edited_slot_turn_id"] == turns[2]["id"]
+    # forked_from = last inherited turn (T2), the inclusive lineage cutoff.
+    assert child["forked_from_turn_id"] == turns[1]["id"]
+    contents = [m["content"] for m in store.get_messages("u1", child["id"])]
+    assert contents == ["q1", "a1", "q2", "a2"]
+    assert len(store.list_turns("u1", child["id"])) == 2
+
+
+def test_edit_first_turn_zero_inheritance(store):
+    cid, turns, _ = _build_four_turns(store)
+    child = store.branch_for_edit("u1", cid, turns[0]["id"])
+    assert child["parent_conversation_id"] == cid
+    assert child["branch_depth"] == 1
+    assert child["forked_from_turn_id"] is None      # nothing inherited
+    assert child["edited_slot_turn_id"] == turns[0]["id"]
+    assert store.get_messages("u1", child["id"]) == []
+    assert store.list_turns("u1", child["id"]) == []
+    # Lineage exposes NO ancestor context for a zero-inheritance branch.
+    lineage = store.get_branch_lineage("u1", child["id"])
+    assert [e["conversation_id"] for e in lineage] == [child["id"]]
+
+
+def test_edit_of_failed_turn_allowed(store):
+    """The edited turn's status is irrelevant — only completed turns before it are inherited."""
+    conv = store.create_conversation("u1", title="src")
+    cid = conv["id"]
+    t1, _, _ = _run_turn(store, "u1", cid, "q1", "a1")
+    uf = store.add_message("u1", cid, "user", "qfail")
+    tf = store.begin_turn("u1", cid, user_message_id=uf["id"])
+    store.fail_turn("u1", tf["id"])
+    child = store.branch_for_edit("u1", cid, tf["id"])
+    assert child["edited_slot_turn_id"] == tf["id"]
+    assert [m["content"] for m in store.get_messages("u1", child["id"])] == ["q1", "a1"]
+
+
+def test_edit_unknown_and_foreign_turn(store):
+    cid, turns, _ = _build_four_turns(store)
+    with pytest.raises(TurnNotFound):
+        store.branch_for_edit("u1", cid, "nope")
+    other = store.create_conversation("u1", title="other")
+    ot, _, _ = _run_turn(store, "u1", other["id"], "x", "y")
+    with pytest.raises(TurnNotInConversation):
+        store.branch_for_edit("u1", cid, ot["id"])
+    with pytest.raises(ConversationNotFound):
+        store.branch_for_edit("u1", "does-not-exist", turns[0]["id"])
+
+
+def test_edit_idempotency(store):
+    cid, turns, _ = _build_four_turns(store)
+    c1 = store.branch_for_edit("u1", cid, turns[1]["id"], idempotency_key="e1")
+    c2 = store.branch_for_edit("u1", cid, turns[1]["id"], idempotency_key="e1")
+    assert c1["id"] == c2["id"]
+    assert c1["idempotent"] is False and c2["idempotent"] is True
+
+
+# -------------------------------------------------------------------- version_map
+def test_version_map_transitivity_and_shape(store):
+    cid, turns, _ = _build_four_turns(store)
+    t2 = turns[1]["id"]
+    # First edit of slot t2 → branch b, then give b a fresh turn at that same slot.
+    b = store.branch_for_edit("u1", cid, t2)
+    b_turn, _, _ = _run_turn(store, "u1", b["id"], "q2-v2", "a2-v2")
+    # Editing b's own resent slot turn → branch c, same group by transitivity.
+    c = store.branch_for_edit("u1", b["id"], b_turn["id"])
+    assert c["edited_slot_turn_id"] == t2   # inherited family-stable slot key
+
+    vm = store.version_map("u1", cid)["version_groups"]
+    assert list(vm.keys()) == [t2]
+    ids = [m["conversation_id"] for m in vm[t2]]
+    assert ids == [cid, b["id"], c["id"]]   # created_at ASC: original, edit1, edit2
+    for m in vm[t2]:
+        assert set(m) == {"conversation_id", "created_at", "title"}
+    # Whole family shares one map regardless of which member we query.
+    assert store.version_map("u1", c["id"]) == store.version_map("u1", cid)
+
+
+def test_version_map_distinct_slots_and_empty(store):
+    cid, turns, _ = _build_four_turns(store)
+    assert store.version_map("u1", cid)["version_groups"] == {}   # no edits yet
+    b = store.branch_for_edit("u1", cid, turns[1]["id"])
+    d = store.branch_for_edit("u1", cid, turns[2]["id"])
+    vm = store.version_map("u1", cid)["version_groups"]
+    assert set(vm) == {turns[1]["id"], turns[2]["id"]}
+    assert [m["conversation_id"] for m in vm[turns[1]["id"]]] == [cid, b["id"]]
+    assert [m["conversation_id"] for m in vm[turns[2]["id"]]] == [cid, d["id"]]
+
+
+def test_version_map_unknown_conversation_returns_none(store):
+    assert store.version_map("u1", "does-not-exist") is None
+
+
 # --------------------------------------------------------------- delete cascades
 def test_delete_conversation_cascades_turns_and_snapshots(store):
     conv = store.create_conversation("u1")

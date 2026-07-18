@@ -686,15 +686,15 @@ async def api_alex():
     request_id = new_request_id(request.headers.get("X-Request-Id"))
 
     # Persist the user turn up-front (survives a crash mid-generation) and open a turn.
-    # begin_turn needs the user message's rowid, so the user row is written first; the turn
-    # then spans this request. (The user row's turn_id column stays NULL — the frozen store
-    # exposes no message-turn_id update and the turns table records user_message_id, which
-    # is what fork/lineage rely on; the assistant row below carries the turn_id.)
+    # begin_turn needs the user message's rowid, so the user row is written first; once the
+    # turn id exists we stamp it back onto the user row so BOTH the user and assistant rows
+    # carry turn_id (the frontend edits a USER message and needs its turn_id to branch).
     _user_msg = conversation_store.add_message(user_id, conversation_id, "user", user_message)
     turn = conversation_store.begin_turn(
         user_id, conversation_id, request_id=request_id,
         user_message_id=_user_msg.get("id"))
     turn_id = turn["id"]
+    conversation_store.set_message_turn(user_id, _user_msg.get("id"), turn_id)
 
     _turn_crashed = False
     try:
@@ -1823,13 +1823,14 @@ async def api_search_direct():
     request_id = new_request_id(request.headers.get("X-Request-Id"))
 
     # Persist the user turn up-front (survives a crash mid-search) and open a turn spanning
-    # this request. (See /api/alex: the user row's turn_id stays NULL; the turns table holds
-    # user_message_id and the assistant row below carries the turn_id.)
+    # this request. (See /api/alex: the user row is stamped with turn_id after begin_turn so
+    # both the user and assistant rows carry it, which the edit-and-branch flow relies on.)
     _user_msg = conversation_store.add_message(user_id, conversation_id, "user", readable)
     turn = conversation_store.begin_turn(
         user_id, conversation_id, request_id=request_id,
         user_message_id=_user_msg.get("id"))
     turn_id = turn["id"]
+    conversation_store.set_message_turn(user_id, _user_msg.get("id"), turn_id)
 
     # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
     try:
@@ -1992,8 +1993,10 @@ def delete_conversation(cid):
 
 @app.route('/api/conversations/<cid>/messages', methods=['GET'])
 def get_conversation_messages(cid):
-    """Full persisted transcript (role/content/timestamp[/response_type/recommendations])
-    in chronological order. 404 if the conversation isn't owned by this user."""
+    """Full persisted transcript in chronological order. Each message carries
+    role/content/timestamp/turn_id[/response_type/recommendations]; turn_id is present on
+    BOTH user and assistant rows (null for legacy pre-turns rows) so the frontend can branch
+    off a user message's turn. 404 if the conversation isn't owned by this user."""
     user_id, _ = _identity_from_request()
     if conversation_store.get_conversation(user_id, cid) is None:
         raise ApiError(404, "conversation not found")
@@ -2054,6 +2057,64 @@ def fork_conversation(cid):
     # The store also mirrors forked_from_turn_id at the top level of the returned dict; it is
     # already part of the conversation dict shape, so nothing extra to strip.
     return jsonify({"conversation": child, "idempotent": idempotent}), (200 if idempotent else 201)
+
+
+@app.route('/api/conversations/<cid>/edit_turn', methods=['POST'])
+def edit_turn(cid):
+    """Branch a NEW conversation for a ChatGPT-style message edit: the user wants to rewrite
+    the user message of turn ``turn_id`` and resend it. The branch inherits everything BEFORE
+    ``turn_id`` (exclusive); the source conversation is untouched. Editing the first turn
+    yields a zero-inheritance branch (lineage preserved, no turns copied).
+
+    Body: {user_id?, turn_id}. Header 'Idempotency-Key' (or body 'idempotency_key') makes a
+    retried request return the same branch. This endpoint ONLY creates the branch — the client
+    then POSTs the rewritten message to /api/alex against the returned conversation_id.
+
+    Returns {"conversation": {...full dict incl. parent/root/branch_depth + fork_reason +
+    edited_slot_turn_id...}, "idempotent": bool}: 201 on create, 200 on idempotent replay.
+    Validation failures return {"error", "code"} at 404/400 (shared _FORK_ERROR_MAP)."""
+    data = _request_body() or {}
+    user_id, _ = resolve_identity(data)
+
+    turn_id = data.get('turn_id')
+    if not isinstance(turn_id, str) or not turn_id.strip():
+        raise ApiError(400, "turn_id is required")
+    title = data.get('title')
+    if title is not None and not isinstance(title, str):
+        raise ApiError(400, "title must be a string")
+    try:
+        idem = request.headers.get('Idempotency-Key')
+    except Exception:
+        idem = None
+    if not idem:
+        _body_idem = data.get('idempotency_key')
+        idem = _body_idem if isinstance(_body_idem, str) and _body_idem.strip() else None
+
+    try:
+        child = conversation_store.branch_for_edit(
+            user_id, cid, turn_id.strip(), title=title, idempotency_key=idem)
+    except Exception as e:
+        for exc_type, status, code, msg in _FORK_ERROR_MAP:
+            if isinstance(e, exc_type):
+                return jsonify({"error": msg, "code": code}), status
+        raise  # non-fork error → global handler (500)
+
+    idempotent = bool(child.pop("idempotent", False))
+    return jsonify({"conversation": child, "idempotent": idempotent}), (200 if idempotent else 201)
+
+
+@app.route('/api/conversations/<cid>/version_map', methods=['GET'])
+def get_version_map(cid):
+    """Version groups for the branch family (same root) that <cid> belongs to — the frontend
+    uses this to decide which user bubbles show a `< k/n >` version switcher and where each
+    version lives. Shape: {"version_groups": {"<slot_turn_id>": [{"conversation_id",
+    "created_at", "title"} ... created_at ASC]}}. Only groups with >=2 versions are returned;
+    no edits → {"version_groups": {}}. 404 if <cid> isn't owned by this user."""
+    user_id, _ = _identity_from_request()
+    vm = conversation_store.version_map(user_id, cid)
+    if vm is None:
+        raise ApiError(404, "conversation not found")
+    return jsonify(vm)
 
 
 @app.route('/api/conversations/<cid>/turns', methods=['GET'])

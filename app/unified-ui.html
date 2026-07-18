@@ -386,7 +386,7 @@
         .send-btn.is-stop:hover { background: #000; }
 
         /* --- 焦点指示器 (Context Focus) — 聚焦栈：可同时关注多套房源 --- */
-        #propertyFocusIndicator {
+        .property-focus-indicator {
             display: none; /* JS 控制 (flex column) */
             flex-direction: column;
             gap: 8px;
@@ -400,19 +400,19 @@
             animation: slideIn 0.2s ease;
         }
         /* 头部：计数标签 + 清除全部 */
-        #propertyFocusIndicator .focus-head {
+        .property-focus-indicator .focus-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 8px;
         }
-        #propertyFocusIndicator .focus-head-label {
+        .property-focus-indicator .focus-head-label {
             display: flex;
             align-items: center;
             gap: 6px;
             font-weight: 600;
         }
-        #propertyFocusIndicator .focus-clear-all {
+        .property-focus-indicator .focus-clear-all {
             background: none;
             border: none;
             cursor: pointer;
@@ -422,14 +422,14 @@
             border-radius: var(--radius-sm);
             text-decoration: underline;
         }
-        #propertyFocusIndicator .focus-clear-all:hover { color: #1e3a8a; }
+        .property-focus-indicator .focus-clear-all:hover { color: #1e3a8a; }
         /* 每套房源一个 chip；末位（栈顶）= 当前聚焦，视觉加强 */
-        #propertyFocusIndicator .focus-chips {
+        .property-focus-indicator .focus-chips {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
         }
-        #propertyFocusIndicator .focus-chip {
+        .property-focus-indicator .focus-chip {
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -441,18 +441,18 @@
             font-size: 12px;
             max-width: 100%;
         }
-        #propertyFocusIndicator .focus-chip.is-current {
+        .property-focus-indicator .focus-chip.is-current {
             border-color: #2563eb;
             background: #dbeafe;
             font-weight: 700;
             box-shadow: 0 0 0 1px #2563eb;
         }
-        #propertyFocusIndicator .focus-chip-text {
+        .property-focus-indicator .focus-chip-text {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        #propertyFocusIndicator .focus-chip-remove {
+        .property-focus-indicator .focus-chip-remove {
             background: none;
             border: none;
             cursor: pointer;
@@ -460,9 +460,133 @@
             display: inline-flex;
             padding: 0;
         }
-        #propertyFocusIndicator .focus-chip-remove:hover { color: var(--primary-color); }
+        .property-focus-indicator .focus-chip-remove:hover { color: var(--primary-color); }
         @keyframes slideIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ============================================================= */
+        /* CHAT PANES (single + split-screen compare)                    */
+        /* ============================================================= */
+        /* The wrap holds one pane (single mode) or two panes (split).   */
+        .chat-panes-wrap {
+            flex: 0 0 400px;
+            display: flex;
+            min-width: 0;
+            position: relative;      /* anchors the drag drop-overlay */
+            background: var(--border-medium);
+            gap: 1px;                /* 1px reveals the wrap bg as a divider between panes */
+        }
+        /* Pane fills the wrap; overrides .chat-panel's fixed basis so two panes split 50/50. */
+        .chat-pane { flex: 1 1 0; min-width: 0; }
+        /* Split mode: the wrap grows to share the middle; results panel gives up room. */
+        .main-container.split-active .chat-panes-wrap { flex: 1 1 auto; }
+        .main-container.split-active .results-panel { flex: 0 0 360px; }
+        /* Subtle active-pane accent (only meaningful when two panes are visible). */
+        .main-container.split-active .chat-pane.is-active-pane { box-shadow: inset 3px 0 0 var(--primary-fade); }
+
+        /* Secondary pane top bar: conversation title + close */
+        .pane-topbar {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 0 12px 0 16px; height: 60px; flex-shrink: 0;
+            border-bottom: 1px solid var(--border-medium);
+            background: rgba(255,255,255,0.95);
+        }
+        .pane-topbar-title {
+            font-size: 0.9rem; font-weight: 600; color: var(--text-main);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+        }
+        .pane-topbar-close {
+            width: 30px; height: 30px; flex-shrink: 0; border: none; background: transparent;
+            border-radius: var(--radius-sm); color: var(--text-tertiary); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: var(--transition-base);
+        }
+        .pane-topbar-close:hover { background: var(--bg-hover); color: var(--primary-color); }
+
+        /* Drag drop-overlay: shown while a sidebar conversation is being dragged. */
+        .drop-overlay {
+            position: absolute; inset: 0; z-index: 40; display: flex; pointer-events: none;
+        }
+        .drop-overlay.active { pointer-events: auto; }
+        .drop-half {
+            flex: 1 1 0; display: flex; align-items: center; justify-content: center;
+            margin: 12px; border: 2px dashed var(--border-dark); border-radius: var(--radius-lg);
+            background: rgba(220, 38, 38, 0.04); color: var(--text-secondary);
+            font-size: 13px; font-weight: 600; text-align: center; padding: 12px;
+            transition: var(--transition-base);
+        }
+        .drop-half.drag-over {
+            border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-color);
+        }
+
+        /* --- Feature 1: editable user messages --- */
+        .user-msg-actions { margin-top: 4px; margin-right: 2px; opacity: 0; transition: var(--transition-base); }
+        .message.user:hover .user-msg-actions { opacity: 1; }
+        .msg-edit-btn {
+            display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px;
+            background: transparent; border: 1px solid var(--border-medium); border-radius: var(--radius-sm);
+            color: var(--text-tertiary); cursor: pointer; font-family: inherit; font-size: 11px;
+            transition: var(--transition-base);
+        }
+        .msg-edit-btn:hover { border-color: var(--primary-color); color: var(--primary-color); background: var(--primary-light); }
+        .msg-edit-btn:disabled { opacity: 0.4; cursor: default; }
+        .msg-edit-btn .icon { width: 13px; height: 13px; }
+
+        .msg-edit-box { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 90%; }
+        .msg-edit-textarea {
+            width: 100%; min-width: 260px; min-height: 60px; resize: vertical;
+            padding: 10px 12px; border: 1px solid var(--primary-color); border-radius: var(--radius-md);
+            font-family: inherit; font-size: 0.925rem; line-height: 1.5; color: var(--text-main);
+            background: white; outline: none; box-shadow: var(--shadow-focus);
+        }
+        .msg-edit-row { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+        .msg-edit-hint { flex: 1; font-size: 11px; color: var(--text-tertiary); }
+        .msg-edit-action {
+            padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+            font-family: inherit; cursor: pointer; transition: var(--transition-base); border: 1px solid var(--border-medium);
+            background: white; color: var(--text-secondary);
+        }
+        .msg-edit-action.primary { background: var(--primary-color); border-color: var(--primary-color); color: white; }
+        .msg-edit-action.primary:hover { background: var(--primary-hover); }
+        .msg-edit-action:not(.primary):hover { border-color: var(--border-dark); color: var(--text-main); }
+
+        /* --- Feature 1: version switcher (‹ k/n ›) under a user bubble --- */
+        .version-switcher {
+            display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; margin-right: 2px;
+            font-size: 11px; color: var(--text-tertiary); user-select: none;
+        }
+        .version-switcher button {
+            width: 18px; height: 18px; padding: 0; border: none; background: transparent;
+            color: var(--text-tertiary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+            border-radius: var(--radius-sm); transition: var(--transition-base);
+        }
+        .version-switcher button:hover:not(:disabled) { color: var(--primary-color); background: var(--primary-light); }
+        .version-switcher button:disabled { opacity: 0.3; cursor: default; }
+        .version-switcher .icon { width: 13px; height: 13px; }
+        .version-switcher-count { min-width: 26px; text-align: center; font-variant-numeric: tabular-nums; }
+
+        /* --- Feature 1: sidebar branch stacking --- */
+        .conv-group { display: flex; flex-direction: column; gap: 2px; }
+        .conv-root-row { display: flex; align-items: stretch; }
+        .conv-collapse-btn {
+            width: 20px; flex-shrink: 0; border: none; background: transparent; cursor: pointer;
+            color: var(--text-tertiary); display: flex; align-items: center; justify-content: center;
+            border-radius: var(--radius-sm); transition: var(--transition-base);
+        }
+        .conv-collapse-btn:hover { color: var(--primary-color); }
+        .conv-collapse-btn .icon { width: 13px; height: 13px; transition: transform 0.2s ease; }
+        .conv-collapse-btn.collapsed .icon { transform: rotate(-90deg); }
+        .conv-collapse-spacer { width: 20px; flex-shrink: 0; }
+        .conv-branch-children { display: flex; flex-direction: column; gap: 2px; }
+        .conv-branch-children.collapsed { display: none; }
+        .conv-item.is-branch { margin-left: 14px; position: relative; }
+        .conv-item.is-branch::before {
+            content: ''; position: absolute; left: -7px; top: 0; bottom: 50%;
+            border-left: 1px solid var(--border-dark); border-bottom: 1px solid var(--border-dark);
+            width: 6px; border-bottom-left-radius: 4px;
+        }
+        .conv-item.dragging { opacity: 0.5; }
+        .conv-item[draggable="true"] .conv-item-main { cursor: grab; }
+        .conv-item.open-in-pane { box-shadow: inset 0 0 0 1px var(--primary-fade); }
 
         /* --- 右侧结果区 (Results Panel) --- */
         .results-panel {
@@ -1133,8 +1257,9 @@
             </div>
         </aside>
 
-        <!-- LEFT PANEL (CHAT) -->
-        <div class="chat-panel">
+        <!-- LEFT PANEL (CHAT) — one or two ChatPane instances live inside this wrap -->
+        <div class="chat-panes-wrap" id="chatPanesWrap">
+        <div class="chat-panel chat-pane" id="mainChatPane">
             <div class="chat-header">
                 <h1>
                     <svg class="icon icon-sm" style="color:var(--primary-color);" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
@@ -1147,7 +1272,7 @@
                 <!-- Welcome message generated by JS -->
             </div>
 
-            <div id="propertyFocusIndicator"></div>
+            <div id="propertyFocusIndicator" class="property-focus-indicator"></div>
 
             <div class="chat-input-area">
                 <div class="quick-actions" id="quickActions">
@@ -1169,6 +1294,7 @@
                 </div>
             </div>
         </div>
+        </div><!-- /chat-panes-wrap -->
 
         <!-- RIGHT PANEL -->
         <div class="results-panel">
@@ -1334,7 +1460,7 @@
             if (!localStorage.getItem(LS_USER_NAME)) {
                 localStorage.setItem(LS_USER_NAME, 'Guest');
             }
-            activeConversationId = localStorage.getItem(LS_ACTIVE_CONV) || null;
+            bootConversationId = localStorage.getItem(LS_ACTIVE_CONV) || null;
         }
 
         /* -------------------------------------------------------------------------- */
@@ -1584,7 +1710,29 @@
                 error_delete: "Could not delete.",
                 error_favorite: "Could not update your saved properties.",
                 error_map: "Could not generate the map.",
-                error_forget: "Could not delete your data."
+                error_forget: "Could not delete your data.",
+
+                // Edit user message + version switching
+                edit_message: "Edit message",
+                edit_save: "Save",
+                edit_cancel: "Cancel",
+                edit_hint: "Ctrl+Enter to save, Esc to cancel",
+                version_prev: "Previous version",
+                version_next: "Next version",
+                version_of: "{k}/{n}",
+                version_label: "Version {k} of {n}",
+                error_edit_turn: "Could not edit this message.",
+
+                // Sidebar branch stacking
+                collapse_branches: "Collapse branches",
+                expand_branches: "Expand branches",
+
+                // Split-screen compare
+                compare_action: "Compare side by side",
+                close_compare: "Close compare",
+                drop_here_hint: "Drop here to compare",
+                split_too_narrow: "Screen is too narrow for side-by-side compare.",
+                split_same_conv: "That conversation is already open in the other pane."
             },
             zh: {
                 brand: "Alex",
@@ -1781,7 +1929,29 @@
                 error_delete: "删除失败。",
                 error_favorite: "无法更新您的收藏。",
                 error_map: "无法生成地图。",
-                error_forget: "无法删除您的数据。"
+                error_forget: "无法删除您的数据。",
+
+                // 编辑用户消息 + 版本切换
+                edit_message: "编辑消息",
+                edit_save: "保存",
+                edit_cancel: "取消",
+                edit_hint: "Ctrl+Enter 保存，Esc 取消",
+                version_prev: "上一个版本",
+                version_next: "下一个版本",
+                version_of: "{k}/{n}",
+                version_label: "第 {k}/{n} 个版本",
+                error_edit_turn: "无法编辑该消息。",
+
+                // 侧栏分支堆叠
+                collapse_branches: "折叠分支",
+                expand_branches: "展开分支",
+
+                // 分屏对比
+                compare_action: "并排对比",
+                close_compare: "关闭对比",
+                drop_here_hint: "拖到此处进行对比",
+                split_too_narrow: "屏幕太窄，无法并排对比。",
+                split_same_conv: "该会话已在另一侧打开。"
             }
         };
 
@@ -1809,7 +1979,10 @@
                 trash: `<svg class="icon ${size}" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
                 stop: `<svg class="icon ${size}" style="fill:currentColor;stroke:none" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>`,
                 send: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
-                branch: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`
+                branch: `<svg class="icon ${size}" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>`,
+                compare: `<svg class="icon ${size}" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="16" rx="1"/><rect x="14" y="4" width="7" height="16" rx="1"/></svg>`,
+                chevronLeft: `<svg class="icon ${size}" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>`,
+                chevronRight: `<svg class="icon ${size}" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>`
             };
             return icons[name] || '';
         }
@@ -1821,23 +1994,78 @@
         let currentAreaRecommendations = [];   // backend-suggested nearby areas (chips row)
         let favorites = new Set();
         let favoriteItems = [];          // raw favorite objects from the backend
-        // 聚焦栈：用户可同时关注多套房源，顺序=点击先后（旧→新）。末位=当前聚焦。
-        // 只存本会话内存（不做 localStorage 持久化），切换会话/分支时清空以防泄漏。
-        let focusStack = [];
         const MAX_FOCUS_STACK = 8;
-        // 房源卡的「AI 咨询」点击历史。它和聚焦栈分开维护：后者决定本轮优先
-        // 回答哪几套，前者让后端仍能看到用户此前咨询过的房源。
+        // 房源卡的「AI 咨询」点击历史（跨会话，per-user）。与每个 pane 的聚焦栈分开维护：
+        // 后者决定本轮优先回答哪几套，前者让后端仍能看到用户此前咨询过的房源。
         let viewedProperties = [];
         let currentGalleryImages = [];
         let currentImageIndex = 0;
-        let isProcessing = false;
-        let lastResponseType = null;
-        let lastUserMessage = '';
-        let activeController = null;     // in-flight /api/alex request (for cancel)
-        let showingWelcome = false;
 
         let conversations = [];
-        let activeConversationId = null;
+
+        /* -------------------------------------------------------------------------- */
+        /* CHAT PANES                                                                 */
+        /* Chat-scoped state (conversationId / isProcessing / lastResponseType /       */
+        /* activeController / lastUserMessage / focusStack / versionMap + DOM refs) is  */
+        /* owned by a ChatPane instance. Single mode = one pane (main); split mode adds */
+        /* a fully-interactive secondary pane. The right-hand results/criteria panel is */
+        /* shared and driven by whichever pane last searched (resultsOwnerPane).        */
+        /* -------------------------------------------------------------------------- */
+        function ChatPane(opts) {
+            this.id = opts.id;
+            this.root = opts.root;                       // .chat-pane element
+            this.messagesEl = opts.messagesEl;
+            this.inputEl = opts.inputEl;
+            this.sendBtnEl = opts.sendBtnEl;
+            this.focusIndicatorEl = opts.focusIndicatorEl;
+            this.quickActionsEl = opts.quickActionsEl || null;
+            this.titleEl = opts.titleEl || null;         // secondary top-bar title (main = null)
+            this.conversationId = null;
+            this.isProcessing = false;
+            this.lastResponseType = null;
+            this.activeController = null;                 // in-flight request (for cancel)
+            this.lastUserMessage = '';
+            this.focusStack = [];                         // 聚焦栈：旧→新，末位=当前聚焦；内存态，切会话清空
+            this.versionMap = {};                         // slot_turn_id -> [{conversation_id,created_at,title}]
+            this.showingWelcome = false;
+            this.typingEl = null;                         // this pane's typing indicator (per-pane, no shared id)
+            this.results = [];                            // cached recs so the shared panel can repaint on owner change
+            this.areaRecos = [];
+            this.root._pane = this;
+        }
+
+        let mainPane = null;            // the original / left pane (persists to localStorage)
+        let secondaryPane = null;       // the compare / right pane (ephemeral), null when single
+        let activePane = null;          // last-focused chat pane (fallback Ask-AI/criteria target)
+        let resultsOwnerPane = null;    // pane that owns the shared results + criteria panel
+        let splitMode = false;
+        let bootConversationId = null;  // localStorage active conv, read at boot, assigned to mainPane in initApp
+
+        function eachPane(fn) { if (mainPane) fn(mainPane); if (secondaryPane) fn(secondaryPane); }
+        function allPanes() { return secondaryPane ? [mainPane, secondaryPane] : [mainPane]; }
+        // Resolve the pane owning a DOM node (event target); falls back to active/main.
+        function paneFromEl(node) {
+            const root = (node && node.closest) ? node.closest('.chat-pane') : null;
+            return (root && root._pane) || activePane || mainPane;
+        }
+        // Pane owning the shared results/criteria surface (cards, Ask-AI, criteria submit).
+        function ownerPane() { return resultsOwnerPane || activePane || mainPane; }
+        function anyPaneProcessing() { return allPanes().some(p => p && p.isProcessing); }
+        function paneForConversation(cid) {
+            if (!cid) return null;
+            if (mainPane && mainPane.conversationId === cid) return mainPane;
+            if (secondaryPane && secondaryPane.conversationId === cid) return secondaryPane;
+            return null;
+        }
+        function setActivePane(pane) {
+            if (!pane) return;
+            activePane = pane;
+            eachPane(p => p.root.classList.toggle('is-active-pane', p === pane));
+        }
+        function persistMainConversation() {
+            if (mainPane && mainPane.conversationId) localStorage.setItem(LS_ACTIVE_CONV, mainPane.conversationId);
+            else localStorage.removeItem(LS_ACTIVE_CONV);
+        }
 
         // Structured search criteria (persistent panel + auto-popup modal share this)
         let currentCriteria = null;      // last known canonical criteria for this conversation
@@ -1871,17 +2099,15 @@
                 elm.placeholder = t(elm.getAttribute('data-i18n-ph'));
             });
 
-            const input = document.getElementById('chatInput');
-            input.placeholder = focusStack.length ? t('placeholder_focus') : t('placeholder_input');
-
-            renderQuickActions();
+            eachPane(pane => {
+                pane.inputEl.placeholder = pane.focusStack.length ? t('placeholder_focus') : t('placeholder_input');
+                renderQuickActions(pane);
+                if (!pane.isProcessing) setProcessingUI(pane, false);
+                if (pane.showingWelcome) renderWelcomeMessage(pane);
+                if (pane.titleEl && pane.conversationId) pane.titleEl.textContent = conversationTitle(pane.conversationId);
+            });
             renderConversationList();
             updateUserNameLabel();
-            if (!isProcessing) setProcessingUI(false);
-
-            if (showingWelcome) {
-                renderWelcomeMessage();
-            }
 
             if (favoritesTabActive()) {
                 renderFavorites();
@@ -1890,8 +2116,9 @@
             }
         }
 
-        function renderQuickActions() {
-            const container = document.getElementById('quickActions');
+        function renderQuickActions(pane) {
+            const container = pane.quickActionsEl;
+            if (!container) return;
             container.innerHTML = '';
             const actions = currentLang === 'en' ? [
                 { label: t('qa_ucl'), query: "Find flats near UCL under £1500" },
@@ -1905,13 +2132,13 @@
             actions.forEach(action => {
                 const btn = el('button', 'quick-action');
                 btn.textContent = action.label;
-                btn.addEventListener('click', () => sendQuickMessage(action.query));
+                btn.addEventListener('click', () => sendQuickMessage(action.query, pane));
                 container.appendChild(btn);
             });
         }
 
-        function renderWelcomeMessage() {
-            const msgs = document.getElementById('chatMessages');
+        function renderWelcomeMessage(pane) {
+            const msgs = pane.messagesEl;
             msgs.innerHTML = '';
             // All values below come from the trusted i18n table (no user/LLM data).
             const wrap = el('div', 'message alex');
@@ -1936,7 +2163,7 @@
             wrap.appendChild(sender);
             wrap.appendChild(bubble);
             msgs.appendChild(wrap);
-            showingWelcome = true;
+            pane.showingWelcome = true;
         }
 
         /* -------------------------------------------------------------------------- */
@@ -1951,7 +2178,8 @@
         function handleEnter(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (!isProcessing) sendMessage();
+                const pane = paneFromEl(e.target);
+                if (!pane.isProcessing) sendMessage(pane);
             }
         }
 
@@ -2237,8 +2465,8 @@
         /* -------------------------------------------------------------------------- */
         /* CHAT — SEND / CANCEL                                                        */
         /* -------------------------------------------------------------------------- */
-        function setProcessingUI(processing) {
-            const btn = document.getElementById('sendBtn');
+        function setProcessingUI(pane, processing) {
+            const btn = pane && pane.sendBtnEl;
             if (!btn) return;
             if (processing) {
                 btn.classList.add('is-stop');
@@ -2253,56 +2481,71 @@
             }
         }
 
-        function cancelRequest() {
-            if (activeController) activeController.abort();
+        function cancelRequest(pane) {
+            if (pane && pane.activeController) pane.activeController.abort();
         }
 
-        function onSendButtonClick() {
-            if (isProcessing) cancelRequest();
-            else sendMessage();
+        function onSendButtonClick(pane) {
+            pane = pane || mainPane;
+            if (pane.isProcessing) cancelRequest(pane);
+            else sendMessage(pane);
         }
 
-        function showRetryToast() {
+        function showRetryToast(pane) {
             showToast(t('error_connection'), 'error', {
                 label: t('retry'),
                 onClick: () => {
-                    const input = document.getElementById('chatInput');
-                    input.value = lastUserMessage;
-                    sendMessage();
+                    pane.inputEl.value = pane.lastUserMessage;
+                    sendMessage(pane);
                 }
             });
         }
 
-        function adoptConversationId(cid) {
-            if (!cid || cid === activeConversationId) return;
-            activeConversationId = cid;
-            localStorage.setItem(LS_ACTIVE_CONV, cid);
+        function adoptConversationId(cid, pane) {
+            if (!cid || cid === pane.conversationId) return;
+            pane.conversationId = cid;
+            if (pane === mainPane) persistMainConversation();
         }
 
-        async function sendMessage() {
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            if (!message || isProcessing) return;
+        // Paint the shared results/criteria panel from a pane's produced results and
+        // mark that pane as the panel's owner (drives Ask-AI / criteria submit target).
+        function paintResults(pane, recs, areaRecos) {
+            pane.results = Array.isArray(recs) ? recs : [];
+            pane.areaRecos = Array.isArray(areaRecos) ? areaRecos : [];
+            resultsOwnerPane = pane;
+            currentResults = pane.results;
+            currentAreaRecommendations = pane.areaRecos;
+            displayResults(currentResults);
+        }
 
-            lastUserMessage = message;
-            isProcessing = true;
-            setProcessingUI(true);
+        // overrideText: used by the edit-turn flow to send the edited message text
+        // (bypasses the pane input which the user has since cleared).
+        async function sendMessage(pane, overrideText) {
+            pane = pane || mainPane;
+            const input = pane.inputEl;
+            const message = (overrideText != null ? overrideText : input.value).trim();
+            if (!message || pane.isProcessing) return;
 
-            addMessage(message, 'user');
+            setActivePane(pane);
+            pane.lastUserMessage = message;
+            pane.isProcessing = true;
+            setProcessingUI(pane, true);
+
+            const userMsgEl = addMessage(pane, message, 'user');
             input.value = '';
             input.style.height = 'auto';
-            showTypingIndicator();
+            showTypingIndicator(pane);
 
-            activeController = new AbortController();
+            pane.activeController = new AbortController();
 
             try {
-                const isContinuation = lastResponseType === 'clarification';
+                const isContinuation = pane.lastResponseType === 'clarification';
                 // 聚焦栈载荷：focus_stack 顺序为旧→新，末位=当前聚焦。
                 // property 保留向后兼容 = 栈顶（末位）；栈空时两者都不传。
                 const context = { viewed_properties: viewedProperties };
-                if (focusStack.length) {
-                    context.focus_stack = focusStack.slice();
-                    context.property = focusStack[focusStack.length - 1];
+                if (pane.focusStack.length) {
+                    context.focus_stack = pane.focusStack.slice();
+                    context.property = pane.focusStack[pane.focusStack.length - 1];
                 }
                 const body = {
                     message: message,
@@ -2311,36 +2554,37 @@
                     language: currentLang,
                     ui_language: currentLang
                 };
-                if (activeConversationId) body.conversation_id = activeConversationId;
+                if (pane.conversationId) body.conversation_id = pane.conversationId;
 
                 const response = await apiFetch('/api/alex', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
-                    signal: activeController.signal
+                    signal: pane.activeController.signal
                 });
 
-                removeTypingIndicator();
+                removeTypingIndicator(pane);
 
                 if (!response.ok) {
                     let errMsg = t('error_connection');
                     try { const ed = await response.json(); if (ed && ed.error) errMsg = ed.error; } catch (_) {}
-                    addMessage(errMsg, 'alex', { icon: 'error' });
-                    lastResponseType = 'error';
-                    showRetryToast();
+                    addMessage(pane, errMsg, 'alex', { icon: 'error' });
+                    pane.lastResponseType = 'error';
+                    showRetryToast(pane);
                 } else {
                     const data = await response.json();
-                    if (data.conversation_id) adoptConversationId(data.conversation_id);
-                    // turn_id (when the backend supports fork) tags the assistant bubble so
-                    // it can offer "Branch from here"; absent → no fork affordance.
+                    if (data.conversation_id) adoptConversationId(data.conversation_id, pane);
+                    // turn_id tags both the user bubble (edit/version) and the assistant
+                    // bubble (fork "Branch from here"); absent → no such affordance.
                     const turnId = (data.turn_id != null) ? data.turn_id : null;
+                    if (turnId != null && userMsgEl) tagUserTurn(pane, userMsgEl, turnId);
 
                     if (data.error) {
-                        addMessage(cleanRawResponse(String(data.error)), 'alex', { icon: 'error', turnId: turnId });
-                        lastResponseType = 'error';
+                        addMessage(pane, cleanRawResponse(String(data.error)), 'alex', { icon: 'error', turnId: turnId });
+                        pane.lastResponseType = 'error';
                     } else if (data.response_type === 'clarification') {
-                        addMessage(cleanRawResponse(data.message), 'alex', { icon: 'question', turnId: turnId });
-                        lastResponseType = 'clarification';
+                        addMessage(pane, cleanRawResponse(data.message), 'alex', { icon: 'question', turnId: turnId });
+                        pane.lastResponseType = 'clarification';
                         const missing = Array.isArray(data.missing_fields) ? data.missing_fields : [];
                         // Optional fields the gate merely mentions (e.g. 'move_in') —
                         // highlighted like the recommended ones, but they never drive
@@ -2366,25 +2610,21 @@
                             });
                         }
                     } else if (data.response_type === 'search' && data.recommendations) {
-                        addMessage(cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
-                        currentResults = data.recommendations;
-                        currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
-                        displayResults(data.recommendations);
-                        lastResponseType = 'search';
+                        addMessage(pane, cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
+                        paintResults(pane, data.recommendations, data.area_recommendations);
+                        pane.lastResponseType = 'search';
                         if (data.search_criteria) applyCriteria(data.search_criteria);
                     } else if (data.response_type === 'error') {
-                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
-                        lastResponseType = 'error';
+                        addMessage(pane, cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
+                        pane.lastResponseType = 'error';
                     } else {
                         const rawText = data.message || data.response || t('error_connection');
-                        addMessage(cleanRawResponse(rawText), 'alex', { turnId: turnId });
+                        addMessage(pane, cleanRawResponse(rawText), 'alex', { turnId: turnId });
                         if (data.recommendations && data.recommendations.length > 0) {
-                            currentResults = data.recommendations;
-                            currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
-                            displayResults(data.recommendations);
-                            lastResponseType = 'search';
+                            paintResults(pane, data.recommendations, data.area_recommendations);
+                            pane.lastResponseType = 'search';
                         } else {
-                            lastResponseType = 'answer';
+                            pane.lastResponseType = 'answer';
                         }
                         if (data.search_criteria) applyCriteria(data.search_criteria);
                     }
@@ -2393,41 +2633,42 @@
                     loadConversations(true);
                 }
             } catch (error) {
-                removeTypingIndicator();
+                removeTypingIndicator(pane);
                 if (error && error.name === 'AbortError') {
-                    addMessage(t('request_cancelled'), 'alex', { icon: 'error' });
-                    lastResponseType = null;
+                    addMessage(pane, t('request_cancelled'), 'alex', { icon: 'error' });
+                    pane.lastResponseType = null;
                 } else {
-                    addMessage(t('error_connection'), 'alex', { icon: 'error' });
-                    lastResponseType = 'error';
-                    showRetryToast();
+                    addMessage(pane, t('error_connection'), 'alex', { icon: 'error' });
+                    pane.lastResponseType = 'error';
+                    showRetryToast(pane);
                     console.error('Error:', error);
                 }
             } finally {
-                isProcessing = false;
-                activeController = null;
-                setProcessingUI(false);
+                pane.isProcessing = false;
+                pane.activeController = null;
+                setProcessingUI(pane, false);
                 if (window.innerWidth > 1024) input.focus();
             }
         }
 
-        function sendQuickMessage(text) {
-            if (isProcessing) return;
-            const input = document.getElementById('chatInput');
-            input.value = text;
-            autoResize(input);
-            sendMessage();
+        function sendQuickMessage(text, pane) {
+            pane = pane || activePane || mainPane;
+            if (pane.isProcessing) return;
+            pane.inputEl.value = text;
+            autoResize(pane.inputEl);
+            sendMessage(pane);
         }
 
         /* -------------------------------------------------------------------------- */
         /* MESSAGE RENDERING                                                          */
         /* opts.icon = trusted local icon name prepended to the (escaped) bubble.     */
+        /* Returns the message element so callers can backfill a turn_id later.       */
         /* -------------------------------------------------------------------------- */
-        function addMessage(text, sender, opts) {
+        function addMessage(pane, text, sender, opts) {
             opts = opts || {};
-            showingWelcome = false;
+            pane.showingWelcome = false;
 
-            const messagesDiv = document.getElementById('chatMessages');
+            const messagesDiv = pane.messagesEl;
             const messageDiv = el('div', 'message ' + sender);
 
             if (sender === 'alex') {
@@ -2443,8 +2684,8 @@
                 messageDiv.appendChild(bubble);
                 // Per-message fork affordance. Only shown when the turn is known and we
                 // are inside a saved conversation (fork targets a stored conversation).
-                if (opts.turnId != null && opts.turnId !== '' && activeConversationId) {
-                    const sourceCid = activeConversationId;
+                if (opts.turnId != null && opts.turnId !== '' && pane.conversationId) {
+                    const sourceCid = pane.conversationId;
                     const turnId = opts.turnId;
                     const actions = el('div', 'message-actions');
                     const branchBtn = el('button', 'msg-branch-btn');
@@ -2453,7 +2694,7 @@
                     branchBtn.setAttribute('aria-label', t('branch_from_here'));
                     branchBtn.innerHTML = getIcon('branch', 'icon-sm') +
                         '<span>' + escapeHtml(t('branch_from_here')) + '</span>';
-                    branchBtn.addEventListener('click', () => forkConversation(sourceCid, turnId, branchBtn));
+                    branchBtn.addEventListener('click', () => forkConversation(sourceCid, turnId, branchBtn, pane));
                     actions.appendChild(branchBtn);
                     messageDiv.appendChild(actions);
                 }
@@ -2461,16 +2702,38 @@
                 const bubble = el('div', 'bubble');
                 bubble.textContent = text; // user echo — escaped by textContent
                 messageDiv.appendChild(bubble);
+                messageDiv._rawText = text;   // original text, reused by the edit box
+                if (opts.turnId != null && opts.turnId !== '') tagUserTurn(pane, messageDiv, opts.turnId);
             }
 
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return messageDiv;
         }
 
-        function showTypingIndicator() {
-            const messagesDiv = document.getElementById('chatMessages');
+        // Attach a turn_id to a user bubble → reveals the hover "Edit" affordance and
+        // makes the bubble eligible for a version switcher. Idempotent (safe to re-tag
+        // a live bubble once the response returns its turn_id).
+        function tagUserTurn(pane, messageDiv, turnId) {
+            if (!messageDiv || messageDiv.classList.contains('user') === false) return;
+            messageDiv.dataset.turnId = String(turnId);
+            if (!messageDiv.querySelector('.user-msg-actions')) {
+                const actions = el('div', 'user-msg-actions');
+                const editBtn = el('button', 'msg-edit-btn');
+                editBtn.type = 'button';
+                editBtn.title = t('edit_message');
+                editBtn.setAttribute('aria-label', t('edit_message'));
+                editBtn.innerHTML = getIcon('edit', 'icon-sm') + '<span>' + escapeHtml(t('edit_message')) + '</span>';
+                editBtn.addEventListener('click', () => enterEditMode(pane, messageDiv));
+                actions.appendChild(editBtn);
+                messageDiv.appendChild(actions);
+            }
+            renderVersionSwitcher(pane, messageDiv);
+        }
+
+        function showTypingIndicator(pane) {
+            const messagesDiv = pane.messagesEl;
             const indicator = el('div', 'message alex');
-            indicator.id = 'typingIndicator';
             const senderEl = el('div', 'sender');
             senderEl.textContent = t('brand');
             const bubble = el('div', 'bubble');
@@ -2479,11 +2742,194 @@
             indicator.appendChild(bubble);
             messagesDiv.appendChild(indicator);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            pane.typingEl = indicator;
         }
 
-        function removeTypingIndicator() {
-            const indicator = document.getElementById('typingIndicator');
-            if (indicator) indicator.remove();
+        function removeTypingIndicator(pane) {
+            if (pane && pane.typingEl) { pane.typingEl.remove(); pane.typingEl = null; }
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* EDIT USER MESSAGE + VERSION SWITCHING (ChatGPT-style)                      */
+        /* Editing a user turn creates a new branch (edit_turn) that inherits the      */
+        /* context BEFORE that turn; the pane then sends the edited text normally.     */
+        /* Sibling branches sharing a turn slot show a ‹ k/n › switcher.               */
+        /* -------------------------------------------------------------------------- */
+        function conversationTitle(cid) {
+            const c = conversations.find(x => x.id === cid);
+            return (c && c.title) ? c.title : t('untitled_chat');
+        }
+
+        // Turn a user bubble into an inline editor (textarea + Save/Cancel).
+        function enterEditMode(pane, messageDiv) {
+            if (anyPaneProcessing()) return;                 // never edit while a request is in flight
+            if (messageDiv.dataset.editing === '1') return;  // already editing this bubble
+            const cid = pane.conversationId;
+            const turnId = messageDiv.dataset.turnId;
+            if (!cid || turnId == null) return;              // edit needs a saved conversation + known turn
+            messageDiv.dataset.editing = '1';
+
+            const bubbleEl = messageDiv.querySelector('.bubble');
+            const original = (messageDiv._rawText != null) ? messageDiv._rawText : (bubbleEl ? bubbleEl.textContent : '');
+            // Hide the existing bubble/actions/switcher; restore them on cancel.
+            const prevChildren = Array.from(messageDiv.children);
+            prevChildren.forEach(n => { n.style.display = 'none'; });
+
+            const box = el('div', 'msg-edit-box');
+            const ta = el('textarea', 'msg-edit-textarea');
+            ta.value = original;
+            const row = el('div', 'msg-edit-row');
+            const hint = el('span', 'msg-edit-hint');
+            hint.textContent = t('edit_hint');
+            const cancelBtn = el('button', 'msg-edit-action');
+            cancelBtn.type = 'button';
+            cancelBtn.textContent = t('edit_cancel');
+            const saveBtn = el('button', 'msg-edit-action primary');
+            saveBtn.type = 'button';
+            saveBtn.textContent = t('edit_save');
+            row.appendChild(hint); row.appendChild(cancelBtn); row.appendChild(saveBtn);
+            box.appendChild(ta); box.appendChild(row);
+            messageDiv.appendChild(box);
+
+            function cleanup() {
+                box.remove();
+                prevChildren.forEach(n => { n.style.display = ''; });
+                delete messageDiv.dataset.editing;
+            }
+            function doSave() {
+                const val = ta.value.trim();
+                if (!val) { ta.focus(); return; }
+                cleanup();
+                editUserTurn(pane, cid, turnId, val);
+            }
+            cancelBtn.addEventListener('click', cleanup);
+            saveBtn.addEventListener('click', doSave);
+            ta.addEventListener('keydown', e => {
+                if (e.key === 'Escape') { e.preventDefault(); cleanup(); }
+                else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doSave(); }
+            });
+            ta.focus();
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+
+        // Create the edit branch, switch this pane to it, then send the edited text.
+        async function editUserTurn(pane, sourceCid, turnId, text) {
+            if (pane.isProcessing) return;
+            try {
+                const response = await apiFetch('/api/conversations/' + encodeURIComponent(sourceCid) + '/edit_turn', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uuidHex() },
+                    body: JSON.stringify({ turn_id: turnId })
+                });
+                if (!response.ok) { showToast(t('error_edit_turn'), 'error'); return; }
+                const data = await response.json();
+                const conv = (data && data.conversation) ? data.conversation : data;
+                if (!conv || !conv.id) { showToast(t('error_edit_turn'), 'error'); return; }
+                await loadConversations(true);
+                await switchConversation(pane, conv.id);  // load inherited (pre-turn) context
+                await sendMessage(pane, text);            // send edited text down the normal pipeline
+            } catch (error) {
+                if (error && error.name === 'AbortError') return;
+                showToast(t('error_edit_turn'), 'error');
+            }
+        }
+
+        // Build a ‹ k/n › switcher for a bubble from an explicit version group.
+        // group = [{conversation_id, created_at, title}...] (created_at ASC).
+        function mountSwitcher(pane, messageDiv, group) {
+            const existing = messageDiv.querySelector('.version-switcher');
+            if (existing) existing.remove();
+            const n = group.length;
+            const idx = group.findIndex(v => v.conversation_id === pane.conversationId);
+            const k = idx >= 0 ? idx + 1 : 1;
+
+            const sw = el('div', 'version-switcher');
+            sw.title = t('version_label').replace('{k}', k).replace('{n}', n);
+            const prev = el('button');
+            prev.type = 'button';
+            prev.title = t('version_prev');
+            prev.setAttribute('aria-label', t('version_prev'));
+            prev.innerHTML = getIcon('chevronLeft', 'icon-sm');
+            prev.disabled = idx <= 0;
+            const count = el('span', 'version-switcher-count');
+            count.textContent = t('version_of').replace('{k}', k).replace('{n}', n);
+            const next = el('button');
+            next.type = 'button';
+            next.title = t('version_next');
+            next.setAttribute('aria-label', t('version_next'));
+            next.innerHTML = getIcon('chevronRight', 'icon-sm');
+            next.disabled = idx < 0 || idx >= n - 1;
+            prev.addEventListener('click', () => { if (idx > 0) switchConversation(pane, group[idx - 1].conversation_id); });
+            next.addEventListener('click', () => { if (idx >= 0 && idx < n - 1) switchConversation(pane, group[idx + 1].conversation_id); });
+            sw.appendChild(prev); sw.appendChild(count); sw.appendChild(next);
+            messageDiv.appendChild(sw);
+        }
+
+        // Single-bubble direct-key render (used when a live send tags a fresh turn_id).
+        function renderVersionSwitcher(pane, messageDiv) {
+            const existing = messageDiv.querySelector('.version-switcher');
+            if (existing) existing.remove();
+            const turnId = messageDiv.dataset.turnId;
+            if (turnId == null) return;
+            const group = pane.versionMap && pane.versionMap[turnId];
+            if (Array.isArray(group) && group.length >= 2) mountSwitcher(pane, messageDiv, group);
+        }
+
+        // Place version switchers across a whole loaded conversation.
+        // Pass 1 (direct key): a user bubble whose turn_id equals a group's slot key —
+        //   this is the canonical/original branch, whose turn_ids ARE the slot keys.
+        // Pass 2 (fallback): on an edit branch, inherited messages carry fresh turn_ids,
+        //   so the slot's first-new message never key-matches. For any group that still
+        //   contains the current conversation_id, mount the switcher on the branch's first
+        //   post-inheritance user message — approximated as the first user bubble not yet
+        //   carrying a switcher, scanning left→right after the last placed bubble.
+        function renderAllVersionSwitchers(pane) {
+            const bubbles = Array.from(pane.messagesEl.querySelectorAll('.message.user'));
+            bubbles.forEach(b => { const s = b.querySelector('.version-switcher'); if (s) s.remove(); });
+            const groups = pane.versionMap || {};
+            const placedKeys = new Set();
+            const used = new Set();
+
+            // Pass 1: direct turn_id -> slot key.
+            bubbles.forEach(bubble => {
+                const tid = bubble.dataset.turnId;
+                if (tid != null && Array.isArray(groups[tid]) && groups[tid].length >= 2) {
+                    mountSwitcher(pane, bubble, groups[tid]);
+                    placedKeys.add(tid);
+                    used.add(bubble);
+                }
+            });
+
+            // Pass 2: fallback for groups containing this conversation but not key-matched.
+            let cursor = 0;
+            Object.keys(groups).forEach(key => {
+                if (placedKeys.has(key)) return;
+                const versions = groups[key];
+                if (!Array.isArray(versions) || versions.length < 2) return;
+                if (!versions.some(v => v.conversation_id === pane.conversationId)) return;
+                let target = null;
+                for (; cursor < bubbles.length; cursor++) {
+                    if (!used.has(bubbles[cursor])) { target = bubbles[cursor]; cursor++; break; }
+                }
+                if (target) { mountSwitcher(pane, target, versions); used.add(target); }
+            });
+        }
+
+        // Fetch the version map for a pane's conversation and render all its switchers.
+        async function loadVersionMap(pane) {
+            pane.versionMap = {};
+            const cid = pane.conversationId;
+            if (!cid) return;
+            try {
+                const response = await apiFetch('/api/conversations/' + encodeURIComponent(cid) + '/version_map', { method: 'GET' });
+                if (!response.ok) return;
+                const data = await response.json();
+                pane.versionMap = (data && data.version_groups) ? data.version_groups : {};
+            } catch (error) {
+                pane.versionMap = {};
+                return;
+            }
+            renderAllVersionSwitchers(pane);
         }
 
         /* -------------------------------------------------------------------------- */
@@ -2624,7 +3070,7 @@
         // The chip highlight is handled by syncAreaRecoChips via the form's onAreasChanged
         // hook, so no manual chip mutation is needed here.
         function onRecoAreaClick(name, chipEl) {
-            if (isProcessing || !panelFormApi) return;
+            if (ownerPane().isProcessing || !panelFormApi) return;
             const added = panelFormApi.addArea(name);
             if (!added) return;                 // was already selected — no re-search
             expandCriteriaPanel();
@@ -2848,34 +3294,37 @@
             return card;
         }
 
+        // Ask-AI on a card focuses that card's owning pane (the pane whose search
+        // produced these results). Falls back to the active/main pane.
         function askAboutProperty(property) {
+            const pane = ownerPane();
             const normalized = recordViewedProperty(property);
             const key = propertyContextKey(normalized);
             // 重复点击已在栈内的房源 → 移到栈顶；否则新入栈。栈满丢最旧。
-            focusStack = focusStack.filter(item => propertyContextKey(item) !== key);
-            focusStack.push(normalized);
-            focusStack = focusStack.slice(-MAX_FOCUS_STACK);
-            renderFocusIndicator();
+            pane.focusStack = pane.focusStack.filter(item => propertyContextKey(item) !== key);
+            pane.focusStack.push(normalized);
+            pane.focusStack = pane.focusStack.slice(-MAX_FOCUS_STACK);
+            renderFocusIndicator(pane);
 
-            const input = document.getElementById('chatInput');
-            input.placeholder = t('placeholder_focus');
-            input.focus();
+            setActivePane(pane);
+            pane.inputEl.placeholder = t('placeholder_focus');
+            pane.inputEl.focus();
         }
 
         // 单套移出聚焦栈；移除后若栈非空，指示条保留并让新栈顶获得高亮。
-        function removeFocusItem(key) {
-            focusStack = focusStack.filter(item => propertyContextKey(item) !== key);
-            if (!focusStack.length) {
-                clearPropertyFocus();
+        function removeFocusItem(key, pane) {
+            pane.focusStack = pane.focusStack.filter(item => propertyContextKey(item) !== key);
+            if (!pane.focusStack.length) {
+                clearPropertyFocus(pane);
             } else {
-                renderFocusIndicator();
+                renderFocusIndicator(pane);
             }
         }
 
-        // 依据 focusStack 重绘指示条：计数头部 + 每套一个 chip（末位=当前聚焦）。
-        function renderFocusIndicator() {
-            const indicator = document.getElementById('propertyFocusIndicator');
-            if (!focusStack.length) {
+        // 依据 pane.focusStack 重绘该 pane 的指示条：计数头部 + 每套一个 chip（末位=当前聚焦）。
+        function renderFocusIndicator(pane) {
+            const indicator = pane.focusIndicatorEl;
+            if (!pane.focusStack.length) {
                 indicator.style.display = 'none';
                 indicator.innerHTML = '';
                 return;
@@ -2890,9 +3339,9 @@
             label.className = 'focus-head-label';
             label.innerHTML = getIcon('mapPin', 'icon-sm');
             const labelText = document.createElement('span');
-            labelText.textContent = focusStack.length === 1
+            labelText.textContent = pane.focusStack.length === 1
                 ? t('focus_count_one')
-                : t('focus_count_many').replace('{n}', focusStack.length);
+                : t('focus_count_many').replace('{n}', pane.focusStack.length);
             label.appendChild(labelText);
             head.appendChild(label);
 
@@ -2900,15 +3349,15 @@
             clearAll.type = 'button';
             clearAll.className = 'focus-clear-all';
             clearAll.textContent = t('focus_clear_all');
-            clearAll.addEventListener('click', clearPropertyFocus);
+            clearAll.addEventListener('click', () => clearPropertyFocus(pane));
             head.appendChild(clearAll);
             indicator.appendChild(head);
 
             // Chips：旧→新，末位（栈顶）标记为当前聚焦。
             const chips = document.createElement('div');
             chips.className = 'focus-chips';
-            focusStack.forEach((item, idx) => {
-                const isCurrent = idx === focusStack.length - 1;
+            pane.focusStack.forEach((item, idx) => {
+                const isCurrent = idx === pane.focusStack.length - 1;
                 const chip = document.createElement('div');
                 chip.className = 'focus-chip' + (isCurrent ? ' is-current' : '');
                 if (isCurrent) chip.title = t('focus_current');
@@ -2926,7 +3375,7 @@
                 remove.setAttribute('aria-label', t('focus_remove'));
                 remove.innerHTML = getIcon('close', 'icon-sm');
                 const itemKey = propertyContextKey(item);
-                remove.addEventListener('click', () => removeFocusItem(itemKey));
+                remove.addEventListener('click', () => removeFocusItem(itemKey, pane));
                 chip.appendChild(remove);
 
                 chips.appendChild(chip);
@@ -2934,13 +3383,13 @@
             indicator.appendChild(chips);
         }
 
-        // 清空整个聚焦栈（切换会话 / 分支 / 清除全部）。
-        function clearPropertyFocus() {
-            focusStack = [];
-            const indicator = document.getElementById('propertyFocusIndicator');
+        // 清空某 pane 的整个聚焦栈（切换会话 / 分支 / 清除全部）。
+        function clearPropertyFocus(pane) {
+            pane.focusStack = [];
+            const indicator = pane.focusIndicatorEl;
             indicator.style.display = 'none';
             indicator.innerHTML = '';
-            document.getElementById('chatInput').placeholder = t('placeholder_input');
+            pane.inputEl.placeholder = t('placeholder_input');
         }
 
         function normalizePropertyContext(property) {
@@ -3228,6 +3677,106 @@
             return t('branched_from_tpl').replace('{title}', name);
         }
 
+        // --- Branch-stacking: group by root, collapsible, drag/compare aware ---
+        const LS_COLLAPSED_GROUPS = 'ukra_collapsed_groups';
+        function getCollapsedGroups() {
+            try { return new Set(JSON.parse(localStorage.getItem(LS_COLLAPSED_GROUPS) || '[]')); }
+            catch (_) { return new Set(); }
+        }
+        function setGroupCollapsed(rootId, collapsed) {
+            const s = getCollapsedGroups();
+            if (collapsed) s.add(rootId); else s.delete(rootId);
+            localStorage.setItem(LS_COLLAPSED_GROUPS, JSON.stringify(Array.from(s)));
+        }
+        function tsOf(iso) { const d = new Date(iso); return isNaN(d.getTime()) ? 0 : d.getTime(); }
+
+        // Group conversations by root_conversation_id. Groups are ordered by their most
+        // recent updated_at (DESC, preserving the existing sort feel); branches inside a
+        // group are ordered by created_at ASC (the original continuation first).
+        function buildConversationGroups() {
+            const byId = {};
+            conversations.forEach(c => { byId[c.id] = c; });
+            const rootOf = c => c.root_conversation_id || c.id;
+            const buckets = {};
+            conversations.forEach(c => {
+                const rid = rootOf(c);
+                (buckets[rid] || (buckets[rid] = [])).push(c);
+            });
+            const groups = Object.keys(buckets).map(rid => {
+                const items = buckets[rid];
+                let root = byId[rid] || null;
+                let children = items.filter(c => c.id !== rid);
+                if (!root) {
+                    // Root itself isn't in the list (e.g. deleted) — promote the earliest item.
+                    const sorted = items.slice().sort((a, b) => tsOf(a.created_at) - tsOf(b.created_at));
+                    root = sorted[0];
+                    children = items.filter(c => c !== root);
+                }
+                children.sort((a, b) => tsOf(a.created_at) - tsOf(b.created_at));
+                const latest = Math.max.apply(null, items.map(c => tsOf(c.updated_at) || tsOf(c.created_at)));
+                return { rootId: rid, root: root, children: children, latest: latest };
+            });
+            groups.sort((a, b) => b.latest - a.latest);
+            return groups;
+        }
+
+        function buildConvItem(conv, isBranch) {
+            const openPane = paneForConversation(conv.id);
+            const item = el('div', 'conv-item'
+                + (openPane ? ' active open-in-pane' : '')
+                + (isBranch ? ' is-branch' : ''));
+            item.dataset.convId = conv.id;
+            item.setAttribute('draggable', 'true');
+            item.addEventListener('dragstart', e => onConvDragStart(e, conv, item));
+            item.addEventListener('dragend', () => onConvDragEnd(item));
+
+            const main = el('button', 'conv-item-main');
+            const titleRow = el('div', 'conv-title-row');
+            if (conv.parent_conversation_id) {
+                const glyph = el('span', 'conv-branch-glyph');
+                glyph.innerHTML = getIcon('branch', 'icon-sm');
+                glyph.title = branchedFromLabel(conv);
+                titleRow.appendChild(glyph);
+            }
+            const title = el('span', 'conv-title');
+            title.textContent = conv.title || t('untitled_chat');
+            titleRow.appendChild(title);
+            const meta = el('span', 'conv-meta');
+            meta.textContent = formatRelativeTime(conv.updated_at);
+            main.appendChild(titleRow);
+            main.appendChild(meta);
+            main.addEventListener('click', () => switchConversation(mainPane, conv.id));
+            item.appendChild(main);
+
+            const actionsWrap = el('div', 'conv-item-actions');
+            const compareBtn = el('button', 'conv-icon-btn');
+            compareBtn.title = t('compare_action');
+            compareBtn.setAttribute('aria-label', t('compare_action'));
+            compareBtn.innerHTML = getIcon('compare', 'icon-sm');
+            compareBtn.addEventListener('click', e => { e.stopPropagation(); requestCompare(conv.id); });
+            const branchBtn = el('button', 'conv-icon-btn');
+            branchBtn.title = t('branch_action');
+            branchBtn.setAttribute('aria-label', t('branch_action'));
+            branchBtn.innerHTML = getIcon('branch', 'icon-sm');
+            branchBtn.addEventListener('click', e => { e.stopPropagation(); forkConversation(conv.id, null, branchBtn, mainPane); });
+            const renameBtn = el('button', 'conv-icon-btn');
+            renameBtn.title = t('rename');
+            renameBtn.setAttribute('aria-label', t('rename'));
+            renameBtn.innerHTML = getIcon('edit', 'icon-sm');
+            renameBtn.addEventListener('click', e => { e.stopPropagation(); promptRenameConversation(conv); });
+            const delBtn = el('button', 'conv-icon-btn');
+            delBtn.title = t('delete');
+            delBtn.setAttribute('aria-label', t('delete'));
+            delBtn.innerHTML = getIcon('trash', 'icon-sm');
+            delBtn.addEventListener('click', e => { e.stopPropagation(); promptDeleteConversation(conv); });
+            actionsWrap.appendChild(compareBtn);
+            actionsWrap.appendChild(branchBtn);
+            actionsWrap.appendChild(renameBtn);
+            actionsWrap.appendChild(delBtn);
+            item.appendChild(actionsWrap);
+            return item;
+        }
+
         function renderConversationList() {
             const list = document.getElementById('convList');
             list.innerHTML = '';
@@ -3237,53 +3786,36 @@
                 list.appendChild(empty);
                 return;
             }
-            conversations.forEach(conv => {
-                const item = el('div', 'conv-item' + (conv.id === activeConversationId ? ' active' : ''));
-                // Keep flat updated_at ordering; only hint lineage with a subtle indent
-                // (capped at depth 3) so the list never becomes a tree in v1.
-                const depth = Math.min(Number(conv.branch_depth) || 0, 3);
-                if (depth > 0) item.style.marginLeft = (depth * 10) + 'px';
-
-                const main = el('button', 'conv-item-main');
-                const titleRow = el('div', 'conv-title-row');
-                if (conv.parent_conversation_id) {
-                    const glyph = el('span', 'conv-branch-glyph');
-                    glyph.innerHTML = getIcon('branch', 'icon-sm');
-                    glyph.title = branchedFromLabel(conv);
-                    titleRow.appendChild(glyph);
+            const collapsed = getCollapsedGroups();
+            buildConversationGroups().forEach(group => {
+                const groupEl = el('div', 'conv-group');
+                const rootRow = el('div', 'conv-root-row');
+                const hasChildren = group.children.length > 0;
+                const isCollapsed = collapsed.has(group.rootId);
+                if (hasChildren) {
+                    const caret = el('button', 'conv-collapse-btn' + (isCollapsed ? ' collapsed' : ''));
+                    caret.type = 'button';
+                    caret.title = isCollapsed ? t('expand_branches') : t('collapse_branches');
+                    caret.setAttribute('aria-label', caret.title);
+                    caret.innerHTML = getIcon('chevronRight', 'icon-sm');
+                    caret.addEventListener('click', e => {
+                        e.stopPropagation();
+                        setGroupCollapsed(group.rootId, !collapsed.has(group.rootId));
+                        renderConversationList();
+                    });
+                    rootRow.appendChild(caret);
+                } else {
+                    rootRow.appendChild(el('div', 'conv-collapse-spacer'));
                 }
-                const title = el('span', 'conv-title');
-                title.textContent = conv.title || t('untitled_chat');
-                titleRow.appendChild(title);
-                const meta = el('span', 'conv-meta');
-                meta.textContent = formatRelativeTime(conv.updated_at);
-                main.appendChild(titleRow);
-                main.appendChild(meta);
-                main.addEventListener('click', () => switchConversation(conv.id));
-                item.appendChild(main);
+                rootRow.appendChild(buildConvItem(group.root, false));
+                groupEl.appendChild(rootRow);
 
-                const actionsWrap = el('div', 'conv-item-actions');
-                const branchBtn = el('button', 'conv-icon-btn');
-                branchBtn.title = t('branch_action');
-                branchBtn.setAttribute('aria-label', t('branch_action'));
-                branchBtn.innerHTML = getIcon('branch', 'icon-sm');
-                branchBtn.addEventListener('click', e => { e.stopPropagation(); forkConversation(conv.id, null, branchBtn); });
-                actionsWrap.appendChild(branchBtn);
-                const renameBtn = el('button', 'conv-icon-btn');
-                renameBtn.title = t('rename');
-                renameBtn.setAttribute('aria-label', t('rename'));
-                renameBtn.innerHTML = getIcon('edit', 'icon-sm');
-                renameBtn.addEventListener('click', e => { e.stopPropagation(); promptRenameConversation(conv); });
-                const delBtn = el('button', 'conv-icon-btn');
-                delBtn.title = t('delete');
-                delBtn.setAttribute('aria-label', t('delete'));
-                delBtn.innerHTML = getIcon('trash', 'icon-sm');
-                delBtn.addEventListener('click', e => { e.stopPropagation(); promptDeleteConversation(conv); });
-                actionsWrap.appendChild(renameBtn);
-                actionsWrap.appendChild(delBtn);
-                item.appendChild(actionsWrap);
-
-                list.appendChild(item);
+                if (hasChildren) {
+                    const kids = el('div', 'conv-branch-children' + (isCollapsed ? ' collapsed' : ''));
+                    group.children.forEach(child => kids.appendChild(buildConvItem(child, true)));
+                    groupEl.appendChild(kids);
+                }
+                list.appendChild(groupEl);
             });
         }
 
@@ -3303,80 +3835,100 @@
             }
         }
 
-        function renderStoredMessage(msg) {
+        // Renders one stored message into a pane. Returns its recommendations (if any)
+        // so the caller can seed the pane's cached results.
+        function renderStoredMessage(pane, msg) {
             if (msg.role === 'user') {
-                addMessage(msg.content || '', 'user');
-            } else {
-                let icon = null;
-                if (msg.response_type === 'clarification') icon = 'question';
-                else if (msg.response_type === 'error') icon = 'error';
                 const opts = {};
-                if (icon) opts.icon = icon;
                 if (msg.turn_id != null) opts.turnId = msg.turn_id;
-                addMessage(cleanRawResponse(msg.content || ''), 'alex', opts);
-                if (Array.isArray(msg.recommendations) && msg.recommendations.length) {
-                    currentResults = msg.recommendations;
-                }
+                addMessage(pane, msg.content || '', 'user', opts);
+                return null;
             }
+            let icon = null;
+            if (msg.response_type === 'clarification') icon = 'question';
+            else if (msg.response_type === 'error') icon = 'error';
+            const opts = {};
+            if (icon) opts.icon = icon;
+            if (msg.turn_id != null) opts.turnId = msg.turn_id;
+            addMessage(pane, cleanRawResponse(msg.content || ''), 'alex', opts);
+            return (Array.isArray(msg.recommendations) && msg.recommendations.length) ? msg.recommendations : null;
         }
 
-        async function switchConversation(cid) {
-            activeConversationId = cid;
-            localStorage.setItem(LS_ACTIVE_CONV, cid);
+        async function switchConversation(pane, cid) {
+            pane = pane || mainPane;
+            pane.conversationId = cid;
+            if (pane === mainPane) persistMainConversation();
+            setActivePane(pane);
             renderConversationList();
             closeSidebarMobile();
+            if (pane.titleEl) pane.titleEl.textContent = conversationTitle(cid);
 
-            const messagesDiv = document.getElementById('chatMessages');
+            const messagesDiv = pane.messagesEl;
             messagesDiv.innerHTML = '<div style="text-align:center;padding:40px;"><div class="spinner"></div></div>';
-            currentResults = [];
-            lastResponseType = null;
-            clearPropertyFocus();
+            pane.lastResponseType = null;
+            pane.results = [];
+            pane.areaRecos = [];
+            pane.versionMap = {};
+            clearPropertyFocus(pane);
+            // This pane now owns the shared results/criteria panel; reset it fresh.
+            resultsOwnerPane = pane;
             resetCriteria();
 
             try {
                 const response = await apiFetch('/api/conversations/' + encodeURIComponent(cid) + '/messages', { method: 'GET' });
                 if (!response.ok) {
                     showToast(t('error_load_messages'), 'error');
-                    renderWelcomeMessage();
+                    renderWelcomeMessage(pane);
                     return;
                 }
                 const data = await response.json();
                 const msgs = Array.isArray(data.messages) ? data.messages : [];
                 messagesDiv.innerHTML = '';
+                let lastRecs = [];
                 if (!msgs.length) {
-                    renderWelcomeMessage();
+                    renderWelcomeMessage(pane);
                 } else {
-                    msgs.forEach(renderStoredMessage);
+                    msgs.forEach(m => { const r = renderStoredMessage(pane, m); if (r) lastRecs = r; });
                     for (let k = msgs.length - 1; k >= 0; k--) {
                         if (msgs[k].role === 'assistant' && msgs[k].response_type) {
-                            lastResponseType = msgs[k].response_type;
+                            pane.lastResponseType = msgs[k].response_type;
                             break;
                         }
                     }
                 }
-                // Re-render property cards from the most recent stored recommendations.
-                displayResults(currentResults);
+                pane.results = lastRecs;
+                // Re-render property cards from this conversation's most recent recs.
+                if (resultsOwnerPane === pane) { currentResults = lastRecs; displayResults(currentResults); }
                 messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                // Version switchers for this conversation's user turns.
+                loadVersionMap(pane);
             } catch (error) {
                 if (error && error.name === 'AbortError') return;
                 showToast(t('error_connection'), 'error');
-                renderWelcomeMessage();
+                renderWelcomeMessage(pane);
             }
         }
 
-        function startBlankConversation() {
-            activeConversationId = null;
-            localStorage.removeItem(LS_ACTIVE_CONV);
-            currentResults = [];
-            lastResponseType = null;
-            clearPropertyFocus();
+        function startBlankConversation(pane) {
+            pane = pane || mainPane;
+            pane.conversationId = null;
+            if (pane === mainPane) persistMainConversation();
+            pane.lastResponseType = null;
+            pane.results = [];
+            pane.areaRecos = [];
+            pane.versionMap = {};
+            clearPropertyFocus(pane);
+            renderWelcomeMessage(pane);
+            if (pane.titleEl) pane.titleEl.textContent = t('new_chat_title');
+            resultsOwnerPane = pane;
             resetCriteria();
-            renderWelcomeMessage();
+            currentResults = [];
             displayResults([]);
             renderConversationList();
         }
 
-        async function newChat() {
+        async function newChat(pane) {
+            pane = pane || mainPane;
             closeSidebarMobile();
             try {
                 const response = await apiFetch('/api/conversations', {
@@ -3389,20 +3941,26 @@
                 const conv = data.conversation || data;
                 if (!conv || !conv.id) { showToast(t('error_create_conversation'), 'error'); return; }
                 conversations.unshift(conv);
-                activeConversationId = conv.id;
-                localStorage.setItem(LS_ACTIVE_CONV, conv.id);
-                currentResults = [];
-                lastResponseType = null;
-                clearPropertyFocus();
+                pane.conversationId = conv.id;
+                if (pane === mainPane) persistMainConversation();
+                setActivePane(pane);
+                pane.lastResponseType = null;
+                pane.results = [];
+                pane.areaRecos = [];
+                pane.versionMap = {};
+                clearPropertyFocus(pane);
+                resultsOwnerPane = pane;
                 resetCriteria();
-                renderWelcomeMessage();
+                currentResults = [];
+                renderWelcomeMessage(pane);
+                if (pane.titleEl) pane.titleEl.textContent = conv.title || t('new_chat_title');
                 displayResults([]);
                 renderConversationList();
             } catch (error) {
                 if (error && error.name === 'AbortError') return;
                 // Offline fallback: start a local blank session; the backend will
                 // create a conversation implicitly on the first message.
-                startBlankConversation();
+                startBlankConversation(pane);
                 showToast(t('error_connection'), 'error');
             }
         }
@@ -3426,6 +3984,8 @@
                         const updated = (data && data.conversation) ? data.conversation : data;
                         conv.title = (updated && updated.title) ? updated.title : val;
                         if (updated && updated.updated_at) conv.updated_at = updated.updated_at;
+                        // Keep any pane header currently showing this conversation in sync.
+                        eachPane(p => { if (p.titleEl && p.conversationId === conv.id) p.titleEl.textContent = conv.title; });
                         renderConversationList();
                     } catch (error) {
                         if (error && error.name === 'AbortError') return;
@@ -3445,9 +4005,13 @@
                         const response = await apiFetch('/api/conversations/' + encodeURIComponent(conv.id), { method: 'DELETE' });
                         if (!response.ok) { showToast(t('error_delete'), 'error'); return; }
                         conversations = conversations.filter(c => c.id !== conv.id);
-                        if (activeConversationId === conv.id) {
-                            if (conversations.length) switchConversation(conversations[0].id);
-                            else startBlankConversation();
+                        // Split-screen sync: a deleted conversation must not stay open in a pane.
+                        if (secondaryPane && secondaryPane.conversationId === conv.id) closeSecondaryPane();
+                        if (mainPane.conversationId === conv.id) {
+                            // Fall back to another conversation not already open in the other pane.
+                            const next = conversations.find(c => !(secondaryPane && secondaryPane.conversationId === c.id));
+                            if (next) switchConversation(mainPane, next.id);
+                            else startBlankConversation(mainPane);
                         } else {
                             renderConversationList();
                         }
@@ -3463,7 +4027,8 @@
         // turn (sidebar "Branch"); a turn id → fork from that assistant message
         // ("Branch from here"). Idempotency key is generated per click; the disabled
         // trigger prevents a second in-flight request for the same click.
-        async function forkConversation(sourceCid, afterTurnId, triggerEl) {
+        async function forkConversation(sourceCid, afterTurnId, triggerEl, pane) {
+            pane = pane || mainPane;
             if (!sourceCid) return;
             if (triggerEl && triggerEl.disabled) return;
             if (triggerEl) triggerEl.disabled = true;
@@ -3487,13 +4052,180 @@
                 if (!conv || !conv.id) { showToast(t('error_fork'), 'error'); return; }
                 showToast(t('branch_created'), 'success');
                 await loadConversations(true);
-                await switchConversation(conv.id);
+                await switchConversation(pane, conv.id);
             } catch (error) {
                 if (error && error.name === 'AbortError') return;
                 showToast(t('error_fork'), 'error');
             } finally {
                 if (triggerEl) triggerEl.disabled = false;
             }
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* SPLIT-SCREEN COMPARE (drag a conversation, or click "Compare")             */
+        /* Secondary pane is a fully-interactive ChatPane; the main pane never regresses.*/
+        /* -------------------------------------------------------------------------- */
+        let dragConvId = null;
+
+        function buildSecondaryPane() {
+            const root = el('div', 'chat-panel chat-pane chat-pane-secondary');
+            const bar = el('div', 'pane-topbar');
+            const title = el('span', 'pane-topbar-title');
+            title.textContent = t('new_chat_title');
+            const closeBtn = el('button', 'pane-topbar-close');
+            closeBtn.type = 'button';
+            closeBtn.title = t('close_compare');
+            closeBtn.setAttribute('aria-label', t('close_compare'));
+            closeBtn.innerHTML = getIcon('close', 'icon-sm');
+            closeBtn.addEventListener('click', closeSecondaryPane);
+            bar.appendChild(title);
+            bar.appendChild(closeBtn);
+            root.appendChild(bar);
+
+            const messages = el('div', 'chat-messages');
+            root.appendChild(messages);
+            const focus = el('div', 'property-focus-indicator');
+            focus.style.display = 'none';
+            root.appendChild(focus);
+
+            const inputArea = el('div', 'chat-input-area');
+            const qa = el('div', 'quick-actions');
+            inputArea.appendChild(qa);
+            const wrap = el('div', 'input-wrapper');
+            const ta = el('textarea', 'chat-textarea');
+            ta.rows = 1;
+            ta.placeholder = t('placeholder_input');
+            ta.addEventListener('input', () => autoResize(ta));
+            ta.addEventListener('keydown', handleEnter);
+            const sendBtn = el('button', 'send-btn');
+            sendBtn.type = 'button';
+            sendBtn.innerHTML = getIcon('send');
+            wrap.appendChild(ta);
+            wrap.appendChild(sendBtn);
+            inputArea.appendChild(wrap);
+            root.appendChild(inputArea);
+
+            const pane = new ChatPane({
+                id: 'secondary', root: root, messagesEl: messages, inputEl: ta,
+                sendBtnEl: sendBtn, focusIndicatorEl: focus, quickActionsEl: qa, titleEl: title
+            });
+            sendBtn.addEventListener('click', () => onSendButtonClick(pane));
+            wirePaneActivation(pane);
+            return pane;
+        }
+
+        // Make a pane become "active" (Ask-AI / criteria fallback target) on interaction.
+        function wirePaneActivation(pane) {
+            pane.inputEl.addEventListener('focus', () => setActivePane(pane));
+            pane.messagesEl.addEventListener('mousedown', () => setActivePane(pane));
+        }
+
+        // Compare button (non-drag path) — equivalent to dropping on the right half.
+        function requestCompare(cid) {
+            if (window.innerWidth < 800) { showToast(t('split_too_narrow'), 'error'); return; }
+            openCompare(cid, 'right');
+        }
+
+        // Enter split mode (single -> two panes) with cid loaded into the new secondary.
+        function enterSplit(cid) {
+            if (window.innerWidth < 800) { showToast(t('split_too_narrow'), 'error'); return; }
+            // Already split (defensive): load into the existing secondary instead of stacking a third pane.
+            if (secondaryPane) { openCompare(cid, 'right'); return; }
+            if (mainPane.conversationId && mainPane.conversationId === cid) { showToast(t('split_same_conv'), 'error'); return; }
+            secondaryPane = buildSecondaryPane();
+            document.getElementById('chatPanesWrap').appendChild(secondaryPane.root);
+            document.querySelector('.main-container').classList.add('split-active');
+            splitMode = true;
+            renderQuickActions(secondaryPane);
+            switchConversation(secondaryPane, cid);
+        }
+
+        // Route a compare request to the right pane/side, enforcing the "not both sides"
+        // rule. side is 'left' (main) or 'right' (secondary).
+        function openCompare(cid, side) {
+            if (window.innerWidth < 800) { showToast(t('split_too_narrow'), 'error'); return; }
+            if (!cid) return;
+            if (!splitMode) { enterSplit(cid); return; }
+            const targetPane = (side === 'left') ? mainPane : secondaryPane;
+            const otherPane = (side === 'left') ? secondaryPane : mainPane;
+            if (otherPane && otherPane.conversationId === cid) { showToast(t('split_same_conv'), 'error'); return; }
+            if (targetPane.conversationId === cid) return;   // already there — no-op
+            switchConversation(targetPane, cid);
+        }
+
+        function closeSecondaryPane() {
+            if (!secondaryPane) return;
+            if (secondaryPane.activeController) secondaryPane.activeController.abort();
+            secondaryPane.root.remove();
+            if (resultsOwnerPane === secondaryPane) resultsOwnerPane = mainPane;
+            secondaryPane = null;
+            splitMode = false;
+            document.querySelector('.main-container').classList.remove('split-active');
+            setActivePane(mainPane);
+            mainPane.root.classList.remove('is-active-pane');
+            // Hand the shared results panel back to the main pane.
+            if (favoritesTabActive()) {
+                renderFavorites();
+            } else {
+                currentResults = mainPane.results || [];
+                currentAreaRecommendations = mainPane.areaRecos || [];
+                displayResults(currentResults);
+            }
+            renderConversationList();
+        }
+
+        /* --- Drag & drop (HTML5) --- */
+        function onConvDragStart(e, conv, item) {
+            dragConvId = conv.id;
+            if (e.dataTransfer) {
+                e.dataTransfer.setData('text/plain', conv.id);
+                e.dataTransfer.effectAllowed = 'move';
+            }
+            item.classList.add('dragging');
+            if (window.innerWidth >= 800) showDropOverlay();
+        }
+        function onConvDragEnd(item) {
+            item.classList.remove('dragging');
+            hideDropOverlay();
+            dragConvId = null;
+        }
+
+        function buildDropHalf(side) {
+            const half = el('div', 'drop-half');
+            half.dataset.side = side;
+            half.textContent = t('drop_here_hint');
+            half.addEventListener('dragover', e => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; half.classList.add('drag-over'); });
+            half.addEventListener('dragleave', () => half.classList.remove('drag-over'));
+            half.addEventListener('drop', e => {
+                e.preventDefault();
+                half.classList.remove('drag-over');
+                const cid = (e.dataTransfer && e.dataTransfer.getData('text/plain')) || dragConvId;
+                hideDropOverlay();
+                openCompare(cid, side);
+            });
+            return half;
+        }
+        function showDropOverlay() {
+            if (window.innerWidth < 800) return;   // narrow guard: no drop zones
+            hideDropOverlay();
+            const wrap = document.getElementById('chatPanesWrap');
+            const overlay = el('div', 'drop-overlay active');
+            overlay.id = 'dropOverlay';
+            if (splitMode) {
+                overlay.appendChild(buildDropHalf('left'));
+                overlay.appendChild(buildDropHalf('right'));
+            } else {
+                // Single mode: left half stays the current pane; only the right half is a target.
+                const spacer = el('div');
+                spacer.style.flex = '1 1 0';
+                overlay.appendChild(spacer);
+                overlay.appendChild(buildDropHalf('right'));
+            }
+            wrap.appendChild(overlay);
+        }
+        function hideDropOverlay() {
+            const o = document.getElementById('dropOverlay');
+            if (o) o.remove();
         }
 
         /* -------------------------------------------------------------------------- */
@@ -3535,7 +4267,7 @@
             localStorage.setItem(LS_USER_ID, uid);
             localStorage.setItem(LS_USER_NAME, name || 'Guest');
             localStorage.removeItem(LS_ACTIVE_CONV);
-            activeConversationId = null;
+            if (secondaryPane) closeSecondaryPane();
             conversations = [];
             favorites.clear();
             favoriteItems = [];
@@ -3544,7 +4276,7 @@
             updateUserNameLabel();
             updateFavCount();
             await loadConversations(true);
-            startBlankConversation();
+            startBlankConversation(mainPane);
             await fetchFavorites();
         }
 
@@ -3762,14 +4494,14 @@
                             body: JSON.stringify({ user_id: getUserId() })
                         });
                         if (!response.ok) { showToast(t('error_forget'), 'error'); return; }
+                        if (secondaryPane) closeSecondaryPane();
                         conversations = [];
                         favorites.clear();
                         favoriteItems = [];
                         currentResults = [];
-                        activeConversationId = null;
                         localStorage.removeItem(LS_ACTIVE_CONV);
                         updateFavCount();
-                        startBlankConversation();
+                        startBlankConversation(mainPane);
                         showToast(t('forgotten'), 'success');
                     } catch (error) {
                         if (error && error.name === 'AbortError') return;
@@ -4259,7 +4991,7 @@
         // treated by the backend as explicit confirmation. Area is re-checked inside
         // submitCriteriaSearch (existing markAreaError path handles a missing area).
         function searchAnyway() {
-            if (isProcessing || !panelFormApi) return;
+            if (ownerPane().isProcessing || !panelFormApi) return;
             submitCriteriaSearch(panelFormApi.read(), panelFormApi);
         }
 
@@ -4372,7 +5104,9 @@
 
         /* --- Deterministic search submit (bypasses the LLM) --- */
         async function submitCriteriaSearch(criteria, sourceApi) {
-            if (isProcessing) return;             // never race with chat send / another submit
+            // The criteria panel drives the pane that owns the shared results surface.
+            const pane = ownerPane();
+            if (pane.isProcessing) return;        // never race with chat send / another submit
             // Multi-area: send `areas` plus `area` = areas[0] for back-compat.
             const areas = (criteria && Array.isArray(criteria.areas) && criteria.areas.length)
                 ? dedupeAreas(criteria.areas)
@@ -4408,14 +5142,14 @@
                 reqCriteria.move_in_date = criteria.move_in_date;
             }
             const body = { criteria: reqCriteria, ui_language: currentLang };
-            if (activeConversationId) body.conversation_id = activeConversationId;
+            if (pane.conversationId) body.conversation_id = pane.conversationId;
 
-            isProcessing = true;
-            setProcessingUI(true);
+            pane.isProcessing = true;
+            setProcessingUI(pane, true);
             setAllCriteriaBusy(true);
 
-            addMessage(summarizeCriteria(criteria), 'user');
-            showTypingIndicator();
+            const userMsgEl = addMessage(pane, summarizeCriteria(criteria), 'user');
+            showTypingIndicator(pane);
 
             try {
                 const response = await apiFetch('/api/search_direct', {
@@ -4423,33 +5157,31 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
-                removeTypingIndicator();
+                removeTypingIndicator(pane);
 
                 if (!response.ok) {
                     let errMsg = t('error_connection');
                     try { const ed = await response.json(); if (ed && ed.error) errMsg = ed.error; } catch (_) {}
-                    addMessage(errMsg, 'alex', { icon: 'error' });
-                    lastResponseType = 'error';
+                    addMessage(pane, errMsg, 'alex', { icon: 'error' });
+                    pane.lastResponseType = 'error';
                     showToast(errMsg, 'error');
                 } else {
                     const data = await response.json();
-                    if (data.conversation_id) adoptConversationId(data.conversation_id);
+                    if (data.conversation_id) adoptConversationId(data.conversation_id, pane);
                     const turnId = (data.turn_id != null) ? data.turn_id : null;
+                    if (turnId != null && userMsgEl) tagUserTurn(pane, userMsgEl, turnId);
 
                     if (data.response_type === 'error') {
-                        addMessage(cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
-                        lastResponseType = 'error';
+                        addMessage(pane, cleanRawResponse(data.message || t('error_connection')), 'alex', { icon: 'error', turnId: turnId });
+                        pane.lastResponseType = 'error';
                     } else {
-                        addMessage(cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
+                        addMessage(pane, cleanRawResponse(data.message || ''), 'alex', { turnId: turnId });
                         const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
-                        currentAreaRecommendations = Array.isArray(data.area_recommendations) ? data.area_recommendations : [];
-                        lastResponseType = 'search';
+                        pane.lastResponseType = 'search';
                         if (recs.length) {
-                            currentResults = recs;
-                            displayResults(recs);
+                            paintResults(pane, recs, data.area_recommendations);
                         } else {
-                            currentResults = [];
-                            displayResults([]);   // empty state on the Search tab
+                            paintResults(pane, [], data.area_recommendations);   // empty state on the Search tab
                             showToast(t('criteria_search_empty_hint'), null, {
                                 label: t('criteria_edit_action'),
                                 onClick: expandCriteriaPanel
@@ -4467,18 +5199,18 @@
                     loadConversations(true);
                 }
             } catch (error) {
-                removeTypingIndicator();
+                removeTypingIndicator(pane);
                 if (error && error.name === 'AbortError') {
                     // silent — user navigated / cancelled
                 } else {
-                    addMessage(t('error_connection'), 'alex', { icon: 'error' });
-                    lastResponseType = 'error';
+                    addMessage(pane, t('error_connection'), 'alex', { icon: 'error' });
+                    pane.lastResponseType = 'error';
                     showToast(t('error_connection'), 'error');
                     console.error('search_direct error:', error);
                 }
             } finally {
-                isProcessing = false;
-                setProcessingUI(false);
+                pane.isProcessing = false;
+                setProcessingUI(pane, false);
                 setAllCriteriaBusy(false);
             }
         }
@@ -4502,17 +5234,41 @@
         /* -------------------------------------------------------------------------- */
         /* INITIALIZATION                                                             */
         /* -------------------------------------------------------------------------- */
+        // Build the main pane by wrapping the static chat DOM. Must run before any code
+        // that touches a pane (setLanguage / criteria / conversations).
+        function initMainPane() {
+            mainPane = new ChatPane({
+                id: 'main',
+                root: document.getElementById('mainChatPane'),
+                messagesEl: document.getElementById('chatMessages'),
+                inputEl: document.getElementById('chatInput'),
+                sendBtnEl: document.getElementById('sendBtn'),
+                focusIndicatorEl: document.getElementById('propertyFocusIndicator'),
+                quickActionsEl: document.getElementById('quickActions')
+            });
+            activePane = mainPane;
+            resultsOwnerPane = mainPane;
+            wirePaneActivation(mainPane);
+        }
+
+        // Split-screen needs a wide viewport; drop below the threshold => collapse to single.
+        function handleViewportResize() {
+            hideDropOverlay();
+            if (splitMode && window.innerWidth < 800) closeSecondaryPane();
+        }
+
         function wireEvents() {
             // Language
             document.querySelectorAll('.lang-btn').forEach(btn => {
                 btn.addEventListener('click', () => setLanguage(btn.getAttribute('data-lang')));
             });
-            // Send / cancel
-            document.getElementById('sendBtn').addEventListener('click', onSendButtonClick);
+            // Send / cancel (main pane; the secondary pane wires its own button)
+            document.getElementById('sendBtn').addEventListener('click', () => onSendButtonClick(mainPane));
             // Sidebar / conversations
-            document.getElementById('newChatBtn').addEventListener('click', newChat);
+            document.getElementById('newChatBtn').addEventListener('click', () => newChat(mainPane));
             document.getElementById('menuToggle').addEventListener('click', toggleSidebar);
             document.getElementById('sidebarBackdrop').addEventListener('click', closeSidebarMobile);
+            window.addEventListener('resize', handleViewportResize);
             // User menu
             document.getElementById('userMenuBtn').addEventListener('click', e => { e.stopPropagation(); toggleUserDropdown(); });
             document.getElementById('renameUserBtn').addEventListener('click', promptRenameUser);
@@ -4544,6 +5300,7 @@
 
         async function initApp() {
             ensureIdentity();
+            initMainPane();               // wrap the static chat DOM into the main ChatPane
             wireEvents();
             initCriteriaPanel();          // build the persistent criteria form before i18n
             setLanguage('en');            // default language + static strings + welcome
@@ -4557,13 +5314,13 @@
             await loadConversations(true);
 
             let target = null;
-            if (activeConversationId) target = conversations.find(c => c.id === activeConversationId);
+            if (bootConversationId) target = conversations.find(c => c.id === bootConversationId);
             if (!target && conversations.length) target = conversations[0];
 
             if (target) {
-                await switchConversation(target.id);
+                await switchConversation(mainPane, target.id);
             } else {
-                startBlankConversation();
+                startBlankConversation(mainPane);
             }
 
             // Load favorites (updates the Saved count without hijacking the results panel).

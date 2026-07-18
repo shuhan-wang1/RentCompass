@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     root_conversation_id   TEXT,
     branch_depth           INTEGER NOT NULL DEFAULT 0,
     context_schema_version INTEGER NOT NULL DEFAULT 1,
+    fork_reason            TEXT,
+    edited_slot_turn_id    TEXT,
     PRIMARY KEY (user_id, id)
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -155,6 +157,8 @@ class ConversationStore:
             ("root_conversation_id", "TEXT"),
             ("branch_depth", "INTEGER NOT NULL DEFAULT 0"),
             ("context_schema_version", "INTEGER NOT NULL DEFAULT 1"),
+            ("fork_reason", "TEXT"),
+            ("edited_slot_turn_id", "TEXT"),
         ):
             if name not in conv_cols:
                 self._conn.execute(f"ALTER TABLE conversations ADD COLUMN {name} {decl}")
@@ -191,7 +195,8 @@ class ConversationStore:
         return {"id": cid, "title": title, "created_at": now,
                 "updated_at": now, "message_count": 0,
                 "parent_conversation_id": None, "forked_from_turn_id": None,
-                "root_conversation_id": cid, "branch_depth": 0}
+                "root_conversation_id": cid, "branch_depth": 0,
+                "fork_reason": None, "edited_slot_turn_id": None}
 
     def get_conversation(self, user_id: str, cid: str) -> dict | None:
         with self._lock:
@@ -199,6 +204,7 @@ class ConversationStore:
                 """SELECT id, title, created_at, updated_at,
                           parent_conversation_id, forked_from_turn_id,
                           root_conversation_id, branch_depth,
+                          fork_reason, edited_slot_turn_id,
                           (SELECT COUNT(*) FROM messages m
                              WHERE m.user_id=? AND m.conversation_id=?) AS message_count
                    FROM conversations WHERE user_id=? AND id=?""",
@@ -212,6 +218,7 @@ class ConversationStore:
                 """SELECT c.id, c.title, c.created_at, c.updated_at,
                           c.parent_conversation_id, c.forked_from_turn_id,
                           c.root_conversation_id, c.branch_depth,
+                          c.fork_reason, c.edited_slot_turn_id,
                           (SELECT COUNT(*) FROM messages m
                              WHERE m.user_id=c.user_id AND m.conversation_id=c.id) AS message_count
                    FROM conversations c WHERE c.user_id=?
@@ -314,6 +321,17 @@ class ConversationStore:
             )
             self._conn.commit()
         return {"id": row_id, "timestamp": ts}
+
+    def set_message_turn(self, user_id: str, message_id: int, turn_id: str) -> None:
+        """Tag an already-persisted message row with its turn_id. Used by the live app to
+        stamp the USER message after begin_turn mints the turn id (the row is written first
+        to obtain its rowid for turns.user_message_id). Idempotent; no-op if the row is gone."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE messages SET turn_id=? WHERE user_id=? AND id=?",
+                (turn_id, user_id, message_id),
+            )
+            self._conn.commit()
 
     def get_messages(self, user_id: str, cid: str) -> list[dict]:
         with self._lock:
@@ -503,6 +521,12 @@ class ConversationStore:
             if not parent:
                 break
             fork_turn_id = row["forked_from_turn_id"]
+            if not fork_turn_id:
+                # A branch with a parent but NO fork turn is a deliberate zero-inheritance
+                # branch (edit of the conversation's first turn): it inherits nothing, so the
+                # walk stops here — no ancestor context is visible to it. (Ordinary
+                # fork/edit branches always carry a fork turn, so this never fires for them.)
+                break
             turn_row = None
             if fork_turn_id:
                 with self._lock:
@@ -601,120 +625,20 @@ class ConversationStore:
                      source_cid, fork_turn_id, root, depth),
                 )
 
-                # 5. Determine which COMPLETED turns are inherited (started_at <= fork
-                #    turn's) and assign each a fresh child turn id up front.
+                # 5-7. Copy the inherited COMPLETED turns (started_at <= fork turn's), their
+                #      messages (whole turns only) and snapshots into the child. Legacy no-turn
+                #      rows are bounded by the fork turn's message id so we never grab a row
+                #      after the fork point.
                 src_turns = self._conn.execute(
                     """SELECT * FROM turns WHERE user_id=? AND conversation_id=?
                        AND status='completed' AND started_at<=? ORDER BY started_at ASC""",
                     (user_id, source_cid, fork_started_at),
                 ).fetchall()
-                turn_map: dict[str, str] = {t["id"]: uuid.uuid4().hex for t in src_turns}
-                copied_turn_ids = set(turn_map)
-
-                # Message membership is derived from the TURNS table, NOT messages.turn_id
-                # (the live app tags only assistant rows; user rows keep turn_id NULL).
-                copied_turn_msg_ids: set[int] = set()
-                for t in src_turns:
-                    for col in ("user_message_id", "assistant_message_id"):
-                        if t[col] is not None:
-                            copied_turn_msg_ids.add(t[col])
-                # Any message referenced by a NON-inherited turn (running / failed /
-                # completed-after-fork) is an in-flight or failed half-turn → excluded.
-                other_turn_msg_ids: set[int] = set()
-                for t in self._conn.execute(
-                    """SELECT id, user_message_id, assistant_message_id FROM turns
-                       WHERE user_id=? AND conversation_id=?""",
-                    (user_id, source_cid),
-                ).fetchall():
-                    if t["id"] in copied_turn_ids:
-                        continue
-                    for col in ("user_message_id", "assistant_message_id"):
-                        if t[col] is not None:
-                            other_turn_msg_ids.add(t[col])
-
-                # Legacy (pre-turns) rows are bounded by the fork turn's message id so we
-                # never grab a no-turn row that lives after the fork point.
                 cutoff_msg_id = fork_turn["assistant_message_id"]
                 if cutoff_msg_id is None:
                     cutoff_msg_id = fork_turn["user_message_id"]
-
-                # 6. Copy messages by turn membership (whole turns only, never half a
-                #    turn). Copied-turn messages are copied in full regardless of rowid;
-                #    no-turn rows up to the cutoff are copied as legacy; everything else
-                #    (other-turn rows, post-fork no-turn rows) is excluded.
-                msg_map: dict[int, int] = {}
-                src_msgs = self._conn.execute(
-                    """SELECT id, role, content, response_type, recommendations_json,
-                              timestamp, turn_id
-                       FROM messages WHERE user_id=? AND conversation_id=? ORDER BY id ASC""",
-                    (user_id, source_cid),
-                ).fetchall()
-                for m in src_msgs:
-                    mid = m["id"]
-                    mtid = m["turn_id"]
-                    if mid in copied_turn_msg_ids or (mtid and mtid in copied_turn_ids):
-                        pass  # belongs to an inherited turn → copy
-                    elif mtid is not None:
-                        continue  # tagged to a non-inherited turn (e.g. failed-turn
-                                  # error row) → exclude
-                    elif mid in other_turn_msg_ids:
-                        continue  # untagged row owned by an in-flight/failed turn
-                    elif cutoff_msg_id is not None and mid <= cutoff_msg_id:
-                        pass  # legacy no-turn prefix → copy with NULL turn_id
-                    else:
-                        continue
-                    # Assistant rows carry the (remapped) copied turn id; user & legacy
-                    # rows keep turn_id NULL, matching the live app's tagging.
-                    new_turn = turn_map.get(m["turn_id"]) if m["turn_id"] else None
-                    cur = self._conn.execute(
-                        """INSERT INTO messages
-                           (user_id, conversation_id, role, content, response_type,
-                            recommendations_json, timestamp, turn_id)
-                           VALUES(?,?,?,?,?,?,?,?)""",
-                        (user_id, child_cid, m["role"], m["content"],
-                         m["response_type"], m["recommendations_json"], m["timestamp"],
-                         new_turn),
-                    )
-                    msg_map[mid] = cur.lastrowid
-
-                # Copy the inherited turns, remapping message ids to the copied rows.
-                for t in src_turns:
-                    new_umid = msg_map.get(t["user_message_id"]) if t["user_message_id"] is not None else None
-                    new_amid = msg_map.get(t["assistant_message_id"]) if t["assistant_message_id"] is not None else None
-                    self._conn.execute(
-                        """INSERT INTO turns
-                           (id, user_id, conversation_id, request_id, user_message_id,
-                            assistant_message_id, status, started_at, completed_at)
-                           VALUES(?,?,?,?,?,?,?,?,?)""",
-                        (turn_map[t["id"]], user_id, child_cid, t["request_id"], new_umid,
-                         new_amid, t["status"], t["started_at"], t["completed_at"]),
-                    )
-
-                # 7. Copy turn snapshots for every copied turn (rewrite embedded turn_id).
-                for old_tid, new_tid in turn_map.items():
-                    snap = self._conn.execute(
-                        """SELECT schema_version, snapshot_json FROM turn_snapshots
-                           WHERE user_id=? AND turn_id=?""",
-                        (user_id, old_tid),
-                    ).fetchone()
-                    if snap is None:
-                        continue
-                    snapshot_json = snap["snapshot_json"]
-                    try:
-                        parsed = json.loads(snapshot_json)
-                        if isinstance(parsed, dict) and "turn_id" in parsed:
-                            parsed["turn_id"] = new_tid
-                            snapshot_json = json.dumps(parsed, ensure_ascii=False)
-                    except Exception:
-                        pass  # store verbatim if unparseable
-                    self._conn.execute(
-                        """INSERT OR REPLACE INTO turn_snapshots
-                           (turn_id, user_id, conversation_id, schema_version,
-                            snapshot_json, created_at)
-                           VALUES(?,?,?,?,?,?)""",
-                        (new_tid, user_id, child_cid, snap["schema_version"],
-                         snapshot_json, _now_iso()),
-                    )
+                self._materialize_branch(user_id, source_cid, child_cid, src_turns,
+                                         cutoff_msg_id)
 
                 # 8. Record the idempotency key (overwrites a stale row).
                 if idempotency_key:
@@ -736,6 +660,324 @@ class ConversationStore:
         child["idempotent"] = False
         child["forked_from_turn_id"] = fork_turn_id
         return child
+
+    def _materialize_branch(self, user_id: str, source_cid: str, child_cid: str,
+                            src_turns: list, cutoff_msg_id) -> None:
+        """Copy inherited turns/messages/snapshots from ``source_cid`` into the ALREADY-created
+        child conversation row ``child_cid``. MUST run inside the caller's lock and open
+        transaction (it neither BEGINs nor commits). Shared by fork_conversation and
+        branch_for_edit — the ONLY difference between those two is which ``src_turns`` are
+        inherited and the legacy ``cutoff_msg_id``; the copy semantics are identical.
+
+        ``src_turns`` are the source completed-turn rows to inherit (whole turns only, each
+        assigned a fresh child turn id). Message membership is derived from the TURNS table,
+        not messages.turn_id, so it is robust whether or not the live app tagged user rows:
+        a source message is copied iff it belongs to an inherited turn, or it is a legacy
+        (no-turn) row with id <= cutoff_msg_id. Messages owned by a non-inherited turn
+        (running / failed / after the cut) are excluded. Copied rows carry the remapped
+        turn id when they had one, else NULL."""
+        turn_map: dict[str, str] = {t["id"]: uuid.uuid4().hex for t in src_turns}
+        copied_turn_ids = set(turn_map)
+
+        copied_turn_msg_ids: set[int] = set()
+        for t in src_turns:
+            for col in ("user_message_id", "assistant_message_id"):
+                if t[col] is not None:
+                    copied_turn_msg_ids.add(t[col])
+        # Any message referenced by a NON-inherited turn is an in-flight / failed / excluded
+        # half-turn → never copied even if its rowid falls under the legacy cutoff.
+        other_turn_msg_ids: set[int] = set()
+        for t in self._conn.execute(
+            """SELECT id, user_message_id, assistant_message_id FROM turns
+               WHERE user_id=? AND conversation_id=?""",
+            (user_id, source_cid),
+        ).fetchall():
+            if t["id"] in copied_turn_ids:
+                continue
+            for col in ("user_message_id", "assistant_message_id"):
+                if t[col] is not None:
+                    other_turn_msg_ids.add(t[col])
+
+        msg_map: dict[int, int] = {}
+        src_msgs = self._conn.execute(
+            """SELECT id, role, content, response_type, recommendations_json,
+                      timestamp, turn_id
+               FROM messages WHERE user_id=? AND conversation_id=? ORDER BY id ASC""",
+            (user_id, source_cid),
+        ).fetchall()
+        for m in src_msgs:
+            mid = m["id"]
+            mtid = m["turn_id"]
+            if mid in copied_turn_msg_ids or (mtid and mtid in copied_turn_ids):
+                pass  # belongs to an inherited turn → copy
+            elif mtid is not None:
+                continue  # tagged to a non-inherited turn → exclude
+            elif mid in other_turn_msg_ids:
+                continue  # untagged row owned by an in-flight / excluded turn
+            elif cutoff_msg_id is not None and mid <= cutoff_msg_id:
+                pass  # legacy no-turn prefix → copy
+            else:
+                continue
+            new_turn = turn_map.get(m["turn_id"]) if m["turn_id"] else None
+            cur = self._conn.execute(
+                """INSERT INTO messages
+                   (user_id, conversation_id, role, content, response_type,
+                    recommendations_json, timestamp, turn_id)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (user_id, child_cid, m["role"], m["content"],
+                 m["response_type"], m["recommendations_json"], m["timestamp"],
+                 new_turn),
+            )
+            msg_map[mid] = cur.lastrowid
+
+        for t in src_turns:
+            new_umid = msg_map.get(t["user_message_id"]) if t["user_message_id"] is not None else None
+            new_amid = msg_map.get(t["assistant_message_id"]) if t["assistant_message_id"] is not None else None
+            self._conn.execute(
+                """INSERT INTO turns
+                   (id, user_id, conversation_id, request_id, user_message_id,
+                    assistant_message_id, status, started_at, completed_at)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (turn_map[t["id"]], user_id, child_cid, t["request_id"], new_umid,
+                 new_amid, t["status"], t["started_at"], t["completed_at"]),
+            )
+
+        for old_tid, new_tid in turn_map.items():
+            snap = self._conn.execute(
+                """SELECT schema_version, snapshot_json FROM turn_snapshots
+                   WHERE user_id=? AND turn_id=?""",
+                (user_id, old_tid),
+            ).fetchone()
+            if snap is None:
+                continue
+            snapshot_json = snap["snapshot_json"]
+            try:
+                parsed = json.loads(snapshot_json)
+                if isinstance(parsed, dict) and "turn_id" in parsed:
+                    parsed["turn_id"] = new_tid
+                    snapshot_json = json.dumps(parsed, ensure_ascii=False)
+            except Exception:
+                pass  # store verbatim if unparseable
+            self._conn.execute(
+                """INSERT OR REPLACE INTO turn_snapshots
+                   (turn_id, user_id, conversation_id, schema_version,
+                    snapshot_json, created_at)
+                   VALUES(?,?,?,?,?,?)""",
+                (new_tid, user_id, child_cid, snap["schema_version"],
+                 snapshot_json, _now_iso()),
+            )
+
+    # -------------------------------------------------------------- edit / branch
+    def _resolve_slot_anchor(self, user_id: str, source_cid: str, src_row,
+                             edited_turn_id: str) -> str:
+        """Family-stable version-group slot key for editing ``edited_turn_id`` in
+        ``source_cid`` (see :meth:`version_map` and :meth:`branch_for_edit`).
+
+        A slot is a logical message position across a branch family. The key is the turn_id
+        of the edited turn AS IT LIVES IN THE CONVERSATION WHERE THE SLOT ORIGINATED. To keep
+        repeated edits of the *same* position in one group (transitivity), when the edited
+        turn is the source branch's OWN first fresh turn — the very slot the source branch was
+        created to fill — and the source is itself an edit branch, we reuse the source's slot
+        key instead of minting a new one. Any other edit (a later turn, or the first edit off
+        a non-edit conversation) originates a new slot keyed by the edited turn's own id.
+
+        Turn ids are regenerated when a branch copies turns, so a slot key deliberately points
+        at a turn in a *specific* conversation (the origin), never a copied turn."""
+        boundary = ""
+        fork_turn_id = src_row["forked_from_turn_id"]
+        if fork_turn_id:
+            r = self._conn.execute(
+                "SELECT started_at FROM turns WHERE user_id=? AND id=?",
+                (user_id, fork_turn_id),
+            ).fetchone()
+            if r is not None:
+                boundary = r["started_at"]
+        first_fresh = self._conn.execute(
+            """SELECT id FROM turns WHERE user_id=? AND conversation_id=? AND started_at>?
+               ORDER BY started_at ASC LIMIT 1""",
+            (user_id, source_cid, boundary),
+        ).fetchone()
+        src_anchor = src_row["edited_slot_turn_id"]
+        if src_anchor and first_fresh is not None and first_fresh["id"] == edited_turn_id:
+            return src_anchor
+        return edited_turn_id
+
+    def branch_for_edit(self, user_id: str, source_cid: str, turn_id: str,
+                        title: str | None = None,
+                        idempotency_key: str | None = None) -> dict:
+        """Create a NEW branch that inherits everything STRICTLY BEFORE ``turn_id`` so the
+        caller can re-send a rewritten version of that turn's user message (ChatGPT-style
+        edit-and-resend). The source conversation is never modified. Entirely atomic (one
+        transaction, rollback on error). This endpoint only builds the branch; the caller
+        drives the rewritten message through the normal chat path afterwards.
+
+        Contrast with :meth:`fork_conversation`, which inherits up to and INCLUDING a chosen
+        completed turn:
+          * The edited turn itself is NEVER inherited, and its status is irrelevant — a
+            running, failed, or completed turn are all valid edit targets (we only ever
+            inherit COMPLETED turns that STARTED before it, so a concurrent in-flight turn or
+            the edited turn's own failed attempt are naturally excluded).
+          * When ``turn_id`` is the conversation's first turn there is nothing before it, so
+            the branch inherits ZERO turns (a "zero-inheritance branch"). Lineage is still
+            recorded (parent / root / branch_depth), and forked_from_turn_id is left NULL,
+            which get_branch_lineage reads as "inherits no ancestor context".
+
+        Version-group metadata is recorded on the child: ``fork_reason='edit'`` and
+        ``edited_slot_turn_id`` (the family-stable slot key from :meth:`_resolve_slot_anchor`).
+
+        Raises ConversationNotFound (source missing / not owned), TurnNotFound (unknown
+        turn_id), TurnNotInConversation (turn belongs to another conversation). Returns the
+        child conversation dict with an extra ``idempotent`` flag."""
+        with self._lock:
+            # 1. Idempotency replay (shares the fork_requests table; serialized by the lock).
+            if idempotency_key:
+                existing = self._conn.execute(
+                    """SELECT conversation_id FROM fork_requests
+                       WHERE user_id=? AND idempotency_key=?""",
+                    (user_id, idempotency_key),
+                ).fetchone()
+                if existing:
+                    child = self.get_conversation(user_id, existing["conversation_id"])
+                    if child is not None:
+                        child = dict(child)
+                        child["idempotent"] = True
+                        return child
+                    # Recorded child was deleted → stale key, fall through and re-create.
+
+            # 2. Validate source + the edited turn (completion status is NOT required).
+            src = self._conn.execute(
+                """SELECT id, title, root_conversation_id, branch_depth,
+                          forked_from_turn_id, edited_slot_turn_id
+                   FROM conversations WHERE user_id=? AND id=?""",
+                (user_id, source_cid),
+            ).fetchone()
+            if src is None:
+                raise ConversationNotFound(source_cid)
+            edited = self._conn.execute(
+                "SELECT * FROM turns WHERE user_id=? AND id=?", (user_id, turn_id),
+            ).fetchone()
+            if edited is None:
+                raise TurnNotFound(turn_id)
+            if edited["conversation_id"] != source_cid:
+                raise TurnNotInConversation(turn_id)
+
+            edited_started_at = edited["started_at"]
+
+            # 3. Inherited = COMPLETED turns that STARTED before the edited turn (exclusive).
+            src_turns = self._conn.execute(
+                """SELECT * FROM turns WHERE user_id=? AND conversation_id=?
+                   AND status='completed' AND started_at<? ORDER BY started_at ASC""",
+                (user_id, source_cid, edited_started_at),
+            ).fetchall()
+
+            # Fork point = last inherited turn (inclusive cutoff in get_branch_lineage);
+            # None → zero-inheritance branch.
+            forked_from = src_turns[-1]["id"] if src_turns else None
+
+            # Legacy (no-turn) rows are bounded to just before the edited turn's first message.
+            edited_msg_ids = [x for x in (edited["user_message_id"],
+                                          edited["assistant_message_id"]) if x is not None]
+            if edited_msg_ids:
+                cutoff_msg_id = min(edited_msg_ids) - 1
+            elif src_turns:
+                inh = [x for t in src_turns
+                       for x in (t["user_message_id"], t["assistant_message_id"])
+                       if x is not None]
+                cutoff_msg_id = max(inh) if inh else None
+            else:
+                cutoff_msg_id = None
+
+            anchor = self._resolve_slot_anchor(user_id, source_cid, src, turn_id)
+
+            try:
+                self._conn.execute("BEGIN")
+                child_cid = uuid.uuid4().hex
+                now = _now_iso()
+                child_title = (title or "").strip() or f"{src['title']} (edit)"
+                root = src["root_conversation_id"] or source_cid
+                depth = int(src["branch_depth"] or 0) + 1
+                self._conn.execute(
+                    """INSERT INTO conversations
+                       (user_id, id, title, created_at, updated_at,
+                        parent_conversation_id, forked_from_turn_id, root_conversation_id,
+                        branch_depth, context_schema_version, fork_reason, edited_slot_turn_id)
+                       VALUES(?,?,?,?,?,?,?,?,?,1,'edit',?)""",
+                    (user_id, child_cid, child_title, now, now,
+                     source_cid, forked_from, root, depth, anchor),
+                )
+                self._materialize_branch(user_id, source_cid, child_cid, src_turns,
+                                         cutoff_msg_id)
+                if idempotency_key:
+                    self._conn.execute(
+                        """INSERT OR REPLACE INTO fork_requests
+                           (user_id, idempotency_key, conversation_id, created_at)
+                           VALUES(?,?,?,?)""",
+                        (user_id, idempotency_key, child_cid, _now_iso()),
+                    )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+
+        child = dict(self.get_conversation(user_id, child_cid))
+        child["idempotent"] = False
+        return child
+
+    def version_map(self, user_id: str, cid: str) -> dict | None:
+        """Version-group map for the whole branch FAMILY (same root_conversation_id) that
+        ``cid`` belongs to. Returns ``None`` when ``cid`` is not owned by ``user_id`` (the
+        route maps that to 404).
+
+        Shape::
+
+            {"version_groups": {"<slot_turn_id>": [
+                {"conversation_id", "created_at", "title"},  # created_at ASC
+                ...]}}
+
+        A group is the set of alternative versions of one logical user-message slot. Its
+        members are every edit branch tagged with that slot key PLUS each such branch's parent
+        (the "original, un-edited continuation" the branch diverged from). Because a slot key
+        is family-stable (see :meth:`_resolve_slot_anchor`), editing the same position on an
+        edit branch lands in the SAME group as the previous edit (transitivity): the branch
+        and its parent chain are all pulled in.
+
+        Only groups with >=2 members are emitted — a single version has nothing to switch
+        between. Every emitted group therefore has >=2 members by construction (an edit branch
+        always contributes at least itself + its parent). No edits anywhere in the family →
+        ``{"version_groups": {}}``."""
+        with self._lock:
+            base = self._conn.execute(
+                "SELECT root_conversation_id FROM conversations WHERE user_id=? AND id=?",
+                (user_id, cid),
+            ).fetchone()
+            if base is None:
+                return None
+            root = base["root_conversation_id"] or cid
+            fam = self._conn.execute(
+                """SELECT id, created_at, title, parent_conversation_id, edited_slot_turn_id
+                   FROM conversations WHERE user_id=? AND root_conversation_id=?""",
+                (user_id, root),
+            ).fetchall()
+        by_id = {r["id"]: r for r in fam}
+        groups: dict[str, set] = {}
+        for r in fam:
+            slot = r["edited_slot_turn_id"]
+            if not slot:
+                continue
+            members = groups.setdefault(slot, set())
+            members.add(r["id"])
+            parent = r["parent_conversation_id"]
+            if parent and parent in by_id:
+                members.add(parent)
+        out: dict[str, list] = {}
+        for slot, ids in groups.items():
+            if len(ids) < 2:
+                continue
+            rows = sorted((by_id[i] for i in ids),
+                          key=lambda r: (r["created_at"], r["id"]))
+            out[slot] = [{"conversation_id": r["id"], "created_at": r["created_at"],
+                          "title": r["title"]} for r in rows]
+        return {"version_groups": out}
 
     # ---------------------------------------------------------------- favorites
     def add_favorite(self, user_id: str, url: str, property_dict: dict) -> None:
@@ -793,6 +1035,8 @@ class ConversationStore:
             "forked_from_turn_id": row["forked_from_turn_id"],
             "root_conversation_id": row["root_conversation_id"],
             "branch_depth": row["branch_depth"],
+            "fork_reason": row["fork_reason"],
+            "edited_slot_turn_id": row["edited_slot_turn_id"],
         }
 
     @staticmethod

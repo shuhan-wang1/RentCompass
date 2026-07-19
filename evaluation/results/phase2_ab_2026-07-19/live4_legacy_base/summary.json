@@ -1,0 +1,780 @@
+{
+  "config": "routed_models",
+  "arch": "legacy",
+  "mode": "live",
+  "offline": false,
+  "repeats": 1,
+  "n_cases_selected": 98,
+  "n_runs": 98,
+  "passed": {
+    "num": 33,
+    "den": 98,
+    "display": "33/98",
+    "rate": 0.336734693877551
+  },
+  "task_completion": {
+    "num": 98,
+    "den": 98,
+    "display": "98/98",
+    "rate": 1.0
+  },
+  "route_accuracy": {
+    "num": 55,
+    "den": 98,
+    "display": "55/98",
+    "rate": 0.5612244897959183
+  },
+  "forbidden_tool_rate": {
+    "num": 5,
+    "den": 98,
+    "display": "5/98",
+    "rate": 0.05102040816326531
+  },
+  "duplicate_call_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "loop_exhaustion_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "schema_failure_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "hard_gate": {
+    "total": 0,
+    "passed": 0,
+    "failed_case_ids": []
+  },
+  "gate_passed": true,
+  "constraints": {
+    "num": 216,
+    "den": 321,
+    "display": "216/321",
+    "rate": 0.6728971962616822
+  },
+  "grounded_rate": {
+    "num": 136,
+    "den": 176,
+    "display": "136/176",
+    "rate": 0.7727272727272727
+  },
+  "money_grounded_rate": {
+    "num": 112,
+    "den": 125,
+    "display": "112/125",
+    "rate": 0.896
+  },
+  "contradicted_claims": 1,
+  "source_coverage": {
+    "num": 109,
+    "den": 176,
+    "display": "109/176",
+    "rate": 0.6193181818181818
+  },
+  "critic_triggers": 72,
+  "critic_repairs": 7,
+  "latency_ms": {
+    "mean": 4794.990865305204,
+    "p50": 2833.396750007523,
+    "p95": 14351.659905011169,
+    "n": 98
+  },
+  "node_latency_by_kind": {
+    "extract_preferences": {
+      "sum_ms": 73.02389974938706,
+      "max_ms": 10.178899974562228,
+      "count": 98
+    },
+    "decide_tool": {
+      "sum_ms": 96228.32130017923,
+      "max_ms": 4741.113800031599,
+      "count": 98
+    },
+    "execute_tool": {
+      "sum_ms": 75512.88030005526,
+      "max_ms": 35086.21729997685,
+      "count": 58
+    },
+    "format_output": {
+      "sum_ms": 14.603499905206263,
+      "max_ms": 1.1526999878697097,
+      "count": 98
+    },
+    "generate_response": {
+      "sum_ms": 200619.69320033677,
+      "max_ms": 7450.193399970885,
+      "count": 65
+    },
+    "critic": {
+      "sum_ms": 20621.246100228745,
+      "max_ms": 5482.967999996617,
+      "count": 65
+    },
+    "dispatch_tasks": {
+      "sum_ms": 0.48940005945041776,
+      "max_ms": 0.06669998401775956,
+      "count": 18
+    },
+    "task_worker": {
+      "sum_ms": 295604.2797997361,
+      "max_ms": 10313.554899999872,
+      "count": 80
+    },
+    "gather_wave": {
+      "sum_ms": 2.2282999707385898,
+      "max_ms": 0.28989999555051327,
+      "count": 18
+    },
+    "reflect": {
+      "sum_ms": 2458.1416000728495,
+      "max_ms": 1056.9717999896966,
+      "count": 16
+    },
+    "build_execution_plan": {
+      "sum_ms": 4043.5753000201657,
+      "max_ms": 1430.170299950987,
+      "count": 3
+    }
+  },
+  "slowest_cases": [
+    {
+      "run_id": "A1#r1#routed_models",
+      "case_id": "A1",
+      "category": "A_retrieval",
+      "config": "routed_models",
+      "latency_ms": 38821.47610001266,
+      "llm_calls": 0,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 10.178899974562228,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 0.16729999333620071,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 35086.21729997685,
+          "seq": 2
+        },
+        {
+          "node": "format_output",
+          "ms": 0.2604000037536025,
+          "seq": 3
+        }
+      ]
+    },
+    {
+      "run_id": "B4#r1#routed_models",
+      "case_id": "B4",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 22636.173799983226,
+      "llm_calls": 4,
+      "tool_batches": 5,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 1.2965999776497483,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 3919.442899990827,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.02139998832717538,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 10285.555200011004,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 10286.920400045346,
+          "seq": 4
+        },
+        {
+          "node": "task_worker",
+          "ms": 10288.0399999558,
+          "seq": 5
+        },
+        {
+          "node": "task_worker",
+          "ms": 10288.886999944225,
+          "seq": 6
+        },
+        {
+          "node": "task_worker",
+          "ms": 10289.495099976193,
+          "seq": 7
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.11090002954006195,
+          "seq": 8
+        },
+        {
+          "node": "generate_response",
+          "ms": 5691.439399961382,
+          "seq": 9
+        },
+        {
+          "node": "critic",
+          "ms": 2684.6807000110857,
+          "seq": 10
+        },
+        {
+          "node": "format_output",
+          "ms": 0.17630000365898013,
+          "seq": 11
+        }
+      ]
+    },
+    {
+      "run_id": "B14#r1#routed_models",
+      "case_id": "B14",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 17397.112100035883,
+      "llm_calls": 3,
+      "tool_batches": 5,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.36990002263337374,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 4225.127800018527,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.0247000134550035,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 10310.535500000697,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 10311.455699964426,
+          "seq": 4
+        },
+        {
+          "node": "task_worker",
+          "ms": 10312.18439998338,
+          "seq": 5
+        },
+        {
+          "node": "task_worker",
+          "ms": 10312.868700013496,
+          "seq": 6
+        },
+        {
+          "node": "task_worker",
+          "ms": 10313.554899999872,
+          "seq": 7
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.09950000094249845,
+          "seq": 8
+        },
+        {
+          "node": "generate_response",
+          "ms": 2806.322300049942,
+          "seq": 9
+        },
+        {
+          "node": "critic",
+          "ms": 3.0137000139802694,
+          "seq": 10
+        },
+        {
+          "node": "format_output",
+          "ms": 0.22089999401941895,
+          "seq": 11
+        }
+      ]
+    },
+    {
+      "run_id": "B5#r1#routed_models",
+      "case_id": "B5",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 16758.632700017188,
+      "llm_calls": 3,
+      "tool_batches": 5,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.3437999985180795,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 3635.9894999768585,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.025300018023699522,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 8209.971999982372,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 8211.09279996017,
+          "seq": 4
+        },
+        {
+          "node": "task_worker",
+          "ms": 8212.545499962289,
+          "seq": 5
+        },
+        {
+          "node": "task_worker",
+          "ms": 8213.164400018286,
+          "seq": 6
+        },
+        {
+          "node": "task_worker",
+          "ms": 8214.027799956966,
+          "seq": 7
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.08460000390186906,
+          "seq": 8
+        },
+        {
+          "node": "generate_response",
+          "ms": 4845.757899980526,
+          "seq": 9
+        },
+        {
+          "node": "critic",
+          "ms": 4.510300001129508,
+          "seq": 10
+        },
+        {
+          "node": "format_output",
+          "ms": 0.18749997252598405,
+          "seq": 11
+        }
+      ]
+    },
+    {
+      "run_id": "B7#r1#routed_models",
+      "case_id": "B7",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 15730.452300049365,
+      "llm_calls": 3,
+      "tool_batches": 5,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.3239999641664326,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 4741.113800031599,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.021499989088624716,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 6207.542400050443,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 6208.608699962497,
+          "seq": 4
+        },
+        {
+          "node": "task_worker",
+          "ms": 6209.527499973774,
+          "seq": 5
+        },
+        {
+          "node": "task_worker",
+          "ms": 6210.385899990797,
+          "seq": 6
+        },
+        {
+          "node": "task_worker",
+          "ms": 6211.22130000731,
+          "seq": 7
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.11309998808428645,
+          "seq": 8
+        },
+        {
+          "node": "generate_response",
+          "ms": 4727.178999979515,
+          "seq": 9
+        },
+        {
+          "node": "critic",
+          "ms": 2.000100037548691,
+          "seq": 10
+        },
+        {
+          "node": "format_output",
+          "ms": 0.1373999984934926,
+          "seq": 11
+        }
+      ]
+    },
+    {
+      "run_id": "B15#r1#routed_models",
+      "case_id": "B15",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 14108.343600004446,
+      "llm_calls": 3,
+      "tool_batches": 5,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.360500009264797,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 4712.241100030951,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.030399998649954796,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 4112.306299968623,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 4113.328699953854,
+          "seq": 4
+        },
+        {
+          "node": "task_worker",
+          "ms": 4114.021399989724,
+          "seq": 5
+        },
+        {
+          "node": "task_worker",
+          "ms": 4114.6338999969885,
+          "seq": 6
+        },
+        {
+          "node": "task_worker",
+          "ms": 4115.1918999967165,
+          "seq": 7
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.08899997919797897,
+          "seq": 8
+        },
+        {
+          "node": "generate_response",
+          "ms": 5224.691900017206,
+          "seq": 9
+        },
+        {
+          "node": "critic",
+          "ms": 7.881700003053993,
+          "seq": 10
+        },
+        {
+          "node": "format_output",
+          "ms": 0.12959999730810523,
+          "seq": 11
+        }
+      ]
+    },
+    {
+      "run_id": "B9#r1#routed_models",
+      "case_id": "B9",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 13897.304899990559,
+      "llm_calls": 3,
+      "tool_batches": 5,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.33760000951588154,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 3777.489100000821,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.02600002335384488,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 8289.254300005268,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 8290.534699975979,
+          "seq": 4
+        },
+        {
+          "node": "task_worker",
+          "ms": 8291.533700015862,
+          "seq": 5
+        },
+        {
+          "node": "task_worker",
+          "ms": 8292.474500020035,
+          "seq": 6
+        },
+        {
+          "node": "task_worker",
+          "ms": 8293.562400038354,
+          "seq": 7
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.2470999606885016,
+          "seq": 8
+        },
+        {
+          "node": "generate_response",
+          "ms": 1774.7949000331573,
+          "seq": 9
+        },
+        {
+          "node": "critic",
+          "ms": 2.2096000029705465,
+          "seq": 10
+        },
+        {
+          "node": "format_output",
+          "ms": 0.08249998791143298,
+          "seq": 11
+        }
+      ]
+    },
+    {
+      "run_id": "B1#r1#routed_models",
+      "case_id": "B1",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 12821.920200018212,
+      "llm_calls": 3,
+      "tool_batches": 5,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.23309997050091624,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 4125.47899998026,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.026100024115294218,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 6164.034300018102,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 6165.0660000159405,
+          "seq": 4
+        },
+        {
+          "node": "task_worker",
+          "ms": 6166.011099994648,
+          "seq": 5
+        },
+        {
+          "node": "task_worker",
+          "ms": 6166.793400014285,
+          "seq": 6
+        },
+        {
+          "node": "task_worker",
+          "ms": 6167.497000016738,
+          "seq": 7
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.10090001160278916,
+          "seq": 8
+        },
+        {
+          "node": "generate_response",
+          "ms": 2474.2221999913454,
+          "seq": 9
+        },
+        {
+          "node": "critic",
+          "ms": 7.367199985310435,
+          "seq": 10
+        },
+        {
+          "node": "format_output",
+          "ms": 0.1737999846227467,
+          "seq": 11
+        }
+      ]
+    },
+    {
+      "run_id": "A3#r1#routed_models",
+      "case_id": "A3",
+      "category": "A_retrieval",
+      "config": "routed_models",
+      "latency_ms": 12585.5550999986,
+      "llm_calls": 1,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 1.534599985461682,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 0.13679999392479658,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 8841.120700002648,
+          "seq": 2
+        },
+        {
+          "node": "generate_response",
+          "ms": 3693.805000046268,
+          "seq": 3
+        },
+        {
+          "node": "critic",
+          "ms": 1.5783000271767378,
+          "seq": 4
+        },
+        {
+          "node": "format_output",
+          "ms": 0.07660000119358301,
+          "seq": 5
+        }
+      ]
+    },
+    {
+      "run_id": "B12#r1#routed_models",
+      "case_id": "B12",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 12497.055500047281,
+      "llm_calls": 3,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.7443000213243067,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 828.882200003136,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 4.277999978512526,
+          "seq": 2
+        },
+        {
+          "node": "generate_response",
+          "ms": 6147.602500044741,
+          "seq": 3
+        },
+        {
+          "node": "critic",
+          "ms": 5482.967999996617,
+          "seq": 4
+        },
+        {
+          "node": "format_output",
+          "ms": 0.05859998054802418,
+          "seq": 5
+        }
+      ]
+    }
+  ],
+  "profile_totals": {
+    "llm_calls": 159,
+    "tool_batches": 121,
+    "critic_repairs_cases": 7
+  },
+  "tokens": {
+    "input": 148592,
+    "output": 18535
+  },
+  "total_cost_usd": 0.009361844799999998,
+  "cost_cap_usd": 5.0,
+  "stopped_reason": null,
+  "security_audit": {
+    "cases_with_denied_writes": 0,
+    "denied_by_tool": {},
+    "denied_cases": []
+  },
+  "git_commit": "9890e08",
+  "git_dirty": false,
+  "timestamp": "2026-07-19T12:34:46",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

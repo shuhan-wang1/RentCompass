@@ -1,0 +1,915 @@
+{
+  "config": "routed_models",
+  "arch": "fc_loop",
+  "mode": "live",
+  "offline": false,
+  "repeats": 1,
+  "n_cases_selected": 98,
+  "n_runs": 98,
+  "passed": {
+    "num": 49,
+    "den": 98,
+    "display": "49/98",
+    "rate": 0.5
+  },
+  "task_completion": {
+    "num": 98,
+    "den": 98,
+    "display": "98/98",
+    "rate": 1.0
+  },
+  "route_accuracy": {
+    "num": 78,
+    "den": 98,
+    "display": "78/98",
+    "rate": 0.7959183673469388
+  },
+  "forbidden_tool_rate": {
+    "num": 4,
+    "den": 98,
+    "display": "4/98",
+    "rate": 0.04081632653061224
+  },
+  "duplicate_call_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "loop_exhaustion_rate": {
+    "num": 1,
+    "den": 98,
+    "display": "1/98",
+    "rate": 0.01020408163265306
+  },
+  "schema_failure_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "hard_gate": {
+    "total": 0,
+    "passed": 0,
+    "failed_case_ids": []
+  },
+  "gate_passed": true,
+  "constraints": {
+    "num": 253,
+    "den": 321,
+    "display": "253/321",
+    "rate": 0.7881619937694704
+  },
+  "grounded_rate": {
+    "num": 223,
+    "den": 311,
+    "display": "223/311",
+    "rate": 0.7170418006430869
+  },
+  "money_grounded_rate": {
+    "num": 149,
+    "den": 180,
+    "display": "149/180",
+    "rate": 0.8277777777777777
+  },
+  "contradicted_claims": 17,
+  "source_coverage": {
+    "num": 182,
+    "den": 311,
+    "display": "182/311",
+    "rate": 0.5852090032154341
+  },
+  "critic_triggers": 105,
+  "critic_repairs": 10,
+  "latency_ms": {
+    "mean": 8634.025821427824,
+    "p50": 4609.412299992982,
+    "p95": 32972.85240997437,
+    "n": 98
+  },
+  "node_latency_by_kind": {
+    "extract_preferences": {
+      "sum_ms": 68.55150015326217,
+      "max_ms": 10.853199986740947,
+      "count": 98
+    },
+    "guard": {
+      "sum_ms": 15.897699864581227,
+      "max_ms": 3.34689998999238,
+      "count": 98
+    },
+    "agent": {
+      "sum_ms": 530967.0730001526,
+      "max_ms": 12752.076000033412,
+      "count": 234
+    },
+    "execute_tools": {
+      "sum_ms": 290201.828199788,
+      "max_ms": 38939.757099957205,
+      "count": 136
+    },
+    "critic": {
+      "sum_ms": 20382.933300279547,
+      "max_ms": 3017.157100024633,
+      "count": 95
+    },
+    "format_output_fc": {
+      "sum_ms": 17.30370055884123,
+      "max_ms": 0.8793000015430152,
+      "count": 98
+    }
+  },
+  "slowest_cases": [
+    {
+      "run_id": "E6#r1#routed_models",
+      "case_id": "E6",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 61899.759499996435,
+      "llm_calls": 11,
+      "tool_batches": 8,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.6759000243619084,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.1249000197276473,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 2123.002299980726,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 5593.890699965414,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 2929.4806999969296,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 3880.245800013654,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 2734.236999996938,
+          "seq": 6
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2604.079099954106,
+          "seq": 7
+        },
+        {
+          "node": "agent",
+          "ms": 1721.3172999909148,
+          "seq": 8
+        },
+        {
+          "node": "execute_tools",
+          "ms": 20007.019600016065,
+          "seq": 9
+        },
+        {
+          "node": "agent",
+          "ms": 1767.7197000011802,
+          "seq": 10
+        },
+        {
+          "node": "execute_tools",
+          "ms": 10.813200031407177,
+          "seq": 11
+        },
+        {
+          "node": "agent",
+          "ms": 1989.2538000131026,
+          "seq": 12
+        },
+        {
+          "node": "execute_tools",
+          "ms": 0.45650004176422954,
+          "seq": 13
+        },
+        {
+          "node": "agent",
+          "ms": 1573.2956999563612,
+          "seq": 14
+        },
+        {
+          "node": "execute_tools",
+          "ms": 10.60519996099174,
+          "seq": 15
+        },
+        {
+          "node": "agent",
+          "ms": 1769.1026999964379,
+          "seq": 16
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2047.5598000339232,
+          "seq": 17
+        },
+        {
+          "node": "agent",
+          "ms": 2082.1882000309415,
+          "seq": 18
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2927.273699955549,
+          "seq": 19
+        },
+        {
+          "node": "agent",
+          "ms": 1361.6222999989986,
+          "seq": 20
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2923.7032999517396,
+          "seq": 21
+        },
+        {
+          "node": "agent",
+          "ms": 1737.017499981448,
+          "seq": 22
+        },
+        {
+          "node": "critic",
+          "ms": 12.544500001240522,
+          "seq": 23
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.11000002268701792,
+          "seq": 24
+        }
+      ]
+    },
+    {
+      "run_id": "E1#r1#routed_models",
+      "case_id": "E1",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 60824.82560002245,
+      "llm_calls": 6,
+      "tool_batches": 4,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.6664000102318823,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.13689999468624592,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1622.9082000209019,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 7585.923600010574,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 3625.4119999939576,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 20018.581999989692,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 2605.9713000431657,
+          "seq": 6
+        },
+        {
+          "node": "execute_tools",
+          "ms": 9.600199991837144,
+          "seq": 7
+        },
+        {
+          "node": "agent",
+          "ms": 1871.98769999668,
+          "seq": 8
+        },
+        {
+          "node": "execute_tools",
+          "ms": 12407.11959998589,
+          "seq": 9
+        },
+        {
+          "node": "agent",
+          "ms": 3583.996000001207,
+          "seq": 10
+        },
+        {
+          "node": "execute_tools",
+          "ms": 0.1943999668583274,
+          "seq": 11
+        },
+        {
+          "node": "agent",
+          "ms": 7418.815599987283,
+          "seq": 12
+        },
+        {
+          "node": "critic",
+          "ms": 13.290599978063256,
+          "seq": 13
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.4061999497935176,
+          "seq": 14
+        }
+      ]
+    },
+    {
+      "run_id": "E11#r1#routed_models",
+      "case_id": "E11",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 52448.7827999983,
+      "llm_calls": 5,
+      "tool_batches": 3,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.5991000216454268,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.13639999087899923,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 2384.8977999878116,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 4504.151300003286,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 2347.4132000119425,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 20015.544799971394,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 2226.7888999776915,
+          "seq": 6
+        },
+        {
+          "node": "execute_tools",
+          "ms": 0.24500000290572643,
+          "seq": 7
+        },
+        {
+          "node": "agent",
+          "ms": 1243.473600014113,
+          "seq": 8
+        },
+        {
+          "node": "execute_tools",
+          "ms": 12897.79300004011,
+          "seq": 9
+        },
+        {
+          "node": "agent",
+          "ms": 6761.172299971804,
+          "seq": 10
+        },
+        {
+          "node": "critic",
+          "ms": 7.217100006528199,
+          "seq": 11
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.3412999794818461,
+          "seq": 12
+        }
+      ]
+    },
+    {
+      "run_id": "A1#r1#routed_models",
+      "case_id": "A1",
+      "category": "A_retrieval",
+      "config": "routed_models",
+      "latency_ms": 51063.212600012776,
+      "llm_calls": 4,
+      "tool_batches": 0,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 10.853199986740947,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 3.191600029822439,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 6020.172399992589,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 38939.757099957205,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 2087.4457000172697,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 0.7628999883309007,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 2364.7688000346534,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 1577.822700026445,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.22529996931552887,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "F9#r1#routed_models",
+      "case_id": "F9",
+      "category": "F_grounding",
+      "config": "routed_models",
+      "latency_ms": 39726.11039999174,
+      "llm_calls": 3,
+      "tool_batches": 2,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.7687000324949622,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.0923000043258071,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 2022.0804999698885,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 20008.86929995613,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 2767.283499997575,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2115.5308000161313,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 12752.076000033412,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 4.587400006130338,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.6787999882362783,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "E5#r1#routed_models",
+      "case_id": "E5",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 31781.100999971386,
+      "llm_calls": 8,
+      "tool_batches": 6,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.2861000248230994,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.07880001794546843,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1705.0534999580123,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 3025.0035999924876,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 1620.8704999880865,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2076.4547999715433,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 3636.5744000067934,
+          "seq": 6
+        },
+        {
+          "node": "execute_tools",
+          "ms": 6.829200021456927,
+          "seq": 7
+        },
+        {
+          "node": "agent",
+          "ms": 3877.686200023163,
+          "seq": 8
+        },
+        {
+          "node": "execute_tools",
+          "ms": 0.46900002053007483,
+          "seq": 9
+        },
+        {
+          "node": "agent",
+          "ms": 1823.2495000120252,
+          "seq": 10
+        },
+        {
+          "node": "execute_tools",
+          "ms": 5.0311999511905015,
+          "seq": 11
+        },
+        {
+          "node": "agent",
+          "ms": 2039.3124999827705,
+          "seq": 12
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2070.4583000042476,
+          "seq": 13
+        },
+        {
+          "node": "agent",
+          "ms": 1138.8317999662831,
+          "seq": 14
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2049.629000015557,
+          "seq": 15
+        },
+        {
+          "node": "agent",
+          "ms": 6634.549899958074,
+          "seq": 16
+        },
+        {
+          "node": "critic",
+          "ms": 2.4276000331155956,
+          "seq": 17
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.20409998251125216,
+          "seq": 18
+        }
+      ]
+    },
+    {
+      "run_id": "E7#r1#routed_models",
+      "case_id": "E7",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 28135.15049999114,
+      "llm_calls": 3,
+      "tool_batches": 2,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.7852999842725694,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.11930003529414535,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1742.7949999691918,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2.5215999921783805,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 2115.6761000165716,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 20007.183100038674,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 4216.682199970819,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 4.1942999814637005,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.21949998335912824,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "C9#r1#routed_models",
+      "case_id": "C9",
+      "category": "C_commute",
+      "config": "routed_models",
+      "latency_ms": 26882.80699995812,
+      "llm_calls": 5,
+      "tool_batches": 4,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.47400000039488077,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.08349999552592635,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 2477.243000001181,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 80.84440004313365,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 3044.827699952293,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 1810.0085000041872,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 2329.7586999833584,
+          "seq": 6
+        },
+        {
+          "node": "execute_tools",
+          "ms": 9529.118000005838,
+          "seq": 7
+        },
+        {
+          "node": "agent",
+          "ms": 2148.0219999793917,
+          "seq": 8
+        },
+        {
+          "node": "execute_tools",
+          "ms": 35.285199992358685,
+          "seq": 9
+        },
+        {
+          "node": "agent",
+          "ms": 5365.718199987896,
+          "seq": 10
+        },
+        {
+          "node": "critic",
+          "ms": 11.310899979434907,
+          "seq": 11
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.2408000291325152,
+          "seq": 12
+        }
+      ]
+    },
+    {
+      "run_id": "E2#r1#routed_models",
+      "case_id": "E2",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 16799.34600001434,
+      "llm_calls": 4,
+      "tool_batches": 3,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.7046000100672245,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.10770000517368317,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1792.1217000111938,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 4266.3961999933235,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 1939.7155999904498,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 1499.274100002367,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 1407.8966999659315,
+          "seq": 6
+        },
+        {
+          "node": "execute_tools",
+          "ms": 1092.6586000132374,
+          "seq": 7
+        },
+        {
+          "node": "agent",
+          "ms": 4742.835899989586,
+          "seq": 8
+        },
+        {
+          "node": "critic",
+          "ms": 4.73090005107224,
+          "seq": 9
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.2432999899610877,
+          "seq": 10
+        }
+      ]
+    },
+    {
+      "run_id": "B8#r1#routed_models",
+      "case_id": "B8",
+      "category": "B_money",
+      "config": "routed_models",
+      "latency_ms": 14185.792899981607,
+      "llm_calls": 4,
+      "tool_batches": 2,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.8497000089846551,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.09210000280290842,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1556.680299981963,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2047.9973999899812,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 954.4976000324823,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2033.744900021702,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 5077.15000002645,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 2472.248899983242,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.05870003951713443,
+          "seq": 8
+        }
+      ]
+    }
+  ],
+  "profile_totals": {
+    "llm_calls": 244,
+    "tool_batches": 131,
+    "critic_repairs_cases": 10
+  },
+  "tokens": {
+    "input": 2110923,
+    "output": 40314
+  },
+  "total_cost_usd": 0.026762304800000004,
+  "cost_cap_usd": 5.0,
+  "stopped_reason": null,
+  "security_audit": {
+    "cases_with_denied_writes": 0,
+    "denied_by_tool": {},
+    "denied_cases": []
+  },
+  "git_commit": "07c8dfc",
+  "git_dirty": false,
+  "timestamp": "2026-07-19T13:37:28",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

@@ -286,6 +286,15 @@ def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
     return art
 
 
+def _swallow_abandoned_task(task) -> None:
+    """Done-callback for budget-abandoned tasks: consume the outcome so the loop never
+    logs 'exception was never retrieved' for work we deliberately walked away from."""
+    try:
+        task.exception()
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
 def _is_executed(artifact: dict) -> bool:
     """True unless the artifact is a timeout / denied placeholder. Card rendering and
     'last successful' lookups must skip these — they represent work that never ran — while
@@ -720,9 +729,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     else:
                         task.cancel()
                         timed_out_idx.add(i)
-                if pending:
-                    # Let cancellations settle so no "Task was destroyed" warning leaks.
-                    await asyncio.gather(*pending, return_exceptions=True)
+                        # Do NOT await the cancelled task: wait_for's cancellation waits
+                        # for the inner future, and a tool already running in an executor
+                        # THREAD cannot be cancelled — awaiting here blocks until the tool
+                        # actually finishes, defeating the batch budget (observed live:
+                        # 37.6s spans past a 20s window). Abandon instead: the thread
+                        # completes in the background; the callback swallows the eventual
+                        # CancelledError/result so nothing leaks a warning.
+                        task.add_done_callback(_swallow_abandoned_task)
 
         tainted_any = False
         for i, (tc, digest, mode, args) in enumerate(plan):

@@ -52,6 +52,9 @@ from typing import Any, Dict, List, Optional
 # Assertable markers (kept short + load-bearing so wording tweaks don't break tests).
 SOFT_GATE_CONFIRMED_MARKER = "confirmed=true"
 NO_EMOJI_MARKER = "Never use emoji"
+NO_RECALL_MARKER = "Do NOT call recall_memory"
+WEB_SEARCH_BUDGET_MARKER = "at most 2 web_search"
+POLICE_SOURCE_MARKER = "data.police.uk"
 
 # 2.6 soft criteria gate. The gate itself lives inside search_properties; the harness
 # re-injects criteria_gate_shown / confirmed. The model must know the confirmed
@@ -99,13 +102,48 @@ MEMORY_CONFIRM_RULE = (
     "precise text you would store and ask the user to confirm — do not paraphrase it."
 )
 
+# Latency + routing-quality rules (fc-loop A/B): long-term memory is ALREADY injected
+# into the context block, so a recall_memory first hop is a wasted LLM round-trip.
+MEMORY_IN_CONTEXT_RULE = (
+    "MEMORY ALREADY PROVIDED: What we remember about the user is already provided in your "
+    "context (the WHAT I REMEMBER block). " + NO_RECALL_MARKER + " unless the user asks about a "
+    "specific remembered fact that is ABSENT from the provided context."
+)
+
+# Loop-churn guard: parallelise independent calls, cap repeat web_search, answer from context.
+EFFICIENCY_RULE = (
+    "TOOL EFFICIENCY: Prefer ONE batch of parallel tool calls over sequential single calls when "
+    "the tools are independent. Use " + WEB_SEARCH_BUDGET_MARKER + " batches per turn — synthesize "
+    "an answer from what you already have instead of searching again. When the context already "
+    "contains the answer, reply directly without calling any tool."
+)
+
+# Safety follow-ups about the discussed area must hit check_safety, not recall_memory/web_search.
+SAFETY_TARGET_RULE = (
+    "SAFETY TARGET: A safety question about an area under discussion (「那个区域安全吗」/「这边治安"
+    "怎么样」/ \"is that area safe\") means call check_safety with that discussed area as the "
+    "address/area argument, then cite the data source (" + POLICE_SOURCE_MARKER + ") in your "
+    "answer. Do NOT route it to recall_memory or web_search."
+)
+
+# Grounded citation: surface the source attribution a tool provides.
+GROUNDED_CITATION_RULE = (
+    "CITE THE SOURCE: When a tool result carries a source attribution (safety data from "
+    + POLICE_SOURCE_MARKER + ", official TfL fares, etc.), name that source in your reply so the "
+    "user knows where the figures came from."
+)
+
 _BEHAVIOUR_RULES_HEADER = "=== BEHAVIOUR RULES (standing instructions) ==="
 _BEHAVIOUR_RULES_FOOTER = "=== END BEHAVIOUR RULES ==="
 
 _BEHAVIOUR_RULES_ORDER = (
+    MEMORY_IN_CONTEXT_RULE,
+    EFFICIENCY_RULE,
     SOFT_GATE_RULE,
     NO_SEARCH_YET_RULE,
     DEICTIC_RULE,
+    SAFETY_TARGET_RULE,
+    GROUNDED_CITATION_RULE,
     NO_FABRICATION_RULE,
     MEMORY_CONFIRM_RULE,
     NO_EMOJI_RULE,

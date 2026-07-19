@@ -23,8 +23,8 @@
     "case_id": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^[A-G][0-9]+$",
-      "description": "Unique id. Prefix letter is the category (A-G)."
+      "pattern": "^[A-H][0-9]+$",
+      "description": "Unique id. Prefix letter is the category (A-H). H = guard-regression shard (cases_guard_regression.jsonl)."
     },
     "category": {
       "type": "string",
@@ -35,7 +35,8 @@
         "D_crime_poi",
         "E_multi_constraint",
         "F_grounding",
-        "G_memory"
+        "G_memory",
+        "H_guard_regression"
       ]
     },
     "user_query": {
@@ -171,12 +172,31 @@
         "get_transport_info",
         "recall_memory",
         "remember",
+        "compare_or_rank_areas",
+        "ask_user",
         "market_info",
         "direct_answer",
         "multi_search",
         "reasoning_property",
         "clarification"
       ]
+    },
+    "allowed_tool_paths": {
+      "type": "array",
+      "description": "OPTIONAL. Path-based expected trace for --arch fc_loop grading. A list of ALLOWED paths; a case matches if the actual tool trace equals ANY one of them. Each path is an ordered list of BATCHES; each batch is a list of tool names executed concurrently in one agent super-step. Batch-internal order is INSIGNIFICANT (compared as a set); cross-batch order IS significant. An empty batch list [] means 'no tools' (pure answer/refusal); [[]] means the single allowed path is the empty trace. Tool names must be real registry tools, the new fc_loop tools (ask_user, compare_or_rank_areas), or documented pseudo-routes. For --arch legacy this field is ignored and the expected_tools/forbidden_tools subset semantics apply instead.",
+      "items": {
+        "type": "array",
+        "description": "One allowed path: an ordered sequence of concurrent batches.",
+        "items": {
+          "type": "array",
+          "description": "One batch: tool names run concurrently in a single super-step (order insignificant).",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "hard_gate": {
+      "type": "boolean",
+      "description": "OPTIONAL. If true, this case is an individually-mandatory gate: it must pass on its own and failures are reported by case_id, never averaged into an aggregate pass_rate. Used by the guard-regression shard (category H_guard_regression) where each case reproduces one historical bug / deleted deterministic guard."
     },
     "fixture": {
       "description": "Recorded tool-output fixture(s) under fixtures/ that the runner replays as tool evidence for this case.",

@@ -301,25 +301,8 @@ async def get_property_details_impl(
 # 创建工具实例
 get_property_details_tool = Tool(
     name="get_property_details",
-    description="""获取数据库中特定房产的完整详细信息（描述/设施/访客政策/付款规则等）。
-
-当用户询问某个特定房产的详情时使用此工具，包括：
-- 询问某个房产是什么房型（studio/ensuite/shared等）
-- 询问某个房产的价格、设施、政策等
-- 用户点击 "Ask AI" 按钮询问特定房产
-- 用户对之前推荐过的（含任何历史轮次的）房产提出具体问题
-
-重要：上下文里的"RECOMMENDED LISTINGS INDEX / 推荐索引"只含每套房源的摘要（地址/价格/通勤/URL），
-不含完整描述。要获取某套房源的完整信息时，优先把该条的 URL 传给 property_url —— 这会精确命中缓存里
-的那一条，最准确，避免同名/同街道歧义。没有 URL 时再用名称或地址。
-
-此工具直接查询本地缓存（与搜索同一数据源），比网络搜索更准确。
-
-示例查询：
-- 传 property_url="https://www.onthemarket.com/details/12345/" 精确取该房源详情
-- "Scape Bloomsbury 是 studio 吗？"
-- "告诉我 Woburn Place 那个房子的详细信息"
-""",
+    description="""Get a specific property's full details from the local cache (description, amenities, visitor/payment policy, room type) — same source as search, more accurate than the web. Use when the user asks about a specific listing, clicks "Ask AI" on one, or asks about any previously recommended listing. The RECOMMENDED LISTINGS INDEX in context holds only summaries; pass a listing's URL to property_url for an exact cache hit (avoids same-name ambiguity), else use its name or address.
+获取某房源的完整详情；优先用该房源 URL 精确命中缓存。""",
     parameters={
         "type": "object",
         "properties": {

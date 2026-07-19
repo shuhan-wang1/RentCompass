@@ -88,9 +88,10 @@ def _bootstrap_env(state_dir: Path, events_log: Path) -> None:
 # --------------------------------------------------------------------------- #
 # Case loading + selection
 # --------------------------------------------------------------------------- #
-def load_cases() -> List[dict]:
+def load_cases(path: Optional[Path] = None) -> List[dict]:
     rows: List[dict] = []
-    with CASES_PATH.open("r", encoding="utf-8") as fh:
+    cases_path = Path(path) if path else CASES_PATH
+    with cases_path.open("r", encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, 1):
             line = line.strip()
             if not line:
@@ -98,7 +99,7 @@ def load_cases() -> List[dict]:
             try:
                 rows.append(json.loads(line))
             except json.JSONDecodeError as exc:
-                raise SystemExit(f"cases.jsonl line {lineno}: invalid JSON: {exc}")
+                raise SystemExit(f"{cases_path.name} line {lineno}: invalid JSON: {exc}")
     return rows
 
 
@@ -192,9 +193,29 @@ def _map_intent(expected_route: Optional[str]) -> str:
     return "direct_answer"
 
 
+def _grounding_suffix(case: dict) -> str:
+    """Values/sources the case's deterministic checkers look for in the final answer.
+
+    Offline fake responders (legacy and fc alike) append them so offline measures
+    PIPELINE mechanics rather than fixture-text gaps; whether the REAL model grounds
+    its answer is exactly what the LIVE runs measure."""
+    bits = []
+    for c in case.get("expected_constraints") or []:
+        t = c.get("type")
+        if t in ("must_mention_value", "must_recall_value") and c.get("value") is not None:
+            bits.append(str(c["value"]))
+        elif t == "must_mention_source" and c.get("source"):
+            bits.append(str(c["source"]))
+    for src in case.get("expected_grounding_sources") or []:
+        bits.append(str(src))
+    uniq = list(dict.fromkeys(b for b in bits if b))
+    return (" | grounded on: " + "; ".join(uniq)) if uniq else ""
+
+
 def build_fake_scripts(case: dict) -> Dict[str, str]:
     query = case.get("user_query", "")
-    answer = f"[offline-fake responder] Processed request: {query[:140]}"
+    answer = (f"[offline-fake responder] Processed request: {query[:140]}"
+              + _grounding_suffix(case))
     return {
         "intent": json.dumps({"intent": _map_intent(case.get("expected_route"))}),
         "classification": json.dumps({"intent": _map_intent(case.get("expected_route"))}),
@@ -206,6 +227,83 @@ def build_fake_scripts(case: dict) -> Dict[str, str]:
         }),
         "default": answer,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Offline fake FC agent model (--arch fc_loop --offline)
+#
+# The fc_loop `agent` node calls a bound-tools chat model per super-step (design §2.3).
+# Offline we inject a scripted stand-in via build_agent_graph(agent_llm=...): it replays
+# the case's expected tool-call path as AIMessage(tool_calls=[...]) batches, then a final
+# plain-text AIMessage. This validates the LOOP MECHANICS (agent<->execute_tools handoff,
+# batch/turn structure, artifact capture) unbilled; REAL routing stays live-only, exactly
+# like legacy offline pre-injects the classifier intent. The model is duck-typed (only
+# bind_tools + async ainvoke are used) — it is not a LangChain BaseChatModel.
+# --------------------------------------------------------------------------- #
+def build_fc_batches(case: dict) -> List[List[str]]:
+    """Ordered tool-call batches the fake agent should emit for this case.
+
+    Priority: the FIRST ``allowed_tool_paths`` entry (authoritative batch structure from
+    the guard-regression shard) -> ``expected_tools`` as a single batch -> the mapped
+    ``expected_route`` as a single one-tool batch -> [] (a direct answer, no tools)."""
+    allowed = case.get("allowed_tool_paths")
+    if allowed:
+        # Drop empty batches: the schema writes a no-tools path as [[]], but emitting an
+        # empty tool_calls batch would surface as an empty final answer. No batches at
+        # all IS the empty trace.
+        return [list(b) for b in allowed[0] if b]
+    expected = case.get("expected_tools")
+    if expected:
+        return [list(expected)]
+    route = case.get("expected_route")
+    if route in _CATALOG_INTENTS and route != "direct_answer":
+        return [[route]]
+    return []
+
+
+class _FakeFCModel:
+    """Scripted, duck-typed stand-in for the fc_loop agent's bound-tools chat model."""
+
+    def __init__(self, batches: List[List[str]], final_text: str, query: str):
+        self._batches = batches
+        self._final_text = final_text
+        self._query = query
+        self._step = 0
+
+    def bind_tools(self, tools, **kwargs):  # noqa: ANN001 - duck-typed, returns self
+        return self
+
+    def _args_for(self, name: str) -> dict:
+        # Minimal args synthesized from the case; the executor re-injects real search
+        # params and offline tools are stubbed, so only search gets a seed query.
+        if name == "search_properties":
+            return {"user_query": self._query, "current_message": self._query}
+        if name == "ask_user":
+            # format_output_fc surfaces this question verbatim; the
+            # must_ask_clarification checker looks for question markers.
+            return {"question": f"Could you tell me more about what you need? ({self._query[:60]}?)",
+                    "clarification_kind": "other"}
+        return {}
+
+    async def ainvoke(self, messages, **kwargs):  # noqa: ANN001
+        from langchain_core.messages import AIMessage
+        if self._step < len(self._batches):
+            batch = self._batches[self._step]
+            self._step += 1
+            tool_calls = [
+                {"name": name, "args": self._args_for(name),
+                 "id": f"call_{self._step}_{i}", "type": "tool_call"}
+                for i, name in enumerate(batch)
+            ]
+            return AIMessage(content="", tool_calls=tool_calls)
+        return AIMessage(content=self._final_text)
+
+
+def build_fake_fc_model(case: dict) -> _FakeFCModel:
+    query = case.get("user_query", "")
+    final_text = (f"[offline-fake fc responder] Processed request: {query[:140]}"
+                  + _grounding_suffix(case))
+    return _FakeFCModel(build_fc_batches(case), final_text, query)
 
 
 # --------------------------------------------------------------------------- #
@@ -280,6 +378,15 @@ class RunResult:
     route: Any = None
     tools_called: List[str] = field(default_factory=list)
     tool_call_events: List[dict] = field(default_factory=list)
+    # Phase 2 route/trace + failure flags (per case). tool_trace = ordered batches of
+    # tool names; the flags feed graders.summarize_route_metrics for the summary block.
+    tool_trace: List[List[str]] = field(default_factory=list)
+    route_matched: bool = False
+    forbidden_tool: bool = False
+    duplicate_call: bool = False
+    loop_exhaustion: bool = False
+    schema_failure: bool = False
+    hard_gate: bool = False
     node_latencies: Dict[str, float] = field(default_factory=dict)
     model_usage: List[dict] = field(default_factory=list)
     critic_verdicts: List[dict] = field(default_factory=list)
@@ -326,8 +433,9 @@ class CaseRunner:
     """Holds imported modules + shared config; runs cases one at a time."""
 
     def __init__(self, *, mode: str, cfg, state_root: Path, events_log: Path,
-                 judge: bool):
+                 judge: bool, arch: str = "legacy"):
         self.mode = mode          # "offline" | "live"
+        self.arch = arch          # "legacy" | "fc_loop"
         self.cfg = cfg
         self.state_root = state_root
         self.events_log = events_log
@@ -576,10 +684,16 @@ class CaseRunner:
         started = time.perf_counter()
         final_state = None
         run_error: Optional[str] = None
+        # Offline fc_loop: inject a scripted fake agent model so the tool loop runs
+        # unbilled (design §2.3). Legacy / live builds pass agent_llm=None (unused by
+        # legacy; live fc uses the real ModelRouter driver).
+        agent_llm = (build_fake_fc_model(case)
+                     if (self.arch == "fc_loop" and self.mode == "offline") else None)
         with self.collector.capture_run(run_id, case_id, self.cfg.name):
             with self._patch_tools(registry, fixture_queue, evidence), self._patch_llm(case):
                 # Build graph INSIDE the patches so build-time LLM factory (intent) is faked.
-                graph = self.build_agent_graph(registry, checkpointer=checkpointer)
+                graph = self.build_agent_graph(registry, checkpointer=checkpointer,
+                                               agent_llm=agent_llm)
                 try:
                     final_state = await graph.ainvoke(state, config=gconfig)
                 except Exception as exc:
@@ -612,6 +726,25 @@ class CaseRunner:
                              for e in mine if e.get("type") == "node_span"}
         rr.model_usage = [e for e in mine if e.get("type") == "llm_call"]
         rr.critic_verdicts = [e for e in mine if e.get("type") == "critic_verdict"]
+
+        # ---- Phase 2 route/trace + failure flags -------------------------- #
+        # fc_loop trace = artifacts grouped into batches by turn (batch = one agent
+        # super-step). legacy trace = one batch per executed tool, in call order
+        # (there is no batch structure to recover). Failure flags are per case.
+        fs = final_state or {}
+        if self.arch == "fc_loop":
+            artifacts = fs.get("tool_artifacts") or []
+            rr.tool_trace = self.graders.extract_tool_trace(artifacts)
+            signatures = [(a.get("tool"), a.get("params_digest")) for a in artifacts]
+        else:
+            rr.tool_trace = [[t] for t in rr.tools_called]
+            signatures = [(e.get("tool"), e.get("args_hash")) for e in tool_events]
+        rr.route_matched = self.graders.route_matches(rr.tool_trace, case)
+        rr.forbidden_tool = self.graders.forbidden_tool_used(rr.tool_trace, case)
+        rr.duplicate_call = self.graders.has_duplicate_calls(signatures)
+        rr.loop_exhaustion = self.graders.loop_exhausted(fs)
+        rr.schema_failure = self.graders.schema_failure_detected(evidence)
+        rr.hard_gate = bool(case.get("hard_gate"))
 
         # Cost from llm_call events.
         rr.cost_usd = self._cost_of(rr.model_usage)
@@ -746,7 +879,7 @@ def write_model_usage(out: Path, runs: List[RunResult], pricing) -> None:
 
 def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
                   repeats: int, cost_cap: float, stopped_reason: Optional[str],
-                  n_selected: int, timestamp: str) -> dict:
+                  n_selected: int, timestamp: str, arch: str = "legacy") -> dict:
     n = len(runs)
     passed = sum(1 for r in runs if r.passed)
     completed = sum(1 for r in runs if r.verdict.get("task_completed"))
@@ -771,8 +904,21 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
         return {"num": num, "den": den, "display": f"{num}/{den}",
                 "rate": (num / den if den else None)}
 
+    # Phase 2 route/trace + failure metrics + hard-gate block (design Phase 2). Built from
+    # the per-case flags computed in CaseRunner.run; delegates aggregation to graders so
+    # the same pure logic is unit-tested in tests/test_eval_fc_metrics.py.
+    from evaluation.metrics import graders as _graders
+    route_metrics = _graders.summarize_route_metrics([
+        {"case_id": r.case_id, "route_matched": r.route_matched,
+         "forbidden_tool": r.forbidden_tool, "duplicate_call": r.duplicate_call,
+         "loop_exhaustion": r.loop_exhaustion, "schema_failure": r.schema_failure,
+         "hard_gate": r.hard_gate, "passed": r.passed}
+        for r in runs
+    ])
+
     summary = {
         "config": cfg_name,
+        "arch": arch,
         "mode": mode,
         "offline": mode == "offline",
         "repeats": repeats,
@@ -780,6 +926,13 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
         "n_runs": n,
         "passed": ratio(passed, n),
         "task_completion": ratio(completed, n),
+        "route_accuracy": route_metrics["route_accuracy"],
+        "forbidden_tool_rate": route_metrics["forbidden_tool_rate"],
+        "duplicate_call_rate": route_metrics["duplicate_call_rate"],
+        "loop_exhaustion_rate": route_metrics["loop_exhaustion_rate"],
+        "schema_failure_rate": route_metrics["schema_failure_rate"],
+        "hard_gate": route_metrics["hard_gate"],
+        "gate_passed": route_metrics["gate_passed"],
         "constraints": ratio(con_pass, con_tot),
         "grounded_rate": ratio(grounded, tot_claims),
         "money_grounded_rate": ratio(money_grounded, money_tot),
@@ -860,12 +1013,16 @@ async def _run_all(args) -> int:
     state_root = Path(tempfile.mkdtemp(prefix="rc_eval_state_"))
 
     _bootstrap_env(state_root, events_log)
+    # Architecture selection (design Phase 2): AGENT_ARCH is read by build_agent_graph at
+    # build time (per case), so set it here BEFORE any graph is constructed. Recorded in
+    # summary.json so A/B result dirs are self-describing.
+    os.environ["AGENT_ARCH"] = args.arch
 
     from evaluation.configs.loader import load_config, apply_config
     from evaluation.metrics import pricing as pricing_mod
 
     cfg = load_config(args.config)
-    cases = load_cases()
+    cases = load_cases(Path(args.cases) if args.cases else None)
     problems = schema_validate(cases)
     if problems:
         print("Schema problems (first 10):")
@@ -904,7 +1061,7 @@ async def _run_all(args) -> int:
 
     with apply_config(cfg):
         runner = CaseRunner(mode=mode, cfg=cfg, state_root=state_root,
-                            events_log=events_log, judge=args.judge)
+                            events_log=events_log, judge=args.judge, arch=args.arch)
         for repeat in range(1, args.repeat + 1):
             for case in selected:
                 run_id = f"{case.get('case_id')}#r{repeat}#{cfg.name}"
@@ -948,13 +1105,15 @@ async def _run_all(args) -> int:
         _write_judge_io(out, runs)
     summary = write_summary(out, runs, mode=mode, cfg_name=cfg.name, repeats=args.repeat,
                             cost_cap=args.max_cost_usd, stopped_reason=stopped_reason,
-                            n_selected=len(selected), timestamp=timestamp)
+                            n_selected=len(selected), timestamp=timestamp, arch=args.arch)
     _save_checkpoint(out, list(done_ids), cumulative_cost, stopped_reason)
 
     print("\n=== summary ===")
-    print(f"config={summary['config']} mode={summary['mode']} "
+    print(f"config={summary['config']} arch={summary['arch']} mode={summary['mode']} "
           f"runs={summary['n_runs']} passed={summary['passed']['display']} "
           f"task_completed={summary['task_completion']['display']} "
+          f"route_acc={summary['route_accuracy']['display']} "
+          f"gate_passed={summary['gate_passed']} "
           f"grounded={summary['grounded_rate']['display']} "
           f"money_grounded={summary['money_grounded_rate']['display']} "
           f"cost=${summary['total_cost_usd']:.4f}")
@@ -989,6 +1148,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
                                 description="RentCompass offline eval runner.")
     p.add_argument("--config", default="routed_models",
                    help="config name or path (default: routed_models)")
+    p.add_argument("--arch", choices=["legacy", "fc_loop"], default="legacy",
+                   help="agent architecture: 'legacy' (classify-then-execute, default) or "
+                        "'fc_loop' (native function-calling loop). Sets AGENT_ARCH before build.")
+    p.add_argument("--cases", default=None,
+                   help="path to an arbitrary case shard (.jsonl); default: benchmark/cases.jsonl")
     p.add_argument("--smoke", action="store_true", help="only smoke cases")
     p.add_argument("--limit", type=int, default=None, help="cap number of cases")
     p.add_argument("--category", default=None, help="filter by category (e.g. A_retrieval or A)")

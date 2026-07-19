@@ -2177,34 +2177,9 @@ async def search_properties_impl(
 search_properties_tool = Tool(
     name="search_properties",
 
-    description="""Search for SPECIFIC rental properties in the UK database.
+    description="""Search the UK database for SPECIFIC rental properties to rent. Use ONLY when the user wants to FIND/search listings ("帮我找房", "find me a flat", "search for apartments") or gives search criteria (budget, location, commute time). Do NOT use for general questions about rent prices/averages, living/transport/food costs, or areas/neighbourhoods/safety ("租房价格怎么样"/"介绍租房信息" -> web_search).
 
-⚠️ USE THIS TOOL ONLY WHEN:
-- User explicitly wants to FIND/SEARCH for a specific property they can rent
-- User provides search criteria like budget, location, commute time
-- User says things like "帮我找房", "I want to find a flat", "search for apartments", "找房子"
-
-❌ DO NOT USE THIS TOOL FOR:
-- General questions about rent prices or averages ("租房价格多少")
-- Questions about living costs, transport costs, food costs
-- Questions about areas, neighborhoods, or safety
-- "租房价格怎么样" = asking about rent prices → use web_search
-- "介绍租房信息" = asking about renting info → use web_search
-
-WHAT IS REQUIRED:
-- ONLY an area to live in (or a commute destination it can be derived from). Budget
-  and commute time are OPTIONAL — the tool degrades gracefully and NEVER loops asking
-  for them. Missing budget → no budget filter; missing/no commute → no commute filter.
-- "area" = where the user wants to LIVE. "commute_destination" = where they commute to.
-  These are DISTINCT. If the user says they don't commute (e.g. "我不通勤我单纯住着",
-  "work from home"), set no_commute=true.
-
-WORKFLOW:
-1. Call this tool with whatever criteria exist (at minimum an area or commute destination).
-2. Only if NO area can be determined does the tool return a clarification question.
-3. Otherwise it returns property recommendations.
-
-For GENERAL INFORMATION questions about rent, use web_search instead.""",
+Required: only an area to live in (or a commute_destination to derive it from). Budget and commute time are OPTIONAL — the tool degrades gracefully and never loops asking for them (missing budget -> no budget filter; missing commute -> no commute filter). "area" = where they LIVE; "commute_destination" = where they commute TO (distinct). If the user does not commute (e.g. "我不通勤我单纯住着", WFH), set no_commute=true. If no area can be determined the tool returns a clarification question; otherwise it returns recommendations.""",
 
     func=search_properties_impl,
 

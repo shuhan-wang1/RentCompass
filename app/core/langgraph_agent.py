@@ -3520,7 +3520,7 @@ def _make_gather_wave_node():
 # ═══════════════════════════════════════════════════════════════════
 
 def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_llm=None,
-                      enable_hitl=False):
+                      enable_hitl=False, agent_llm=None):
     """Build and compile the LangGraph StateGraph.
 
     Args:
@@ -3569,6 +3569,9 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
             hydrate_prefs_node=(make_hydrate_prefs_node() if use_store else None),
             persist_prefs_node=(make_persist_prefs_node() if use_store else None),
             instrument=_n_fc,
+            # Eval override: the offline fake-FC model (a scripted, bound-tools stand-in)
+            # is injected here so the loop mechanics run unbilled. None => live driver.
+            agent_llm=agent_llm,
         )
 
     classification_llm = get_classification_llm()

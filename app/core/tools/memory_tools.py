@@ -43,10 +43,10 @@ async def remember_impl(content: str, kind: str = "semantic",
 recall_memory_tool = Tool(
     name="recall_memory",
     description=(
-        "Recall what is known about the CURRENT user from long-term memory — their stated "
-        "preferences, budget, target destination/university, hard constraints, areas to avoid, "
-        "and earlier requests. Use this when answering a follow-up that may depend on something "
-        "the user said in a previous turn or session. Returns the most relevant remembered facts."
+        "Recall facts about the CURRENT user from long-term memory — stated preferences, budget, "
+        "target destination/university, hard constraints, areas to avoid, earlier requests. Your "
+        "context already includes a WHAT I REMEMBER block, so call this ONLY when the user asks "
+        "about a remembered fact that is not present there. Returns the most relevant facts."
     ),
     func=recall_memory_impl,
     parameters={

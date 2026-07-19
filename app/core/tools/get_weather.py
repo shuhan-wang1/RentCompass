@@ -73,30 +73,8 @@ async def get_weather_impl(
 get_weather_tool = Tool(
     name="get_weather",
     
-    description="""
-获取指定地点的天气信息。
-
-**功能:**
-- 获取当前天气状况
-- 温度、风速、湿度等信息
-- 降雨概率和紫外线指数
-
-**何时使用:**
-- 用户想了解该地区的天气
-- 规划看房时间时需要天气信息
-- 评估地区气候环境
-
-**何时不用:**
-- 用户没有提到天气
-- 与房源选择无直接关系
-
-**返回内容:**
-- current_temp: 当前温度
-- condition: 天气状况
-- humidity: 湿度
-- wind_speed: 风速
-- rainfall_chance: 降雨概率
-""",
+    description="""Get current weather for a place: temperature, condition, humidity, wind speed, rainfall chance and UV. Use when the user asks about an area's weather or is planning viewing times; skip when weather is unrelated to the choice.
+获取指定地点的天气信息。""",
     
     func=get_weather_impl,
     

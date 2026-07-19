@@ -146,11 +146,12 @@ def test_on_tool_call_emits_event(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_pricing_null_returns_none_cost():
     pr = pricing.load_pricing()
-    # deepseek-v4-pro has null prices -> cost must be None.
+    # deepseek-v4-pro gained confirmed 2026-07 pricing (it used to be the null example);
+    # the null-price semantics are now covered by the unknown-model path only.
     assert pr.price_for("deepseek-v4-pro") is not None
-    assert pr.price_for("deepseek-v4-pro").confirmed is False
-    assert pr.cost("deepseek-v4-pro", input_tokens=1000, output_tokens=500) is None
-    # unknown model -> None too.
+    assert pr.cost("deepseek-v4-pro", input_tokens=1000, output_tokens=500) is not None
+    # unknown model -> None.
+    assert pr.price_for("no-such-model") is None
     assert pr.cost("no-such-model", input_tokens=10) is None
     assert pr.price_source and pr.price_as_of
 

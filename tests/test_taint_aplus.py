@@ -104,6 +104,62 @@ def test_memory_write_allowed_truth_table(tainted, authorized, expected):
         context_tainted=tainted, user_authorized=authorized) is expected
 
 
+# --------------------------------------------------------- content_is_user_stated (rule 2 refine)
+
+@pytest.mark.parametrize("content,msg", [
+    # cross-language number-anchored: content echoes only generic budget words → number anchors
+    ("budget £1400/month", "记住我预算1400"),
+    ("user budget 1500 pcm", "Please remember my budget is 1500 pcm"),
+    # thousands-comma / currency normalisation
+    ("max rent £1,400 per month", "记住我预算1400"),
+    # en distinguishing nouns present in the message
+    ("user has a dog and needs parking", "Remember that I have a dog and need parking"),
+    # pure CJK: distinguishing bigrams overlap the message
+    ("预算上限1400镑", "记住我预算上限1400镑"),
+])
+def test_content_is_user_stated_positive(content, msg):
+    assert mg.content_is_user_stated(content, msg) is True
+
+
+@pytest.mark.parametrize("content,msg", [
+    # H13: tool-derived scraped price the user never typed (no number in the message)
+    ("£950 (cheapest flat found in Camden)",
+     "搜下 Camden 的房子，顺便把你找到的最便宜那套的价格记住"),
+    ("the cheapest flat is £950 per month", "记住最便宜那套的价格"),
+    # numbers match but the distinguishing text is unrelated to the message
+    ("flat viewing at 1400 Camden Road", "记住我预算1400"),
+    ("user prefers a studio on Baker Street", "记住我预算1400"),
+    # CJK number-anchored but scraped figure absent from the message
+    ("最便宜房源950镑", "记住最便宜那套"),
+    # nothing to anchor on: no number, no shared distinguishing token
+    ("north-facing garden flat", "记住我预算1400"),
+    # empty / whitespace content
+    ("", "记住这个"),
+    ("   ", "记住这个"),
+])
+def test_content_is_user_stated_negative(content, msg):
+    assert mg.content_is_user_stated(content, msg) is False
+
+
+# ------------------------------------------------------------------------ write_authorization
+
+def test_write_authorization_cue_and_user_stated():
+    # cue present AND content derivable from the message → authorized
+    assert mg.write_authorization("记住我预算1400", "budget £1400/month") is True
+
+
+def test_write_authorization_cue_but_tool_derived_content():
+    # H13: cue present, but the content is a scraped price → NOT authorized
+    assert mg.write_authorization(
+        "搜下 Camden 的房子，顺便把你找到的最便宜那套的价格记住",
+        "£950 (cheapest flat found in Camden)") is False
+
+
+def test_write_authorization_user_stated_but_no_cue():
+    # content matches the message but there is no save cue → NOT authorized
+    assert mg.write_authorization("我的预算是1400镑", "预算1400镑") is False
+
+
 # ------------------------------------------------------------- freeze / consume ledger
 
 @pytest.fixture()

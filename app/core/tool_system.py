@@ -56,16 +56,53 @@ _CONSTRAINT_KEYWORDS = (
 
 
 def _merge_constraint_keywords(emitted: Dict[str, Any], original: Dict[str, Any]) -> Dict[str, Any]:
-    """Copy per-property constraint keywords from the author-written schema back into
-    the pydantic-emitted one (additive only — never overrides what pydantic emitted)."""
-    emitted_props = emitted.get("properties") or {}
-    for pname, pdef in (original.get("properties") or {}).items():
-        target = emitted_props.get(pname)
-        if not isinstance(target, dict) or not isinstance(pdef, dict):
-            continue
+    """Restore author-written schema fidelity that the pydantic round-trip drops.
+
+    Three losses, all real (bare ``list``/``dict`` annotations erase them):
+      1. per-property constraint keywords (enum, format, bounds, ...);
+      2. array ``items`` sub-schemas — pydantic emits ``items: {}`` for a bare list,
+         and the DeepSeek strict endpoint rejects a sub-schema with no type selector;
+      3. nested object ``properties``/``required``/``additionalProperties`` — pydantic
+         emits a bare ``{"type": "object"}`` for a dict field (e.g. budget_hint lost
+         its amount/period members), and strict rejects property-less objects.
+    Additive/repair-only: authored values fill gaps, they never override a concrete
+    pydantic emission. Recurses through matched nested properties."""
+    import copy as _copy
+
+    def _typeless(node: Any) -> bool:
+        return not (isinstance(node, dict) and (set(node) & {"type", "anyOf", "$ref"}))
+
+    def _merge_node(target: Dict[str, Any], source: Dict[str, Any]) -> None:
+        # pydantic wraps an Optional property as anyOf[<real>, {"type":"null"}] while the
+        # authored schema is flat — the loss (items:{}, missing nested properties) lives
+        # INSIDE the non-null branch, so descend into it rather than decorating the
+        # property level with siblings of anyOf.
+        if isinstance(target.get("anyOf"), list) and "anyOf" not in source:
+            for br in target["anyOf"]:
+                if isinstance(br, dict) and br.get("type") != "null":
+                    _merge_node(br, source)
+            return
         for kw in _CONSTRAINT_KEYWORDS:
-            if kw in pdef and kw not in target:
-                target[kw] = pdef[kw]
+            if kw in source and kw not in target:
+                target[kw] = _copy.deepcopy(source[kw])
+        if isinstance(source.get("items"), dict) and _typeless(target.get("items")):
+            target["items"] = _copy.deepcopy(source["items"])
+        if isinstance(source.get("properties"), dict) and not target.get("properties"):
+            target["properties"] = _copy.deepcopy(source["properties"])
+            for kw in ("required", "additionalProperties"):
+                if kw in source and kw not in target:
+                    target[kw] = _copy.deepcopy(source[kw])
+        # Recurse where both sides have structure.
+        if isinstance(target.get("items"), dict) and isinstance(source.get("items"), dict):
+            _merge_node(target["items"], source["items"])
+        t_props, s_props = target.get("properties"), source.get("properties")
+        if isinstance(t_props, dict) and isinstance(s_props, dict):
+            for pname, sdef in s_props.items():
+                tdef = t_props.get(pname)
+                if isinstance(tdef, dict) and isinstance(sdef, dict):
+                    _merge_node(tdef, sdef)
+
+    _merge_node(emitted, original)
     return emitted
 
 

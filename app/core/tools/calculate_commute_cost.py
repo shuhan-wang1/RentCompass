@@ -425,47 +425,8 @@ async def calculate_commute_cost_impl(
 calculate_commute_cost_tool = Tool(
     name="calculate_commute_cost",
 
-    description="""
-计算从房源到目的地的综合通勤成本（时间 + 费用）。
-
-**功能:**
-- 获取详细路线信息 (使用 Google Maps Directions API)
-- 检查路线是否使用公共交通 (bus, tube, train等)
-- 仅当路线使用公共交通时才计算交通费用
-- 自动识别起点和终点的 Transport Zone
-- 计算月度交通费用 (基于 travel_cost_data.csv - TfL 官方票价)
-- 同区域 (如 Zone 1 到 Zone 1) 返回 £0 成本
-
-**智能逻辑:**
-1. 先查询 Google Maps 获取最快路线
-2. 检查路线是否包含任何公共交通方式
-3. 如果包含公共交通 → 计算交通费用
-4. 如果不包含公共交通 (步行/骑车) → 返回 £0 成本
-5. 如果同一 Zone → 返回 £0 成本
-
-**何时使用:**
-- 用户询问"从 XX 到 YY 的通勤成本是多少"
-- 用户询问"每个月通勤需要花多少钱"
-- 用户想知道某个房源的通勤时间和交通费用
-- 用户比较不同房源的通勤成本
-
-**示例:**
-- "从 City, 11 Bastwick Street 到 UCL 每个月的通勤成本是多少?"
-- "住在 Zone 3 和 Zone 1 的通勤成本差多少?"
-
-**返回内容:**
-- 通勤时间 (分钟)
-- 是否使用公共交通 (Yes/No)
-- 起点和终点的 Zone
-- 建议的通勤方式 (如 Zone 1-2 Oyster)
-- 月度交通费用 (基于 daily cap × 22 工作日)
-- 每日封顶价格 (peak 和 off-peak)
-
-**数据来源:**
-- 通勤时间 & 路线详情: Google Maps Directions API (实时)
-- 交通费用: travel_cost_data.csv (TfL 官方票价 2025)
-- Zone 判断: Postcode-based zone detection
-""",
+    description="""Calculate the combined commute cost (time + monthly fare) from a listing to a destination via Google Maps; only charges a fare when the route uses public transport (walking/cycling or same-zone = £0). Fares come from TfL 2025 official prices (daily cap x 22 days). Use when the user asks a property's commute cost or monthly transport spend.
+计算房源到目的地的通勤时间与月度交通费用（票价来源 TfL）。""",
 
     func=calculate_commute_cost_impl,
 

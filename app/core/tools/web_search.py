@@ -118,74 +118,8 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
 web_search_tool = Tool(
     name="web_search",
     
-    description="""
-智能搜索协调器 - 可以调用本地工具 + 网络搜索
-
-**USE THIS TOOL FOR:**
-- 综合性问题（涉及多个主题）
-- 一般性信息查询（UK areas, neighborhoods, universities, living costs等）
-- 需要结合本地数据和网络信息的问题
-
-**🆕 ADVANCED: 可以调用其他本地工具**
-如果用户的问题需要多个数据源，可以使用 sub_queries 参数：
-
-示例1: 用户问 "Scape Bloomsbury 的治安和天气怎么样？"
-```json
-{
-  "query": "Scape Bloomsbury safety and weather",
-  "sub_queries": [
-    {
-      "tool": "check_safety",
-      "params": {"address": "Scape Bloomsbury, 19-29 Woburn Place, London WC1H 0AQ, UK"}
-    },
-    {
-      "tool": "get_weather",
-      "params": {"location": "London"}
-    }
-  ]
-}
-```
-
-示例2: 用户问 "这个区域安全吗？附近有什么设施？"
-```json
-{
-  "query": "area safety and nearby amenities",
-  "sub_queries": [
-    {
-      "tool": "check_safety",
-      "params": {"address": "完整地址"}
-    },
-    {
-      "tool": "search_nearby_pois",
-      "params": {"address": "完整地址", "poi_type": "all"}
-    }
-  ]
-}
-```
-
-示例3: 用户问 "伦敦租房政策是什么？"（纯网络搜索）
-```json
-{
-  "query": "London rental policy UK 2024",
-  "sub_queries": [
-    {
-      "tool": "web_search_only",
-      "params": {"query": "London tenant rights UK gov.uk 2024"}
-    }
-  ]
-}
-```
-
-**可用的本地工具:**
-- check_safety: 检查治安数据
-- get_weather: 获取天气信息
-- search_nearby_pois: 搜索附近设施
-- get_property_details: 获取房产详情
-- calculate_commute: 计算通勤时间
-
-**简单模式（不使用 sub_queries）:**
-只传 query 参数，系统会执行简单的网络搜索。
-""",
+    description="""Smart search coordinator for general/open-ended questions (UK areas, neighbourhoods, universities, living costs) and anything needing web information or a mix of web + local data. Put the main query (in English) in `query`. Optionally pass `sub_queries` to run local tools in the same call (check_safety, get_weather, search_nearby_pois, get_property_details, calculate_commute, web_search_only); each is {tool, params}. Omit sub_queries for a plain web search.
+综合搜索协调器：一般性/开放性问题与需要联网的信息查询。""",
     
     func=web_search_func,
     

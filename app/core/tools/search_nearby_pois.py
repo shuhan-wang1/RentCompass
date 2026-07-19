@@ -500,25 +500,8 @@ async def search_nearby_pois_impl(
 search_nearby_pois_tool = Tool(
     name="search_nearby_pois",
     
-    description="""
-Search for nearby places (restaurants, supermarkets, stores, etc.) using OpenStreetMap data.
-
-**USE THIS TOOL FOR:**
-- Finding nearby restaurants (Chinese, Italian, etc.)
-- Finding supermarkets (Tesco, Sainsbury's, etc.)
-- Finding convenience stores
-- Finding cafes, pharmacies, gyms, parks
-- Finding public transport (bus stops, tube stations)
-- Any question about "what's nearby" or "is there a ... near"
-
-**DO NOT confuse with check_safety (which is for crime/safety questions only)**
-
-**Parameters:**
-- address (required): The address to search around
-- poi_type: Type of place to search for (restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, or "all")
-- radius: Search radius in meters (default: 500)
-- user_query: Original user query for smart POI type inference (optional)
-""",
+    description="""Find nearby places (restaurants, supermarkets, convenience stores, cafes, pharmacies, gyms, parks, bus stops, tube stations, banks, ATMs) around an address using OpenStreetMap. Use for any "what's nearby" / "is there a ... near" question. Do NOT confuse with check_safety, which is for crime/safety questions only.
+搜索某地址附近的设施（餐厅/超市/交通站点等）。""",
     
     func=search_nearby_pois_impl,
     

@@ -157,7 +157,9 @@ def _behaviour_directive(reply_language: str) -> str:
         "steps once you see the results), answer directly, or call ask_user to ask a single "
         "clarifying question. Fill tool parameters from the context block; never invent "
         "listings, addresses, or prices. If a tool reports missing info, correct the call or "
-        "ask_user — do not loop the same call. Do not use emoji.\n"
+        "ask_user — do not loop the same call. What we remember about the user is already in "
+        "the context block; do NOT call recall_memory unless the user asks about a remembered "
+        "fact absent from that block. Do not use emoji.\n"
         "=== END BEHAVIOUR ==="
     )
 
@@ -209,8 +211,19 @@ def _build_messages(state: AgentState) -> list:
         return msgs
 
 
+def _strict_on() -> bool:
+    """DEEPSEEK_STRICT=1 switches the loop to strict function-calling (design §2.9 step 2):
+    strict-adapted schemas + the /beta endpoint + null-stripping before validation. An A/B
+    toggle — never a closed-loop prerequisite, default off."""
+    import os
+    return os.getenv("DEEPSEEK_STRICT", "0") == "1"
+
+
 def _specs_to_openai(specs) -> list:
     """ToolSpec list -> OpenAI-FC tool dicts for ChatModel.bind_tools (design §2.3)."""
+    if _strict_on():
+        from core.strict_schema import to_strict_function_calling_format
+        return [to_strict_function_calling_format(s) for s in specs]
     tools = []
     for s in specs:
         tools.append({
@@ -228,7 +241,11 @@ def _default_agent_llm():
     from uk_rent_agent.llm.router import ModelRouter
     # Loop driver: v4-flash, thinking DISABLED (responder+low_latency => reasoning=False), so
     # no reasoning_content must be echoed on later tool rounds (design §2.9).
-    return ModelRouter().create("responder", low_latency=True)
+    base_url = None
+    if _strict_on():
+        from core.strict_schema import strict_base_url
+        base_url = strict_base_url()
+    return ModelRouter().create("responder", low_latency=True, base_url=base_url)
 
 
 def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "") -> dict:
@@ -499,6 +516,17 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         for tc in batch:
             name = tc.get("name")
             args = dict(tc.get("args") or {})
+            if _strict_on():
+                # Strict schemas force every param present (null = omitted); drop nulls
+                # BEFORE injection/gating/digest so tool defaults apply and the
+                # no-progress digest stays stable across strict/non-strict. Free-form
+                # objects arrive JSON-encoded as strings (strict server rejects
+                # property-less objects) — decode them back against the authored schema.
+                from core.strict_schema import strip_null_args, decode_json_string_args
+                args = strip_null_args(args)
+                _spec0 = specs.get(name)
+                if _spec0 is not None:
+                    args = decode_json_string_args(args, getattr(_spec0, "input_schema", None))
             if name == "search_properties":
                 args = _inject_search_params(args, state)
             elif name in ("recall_memory", "remember"):
@@ -515,14 +543,26 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             spec = specs.get(name)
             side_effect = getattr(spec, "side_effect", "none") if spec else "none"
             if side_effect == "write":
+                # Candidate content is computed up-front: authorization now depends on it
+                # (A+ rule-2 refinement / H13) — a 「记住」 cue only authorizes saving what
+                # the user actually stated, not tool-derived content pulled into context.
+                content = str(args.get("content") or args.get("fact") or json.dumps(
+                    args, ensure_ascii=False, default=str))
                 if mem_gate is not None:
-                    user_authorized = bool(mem_gate.user_authorizes_memory(cur_msg))
+                    write_auth = getattr(mem_gate, "write_authorization", None)
+                    if write_auth is not None:
+                        user_authorized = bool(write_auth(cur_msg, content))
+                    else:
+                        # Older gate without the refinement: cue-only, plus content check
+                        # if that primitive alone is present. Fail conservative.
+                        user_authorized = bool(mem_gate.user_authorizes_memory(cur_msg))
+                        cius = getattr(mem_gate, "content_is_user_stated", None)
+                        if user_authorized and cius is not None:
+                            user_authorized = bool(cius(content, cur_msg))
                     allowed = bool(mem_gate.memory_write_allowed(
                         context_tainted=state.get("context_tainted", False),
                         user_authorized=user_authorized))
                     if not allowed:
-                        content = str(args.get("content") or args.get("fact") or json.dumps(
-                            args, ensure_ascii=False, default=str))
                         kind = str(args.get("kind") or name)
                         try:
                             frozen = mem_gate.freeze_pending_write(session_id, content, kind)

@@ -30,7 +30,7 @@ SCHEMA_PATH = HERE / "schema.json"
 CASES_PATH = HERE / "cases.jsonl"
 FIXTURES_DIR = HERE / "fixtures"
 
-# The 12 real registry tools (app/core/tool_system.py create_tool_registry) ...
+# The 14 real registry tools (app/core/tool_system.py create_tool_registry) ...
 REAL_TOOLS = {
     "search_properties",
     "calculate_commute",
@@ -44,6 +44,8 @@ REAL_TOOLS = {
     "get_transport_info",
     "recall_memory",
     "remember",
+    "ask_user",
+    "compare_or_rank_areas",
 }
 # ... plus the graph-internal pseudo-routes (NOT registry tools).
 PSEUDO_ROUTES = {
@@ -59,6 +61,10 @@ VALID_CATEGORIES = {
     "A_retrieval", "B_money", "C_commute", "D_crime_poi",
     "E_multi_constraint", "F_grounding", "G_memory",
 }
+# Categories that are LEGAL but not required for coverage: the guard-regression shard
+# (cases_guard_regression.jsonl) lives outside the base suite, so its category must
+# validate per-case without the base cases.jsonl being flagged as "missing" it.
+EXTRA_CATEGORIES = {"H_guard_regression"}
 
 
 def _load_cases() -> list[dict]:
@@ -98,7 +104,7 @@ def _schema_validator():
             for key in required:
                 if key not in obj:
                     errs.append(f"missing required field: {key}")
-            if obj.get("category") not in VALID_CATEGORIES:
+            if obj.get("category") not in VALID_CATEGORIES | EXTRA_CATEGORIES:
                 errs.append(f"bad category: {obj.get('category')}")
             if not isinstance(obj.get("conversation_history"), list):
                 errs.append("conversation_history must be a list")
@@ -149,7 +155,7 @@ def main() -> int:
             problems.append(f"{cid}: expected_route '{route}' is not a real tool/route")
 
         # category prefix consistency
-        if isinstance(cid, str) and cid[:1] not in {"A", "B", "C", "D", "E", "F", "G"}:
+        if isinstance(cid, str) and cid[:1] not in {"A", "B", "C", "D", "E", "F", "G", "H"}:
             problems.append(f"{cid}: case_id prefix is not a category letter")
 
         # fixtures exist

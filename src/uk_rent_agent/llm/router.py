@@ -41,14 +41,16 @@ class ModelRouter:
             return ModelRoute(self.pro_model, 0.0, 8000, reasoning=True)
         return ModelRoute(self.chat_model, 0.1, 4000)
 
-    def create(self, purpose: str, **route_kwargs):
+    def create(self, purpose: str, *, base_url: str | None = None, **route_kwargs):
         from langchain_openai import ChatOpenAI
 
         route = self.route(purpose, **route_kwargs)
         model = ChatOpenAI(
             model=route.model,
             api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+            # base_url override: strict function-calling lives on the /beta endpoint
+            # (design §2.9); everything else stays on the standard endpoint.
+            base_url=base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             temperature=route.temperature,
             max_tokens=route.max_tokens,
             # v4-flash defaults to thinking ENABLED — every route must pick a mode

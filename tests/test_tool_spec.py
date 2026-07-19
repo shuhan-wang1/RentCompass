@@ -215,7 +215,17 @@ def test_mcp_server_list_tools_annotations():
 # copies them back from the author-written schema.
 
 def _prop(registry, tool, name):
-    return registry.get(tool).parameters["properties"][name]
+    return _resolved(registry.get(tool).parameters["properties"][name])
+
+
+def _resolved(prop):
+    """Constraints live on the non-null anyOf branch for Optional properties (the
+    canonical spot the strict adapter consumes); resolve through it."""
+    if isinstance(prop, dict) and isinstance(prop.get("anyOf"), list):
+        for br in prop["anyOf"]:
+            if isinstance(br, dict) and br.get("type") != "null":
+                return br
+    return prop
 
 
 def test_enum_preserved_in_emitted_schema(registry):
@@ -234,5 +244,5 @@ def test_array_items_preserved_in_emitted_schema(registry):
 
 def test_specs_carry_preserved_constraints(registry):
     spec = next(s for s in registry.list_specs() if s.name == "ask_user")
-    assert spec.input_schema["properties"]["clarification_kind"]["enum"] == [
+    assert _resolved(spec.input_schema["properties"]["clarification_kind"])["enum"] == [
         "missing_area", "soft_criteria", "other"]

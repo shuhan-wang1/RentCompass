@@ -1281,6 +1281,195 @@ def grade_case(case: dict, ctx: GradeContext) -> CaseVerdict:
 
 
 # --------------------------------------------------------------------------- #
+# Phase 2 route-accuracy / tool-trace / failure metrics (design §Phase 2, §2.3)
+#
+# These are pure functions over an executed turn's tool trace and per-case result
+# flags — no model, no network, no graph. A "trace" is an ordered list of BATCHES,
+# each batch a list of tool names: order ACROSS batches is significant, order WITHIN
+# a batch is not (a batch is the set of tool_calls the model emitted in ONE agent
+# super-step and the loop runs in parallel — design §2.3 "batch-parallel").
+# --------------------------------------------------------------------------- #
+# The fc_loop degrades to a no-tools answer on the step where the incremented
+# loop_turn first EXCEEDS this cap (agent_loop.agent_node: degraded = loop_turn >
+# MAX_AGENT_TURNS), so the exhausted final_state carries loop_turn == cap + 1.
+# Hardcoded (not imported from langgraph_agent) to keep this module import-light.
+MAX_AGENT_TURNS_DEFAULT = 10
+
+
+def extract_tool_trace(tool_artifacts: List[dict]) -> List[List[str]]:
+    """Reconstruct the executed trace (ordered batches of tool names) from an fc_loop
+    ``tool_artifacts`` list. Each artifact is ``{turn, tool, raw_data, params_digest}``
+    (design §2.8b); artifacts sharing a ``turn`` were executed in the same agent
+    super-step and form one batch. Batches are emitted in ascending turn order; within
+    a turn, tool order is the artifact append order (parallel — order not significant)."""
+    by_turn: Dict[Any, List[str]] = {}
+    order: List[Any] = []
+    for a in tool_artifacts or []:
+        turn = a.get("turn")
+        tool = a.get("tool")
+        if tool is None:
+            continue
+        if turn not in by_turn:
+            by_turn[turn] = []
+            order.append(turn)
+        by_turn[turn].append(tool)
+    try:
+        order = sorted(order, key=lambda t: (t is None, t))
+    except TypeError:
+        pass  # heterogeneous turn keys: keep first-seen order
+    return [by_turn[t] for t in order]
+
+
+# Tools that are a HARMLESS detour when they precede/interleave the real work: a
+# leading or intermediate ``recall_memory``-only batch (the agent checking stored
+# context before acting) must not fail route matching against a path that does not
+# itself call for it. These are stripped from the TRACE before comparison; an allowed
+# path that explicitly lists such a tool stays authoritative and is matched raw.
+IGNORABLE_TOOLS = {"recall_memory"}
+
+
+def _drop_empty_batches(trace: List[List[str]]) -> List[List[str]]:
+    return [b for b in (trace or []) if b]
+
+
+def _strip_ignorable(trace: List[List[str]]) -> List[List[str]]:
+    """Remove IGNORABLE_TOOLS from every batch, then drop batches emptied by that."""
+    out: List[List[str]] = []
+    for batch in trace or []:
+        kept = [t for t in batch if t not in IGNORABLE_TOOLS]
+        if kept:
+            out.append(kept)
+    return out
+
+
+def route_matches(trace: List[List[str]], case: dict) -> bool:
+    """Design Phase-2 route match (the old strict-sequence definition was rejected).
+
+    * If the case declares ``allowed_tool_paths`` (a list of allowed paths; each path a
+      list of batches; each batch a list of tool names): the trace matches iff it equals
+      ANY allowed path under per-batch SET comparison — same number of batches, and each
+      batch's tool set equals the corresponding allowed batch's set. Order across batches
+      is significant; order within a batch is not.
+    * Otherwise (fallback): ``set(expected_tools) ⊆ set(all called tools)`` AND no
+      ``forbidden_tools`` was called. Empty ``expected_tools`` + empty
+      ``allowed_tool_paths`` is vacuously true when no forbidden tool ran.
+
+    A leading/interleaved ``recall_memory``-only batch is a harmless detour: it is
+    stripped from the TRACE before comparison, so e.g. ``[[recall_memory],[search]]``
+    matches an allowed path ``[[search]]``. Allowed paths stay authoritative — a path
+    that ITSELF lists ``recall_memory`` is compared against the raw (unstripped) trace,
+    so it still matches a genuine ``recall_memory`` trace.
+    """
+    # Empty-batch normalization: the case schema writes an explicitly-empty path as
+    # [[]] (one empty batch) or [] (zero batches) while an actual no-tools trace arrives
+    # as []. All mean "no tools ran" — drop empty batches on BOTH sides so the
+    # representations compare equal.
+    raw = _drop_empty_batches(trace)
+    stripped = _strip_ignorable(raw)
+    allowed = case.get("allowed_tool_paths")
+    if allowed:  # non-empty list of paths
+        raw_set = [set(b) for b in raw]
+        stripped_set = [set(b) for b in stripped]
+        for path in allowed:
+            pset = [set(b) for b in path if b]
+            # If the allowed path itself calls for an ignorable tool, honour it against
+            # the raw trace; otherwise ignore the trace's ignorable detours.
+            path_has_ignorable = any(IGNORABLE_TOOLS & s for s in pset)
+            tset = raw_set if path_has_ignorable else stripped_set
+            if len(pset) == len(tset) and all(a == b for a, b in zip(pset, tset)):
+                return True
+        return False
+    expected = set(case.get("expected_tools") or [])
+    forbidden = set(case.get("forbidden_tools") or [])
+    called = {t for batch in raw for t in batch}
+    if forbidden & called:
+        return False
+    return expected.issubset(called)
+
+
+def forbidden_tool_used(trace: List[List[str]], case: dict) -> bool:
+    """True iff any of the case's ``forbidden_tools`` appears anywhere in the trace."""
+    forbidden = set(case.get("forbidden_tools") or [])
+    called = {t for batch in (trace or []) for t in batch}
+    return bool(forbidden & called)
+
+
+def has_duplicate_calls(signatures: List[Any]) -> bool:
+    """True iff the same executed call signature ran more than once. ``signatures`` is a
+    list of ``(tool, digest)`` pairs — fc artifacts carry ``params_digest``; legacy can
+    approximate with ``(tool, args_hash)``. Signatures with a falsy digest are skipped
+    (an unknown digest is not evidence of duplication)."""
+    seen: set = set()
+    for sig in signatures or []:
+        try:
+            tool, digest = sig
+        except (TypeError, ValueError):
+            continue
+        if not digest:
+            continue
+        key = (tool, digest)
+        if key in seen:
+            return True
+        seen.add(key)
+    return False
+
+
+def loop_exhausted(final_state: dict, max_turns: int = MAX_AGENT_TURNS_DEFAULT) -> bool:
+    """True iff the fc_loop hit its turn cap (degraded no-tools answer). The degraded
+    branch sets ``loop_turn == max_turns + 1``, so exhaustion is ``loop_turn > max_turns``."""
+    try:
+        return int((final_state or {}).get("loop_turn", 0) or 0) > max_turns
+    except (TypeError, ValueError):
+        return False
+
+
+def schema_failure_detected(evidence: List[dict]) -> bool:
+    """True iff any executed tool returned a pydantic ``ValidationError`` (bad tool args).
+    Scans each evidence entry's ``error`` (ToolResult error text) — design §Phase 2."""
+    for ev in evidence or []:
+        if "validationerror" in str((ev or {}).get("error") or "").lower():
+            return True
+    return False
+
+
+def summarize_route_metrics(results: List[dict]) -> dict:
+    """Aggregate per-case route/failure flags into the summary block (design Phase 2).
+
+    ``results`` is a list of per-case dicts with the boolean flags ``route_matched``,
+    ``forbidden_tool``, ``duplicate_call``, ``loop_exhaustion``, ``schema_failure``,
+    ``hard_gate``, ``passed`` and a ``case_id``. Returns route_accuracy + the four
+    independent failure rates + the hard-gate block (every failed id listed, NEVER
+    averaged away) + the overall ``gate_passed`` boolean."""
+    rows = list(results or [])
+    n = len(rows)
+
+    def _ratio(num: int, den: int) -> dict:
+        return {"num": num, "den": den, "display": f"{num}/{den}",
+                "rate": (num / den if den else None)}
+
+    matched = sum(1 for r in rows if r.get("route_matched"))
+    hard = [r for r in rows if r.get("hard_gate")]
+    hard_failed = [r.get("case_id") for r in hard if not r.get("passed")]
+    hard_block = {
+        "total": len(hard),
+        "passed": len(hard) - len(hard_failed),
+        "failed_case_ids": hard_failed,
+    }
+    route_accuracy = _ratio(matched, n)
+    # gate_passed: every hard-gate case passed AND route_accuracy was computable (n>0).
+    gate_passed = (not hard_failed) and (route_accuracy["rate"] is not None)
+    return {
+        "route_accuracy": route_accuracy,
+        "forbidden_tool_rate": _ratio(sum(1 for r in rows if r.get("forbidden_tool")), n),
+        "duplicate_call_rate": _ratio(sum(1 for r in rows if r.get("duplicate_call")), n),
+        "loop_exhaustion_rate": _ratio(sum(1 for r in rows if r.get("loop_exhaustion")), n),
+        "schema_failure_rate": _ratio(sum(1 for r in rows if r.get("schema_failure")), n),
+        "hard_gate": hard_block,
+        "gate_passed": bool(gate_passed),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Optional auxiliary LLM judge (OFF by default; never decides pass/fail alone)
 # --------------------------------------------------------------------------- #
 JUDGE_SYSTEM_PROMPT = (

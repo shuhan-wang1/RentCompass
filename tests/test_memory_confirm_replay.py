@@ -183,3 +183,67 @@ def test_bad_frozen_kind_falls_back_to_semantic(gate):
 
     assert len(provider.calls) == 1
     assert provider.calls[0][1]["kind"] == "semantic"
+
+
+# ─── write-gate under the rule-2 refinement (H13) ───────────────────
+def _tc(name, args, cid):
+    return {"name": name, "args": args, "id": cid, "type": "tool_call"}
+
+
+def _drive_write(gate, current_message, tool_args, *, context_tainted=True):
+    """Run agent → execute_tools once for a model-initiated remember, so the write-gate
+    (write_authorization = cue AND user-stated content) actually runs."""
+    from langchain_core.messages import AIMessage
+    from core.agent_loop import build_fc_nodes
+    provider = FakeProvider([FakeSpec("remember", side_effect="write", retry_safe=False)])
+    chat = FakeChat([
+        AIMessage(content="", tool_calls=[_tc("remember", dict(tool_args), "c1")]),
+        AIMessage(content="ok"),
+    ])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(current_message, context_tainted=context_tainted)
+    cmd = asyncio.run(nodes["agent"](state))
+    state.update(cmd.update or {})
+    assert cmd.goto == "execute_tools"
+    cmd = asyncio.run(nodes["execute_tools"](state))
+    state.update(cmd.update or {})
+    return provider, state
+
+
+_H13_MSG = "搜下 Camden 的房子，顺便把你找到的最便宜那套的价格记住"
+
+
+def test_h13_tool_derived_content_denied_and_frozen(gate):
+    # Cue present ("记住") but the number is a scraped price never in the user message →
+    # not authorized → denied even though context is tainted, and content is frozen.
+    provider, state = _drive_write(
+        gate, _H13_MSG,
+        {"content": "£950 (cheapest flat found in Camden)", "kind": "semantic"})
+
+    assert provider.calls == []                       # write never executed
+    assert gate.latest_pending_digest("s1") is not None  # exact content frozen for replay
+    from langchain_core.messages import ToolMessage
+    blocked = [m for m in state["messages"]
+               if isinstance(m, ToolMessage) and "write blocked" in m.content]
+    assert len(blocked) == 1
+
+
+def test_user_stated_content_allowed_under_taint(gate):
+    # Cue present AND the saved content is derivable from the user message → authorized
+    # even though the turn is tainted; the write executes, nothing is frozen.
+    provider, _state_ = _drive_write(
+        gate, "记住我预算1400", {"content": "budget £1400/month", "kind": "semantic"})
+
+    assert len(provider.calls) == 1
+    assert provider.calls[0][0] == "remember"
+    assert gate.latest_pending_digest("s1") is None
+
+
+def test_cue_but_unrelated_number_matches_denied(gate):
+    # numbers-match-but-text-unrelated: the figure 1400 is in the message but the
+    # distinguishing phrase is not → not user-stated → denied.
+    provider, _state_ = _drive_write(
+        gate, "记住我预算1400", {"content": "flat viewing at 1400 Camden Road", "kind": "semantic"})
+
+    assert provider.calls == []
+    assert gate.latest_pending_digest("s1") is not None

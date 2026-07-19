@@ -44,3 +44,39 @@ def test_new_rules_reach_the_system_directive():
     # Pre-existing rules still present (no regression).
     assert loop_prompts.SOFT_GATE_CONFIRMED_MARKER in directive
     assert loop_prompts.NO_EMOJI_MARKER in directive
+
+
+# ---------------------------------------------------------------------------
+# H2 — area-switch continuation routes to search_properties, not web_search
+# ---------------------------------------------------------------------------
+
+def test_area_switch_rule_routes_to_search_properties():
+    rule = loop_prompts.AREA_SWITCH_RULE
+    assert loop_prompts.AREA_SWITCH_MARKER in rule           # "AREA SWITCH CONTINUATION"
+    # continuation is a property search with the existing criteria ...
+    assert "search_properties" in rule
+    # ... and explicitly NOT web research (the observed misroute).
+    assert "web_search" in rule
+
+
+def test_area_switch_rule_defers_to_negative_directive():
+    # CRITICAL: an explicit no-search / research-only directive keeps HIGHER priority
+    # so the rule cannot regress guard case H3.
+    rule = loop_prompts.AREA_SWITCH_RULE
+    assert "EXCEPTION" in rule
+    assert "HIGHER priority" in rule
+    assert "RESEARCH vs LISTING SEARCH" in rule              # names the winning rule
+
+
+def test_area_switch_rule_reaches_the_system_directive():
+    directive = loop_prompts.build_system_directive("en")
+    assert loop_prompts.AREA_SWITCH_MARKER in directive
+    # The negative-directive rule it defers to is present too (H3 not regressed).
+    assert loop_prompts.NO_SEARCH_YET_RULE in directive
+    assert "只是了解一下" in directive                         # H3 research cue preserved
+
+
+def test_area_switch_rule_is_bilingual():
+    rule = loop_prompts.AREA_SWITCH_RULE
+    assert "换到" in rule and "那 Camden 呢" in rule           # zh switch cues
+    assert "what about" in rule.lower()                       # en switch cue

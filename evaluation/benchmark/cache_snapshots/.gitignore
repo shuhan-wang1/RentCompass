@@ -1,0 +1,10 @@
+# Committed listing-cache snapshots + their integrity sidecars live here.
+#
+# The repo-root .gitignore ignores *.sqlite3 everywhere. Re-include this directory's
+# snapshot files (only <=20MB should actually be committed — a larger snapshot must be
+# excluded manually) and ALWAYS re-include the .sha256 / .meta.json sidecars so a
+# committed benchmark package can be integrity-checked from the tree alone.
+!*.sqlite3
+!*.sha256
+!*.meta.json
+!.gitignore

@@ -243,6 +243,15 @@ class Tool:
         idempotency_key = kwargs.pop("idempotency_key", None)
         idempotency_store = kwargs.pop("_idempotency_store", None)
 
+        # Injected runtime params: leading-underscore kwargs supplied by the agent runtime /
+        # loop executor (e.g. `_deadline_monotonic`, an absolute time.monotonic() deadline) that
+        # must BYPASS the model input schema — pydantic create_model forbids underscore field
+        # names and model_validate() drops unknown keys, so they can never be model-visible tool
+        # parameters — yet still reach a tool func that declares them. Captured here, re-attached
+        # AFTER validation, and only for a func that actually accepts the name (explicit
+        # parameter or **kwargs), so tools that don't declare them are entirely unaffected.
+        injected = {k: kwargs.pop(k) for k in list(kwargs) if k.startswith("_")}
+
         # 填充默认值
         kwargs = self._apply_defaults(kwargs)
         try:
@@ -275,13 +284,20 @@ class Tool:
                 # 验证输入参数
                 self._validate_input(kwargs)
                 
+                # Re-attach injected runtime params (see above) only for funcs that accept them.
+                call_kwargs = kwargs
+                if injected:
+                    accepted = {k: v for k, v in injected.items() if self._accepts_kwarg(k)}
+                    if accepted:
+                        call_kwargs = {**kwargs, **accepted}
+
                 # 执行函数（支持同步和异步）
                 if asyncio.iscoroutinefunction(self.func):
-                    result = await self.func(**kwargs)
+                    result = await self.func(**call_kwargs)
                 else:
                     # 同步函数在 executor 中运行（避免阻塞）
                     loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(None, lambda: self.func(**kwargs))
+                    result = await loop.run_in_executor(None, lambda: self.func(**call_kwargs))
                 
                 execution_time = (time.time() - start_time) * 1000
                 
@@ -329,6 +345,27 @@ class Tool:
                         idempotency_key=idempotency_key,
                     )
     
+    def _accepts_kwarg(self, name: str) -> bool:
+        """True if ``self.func`` can receive keyword ``name`` — either as an explicit
+        parameter or via ``**kwargs``. Used to decide whether an INJECTED runtime param
+        (e.g. ``_deadline_monotonic``) should be forwarded to this tool's func. Result is
+        cached: signature introspection runs at most once per Tool."""
+        cache = getattr(self, "_accepts_cache", None)
+        if cache is None:
+            import inspect
+            cache = {"names": set(), "varkw": False}
+            try:
+                for p in inspect.signature(self.func).parameters.values():
+                    if p.kind is inspect.Parameter.VAR_KEYWORD:
+                        cache["varkw"] = True
+                    elif p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                                    inspect.Parameter.KEYWORD_ONLY):
+                        cache["names"].add(p.name)
+            except (TypeError, ValueError):
+                cache["varkw"] = True  # uninspectable callable -> be permissive
+            self._accepts_cache = cache
+        return cache["varkw"] or name in cache["names"]
+
     def _validate_input(self, kwargs: Dict):
         """验证是否满足 required 的参数"""
         required = self.parameters.get('required', [])

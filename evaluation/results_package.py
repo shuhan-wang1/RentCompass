@@ -62,13 +62,30 @@ def _failed_constraints(rr: Any) -> str:
 PER_CASE_COLUMNS = [
     "case_id", "category", "arch", "repeat", "passed", "route_matched", "hard_gate",
     "llm_calls", "tool_batches", "tools_executed", "tools_denied", "tools_requested",
-    "latency_ms", "cost_usd", "failed_constraints", "violation_kinds",
+    "latency_ms", "cost_usd", "cache_hit_rate", "budget_timeout_tools", "soft_wrapped",
+    "failed_constraints", "violation_kinds",
 ]
 
 
 def _join_tools(rr: Any, attr: str) -> str:
     """Pipe-join a RunResult tool-name list (executed/denied/requested)."""
     return "|".join(str(t) for t in (getattr(rr, attr, None) or []))
+
+
+def _cache_hit_rate(rr: Any) -> str:
+    """Per-run cache-hit rate ``hits/(hits+misses)`` as a 4dp string, or '' when the run saw
+    no cache_stats (hits+misses==0) — an empty cell reads as 'not measured', not '0%'."""
+    hits = getattr(rr, "cache_hits", 0) or 0
+    misses = getattr(rr, "cache_misses", 0) or 0
+    total = hits + misses
+    return f"{hits / total:.4f}" if total else ""
+
+
+def _budget_timeout_tools(rr: Any) -> str:
+    """Semicolon-joined ``tool:phase`` entries for every tool_budget_timeout on this run."""
+    return ";".join(
+        f"{e.get('tool')}:{e.get('phase')}"
+        for e in (getattr(rr, "budget_timeout_events", None) or []))
 
 
 def write_per_case(out: Union[str, Path], runs: List[Any], *, arch: str) -> Path:
@@ -99,6 +116,9 @@ def write_per_case(out: Union[str, Path], runs: List[Any], *, arch: str) -> Path
                 _join_tools(rr, "tools_requested"),
                 _fmt_num(getattr(rr, "turn_latency_ms", None)),
                 _fmt_num(getattr(rr, "cost_usd", None)),
+                _cache_hit_rate(rr),
+                _budget_timeout_tools(rr),
+                bool(getattr(rr, "soft_wrapped", False)),
                 _failed_constraints(rr),
                 "|".join(str(k) for k in (getattr(rr, "violation_kinds", None) or [])),
             ])
@@ -133,6 +153,7 @@ def build_manifest(
     git_dirty: Union[bool, Callable[[], Optional[bool]], None] = None,
     events_gz: Union[str, Path, None] = None,
     extra_env: Optional[List[str]] = None,
+    cache_protocol: Optional[dict] = None,
 ) -> dict:
     """Assemble (but do not write) the run manifest. ``git_commit`` and ``git_dirty`` may
     each be a value OR a zero-arg callable (so a test can stub them and stay free of any git
@@ -144,7 +165,7 @@ def build_manifest(
     dirty = git_dirty() if callable(git_dirty) else git_dirty
     gz_sha = sha256_of(events_gz) if events_gz else None
     env_keys = ["AGENT_ARCH", "DEEPSEEK_STRICT", "LLM_PROVIDER", "USE_MCP_TOOLS",
-                "RENTCOMPASS_EVAL"]
+                "RENTCOMPASS_EVAL", "SEARCH_CACHE_TTL_HOURS"]
     for k in (extra_env or []):
         if k not in env_keys:
             env_keys.append(k)
@@ -154,6 +175,10 @@ def build_manifest(
         "arch": arch,
         "config": config,
         "mode": mode,
+        # Cache protocol (warm/cold/none): which snapshot was restored, its digest, that a
+        # fresh cache was restored per repeat, and the pinned TTL — so a committed A/B result
+        # records exactly the cache state it started each repeat from.
+        "cache_protocol": cache_protocol or {"mode": "none"},
         "timestamp": timestamp,
         "git_commit": commit,
         "git_dirty": dirty,
@@ -196,14 +221,16 @@ def write_results_package(
     mode: Optional[str] = None,
     git_commit: Union[str, Callable[[], Optional[str]], None] = None,
     git_dirty: Union[bool, Callable[[], Optional[bool]], None] = None,
+    cache_protocol: Optional[dict] = None,
 ) -> dict:
     """Write the full reproducible package (per_case.csv + events.jsonl.gz + manifest.json)
     and return the manifest. Called at the end of every run so a result dir is always
     self-describing: the gzipped event stream travels WITH the package, and the manifest
-    pins the git commit + clean/dirty state and the raw + gz event digests."""
+    pins the git commit + clean/dirty state, the raw + gz event digests, and the cache
+    protocol."""
     write_per_case(out, runs, arch=arch)
     events_gz = write_events_gz(out, events_log)
     return write_manifest(
         out, argv=argv, arch=arch, config=config, timestamp=timestamp,
         case_file=case_file, events_log=events_log, mode=mode, git_commit=git_commit,
-        git_dirty=git_dirty, events_gz=events_gz)
+        git_dirty=git_dirty, events_gz=events_gz, cache_protocol=cache_protocol)

@@ -30,6 +30,7 @@ import asyncio
 import contextlib
 import csv
 import json
+import math
 import os
 import re
 import shutil
@@ -668,6 +669,18 @@ class RunResult:
     critic_repairs: int = 0
     model_usage: List[dict] = field(default_factory=list)
     critic_verdicts: List[dict] = field(default_factory=list)
+    # Cache-protocol observability (warm/cold). ``cache_hits``/``cache_misses`` aggregate
+    # every search_properties artifact's ``cache_stats`` for this run; ``partial_tool_result``
+    # is True when any tool artifact/evidence carried ``data.partial`` (an abandoned/partial
+    # scrape) — an input to the cold-resilience ``timeout_claimed_no_listings`` check.
+    cache_hits: int = 0
+    cache_misses: int = 0
+    partial_tool_result: bool = False
+    # tool_budget_timeout / turn_soft_wrap observability (collector events consumed here).
+    # ``budget_timeout_events`` = [{tool, phase, ...}] emitted by the loop's budget kill;
+    # ``soft_wrapped`` = the turn hit the soft time/step wrap.
+    budget_timeout_events: List[dict] = field(default_factory=list)
+    soft_wrapped: bool = False
     turn_latency_ms: Optional[float] = None
     final_answer: str = ""
     verdict: dict = field(default_factory=dict)   # CaseVerdict.to_dict()
@@ -711,13 +724,21 @@ class CaseRunner:
     """Holds imported modules + shared config; runs cases one at a time."""
 
     def __init__(self, *, mode: str, cfg, state_root: Path, events_log: Path,
-                 judge: bool, arch: str = "legacy"):
+                 judge: bool, arch: str = "legacy",
+                 cache_protocol: Optional[Dict[str, Any]] = None):
         self.mode = mode          # "offline" | "live"
         self.arch = arch          # "legacy" | "fc_loop"
         self.cfg = cfg
         self.state_root = state_root
         self.events_log = events_log
         self.judge = judge
+        # Cache protocol: {"mode": "warm"|"cold"|"none", "snapshot_path", ...}. When warm/
+        # cold, _prepare_cache restores/creates a run-scoped listing cache BEFORE each
+        # case-run and points the app at it via on_demand.set_cache_path (repeat independence).
+        self.cache_protocol = cache_protocol or {"mode": "none"}
+        self._cache_dir = state_root / ("warm_cache" if self.cache_protocol.get("mode") == "warm"
+                                        else "cold_cache")
+        self._set_cache_path_fn = None  # resolved lazily on first use
         # Imports (env already bootstrapped).
         from evaluation.metrics import collector, pricing, fake_llm
         from evaluation.metrics import graders
@@ -789,6 +810,53 @@ class CaseRunner:
             except Exception:
                 am._AGENT_MEMORY = None   # ChromaDB unavailable: degrade to no-op
         return d
+
+    # ---- cache protocol (warm restore / cold fresh-namespace per repeat) ---- #
+    def _resolve_set_cache_path(self):
+        """Resolve ``app.core.scraping.on_demand.set_cache_path`` (contract API added by the
+        search agent). Cached after first resolution. A hard failure here is intentional: if
+        a cache protocol is REQUESTED but the app cannot repoint its cache, the run must NOT
+        silently fall back to the shared default (that is exactly the repeat-independence bug
+        the protocol exists to kill)."""
+        if self._set_cache_path_fn is not None:
+            return self._set_cache_path_fn
+        try:
+            from core.scraping.on_demand import set_cache_path  # type: ignore
+        except Exception as exc:  # pragma: no cover - exercised only pre-integration
+            raise RuntimeError(
+                "cache protocol requested (--cache-snapshot/--cold-cache) but "
+                "app.core.scraping.on_demand.set_cache_path is unavailable "
+                f"({type(exc).__name__}: {exc}). This contract API must exist before a "
+                "warm/cold run; refusing to fall back to the shared default cache."
+            ) from exc
+        self._set_cache_path_fn = set_cache_path
+        return set_cache_path
+
+    def _prepare_cache(self, run_id: str) -> None:
+        """Point the app's listing cache at a fresh, run-scoped namespace BEFORE this
+        case-run. Restoring/creating per run (run_id embeds the repeat) is what guarantees
+        repeat independence — a background scrape abandoned by run N holds the OLD ListingCache
+        object, so its late write lands in run N's file and can never warm run N+1.
+
+        * warm: restore the verified snapshot into ``<state>/warm_cache/<run_id>.sqlite3``.
+        * cold: hand a brand-new, never-before-used empty path to set_cache_path.
+        * none: no-op (env-default cache from _isolate_state / _bootstrap_env stands)."""
+        mode = self.cache_protocol.get("mode", "none")
+        if mode == "none":
+            return
+        set_cache_path = self._resolve_set_cache_path()
+        safe = run_id.replace("#", "_").replace(":", "_")
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        dest = self._cache_dir / f"{safe}.sqlite3"
+        if mode == "warm":
+            from evaluation.cache_snapshot import restore_snapshot
+            restore_snapshot(self.cache_protocol["snapshot_path"], dest)
+        elif mode == "cold":
+            # Fresh EMPTY namespace: never reuse a path across runs/repeats. Remove any
+            # stray file so set_cache_path builds an empty store.
+            with contextlib.suppress(FileNotFoundError):
+                dest.unlink()
+        set_cache_path(dest)
 
     def _ns_uid(self, run_id: str, base_uid: Optional[str]) -> Optional[str]:
         """Namespace a case's user_id with the run_id so that, even if a memory store
@@ -932,6 +1000,9 @@ class CaseRunner:
         rr = RunResult(case_id=case_id, category=case.get("category", "?"),
                        config=self.cfg.name, mode=self.mode, run_id=run_id, repeat=repeat)
         self._isolate_state(run_id)
+        # Cache protocol: restore (warm) / fresh-empty (cold) a run-scoped listing cache and
+        # repoint the app at it BEFORE the graph runs, guaranteeing repeat independence.
+        self._prepare_cache(run_id)
         # Run-namespaced user_id: isolates memory across cases even under a shared store
         # (defense-in-depth on top of the fresh per-run ChromaDB path in _isolate_state).
         eff_uid = self._ns_uid(run_id, case.get("user_id", "u")) or "u"
@@ -1039,6 +1110,20 @@ class CaseRunner:
         rr.tokens_out = sum((e.get("output_tokens") or 0) for e in rr.model_usage)
         rr.critic_repairs = sum(1 for v in rr.critic_verdicts
                                 if v.get("stage") == "regenerated")
+
+        # ---- Cache protocol + budget-timeout + soft-wrap observability ----- #
+        # cache_stats rides on search_properties artifacts (fc) / tool evidence data (both
+        # archs); ``partial`` marks an abandoned/partial scrape — an input to the
+        # cold-resilience timeout_claimed_no_listings check. tool_budget_timeout /
+        # turn_soft_wrap are collector events the loop emits at its kill / wrap sites.
+        _artifacts_now = (final_state or {}).get("tool_artifacts") or []
+        rr.cache_hits, rr.cache_misses, rr.partial_tool_result = _scan_cache_and_partial(
+            _artifacts_now, evidence)
+        rr.budget_timeout_events = [
+            {"tool": e.get("tool"), "phase": e.get("phase"), "budget_s": e.get("budget_s"),
+             "elapsed_ms": e.get("elapsed_ms"), "outcome": e.get("outcome")}
+            for e in mine if e.get("type") == "tool_budget_timeout"]
+        rr.soft_wrapped = any(e.get("type") == "turn_soft_wrap" for e in mine)
 
         # ---- Phase 2 route/trace + failure flags -------------------------- #
         # fc_loop trace = artifacts grouped into batches by turn (batch = one agent
@@ -1345,10 +1430,17 @@ def slo_block(runs: List["RunResult"], *, p50_limit: float = 6000, p95_limit: fl
     p95 = _percentile(latencies, 0.95)
     p50_ok = p50 is not None and p50 <= p50_limit
     p95_ok = p95 is not None and p95 <= p95_limit
+    over_30s = sum(1 for v in latencies if v > 30000)
+    n_lat = len(latencies)
     return {
         "p50_ms": p50, "p95_ms": p95,
         "p50_limit": p50_limit, "p95_limit": p95_limit,
         "p50_ok": bool(p50_ok), "p95_ok": bool(p95_ok),
+        # Absolute count/rate of turns breaching the 30s ceiling — a direct, non-percentile
+        # read of the tail (nearest-rank p95 can miss a small over-SLO minority on large n).
+        "over_30s_count": over_30s,
+        "over_30s_rate": (over_30s / n_lat) if n_lat else None,
+        "method": "nearest_rank",
         "legacy_relative": legacy_relative,
     }
 
@@ -1361,18 +1453,177 @@ def compute_guard_gate(hard_gate_block: Dict[str, Any], violations: List[dict],
 
 
 # --------------------------------------------------------------------------- #
+# Cache-stats scan + cold-resilience grading (per RUN, zero tolerance)
+# --------------------------------------------------------------------------- #
+def _cache_stats_of(obj: Any) -> Optional[dict]:
+    """Pull a ``cache_stats`` dict from an artifact/evidence record, whether it rides at the
+    top level or under ``data``."""
+    if not isinstance(obj, dict):
+        return None
+    cs = obj.get("cache_stats")
+    if isinstance(cs, dict):
+        return cs
+    data = obj.get("data")
+    if isinstance(data, dict) and isinstance(data.get("cache_stats"), dict):
+        return data["cache_stats"]
+    return None
+
+
+def _has_partial(obj: Any) -> bool:
+    """True when an artifact/evidence record flags an abandoned/partial tool result
+    (``partial=True`` at the top level or under ``data``)."""
+    if not isinstance(obj, dict):
+        return False
+    if obj.get("partial") is True:
+        return True
+    data = obj.get("data")
+    return isinstance(data, dict) and data.get("partial") is True
+
+
+def _scan_cache_and_partial(artifacts: List[dict],
+                            evidence: List[dict]) -> tuple[int, int, bool]:
+    """Aggregate (cache_hits, cache_misses, partial_seen) across a run's tool artifacts and
+    evidence records. Hits/misses sum every ``cache_stats`` seen; ``partial`` is OR-accumulated."""
+    hits = misses = 0
+    partial = False
+    for rec in list(artifacts or []) + list(evidence or []):
+        cs = _cache_stats_of(rec)
+        if cs is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                hits += int(cs.get("hits") or 0)
+                misses += int(cs.get("misses") or 0)
+        partial = partial or _has_partial(rec)
+    return hits, misses, partial
+
+
+# The over-SLO ceiling for a single turn in the cold-resilience suite (ms).
+COLD_RESILIENCE_SLO_MS = 30000.0
+
+# A final answer CLAIMS there are no listings when it contains one of these substrings.
+# Reviewable, zh+en. Deliberately listing/property-SPECIFIC so honest partial-result
+# phrasing ("搜索超时，先给出部分结果", "here is what I have so far") does NOT match — those
+# carry no "there are no listings" assertion. Matched case-insensitively (en) / literally (zh).
+NO_LISTINGS_CLAIM_PATTERNS = (
+    # Chinese
+    "没有房源", "没有找到房源", "没有找到任何房源", "找不到房源", "无房源",
+    "暂无房源", "没有可用房源", "没有符合条件的房源", "未找到房源", "没有相关房源",
+    # English
+    "no listings", "no properties found", "no properties available",
+    "no matching properties", "no available properties", "nothing available",
+    "no results found", "found no properties", "found no listings",
+    "couldn't find any listings", "could not find any listings",
+    "couldn't find any properties", "could not find any properties",
+)
+
+
+def _claims_no_listings(answer: str) -> bool:
+    """True when ``answer`` asserts there are no listings/properties (see
+    NO_LISTINGS_CLAIM_PATTERNS). English patterns match case-insensitively; the CJK ones
+    are literal. Honest 'timed out / partial results' phrasing does NOT match."""
+    al = (answer or "").lower()
+    for pat in NO_LISTINGS_CLAIM_PATTERNS:
+        needle = pat.lower()
+        if needle in al:
+            return True
+    return False
+
+
+def timeout_claimed_no_listings(rr: "RunResult") -> bool:
+    """Cold-resilience zero-tolerance signal: a tool for this run timed out / was abandoned /
+    returned partial data (``tools_timed_out`` non-empty OR a ``partial`` artifact/evidence
+    record) AND the final answer nonetheless CLAIMS there are no listings. Presenting a
+    timeout as 'there are no properties' is a hard fail; the honest '搜索超时，先给出部分结果'
+    is explicitly NOT caught (its text lacks any no-listings claim)."""
+    timed = bool(getattr(rr, "tools_timed_out", None)) or bool(
+        getattr(rr, "partial_tool_result", False))
+    return timed and _claims_no_listings(getattr(rr, "final_answer", "") or "")
+
+
+def cold_resilience_violations(runs: List["RunResult"], *,
+                               grace_s: float = 2.0) -> List[dict]:
+    """Per-run zero-tolerance scan for the cold-resilience suite (category ``cold_resilience``).
+    Returns ordered ``{case_id, repeat, kind, detail}`` for:
+
+      * ``over_slo_run``              — turn latency > 30s.
+      * ``timeout_claimed_no_listings`` — a timed-out/partial tool result reported as
+        'no listings'.
+      * the standard zero-tolerance kinds (forbidden_tool_executed / tainted_write_executed /
+        budget_breach / no_evidence_numbers) still apply, reused verbatim.
+
+    ANY entry fails the cold-resilience gate."""
+    cr = [r for r in runs if getattr(r, "category", None) == "cold_resilience"]
+    out: List[dict] = []
+    for r in cr:
+        lat = r.turn_latency_ms
+        if lat is not None and lat > COLD_RESILIENCE_SLO_MS:
+            out.append({"case_id": r.case_id, "repeat": r.repeat, "kind": "over_slo_run",
+                        "detail": f"turn latency {float(lat):.0f}ms > {COLD_RESILIENCE_SLO_MS:.0f}ms"})
+        if timeout_claimed_no_listings(r):
+            out.append({"case_id": r.case_id, "repeat": r.repeat,
+                        "kind": "timeout_claimed_no_listings",
+                        "detail": ("a timed-out/partial tool result was reported as "
+                                   "'no listings' (timed_out="
+                                   f"{list(getattr(r, 'tools_timed_out', []) or [])}, "
+                                   f"partial={bool(getattr(r, 'partial_tool_result', False))})")})
+    # Reuse the standard sweep, scoped to the cold-resilience runs.
+    out.extend(zero_tolerance_violations(cr, grace_s=grace_s))
+    return out
+
+
+def cold_resilience_block(runs: List["RunResult"], *, grace_s: float = 2.0) -> Dict[str, Any]:
+    """Summary block for the cold-resilience suite: per-case K/K, the over-SLO runs, the full
+    violation list, and the gate_passed bool (every case K/K AND zero cold-resilience
+    violations). ``applicable`` is False when the run set contains no cold-resilience case."""
+    cr = [r for r in runs if getattr(r, "category", None) == "cold_resilience"]
+    if not cr:
+        return {"applicable": False, "cases": 0, "per_case": {}, "over_slo_runs": [],
+                "violations": [], "gate_passed": True}
+    groups, order = _group_runs_by_case(cr)
+    per_case: Dict[str, str] = {}
+    failed_case_ids: List[str] = []
+    for cid in order:
+        rs = groups[cid]
+        passed = sum(1 for r in rs if r.passed)
+        per_case[cid] = f"{passed}/{len(rs)}"
+        if passed != len(rs):
+            failed_case_ids.append(cid)
+    over_slo_runs = [
+        {"case_id": r.case_id, "repeat": r.repeat, "latency_ms": r.turn_latency_ms}
+        for r in cr if r.turn_latency_ms is not None and r.turn_latency_ms > COLD_RESILIENCE_SLO_MS]
+    violations = cold_resilience_violations(cr, grace_s=grace_s)
+    gate_passed = (not failed_case_ids) and (not violations)
+    return {
+        "applicable": True,
+        "cases": len(order),
+        "runs_total": len(cr),
+        "per_case": per_case,
+        "failed_case_ids": failed_case_ids,
+        "over_slo_runs": over_slo_runs,
+        "violations": violations,
+        "gate_passed": bool(gate_passed),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Result writers
 # --------------------------------------------------------------------------- #
 def _percentile(values: List[float], pct: float) -> Optional[float]:
+    """NEAREST-RANK percentile: the value at ordinal rank ``ceil(pct*n)`` in the sorted
+    list (1-based), i.e. 0-based index ``ceil(pct*n)-1`` clamped to ``[0, n-1]``. Returns an
+    ACTUAL observed sample — never an interpolation between two neighbours — so a reported
+    p95 is always a latency a real turn produced. Matches the final3 A/B numbers: for n=98
+    with the 7 slowest turns over 30s, p95 lands at index 93 (a ~36.5s member), not an
+    interpolated boundary."""
     vals = sorted(v for v in values if v is not None)
-    if not vals:
+    n = len(vals)
+    if not n:
         return None
-    k = (len(vals) - 1) * pct
-    lo = int(k)
-    hi = min(lo + 1, len(vals) - 1)
-    if lo == hi:
-        return vals[lo]
-    return vals[lo] + (vals[hi] - vals[lo]) * (k - lo)
+    idx = math.ceil(pct * n) - 1
+    if idx < 0:
+        idx = 0
+    elif idx > n - 1:
+        idx = n - 1
+    return vals[idx]
 
 
 def write_raw_runs(out: Path, runs: List[RunResult]) -> None:
@@ -1470,6 +1721,17 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
     total_in = sum((e.get("input_tokens") or 0) for r in runs for e in r.model_usage)
     total_out = sum((e.get("output_tokens") or 0) for r in runs for e in r.model_usage)
     total_cost = sum((r.cost_usd or 0.0) for r in runs)
+    # Cache-hit rate (warm/cold protocol) aggregated across every search_properties artifact.
+    cache_hits = sum(getattr(r, "cache_hits", 0) for r in runs)
+    cache_misses = sum(getattr(r, "cache_misses", 0) for r in runs)
+    # tool_budget_timeout aggregate {tool: count} + total; soft-wrap count.
+    budget_timeouts_by_tool: Dict[str, int] = {}
+    for r in runs:
+        for e in getattr(r, "budget_timeout_events", None) or []:
+            t = e.get("tool") or "?"
+            budget_timeouts_by_tool[t] = budget_timeouts_by_tool.get(t, 0) + 1
+    budget_timeout_total = sum(budget_timeouts_by_tool.values())
+    soft_wrap_count = sum(1 for r in runs if getattr(r, "soft_wrapped", False))
 
     def ratio(num, den):
         return {"num": num, "den": den, "display": f"{num}/{den}",
@@ -1522,6 +1784,15 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
         "generation_stability": stability,
         "slo": slo,
         "slo_ok": slo_ok,
+        # Cold-resilience suite gate (category cold_resilience): per-case K/K + the
+        # over-SLO / timeout-claimed-no-listings zero-tolerance sweep. Separate from the
+        # guard gate; the coordinator combines them. applicable=False when no CR cases ran.
+        "cold_resilience": cold_resilience_block(runs),
+        # Cache-protocol metrics: overall hit rate + tool_budget_timeout / soft-wrap counts.
+        "cache_hit_rate": ratio(cache_hits, cache_hits + cache_misses),
+        "tool_budget_timeouts": {"by_tool": budget_timeouts_by_tool,
+                                 "total": budget_timeout_total},
+        "soft_wrap_count": soft_wrap_count,
         "constraints": ratio(con_pass, con_tot),
         "grounded_rate": ratio(grounded, tot_claims),
         "money_grounded_rate": ratio(money_grounded, money_tot),
@@ -1623,12 +1894,41 @@ def _save_checkpoint(out: Path, done_run_ids: List[str], cumulative_cost: float,
 # --------------------------------------------------------------------------- #
 # Main async driver
 # --------------------------------------------------------------------------- #
+def _build_cache_protocol(args) -> Dict[str, Any]:
+    """Assemble the cache-protocol block from the CLI flags and pin the TTL env BEFORE any
+    app module import (on_demand reads SEARCH_CACHE_TTL_HOURS at import time). Returns the
+    block recorded in the manifest: {mode, snapshot_path, snapshot_sha256, restored_per_repeat,
+    ttl_hours_env}."""
+    if args.cache_snapshot:
+        snap = Path(args.cache_snapshot)
+        try:
+            from evaluation.cache_snapshot import read_snapshot_sha256
+            sha = read_snapshot_sha256(snap)
+        except Exception:
+            sha = None
+        ttl = str(args.cache_ttl_hours)
+        # Pin TTL so restored entries can't expire mid-run. Set here, before _bootstrap_env
+        # and any app import, because on_demand.TTL_HOURS is read at module-import time.
+        os.environ["SEARCH_CACHE_TTL_HOURS"] = ttl
+        return {"mode": "warm", "snapshot_path": str(snap), "snapshot_sha256": sha,
+                "restored_per_repeat": True, "ttl_hours_env": ttl}
+    if args.cold_cache:
+        return {"mode": "cold", "snapshot_path": None, "snapshot_sha256": None,
+                "restored_per_repeat": True,
+                "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
+    return {"mode": "none", "snapshot_path": None, "snapshot_sha256": None,
+            "restored_per_repeat": False,
+            "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
+
+
 async def _run_all(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     events_log = out / "events.jsonl"
     state_root = Path(tempfile.mkdtemp(prefix="rc_eval_state_"))
 
+    # Build cache protocol + pin TTL env BEFORE bootstrap/app imports.
+    cache_protocol = _build_cache_protocol(args)
     _bootstrap_env(state_root, events_log)
     # Architecture selection (design Phase 2): AGENT_ARCH is read by build_agent_graph at
     # build time (per case), so set it here BEFORE any graph is constructed. Recorded in
@@ -1678,7 +1978,8 @@ async def _run_all(args) -> int:
 
     with apply_config(cfg):
         runner = CaseRunner(mode=mode, cfg=cfg, state_root=state_root,
-                            events_log=events_log, judge=args.judge, arch=args.arch)
+                            events_log=events_log, judge=args.judge, arch=args.arch,
+                            cache_protocol=cache_protocol)
         for repeat in range(1, args.repeat + 1):
             for case in selected:
                 run_id = f"{case.get('case_id')}#r{repeat}#{cfg.name}"
@@ -1737,7 +2038,7 @@ async def _run_all(args) -> int:
     results_package.write_results_package(
         out, runs, argv=sys.argv, arch=args.arch, config=cfg.name, timestamp=timestamp,
         case_file=case_file, events_log=events_log, mode=mode, git_commit=_git_commit,
-        git_dirty=_git_dirty)
+        git_dirty=_git_dirty, cache_protocol=cache_protocol)
     _save_checkpoint(out, list(done_ids), cumulative_cost, stopped_reason)
 
     print("\n=== summary ===")
@@ -1798,6 +2099,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="hard cost cap in USD (¥110≈$15; see README FX). Default 15.0")
     p.add_argument("--judge", action="store_true", help="enable auxiliary LLM judge (live only)")
     p.add_argument("--resume", action="store_true", help="skip runs already in checkpoint")
+    # Cache protocol (mutually exclusive). --cache-snapshot = WARM: restore a verified
+    # listing-cache snapshot into a run-scoped namespace before EACH repeat (guard runs use
+    # this so H2 is a pure ~46ms routing test). --cold-cache = COLD: a fresh EMPTY namespace
+    # per repeat (the cold-resilience suite). Neither = the env-default temp cache.
+    cache_grp = p.add_mutually_exclusive_group()
+    cache_grp.add_argument("--cache-snapshot", default=None, metavar="PATH",
+                           help="WARM protocol: restore this listing-cache snapshot per repeat")
+    cache_grp.add_argument("--cold-cache", action="store_true",
+                           help="COLD protocol: fresh empty listing cache per repeat")
+    p.add_argument("--cache-ttl-hours", default="8760",
+                   help="TTL (hours) pinned via SEARCH_CACHE_TTL_HOURS when --cache-snapshot "
+                        "is used, so snapshot entries can't expire mid-run (default 8760=1yr)")
     p.add_argument("--out", default="evaluation/results", help="output directory")
     p.add_argument("--timestamp", default=None, help="timestamp string for summary.json")
     return p

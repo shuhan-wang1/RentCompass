@@ -57,6 +57,12 @@ class AgentState(TypedDict, total=False):
     # accumulates across the turn's batches so FC_TURN_TOOL_BUDGET_S can be enforced turn-wide
     # (execute_tools is the sole writer; last-write-wins is safe). See app/core/agent_loop.py.
     turn_tool_budget_used_s: float
+    # Monotonic timestamp (time.monotonic()) captured at the fc_loop guard/entry node marking
+    # the TURN START, so the agent + execute_tools nodes can measure whole-turn elapsed (LLM +
+    # tools) and enforce the turn-wide soft wrap (FC_TURN_SOFT_WRAP_S) + search deadline. A PLAIN
+    # per-turn channel reset by create_initial_state (0.0 = not yet captured; guard is the sole
+    # writer). Process-local: never compare across a cross-process checkpoint resume.
+    turn_start_monotonic: float
     # Multi-intent execution plan (build_execution_plan -> dispatch_tasks -> task_worker x N
     # -> gather_wave). task_plan is the resolved task list [{id,index,tool,params,depends_on}];
     # plan_origin is "multi_search" (degenerate single-intent web fan-out, ends at
@@ -115,6 +121,7 @@ def create_initial_state(
         messages=[],
         tool_artifacts=[],
         turn_tool_budget_used_s=0.0,
+        turn_start_monotonic=0.0,
         task_plan=[],
         plan_origin="",
         plan_notes=[],

@@ -332,7 +332,8 @@ def test_per_case_csv_columns_and_values(tmp_path):
     assert rows[0] == ["case_id", "category", "arch", "repeat", "passed", "route_matched",
                        "hard_gate", "llm_calls", "tool_batches", "tools_executed",
                        "tools_denied", "tools_requested", "latency_ms",
-                       "cost_usd", "failed_constraints", "violation_kinds"]
+                       "cost_usd", "cache_hit_rate", "budget_timeout_tools", "soft_wrapped",
+                       "failed_constraints", "violation_kinds"]
     by_id = {r[0]: r for r in rows[1:]}
     assert by_id["H2"][2] == "fc_loop"
     assert by_id["H2"][3] == "1"                     # repeat
@@ -340,10 +341,10 @@ def test_per_case_csv_columns_and_values(tmp_path):
     assert by_id["H2"][9] == "search_properties"    # tools_executed
     assert by_id["H2"][10] == ""                     # tools_denied
     assert by_id["H2"][11] == "search_properties"   # tools_requested
-    assert by_id["H2"][14] == ""  # no failed constraints
+    assert by_id["H2"][17] == ""  # no failed constraints
     # A failing case lists its failed constraint + the forbidden-tool use.
-    assert "must_mention_value" in by_id["H8"][14]
-    assert "forbidden:search_properties" in by_id["H8"][14]
+    assert "must_mention_value" in by_id["H8"][17]
+    assert "forbidden:search_properties" in by_id["H8"][17]
 
 
 def test_per_case_csv_denied_write_split(tmp_path):
@@ -360,7 +361,7 @@ def test_per_case_csv_denied_write_split(tmp_path):
     assert row[9] == "search_properties"          # executed: remember NOT here
     assert row[10] == "remember"                   # denied
     assert "remember" in row[11]                   # requested keeps it
-    assert row[15] == ""                           # no zero-tolerance violation fired
+    assert row[18] == ""                           # no zero-tolerance violation fired
 
 
 def test_manifest_fields_with_stubbed_commit(tmp_path):

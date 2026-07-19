@@ -1049,26 +1049,71 @@ class ListingCache:
             )
 
 
+# Active cache namespace. `CACHE_PATH` is the import-time default; `_CACHE_PATH` is the
+# CURRENTLY active namespace, swappable at runtime via set_cache_path() (the eval harness
+# isolates each protocol/run in its own sqlite file). `_CACHE` is the lazily built singleton
+# over `_CACHE_PATH`. All of these are guarded by `_CACHE_LOCK` so a swap + singleton reset is
+# atomic against a concurrent _cache() build (the fc-loop offloads searches to worker threads).
+_CACHE_LOCK = threading.Lock()
+_CACHE_PATH: Path = CACHE_PATH
 _CACHE: ListingCache | None = None
 
 
+def _build_cache(path: Path) -> ListingCache:
+    """Construct a ListingCache over `path`, probing writability once and degrading to a
+    temp-dir namespace if the preferred path is not writable. Holds no lock."""
+    try:
+        candidate = ListingCache(path)
+        with sqlite3.connect(candidate.path, timeout=1) as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.rollback()
+        return candidate
+    except (OSError, sqlite3.Error) as exc:
+        fallback_path = Path(tempfile.gettempdir()) / "uk-rent-agent" / "listing_cache.sqlite3"
+        print(
+            f"  [on_demand] listing cache {path} is not writable ({exc}); "
+            f"using {fallback_path}"
+        )
+        return ListingCache(fallback_path)
+
+
 def _cache() -> ListingCache:
+    """The active listing-cache singleton over the current namespace (`_CACHE_PATH`).
+    Rebuilt lazily after a set_cache_path() swap (which nulls `_CACHE`)."""
     global _CACHE
-    if _CACHE is None:
-        try:
-            candidate = ListingCache()
-            with sqlite3.connect(candidate.path, timeout=1) as db:
-                db.execute("BEGIN IMMEDIATE")
-                db.rollback()
-            _CACHE = candidate
-        except (OSError, sqlite3.Error) as exc:
-            fallback_path = Path(tempfile.gettempdir()) / "uk-rent-agent" / "listing_cache.sqlite3"
-            print(
-                f"  [on_demand] listing cache {CACHE_PATH} is not writable ({exc}); "
-                f"using {fallback_path}"
-            )
-            _CACHE = ListingCache(fallback_path)
-    return _CACHE
+    with _CACHE_LOCK:
+        if _CACHE is None:
+            _CACHE = _build_cache(Path(_CACHE_PATH))
+        return _CACHE
+
+
+def get_cache_path() -> Path:
+    """Return the path of the CURRENTLY active listing-cache namespace."""
+    with _CACHE_LOCK:
+        return Path(_CACHE_PATH)
+
+
+def set_cache_path(path: str | Path) -> Path:
+    """Atomically swap the module's active listing-cache namespace to `path` and return the
+    OLD path. Creates the parent directory and resets the `_CACHE` singleton so every
+    subsequent _cache() / get_listings() / iter_cached_listings() / find_cached_listing_by_url()
+    call resolves against the new namespace.
+
+    Isolation contract (the eval harness gives each run/protocol its own cache file): any
+    in-flight or ABANDONED scrape/offloaded thread keeps its OWN reference to the PREVIOUS
+    ListingCache instance (the one it captured via _cache() before the swap) and will
+    therefore write to the OLD file — never the new namespace. That is intentional: a slow
+    scrape abandoned by the batch budget can no longer pollute the fresh namespace of a later
+    eval case. Callers wanting the swap to take effect for a thread must re-resolve _cache()
+    AFTER the swap (as every entry point above does)."""
+    global _CACHE_PATH, _CACHE
+    new_path = Path(path)
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    with _CACHE_LOCK:
+        old_path = Path(_CACHE_PATH)
+        _CACHE_PATH = new_path
+        _CACHE = None  # force a rebuild against the new namespace on the next _cache()
+    return old_path
 
 def iter_cached_listings() -> list[dict]:
     """Return every listing row currently held in the persistent listing cache,
@@ -1121,12 +1166,13 @@ def find_cached_listing_by_url(url: str) -> dict | None:
 def _fallback_cache(exc: Exception) -> ListingCache:
     global _CACHE
     fallback_path = Path(tempfile.gettempdir()) / "uk-rent-agent" / "listing_cache.sqlite3"
-    print(
-        f"  [on_demand] listing cache {_CACHE.path if _CACHE else CACHE_PATH} failed during use ({exc}); "
-        f"switching to {fallback_path}"
-    )
-    _CACHE = ListingCache(fallback_path)
-    return _CACHE
+    with _CACHE_LOCK:
+        print(
+            f"  [on_demand] listing cache {_CACHE.path if _CACHE else _CACHE_PATH} failed "
+            f"during use ({exc}); switching to {fallback_path}"
+        )
+        _CACHE = ListingCache(fallback_path)
+        return _CACHE
 
 
 def _query_key(slug: str, min_beds: int, max_beds: int, min_price: int, max_price: int) -> str:
@@ -1137,8 +1183,16 @@ def _query_key(slug: str, min_beds: int, max_beds: int, min_price: int, max_pric
 
 
 def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s):
-    """Run the OnTheMarket scrape under a wall-clock budget. Returns the row list
-    on success, or None if it errored / timed out (-> caller does stale-if-error)."""
+    """Run the OnTheMarket scrape under a wall-clock budget.
+
+    Returns ``(rows, timed_out)``:
+      * success -> ``(row_list, False)`` (``row_list`` may be empty for a genuine no-match);
+      * budget hit -> ``(None, True)`` — the deadline was reached, so the caller can report
+        the area as INCOMPLETE (distinct from a genuinely empty result);
+      * error -> ``(None, False)`` -> caller does stale-if-error.
+    On timeout the underlying scrape thread is left running (shutdown(wait=False)); its
+    eventual result is discarded and never cached, so a budget-abandoned area can't pollute
+    the store."""
     ex = ThreadPoolExecutor(max_workers=1)
     fut = ex.submit(
         onthemarket.find_rich_onthemarket,
@@ -1148,15 +1202,15 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
     try:
         rows = fut.result(timeout=budget_s)
         ex.shutdown(wait=False)
-        return rows
+        return rows, False
     except FuturesTimeout:
         print(f"  [on_demand] scrape budget ({budget_s}s) exceeded for '{slug}'")
         ex.shutdown(wait=False)
-        return None
+        return None, True
     except Exception as e:  # network/parse failure -> stale-if-error
         print(f"  [on_demand] scrape error for '{slug}': {e}")
         ex.shutdown(wait=False)
-        return None
+        return None, False
 
 
 def _clean(rows: list[dict], requested_city: str | None) -> list[dict]:
@@ -1181,6 +1235,7 @@ def get_listings(
     *,
     force_refresh: bool = False,
     budget_s: float | None = None,
+    cache_only: bool = False,
 ) -> dict:
     """Resolve a query to real, city-correct OnTheMarket listings via the
     scrape-on-demand + persistent-cache pipeline.
@@ -1210,6 +1265,9 @@ def get_listings(
         "count": 0,
         "elapsed_s": 0.0,
         "message": "",
+        # True only when a live scrape was started and hit its wall-clock budget: lets the
+        # caller mark the area INCOMPLETE (deadline reached) rather than complete-empty.
+        "timed_out": False,
     }
     if not slug:
         meta["message"] = "No search location was provided."
@@ -1229,9 +1287,19 @@ def get_listings(
                         elapsed_s=round(time.time() - t0, 2))
             return {"rows": rows, "meta": meta}
 
+    # 1b) Cache-only lookup (no scrape): the caller (deadline-aware multi-area search) uses
+    #     this to serve already-cached areas for near-free before deciding which uncached
+    #     areas it still has time to scrape. A stale/absent entry returns an honest empty so
+    #     the caller treats the area as a cache MISS.
+    if cache_only:
+        meta.update(source="none", elapsed_s=round(time.time() - t0, 2),
+                    message="No fresh cached listings for this query (cache-only lookup).")
+        return {"rows": [], "meta": meta}
+
     # 2) Cache miss / stale -> scrape live under budget.
-    scraped = _scrape_live(slug, min_bedrooms, max_bedrooms,
-                           min_price, max_price, limit, budget_s)
+    scraped, scrape_timed_out = _scrape_live(slug, min_bedrooms, max_bedrooms,
+                                             min_price, max_price, limit, budget_s)
+    meta["timed_out"] = bool(scrape_timed_out)
     if scraped is not None:
         rows = _clean(scraped, city)
         if rows:

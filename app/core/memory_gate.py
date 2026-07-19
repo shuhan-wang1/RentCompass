@@ -7,6 +7,11 @@ The loop executor codes against this module. It provides:
     user message is untainted by construction, so a model-initiated ``remember``
     may go through directly, no extra confirmation (A+ rule 2). Recall questions
     ("do you remember ...", "还记得吗") are NOT authorization.
+  * ``is_pure_recall_question`` — True iff the CURRENT user message is a memory-recall
+    question with NO store-new-content intent (H12). The executor calls it to deny a
+    model-initiated ``remember`` on such a turn regardless of taint. A mixed message
+    that also asks to save something is NOT pure recall (store intent wins), so it
+    survives. Shares the recall + authorize cue families rather than duplicating them.
   * ``content_is_user_stated`` — the refinement of rule 2 (H13). The direct-allow
     only holds when the content being saved IS what the user stated — the
     "current message is untainted" reasoning does NOT cover a scraped price the
@@ -69,16 +74,23 @@ _AUTHORIZE_ZH = (
 
 # Recall QUESTIONS — the user is asking what we already know, NOT asking to save.
 # These veto authorization even when a positive substring incidentally matches
-# (e.g. "do you remember my budget").
+# (e.g. "do you remember my budget"). They are ALSO the recall-cue family that
+# ``is_pure_recall_question`` consumes, so keep them recall-only (never a save cue).
 _RECALL_VETO_EN = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
-        r"\b(?:do|does|did|can|could|would|will)\s+you\s+remember\b",
-        r"\byou\s+remember\b",
+        r"\b(?:do|does|did|can|could|would|will)\s+you\s+(?:remember|recall)\b",
+        r"\byou\s+(?:remember|recall)\b",
         r"\bremember\s+(?:when|what|who|where|why|how|the\s+time|that\s+time|if)\b",
+        r"\bwhat\s+did\s+i\s+(?:say|tell|mention)\b",
+        r"\bdid\s+i\s+(?:say|tell|mention|already\s+tell)\b",
+        r"\bwhat(?:'?s|\s+is|\s+was)\s+my\b.*?\bagain\b",
     )
 )
-_RECALL_VETO_ZH = ("记得吗", "记不记得", "还记得", "是否记得", "你记得")
+_RECALL_VETO_ZH = (
+    "记得吗", "记不记得", "还记得", "是否记得", "你记得", "记得我",
+    "我之前说过", "之前说过", "我说过", "说过什么", "上次说的", "上次说过",
+)
 
 
 def user_authorizes_memory(current_message: str) -> bool:
@@ -98,6 +110,62 @@ def user_authorizes_memory(current_message: str) -> bool:
     if any(phrase in text for phrase in _AUTHORIZE_ZH):
         return True
     return False
+
+
+# -------------------------------------------------------------- pure-recall detection (H12)
+
+def _has_recall_cue(text: str) -> bool:
+    """True when ``text`` contains a memory-RECALL cue (zh+en). Shares the recall-veto
+    families used by ``user_authorizes_memory`` — the single source of recall phrasing."""
+    if any(pat.search(text) for pat in _RECALL_VETO_EN):
+        return True
+    return any(phrase in text for phrase in _RECALL_VETO_ZH)
+
+
+# Interrogative heads that turn an EN "remember ..." authorize match into a recall
+# question ("do you remember my budget"): the save cue is a false positive there.
+_REMEMBER_RECALL_HEAD = re.compile(r"\byou\s*$", re.IGNORECASE)
+
+
+def _has_store_intent(text: str) -> bool:
+    """True when ``text`` carries an explicit imperative to SAVE new content (zh+en).
+
+    Robust to co-occurring recall phrasing so a genuine store cue WINS in a mixed
+    message (「回忆一下我的预算，另外记住我要两居室」/ "what's my budget again? also
+    remember I now want a 2-bed"). Reuses ``user_authorizes_memory``'s cue lists.
+
+    The zh save cues (记住 / 记一下 / 存一下 …) never occur inside recall phrasing
+    (记得 ≠ 记住), so a substring hit is decisive. The en ``remember <object>`` cue,
+    however, also fires on the recall question "… you remember my …"; that specific
+    false positive is filtered out, every other authorize cue counts.
+    """
+    if any(phrase in text for phrase in _AUTHORIZE_ZH):
+        return True
+    for pat in _AUTHORIZE_EN:
+        for m in pat.finditer(text):
+            if m.group(0).lower().startswith("remember") and \
+                    _REMEMBER_RECALL_HEAD.search(text[:m.start()]):
+                continue  # "… you remember <object>" is a recall question, not a save
+            return True
+    return False
+
+
+def is_pure_recall_question(current_message: str) -> bool:
+    """True iff the message is a memory-RECALL question with NO store-new-content intent.
+
+    The loop executor calls this to DENY a model-initiated ``remember`` on a pure-recall
+    turn (zero-tolerance: 「你还记得我的预算吗」 must never trigger a write), regardless of
+    taint. A mixed message that also asks to save (「…另外记住我要两居室」) is NOT pure recall
+    — the store intent wins — so it survives and can still write (H12 product ruling).
+
+    zh + en. Empty / whitespace → False.
+    """
+    text = (current_message or "").strip()
+    if not text:
+        return False
+    if _has_store_intent(text):
+        return False
+    return _has_recall_cue(text)
 
 
 # -------------------------------------------------- content-is-user-stated (rule 2 refinement)

@@ -91,6 +91,54 @@ def test_user_authorizes_negative(msg):
     assert mg.user_authorizes_memory(msg) is False
 
 
+# ---------------------------------------------------------------- is_pure_recall_question (H12)
+
+@pytest.mark.parametrize("msg", [
+    # zh recall questions — no store intent
+    "你还记得我的预算吗",
+    "还记得我要一楼吗",
+    "记得我的预算是多少吗",
+    "你记不记得我说过什么",
+    "我之前说过什么预算来着",
+    "上次说的那个区域是哪里",
+    "我说过我想住哪吗",
+    # en recall questions
+    "Do you remember my budget?",
+    "do you recall what I said earlier?",
+    "you remember the flat we looked at?",
+    "What did I say my budget was?",
+    "did I tell you my move-in date?",
+    "what's my budget again?",
+    # recall question quoting numbers from history (still a question, not a save)
+    "你还记得我说过预算是1500吗",
+    "did I say my budget was 1500?",
+])
+def test_is_pure_recall_question_true(msg):
+    assert mg.is_pure_recall_question(msg) is True
+
+
+@pytest.mark.parametrize("msg", [
+    # mixed recall + store — store intent WINS, must NOT be blocked (product ruling)
+    "回忆一下我的预算，另外记住我现在想要两居室",
+    "你还记得我的预算吗？顺便记住我现在要两居室",
+    "what's my budget again? also remember I now want a 2-bed",
+    "do you remember my budget? please remember I have a dog now",
+    # plain new-fact statements — not a recall question at all
+    "我预算1500",
+    "I want to live near UCL",
+    "预算大概1500镑一个月",
+    # explicit store commands — a save, not a recall
+    "记住我的预算是1500",
+    "Please remember that my budget is 1500 pcm",
+    "帮我记一下这个地址",
+    # empty / whitespace
+    "",
+    "   ",
+])
+def test_is_pure_recall_question_false(msg):
+    assert mg.is_pure_recall_question(msg) is False
+
+
 # ---------------------------------------------------------------- memory_write_allowed
 
 @pytest.mark.parametrize("tainted,authorized,expected", [

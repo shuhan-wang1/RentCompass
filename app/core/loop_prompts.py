@@ -57,6 +57,7 @@ NO_EMOJI_MARKER = "Never use emoji"
 NO_RECALL_MARKER = "Do NOT call recall_memory"
 WEB_SEARCH_BUDGET_MARKER = "at most 2 web_search"
 POLICE_SOURCE_MARKER = "data.police.uk"
+AREA_SWITCH_MARKER = "AREA SWITCH CONTINUATION"
 
 # 2.6 soft criteria gate. The gate itself lives inside search_properties; the harness
 # re-injects criteria_gate_shown / confirmed. The model must know the confirmed
@@ -72,9 +73,23 @@ SOFT_GATE_RULE = (
 # 1.7 market-research negative guard.
 NO_SEARCH_YET_RULE = (
     "RESEARCH vs LISTING SEARCH: If the user explicitly says not to search yet "
-    "(「先不要搜索」/「先不搜」/「先调研」/ \"don't search yet\" / \"just research first\") they want "
-    "market RESEARCH (typical prices, area overview via web_search / your knowledge), NOT a "
-    "property-listing search. Do NOT call search_properties in that case."
+    "(「先不要搜索」/「先别搜」/「先不搜」/「只是了解一下」/「先调研」/ \"don't search yet\" / "
+    "\"just research(ing)\" / \"no search for now\") they want market RESEARCH (typical prices, "
+    "area overview via web_search / your knowledge), NOT a property-listing search. Do NOT call "
+    "search_properties in that case."
+)
+
+# H2 area-switch continuation. When criteria already exist and the user retargets the area,
+# the continuation is a property search — never web research. The negative directive above
+# still wins (stated as the explicit exception so this rule cannot regress guard case H3).
+AREA_SWITCH_RULE = (
+    "AREA SWITCH CONTINUATION: If search criteria (room type / budget / commute) already exist "
+    "in the context and the user switches or adds a target area (「换到 Camden 找」/「那 Camden 呢」"
+    "/「改成 Camden」/ \"try Camden instead\" / \"what about Camden\"), this is a PROPERTY SEARCH: "
+    "call search_properties with the updated area(s) plus the existing criteria. Do NOT route it "
+    "to web_search or market research. EXCEPTION — an explicit no-search / research-only directive "
+    "has HIGHER priority: if the same message says not to search yet or to only research (see the "
+    "RESEARCH vs LISTING SEARCH rule), obey that and answer via market research instead."
 )
 
 # 1 / 1.5 / multi-area zh deictic anchoring (structural rule, not results[0]).
@@ -143,6 +158,7 @@ _BEHAVIOUR_RULES_ORDER = (
     EFFICIENCY_RULE,
     SOFT_GATE_RULE,
     NO_SEARCH_YET_RULE,
+    AREA_SWITCH_RULE,
     DEICTIC_RULE,
     SAFETY_TARGET_RULE,
     GROUNDED_CITATION_RULE,

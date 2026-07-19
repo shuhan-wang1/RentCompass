@@ -23,8 +23,8 @@
     "case_id": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^[A-H][0-9]+$",
-      "description": "Unique id. Prefix letter is the category (A-H). H = guard-regression shard (cases_guard_regression.jsonl)."
+      "pattern": "^(CR|[A-H])[0-9]+$",
+      "description": "Unique id. Prefix is the category: A-H, or CR for the cold-resilience shard (cases_cold_resilience.jsonl). H = guard-regression shard (cases_guard_regression.jsonl)."
     },
     "category": {
       "type": "string",
@@ -36,7 +36,8 @@
         "E_multi_constraint",
         "F_grounding",
         "G_memory",
-        "H_guard_regression"
+        "H_guard_regression",
+        "cold_resilience"
       ]
     },
     "user_query": {

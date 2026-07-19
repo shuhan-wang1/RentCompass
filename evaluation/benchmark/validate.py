@@ -64,7 +64,7 @@ VALID_CATEGORIES = {
 # Categories that are LEGAL but not required for coverage: the guard-regression shard
 # (cases_guard_regression.jsonl) lives outside the base suite, so its category must
 # validate per-case without the base cases.jsonl being flagged as "missing" it.
-EXTRA_CATEGORIES = {"H_guard_regression"}
+EXTRA_CATEGORIES = {"H_guard_regression", "cold_resilience"}
 
 
 def _load_cases() -> list[dict]:
@@ -155,7 +155,8 @@ def main() -> int:
             problems.append(f"{cid}: expected_route '{route}' is not a real tool/route")
 
         # category prefix consistency
-        if isinstance(cid, str) and cid[:1] not in {"A", "B", "C", "D", "E", "F", "G", "H"}:
+        if isinstance(cid, str) and not (
+                cid.startswith("CR") or cid[:1] in {"A", "B", "C", "D", "E", "F", "G", "H"}):
             problems.append(f"{cid}: case_id prefix is not a category letter")
 
         # fixtures exist

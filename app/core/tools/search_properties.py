@@ -21,6 +21,7 @@ import asyncio
 import math
 import os
 import threading
+import time
 from pathlib import Path
 from datetime import date
 import json
@@ -835,6 +836,25 @@ def _soft_gate_question(missing, is_cjk: bool, move_in_missing: bool = False) ->
             "search-criteria panel on the right and press Search.")
 
 
+def _partial_note(incomplete_areas, is_cjk: bool) -> str:
+    """Model-facing note when the time budget was reached before some areas were fully
+    searched. Deliberately honest: it says the results are PARTIAL and that more listings
+    may exist in the incomplete areas — and it explicitly tells the model NOT to claim those
+    areas have no listings (incomplete ≠ empty, the H2 honesty failure). Returns '' when
+    nothing is incomplete."""
+    areas = [a for a in (incomplete_areas or []) if a]
+    if not areas:
+        return ""
+    if is_cjk:
+        names = "、".join(areas)
+        return (f"（部分结果：已达搜索时间预算，{names} 尚未完成搜索，那里可能还有更多房源。"
+                f"请勿据此判断这些区域没有房源。）")
+    names = ", ".join(areas)
+    return (f"Partial results: the search time budget was reached before {names} could be "
+            f"fully searched, so more listings may exist there. Do not conclude that these "
+            f"areas have no listings.")
+
+
 def _no_results_message(area: str, is_cjk: bool) -> str:
     """Honest 'nothing found' text, language-aware, always pointing at the form."""
     if is_cjk:
@@ -1066,6 +1086,7 @@ async def search_properties_impl(
     confirmed: bool = False,          # 🆕 用户已确认/表单直搜 —— 跳过软性条件门
     criteria_gate_shown: bool = False,  # 🆕 本会话软性条件门是否已出现过（至多触发一次）
     reply_language: str = None,       # 🆕 显式回复语言 'zh'|'en'：覆盖基于消息的 is_cjk 推断
+    _deadline_monotonic: float | None = None,  # 🆕 INJECTED 绝对 time.monotonic() 截止时间（不在模型可见 schema 中）
     **kwargs  # 接受 LLM 可能传递的任何额外参数（如 property_type）
 ) -> dict:
     """
@@ -1098,6 +1119,21 @@ async def search_properties_impl(
     # current_message. Long-term memory may still inform soft context elsewhere, but
     # it can no longer SET a hard filter the user didn't state this conversation.
     stripped_query = _strip_memory_block(user_query)
+
+    # ── Deadline-aware degradation (latency round) ─────────────────────────
+    # 绝不让本工具成为吃掉 fc-loop 20s batch 预算、从而被整体 ABANDON（=零结果、
+    # "没有房源数据" 的诚实失败，H2）的元凶。执行器注入一个绝对 time.monotonic() 截止时间
+    # (_deadline_monotonic)；未注入时（旧调用/MCP 路径）自行按 SEARCH_TOOL_BUDGET_S 设一个
+    # 保守自限。整条流水线按此截止时间做"到点即返回已有部分结果"的降级（见步骤 3 与其后各段）。
+    try:
+        _self_budget_s = float(os.getenv("SEARCH_TOOL_BUDGET_S", "18"))
+    except (TypeError, ValueError):
+        _self_budget_s = 18.0
+    _deadline = (float(_deadline_monotonic) if _deadline_monotonic is not None
+                 else time.monotonic() + _self_budget_s)
+
+    def _time_left() -> float:
+        return _deadline - time.monotonic()
 
     # ── 语言：中文用户用中文回复（澄清/无结果/摘要文案） ──────────────────
     # 显式 reply_language（'zh'|'en'）优先，覆盖基于消息的推断：/api/search_direct 无消息、
@@ -1611,23 +1647,104 @@ async def search_properties_impl(
                     limit=int(os.getenv("AREA_RECO_LIMIT", "4")),
                 ))
 
-        # 🆕 多区域并发抓取；每行打上来源区域标签（_search_area），合并后统一排序/标注/过滤。
+        # 🆕 多区域 DEADLINE-AWARE 抓取；每行打上来源区域标签（_search_area），合并后统一排序/
+        # 标注/过滤。绝不因单个冷缓存区域的慢抓取而让整个工具被 batch 预算 ABANDON（H2）：
+        #   Phase 1（近乎免费）：仅查缓存（cache_only）——已缓存的区域总是被服务；
+        #   Phase 2（有界）：仅在"截止时间(减去排序余量)仍能容纳一次保守的 per-area 估算"时才对
+        #                    未命中的区域发起抓取，且每次抓取自身有界（min(SCRAPE_BUDGET_S, 剩余)），
+        #                    使一个慢区域吃不掉整个窗口；来不及抓的区域标记为 incomplete（≠ empty）。
         print(f"\n🌐 [SEARCH] 抓取实时房源: areas={search_areas}, beds={min_beds}-{max_beds}, "
               f"£{scrape_min}-{scrape_max}/month")
+        RANK_HEADROOM_S = float(os.getenv("SEARCH_RANK_HEADROOM_S", "1.5"))
+        PER_AREA_EST_S = float(os.getenv("SEARCH_PER_AREA_SCRAPE_EST_S", "6.0"))
+        from core.scraping.on_demand import SCRAPE_BUDGET_S as _SCRAPE_BUDGET_S
 
-        def _fetch_one(_a):
-            res = get_listings(_a, min_beds, max_beds, scrape_min, scrape_max, limit=15)
+        def _tag(_a, res):
             for _r in res.get('rows', []):
                 _r.setdefault('_search_area', _a)
-            return _a, res
+            return res
 
-        _fetch_results = await asyncio.gather(
-            *[loop.run_in_executor(None, _fetch_one, _a) for _a in search_areas]
-        )
+        def _incomplete_result():
+            return {"rows": [], "meta": {"requested_city": None, "stale": False,
+                                         "source": "none", "count": 0, "timed_out": True}}
+
+        _res_by_area: dict = {}
+        cache_hits = 0
+        cache_misses = 0
+        incomplete_areas: list = []
+
+        # Phase 1: cache-only pass (no scrape). Already-cached areas are served for near-free.
+        _missed_areas: list = []
+        for _a in search_areas:
+            _cres = await loop.run_in_executor(
+                None, lambda _x=_a: get_listings(_x, min_beds, max_beds, scrape_min,
+                                                 scrape_max, limit=15, cache_only=True))
+            if _cres.get('rows'):
+                _res_by_area[_a] = _tag(_a, _cres)
+                cache_hits += 1
+            else:
+                cache_misses += 1
+                _missed_areas.append(_a)
+
+        # Phase 2: scrape the missed areas that still fit the deadline (bounded per-area).
+        _scrape_left = _time_left() - RANK_HEADROOM_S
+        if _missed_areas and _scrape_left >= PER_AREA_EST_S:
+            _per_area_budget = max(1.0, min(_SCRAPE_BUDGET_S, _scrape_left - 0.3))
+            _scrape_tasks = {
+                _a: asyncio.ensure_future(loop.run_in_executor(
+                    None, lambda _x=_a: get_listings(_x, min_beds, max_beds, scrape_min,
+                                                     scrape_max, limit=15,
+                                                     budget_s=_per_area_budget)))
+                for _a in _missed_areas
+            }
+            _done, _pending = await asyncio.wait(list(_scrape_tasks.values()),
+                                                 timeout=max(0.2, _scrape_left))
+            for _a, _task in _scrape_tasks.items():
+                if _task in _done:
+                    try:
+                        _sres = _task.result()
+                    except Exception as _se:
+                        print(f"   ⚠️ 区域 '{_a}' 抓取失败: {_se}")
+                        incomplete_areas.append(_a)
+                        _res_by_area[_a] = _incomplete_result()
+                        continue
+                    _smeta = _sres.get('meta', {})
+                    if _sres.get('rows'):
+                        _res_by_area[_a] = _tag(_a, _sres)          # complete-with-results
+                    elif _smeta.get('timed_out'):
+                        incomplete_areas.append(_a)                 # deadline hit -> incomplete
+                        _res_by_area[_a] = _sres
+                    else:
+                        _res_by_area[_a] = _tag(_a, _sres)          # genuine complete-empty
+                else:
+                    # Still running at the window: abandon (result discarded) -> incomplete.
+                    _task.cancel()
+                    _task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
+                    incomplete_areas.append(_a)
+                    _res_by_area[_a] = _incomplete_result()
+        elif _missed_areas:
+            # Deadline can't fit even one scrape: every missed area is incomplete (served
+            # nothing) — NEVER scraped, so we reserve the remaining time for ranking/format.
+            print(f"   ⏱️ 剩余时间不足以抓取（{_scrape_left:.1f}s < {PER_AREA_EST_S:.1f}s）；"
+                  f"未命中区域标记为 incomplete: {_missed_areas}")
+            for _a in _missed_areas:
+                incomplete_areas.append(_a)
+                _res_by_area[_a] = _incomplete_result()
+
+        # Per-area served-row counts (pre-filter) drive the crisp per-area status contract:
+        # 'results' (complete, had listings) | 'empty' (complete, genuinely none) | 'incomplete'.
+        _area_rowcount = {_a: len(_res_by_area.get(_a, {}).get('rows', []) or [])
+                          for _a in search_areas}
+        _area_status = {
+            _a: ('incomplete' if _a in incomplete_areas
+                 else 'results' if _area_rowcount.get(_a) else 'empty')
+            for _a in search_areas
+        }
 
         live_rows = []
         _metas = []
-        for _a, res in _fetch_results:
+        for _a in search_areas:
+            res = _res_by_area.get(_a) or {"rows": [], "meta": {}}
             live_rows.extend(res.get('rows', []))
             _metas.append(res.get('meta', {}))
         # 聚合 meta：主区域（search_areas[0]）的 city 用于步骤 4 的 London 判定；
@@ -1646,16 +1763,44 @@ async def search_properties_impl(
         print(f"   ✅ 实时房源 {listing_meta.get('count', 0)} 个 "
               f"(areas={len(search_areas)}, cached={_all_cached})")
 
-        # 🆕 收集区域推荐（有界等待；命中缓存即时返回，未命中最多等 AREA_RECO_INLINE_TIMEOUT）。
+        # 🆕 收集区域推荐（有界等待；命中缓存即时返回）。等待上限再被截止时间夹一层：绝不为可选的
+        # 区域推荐把整个工具拖过预算（未完成时 area_recommendations=[]，任务转入后台并落缓存供下次）。
         area_recommendations = []
         if _reco_task is not None:
+            _reco_cap = min(float(os.getenv("AREA_RECO_INLINE_TIMEOUT", "30")),
+                            max(0.0, _time_left() - 0.2))
             try:
                 area_recommendations = await asyncio.wait_for(
-                    _reco_task, timeout=float(os.getenv("AREA_RECO_INLINE_TIMEOUT", "30"))
+                    _reco_task, timeout=_reco_cap
                 ) or []
             except Exception as _e:
                 print(f"   ⚠️ 区域推荐超时/失败（不阻塞搜索）: {_e}")
                 area_recommendations = []
+
+        # 到达此处若截止时间余量已不足以跑完（语义排序 + 通勤标注 + 详情丰富）这些 post-scrape 段，
+        # 则降级为"确定性价格升序"结果——绝不返回空。降级只在时间告急时触发（有界抓取通常会预留
+        # RANK_HEADROOM_S 余量），并跳过网络重的通勤标注/详情丰富，保证到点即返回已有部分结果。
+        degraded = _time_left() < RANK_HEADROOM_S
+        if degraded:
+            print(f"   ⏱️ 截止余量不足（{_time_left():.1f}s < {RANK_HEADROOM_S:.1f}s）→ "
+                  f"降级为价格升序结果（跳过语义排序/通勤/详情丰富）")
+            # Disable commute annotation AND filtering: annotation is network-heavy (skipped),
+            # and leaving the filter ON would make apply_hard_filters drop every un-annotated
+            # row (no travel_time) — turning a time-degrade into a false empty. Price-only.
+            commute_annotation_enabled = False
+            commute_filter_enabled = False
+
+        # Merge the deadline/partial contract into any post-scrape payload (found, no_results,
+        # similar). cache_stats is ALWAYS present; partial/incomplete_areas/partial_note reflect
+        # areas the time budget prevented us from fully searching (incomplete ≠ empty).
+        def _augment(payload: dict) -> dict:
+            out = dict(payload)
+            out['partial'] = bool(incomplete_areas)
+            out['incomplete_areas'] = list(incomplete_areas)
+            out['partial_note'] = _partial_note(incomplete_areas, is_cjk) if incomplete_areas else ""
+            out['cache_stats'] = {"hits": cache_hits, "misses": cache_misses}
+            out['area_status'] = dict(_area_status)
+            return out
 
         # 没有任何真实房源 —— 诚实返回（语言感知），绝不使用 demo 假数据。
         # Provider area pages are candidate generators, not proof of proximity.
@@ -1663,7 +1808,7 @@ async def search_properties_impl(
         # can enter RAG, ranking, the similar fallback, or the UI.
         geo_rejected = []
         geo_validation_enabled = os.getenv("SEARCH_GEO_VALIDATION_ENABLED", "1") != "0"
-        if live_rows and geo_validation_enabled:
+        if live_rows and geo_validation_enabled and not degraded:
             from core.geography import (
                 filter_properties_by_radius,
                 known_area_centroid,
@@ -1711,16 +1856,21 @@ async def search_properties_impl(
             )
 
         if not live_rows:
-            return {
+            # When the emptiness is because the time budget prevented searching some areas,
+            # the message must NOT claim "no listings" for them (H2 honesty) — surface the
+            # partial note instead. A genuinely-searched empty stays the honest no-results.
+            _empty_msg = (_partial_note(incomplete_areas, is_cjk) if incomplete_areas
+                          else _no_results_message(search_area, is_cjk))
+            return _augment({
                 'success': True,
                 'status': 'no_results',
-                'message': _no_results_message(search_area, is_cjk),
+                'message': _empty_msg,
                 'recommendations': [],
                 'data_source': data_source,
                 'search_criteria': _criteria(),
                 'known_criteria': _known_criteria(),
                 'area_recommendations': area_recommendations,
-            }
+            })
 
         # 🆕 构建搜索查询（无预算时避免 "£None"）。抽成小工具，便于多区域时按区域各自召回。
         def _build_search_query(_area_name):
@@ -1793,7 +1943,28 @@ async def search_properties_impl(
                     return _ranked, [], []
                 return _coord.enhanced_search(search_query, criteria)
 
-        ranked_properties, past_context, area_info = await asyncio.to_thread(_normalize_and_rank)
+        def _degraded_rank():
+            # Deadline is too close for semantic ranking: normalize the rows and order them
+            # deterministically by price (ascending). Still surfaces real, city-correct
+            # listings — never nothing — and stays cheap/off-network.
+            for prop in live_rows:
+                prop['parsed_price'] = parse_price(prop.get('Price'))
+                _rt = str(prop.get('Room_Type_Category', ''))
+                prop.setdefault('Type', _rt or 'Flat')
+                _bm = re.search(r'(\d+)\s*bed', _rt, re.I)
+                if _bm:
+                    prop['Bedrooms'] = int(_bm.group(1))
+                elif 'studio' in _rt.lower():
+                    prop['Bedrooms'] = 'Studio'
+                if possibly_outdated:
+                    prop['possibly_outdated'] = True
+            return sorted(live_rows,
+                          key=lambda p: (p.get('parsed_price') if p.get('parsed_price') else float('inf')))
+
+        if degraded:
+            ranked_properties, past_context, area_info = _degraded_rank(), "", {}
+        else:
+            ranked_properties, past_context, area_info = await asyncio.to_thread(_normalize_and_rank)
         # O(1) singleton handle (already constructed inside the offloaded pipeline);
         # used by the similar-but-over-budget fallback below.
         rag_coordinator = _get_rag_coordinator()
@@ -1844,7 +2015,7 @@ async def search_properties_impl(
         # A requested room type is an explicit constraint. Do not show another
         # type merely to fill the result page.
         if room_type and not rt_matched:
-            return {
+            return _augment({
                 'success': True,
                 'status': 'no_results',
                 'message': _no_results_message(search_area, is_cjk),
@@ -1853,13 +2024,13 @@ async def search_properties_impl(
                 'search_criteria': _criteria(),
                 'known_criteria': _known_criteria(),
                 'area_recommendations': area_recommendations,
-            }
+            })
 
         candidates = ranked_properties[:15]
         dest_coords = None
         london_dest = False
 
-        if commute_annotation_enabled:
+        if commute_annotation_enabled and not degraded:
             print(f"\n⏱️ [SEARCH] 计算通勤时间到 {commute_target} "
                   f"(过滤={'开' if commute_filter_enabled else '关'})...")
             from core.maps_service import calculate_travel_time, geocode_address
@@ -1932,8 +2103,9 @@ async def search_properties_impl(
         # RAG is useful for candidate recall, but the final page needs a single
         # transparent objective. Re-score eligible listings with continuous
         # price/commute utilities, evidence-aware normalisation, and light MMR
-        # diversification. RANKER_V2_ENABLED=0 restores the previous ordering.
-        if os.getenv('RANKER_V2_ENABLED', '1') != '0':
+        # diversification. RANKER_V2_ENABLED=0 restores the previous ordering. Skipped when
+        # degraded (deadline-tight): the price-sorted order already computed above stands.
+        if os.getenv('RANKER_V2_ENABLED', '1') != '0' and not degraded:
             from core.ranking import rank_and_diversify
 
             rank_kwargs = {
@@ -2045,7 +2217,7 @@ async def search_properties_impl(
                             similar_formatted.append(row)
 
                         _cp = _commute_phrase(max_commute_time, commute_target) if commute_target else ""
-                        return {
+                        return _augment({
                             'success': True,
                             'status': 'no_exact_match_but_similar',
                             'message': (f"No properties were found within your budget of £{max_budget}/month"
@@ -2061,19 +2233,21 @@ async def search_properties_impl(
                             'known_criteria': _known_criteria(),
                             'recommendations': similar_formatted,
                             'area_recommendations': area_recommendations,
-                        }
+                        })
 
             # 无预算，或相似回退也没结果 —— 诚实的 no_results（语言感知，提示表单）。
-            return {
+            _empty_msg = (_partial_note(incomplete_areas, is_cjk) if incomplete_areas
+                          else _no_results_message(search_area, is_cjk))
+            return _augment({
                 'success': True,
                 'status': 'no_results',
-                'message': _no_results_message(search_area, is_cjk),
+                'message': _empty_msg,
                 'recommendations': [],
                 'data_source': data_source,
                 'search_criteria': _criteria(),
                 'known_criteria': _known_criteria(),
                 'area_recommendations': area_recommendations,
-            }
+            })
 
         # ================================================================
         # 步骤 6: 格式化结果
@@ -2091,7 +2265,7 @@ async def search_properties_impl(
         # 🆕 用房源详情页丰富"将要展示的候选"（主推荐 + 备选）：完整描述 + 真实可入住日期
         # （有界=仅待展示项；并发；一次抓取取回两者，按 URL 缓存）。让 Agent 拿到真实房源
         # 文本以回答后续问题，并让每套房都能诚实标注"何时可入住"。
-        if os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and display_pool:
+        if os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and display_pool and not degraded:
             try:
                 from core.scraping.onthemarket import fetch_listing_details as _fetch_details
             except Exception:
@@ -2213,6 +2387,11 @@ async def search_properties_impl(
             _summary += (" （部分为近期缓存房源，实时刷新暂不可用，可能已过期。）" if is_cjk
                          else " (Showing recent cached listings — a live refresh wasn't "
                               "available just now, so some may be outdated.)")
+        # Honesty: when some areas were not fully searched, the per-area breakdown could read
+        # a still-unsearched area's "0" as complete-empty. Append the partial note so the model
+        # never claims those areas have no listings (incomplete ≠ empty, H2).
+        if incomplete_areas:
+            _summary += " " + _partial_note(incomplete_areas, is_cjk)
 
         # over-budget 备选的双语区块标签（reply_language / is_cjk 决定语言）。空列表时留空串。
         over_budget_label = (
@@ -2221,7 +2400,7 @@ async def search_properties_impl(
             "results above and not within your budget)"
         ) if over_budget_alternatives else ''
 
-        return {
+        return _augment({
             'success': True,
             'status': 'found',
             # "找到 N 套" = 严格在预算内的主推荐数（绝不含 over-budget 备选）。
@@ -2243,7 +2422,7 @@ async def search_properties_impl(
             'soft_count': len(soft_violation),
             'summary': _summary,
             'area_recommendations': area_recommendations,
-        }
+        })
 
     except Exception as e:
         print(f"   ❌ 搜索房源出错: {e}")

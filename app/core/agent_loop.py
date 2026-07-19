@@ -315,14 +315,24 @@ def _swallow_abandoned_task(task) -> None:
 
 
 def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str,
-                         abandoned: bool) -> None:
+                         abandoned: bool, *, outcome: Optional[str] = None) -> None:
     """One structured attribution record per abandon/timeout (Phase 2.3 deliverable 4). The
     eval events read `elapsed_ms` off the artifact; this log names WHICH tool ate WHICH
-    budget so a 20s span is no longer an anonymous batch kill. `kind` is one of
-    'batch' | 'turn' | 'per_call'."""
+    budget so a 20s span is no longer an anonymous batch kill. `kind`/`phase` is one of
+    'batch' | 'turn' | 'per_call'.
+
+    In addition to the Python-logger attribution, the same event is mirrored into the offline
+    eval stream (record_tool_budget_timeout), so tool-budget kills are queryable alongside the
+    other events. `outcome` is one of 'timed_out' | 'abandoned' | 'outcome_unknown'; when None
+    it is derived from `abandoned` for the simple timeout/abandon split."""
     logger.warning(
         "fc_loop.tool_budget_timeout tool=%s elapsed_s=%.2f budget_s=%.2f kind=%s abandoned=%s",
         tool, float(elapsed_s or 0.0), float(budget_s or 0.0), kind, bool(abandoned))
+    if outcome is None:
+        outcome = "abandoned" if abandoned else "timed_out"
+    _record_budget_timeout_event(
+        tool=tool, phase=kind, budget_s=budget_s,
+        elapsed_ms=float(elapsed_s or 0.0) * 1000.0, outcome=outcome)
 
 
 def _is_executed(artifact: dict) -> bool:
@@ -361,6 +371,70 @@ def _loop_soft_cap() -> int:
         return int(os.getenv("FC_LOOP_SOFT_CAP", "6"))
     except (TypeError, ValueError):
         return 6
+
+
+def _turn_soft_wrap_s() -> float:
+    """Turn-wide soft wrap threshold (s) measured from TURN START (FC_TURN_SOFT_WRAP_S).
+    Once whole-turn elapsed (LLM + tools) crosses this, the agent node stops opening NEW tool
+    batches and forces an answer-now generation from the evidence already gathered. Product
+    ruling: stop planning new tools at ~25s, reserving ~FC_FINAL_RESERVE_S for the final
+    generation. Read at call time so ops/tests can retune without a reimport."""
+    try:
+        return float(os.getenv("FC_TURN_SOFT_WRAP_S", "25"))
+    except (TypeError, ValueError):
+        return 25.0
+
+
+def _final_reserve_s() -> float:
+    """Head-room (s) reserved after the soft wrap for the final generation call
+    (FC_FINAL_RESERVE_S). Tools dispatched near the wrap must finish inside
+    soft_wrap + reserve so the answer-now generation still has room before the turn ceiling."""
+    try:
+        return float(os.getenv("FC_FINAL_RESERVE_S", "5"))
+    except (TypeError, ValueError):
+        return 5.0
+
+
+# Model-facing wrap directive (never persisted into user-visible history — appended only to
+# the prompt for the single answer-now call). The last sentence is a graded zero-tolerance
+# rule: a run that claims 「没有房源」 / "no listings" after a search timed out or returned
+# partial results is a hard fail, so the model must describe partial evidence honestly.
+_WRAP_DIRECTIVE = (
+    "TIME BUDGET NEARLY EXHAUSTED. Do NOT request any more tools. Produce the FINAL answer "
+    "NOW using ONLY the tool results already gathered above. If the evidence is partial or a "
+    "tool timed out, say so honestly and give the best answer you can from what you have. "
+    "NEVER claim there are no listings / no results when a search timed out or returned "
+    "partial results — describe what WAS found and note that it may be incomplete."
+)
+
+
+# ─── offline-eval instrumentation (additive; no-op unless the eval package is active) ──
+# Imported the same way tool_system.execute_tool imports the collector for record_tool_call:
+# a function-local import guarded by is_active(), wrapped in a bare except so production (where
+# the evaluation package may be absent) is byte-for-byte unchanged. Agent E's collector adds
+# record_tool_budget_timeout / record_turn_soft_wrap as no-ops when eval is inactive.
+def _record_budget_timeout_event(*, tool: str, phase: str, budget_s: float,
+                                 elapsed_ms: float, outcome: str) -> None:
+    try:
+        from evaluation.metrics import collector
+        if collector.is_active():
+            collector.record_tool_budget_timeout(
+                tool=tool, phase=phase, budget_s=float(budget_s or 0.0),
+                elapsed_ms=float(elapsed_ms or 0.0), outcome=outcome)
+    except Exception:
+        pass
+
+
+def _record_turn_soft_wrap_event(*, elapsed_ms: float, llm_calls: int,
+                                 tool_batches: int) -> None:
+    try:
+        from evaluation.metrics import collector
+        if collector.is_active():
+            collector.record_turn_soft_wrap(
+                elapsed_ms=float(elapsed_ms or 0.0), llm_calls=int(llm_calls),
+                tool_batches=int(tool_batches))
+    except Exception:
+        pass
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -411,7 +485,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                        "the area you'd like to live in, or where you commute to and we'll start.")
             return Command(update={"final_response": msg, "response_type": "answer"},
                            goto="format_output_fc")
-        return Command(goto="agent")
+        # Turn-wide deadline anchor (deliverable 1): capture t0 at the entry node so the whole
+        # turn (LLM + tools) is measured, not just tool time. Threaded through state so the
+        # agent + execute_tools nodes can compute elapsed and enforce the soft wrap / deadline.
+        return Command(update={"turn_start_monotonic": time.monotonic()}, goto="agent")
 
     # ── agent ──────────────────────────────────────────────────────
     async def _resolve_pending_memory(state: AgentState):
@@ -496,6 +573,40 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 "results already gathered above. Do not request more tools."))]
             resp = await llm.ainvoke(prompt_msgs)
             text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
+            return Command(update={
+                "messages": messages + [resp], "loop_turn": loop_turn,
+                "final_response": text,
+            }, goto="critic")
+
+        # Turn-wide soft wrap (deliverable 1): once the WHOLE-turn elapsed (LLM + tools,
+        # measured from the guard-captured t0) crosses FC_TURN_SOFT_WRAP_S, the model must not
+        # be able to open a NEW tool batch — call it with tools disabled (tool_choice="none",
+        # or no tools bound on the strict /beta path where "none" is not guaranteed) plus a
+        # wrap-up directive, and answer from the evidence already gathered. This is orthogonal
+        # to the loop cap above (which counts iterations); here it is wall-clock. On a first
+        # entry elapsed is ~0 so the pending-memory replay / normal flow are untouched.
+        turn_start = state.get("turn_start_monotonic") or 0.0
+        elapsed = (time.monotonic() - turn_start) if turn_start else 0.0
+        if turn_start and elapsed > _turn_soft_wrap_s():
+            llm = _llm()
+            prompt_msgs = messages + [SystemMessage(content=_WRAP_DIRECTIVE)]
+            if _strict_on():
+                # Strict /beta path may reject tool_choice="none"; bind no tools at all so the
+                # model provably cannot request a batch.
+                resp = await llm.ainvoke(prompt_msgs)
+            else:
+                try:
+                    bound = llm.bind_tools(_specs_to_openai(specs), tool_choice="none")
+                except Exception:
+                    bound = llm  # fall back to no tools if the backend rejects tool_choice
+                resp = await bound.ainvoke(prompt_msgs)
+            text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
+            tool_batches = len({a.get("turn") for a in (state.get("tool_artifacts") or [])})
+            _record_turn_soft_wrap_event(
+                elapsed_ms=elapsed * 1000.0, llm_calls=loop_turn, tool_batches=tool_batches)
+            logger.warning(
+                "fc_loop.turn_soft_wrap elapsed_s=%.2f soft_wrap_s=%.2f llm_calls=%d "
+                "tool_batches=%d", elapsed, _turn_soft_wrap_s(), loop_turn, tool_batches)
             return Command(update={
                 "messages": messages + [resp], "loop_turn": loop_turn,
                 "final_response": text,
@@ -600,10 +711,20 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             tainted = True
         else:
             data_view = raw
-        content = json.dumps(
-            {"success": getattr(result, "success", False), "data": data_view,
-             "error": getattr(result, "error", None)},
-            ensure_ascii=False, default=str)
+        payload = {"success": getattr(result, "success", False)}
+        # Deadline-driven PARTIAL results (deliverable 3): surface the partial flag + note at the
+        # TOP of the model channel — before `data`, so they survive the length cap even when the
+        # data blob is large — so the model knows the results are incomplete and never claims
+        # "no listings" for a search that only timed out. The raw artifact keeps every field.
+        if isinstance(raw, dict) and raw.get("partial"):
+            payload["partial"] = True
+            if raw.get("partial_note"):
+                payload["partial_note"] = raw.get("partial_note")
+            if raw.get("incomplete_areas"):
+                payload["incomplete_areas"] = raw.get("incomplete_areas")
+        payload["data"] = data_view
+        payload["error"] = getattr(result, "error", None)
+        content = json.dumps(payload, ensure_ascii=False, default=str)
         cap = _TOOLMSG_CAPS.get(tool, _TOOLMSG_CAP_DEFAULT)
         if len(content) > cap:
             logger.info("fc_loop.toolmsg_truncated tool=%s len=%d cap=%d", tool, len(content), cap)
@@ -681,6 +802,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         cius = getattr(mem_gate, "content_is_user_stated", None)
                         if user_authorized and cius is not None:
                             user_authorized = bool(cius(content, cur_msg))
+                    # H12 recall-question gate: a model-initiated remember on a PURE memory-recall
+                    # turn ("你还记得我的预算吗") carries no new content to save — DENY it
+                    # REGARDLESS of session taint. Order matters: explicit user authorization
+                    # (computed above) wins, so we only consult the gate when unauthorized (a pure
+                    # recall question cannot carry a 「记住」 cue, but the ordering is explicit).
+                    if not user_authorized:
+                        ipr = getattr(mem_gate, "is_pure_recall_question", None)
+                        if ipr is not None and bool(ipr(cur_msg)):
+                            plan.append((tc, digest, ("deny_recall", ""), args))
+                            continue
                     allowed = bool(mem_gate.memory_write_allowed(
                         context_tainted=state.get("context_tainted", False),
                         user_authorized=user_authorized))
@@ -710,8 +841,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             fired — outcome unknown, never a clean failure)."""
             tool = provider.get(name) if hasattr(provider, "get") else None
             version = getattr(tool, "version", "1") if tool else "1"
+            # Harness-injected volatile params (leading underscore, e.g. _deadline_monotonic)
+            # are execution-time hints, NOT identity: exclude them from the idempotency key so
+            # two dispatches of the same logical call collapse (mirrors collector._hash_args and
+            # the _params_digest volatile-key exclusion). They still reach the tool via call_args.
+            inv_params = {k: v for k, v in args.items() if not str(k).startswith("_")}
             inv = ToolInvocation.create(run_id=state.get("run_id", "fc"), node_id="execute_tools",
-                                        tool=name, params=args, version=version)
+                                        tool=name, params=inv_params, version=version)
             call_args = dict(args)
             call_args["idempotency_key"] = inv.idempotency_key
             from core.tool_system import ToolResult
@@ -761,6 +897,17 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         batch_budget = _batch_tool_budget_s()
         turn_used = float(state.get("turn_tool_budget_used_s", 0.0) or 0.0)
 
+        # Turn-wide soft wrap also bounds a batch DISPATCHED just before the wrap edge: a batch
+        # started at 24s must not be allowed to run its full 20s window (deliverable 1). Fold the
+        # remaining soft-wrap budget into the batch window so per-call wait_fors and abandonment
+        # both respect it. Absent a captured turn start (unit tests that call this node directly),
+        # fall back to "now" so the soft budget is full and existing behaviour is unchanged.
+        _now0 = time.monotonic()
+        _turn_start = state.get("turn_start_monotonic") or _now0
+        _soft_wrap_s = _turn_soft_wrap_s()
+        _reserve_s = _final_reserve_s()
+        soft_remaining = max(0.0, _soft_wrap_s - (_now0 - _turn_start))
+
         result_by_idx: dict = {}
         elapsed_by_idx: dict = {}
         budget_by_idx: dict = {}      # per-call budget_s used, for attribution events
@@ -777,8 +924,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # even a write is a clean no-run, not an abandon), answer from what we have.
                 turn_exhausted = True
             else:
-                batch_window = max(0.0, min(batch_budget, turn_budget - turn_used))
+                batch_window = max(0.0, min(batch_budget, turn_budget - turn_used, soft_remaining))
                 remaining_turn = max(0.0, turn_budget - turn_used)
+                # Absolute-monotonic deadlines a deadline-aware tool (search_properties) honors to
+                # return PARTIAL results instead of overrunning (deliverable 3). The batch deadline
+                # is when this batch's window closes; the soft-wrap / hard deadlines are turn-wide.
+                batch_deadline = _now0 + batch_window
+                turn_soft_deadline = _turn_start + _soft_wrap_s
+                turn_hard_deadline = _turn_start + _soft_wrap_s + _reserve_s
+                search_deadline = min(batch_deadline, turn_soft_deadline, turn_hard_deadline)
                 read_tasks: dict = {}
                 for i in read_idx:
                     nm = plan[i][0].get("name")
@@ -788,6 +942,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     # If the tool's own timeout is the binding cap it is a genuine per_call
                     # timeout; otherwise the window/turn bound it -> a batch abandonment.
                     kind_by_idx[i] = "per_call" if per_tool < batch_window else "batch"
+                    # Deadline injection (deliverable 3): search_properties receives the absolute
+                    # monotonic time by which it must return; the leading underscore keeps it out
+                    # of the model-visible schema, the digest (computed above) and the idempotency
+                    # key (stripped in _run). The tool honors it and returns partial results.
+                    if nm == "search_properties":
+                        plan[i][3]["_deadline_monotonic"] = search_deadline
                     read_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], eff, False))
                 write_tasks: dict = {}
                 for i in write_idx:
@@ -845,6 +1005,21 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                        ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue
+            if isinstance(mode, tuple) and mode[0] == "deny_recall":
+                # H12: model-initiated write on a pure recall-question turn. Denied like the
+                # tainted-write refusal (denied=True → security audit + not executed), but with
+                # a distinct reason and no frozen candidate (there is nothing new to save).
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error="denied: recall-question turn, memory write blocked", denied=True))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": ("write blocked: this is a memory-recall question; there is "
+                                  "nothing new to save. Answer the recall question directly."),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
             if isinstance(mode, tuple) and mode[0] == "deny":
                 frozen = mode[1]
                 # Denied-write artifact contract (Q3 consumes): record a non-executed
@@ -868,7 +1043,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if turn_exhausted and i in run_idx:
                 # Whole batch skipped — never dispatched, outcome IS known (did not run).
                 err = "turn tool budget exhausted"
-                _emit_budget_timeout(name, 0.0, turn_budget, "turn", False)
+                _emit_budget_timeout(name, 0.0, turn_budget, "turn", False, outcome="timed_out")
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
                     timed_out=True, elapsed_ms=0))
@@ -884,7 +1059,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 n = int(round(budget_by_idx.get(i, batch_window)))
                 err = f"abandoned after {n}s (batch budget); result discarded"
                 _emit_budget_timeout(name, el / 1000.0, budget_by_idx.get(i, batch_window),
-                                     kind_by_idx.get(i, "batch"), True)
+                                     kind_by_idx.get(i, "batch"), True, outcome="abandoned")
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
                     timed_out=True, abandoned=True, outcome_unknown=True, elapsed_ms=el))
@@ -902,7 +1077,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 err = getattr(result, "error", None) or (
                     f"{name} write outcome unknown — may still complete in the background")
                 _emit_budget_timeout(name, (el or 0) / 1000.0, budget_by_idx.get(i, 0.0),
-                                     "per_call", False)
+                                     "per_call", False, outcome="outcome_unknown")
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
                     outcome_unknown=True, elapsed_ms=el))
@@ -918,7 +1093,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 el = elapsed_by_idx.get(i)
                 err = getattr(result, "error", None) or f"{name} timed out"
                 _emit_budget_timeout(name, (el or 0) / 1000.0, budget_by_idx.get(i, 0.0),
-                                     "per_call", False)
+                                     "per_call", False, outcome="timed_out")
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
                     timed_out=True, elapsed_ms=el))

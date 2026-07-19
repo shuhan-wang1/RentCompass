@@ -16,12 +16,13 @@ Verifies, WITHOUT any live Overpass / network call:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass, field
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 import core.agent_loop as agent_loop
 from core.agent_loop import build_fc_nodes
@@ -473,3 +474,327 @@ def test_turn_exhaustion_emits_turn_attribution(monkeypatch, caplog):
     assert "kind=turn" in msg and "abandoned=False" in msg
     a = next(x for x in state["tool_artifacts"] if x["tool"] == "web_search")
     assert a["timed_out"] is True and a["elapsed_ms"] == 0
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Latency/observability round: turn-wide soft wrap, eval stream, deadline
+# injection, partial surfacing, H12 recall-question gate.
+# ═══════════════════════════════════════════════════════════════════
+
+class WrapChat:
+    """Records bind_tools(tools, tool_choice=...) and the messages ainvoke saw, so the
+    soft-wrap path can be asserted (tools disabled + wrap directive present)."""
+
+    def __init__(self, reply):
+        self._reply = reply
+        self.bound_tools = "unset"
+        self.tool_choice = "unset"
+        self.seen_messages = None
+
+    def bind_tools(self, tools, tool_choice=None, **kw):
+        self.bound_tools = tools
+        self.tool_choice = tool_choice
+        return self
+
+    async def ainvoke(self, messages):
+        self.seen_messages = list(messages)
+        return self._reply
+
+
+# ─── Task 1: turn-wide soft wrap ────────────────────────────────────
+def test_soft_wrap_forces_answer_now(monkeypatch):
+    """elapsed > FC_TURN_SOFT_WRAP_S -> the agent node calls the LLM with tools disabled
+    (tool_choice='none'), appends the wrap directive, records the soft-wrap event once, and
+    routes to critic with a final answer (no new tool batch)."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event",
+                        lambda **kw: events.append(kw))
+    chat = WrapChat(AIMessage(content="Here is what I found so far."))
+    provider = FakeProvider([FakeSpec("web_search"), FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(
+        loop_turn=3,
+        messages=[HumanMessage(content="find flats in Camden")],
+        turn_start_monotonic=time.monotonic() - 30.0,
+        tool_artifacts=[{"turn": 0, "tool": "web_search", "raw_data": {"x": 1},
+                         "params_digest": "d0", "success": True}],
+    )
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    assert cmd.goto == "critic"
+    assert cmd.update["final_response"] == "Here is what I found so far."
+    # tools disabled for the wrap call
+    assert chat.tool_choice == "none"
+    # wrap directive present, model-facing only (a SystemMessage on the prompt)
+    assert any("TIME BUDGET NEARLY EXHAUSTED" in getattr(m, "content", "")
+               for m in chat.seen_messages)
+    # ...but NOT persisted into the returned messages channel (user-invisible)
+    assert not any("TIME BUDGET NEARLY EXHAUSTED" in getattr(m, "content", "")
+                   for m in cmd.update["messages"])
+    # soft-wrap event fired exactly once with llm_calls/tool_batches
+    assert len(events) == 1
+    assert events[0]["llm_calls"] == 4 and events[0]["tool_batches"] == 1
+    assert events[0]["elapsed_ms"] >= 25000
+
+
+def test_no_soft_wrap_under_threshold(monkeypatch):
+    """Under the soft-wrap threshold the agent opens tool batches normally (tools bound,
+    no wrap event, routes to execute_tools)."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event",
+                        lambda **kw: events.append(kw))
+    chat = WrapChat(AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")]))
+    provider = FakeProvider([FakeSpec("web_search")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(loop_turn=1, messages=[HumanMessage(content="hi")],
+                   turn_start_monotonic=time.monotonic() - 1.0)
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    assert cmd.goto == "execute_tools"   # normal tool batch, not wrapped
+    assert events == []                   # no soft-wrap event
+    assert chat.tool_choice is None       # normal bind_tools (tool_choice not forced)
+
+
+def test_per_call_timeout_respects_soft_wrap_remainder(monkeypatch):
+    """The per-call min() folds in the soft-wrap remainder: a batch dispatched just before the
+    wrap edge cannot run its full window. Turn started 24.5s ago (remainder ~0.5s) despite a
+    20s window and a 30s tool timeout -> the tool is abandoned in well under a second."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "web_search", 30)
+    provider = SlowProvider([FakeSpec("web_search")], delay=1.5)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic() - 24.5)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 1.5, f"soft-wrap remainder did not bind the dispatch ({wall:.2f}s)"
+    timed = [a for a in state["tool_artifacts"] if a.get("timed_out")]
+    assert len(timed) == 1 and timed[0]["tool"] == "web_search"
+
+
+# ─── Task 2: tool_budget_timeout into the eval stream ───────────────
+def test_batch_abandon_emits_eval_budget_timeout(monkeypatch):
+    """The batch-abandon path mirrors its attribution into the eval stream via
+    record_tool_budget_timeout with phase='batch', outcome='abandoned'."""
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_budget_timeout_event",
+                        lambda **kw: events.append(kw))
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = SlowProvider([FakeSpec("web_search")], delay=1.5)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert len(events) == 1
+    e = events[0]
+    assert e["tool"] == "web_search"
+    assert e["phase"] == "batch"
+    assert e["outcome"] == "abandoned"
+    assert e["budget_s"] > 0 and e["elapsed_ms"] >= 0
+
+
+def test_turn_and_write_unknown_emit_eval_outcomes(monkeypatch):
+    """Turn exhaustion -> outcome='timed_out'/phase='turn'; write-own-timeout ->
+    outcome='outcome_unknown'/phase='per_call'."""
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_budget_timeout_event",
+                        lambda **kw: events.append(kw))
+    # turn exhaustion
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "10")
+    provider = FakeProvider([FakeSpec("web_search")])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(loop_turn=3, turn_tool_budget_used_s=10.0)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+    _exec_once(nodes, state)
+    assert events[-1]["phase"] == "turn" and events[-1]["outcome"] == "timed_out"
+
+    # write own wait_for fires -> outcome unknown
+    events.clear()
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 0.3)
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider2 = PerToolDelayProvider([FakeSpec("save_note", side_effect="write")],
+                                     delays={"save_note": 1.5})
+    nodes2 = build_fc_nodes(provider2, agent_llm=FakeChat())
+    state2 = _state(context_tainted=False)
+    state2["messages"] = [AIMessage(content="", tool_calls=[_tc("save_note", {"content": "n"}, "c1")])]
+    _exec_once(nodes2, state2)
+    assert events[-1]["phase"] == "per_call" and events[-1]["outcome"] == "outcome_unknown"
+
+
+# ─── Task 3: deadline injection + partial surfacing ─────────────────
+def test_search_deadline_injected_and_hidden(monkeypatch):
+    """search_properties receives an absolute-monotonic _deadline_monotonic (a future time),
+    which is NOT in the model-visible tool schema and (leading underscore) is excluded from
+    the digest/idempotency identity."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    captured = {}
+
+    def sp_result(**params):
+        captured.update(params)
+        return FakeResult(True, {"status": "found", "recommendations": []})
+
+    provider = FakeProvider([FakeSpec("search_properties")], {"search_properties": sp_result})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic())
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    now = time.monotonic()
+    state = _exec_once(nodes, state)
+
+    assert "_deadline_monotonic" in captured
+    assert isinstance(captured["_deadline_monotonic"], float)
+    assert now < captured["_deadline_monotonic"] <= now + 6.0  # bounded by the 5s window
+    assert "idempotency_key" in captured
+    # not in the model-visible schema built for bind_tools
+    tools = agent_loop._specs_to_openai(provider.list_specs())
+    sp = next(t for t in tools if t["function"]["name"] == "search_properties")
+    assert "_deadline_monotonic" not in json.dumps(sp)
+
+
+def test_partial_note_surfaced_in_toolmsg():
+    """A deadline-driven partial search: the model-facing ToolMessage surfaces partial + note
+    prominently; the raw artifact keeps every field intact."""
+    data = {"status": "found", "recommendations": [{"id": 1}], "partial": True,
+            "partial_note": "Only 2 of 5 areas searched before the deadline.",
+            "incomplete_areas": ["Shoreditch", "Hackney"]}
+    provider = FakeProvider([FakeSpec("search_properties")],
+                            {"search_properties": FakeResult(True, data)})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    tmsg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
+    assert '"partial": true' in tmsg.content
+    assert "Only 2 of 5 areas searched before the deadline." in tmsg.content
+    # raw artifact keeps ALL fields untouched
+    art = next(a for a in state["tool_artifacts"] if a["tool"] == "search_properties")
+    assert art["raw_data"]["incomplete_areas"] == ["Shoreditch", "Hackney"]
+    assert art["raw_data"]["partial_note"] == "Only 2 of 5 areas searched before the deadline."
+
+
+# ─── Task 4: H12 recall-question write gate ─────────────────────────
+class _RecallGate:
+    pure = True
+    authorized = False
+
+    @staticmethod
+    def is_pure_recall_question(msg):
+        return _RecallGate.pure
+
+    @staticmethod
+    def write_authorization(msg, content):
+        return _RecallGate.authorized
+
+    @staticmethod
+    def user_authorizes_memory(msg):
+        return _RecallGate.authorized
+
+    @staticmethod
+    def content_is_user_stated(content, msg):
+        return False
+
+    @staticmethod
+    def memory_write_allowed(*, context_tainted, user_authorized):
+        return (not context_tainted) or user_authorized
+
+    @staticmethod
+    def freeze_pending_write(session_id, content, kind):
+        return "dig"
+
+
+def test_pure_recall_denies_model_remember(monkeypatch):
+    """On a CLEAN (untainted) turn, a model-initiated remember is denied when the current
+    message is a pure recall question — regardless of taint — as a distinct denied artifact."""
+    _RecallGate.pure = True
+    _RecallGate.authorized = False
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write", retry_safe=False)])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)  # CLEAN turn
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user budget 1400", "kind": "semantic"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert provider.calls == []  # never executed
+    denied = [a for a in state["tool_artifacts"] if a.get("denied")]
+    assert len(denied) == 1
+    assert denied[0]["error"] == "denied: recall-question turn, memory write blocked"
+    tmsg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
+    assert "recall question" in tmsg.content.lower()
+
+
+def test_explicit_authorization_bypasses_recall_gate(monkeypatch):
+    """Explicit authorization wins over the recall gate (order-of-evaluation): the write runs."""
+    _RecallGate.pure = True
+    _RecallGate.authorized = True
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(True, {"saved": True})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user budget 1400", "kind": "semantic"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert [c[0] for c in provider.calls] == ["remember"]  # executed
+    assert [a for a in state["tool_artifacts"] if a.get("denied")] == []
+
+
+class _ReplayGate:
+    @staticmethod
+    def latest_pending_digest(session_id):
+        return "digX"
+
+    @staticmethod
+    def confirmation_intent(msg):
+        return "yes"
+
+    @staticmethod
+    def user_authorizes_memory(msg):
+        return False
+
+    @staticmethod
+    def consume_pending_write(session_id, digest):
+        return {"content": "user budget 1400", "kind": "semantic"}
+
+    @staticmethod
+    def is_pure_recall_question(msg):
+        return True  # even a recall-shaped confirmation must not block the frozen replay
+
+
+def test_frozen_replay_bypasses_recall_gate(monkeypatch):
+    """The frozen pending-confirmation replay (agent node, not the executor gate) saves the
+    frozen candidate verbatim and is unaffected by the recall-question gate."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _ReplayGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(True, {"saved": True})})
+    chat = FakeChat([AIMessage(content="Saved it.")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(messages=[])  # first entry -> pending-memory replay resolves
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    assert [c[0] for c in provider.calls] == ["remember"]  # replay saved verbatim
+    assert cmd.goto == "critic"

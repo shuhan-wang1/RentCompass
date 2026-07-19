@@ -2689,6 +2689,9 @@ def _make_execute_tool_node(tool_registry):
                     side_effect=side_effect,
                     context_tainted=state.get("context_tainted", False),
                     tool_name=tool_name,
+                    # Legacy arch keeps pre-A+ behaviour (tainted remember allowed) until
+                    # Phase 3; the guardrails default flipped to deny for the fc_loop arch.
+                    allow_tainted_memory=True,
                 ):
                     raise PermissionError("write tool denied because this turn contains untrusted content")
                 invocation = ToolInvocation.create(
@@ -3538,6 +3541,35 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
     from core.graph_advanced import (
         make_confirm_search_node, make_hydrate_prefs_node, make_persist_prefs_node,
     )
+    import os
+
+    # Architecture selection (design Phase 1). AGENT_ARCH=fc_loop swaps the classify-then-
+    # execute topology for the native function-calling tool loop; anything else (default)
+    # keeps the legacy graph byte-identical. agent_loop is imported LAZILY here because it
+    # imports langgraph_agent helpers at module level — a top-level import would be circular.
+    if os.getenv("AGENT_ARCH", "legacy") == "fc_loop":
+        from core.agent_loop import build_fc_graph
+
+        def _n_fc(node_name, fn):
+            try:
+                from evaluation.metrics.collector import instrument_node, is_active
+                if is_active():
+                    return instrument_node(node_name, fn, logger=logger)
+            except Exception:
+                pass
+            return fn
+
+        use_store = store is not None
+        return build_fc_graph(
+            tool_registry,
+            extract_preferences_node=_make_extract_preferences_node(),
+            critic_node=_make_critic_node(),
+            checkpointer=checkpointer, store=store,
+            enable_hitl=bool(enable_hitl and checkpointer is not None),
+            hydrate_prefs_node=(make_hydrate_prefs_node() if use_store else None),
+            persist_prefs_node=(make_persist_prefs_node() if use_store else None),
+            instrument=_n_fc,
+        )
 
     classification_llm = get_classification_llm()
     # The loop controller is a cheap decision call — reuse the classification model

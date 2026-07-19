@@ -1541,6 +1541,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             conversation_id=conversation_id,
             turn_id=(turn.get("id") if isinstance(turn, dict) else None),
             turn_started_at=(turn.get("started_at") if isinstance(turn, dict) else None),
+            # Taint A+ (§2.8c): a tainted turn hardens the auto-memory bypass to
+            # user-only fact extraction so untrusted content can't seed durable memory.
+            context_tainted=final_state.get('context_tainted', False),
         )
     except Exception as _e:
         print(f"[Memory] write skipped: {_e}")

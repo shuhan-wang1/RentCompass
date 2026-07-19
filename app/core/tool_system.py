@@ -46,6 +46,64 @@ def _model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel]:
     return create_model(f"{''.join(part.title() for part in name.split('_'))}Input", **fields)
 
 
+# JSON-schema constraint keywords the pydantic round-trip drops (it only captures
+# type/default/description). Losing enum/items degrades native function-calling:
+# the model never sees the legal values, so it guesses parameters it could have read.
+_CONSTRAINT_KEYWORDS = (
+    "enum", "items", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
+    "minLength", "maxLength", "pattern", "format", "minItems", "maxItems",
+)
+
+
+def _merge_constraint_keywords(emitted: Dict[str, Any], original: Dict[str, Any]) -> Dict[str, Any]:
+    """Copy per-property constraint keywords from the author-written schema back into
+    the pydantic-emitted one (additive only — never overrides what pydantic emitted)."""
+    emitted_props = emitted.get("properties") or {}
+    for pname, pdef in (original.get("properties") or {}).items():
+        target = emitted_props.get(pname)
+        if not isinstance(target, dict) or not isinstance(pdef, dict):
+            continue
+        for kw in _CONSTRAINT_KEYWORDS:
+            if kw in pdef and kw not in target:
+                target[kw] = pdef[kw]
+    return emitted
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    """
+    统一工具描述契约（design §2.8a）。
+
+    - in-process 由 ``Tool.to_spec()`` / ``ToolRegistry.list_specs()`` 构造；
+    - MCP 由 ``MCPToolClient.list_specs()`` 从 list_tools() 的 inputSchema+annotations
+      构造（缺字段时回退到 fallback_registry 的 spec）。
+    两进程共享同一份工具代码，registry 是单一事实源。
+    """
+    name: str
+    description: str
+    input_schema: dict      # 原始 JSON schema（OpenAI FC 格式，即 Tool.parameters）
+    side_effect: str        # "none" | "write"
+    retry_safe: bool
+    version: str = "1"      # 幂等键的工具版本语义——必须与 Tool.version 一致
+    terminal: bool = False  # ask_user
+
+
+def to_function_calling_format(spec: "ToolSpec") -> Dict[str, Any]:
+    """把 ToolSpec 转成原生 Function-Calling 工具定义（非 strict）。
+
+    strict 适配（全属性 required + additionalProperties:false + 剥不支持关键词）是
+    Phase 2 的独立步骤，这里不做。
+    """
+    return {
+        "type": "function",
+        "function": {
+            "name": spec.name,
+            "description": spec.description,
+            "parameters": spec.input_schema,
+        },
+    }
+
+
 @dataclass
 class ToolResult:
     """
@@ -91,6 +149,7 @@ class Tool:
         side_effect: str = "none",
         retry_safe: Optional[bool] = None,
         cacheable: bool = False,
+        terminal: bool = False,
         input_model: Optional[type[BaseModel]] = None,
         output_model: Optional[type[BaseModel]] = None,
     ):
@@ -109,7 +168,8 @@ class Tool:
         self.func = func
         self.input_model = input_model or _model_from_schema(name, parameters)
         self.output_model = output_model
-        self.parameters = self.input_model.model_json_schema()
+        self.parameters = _merge_constraint_keywords(
+            self.input_model.model_json_schema(), parameters)
         self.return_direct = return_direct
         self.max_retries = max_retries
         self.retry_on_error = retry_on_error
@@ -117,6 +177,7 @@ class Tool:
         self.side_effect = side_effect
         self.retry_safe = (side_effect == "none") if retry_safe is None else retry_safe
         self.cacheable = cacheable
+        self.terminal = terminal
         
         # 验证参数格式
         self._validate_parameters()
@@ -321,7 +382,19 @@ class Tool:
             'description': self.description,
             'parameters': self.parameters
         }
-    
+
+    def to_spec(self) -> "ToolSpec":
+        """构造统一的 ToolSpec 契约（design §2.8a）。"""
+        return ToolSpec(
+            name=self.name,
+            description=self.description,
+            input_schema=self.parameters,
+            side_effect=self.side_effect,
+            retry_safe=self.retry_safe,
+            version=self.version,
+            terminal=self.terminal,
+        )
+
     def __repr__(self) -> str:
         return f"Tool(name='{self.name}')"
 
@@ -369,6 +442,10 @@ class ToolRegistry:
     def list_tool_names(self) -> List[str]:
         """列出所有工具名称"""
         return list(self.tools.keys())
+
+    def list_specs(self) -> List[ToolSpec]:
+        """列出所有已注册工具的 ToolSpec 契约（design §2.8a）。"""
+        return [tool.to_spec() for tool in self.tools.values()]
     
     def list_tools_for_llm(self) -> str:
         """
@@ -477,6 +554,8 @@ def create_tool_registry() -> ToolRegistry:
     from core.tools.check_transport_cost import check_transport_cost_tool
     from core.tools.get_transport_info import get_transport_info_tool
     from core.tools.memory_tools import recall_memory_tool, remember_tool
+    from core.tools.ask_user import ask_user_tool
+    from core.tools.compare_or_rank_areas import compare_or_rank_areas_tool
 
     registry = ToolRegistry()
 
@@ -493,6 +572,8 @@ def create_tool_registry() -> ToolRegistry:
     registry.register(get_transport_info_tool)    # 🚇 实时 TfL：journey/fare/travelcard/line status
     registry.register(recall_memory_tool)         # 🧠 长期记忆：召回
     registry.register(remember_tool)              # 🧠 长期记忆：写入
+    registry.register(ask_user_tool)              # ❓ 终止型：向用户反问澄清
+    registry.register(compare_or_rank_areas_tool)  # 🏙️ 区域性价比排序/比较（design §2.5b）
 
     logger.info("Tool registry initialized with %s tools", len(registry.tools))
 

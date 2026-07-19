@@ -336,7 +336,8 @@ class AgentMemory:
 
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
                       user_id=None, tool_used=None, idempotency_key=None,
-                      conversation_id=None, turn_id=None, turn_started_at=None):
+                      conversation_id=None, turn_id=None, turn_started_at=None,
+                      context_tainted=False):
         """After-turn entry point (run this in the background — it makes LLM calls).
 
         Branch scoping: conversation_id / turn_id / turn_started_at are recorded on
@@ -345,6 +346,15 @@ class AgentMemory:
         attached to the distilled semantic/reflection records, which stay GLOBAL
         (per-user, all branches). Absent (None) values are omitted from metadata —
         chroma rejects None — so legacy call sites keep behaving exactly as before.
+
+        Taint policy A+ (design §2.8c): when ``context_tainted`` is True this turn
+        carried untrusted (e.g. scraped listing) content, so the auto-memory bypass
+        is hardened — semantic facts are extracted from the USER message ONLY;
+        assistant/tool output never reaches the extractor, and therefore never
+        enters the semantic or (downstream) reflection layers. The episodic layer
+        still stores the raw user message (untainted by construction). clean
+        sessions (``context_tainted=False``) are unchanged: user + assistant are
+        both fed to extraction.
         """
         user_id = _valid_user_id(user_id)
         if user_id is None:
@@ -378,7 +388,11 @@ class AgentMemory:
             # Triviality gate: skip the LLM extract+consolidate for greetings/acks/
             # bypass commands and very short messages — they carry nothing durable.
             if not _is_trivial_for_extraction(user_msg):
-                self._consolidate(self._extract_facts(user_msg, assistant_msg), session_id, user_id)
+                # Taint A+: on a tainted turn the assistant text is untrusted; feed
+                # the extractor the user message ONLY so external content cannot
+                # seed a durable semantic fact.
+                extract_assistant = "" if context_tainted else assistant_msg
+                self._consolidate(self._extract_facts(user_msg, extract_assistant), session_id, user_id)
             self.maybe_reflect(session_id, user_id)
         except Exception as e:
             print(f"[memory] remember_turn error: {e}")

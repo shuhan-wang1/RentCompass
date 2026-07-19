@@ -42,6 +42,16 @@ class AgentState(TypedDict, total=False):
     # per-turn list.)
     loop_turn: int
     observations: list
+    # Native function-calling loop (AGENT_ARCH=fc_loop; app/core/agent_loop.py). messages is
+    # the langchain_core BaseMessage list the `agent` node binds tools onto and the
+    # `execute_tools` node appends ToolMessages to; tool_artifacts is the raw-data ledger
+    # [{turn, tool, raw_data, params_digest}] format_output_fc aggregates over (design §2.8b).
+    # Both are PER-TURN plain (non-reducer) channels — exactly like loop_turn/observations —
+    # so the create_initial_state(messages=[], tool_artifacts=[]) input cleanly RESETS them at
+    # the start of every turn under the checkpointer, and each node returns the FULL updated
+    # list (last-write-wins; agent and execute_tools alternate as sole sequential writers).
+    messages: list
+    tool_artifacts: list
     # Multi-intent execution plan (build_execution_plan -> dispatch_tasks -> task_worker x N
     # -> gather_wave). task_plan is the resolved task list [{id,index,tool,params,depends_on}];
     # plan_origin is "multi_search" (degenerate single-intent web fan-out, ends at
@@ -97,6 +107,8 @@ def create_initial_state(
         plan=[],
         loop_turn=0,
         observations=[],
+        messages=[],
+        tool_artifacts=[],
         task_plan=[],
         plan_origin="",
         plan_notes=[],

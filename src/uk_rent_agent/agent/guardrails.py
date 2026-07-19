@@ -44,9 +44,19 @@ def tool_allowed(
     side_effect: str,
     context_tainted: bool,
     confirmed: bool = False,
-    allow_tainted_memory: bool = True,
+    allow_tainted_memory: bool = False,
     tool_name: str = "",
 ) -> bool:
+    """Deterministic write-tool gate for tainted turns.
+
+    Policy A+ (design §2.8c): a model-initiated ``remember`` in a tainted session is
+    DENIED by default. ``allow_tainted_memory`` defaults to ``False`` accordingly;
+    the higher-level A+ authorization / freeze-replay flow lives in
+    ``core.memory_gate`` and is the only sanctioned way to let a tainted write
+    through. Legacy call sites that explicitly pass ``allow_tainted_memory=True``
+    keep the pre-A+ behaviour (unblocked until Phase 3) — the signature stays
+    backward-compatible so their semantics do not change.
+    """
     if side_effect != "write" or not context_tainted:
         return True
     if allow_tainted_memory and tool_name == "remember":

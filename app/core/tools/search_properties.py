@@ -697,7 +697,11 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
     more than one entry, the headline names EVERY searched area with its per-area count
     — including any that returned 0 — instead of only the primary ``area`` (the Bug 4
     fix). Single-area callers pass ``area_counts=None`` and get the unchanged output."""
-    n_total = n_perfect + n_soft
+    # The "found N" claim counts ONLY the main, strictly-in-budget recommendations
+    # (n_perfect). Over-budget soft-expansion listings (n_soft) are surfaced separately
+    # as clearly-labelled alternatives and must NEVER be counted here or described as
+    # satisfying the budget (product-correctness requirement H2).
+    n_total = n_perfect
     stats = _price_stats(results)
     rt_label = _room_type_label(room_type, is_cjk) if room_type else None
     real_commute = commute_target and _commute_phrase(max_commute_time, commute_target)
@@ -742,7 +746,7 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
             if filt:
                 s += "已应用筛选：" + "、".join(filt) + "。"
             if n_soft and max_budget:
-                s += f"其中 {n_soft} 套略超预算。"
+                s += f"另有 {n_soft} 套略超预算的备选单独列出（未计入上述结果，且不在预算内）。"
             s += "完整房源见右侧列表。"
             return s
         breakdown = ", ".join(f"{a}: {c}" for a, c in area_counts)
@@ -756,7 +760,9 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
         if filt:
             s += " Filters applied: " + ", ".join(filt) + "."
         if n_soft and max_budget:
-            s += f" {n_soft} of these are slightly over budget."
+            s += (f" Separately, {n_soft} over-budget option{'s' if n_soft != 1 else ''} "
+                  f"(up to 15% above your budget) are listed as alternatives — not counted "
+                  f"above and not within your budget.")
         s += " See the full listings in the right-hand panel."
         return s
 
@@ -771,7 +777,7 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
         if filt:
             s += "已应用筛选：" + "、".join(filt) + "。"
         if n_soft and max_budget:
-            s += f"其中 {n_soft} 套略超预算。"
+            s += f"另有 {n_soft} 套略超预算的备选单独列出（未计入上述结果，且不在预算内）。"
         s += "完整房源见右侧列表。"
         return s
 
@@ -785,7 +791,9 @@ def _found_summary(results, n_perfect: int, n_soft: int, max_budget, max_commute
     if filt:
         s += " Filters applied: " + ", ".join(filt) + "."
     if n_soft and max_budget:
-        s += f" {n_soft} of these are slightly over budget."
+        s += (f" Separately, {n_soft} over-budget option{'s' if n_soft != 1 else ''} "
+              f"(up to 15% above your budget) are listed as alternatives — not counted "
+              f"above and not within your budget.")
     s += " See the full listings in the right-hand panel."
     return s
 
@@ -2025,21 +2033,27 @@ async def search_properties_impl(
 
         # ================================================================
         # 步骤 6: 格式化结果
+        # ----------------------------------------------------------------
+        # 硬预算是产品正确性要求（缺陷 H2）：主推荐 recommendations 必须严格满足
+        # monthly_rent <= max_budget（perfect_match，价格已归一化）。软扩展（≤ 预算×1.15
+        # 的"略超预算"房源，soft_violation）绝不混入主推荐、绝不计入"找到 N 套"的声明，
+        # 只作为单独、明确双语标注的 over_budget_alternatives 备选列出，摘要也绝不声称其在预算内。
         # ================================================================
-        perfect_limited = perfect_match[:limit]
-        soft_limited = soft_violation[:3]
-        all_results = perfect_limited + soft_limited
+        main_matches = perfect_match[:limit]
+        # over-budget 备选仅在有预算时存在（apply_hard_filters 契约：无预算时 soft 恒为空）。
+        over_budget_matches = soft_violation[:3]
+        display_pool = main_matches + over_budget_matches
 
-        # 🆕 用房源详情页丰富"将要展示的候选"：完整描述 + 真实可入住日期（有界=仅 top-N；
-        # 并发；一次抓取取回两者，按 URL 缓存）。让 Agent 拿到真实房源文本以回答后续问题，
-        # 并让每套房都能诚实标注"何时可入住"。
-        if os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and all_results:
+        # 🆕 用房源详情页丰富"将要展示的候选"（主推荐 + 备选）：完整描述 + 真实可入住日期
+        # （有界=仅待展示项；并发；一次抓取取回两者，按 URL 缓存）。让 Agent 拿到真实房源
+        # 文本以回答后续问题，并让每套房都能诚实标注"何时可入住"。
+        if os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and display_pool:
             try:
                 from core.scraping.onthemarket import fetch_listing_details as _fetch_details
             except Exception:
                 _fetch_details = None
             if _fetch_details:
-                _to_enrich = all_results[:limit]
+                _to_enrich = display_pool
                 # Bound concurrency to a few workers; the actual OTM politeness is
                 # enforced by the shared rate limiter inside fetch_listing_details
                 # (>=1.2s between detail GETs across ALL threads). The semaphore just
@@ -2066,75 +2080,87 @@ async def search_properties_impl(
                       f"{sum(1 for p in _to_enrich if p.get('_available_from'))} 个含可入住日期")
 
         # 🆕 入住日期：为每个待展示房源解析规范化可入住日期（供排序与卡片显示）。
-        for prop in all_results[:limit]:
+        for prop in display_pool:
             prop['_resolved_available_from'] = _resolve_available_from(prop)
 
-        # 🆕 入住匹配降级：给定期望入住日期时，把"仅晚于期望日"的房源稳定下沉到末尾
-        # （在既有分数/预算排序之上做稳定排序：可入住或未知在前、晚于期望日在后），但绝不排除。
-        display_results = list(all_results[:limit])
-        if move_in_date:
-            display_results.sort(
-                key=lambda p: 1 if _is_late_availability(
-                    p.get('_resolved_available_from', ''), move_in_date) else 0
-            )
+        # 🆕 入住匹配降级：给定期望入住日期时，把"仅晚于期望日"的房源稳定下沉到末尾（在既有
+        # 分数/预算排序之上做稳定排序：可入住或未知在前、晚于期望日在后），但绝不排除。主推荐与
+        # over-budget 备选各自独立降级。
+        def _demote_late(props):
+            out = list(props)
+            if move_in_date:
+                out.sort(key=lambda p: 1 if _is_late_availability(
+                    p.get('_resolved_available_from', ''), move_in_date) else 0)
+            return out
 
-        formatted_results = []
-        for i, prop in enumerate(display_results, 1):
-            images = prop.get('Images', prop.get('images', []))
-            if isinstance(images, str):
-                images = [images] if images else []
-            geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
+        main_display = _demote_late(main_matches)
+        alt_display = _demote_late(over_budget_matches)
 
-            _avail_from = prop.get('_resolved_available_from', '')
-            row = {
-                'rank': i,
-                'address': prop.get('Address', prop.get('address', 'Unknown')),
-                'price': f"£{int(prop.get('price', 0))}/month",
-                'budget_status': prop.get('budget_status', ''),
-                'score': prop.get('recommendation_score', 0),
-                'score_breakdown': prop.get('score_breakdown', {}),
-                'property_type': prop.get('Type', prop.get('type', 'Flat')),
-                'bedrooms': prop.get('Bedrooms', prop.get('bedrooms', 'N/A')),
-                'match_type': prop.get('match_type', 'perfect'),
-                'source': data_source,
-                'possibly_outdated': bool(prop.get('possibly_outdated', False)),
-                'url': prop.get('URL', prop.get('url', '')),
-                'images': images,
-                'geo_location': geo_location,
-                'distance_miles': prop.get('distance_miles'),
-                'explanation': _clean_explanation(
-                    prop.get('Description', prop.get('description', '')),
-                    prop.get('travel_time') if commute_annotation_enabled else None,
-                    commute_target,
-                ),
-                # 🆕 多区域：该房源来自哪个搜索区域（前端卡片徽标）。
-                'area': prop.get('_search_area'),
-                # 🆕 OnTheMarket 详情页完整描述（未截断；供 Agent 后续问答）。
-                'description': prop.get('_full_description', ''),
-                # 🆕 可入住日期：""(未知→前端显示"Contact agent") | "Available now" | "YYYY-MM-DD"。
-                'available_from': _avail_from,
-                # 🆕 与期望入住日的匹配标注（无期望日/未知 → ""）。
-                'availability_status': _availability_status(_avail_from, move_in_date),
-            }
-            # 无通勤目标/无通勤时间时，完全省略 travel_time 字段（不出现 "0 min to None"）。
-            _tt = prop.get('travel_time')
-            if commute_annotation_enabled and _tt is not None:
-                row['travel_time'] = f"{int(_tt)} min to {commute_target}"
-            formatted_results.append(row)
+        def _format_rows(props):
+            rows = []
+            for i, prop in enumerate(props, 1):
+                images = prop.get('Images', prop.get('images', []))
+                if isinstance(images, str):
+                    images = [images] if images else []
+                geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
+                _avail_from = prop.get('_resolved_available_from', '')
+                row = {
+                    'rank': i,
+                    'address': prop.get('Address', prop.get('address', 'Unknown')),
+                    'price': f"£{int(prop.get('price', 0))}/month",
+                    'budget_status': prop.get('budget_status', ''),
+                    'score': prop.get('recommendation_score', 0),
+                    'score_breakdown': prop.get('score_breakdown', {}),
+                    'property_type': prop.get('Type', prop.get('type', 'Flat')),
+                    'bedrooms': prop.get('Bedrooms', prop.get('bedrooms', 'N/A')),
+                    'match_type': prop.get('match_type', 'perfect'),
+                    'source': data_source,
+                    'possibly_outdated': bool(prop.get('possibly_outdated', False)),
+                    'url': prop.get('URL', prop.get('url', '')),
+                    'images': images,
+                    'geo_location': geo_location,
+                    'distance_miles': prop.get('distance_miles'),
+                    'explanation': _clean_explanation(
+                        prop.get('Description', prop.get('description', '')),
+                        prop.get('travel_time') if commute_annotation_enabled else None,
+                        commute_target,
+                    ),
+                    # 🆕 多区域：该房源来自哪个搜索区域（前端卡片徽标）。
+                    'area': prop.get('_search_area'),
+                    # 🆕 OnTheMarket 详情页完整描述（未截断；供 Agent 后续问答）。
+                    'description': prop.get('_full_description', ''),
+                    # 🆕 可入住日期：""(未知→前端显示"Contact agent") | "Available now" | "YYYY-MM-DD"。
+                    'available_from': _avail_from,
+                    # 🆕 与期望入住日的匹配标注（无期望日/未知 → ""）。
+                    'availability_status': _availability_status(_avail_from, move_in_date),
+                }
+                # 无通勤目标/无通勤时间时，完全省略 travel_time 字段（不出现 "0 min to None"）。
+                _tt = prop.get('travel_time')
+                if commute_annotation_enabled and _tt is not None:
+                    row['travel_time'] = f"{int(_tt)} min to {commute_target}"
+                rows.append(row)
+            return rows
 
-        # 🆕 多区域：按来源区域(_search_area)统计"全部匹配"(perfect+soft)的每区域套数，供摘要
-        # 列出所有搜索区域（含返回 0 套者）。计数覆盖完整匹配集（与标题的 n_total 一致），而非
-        # 仅展示分页。单区域时传 None，_found_summary 输出与旧版逐字一致。
+        formatted_results = _format_rows(main_display)
+        over_budget_alternatives = _format_rows(alt_display)
+        # 备选行显式结构化标记（即使前端不渲染 budget_status，也能识别其为超预算备选）。
+        for _r in over_budget_alternatives:
+            _r['alternative'] = True
+
+        # 🆕 多区域：按来源区域(_search_area)统计"主推荐（严格在预算内）"的每区域套数，供摘要
+        # 列出所有搜索区域（含返回 0 套者）。与标题的 n_total（=主推荐数）一致；over-budget
+        # 备选不计入。单区域时传 None，_found_summary 输出与旧版逐字一致。
         _area_counts = None
         if len(search_areas) > 1:
             _cnt = {a.lower(): 0 for a in search_areas}
-            for _p in perfect_match + soft_violation:
+            for _p in perfect_match:
                 _k = str(_p.get('_search_area', '')).lower()
                 if _k in _cnt:
                     _cnt[_k] += 1
             _area_counts = [(a, _cnt.get(a.lower(), 0)) for a in search_areas]
 
-        _summary = _found_summary(all_results, len(perfect_match), len(soft_violation),
+        # 摘要的"找到 N"= 主推荐（严格在预算内）计数；over-budget 备选仅作为单独区块提及。
+        _summary = _found_summary(main_matches, len(perfect_match), len(over_budget_matches),
                                   max_budget if has_budget else None,
                                   max_commute_time if commute_filter_enabled else None,
                                   search_area, commute_target, room_type, is_cjk,
@@ -2144,10 +2170,18 @@ async def search_properties_impl(
                          else " (Showing recent cached listings — a live refresh wasn't "
                               "available just now, so some may be outdated.)")
 
+        # over-budget 备选的双语区块标签（reply_language / is_cjk 决定语言）。空列表时留空串。
+        over_budget_label = (
+            "超预算备选（最多高出预算 15%；未计入上述结果，且不在预算内）" if is_cjk else
+            "Over-budget alternatives (up to 15% above your budget; not counted in the "
+            "results above and not within your budget)"
+        ) if over_budget_alternatives else ''
+
         return {
             'success': True,
             'status': 'found',
-            'total_found': len(all_results),
+            # "找到 N 套" = 严格在预算内的主推荐数（绝不含 over-budget 备选）。
+            'total_found': len(perfect_match),
             'data_source': data_source,
             'possibly_outdated': possibly_outdated,
             'search_criteria': _criteria(),
@@ -2155,7 +2189,12 @@ async def search_properties_impl(
             # mirror state after a search (previously absent on the search path, so a
             # consumer reading known_criteria on a found turn got {}).
             'known_criteria': _known_criteria(),
+            # 主推荐：严格满足 monthly_rent <= max_budget（前端读取此键，行为不变）。
             'recommendations': formatted_results,
+            # 🆕 additive：软扩展的超预算备选，明确双语标注，绝不混入 recommendations、
+            # 绝不计入 total_found。前端可选渲染；旧消费者忽略该键即可。
+            'over_budget_alternatives': over_budget_alternatives,
+            'over_budget_alternatives_label': over_budget_label,
             'perfect_count': len(perfect_match),
             'soft_count': len(soft_violation),
             'summary': _summary,

@@ -159,6 +159,33 @@ terminal clarification tool) — both fc_loop additions.
 as evidence, not a fc_loop regression. **H1** similarly fails legacy because
 `compare_or_rank_areas` does not exist there (capability gap, design §2.5b).
 
+**Executed vs denied vs requested (H13 A+).** A turn's tool calls are split three ways:
+`tools_requested` (everything the model asked for) = `tools_executed` (calls that actually
+ran) + `tools_denied` (a memory-write the gate refused — the exact content is shown and
+confirmation is requested, but the tool never executes) + `tools_timed_out` (budget-killed
+calls). **Constraint checkers (`must_call_tool` / `must_not_call_tool` / `forbidden_tools`)
+and the route trace judge EXECUTED-only.** So the A+ flow — search, then the tainted-content
+`remember` is *denied* and the model asks the user to confirm — **passes** H13's
+`forbid remember`: the denied attempt is not a call the model made. The denial is never
+silently dropped: it stays in the per-case `tools_denied` / `denied_tool_detail` columns of
+`per_case.csv` and is aggregated into `summary.json`'s `security_audit` block
+(`{cases_with_denied_writes, denied_by_tool, denied_cases}`). Denied/timed-out artifacts are
+excluded from `extract_tool_trace`, so a denied `remember` never enters the executed batches.
+`tools_called` remains a backward-compatible alias of `tools_executed`.
+
+**History / `extracted_context` wiring (H6/H8).** The runner reconstructs the state a real
+multi-turn session would carry into the graded turn: `extracted_context['history']` is set to
+the SessionStore shape `[{"user":.., "assistant":..}]` (mirroring `app.py`) for **both**
+archs, so the fc context block's `discussed_areas` is populated and a zh deictic ("那个区域")
+anchors to the discussed area instead of the model asking "which area?". The fc arch relies on
+`ec['history']` (its `_build_messages` consumes that plus the raw current message), so the
+runner does **not** also inject the prior turns as a query-text prefix under `--arch fc_loop`
+(no double injection); the legacy string assembler keeps its query prefix unchanged. The
+reconstructed context is also a legitimate number-grounding source: a comparative follow-up
+("哪个最便宜" → £1290, H8) is answered from the priced `last_results` / history text that ride
+in through context, so `no_fabricated_number` treats those figures as supported while a figure
+present in **no** source still fails as fabrication (H3).
+
 Reply-language correctness (Chinese-in ⇒ Chinese-out) and "check the *discussed* area, not
 `results[0]`" are not expressible in the closed constraint vocabulary; they are pinned in
 each case's `failure_conditions` prose instead.

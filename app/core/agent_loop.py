@@ -22,6 +22,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import time
 from dataclasses import dataclass
 from typing import Any, Literal, Optional
 
@@ -264,13 +266,60 @@ def _default_agent_llm():
 
 
 def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
-              success: bool = True, error: Optional[str] = None) -> dict:
+              success: bool = True, error: Optional[str] = None, *,
+              timed_out: bool = False, denied: bool = False) -> dict:
     """A tool_artifacts entry. `success`/`error` mirror the underlying ToolResult so
     downstream readers (P2's critic, format_output_fc) can tell a failed tool apart
     from a successful one without re-parsing the model-facing ToolMessage. The ask_user
-    terminal artifact carries success=True (it always "succeeds" as a clarification)."""
-    return {"turn": turn, "tool": tool, "raw_data": raw_data,
-            "params_digest": params_digest, "success": bool(success), "error": error}
+    terminal artifact carries success=True (it always "succeeds" as a clarification).
+
+    `timed_out` (batch/turn tool-budget kill) and `denied` (tainted-write refusal) mark
+    an artifact that never actually executed a tool: it carries raw_data=None, keeps its
+    params_digest (so the no-progress guard still suppresses an identical retry) but is
+    EXCLUDED from card rendering by _is_executed()."""
+    art = {"turn": turn, "tool": tool, "raw_data": raw_data,
+           "params_digest": params_digest, "success": bool(success), "error": error}
+    if timed_out:
+        art["timed_out"] = True
+    if denied:
+        art["denied"] = True
+    return art
+
+
+def _is_executed(artifact: dict) -> bool:
+    """True unless the artifact is a timeout / denied placeholder. Card rendering and
+    'last successful' lookups must skip these — they represent work that never ran — while
+    the no-progress guard still counts their (tool, digest) to suppress identical retries."""
+    return not (artifact.get("timed_out") or artifact.get("denied"))
+
+
+# ─── fc-loop tool budgets (env-tunable) ─────────────────────────────
+def _batch_tool_budget_s() -> float:
+    """Wall-clock ceiling (s) for ONE execute_tools batch's asyncio.gather. Read at call
+    time so tests / ops can retune via FC_BATCH_TOOL_BUDGET_S without a reimport."""
+    try:
+        return float(os.getenv("FC_BATCH_TOOL_BUDGET_S", "20"))
+    except (TypeError, ValueError):
+        return 20.0
+
+
+def _turn_tool_budget_s() -> float:
+    """Cumulative wall-clock ceiling (s) for ALL tool batches in one user turn
+    (FC_TURN_TOOL_BUDGET_S). Once exhausted, further batches are skipped and answered from
+    what was already gathered."""
+    try:
+        return float(os.getenv("FC_TURN_TOOL_BUDGET_S", "40"))
+    except (TypeError, ValueError):
+        return 40.0
+
+
+def _loop_soft_cap() -> int:
+    """Soft loop_turn threshold above which a single inflation warning is logged
+    (FC_LOOP_SOFT_CAP). Observability only — no behavioural change."""
+    try:
+        return int(os.getenv("FC_LOOP_SOFT_CAP", "6"))
+    except (TypeError, ValueError):
+        return 6
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -385,6 +434,17 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         loop_turn = int(state.get("loop_turn", 0)) + 1
         degraded = loop_turn > MAX_AGENT_TURNS
+
+        # Loop-inflation monitoring (secondary): one warning when the loop grows past the
+        # soft cap, so runaway tool-calling stays observable. loop_turn == llm_calls (one
+        # bound-tools call per super-step); tool batches ~= executed-tool artifacts.
+        soft_cap = _loop_soft_cap()
+        if loop_turn == soft_cap + 1:
+            _batches = len({a.get("turn") for a in (state.get("tool_artifacts") or [])})
+            logger.warning(
+                "fc_loop.inflation loop_turn=%d soft_cap=%d llm_calls=%d tool_batches=%d "
+                "tool_calls=%d", loop_turn, soft_cap, loop_turn, _batches,
+                len(state.get("tool_artifacts") or []))
 
         specs = list(provider.list_specs())
         if degraded:
@@ -620,10 +680,49 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 return ToolResult(False, error=str(e), tool_name=name)
 
         run_idx = [i for i, (_tc, _d, mode, _a) in enumerate(plan) if mode == "run"]
-        results = await asyncio.gather(*[
-            _run(plan[i][0].get("name"), plan[i][3], plan[i][1]) for i in run_idx
-        ]) if run_idx else []
-        result_by_idx = dict(zip(run_idx, results))
+
+        # ── batch + turn tool budgets (fc loop) ─────────────────────────────
+        # Each _run already enforces a per-call TOOL_TIMEOUTS wait_for; on TOP of that the
+        # whole batch shares a wall-clock ceiling (FC_BATCH_TOOL_BUDGET_S), and all batches
+        # in a user turn share a cumulative ceiling (FC_TURN_TOOL_BUDGET_S). A call that does
+        # not finish inside the budget is CANCELLED and gets a structured timeout artifact +
+        # ToolMessage so the model can degrade gracefully instead of the harness silently
+        # overrunning. asyncio.wait (not a single wait_for around gather) gives per-call
+        # granularity: finished calls keep their results, only the stragglers time out.
+        turn_budget = _turn_tool_budget_s()
+        batch_budget = _batch_tool_budget_s()
+        turn_used = float(state.get("turn_tool_budget_used_s", 0.0) or 0.0)
+
+        result_by_idx: dict = {}
+        timed_out_idx: set = set()
+        turn_exhausted = False
+        batch_window = 0.0
+
+        if run_idx:
+            if turn_used >= turn_budget:
+                # Turn budget already spent: skip this whole batch, answer from what we have.
+                turn_exhausted = True
+                timed_out_idx.update(run_idx)
+            else:
+                batch_window = max(0.0, min(batch_budget, turn_budget - turn_used))
+                tasks = {
+                    i: asyncio.ensure_future(
+                        _run(plan[i][0].get("name"), plan[i][3], plan[i][1]))
+                    for i in run_idx
+                }
+                t0 = time.monotonic()
+                done, pending = await asyncio.wait(
+                    list(tasks.values()), timeout=batch_window)
+                turn_used += time.monotonic() - t0
+                for i, task in tasks.items():
+                    if task in done:
+                        result_by_idx[i] = task.result()
+                    else:
+                        task.cancel()
+                        timed_out_idx.add(i)
+                if pending:
+                    # Let cancellations settle so no "Task was destroyed" warning leaks.
+                    await asyncio.gather(*pending, return_exceptions=True)
 
         tainted_any = False
         for i, (tc, digest, mode, args) in enumerate(plan):
@@ -638,6 +737,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 continue
             if isinstance(mode, tuple) and mode[0] == "deny":
                 frozen = mode[1]
+                # Denied-write artifact contract (Q3 consumes): record a non-executed
+                # placeholder so the critic/eval can see the refusal. raw_data=None keeps it
+                # out of card rendering; the digest keeps the no-progress guard suppressing
+                # an identical retry.
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error="denied: tainted write requires confirmation", denied=True))
                 hint = (" A confirmation is required before saving; the exact content has been "
                         f"frozen (digest {frozen}) and will be saved only on explicit user "
                         "confirmation." if frozen else "")
@@ -647,6 +753,20 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         "error": ("write blocked: this turn contains untrusted content and the "
                                   "user has not authorized saving to memory." + hint),
                     }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
+            if i in timed_out_idx:
+                # Structured timeout artifact + matching ToolMessage: the model sees the tool
+                # did not return and can answer from the rest.
+                if turn_exhausted:
+                    err = "turn tool budget exhausted"
+                else:
+                    err = f"timeout after {int(round(batch_window))}s (batch budget)"
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False, error=err, timed_out=True))
+                messages.append(ToolMessage(
+                    content=json.dumps({"success": False, "data": None, "error": err},
+                                       ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue
             result = result_by_idx[i]
@@ -662,6 +782,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             "messages": messages,
             "tool_artifacts": artifacts,
             "context_tainted": state.get("context_tainted", False) or tainted_any,
+            "turn_tool_budget_used_s": turn_used,
         }
         return Command(update=update, goto="agent")
 
@@ -676,7 +797,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         def _last(tool_name):
             for a in reversed(artifacts):
-                if a.get("tool") == tool_name:
+                if a.get("tool") == tool_name and _is_executed(a):
                     return a
             return None
 
@@ -698,7 +819,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         search_found = None
         search_clarify = None
         for a in reversed(artifacts):
-            if a.get("tool") != "search_properties":
+            if a.get("tool") != "search_properties" or not _is_executed(a):
                 continue
             raw = a.get("raw_data")
             if not isinstance(raw, dict):
@@ -763,7 +884,8 @@ def _merge_cards(artifacts: list, tool_data: dict) -> str:
     for tool_name, formatter in _CARD_FORMATTERS.items():
         latest = None
         for a in reversed(artifacts):
-            if a.get("tool") == tool_name and isinstance(a.get("raw_data"), dict):
+            if (a.get("tool") == tool_name and _is_executed(a)
+                    and isinstance(a.get("raw_data"), dict)):
                 latest = a["raw_data"]
                 break
         if latest is None:

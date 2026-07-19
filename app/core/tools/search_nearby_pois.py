@@ -3,6 +3,7 @@ Tool: Search Nearby POIs (使用 OpenStreetMap)
 查询地址周边的餐厅、超市、便利店等设施
 """
 
+import os
 import time
 import math
 from typing import Optional, List, Dict
@@ -12,6 +13,20 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 
 DEFAULT_RADIUS = 200  # 默认搜索半径 500m
+
+# ─── Internal total-time budget (event-loop safe) ───────────────────
+# This tool is registered as a PLAIN SYNC function, so Tool.execute offloads it to an
+# executor thread (tool_system.py :279-284) and the fc-loop's asyncio.wait_for
+# (agent_loop.execute_tools) is free to fire — the event loop is never blocked by the
+# synchronous geocode / Overpass / sleep calls below. ALL requested POI types share ONE
+# monotonic deadline derived from this budget so the total wall time stays bounded instead
+# of running one up-to-30s Overpass request per type serially (the observed 43-99s tail).
+# Aligned with the fc_loop TOOL_TIMEOUTS["search_nearby_pois"] entry (25s) minus a safety
+# margin so the tool returns partial results BEFORE the harness force-times-it-out.
+POI_SEARCH_BUDGET_S = float(os.getenv("POI_SEARCH_BUDGET_S", "20"))
+# Politeness pacing between consecutive Overpass mirror hits (seconds); runs inside the
+# executor thread, so it never blocks the event loop.
+POI_PACING_S = float(os.getenv("POI_PACING_S", "0.3"))
 
 # 🆕 大品牌超市/便利店白名单（不区分大小写匹配）
 # 包含各种店型：Express, Local, Metro, Extra, Superstore 等
@@ -387,7 +402,17 @@ def _infer_poi_types_from_query(user_query: str) -> List[str]:
     return list(dict.fromkeys(inferred))
 
 
-async def search_nearby_pois_impl(
+def _skipped_note(skipped: List[str]) -> str:
+    """Honest partial-result note. This tool has no reply_language param, so the note is
+    neutral English plus a short zh hint (mirrors how other tool notes stay bilingual)."""
+    names = [POI_TYPES[t]["name"] for t in skipped if t in POI_TYPES] or list(skipped)
+    joined = ", ".join(names)
+    return (f"Note: the {POI_SEARCH_BUDGET_S:.0f}s search budget was reached, so these were "
+            f"not checked: {joined}. Returning partial results. "
+            f"（部分结果：已达搜索时间上限，未查询：{joined}。）")
+
+
+def search_nearby_pois_impl(
     address: str,
     poi_type: str = "all",
     radius: int = 300,
@@ -395,13 +420,21 @@ async def search_nearby_pois_impl(
 ) -> dict:
     """
     使用 OpenStreetMap 搜索地址周边的 POI
-    
+
+    NOTE: this is a PLAIN SYNC function on purpose. It performs synchronous geocoding,
+    Overpass HTTP requests and pacing sleeps; registering it as sync means Tool.execute runs
+    it in an executor thread so the asyncio event loop stays responsive and the fc-loop's
+    per-tool asyncio.wait_for can actually fire. All requested POI types share ONE
+    time.monotonic() deadline (POI_SEARCH_BUDGET_S): once the deadline passes, the remaining
+    types are returned as skipped with an honest note rather than silently overrunning.
+
     Args:
         address: 要搜索的地址
         poi_type: POI 类型 (restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, all)
         radius: 搜索半径（米），默认 500m
         user_query: 用户原始查询（可选，用于智能推断 POI 类型）
     """
+    deadline = time.monotonic() + POI_SEARCH_BUDGET_S
     try:
         # 🆕 如果有 user_query，根据用户查询智能推断 POI 类型
         if user_query and poi_type == "all":
@@ -410,9 +443,9 @@ async def search_nearby_pois_impl(
                 print(f"🧠 [OSM POI] 根据用户查询推断 POI 类型: {inferred_types}")
         else:
             inferred_types = None
-        
+
         print(f"🗺️ [OSM POI] 搜索: {poi_type} near {address[:50]}...")
-        
+
         # 地理编码
         coords = geocode_address(address)
         if not coords:
@@ -422,12 +455,12 @@ async def search_nearby_pois_impl(
                 "address": address,
                 "pois": {},
             }
-        
+
         lat, lon = coords
         print(f"📍 坐标: {lat:.6f}, {lon:.6f}")
-        
+
         results = {}
-        
+
         # 确定要查询的 POI 类型
         # 🆕 优先使用从 user_query 推断的类型
         if inferred_types:
@@ -449,25 +482,44 @@ async def search_nearby_pois_impl(
                 types_to_query = ["convenience", "supermarket"]
             else:
                 types_to_query = ["restaurant", "supermarket", "convenience"]
-        
+
         print(f"🔍 [OSM POI] 将查询类型: {types_to_query}")
-        
-        # 查询每种类型（传递原点坐标用于距离计算）
-        for ptype in types_to_query:
+
+        # 查询每种类型（传递原点坐标用于距离计算）。共享一个 monotonic 截止时间：
+        # 截止后不再发起任何 per-type 请求，把剩余类型如实标为 skipped。
+        skipped: List[str] = []
+        for idx, ptype in enumerate(types_to_query):
+            if time.monotonic() >= deadline:
+                # No per-type request may be issued after the deadline.
+                skipped = list(types_to_query[idx:])
+                print(f"  ⏱️ [OSM POI] 预算已用尽，跳过剩余类型: {skipped}")
+                break
             pois = query_osm_pois(lat, lon, ptype, radius, origin_lat=lat, origin_lon=lon)
             if pois:
                 results[ptype] = pois[:5]  # 每种类型最多 5 个
                 print(f"  ✅ 找到 {len(pois)} 个 {POI_TYPES[ptype]['name']}")
-            time.sleep(0.5)  # 限速
-        
+            # 只有还有下一个类型且仍在预算内时才 pace，避免无谓地把时间推过截止点。
+            if idx < len(types_to_query) - 1 and time.monotonic() < deadline:
+                time.sleep(POI_PACING_S)
+
+        note = _skipped_note(skipped) if skipped else None
+
         if not results:
-            return {
+            payload = {
                 "success": True,
                 "address": address,
-                "message": f"No {poi_type} found within {radius}m of this address.",
                 "pois": {},
             }
-        
+            if skipped:
+                payload["message"] = (
+                    "No results were gathered within the time budget. " + note)
+                payload["partial"] = True
+                payload["skipped_types"] = skipped
+                payload["note"] = note
+            else:
+                payload["message"] = f"No {poi_type} found within {radius}m of this address."
+            return payload
+
         # 格式化输出
         formatted = []
         for ptype, pois in results.items():
@@ -480,17 +532,24 @@ async def search_nearby_pois_impl(
                 if poi.get('brand') and poi.get('brand').lower() not in poi.get('name', '').lower():
                     entry += f" [{poi['brand']}]"
                 formatted.append(entry)
-        
+
         summary = f"Found {sum(len(p) for p in results.values())} places within {radius}m:\n" + "\n".join(formatted)
-        
-        return {
+        if note:
+            summary = summary + "\n" + note
+
+        payload = {
             "success": True,
             "address": address,
             "radius_m": radius,
             "summary": summary,
             "pois": results,
         }
-        
+        if skipped:
+            payload["partial"] = True
+            payload["skipped_types"] = skipped
+            payload["note"] = note
+        return payload
+
     except Exception as e:
         print(f"❌ [OSM POI] 错误: {e}")
         return {"success": False, "error": str(e), "address": address, "pois": {}}

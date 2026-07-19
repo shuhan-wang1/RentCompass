@@ -481,6 +481,136 @@ def accumulated_criteria_from_history(hist: List[dict]) -> Optional[Dict[str, An
     return acc
 
 
+def history_snapshot_from_history(hist: List[dict]) -> List[Dict[str, str]]:
+    """Convert a case's ``conversation_history`` (``[{"role","content"}]``) into the
+    SessionStore shape ``[{"user": str, "assistant": str}, ...]`` — one entry per
+    user→assistant exchange, mirroring EXACTLY what app.py persists
+    (``_sess.history.append({'user': user_message, 'assistant': assistant_text[:500]})``).
+
+    Wired into ``extracted_context['history']`` for BOTH archs so the fc context block's
+    ``extract_discussed_areas`` sees the prior turns and a zh deictic ("那个区域") anchors to
+    the discussed area instead of the model asking "which area?" (H6). The legacy string
+    assembler ignores this key (it builds its own query prefix), so there is no double
+    injection. A trailing user turn with no assistant reply is kept with an empty
+    ``assistant`` (the current message is separate); a leading assistant turn pairs with an
+    empty ``user``."""
+    out: List[Dict[str, str]] = []
+    pending_user: Optional[str] = None
+    for turn in hist or []:
+        role = turn.get("role")
+        content = (turn.get("content") or "")
+        if role == "user":
+            if pending_user is not None:
+                out.append({"user": pending_user, "assistant": ""})
+            pending_user = content
+        elif role == "assistant":
+            out.append({"user": pending_user or "", "assistant": content[:500]})
+            pending_user = None
+    if pending_user is not None:
+        out.append({"user": pending_user, "assistant": ""})
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Three-way tool-call split: requested / executed / denied / timed_out (H13)
+#
+# A benchmark turn REQUESTS a set of tools; the loop may EXECUTE, DENY (memory-write gate
+# refuses — the exact content is shown and confirmation requested, but the tool never
+# runs), or have a call TIME OUT (budget kill). The constraint checkers (must_call_tool /
+# must_not_call_tool / forbidden_tools) and the route trace must judge EXECUTED-only, so a
+# denied write is not counted against must_not_call_tool (H13 A+). Denied attempts remain
+# visible via ``tools_denied`` + the per-case ``denied_tool_detail`` and the summary's
+# security_audit block — never silently dropped.
+# --------------------------------------------------------------------------- #
+_DENY_ERR_RE = re.compile(
+    r"write blocked|not authoriz|permission|confirmation is required|denied", re.IGNORECASE)
+_TIMEOUT_ERR_RE = re.compile(r"timed out|timeout", re.IGNORECASE)
+
+
+def _classify_tool_calls(*, arch: str, artifacts: List[dict], tool_events: List[dict],
+                         evidence: List[dict]):
+    """Split the tools a turn requested into (executed, denied, timed_out, requested) —
+    each an ordered list of tool names — plus ``denied_detail`` [{tool, digest, error}].
+
+    * fc_loop: derived from ``tool_artifacts``. Q1 marks a gate-refused write
+      ``denied=True`` and a budget-killed call ``timed_out=True`` (read tolerantly via
+      ``.get``); a normally-run tool has neither. An artifact whose ``success`` is False
+      and whose ``error`` reads as a write-block / timeout is classified accordingly even
+      without the boolean flag, so the split is robust to either surface.
+    * legacy: no artifact channel. Executed calls come from the collector ``tool_call``
+      events (all of which ran); a call whose event flags ``timeout`` is timed_out; a
+      PermissionError / write-block surfaced in the tool's ``evidence`` entry (if
+      detectable) marks it denied.
+
+    Returns (executed, denied, timed_out, requested, denied_detail)."""
+    executed: List[str] = []
+    denied: List[str] = []
+    timed_out: List[str] = []
+    requested: List[str] = []
+    denied_detail: List[dict] = []
+
+    if arch == "fc_loop":
+        for a in artifacts or []:
+            tool = a.get("tool")
+            if tool is None:
+                continue
+            err = str(a.get("error") or "")
+            is_denied = bool(a.get("denied")) or (
+                not a.get("success", True) and bool(_DENY_ERR_RE.search(err)))
+            is_timed = bool(a.get("timed_out")) or (
+                not a.get("success", True) and bool(_TIMEOUT_ERR_RE.search(err)))
+            requested.append(tool)
+            if is_denied:
+                denied.append(tool)
+                denied_detail.append({"tool": tool,
+                                      "digest": a.get("params_digest") or "",
+                                      "error": err[:200]})
+            elif is_timed:
+                timed_out.append(tool)
+            else:
+                executed.append(tool)
+        return executed, denied, timed_out, requested, denied_detail
+
+    # legacy: executed = collector tool_call events; deny detected from evidence errors.
+    denied_by_tool: Dict[str, str] = {}
+    for ev in evidence or []:
+        err = str(ev.get("error") or "")
+        if not ev.get("success", True) and _DENY_ERR_RE.search(err):
+            denied_by_tool[ev.get("tool")] = err
+    for e in tool_events or []:
+        tool = e.get("tool")
+        requested.append(tool)
+        if tool in denied_by_tool:
+            denied.append(tool)
+            denied_detail.append({"tool": tool, "digest": e.get("args_hash") or "",
+                                  "error": denied_by_tool[tool][:200]})
+        elif e.get("timeout"):
+            timed_out.append(tool)
+        else:
+            executed.append(tool)
+    return executed, denied, timed_out, requested, denied_detail
+
+
+def _security_audit(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Summary-level security audit: which case-runs had a write DENIED (H13), and how
+    many denials per tool. Denied attempts are surfaced here (and per-case in
+    ``denied_tool_detail``) so a gate-refused write is auditable, never silently dropped."""
+    denied_cases = [r for r in runs if r.tools_denied]
+    by_tool: Dict[str, int] = {}
+    for r in runs:
+        for t in r.tools_denied:
+            by_tool[t] = by_tool.get(t, 0) + 1
+    return {
+        "cases_with_denied_writes": len(denied_cases),
+        "denied_by_tool": by_tool,
+        "denied_cases": [
+            {"case_id": r.case_id, "run_id": r.run_id, "denied": list(r.tools_denied),
+             "detail": list(r.denied_tool_detail)}
+            for r in denied_cases
+        ],
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Per-run result record
 # --------------------------------------------------------------------------- #
@@ -493,7 +623,19 @@ class RunResult:
     run_id: str
     repeat: int
     route: Any = None
+    # Three-way split of the tools a turn REQUESTED (H13). ``tools_executed`` are the calls
+    # that actually ran; ``tools_denied`` were refused before running (memory-write gate —
+    # the content is shown and confirmation requested, but the tool never executes);
+    # ``tools_timed_out`` were budget-killed; ``tools_requested`` = executed+denied+timed_out.
+    # Constraint checkers and the route trace judge EXECUTED-only, so a denied write no
+    # longer fails must_not_call_tool; the denied attempts stay visible for the security
+    # audit. ``tools_called`` is kept as a backward-compatible ALIAS of ``tools_executed``.
     tools_called: List[str] = field(default_factory=list)
+    tools_executed: List[str] = field(default_factory=list)
+    tools_denied: List[str] = field(default_factory=list)
+    tools_timed_out: List[str] = field(default_factory=list)
+    tools_requested: List[str] = field(default_factory=list)
+    denied_tool_detail: List[dict] = field(default_factory=list)
     tool_call_events: List[dict] = field(default_factory=list)
     # Phase 2 route/trace + failure flags (per case). tool_trace = ordered batches of
     # tool names; the flags feed graders.summarize_route_metrics for the summary block.
@@ -679,7 +821,13 @@ class CaseRunner:
     def _build_query_with_history(self, case: dict, uid: Optional[str]) -> str:
         hist = case.get("conversation_history") or []
         q = case.get("user_query", "")
-        if not hist:
+        # fc_loop relies on extracted_context['history'] (SessionStore shape) — its
+        # _build_messages consumes that plus the raw current_message — so it must NOT also
+        # receive the prior turns as a query TEXT prefix (that would inject history twice).
+        # Legacy's assembler has no structured-history channel, so it keeps the string
+        # prefix (unchanged). This mirrors production: fc reads ec['history'], legacy the
+        # assembled string.
+        if not hist or self.arch == "fc_loop":
             base = q
         else:
             lines = [f"User: {t['content']}" if t["role"] == "user"
@@ -802,6 +950,13 @@ class CaseRunner:
         hist = case.get("conversation_history") or []
         extracted_context = {"current_message": case.get("user_query", "")}
         extracted_context.update(referent_context_from_history(hist))
+        # Reconstruct the SessionStore-shape history ([{"user":..,"assistant":..}]) a real
+        # session would carry, so the fc context block's discussed_areas is populated and a
+        # zh deictic anchors instead of triggering "which area?" (H6). Set for BOTH archs;
+        # the legacy string path ignores this key (no double injection).
+        history_snapshot = history_snapshot_from_history(hist)
+        if history_snapshot:
+            extracted_context["history"] = history_snapshot
         # Reconstruct the accumulated (sticky) search criteria — budget/area/room_type set
         # in an earlier turn — that a persistent session would carry. None => the default
         # empty criteria. Wired into the initial state so BOTH archs' search-param
@@ -854,7 +1009,15 @@ class CaseRunner:
 
         tool_events = [e for e in mine if e.get("type") == "tool_call"]
         rr.tool_call_events = tool_events
-        rr.tools_called = [e.get("tool") for e in tool_events]
+        # Three-way split (H13): what the turn REQUESTED vs what actually EXECUTED vs what
+        # was DENIED (memory-write gate) vs TIMED OUT. tools_called is the backward-compat
+        # alias of tools_executed; constraint checkers + the route trace judge executed-only.
+        _fs_now = final_state or {}
+        (rr.tools_executed, rr.tools_denied, rr.tools_timed_out,
+         rr.tools_requested, rr.denied_tool_detail) = _classify_tool_calls(
+            arch=self.arch, artifacts=_fs_now.get("tool_artifacts") or [],
+            tool_events=tool_events, evidence=evidence)
+        rr.tools_called = list(rr.tools_executed)
         # Per-span profile: preserve every node hop IN ORDER (repeated agent/execute_tools
         # spans no longer overwrite each other). node_latencies is the backward-compatible
         # per-node aggregate derived from these spans.
@@ -875,8 +1038,13 @@ class CaseRunner:
         fs = final_state or {}
         if self.arch == "fc_loop":
             artifacts = fs.get("tool_artifacts") or []
+            # extract_tool_trace + the duplicate signatures both judge EXECUTED-only: a
+            # denied/timed-out artifact is a requested-not-executed call (skipped), so a
+            # shown-and-confirmed denied write never enters the route trace (H13).
             rr.tool_trace = self.graders.extract_tool_trace(artifacts)
-            signatures = [(a.get("tool"), a.get("params_digest")) for a in artifacts]
+            executed_artifacts = [a for a in artifacts
+                                  if not a.get("denied") and not a.get("timed_out")]
+            signatures = [(a.get("tool"), a.get("params_digest")) for a in executed_artifacts]
         else:
             rr.tool_trace = [[t] for t in rr.tools_called]
             signatures = [(e.get("tool"), e.get("args_hash")) for e in tool_events]
@@ -897,13 +1065,17 @@ class CaseRunner:
         user_texts.append(case.get("user_query", ""))
         gctx = self.graders.GradeContext(
             final_answer=rr.final_answer,
-            tools_called=rr.tools_called,
+            tools_called=rr.tools_called,   # = tools_executed: constraints judge executed-only
             tool_call_events=tool_events,
             evidence=evidence,
             route=rr.route,
             user_texts=user_texts,
             reference_calculations=case.get("reference_calculations"),
             error=run_error,
+            # Reconstructed multi-turn context is a legitimate number-grounding source (H8):
+            # the priced last_results + history text back a comparative "£1290" answer.
+            reconstructed_context=extracted_context,
+            history_texts=[t.get("content", "") for t in hist],
         )
         verdict = self.graders.grade_case(case, gctx)
         rr.verdict = verdict.to_dict()
@@ -1157,7 +1329,12 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
         "total_cost_usd": total_cost,
         "cost_cap_usd": cost_cap,
         "stopped_reason": stopped_reason,
+        # Security audit: memory-write denials (H13). A denied write is EXCLUDED from
+        # tools_executed (so it never fails must_not_call_tool), but every denial is
+        # surfaced here and per-case in denied_tool_detail — never silently dropped.
+        "security_audit": _security_audit(runs),
         "git_commit": _git_commit(),
+        "git_dirty": _git_dirty(),
         "timestamp": timestamp,
         "notes": ("OFFLINE mode validates MECHANICS ONLY (routing/tool/latency/"
                   "memory-isolation); grounding numbers use FAKE responder text and are "
@@ -1184,6 +1361,19 @@ def _git_commit() -> Optional[str]:
         return subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"], cwd=str(REPO_ROOT),
             stderr=subprocess.DEVNULL).decode().strip()
+    except Exception:
+        return None
+
+
+def _git_dirty() -> Optional[bool]:
+    """True iff the working tree has uncommitted changes (``git status --porcelain`` is
+    non-empty). Recorded in the manifest so a committed A/B result can be trusted as
+    reproduced from a CLEAN tree; None if git is unavailable."""
+    try:
+        out = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=str(REPO_ROOT),
+            stderr=subprocess.DEVNULL).decode()
+        return bool(out.strip())
     except Exception:
         return None
 
@@ -1319,7 +1509,8 @@ async def _run_all(args) -> int:
     # case-file + events digests). events.jsonl stays out of git; only its SHA256 is kept.
     results_package.write_results_package(
         out, runs, argv=sys.argv, arch=args.arch, config=cfg.name, timestamp=timestamp,
-        case_file=case_file, events_log=events_log, mode=mode, git_commit=_git_commit)
+        case_file=case_file, events_log=events_log, mode=mode, git_commit=_git_commit,
+        git_dirty=_git_dirty)
     _save_checkpoint(out, list(done_ids), cumulative_cost, stopped_reason)
 
     print("\n=== summary ===")

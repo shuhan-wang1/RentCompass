@@ -17,9 +17,11 @@ stream. Nothing here makes a network call.
 from __future__ import annotations
 
 import csv
+import gzip
 import hashlib
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Union
@@ -59,12 +61,23 @@ def _failed_constraints(rr: Any) -> str:
 
 PER_CASE_COLUMNS = [
     "case_id", "category", "arch", "passed", "route_matched", "hard_gate",
-    "llm_calls", "tool_batches", "latency_ms", "cost_usd", "failed_constraints",
+    "llm_calls", "tool_batches", "tools_executed", "tools_denied", "tools_requested",
+    "latency_ms", "cost_usd", "failed_constraints",
 ]
 
 
+def _join_tools(rr: Any, attr: str) -> str:
+    """Pipe-join a RunResult tool-name list (executed/denied/requested)."""
+    return "|".join(str(t) for t in (getattr(rr, attr, None) or []))
+
+
 def write_per_case(out: Union[str, Path], runs: List[Any], *, arch: str) -> Path:
-    """Write the lean, task-specified ``per_case.csv``. Deterministic column order."""
+    """Write the lean, task-specified ``per_case.csv``. Deterministic column order.
+
+    The three tool columns record the requested/executed/denied split (H13): a memory-write
+    the gate refused shows in ``tools_denied`` but NOT ``tools_executed``, so a reviewer can
+    see the write was attempted, shown, and blocked without it counting as a call the model
+    made."""
     path = Path(out) / "per_case.csv"
     with path.open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
@@ -79,11 +92,29 @@ def write_per_case(out: Union[str, Path], runs: List[Any], *, arch: str) -> Path
                 getattr(rr, "hard_gate", ""),
                 getattr(rr, "llm_calls", 0),
                 getattr(rr, "tool_batches", 0),
+                _join_tools(rr, "tools_executed"),
+                _join_tools(rr, "tools_denied"),
+                _join_tools(rr, "tools_requested"),
                 _fmt_num(getattr(rr, "turn_latency_ms", None)),
                 _fmt_num(getattr(rr, "cost_usd", None)),
                 _failed_constraints(rr),
             ])
     return path
+
+
+def write_events_gz(out: Union[str, Path], events_log: Union[str, Path]) -> Optional[Path]:
+    """Gzip the raw event stream into ``<out>/events.jsonl.gz`` so a committed package
+    carries the events for verification (raw + gz SHA256 both go in the manifest). Written
+    with a fixed gzip mtime so the archive is byte-deterministic for a given raw stream.
+    Returns the gz path, or None if the raw log is absent."""
+    src = Path(events_log)
+    if not src.exists() or not src.is_file():
+        return None
+    dst = Path(out) / "events.jsonl.gz"
+    with src.open("rb") as f_in, dst.open("wb") as raw_out:
+        with gzip.GzipFile(filename="", fileobj=raw_out, mode="wb", mtime=0) as gz:
+            shutil.copyfileobj(f_in, gz)
+    return dst
 
 
 def build_manifest(
@@ -96,11 +127,19 @@ def build_manifest(
     events_log: Union[str, Path],
     mode: Optional[str] = None,
     git_commit: Union[str, Callable[[], Optional[str]], None] = None,
+    git_dirty: Union[bool, Callable[[], Optional[bool]], None] = None,
+    events_gz: Union[str, Path, None] = None,
     extra_env: Optional[List[str]] = None,
 ) -> dict:
-    """Assemble (but do not write) the run manifest. ``git_commit`` may be a value OR a
-    zero-arg callable (so a test can stub it and stay free of any git dependency)."""
+    """Assemble (but do not write) the run manifest. ``git_commit`` and ``git_dirty`` may
+    each be a value OR a zero-arg callable (so a test can stub them and stay free of any git
+    dependency). ``git_dirty`` records whether the working tree had uncommitted changes when
+    the run was produced — a committed A/B result should be reproduced from a CLEAN tree
+    (``git_dirty`` False). ``events_gz`` (when the caller has written ``events.jsonl.gz``
+    into the package) pins the gz path + SHA256 alongside the raw event digest."""
     commit = git_commit() if callable(git_commit) else git_commit
+    dirty = git_dirty() if callable(git_dirty) else git_dirty
+    gz_sha = sha256_of(events_gz) if events_gz else None
     env_keys = ["AGENT_ARCH", "DEEPSEEK_STRICT", "LLM_PROVIDER", "USE_MCP_TOOLS",
                 "RENTCOMPASS_EVAL"]
     for k in (extra_env or []):
@@ -114,14 +153,22 @@ def build_manifest(
         "mode": mode,
         "timestamp": timestamp,
         "git_commit": commit,
+        "git_dirty": dirty,
         "python": sys.version.split()[0],
         "env": {k: os.environ.get(k) for k in env_keys},
         "case_file": {"path": str(case_file), "sha256": sha256_of(case_file)},
-        # events.jsonl is intentionally NOT committed; the digest lets a committed package
-        # be integrity-checked without shipping the raw event stream.
-        "events_log": {"path": str(events_log), "sha256": sha256_of(events_log),
-                       "committed": False,
-                       "note": "events.jsonl stays out of git; digest only"},
+        # The raw events.jsonl SHA256 is the reproducibility anchor. The gzip copy
+        # (events.jsonl.gz) is shipped IN the package for verification; both digests are
+        # recorded so the archive can be integrity-checked and re-expanded.
+        "events_log": {
+            "path": str(events_log),
+            "sha256": sha256_of(events_log),
+            "gz_path": str(events_gz) if events_gz else None,
+            "sha256_gz": gz_sha,
+            "committed": bool(events_gz),
+            "note": ("events.jsonl.gz preserved in the package for verification; raw + gz "
+                     "SHA256 both recorded"),
+        },
     }
 
 
@@ -145,10 +192,15 @@ def write_results_package(
     events_log: Union[str, Path],
     mode: Optional[str] = None,
     git_commit: Union[str, Callable[[], Optional[str]], None] = None,
+    git_dirty: Union[bool, Callable[[], Optional[bool]], None] = None,
 ) -> dict:
-    """Write the full reproducible package (per_case.csv + manifest.json) and return the
-    manifest. Called at the end of every run so a result dir is always self-describing."""
+    """Write the full reproducible package (per_case.csv + events.jsonl.gz + manifest.json)
+    and return the manifest. Called at the end of every run so a result dir is always
+    self-describing: the gzipped event stream travels WITH the package, and the manifest
+    pins the git commit + clean/dirty state and the raw + gz event digests."""
     write_per_case(out, runs, arch=arch)
+    events_gz = write_events_gz(out, events_log)
     return write_manifest(
         out, argv=argv, arch=arch, config=config, timestamp=timestamp,
-        case_file=case_file, events_log=events_log, mode=mode, git_commit=git_commit)
+        case_file=case_file, events_log=events_log, mode=mode, git_commit=git_commit,
+        git_dirty=git_dirty, events_gz=events_gz)

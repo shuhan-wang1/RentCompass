@@ -52,6 +52,11 @@ class AgentState(TypedDict, total=False):
     # list (last-write-wins; agent and execute_tools alternate as sole sequential writers).
     messages: list
     tool_artifacts: list
+    # Cumulative wall-clock (seconds) the fc_loop execute_tools node has spent running tool
+    # batches THIS user turn. A PLAIN per-turn channel (reset by create_initial_state) that
+    # accumulates across the turn's batches so FC_TURN_TOOL_BUDGET_S can be enforced turn-wide
+    # (execute_tools is the sole writer; last-write-wins is safe). See app/core/agent_loop.py.
+    turn_tool_budget_used_s: float
     # Multi-intent execution plan (build_execution_plan -> dispatch_tasks -> task_worker x N
     # -> gather_wave). task_plan is the resolved task list [{id,index,tool,params,depends_on}];
     # plan_origin is "multi_search" (degenerate single-intent web fan-out, ends at
@@ -109,6 +114,7 @@ def create_initial_state(
         observations=[],
         messages=[],
         tool_artifacts=[],
+        turn_tool_budget_used_s=0.0,
         task_plan=[],
         plan_origin="",
         plan_notes=[],

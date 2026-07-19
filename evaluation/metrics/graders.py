@@ -233,6 +233,14 @@ class GradeContext:
     user_texts: List[str] = field(default_factory=list)   # user_query + prior user turns
     reference_calculations: Optional[dict] = None
     error: Optional[str] = None
+    # Reconstructed multi-turn context a real session would have carried in (H6/H8): the
+    # priced ``last_results`` / ``property_address`` rebuilt from conversation_history, and
+    # the raw history turn texts. These are a LEGITIMATE number-grounding support source —
+    # a comparative follow-up ("哪个最便宜" → £1290) answers from the prior search results
+    # that ride in through context, not from a fresh tool call. Numbers present here count
+    # as supported (never fabricated); they never seed a contradiction (like user figures).
+    reconstructed_context: Optional[dict] = None
+    history_texts: List[str] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -397,8 +405,26 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
         if isinstance(entry, dict) and isinstance(entry.get("result"), (int, float)):
             ref_money.add(round(float(entry["result"]), 2))
 
-    # money pool for GROUNDED classification = tool + user + reference (+ derivations)
-    grounded_money = set(money) | user_money | ref_money
+    # Reconstructed multi-turn context (H8): the priced ``last_results`` the runner rebuilt
+    # from conversation_history, plus numbers stated in the history turn texts, are a
+    # legitimate support source for number-grounding — a comparative follow-up answers the
+    # £1290 that rode in from the prior search results / discussion, not from a fresh tool.
+    # These count as GROUNDED (with the same sanctioned derivations) but, like user figures,
+    # never seed a contradiction. Absent-everywhere numbers still land unsupported (H3).
+    context_money: set = set()
+    recon = ctx.reconstructed_context or {}
+    for lst in (recon.get("last_results") or []):
+        if isinstance(lst, dict):
+            for _k, num in _iter_numbers(lst):
+                context_money.update(_money_derivations(num))
+    for txt in (ctx.history_texts or []):
+        for m in _MONEY_RE.finditer(txt or ""):
+            n = _to_float(m.group(1))
+            if n is not None:
+                context_money.update(_money_derivations(n))
+
+    # money pool for GROUNDED classification = tool + user + reference + context (+ derivations)
+    grounded_money = set(money) | user_money | ref_money | context_money
     pool = _EvidencePool(
         money=grounded_money,
         commute_minutes=commute,
@@ -406,7 +432,7 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
         safety_scores=scores,
         distances=distances,
         addresses=addresses,
-        has_money_evidence=has_money or bool(user_money) or bool(ref_money),
+        has_money_evidence=has_money or bool(user_money) or bool(ref_money) or bool(context_money),
         has_commute_evidence=has_commute,
         has_crime_evidence=has_crime,
         has_distance_evidence=has_distance,
@@ -426,6 +452,7 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
     pool._tool_money = money  # type: ignore[attr-defined]
     pool._user_money = user_money  # type: ignore[attr-defined]
     pool._ref_money = ref_money  # type: ignore[attr-defined]
+    pool._context_money = context_money  # type: ignore[attr-defined]
     return pool
 
 
@@ -1297,14 +1324,23 @@ MAX_AGENT_TURNS_DEFAULT = 10
 
 
 def extract_tool_trace(tool_artifacts: List[dict]) -> List[List[str]]:
-    """Reconstruct the executed trace (ordered batches of tool names) from an fc_loop
+    """Reconstruct the EXECUTED trace (ordered batches of tool names) from an fc_loop
     ``tool_artifacts`` list. Each artifact is ``{turn, tool, raw_data, params_digest}``
     (design §2.8b); artifacts sharing a ``turn`` were executed in the same agent
     super-step and form one batch. Batches are emitted in ascending turn order; within
-    a turn, tool order is the artifact append order (parallel — order not significant)."""
+    a turn, tool order is the artifact append order (parallel — order not significant).
+
+    An artifact the loop marked ``denied=True`` (a write refused by the memory gate — the
+    tool never ran, H13) or ``timed_out=True`` (a budget-killed call) is a REQUESTED, not
+    an executed, call and is skipped: the trace the route/forbidden checkers judge is
+    executed-only, so a denied ``remember`` that was shown-and-confirmed never counts as a
+    tool the model *called*. Both flags are read tolerantly (``.get``) so pre-flag
+    artifacts are unaffected."""
     by_turn: Dict[Any, List[str]] = {}
     order: List[Any] = []
     for a in tool_artifacts or []:
+        if a.get("denied") or a.get("timed_out"):
+            continue
         turn = a.get("turn")
         tool = a.get("tool")
         if tool is None:

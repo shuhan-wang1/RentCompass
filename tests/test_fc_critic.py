@@ -28,6 +28,7 @@ from uk_rent_agent.agent.critic import (
     LEGACY_INCONSISTENCY_FALLBACK,
     LEGACY_RETRIEVAL_MISS_FALLBACK,
     CAVEAT,
+    evidence_usable,
     has_specific_price_claims,
     no_reliable_data_message,
 )
@@ -255,3 +256,112 @@ def test_legacy_present_evidence_persistent_failure_keeps_caveat_not_fallback(mo
     assert CAVEAT in update["final_response"]                       # caveat path, not 兜底
     assert update["final_response"] != no_reliable_data_message("en")
     assert update["final_response"] not in _LEGACY_FALLBACKS
+
+
+# ── 5. evidence_usable truth table over the REAL emitted shapes (H3) ─────────
+# The exact strings/dicts the web-search stack produces (see core.web_search and
+# core.tools.web_search): get_search_snippets / format_for_llm return the placeholder
+# below when SearXNG is down; web_search's error path returns {success:False,...}; a
+# mislabelled success path can still carry a placeholder blob.
+_PLACEHOLDER_SNIPPET = "No search results found for this query."
+_WEB_SEARCH_PLACEHOLDER_BLOB = (
+    f"### Web Search: zone 2 rent\n{_PLACEHOLDER_SNIPPET}\n"
+)
+# The full web_search tool return when SearXNG is down but success is (wrongly) True.
+_WEB_SEARCH_SUCCESS_BUT_EMPTY = {
+    "success": True,
+    "query": "zone 2 rent",
+    "results": _WEB_SEARCH_PLACEHOLDER_BLOB,
+    "detailed_data": {"web_search_1": _PLACEHOLDER_SNIPPET},
+}
+# The truthful web_search error shape (post-fix / simple path).
+_WEB_SEARCH_ERROR = {
+    "success": False, "error": "No search results found",
+    "query": "zone 2 rent", "results": "", "detailed_data": {},
+}
+# A genuine, usable web_search return.
+_WEB_SEARCH_VALID = {
+    "success": True,
+    "query": "zone 2 rent",
+    "results": ("[1] Title: Average Zone 2 rents 2026\n"
+                "    Link: https://example.co.uk/rents\n"
+                "    Summary: One-beds average about £1,800 pcm."),
+    "detailed_data": {"web_search": "Zone 2 one-beds ~£1,800 pcm."},
+}
+
+
+@pytest.mark.parametrize("evidence, expected", [
+    # unusable — empty / missing
+    (None, False),
+    ("", False),
+    ("   \n  ", False),
+    ([], False),
+    ({}, False),
+    # unusable — placeholder strings the search stack really emits
+    (_PLACEHOLDER_SNIPPET, False),
+    ("Could not retrieve search information.", False),
+    ("No rent price information found.", False),
+    (_WEB_SEARCH_PLACEHOLDER_BLOB, False),
+    ([_PLACEHOLDER_SNIPPET, ""], False),
+    # unusable — dict shapes
+    (_WEB_SEARCH_ERROR, False),
+    (_WEB_SEARCH_SUCCESS_BUT_EMPTY, False),          # success=True but only placeholders
+    ({"success": True, "results": [], "detailed_data": {}}, False),  # zero-entry set
+    # usable — real content
+    (_WEB_SEARCH_VALID, True),
+    ("[1] Title: X\n    Summary: rent about £1,800 pcm.", True),
+    ({"summary": "Zone-2 one-beds ~£1,800 pcm."}, True),
+    ({"recommendations": [{"price": "£1,500 pcm"}]}, True),
+    (1800, True),
+])
+def test_evidence_usable_truth_table(evidence, expected):
+    assert evidence_usable(evidence) is expected
+
+
+def test_evidence_usable_unwraps_fc_artifacts():
+    # Artifact wrapper: success flag and raw_data content both respected.
+    assert evidence_usable(_artifact("web_search", _WEB_SEARCH_VALID)) is True
+    assert evidence_usable(_artifact("web_search", None, success=False)) is False
+    # success=True at the wrapper but a placeholder payload -> still unusable.
+    assert evidence_usable(_artifact("web_search", _WEB_SEARCH_SUCCESS_BUT_EMPTY)) is False
+
+
+# ── 6. H3 end-to-end: the exact SearXNG-down shape triggers the hard replace ──
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_h3_web_search_placeholder_success_true_is_hard_replaced(monkeypatch, lang):
+    """The live H3 defect: web_search returns success=True with a placeholder blob
+    (SearXNG down), the model fabricates a Zone-2 rent table. The deterministic 兜底
+    must now fire because evidence_usable rejects the placeholder as unusable."""
+    pytest.importorskip("langgraph")
+    llm_config, lga = _load_local_core()
+
+    fake = _FakeLLM("Approximately £1,750 pcm on average.")  # regeneration still numeric
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: fake)
+
+    # success=True at BOTH artifact and payload level — the exact mislabelled shape.
+    art = _artifact("web_search", dict(_WEB_SEARCH_SUCCESS_BUT_EMPTY), success=True)
+    state = _fc_state(_H3_ANSWER, [art], reply_language=lang)
+    update = _run(lga._make_critic_node()(state))
+
+    assert update["final_response"] == no_reliable_data_message(lang)   # hard replace
+    assert CAVEAT not in update["final_response"]
+    assert has_specific_price_claims(update["final_response"]) is False
+
+
+def test_h3_valid_web_search_evidence_still_passes(monkeypatch):
+    """Guardrail: a genuine web_search payload with grounded figures is NOT replaced —
+    the 兜底 is scoped strictly to the no-usable-evidence case."""
+    pytest.importorskip("langgraph")
+    llm_config, lga = _load_local_core()
+
+    fake = _FakeLLM("should not be called")
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: fake)
+
+    art = _artifact("web_search", dict(_WEB_SEARCH_VALID))
+    original = "Zone-2 one-beds average about £1,800 pcm."  # grounded in the payload
+    state = _fc_state(original, [art])
+    update = _run(lga._make_critic_node()(state))
+
+    assert fake.calls == 0                                            # grounded -> no regen
+    assert update.get("final_response", original) == original
+    assert update.get("final_response", original) != no_reliable_data_message("en")

@@ -48,6 +48,7 @@ from uk_rent_agent.agent.state import AgentState, create_initial_state
 from uk_rent_agent.agent.contracts import ToolInvocation
 from uk_rent_agent.agent.critic import (
     enforce_grounding,
+    evidence_usable,
     has_specific_price_claims,
     no_reliable_data_message,
 )
@@ -76,7 +77,12 @@ GRAPH_RECURSION_LIMIT = 80
 # hung tool degrades to an error observation instead of stalling the wave.
 MAX_PLAN_TASKS = 8
 MAX_PLAN_WAVES = 3
-TOOL_TIMEOUTS = {"web_search": 25}
+# Per-tool hard wall-clock (seconds) enforced by asyncio.wait_for in the executor. Tools not
+# listed use TOOL_TIMEOUT_DEFAULT. search_nearby_pois is bounded here (25s) AND caps itself
+# internally (POI_SEARCH_BUDGET_S=20s) so it returns partial results a few seconds before this
+# harness timeout would fire — the internal budget is the wall-clock authority, this entry is
+# the outer safety net now that the tool no longer blocks the event loop.
+TOOL_TIMEOUTS = {"web_search": 25, "search_nearby_pois": 25}
 TOOL_TIMEOUT_DEFAULT = 30
 
 # Tools that may participate in the loop: after they return, `reflect` gets to decide
@@ -3117,13 +3123,22 @@ def _is_retrieval_tool(name) -> bool:
 
 
 def _artifact_usable(artifact: dict) -> bool:
-    """An fc artifact contributes usable evidence: not marked failed AND non-empty data.
+    """An fc artifact contributes usable evidence: not marked failed, non-empty data,
+    AND that data reads as real retrieved content (not an empty/placeholder result).
 
     Tolerant of the pre/post P1 artifact shape — ``success`` may be absent (legacy
-    artifacts predate the field); only an explicit ``False`` is treated as a failure."""
+    artifacts predate the field); only an explicit ``False`` is treated as a failure.
+
+    H3: delegates the content check to the deterministic ``evidence_usable`` so a tool
+    that mislabels an empty/placeholder payload as ``success=True`` (e.g. ``web_search``
+    returning "No search results found for this query." when SearXNG is unreachable) is
+    NOT counted as usable evidence — neither for the no-reliable-data 兜底 nor for the
+    grounding-evidence pool."""
     if artifact.get("success", True) is False:
         return False
-    return artifact.get("raw_data") not in (None, "", [], {})
+    if artifact.get("raw_data") in (None, "", [], {}):
+        return False
+    return evidence_usable(artifact)
 
 
 def _has_usable_retrieval_evidence(state: AgentState, artifacts: list) -> bool:
@@ -3136,7 +3151,10 @@ def _has_usable_retrieval_evidence(state: AgentState, artifacts: list) -> bool:
         if _is_retrieval_tool(a.get("tool")) and _artifact_usable(a):
             return True
     if not _tool_errored(state):
-        if state.get("tool_raw_data"):
+        # H3: a legacy raw_data surface counts only when it holds REAL retrieved content
+        # (evidence_usable), so a tool that returned an empty/placeholder payload without
+        # flagging an error can no longer masquerade as usable evidence.
+        if evidence_usable(state.get("tool_raw_data")):
             return True
         observation = state.get("tool_observation")
         if observation and str(observation).strip():

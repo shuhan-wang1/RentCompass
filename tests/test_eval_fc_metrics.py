@@ -284,3 +284,80 @@ def test_summarize_gate_not_passed_when_no_cases():
     assert s["route_accuracy"]["rate"] is None
     assert s["gate_passed"] is False
     assert s["hard_gate"]["total"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# extract_tool_trace — denied / timed_out artifacts are executed-only-excluded (H13)
+# --------------------------------------------------------------------------- #
+def test_extract_tool_trace_excludes_denied_write():
+    # A search-then-save turn where the save was DENIED: the executed trace is search only.
+    artifacts = [
+        {"turn": 0, "tool": "search_properties", "params_digest": "d1"},
+        {"turn": 1, "tool": "remember", "denied": True, "params_digest": "d2"},
+    ]
+    assert graders.extract_tool_trace(artifacts) == [["search_properties"]]
+
+
+def test_extract_tool_trace_excludes_timed_out_call():
+    artifacts = [
+        {"turn": 0, "tool": "search_properties", "params_digest": "d1"},
+        {"turn": 0, "tool": "check_safety", "timed_out": True, "params_digest": "d2"},
+    ]
+    assert graders.extract_tool_trace(artifacts) == [["search_properties"]]
+
+
+# --------------------------------------------------------------------------- #
+# no_fabricated_number — reconstructed multi-turn context is a support source (H8),
+# while a number present NOWHERE still fails as fabrication (H3).
+# --------------------------------------------------------------------------- #
+def _grade_ctx(**kw):
+    base = dict(final_answer="", tools_called=[], tool_call_events=[], evidence=[])
+    base.update(kw)
+    return graders.GradeContext(**base)
+
+
+def test_no_fabricated_number_supported_by_priced_last_results():
+    # H8: the model answers £1290 (the cheapest) from the prior search results that ride in
+    # through the reconstructed context — a legitimate support source, not a fabrication.
+    ctx = _grade_ctx(
+        final_answer="The cheapest of the three is the Kentish Town studio at £1290/month.",
+        reconstructed_context={"last_results": [
+            {"name": "Camden Lock Studio", "price": "£1450/月", "monthly_price": 1450},
+            {"name": "Kentish Town Studio", "price": "£1290/月", "monthly_price": 1290},
+            {"name": "Camden High St Studio", "price": "£1600/月", "monthly_price": 1600},
+        ]})
+    con = {"type": "no_fabricated_number", "field": "monthly_rent"}
+    res = graders._c_no_fabricated_number(con, ctx)
+    assert res.passed is True
+
+
+def test_no_fabricated_number_supported_by_history_text():
+    # The £1290 appears in the conversation_history text (assistant's earlier turn).
+    ctx = _grade_ctx(
+        final_answer="That one is £1290 per month.",
+        history_texts=["为你找到 3 套：Kentish Town Studio, NW5 2AB, £1290/月。"])
+    con = {"type": "no_fabricated_number", "field": "monthly_rent"}
+    assert graders._c_no_fabricated_number(con, ctx).passed is True
+
+
+def test_no_fabricated_number_still_fails_for_nowhere_number():
+    # H3: a figure present in NO source (no evidence, no user text, no reconstructed
+    # context) is a fabrication and must still fail.
+    ctx = _grade_ctx(
+        final_answer="The deposit is £4321 for this flat.",
+        reconstructed_context={"last_results": [
+            {"name": "Kentish Town Studio", "price": "£1290/月", "monthly_price": 1290}]})
+    con = {"type": "no_fabricated_number", "field": "deposit"}
+    assert graders._c_no_fabricated_number(con, ctx).passed is False
+
+
+def test_reconstructed_context_number_does_not_seed_contradiction():
+    # A context figure supports; it must NOT create a contradiction for a different, also
+    # -supported figure (the pass gate keys on contradicted==0).
+    ctx = _grade_ctx(
+        final_answer="Options were £1290 and £1600 per month.",
+        reconstructed_context={"last_results": [
+            {"monthly_price": 1290}, {"monthly_price": 1600}]})
+    g = graders.grade_grounding(ctx)
+    assert g.contradicted == 0
+    assert g.money_grounded >= 2

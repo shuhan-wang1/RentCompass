@@ -124,6 +124,116 @@ def test_referent_empty_for_non_listing_turn():
 
 
 # --------------------------------------------------------------------------- #
+# 2b) ec["history"] SessionStore-shape reconstruction (H6)
+# --------------------------------------------------------------------------- #
+def test_history_snapshot_pairs_user_assistant():
+    hist = [
+        {"role": "user", "content": "帮我看看 Shoreditch 和 Hackney。"},
+        {"role": "assistant", "content": "两个区都不错，Shoreditch 更热闹。"},
+        {"role": "user", "content": "那个区域安全吗？"},
+        {"role": "assistant", "content": "Hackney 的治安…"},
+    ]
+    snap = rb.history_snapshot_from_history(hist)
+    # SessionStore shape: [{"user":..,"assistant":..}] — one entry per exchange.
+    assert snap == [
+        {"user": "帮我看看 Shoreditch 和 Hackney。", "assistant": "两个区都不错，Shoreditch 更热闹。"},
+        {"user": "那个区域安全吗？", "assistant": "Hackney 的治安…"},
+    ]
+
+
+def test_history_snapshot_trailing_user_and_leading_assistant():
+    # A leading assistant pairs with empty user; a trailing user keeps empty assistant.
+    hist = [
+        {"role": "assistant", "content": "你好，我是 Alex。"},
+        {"role": "user", "content": "预算 £1500。"},
+    ]
+    snap = rb.history_snapshot_from_history(hist)
+    assert snap == [
+        {"user": "", "assistant": "你好，我是 Alex。"},
+        {"user": "预算 £1500。", "assistant": ""},
+    ]
+    assert rb.history_snapshot_from_history([]) == []
+
+
+def test_history_snapshot_truncates_assistant_to_500():
+    hist = [{"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "x" * 900}]
+    snap = rb.history_snapshot_from_history(hist)
+    assert len(snap[0]["assistant"]) == 500  # mirrors app.py's [:500]
+
+
+# --------------------------------------------------------------------------- #
+# 2c) three-way tool-call split: executed / denied / timed_out / requested (H13)
+# --------------------------------------------------------------------------- #
+def test_classify_fc_denied_and_timed_out_split():
+    # Artifacts as Q1 emits them: a denied write, a timed-out call, a normal executed tool.
+    artifacts = [
+        {"turn": 0, "tool": "search_properties", "success": True, "params_digest": "d1"},
+        {"turn": 0, "tool": "remember", "success": False, "denied": True,
+         "params_digest": "d2", "error": "write blocked: not authorized"},
+        {"turn": 1, "tool": "check_safety", "success": False, "timed_out": True,
+         "params_digest": "d3", "error": "check_safety timed out after 8s"},
+    ]
+    ex, den, to, req, detail = rb._classify_tool_calls(
+        arch="fc_loop", artifacts=artifacts, tool_events=[], evidence=[])
+    assert ex == ["search_properties"]           # executed = NOT denied and NOT timed_out
+    assert den == ["remember"]
+    assert to == ["check_safety"]
+    assert req == ["search_properties", "remember", "check_safety"]
+    assert detail and detail[0]["tool"] == "remember" and detail[0]["digest"] == "d2"
+
+
+def test_classify_fc_denied_via_error_without_flag():
+    # Robust to a deny surfaced only through the error text (no explicit denied flag).
+    artifacts = [{"turn": 0, "tool": "remember", "success": False,
+                  "error": "write blocked: confirmation is required"}]
+    ex, den, to, req, _ = rb._classify_tool_calls(
+        arch="fc_loop", artifacts=artifacts, tool_events=[], evidence=[])
+    assert ex == [] and den == ["remember"] and req == ["remember"]
+
+
+def test_classify_legacy_from_events_and_evidence():
+    tool_events = [
+        {"tool": "search_properties", "timeout": False, "args_hash": "a1"},
+        {"tool": "get_weather", "timeout": True, "args_hash": "a2"},
+        {"tool": "remember", "timeout": False, "args_hash": "a3"},
+    ]
+    evidence = [
+        {"tool": "remember", "success": False, "error": "PermissionError: write not authorized"},
+    ]
+    ex, den, to, req, detail = rb._classify_tool_calls(
+        arch="legacy", artifacts=[], tool_events=tool_events, evidence=evidence)
+    assert ex == ["search_properties"]
+    assert to == ["get_weather"]
+    assert den == ["remember"]
+    assert req == ["search_properties", "get_weather", "remember"]
+    assert detail[0]["tool"] == "remember"
+
+
+def test_extract_tool_trace_skips_denied_and_timed_out():
+    from evaluation.metrics import graders
+    artifacts = [
+        {"turn": 0, "tool": "search_properties", "params_digest": "d1"},
+        {"turn": 0, "tool": "remember", "denied": True, "params_digest": "d2"},
+        {"turn": 1, "tool": "check_safety", "timed_out": True, "params_digest": "d3"},
+    ]
+    # The executed route trace excludes the denied write and the timed-out call.
+    assert graders.extract_tool_trace(artifacts) == [["search_properties"]]
+
+
+def test_security_audit_aggregates_denied_writes():
+    r1 = _run("H13", 10.0, [])
+    r1.tools_denied = ["remember"]
+    r1.denied_tool_detail = [{"tool": "remember", "digest": "d2", "error": "write blocked"}]
+    r2 = _run("H2", 10.0, [])   # no denials
+    audit = rb._security_audit([r1, r2])
+    assert audit["cases_with_denied_writes"] == 1
+    assert audit["denied_by_tool"] == {"remember": 1}
+    assert audit["denied_cases"][0]["case_id"] == "H13"
+    assert audit["denied_cases"][0]["detail"][0]["digest"] == "d2"
+
+
+# --------------------------------------------------------------------------- #
 # 3) per-span latency profile
 # --------------------------------------------------------------------------- #
 def _span_event(node, ms, ts):
@@ -211,6 +321,8 @@ def test_per_case_csv_columns_and_values(tmp_path):
                 tool_batches=1, cost_usd=0.0,
                 verdict={"constraints": [{"type": "all_results_satisfy", "passed": True}],
                          "forbidden_tool_violations": []})
+    good.tools_executed = ["search_properties"]
+    good.tools_requested = ["search_properties"]
     bad = _run("H8", 99.0, [], passed=False, route_matched=False, tool_batches=0,
                verdict={"constraints": [{"type": "must_mention_value", "passed": False}],
                         "forbidden_tool_violations": ["search_properties"]})
@@ -218,15 +330,34 @@ def test_per_case_csv_columns_and_values(tmp_path):
     rows = list(__import__("csv").reader(path.open(encoding="utf-8")))
     assert rows[0] == rp.PER_CASE_COLUMNS
     assert rows[0] == ["case_id", "category", "arch", "passed", "route_matched",
-                       "hard_gate", "llm_calls", "tool_batches", "latency_ms",
+                       "hard_gate", "llm_calls", "tool_batches", "tools_executed",
+                       "tools_denied", "tools_requested", "latency_ms",
                        "cost_usd", "failed_constraints"]
     by_id = {r[0]: r for r in rows[1:]}
     assert by_id["H2"][2] == "fc_loop"
     assert by_id["H2"][3] == "True"
-    assert by_id["H2"][10] == ""  # no failed constraints
+    assert by_id["H2"][8] == "search_properties"   # tools_executed
+    assert by_id["H2"][9] == ""                     # tools_denied
+    assert by_id["H2"][10] == "search_properties"   # tools_requested
+    assert by_id["H2"][13] == ""  # no failed constraints
     # A failing case lists its failed constraint + the forbidden-tool use.
-    assert "must_mention_value" in by_id["H8"][10]
-    assert "forbidden:search_properties" in by_id["H8"][10]
+    assert "must_mention_value" in by_id["H8"][13]
+    assert "forbidden:search_properties" in by_id["H8"][13]
+
+
+def test_per_case_csv_denied_write_split(tmp_path):
+    # H13-shaped: the model REQUESTED remember but the gate DENIED it — executed excludes
+    # it, requested keeps it, denied surfaces it (auditable, not silently dropped).
+    rr = _run("H13", 30.0, [{"node": "agent", "ms": 5.0, "seq": 0}], tool_batches=1)
+    rr.tools_executed = ["search_properties"]
+    rr.tools_denied = ["remember"]
+    rr.tools_requested = ["search_properties", "remember"]
+    path = rp.write_per_case(tmp_path, [rr], arch="fc_loop")
+    rows = list(__import__("csv").reader(path.open(encoding="utf-8")))
+    row = rows[1]
+    assert row[8] == "search_properties"          # executed: remember NOT here
+    assert row[9] == "remember"                    # denied
+    assert "remember" in row[10]                   # requested keeps it
 
 
 def test_manifest_fields_with_stubbed_commit(tmp_path):
@@ -238,34 +369,65 @@ def test_manifest_fields_with_stubbed_commit(tmp_path):
         tmp_path, argv=["python", "-m", "evaluation.run_benchmark", "--arch", "fc_loop"],
         arch="fc_loop", config="routed_models", timestamp="2026-07-19T00:00:00",
         case_file=case_file, events_log=events, mode="offline",
-        git_commit=lambda: "deadbeef")
+        git_commit=lambda: "deadbeef", git_dirty=lambda: False)
     assert manifest["git_commit"] == "deadbeef"
+    # git_dirty (clean/dirty tree) is recorded, stubbable (no git dependency).
+    assert manifest["git_dirty"] is False
     assert manifest["arch"] == "fc_loop"
     assert manifest["config"] == "routed_models"
     assert manifest["command"].endswith("--arch fc_loop")
     assert "AGENT_ARCH" in manifest["env"] and "DEEPSEEK_STRICT" in manifest["env"]
-    # Digests are computed for both the case file and the (out-of-git) event log.
+    # Digests are computed for both the case file and the event log.
     assert manifest["case_file"]["sha256"] == rp.sha256_of(case_file)
     assert manifest["events_log"]["sha256"] == rp.sha256_of(events)
-    assert manifest["events_log"]["committed"] is False
     # It was actually written to disk.
     written = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
     assert written["git_commit"] == "deadbeef"
+    assert written["git_dirty"] is False
+
+
+def test_manifest_records_gz_and_both_hashes(tmp_path):
+    events = tmp_path / "events.jsonl"
+    events.write_text('{"type": "tool_call"}\n{"type": "llm_call"}\n', encoding="utf-8")
+    gz = rp.write_events_gz(tmp_path, events)
+    assert gz is not None and gz.exists() and gz.name == "events.jsonl.gz"
+    # The gz round-trips back to the raw bytes (it is the real event stream).
+    import gzip as _gz
+    assert _gz.decompress(gz.read_bytes()) == events.read_bytes()
+    manifest = rp.build_manifest(
+        argv=["python", "x"], arch="fc_loop", config="routed_models", timestamp="t",
+        case_file=events, events_log=events, git_commit="c", git_dirty=True, events_gz=gz)
+    el = manifest["events_log"]
+    # Raw AND gz SHA256 are both recorded; the gz is now shipped (committed True).
+    assert el["sha256"] == rp.sha256_of(events)
+    assert el["sha256_gz"] == rp.sha256_of(gz)
+    assert el["sha256"] != el["sha256_gz"]
+    assert el["committed"] is True
+    assert el["gz_path"] == str(gz)
+    assert manifest["git_dirty"] is True
+
+
+def test_write_events_gz_missing_raw_returns_none(tmp_path):
+    assert rp.write_events_gz(tmp_path, tmp_path / "nope.jsonl") is None
 
 
 def test_sha256_of_missing_file_is_none(tmp_path):
     assert rp.sha256_of(tmp_path / "nope.jsonl") is None
 
 
-def test_write_results_package_emits_both(tmp_path):
+def test_write_results_package_emits_all(tmp_path):
     run = _run("H2", 42.0, [{"node": "agent", "ms": 10.0, "seq": 0}])
     case_file = tmp_path / "cases.jsonl"
     case_file.write_text("{}\n", encoding="utf-8")
     events = tmp_path / "events.jsonl"
     events.write_text("{}\n", encoding="utf-8")
-    rp.write_results_package(
+    manifest = rp.write_results_package(
         tmp_path, [run], argv=["python", "x"], arch="legacy", config="routed_models",
         timestamp="t", case_file=case_file, events_log=events,
-        git_commit=lambda: "cafebabe")
+        git_commit=lambda: "cafebabe", git_dirty=lambda: False)
     assert (tmp_path / "per_case.csv").exists()
     assert (tmp_path / "manifest.json").exists()
+    # The gzipped event stream travels WITH the package for verification.
+    assert (tmp_path / "events.jsonl.gz").exists()
+    assert manifest["events_log"]["committed"] is True
+    assert manifest["events_log"]["sha256_gz"] == rp.sha256_of(tmp_path / "events.jsonl.gz")

@@ -6,6 +6,7 @@ Web Search Tool - 智能搜索协调器
 
 from core.tool_system import Tool
 from core.web_search import get_search_snippets
+from uk_rent_agent.agent.critic import evidence_usable as _evidence_usable
 from typing import Optional, List, Dict
 import json
 import re
@@ -88,18 +89,36 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
             # 🆕 没有 sub_queries，只执行简单的网络搜索
             print(f"[WEB_SEARCH] 执行简单网络搜索...")
             web_result = get_search_snippets(query, max_results=5)
-            
-            if not web_result or web_result == "Could not retrieve search information.":
-                return {"success": False, "error": "No search results found", "query": query, "results": ""}
-            
+
+            # H3: report success=FALSE truthfully when the search backend returned
+            # nothing usable. get_search_snippets emits a placeholder string
+            # ("No search results found for this query.") — NOT the old
+            # "Could not retrieve search information." — when SearXNG is unreachable or a
+            # query yields nothing, so the previous exact-string check let placeholders
+            # through as success=True. evidence_usable is the single source of truth for
+            # what counts as an empty/placeholder result.
+            if not _evidence_usable(web_result):
+                print(f"[WEB_SEARCH] ⚠️ 无可用搜索结果（后端为空/占位）: {query}")
+                return {"success": False, "error": "No search results found",
+                        "query": query, "results": "", "detailed_data": {}}
+
             results_parts.append(web_result)
             all_data['web_search'] = web_result
-        
+
         # 合并所有结果
         combined_results = "\n---\n".join(results_parts)
-        
+
+        # H3: if NOTHING usable came back across all sub-queries (every web result was a
+        # placeholder and no local tool produced data), report success=False truthfully
+        # rather than handing the model a page of "No search results found" it might
+        # paper over with a fabricated answer.
+        if not _evidence_usable(all_data):
+            print(f"[WEB_SEARCH] ⚠️ 所有子查询均无可用结果: {query}")
+            return {"success": False, "error": "No usable search results",
+                    "query": query, "results": combined_results, "detailed_data": all_data}
+
         print(f"[WEB_SEARCH] ✅ 完成! 共 {len(results_parts)} 个结果片段")
-        
+
         return {
             "success": True,
             "query": query,

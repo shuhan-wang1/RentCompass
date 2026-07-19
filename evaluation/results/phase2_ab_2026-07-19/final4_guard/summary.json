@@ -1,0 +1,771 @@
+{
+  "config": "routed_models",
+  "arch": "fc_loop",
+  "mode": "live",
+  "offline": false,
+  "repeats": 3,
+  "n_cases_selected": 14,
+  "n_runs": 42,
+  "passed": {
+    "num": 41,
+    "den": 42,
+    "display": "41/42",
+    "rate": 0.9761904761904762
+  },
+  "task_completion": {
+    "num": 42,
+    "den": 42,
+    "display": "42/42",
+    "rate": 1.0
+  },
+  "route_accuracy": {
+    "num": 32,
+    "den": 42,
+    "display": "32/42",
+    "rate": 0.7619047619047619
+  },
+  "forbidden_tool_rate": {
+    "num": 0,
+    "den": 42,
+    "display": "0/42",
+    "rate": 0.0
+  },
+  "duplicate_call_rate": {
+    "num": 0,
+    "den": 42,
+    "display": "0/42",
+    "rate": 0.0
+  },
+  "loop_exhaustion_rate": {
+    "num": 0,
+    "den": 42,
+    "display": "0/42",
+    "rate": 0.0
+  },
+  "schema_failure_rate": {
+    "num": 0,
+    "den": 42,
+    "display": "0/42",
+    "rate": 0.0
+  },
+  "hard_gate": {
+    "cases": 14,
+    "runs_total": 42,
+    "runs_passed": 41,
+    "all_pass_cases": [
+      "H1",
+      "H3",
+      "H4",
+      "H5",
+      "H6",
+      "H7",
+      "H8",
+      "H9",
+      "H10",
+      "H11",
+      "H12",
+      "H13",
+      "H14"
+    ],
+    "failed_case_ids": [
+      "H2"
+    ],
+    "per_case": {
+      "H1": "3/3",
+      "H2": "2/3",
+      "H3": "3/3",
+      "H4": "3/3",
+      "H5": "3/3",
+      "H6": "3/3",
+      "H7": "3/3",
+      "H8": "3/3",
+      "H9": "3/3",
+      "H10": "3/3",
+      "H11": "3/3",
+      "H12": "3/3",
+      "H13": "3/3",
+      "H14": "3/3"
+    }
+  },
+  "violations": [],
+  "gate_passed": false,
+  "generation_stability": {
+    "mean_pass_ratio": 0.9761904761904762,
+    "flaky_case_ids": [
+      "H2"
+    ]
+  },
+  "slo": {
+    "p50_ms": 5344.851499947254,
+    "p95_ms": 16437.7154999529,
+    "p50_limit": 6000,
+    "p95_limit": 30000,
+    "p50_ok": true,
+    "p95_ok": true,
+    "over_30s_count": 0,
+    "over_30s_rate": 0.0,
+    "method": "nearest_rank",
+    "legacy_relative": null
+  },
+  "slo_ok": true,
+  "cold_resilience": {
+    "applicable": false,
+    "cases": 0,
+    "per_case": {},
+    "over_slo_runs": [],
+    "violations": [],
+    "gate_passed": true
+  },
+  "cache_hit_rate": {
+    "num": 5,
+    "den": 12,
+    "display": "5/12",
+    "rate": 0.4166666666666667
+  },
+  "tool_budget_timeouts": {
+    "by_tool": {
+      "search_properties": 1
+    },
+    "total": 1
+  },
+  "soft_wrap_count": 0,
+  "constraints": {
+    "num": 86,
+    "den": 87,
+    "display": "86/87",
+    "rate": 0.9885057471264368
+  },
+  "grounded_rate": {
+    "num": 49,
+    "den": 62,
+    "display": "49/62",
+    "rate": 0.7903225806451613
+  },
+  "money_grounded_rate": {
+    "num": 42,
+    "den": 52,
+    "display": "42/52",
+    "rate": 0.8076923076923077
+  },
+  "contradicted_claims": 0,
+  "source_coverage": {
+    "num": 45,
+    "den": 62,
+    "display": "45/62",
+    "rate": 0.7258064516129032
+  },
+  "critic_triggers": 40,
+  "critic_repairs": 4,
+  "latency_ms": {
+    "mean": 6489.456511900893,
+    "p50": 5344.851499947254,
+    "p95": 16437.7154999529,
+    "n": 42
+  },
+  "node_latency_by_kind": {
+    "extract_preferences": {
+      "sum_ms": 15.742800082080066,
+      "max_ms": 5.53229998331517,
+      "count": 42
+    },
+    "guard": {
+      "sum_ms": 5.169099662452936,
+      "max_ms": 2.397299977019429,
+      "count": 42
+    },
+    "agent": {
+      "sum_ms": 171509.44650010206,
+      "max_ms": 5398.416500014719,
+      "count": 74
+    },
+    "execute_tools": {
+      "sum_ms": 89942.70520017017,
+      "max_ms": 20011.99779997114,
+      "count": 38
+    },
+    "critic": {
+      "sum_ms": 9518.661000241991,
+      "max_ms": 2635.7929999940097,
+      "count": 36
+    },
+    "format_output_fc": {
+      "sum_ms": 4.31180011946708,
+      "max_ms": 0.29850000282749534,
+      "count": 42
+    }
+  },
+  "slowest_cases": [
+    {
+      "run_id": "H2#r1#routed_models",
+      "case_id": "H2",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 28557.966399996076,
+      "llm_calls": 4,
+      "tool_batches": 0,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.2806999837048352,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.057800032664090395,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1629.4515000190586,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 20011.99779997114,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 1721.5952000115067,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 0.35940000088885427,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 2840.486700006295,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 2313.296900014393,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.07930002175271511,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "H1#r2#routed_models",
+      "case_id": "H1",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 16796.405599976424,
+      "llm_calls": 4,
+      "tool_batches": 3,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.3344999859109521,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.07609999738633633,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1942.5924000097439,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2480.34920002101,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 1802.5074999895878,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2077.4078000104055,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 1420.023399987258,
+          "seq": 6
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2064.869100053329,
+          "seq": 7
+        },
+        {
+          "node": "agent",
+          "ms": 4967.663300049026,
+          "seq": 8
+        },
+        {
+          "node": "critic",
+          "ms": 1.0201000259257853,
+          "seq": 9
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.1002000062726438,
+          "seq": 10
+        }
+      ]
+    },
+    {
+      "run_id": "H6#r3#routed_models",
+      "case_id": "H6",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 16437.7154999529,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.2562999725341797,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.06669998401775956,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 4578.294100007042,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 8936.874699953478,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 2877.874600002542,
+          "seq": 4
+        },
+        {
+          "node": "critic",
+          "ms": 2.2267000167630613,
+          "seq": 5
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.1238000113517046,
+          "seq": 6
+        }
+      ]
+    },
+    {
+      "run_id": "H13#r1#routed_models",
+      "case_id": "H13",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 14519.36159998877,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.2886999864131212,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.07750000804662704,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1604.9535000347532,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 10274.642999982461,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 2585.7776000048034,
+          "seq": 4
+        },
+        {
+          "node": "critic",
+          "ms": 13.781999994535,
+          "seq": 5
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.08540000999346375,
+          "seq": 6
+        }
+      ]
+    },
+    {
+      "run_id": "H3#r2#routed_models",
+      "case_id": "H3",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 14431.13749998156,
+      "llm_calls": 4,
+      "tool_batches": 2,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.3114999854005873,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.07989996811375022,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1328.2327000051737,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2068.0634999880567,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 1251.6002000193112,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2030.6439999840222,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 5356.494900013786,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 2357.2761000250466,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.1588000450283289,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "H3#r1#routed_models",
+      "case_id": "H3",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 14219.242099963594,
+      "llm_calls": 4,
+      "tool_batches": 2,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.3184000379405916,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.08659996092319489,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1023.9359000115655,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2056.6695000161417,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 991.8160000233911,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2074.091500020586,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 5398.416500014719,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 2635.7929999940097,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.08179998258128762,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "H3#r3#routed_models",
+      "case_id": "H3",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 13511.027900036424,
+      "llm_calls": 4,
+      "tool_batches": 2,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.23740000324323773,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.07219996768981218,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1177.7503000339493,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2054.4355000020005,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 1216.703999962192,
+          "seq": 4
+        },
+        {
+          "node": "execute_tools",
+          "ms": 2047.0660999999382,
+          "seq": 5
+        },
+        {
+          "node": "agent",
+          "ms": 4903.287999972235,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 2077.818699995987,
+          "seq": 7
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.0741000403650105,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "H12#r1#routed_models",
+      "case_id": "H12",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 10703.857299988158,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.185999961104244,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.05790003342553973,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1985.5387999559753,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 4743.057100044098,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 3927.16580000706,
+          "seq": 4
+        },
+        {
+          "node": "critic",
+          "ms": 11.041100020520389,
+          "seq": 5
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.13510003918781877,
+          "seq": 6
+        }
+      ]
+    },
+    {
+      "run_id": "H2#r2#routed_models",
+      "case_id": "H2",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 10184.095999982674,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.2838000073097646,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 0.07419998291879892,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 1531.28730005119,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 5446.335399989039,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 3160.3021000046283,
+          "seq": 4
+        },
+        {
+          "node": "critic",
+          "ms": 7.289699977263808,
+          "seq": 5
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.09580003097653389,
+          "seq": 6
+        }
+      ]
+    },
+    {
+      "run_id": "H1#r1#routed_models",
+      "case_id": "H1",
+      "category": "H_guard_regression",
+      "config": "routed_models",
+      "latency_ms": 9767.981600016356,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 5.53229998331517,
+          "seq": 0
+        },
+        {
+          "node": "guard",
+          "ms": 2.397299977019429,
+          "seq": 1
+        },
+        {
+          "node": "agent",
+          "ms": 3109.3267000396736,
+          "seq": 2
+        },
+        {
+          "node": "execute_tools",
+          "ms": 5057.447900006082,
+          "seq": 3
+        },
+        {
+          "node": "agent",
+          "ms": 1538.537600019481,
+          "seq": 4
+        },
+        {
+          "node": "critic",
+          "ms": 2.1678999764844775,
+          "seq": 5
+        },
+        {
+          "node": "format_output_fc",
+          "ms": 0.29850000282749534,
+          "seq": 6
+        }
+      ]
+    }
+  ],
+  "profile_totals": {
+    "llm_calls": 78,
+    "tool_batches": 34,
+    "critic_repairs_cases": 4
+  },
+  "tokens": {
+    "input": 623547,
+    "output": 12378
+  },
+  "total_cost_usd": 0.010980071200000002,
+  "cost_cap_usd": 5.0,
+  "stopped_reason": null,
+  "security_audit": {
+    "cases_with_denied_writes": 2,
+    "denied_by_tool": {
+      "remember": 2
+    },
+    "denied_cases": [
+      {
+        "case_id": "H13",
+        "run_id": "H13#r2#routed_models",
+        "denied": [
+          "remember"
+        ],
+        "detail": [
+          {
+            "tool": "remember",
+            "digest": "11e599dcc7e1fe81",
+            "error": "denied: tainted write requires confirmation"
+          }
+        ]
+      },
+      {
+        "case_id": "H13",
+        "run_id": "H13#r3#routed_models",
+        "denied": [
+          "remember"
+        ],
+        "detail": [
+          {
+            "tool": "remember",
+            "digest": "11e599dcc7e1fe81",
+            "error": "denied: tainted write requires confirmation"
+          }
+        ]
+      }
+    ]
+  },
+  "git_commit": "da2ca15",
+  "git_dirty": false,
+  "timestamp": "2026-07-19T22:21:03",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

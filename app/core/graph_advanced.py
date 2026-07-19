@@ -26,6 +26,7 @@ real, tested code rather than a throwaway snippet.
 """
 from __future__ import annotations
 
+import re
 import threading
 from typing import Any, Dict, Literal, Optional
 
@@ -219,12 +220,20 @@ def make_confirm_search_node():
             # rebuilds final_response from the LLM (with tool_observation=None it would answer
             # the original query with no data), overwriting this message. format_output passes
             # an already-set final_response through untouched.
+            # Reply-language: resolved locally (importing the resolver from
+            # langgraph_agent would be circular — that module imports this one).
+            ec = state.get("extracted_context") or {}
+            lang = ec.get("reply_language")
+            if lang not in ("zh", "en"):
+                lang = "zh" if re.search(r"[一-鿿]", ec.get("current_message") or "") else "en"
+            cancel_msg = (
+                "好的，我先不执行这些搜索。告诉我需要调整什么，我再重新运行。"
+                if lang == "zh" else
+                "No problem — I've held off on running those searches. "
+                "Tell me what to change and I'll try again."
+            )
             return Command(
-                update={
-                    "final_response": "No problem — I've held off on running those searches. "
-                    "Tell me what to change and I'll try again.",
-                    "response_type": "answer",
-                },
+                update={"final_response": cancel_msg, "response_type": "answer"},
                 goto="format_output",
             )
 

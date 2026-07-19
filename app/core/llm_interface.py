@@ -59,6 +59,9 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            # v4-flash defaults to thinking ENABLED; this path serves background
+            # memory extraction / judging where thinking only adds latency and cost.
+            extra_body={"thinking": {"type": "disabled"}},
         )
         _record_deepseek_eval(resp, (_time.perf_counter() - _started) * 1000, True)
         return resp.choices[0].message.content

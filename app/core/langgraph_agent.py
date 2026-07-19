@@ -944,6 +944,19 @@ def _language_directive(lang: str) -> str:
             "=== END REPLY LANGUAGE ===")
 
 
+def _localized_clarification(extracted_context, fallback_text, zh: str, en: str) -> str:
+    """Deterministic clarifications are user-facing text and must obey the same
+    reply-language policy as every generated reply (they used to be English-only)."""
+    return zh if _reply_language_from_ctx(extracted_context or {}, fallback_text or "") == 'zh' else en
+
+
+_CLAR_SAFETY_EN = ("Which property or area should I check? You can give me a postcode "
+                   "(e.g. SW8 1RZ), say 'the first one' from your last search, or click "
+                   "'Ask AI' on a property card.")
+_CLAR_SAFETY_ZH = ("需要我查看哪个房源或区域的安全情况？你可以给我一个邮编（例如 SW8 1RZ）、"
+                   "说「上次搜索的第一个」，或在房源卡片上点「Ask AI」。")
+
+
 # ─── market_info negative guard (deterministic, pre-vote) ───────────────────
 # An explicit "don't search (yet)" instruction, or a research verb paired with a
 # price-level noun (and no explicit request for listings), means the user wants
@@ -2107,7 +2120,9 @@ def _heuristic_fallback(user_query, extracted_context, tool_registry, accumulate
         if addr:
             return {"tool": "check_safety", "params": {"address": addr, "area": addr, "user_query": user_query}, "reason": "Heuristic: safety"}
         return {"tool": "clarification", "params": {},
-                "clarification_message": "Which property or area should I check? You can give me a postcode (e.g. SW8 1RZ), say 'the first one' from your last search, or click 'Ask AI' on a property card.",
+                "clarification_message": _localized_clarification(
+                    extracted_context, _current_message(user_query),
+                    _CLAR_SAFETY_ZH, _CLAR_SAFETY_EN),
                 "reason": "Need address for safety check"}
     if any(k in ql for k in ['weather', '\u5929\u6c14']):
         return {"tool": "get_weather", "params": {"location": "London"}, "reason": "Heuristic: weather"}
@@ -2138,7 +2153,9 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         addr = _resolve_target_address(user_query, extracted_context)
         if not addr:
             return {"tool": "clarification", "params": {},
-                    "clarification_message": "Which property or area should I check? You can give me a postcode (e.g. SW8 1RZ), say 'the first one' from your last search, or click 'Ask AI' on a property card.",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        _CLAR_SAFETY_ZH, _CLAR_SAFETY_EN),
                     "reason": "Need address for safety check"}
         return {"tool": "check_safety",
                 "params": {"address": addr, "area": addr, "user_query": user_query},
@@ -2159,12 +2176,25 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         to_addr = _resolve_destination_address(user_query, extracted_context, accumulated)
         if not from_addr and not to_addr:
             return {"tool": "clarification", "params": {},
-                    "clarification_message": "To work out the commute cost I need a starting property (a postcode, 'the first one' from your last search, or an 'Ask AI' property) and a destination (e.g. your university or workplace).",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        "要计算通勤费用，我需要一个起点房源（可以是邮编、「上次搜索的第一个」"
+                        "或 Ask AI 选中的房源）和一个目的地（例如你的学校或公司）。",
+                        "To work out the commute cost I need a starting property (a postcode, "
+                        "'the first one' from your last search, or an 'Ask AI' property) and a "
+                        "destination (e.g. your university or workplace)."),
                     "reason": "commute needs both endpoints"}
         if not from_addr or not to_addr:
-            missing = "starting property/address" if not from_addr else "destination (e.g. your university or workplace)"
+            if not from_addr:
+                missing_en, missing_zh = "starting property/address", "起点房源或地址"
+            else:
+                missing_en = "destination (e.g. your university or workplace)"
+                missing_zh = "目的地（例如你的学校或公司）"
             return {"tool": "clarification", "params": {},
-                    "clarification_message": f"To calculate the commute cost I just need the {missing}. Could you tell me?",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        f"要计算通勤费用，我还需要{missing_zh}，能告诉我吗？",
+                        f"To calculate the commute cost I just need the {missing_en}. Could you tell me?"),
                     "reason": "commute needs both endpoints"}
         return {"tool": "calculate_commute_cost",
                 "params": {"from_address": from_addr, "to_address": to_addr},
@@ -2174,7 +2204,10 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         to_addr = _resolve_destination_address(user_query, extracted_context, accumulated)
         if not from_addr or not to_addr:
             return {"tool": "clarification", "params": {},
-                    "clarification_message": "Please provide both the starting address and destination for the commute.",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        "请同时告诉我通勤的起点地址和目的地。",
+                        "Please provide both the starting address and destination for the commute."),
                     "reason": "commute needs both endpoints"}
         return {"tool": tool_name, "params": {"from_address": from_addr, "to_address": to_addr},
                 "reason": f"Voted: {tool_name}"}
@@ -2418,7 +2451,10 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
         # 3) Deterministic param resolution + drop-with-note; dedup by tool-call digest (also
         #    against any call already executed this turn).
         prior_digests = {e.get("params_digest") for e in (state.get("observations") or [])}
-        seen_digests, tasks, notes = set(), [], []
+        # notes feed the model-facing observations (English scaffolding is fine there);
+        # user_notes keep just the localized clarification texts for the user-facing
+        # all-tasks-dropped message below.
+        seen_digests, tasks, notes, user_notes = set(), [], [], []
         for t in expanded:
             if t.get("_resolved"):
                 tool_name, params = t["tool"], t["params"]
@@ -2430,6 +2466,7 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
                                                     extracted_context, tool_registry, accumulated)
                 if resolved is None:
                     notes.append(f"Could not run '{t['tool']}' for \"{t.get('query')}\": {clar}")
+                    user_notes.append(str(clar))
                     continue
                 tool_name, params = resolved["tool"], resolved["params"]
             digest = _params_digest(tool_name, params)
@@ -2462,7 +2499,11 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
         #    If EVERY task dropped for missing info, surface a single clarification instead.
         if len(tasks) < 2:
             if not tasks and notes:
-                msg = "I need a bit more detail before I can look into that:\n- " + "\n- ".join(notes)
+                _header = _localized_clarification(
+                    extracted_context, cm,
+                    "在继续之前，我还需要一点信息：\n- ",
+                    "I need a bit more detail before I can look into that:\n- ")
+                msg = _header + "\n- ".join(user_notes or notes)
                 return Command(update={
                     "tool_decision": {"tool": "clarification", "params": {},
                                       "clarification_message": msg,

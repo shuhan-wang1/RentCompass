@@ -267,22 +267,41 @@ def _default_agent_llm():
 
 def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
               success: bool = True, error: Optional[str] = None, *,
-              timed_out: bool = False, denied: bool = False) -> dict:
+              timed_out: bool = False, denied: bool = False,
+              abandoned: bool = False, outcome_unknown: bool = False,
+              elapsed_ms: Optional[int] = None) -> dict:
     """A tool_artifacts entry. `success`/`error` mirror the underlying ToolResult so
     downstream readers (P2's critic, format_output_fc) can tell a failed tool apart
     from a successful one without re-parsing the model-facing ToolMessage. The ask_user
     terminal artifact carries success=True (it always "succeeds" as a clarification).
 
-    `timed_out` (batch/turn tool-budget kill) and `denied` (tainted-write refusal) mark
-    an artifact that never actually executed a tool: it carries raw_data=None, keeps its
-    params_digest (so the no-progress guard still suppresses an identical retry) but is
-    EXCLUDED from card rendering by _is_executed()."""
+    Budget/gate markers, each meaning a DIFFERENT thing (raw_data is None for all of them
+    and they are EXCLUDED from card rendering by _is_executed(), but they keep their
+    params_digest so the no-progress guard still suppresses an identical retry):
+
+      * `timed_out`  — a tool-budget kill (per-call / batch / turn); kept for the eval
+        three-way split (run_benchmark._split_tools) that reads this flag verbatim.
+      * `denied`     — a tainted-write refusal (never dispatched).
+      * `abandoned`  — a READ that WAS dispatched, ran past the batch window and was walked
+        away from; its executor thread may still finish but the result is DISCARDED, so the
+        outcome is unknown rather than 'never executed'.
+      * `outcome_unknown` — the true outcome is not observable: an abandoned read, or a WRITE
+        whose own wait_for fired (the background write may still land). Never a clean failure.
+
+    `elapsed_ms` is set on EVERY artifact (executed ones included) so the eval events show
+    exactly which tool consumed the window (Phase 2.3 attribution)."""
     art = {"turn": turn, "tool": tool, "raw_data": raw_data,
            "params_digest": params_digest, "success": bool(success), "error": error}
     if timed_out:
         art["timed_out"] = True
     if denied:
         art["denied"] = True
+    if abandoned:
+        art["abandoned"] = True
+    if outcome_unknown:
+        art["outcome_unknown"] = True
+    if elapsed_ms is not None:
+        art["elapsed_ms"] = int(elapsed_ms)
     return art
 
 
@@ -295,11 +314,24 @@ def _swallow_abandoned_task(task) -> None:
         pass
 
 
+def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str,
+                         abandoned: bool) -> None:
+    """One structured attribution record per abandon/timeout (Phase 2.3 deliverable 4). The
+    eval events read `elapsed_ms` off the artifact; this log names WHICH tool ate WHICH
+    budget so a 20s span is no longer an anonymous batch kill. `kind` is one of
+    'batch' | 'turn' | 'per_call'."""
+    logger.warning(
+        "fc_loop.tool_budget_timeout tool=%s elapsed_s=%.2f budget_s=%.2f kind=%s abandoned=%s",
+        tool, float(elapsed_s or 0.0), float(budget_s or 0.0), kind, bool(abandoned))
+
+
 def _is_executed(artifact: dict) -> bool:
-    """True unless the artifact is a timeout / denied placeholder. Card rendering and
-    'last successful' lookups must skip these — they represent work that never ran — while
-    the no-progress guard still counts their (tool, digest) to suppress identical retries."""
-    return not (artifact.get("timed_out") or artifact.get("denied"))
+    """True unless the artifact is a budget / denied / outcome-unknown placeholder. Card
+    rendering and 'last successful' lookups must skip these — they represent work that never
+    ran or whose result was discarded — while the no-progress guard still counts their
+    (tool, digest) to suppress identical retries."""
+    return not (artifact.get("timed_out") or artifact.get("denied")
+                or artifact.get("abandoned") or artifact.get("outcome_unknown"))
 
 
 # ─── fc-loop tool budgets (env-tunable) ─────────────────────────────
@@ -671,72 +703,136 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         continue
             plan.append((tc, digest, "run", args))
 
-        async def _run(name, args, digest):
+        async def _run(name, args, digest, timeout, is_write):
+            """Execute one tool under its own wait_for(`timeout`). Returns
+            (ToolResult, elapsed_ms, status) where status is 'ok' | 'error' | 'timeout'
+            (read/generic per-call timeout) | 'write_timeout' (a WRITE whose own wait_for
+            fired — outcome unknown, never a clean failure)."""
             tool = provider.get(name) if hasattr(provider, "get") else None
             version = getattr(tool, "version", "1") if tool else "1"
             inv = ToolInvocation.create(run_id=state.get("run_id", "fc"), node_id="execute_tools",
                                         tool=name, params=args, version=version)
             call_args = dict(args)
             call_args["idempotency_key"] = inv.idempotency_key
-            timeout = TOOL_TIMEOUTS.get(name, TOOL_TIMEOUT_DEFAULT)
+            from core.tool_system import ToolResult
+            t_call = time.monotonic()
             try:
-                return await asyncio.wait_for(provider.execute_tool(name, **call_args), timeout)
+                res = await asyncio.wait_for(provider.execute_tool(name, **call_args), timeout)
+                return res, int((time.monotonic() - t_call) * 1000), "ok"
             except asyncio.TimeoutError:
-                from core.tool_system import ToolResult
-                return ToolResult(False, error=f"{name} timed out after {timeout}s", tool_name=name)
+                el = int((time.monotonic() - t_call) * 1000)
+                if is_write:
+                    # Mirror MCPToolClient's non-retry-safe timeout wording (mcp_client.py
+                    # ~:236): a write we could not confirm is UNKNOWN, never a clean failure.
+                    return (ToolResult(
+                        False,
+                        error=(f"{name} timed out after {timeout:.0f}s; write outcome unknown "
+                               "— the write may still complete in the background"),
+                        tool_name=name), el, "write_timeout")
+                return (ToolResult(False, error=f"{name} timed out after {timeout:.0f}s",
+                                   tool_name=name), el, "timeout")
             except Exception as e:  # degrade-don't-crash: one failed tool never kills the batch
-                from core.tool_system import ToolResult
-                return ToolResult(False, error=str(e), tool_name=name)
+                el = int((time.monotonic() - t_call) * 1000)
+                return ToolResult(False, error=str(e), tool_name=name), el, "error"
 
         run_idx = [i for i, (_tc, _d, mode, _a) in enumerate(plan) if mode == "run"]
 
+        def _side_effect(nm: str) -> str:
+            sp = specs.get(nm)
+            return getattr(sp, "side_effect", "none") if sp else "none"
+
+        # READ vs WRITE partition (Phase 2.3 deliverable 2). WRITE calls (side_effect=="write")
+        # are EXCLUDED from the budget-abandon set entirely: a write already running in an
+        # executor thread cannot be terminated, so abandoning it would let the harness report a
+        # timeout while the background thread completes the write. Writes therefore run with
+        # their own full wait_for and the batch AWAITS them even past the batch window (their
+        # elapsed still counts against the turn budget).
+        read_idx = [i for i in run_idx if _side_effect(plan[i][0].get("name")) != "write"]
+        write_idx = [i for i in run_idx if _side_effect(plan[i][0].get("name")) == "write"]
+
         # ── batch + turn tool budgets (fc loop) ─────────────────────────────
-        # Each _run already enforces a per-call TOOL_TIMEOUTS wait_for; on TOP of that the
-        # whole batch shares a wall-clock ceiling (FC_BATCH_TOOL_BUDGET_S), and all batches
-        # in a user turn share a cumulative ceiling (FC_TURN_TOOL_BUDGET_S). A call that does
-        # not finish inside the budget is CANCELLED and gets a structured timeout artifact +
-        # ToolMessage so the model can degrade gracefully instead of the harness silently
-        # overrunning. asyncio.wait (not a single wait_for around gather) gives per-call
-        # granularity: finished calls keep their results, only the stragglers time out.
+        # Per-call effective wait_for = min(TOOL_TIMEOUTS[name], remaining_batch_window,
+        # remaining_turn_budget), computed at dispatch (deliverable 1): a 25s tool inside a 20s
+        # window no longer burns the whole window before an unattributed batch kill — its own
+        # wait_for fires at the window and the abandonment is attributed to THIS tool. On TOP of
+        # that the whole read set shares a wall-clock ceiling (FC_BATCH_TOOL_BUDGET_S) and all
+        # batches in a user turn share a cumulative ceiling (FC_TURN_TOOL_BUDGET_S).
         turn_budget = _turn_tool_budget_s()
         batch_budget = _batch_tool_budget_s()
         turn_used = float(state.get("turn_tool_budget_used_s", 0.0) or 0.0)
 
         result_by_idx: dict = {}
-        timed_out_idx: set = set()
+        elapsed_by_idx: dict = {}
+        budget_by_idx: dict = {}      # per-call budget_s used, for attribution events
+        kind_by_idx: dict = {}        # "batch" | "per_call": which cap bound this dispatch
+        abandoned_idx: set = set()    # reads dispatched then walked away from (thread leaked)
+        per_call_timeout_idx: set = set()  # reads whose OWN (tool) timeout was the binding cap
+        write_timeout_idx: set = set()     # writes whose own wait_for fired -> outcome unknown
         turn_exhausted = False
         batch_window = 0.0
 
         if run_idx:
             if turn_used >= turn_budget:
-                # Turn budget already spent: skip this whole batch, answer from what we have.
+                # Turn budget already spent: skip this whole batch (nothing is dispatched, so
+                # even a write is a clean no-run, not an abandon), answer from what we have.
                 turn_exhausted = True
-                timed_out_idx.update(run_idx)
             else:
                 batch_window = max(0.0, min(batch_budget, turn_budget - turn_used))
-                tasks = {
-                    i: asyncio.ensure_future(
-                        _run(plan[i][0].get("name"), plan[i][3], plan[i][1]))
-                    for i in run_idx
-                }
+                remaining_turn = max(0.0, turn_budget - turn_used)
+                read_tasks: dict = {}
+                for i in read_idx:
+                    nm = plan[i][0].get("name")
+                    per_tool = TOOL_TIMEOUTS.get(nm, TOOL_TIMEOUT_DEFAULT)
+                    eff = max(0.0, min(per_tool, batch_window, remaining_turn))
+                    budget_by_idx[i] = eff
+                    # If the tool's own timeout is the binding cap it is a genuine per_call
+                    # timeout; otherwise the window/turn bound it -> a batch abandonment.
+                    kind_by_idx[i] = "per_call" if per_tool < batch_window else "batch"
+                    read_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], eff, False))
+                write_tasks: dict = {}
+                for i in write_idx:
+                    nm = plan[i][0].get("name")
+                    per_tool = TOOL_TIMEOUTS.get(nm, TOOL_TIMEOUT_DEFAULT)
+                    # WRITE: its own full wait_for, NOT capped by the batch window.
+                    budget_by_idx[i] = per_tool
+                    kind_by_idx[i] = "per_call"
+                    write_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], per_tool, True))
                 t0 = time.monotonic()
-                done, pending = await asyncio.wait(
-                    list(tasks.values()), timeout=batch_window)
+                # Reads share the batch window; stragglers are ABANDONED (deliverable 3).
+                if read_tasks:
+                    done, _pending = await asyncio.wait(list(read_tasks.values()), timeout=batch_window)
+                    for i, task in read_tasks.items():
+                        if task in done:
+                            res, el, status = task.result()
+                            elapsed_by_idx[i] = el
+                            if status == "timeout":
+                                if kind_by_idx[i] == "per_call":
+                                    per_call_timeout_idx.add(i)
+                                    result_by_idx[i] = res  # timeout ToolResult drives the ToolMessage
+                                else:
+                                    abandoned_idx.add(i)     # window bound it -> batch abandon
+                            else:
+                                result_by_idx[i] = res
+                        else:
+                            # Still pending at the window: abandon. Do NOT await the cancelled
+                            # task — a tool running in an executor THREAD cannot be cancelled, so
+                            # awaiting blocks until it finishes and defeats the budget (observed
+                            # live: 37.6s spans past a 20s window). The thread completes in the
+                            # background; the callback swallows the eventual result/CancelledError.
+                            task.cancel()
+                            task.add_done_callback(_swallow_abandoned_task)
+                            abandoned_idx.add(i)
+                            kind_by_idx[i] = "batch"
+                            budget_by_idx[i] = batch_window
+                            elapsed_by_idx[i] = int(batch_window * 1000)
+                # WRITES: await to completion even past the batch window (never abandoned).
+                for i, task in write_tasks.items():
+                    res, el, status = await task
+                    result_by_idx[i] = res
+                    elapsed_by_idx[i] = el
+                    if status == "write_timeout":
+                        write_timeout_idx.add(i)
                 turn_used += time.monotonic() - t0
-                for i, task in tasks.items():
-                    if task in done:
-                        result_by_idx[i] = task.result()
-                    else:
-                        task.cancel()
-                        timed_out_idx.add(i)
-                        # Do NOT await the cancelled task: wait_for's cancellation waits
-                        # for the inner future, and a tool already running in an executor
-                        # THREAD cannot be cancelled — awaiting here blocks until the tool
-                        # actually finishes, defeating the batch budget (observed live:
-                        # 37.6s spans past a 20s window). Abandon instead: the thread
-                        # completes in the background; the callback swallows the eventual
-                        # CancelledError/result so nothing leaks a warning.
-                        task.add_done_callback(_swallow_abandoned_task)
 
         tainted_any = False
         for i, (tc, digest, mode, args) in enumerate(plan):
@@ -769,25 +865,73 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     }, ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue
-            if i in timed_out_idx:
-                # Structured timeout artifact + matching ToolMessage: the model sees the tool
-                # did not return and can answer from the rest.
-                if turn_exhausted:
-                    err = "turn tool budget exhausted"
-                else:
-                    err = f"timeout after {int(round(batch_window))}s (batch budget)"
+            if turn_exhausted and i in run_idx:
+                # Whole batch skipped — never dispatched, outcome IS known (did not run).
+                err = "turn tool budget exhausted"
+                _emit_budget_timeout(name, 0.0, turn_budget, "turn", False)
                 artifacts.append(_artifact(
-                    turn, name, None, digest, success=False, error=err, timed_out=True))
+                    turn, name, None, digest, success=False, error=err,
+                    timed_out=True, elapsed_ms=0))
                 messages.append(ToolMessage(
                     content=json.dumps({"success": False, "data": None, "error": err},
                                        ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue
+            if i in abandoned_idx:
+                # Dispatched READ walked away from: the thread may still finish but the result is
+                # DISCARDED, so the outcome is unknown — NOT "never executed" (deliverable 3).
+                el = elapsed_by_idx.get(i, int(batch_window * 1000))
+                n = int(round(budget_by_idx.get(i, batch_window)))
+                err = f"abandoned after {n}s (batch budget); result discarded"
+                _emit_budget_timeout(name, el / 1000.0, budget_by_idx.get(i, batch_window),
+                                     kind_by_idx.get(i, "batch"), True)
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False, error=err,
+                    timed_out=True, abandoned=True, outcome_unknown=True, elapsed_ms=el))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None, "abandoned": True,
+                        "error": err + " — proceed with the results you already have.",
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
+            if i in write_timeout_idx:
+                # WRITE's own wait_for fired: the background write may still land -> UNKNOWN.
+                result = result_by_idx[i]
+                el = elapsed_by_idx.get(i)
+                err = getattr(result, "error", None) or (
+                    f"{name} write outcome unknown — may still complete in the background")
+                _emit_budget_timeout(name, (el or 0) / 1000.0, budget_by_idx.get(i, 0.0),
+                                     "per_call", False)
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False, error=err,
+                    outcome_unknown=True, elapsed_ms=el))
+                messages.append(ToolMessage(
+                    content=json.dumps({"success": False, "data": None,
+                                        "outcome_unknown": True, "error": err},
+                                       ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
+            if i in per_call_timeout_idx:
+                # READ whose own (tool) timeout was the binding cap: attributed per_call kill.
+                result = result_by_idx[i]
+                el = elapsed_by_idx.get(i)
+                err = getattr(result, "error", None) or f"{name} timed out"
+                _emit_budget_timeout(name, (el or 0) / 1000.0, budget_by_idx.get(i, 0.0),
+                                     "per_call", False)
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False, error=err,
+                    timed_out=True, elapsed_ms=el))
+                content, tainted = _derived_toolmsg(name, result)
+                tainted_any = tainted_any or tainted
+                messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
+                continue
             result = result_by_idx[i]
             artifacts.append(_artifact(
                 turn, name, getattr(result, "data", None), digest,
                 success=getattr(result, "success", False),
-                error=getattr(result, "error", None)))
+                error=getattr(result, "error", None),
+                elapsed_ms=elapsed_by_idx.get(i)))
             content, tainted = _derived_toolmsg(name, result)
             tainted_any = tainted_any or tainted
             messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))

@@ -329,20 +329,21 @@ def test_per_case_csv_columns_and_values(tmp_path):
     path = rp.write_per_case(tmp_path, [good, bad], arch="fc_loop")
     rows = list(__import__("csv").reader(path.open(encoding="utf-8")))
     assert rows[0] == rp.PER_CASE_COLUMNS
-    assert rows[0] == ["case_id", "category", "arch", "passed", "route_matched",
+    assert rows[0] == ["case_id", "category", "arch", "repeat", "passed", "route_matched",
                        "hard_gate", "llm_calls", "tool_batches", "tools_executed",
                        "tools_denied", "tools_requested", "latency_ms",
-                       "cost_usd", "failed_constraints"]
+                       "cost_usd", "failed_constraints", "violation_kinds"]
     by_id = {r[0]: r for r in rows[1:]}
     assert by_id["H2"][2] == "fc_loop"
-    assert by_id["H2"][3] == "True"
-    assert by_id["H2"][8] == "search_properties"   # tools_executed
-    assert by_id["H2"][9] == ""                     # tools_denied
-    assert by_id["H2"][10] == "search_properties"   # tools_requested
-    assert by_id["H2"][13] == ""  # no failed constraints
+    assert by_id["H2"][3] == "1"                     # repeat
+    assert by_id["H2"][4] == "True"                  # passed
+    assert by_id["H2"][9] == "search_properties"    # tools_executed
+    assert by_id["H2"][10] == ""                     # tools_denied
+    assert by_id["H2"][11] == "search_properties"   # tools_requested
+    assert by_id["H2"][14] == ""  # no failed constraints
     # A failing case lists its failed constraint + the forbidden-tool use.
-    assert "must_mention_value" in by_id["H8"][13]
-    assert "forbidden:search_properties" in by_id["H8"][13]
+    assert "must_mention_value" in by_id["H8"][14]
+    assert "forbidden:search_properties" in by_id["H8"][14]
 
 
 def test_per_case_csv_denied_write_split(tmp_path):
@@ -352,12 +353,14 @@ def test_per_case_csv_denied_write_split(tmp_path):
     rr.tools_executed = ["search_properties"]
     rr.tools_denied = ["remember"]
     rr.tools_requested = ["search_properties", "remember"]
+    rr.violation_kinds = []
     path = rp.write_per_case(tmp_path, [rr], arch="fc_loop")
     rows = list(__import__("csv").reader(path.open(encoding="utf-8")))
     row = rows[1]
-    assert row[8] == "search_properties"          # executed: remember NOT here
-    assert row[9] == "remember"                    # denied
-    assert "remember" in row[10]                   # requested keeps it
+    assert row[9] == "search_properties"          # executed: remember NOT here
+    assert row[10] == "remember"                   # denied
+    assert "remember" in row[11]                   # requested keeps it
+    assert row[15] == ""                           # no zero-tolerance violation fired
 
 
 def test_manifest_fields_with_stubbed_commit(tmp_path):
@@ -431,3 +434,87 @@ def test_write_results_package_emits_all(tmp_path):
     assert (tmp_path / "events.jsonl.gz").exists()
     assert manifest["events_log"]["committed"] is True
     assert manifest["events_log"]["sha256_gz"] == rp.sha256_of(tmp_path / "events.jsonl.gz")
+
+
+# --------------------------------------------------------------------------- #
+# 5) R3: SLO gate block + budget-breach detection from node_spans (env-honoring)
+# --------------------------------------------------------------------------- #
+def test_slo_block_math_and_limits():
+    # Ten latencies 1000..10000ms: p50 ~= 5500ms (<= 6000), p95 ~= 9550ms (<= 30000).
+    runs = [_run(f"S{i}", float(i * 1000), []) for i in range(1, 11)]
+    slo = rb.slo_block(runs)
+    assert slo["p50_limit"] == 6000 and slo["p95_limit"] == 30000
+    assert slo["p50_ms"] <= 6000 and slo["p50_ok"] is True
+    assert slo["p95_ms"] <= 30000 and slo["p95_ok"] is True
+    assert slo["legacy_relative"] is None          # diagnostic only, unset by default
+
+
+def test_slo_block_p95_breach_flags_not_ok():
+    # A heavy tail (top decile ~45s) pushes p95 over 30000ms while p50 stays within limit.
+    # 18 fast + 2 slow of 20: p95 index = 19*0.95 = 18.05 -> lands in the slow tail.
+    runs = [_run(f"S{i}", 2000.0, []) for i in range(1, 19)]
+    runs += [_run("Sslow1", 45000.0, []), _run("Sslow2", 45000.0, [])]
+    slo = rb.slo_block(runs)
+    assert slo["p50_ms"] <= 6000 and slo["p50_ok"] is True
+    assert slo["p95_ms"] > 30000 and slo["p95_ok"] is False
+
+
+def test_slo_block_p50_breach_flags_not_ok():
+    runs = [_run(f"S{i}", 9000.0, []) for i in range(1, 6)]
+    slo = rb.slo_block(runs)
+    assert slo["p50_ms"] > 6000 and slo["p50_ok"] is False
+
+
+def test_slo_block_legacy_relative_passthrough():
+    runs = [_run("S1", 3000.0, [])]
+    slo = rb.slo_block(runs, legacy_relative=0.61)
+    assert slo["legacy_relative"] == 0.61          # kept as a diagnostic line
+
+
+def test_budget_breach_default_limit(monkeypatch):
+    # Default FC_BATCH_TOOL_BUDGET_S=20 + 2s grace = 22000ms. A 25000ms execute_tools span
+    # breaches; an 18000ms one does not.
+    monkeypatch.delenv("FC_BATCH_TOOL_BUDGET_S", raising=False)
+    breach = _run("B", 25000.0,
+                  [{"node": "execute_tools", "ms": 25000.0, "seq": 0}])
+    clean = _run("C", 18000.0,
+                 [{"node": "execute_tools", "ms": 18000.0, "seq": 0}])
+    v = rb.zero_tolerance_violations([breach, clean])
+    assert [e["kind"] for e in v] == ["budget_breach"]
+    assert v[0]["case_id"] == "B" and "seq=0" in v[0]["detail"]
+
+
+def test_budget_breach_honors_env_override(monkeypatch):
+    # Raise the budget to 30s -> limit 32000ms; the same 25000ms span no longer breaches.
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "30")
+    run = _run("B", 25000.0, [{"node": "execute_tools", "ms": 25000.0, "seq": 0}])
+    assert rb.zero_tolerance_violations([run]) == []
+    # Lower it to 5s -> limit 7000ms; a 9000ms span now breaches.
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")
+    run2 = _run("B2", 9000.0, [{"node": "execute_tools", "ms": 9000.0, "seq": 1}])
+    v = rb.zero_tolerance_violations([run2])
+    assert [e["kind"] for e in v] == ["budget_breach"]
+
+
+def test_budget_breach_only_execute_tools_spans(monkeypatch):
+    # A slow AGENT span (model latency) is NOT a tool-budget breach — only execute_tools
+    # spans carry the batch budget.
+    monkeypatch.delenv("FC_BATCH_TOOL_BUDGET_S", raising=False)
+    run = _run("A", 40000.0, [{"node": "agent", "ms": 40000.0, "seq": 0},
+                              {"node": "execute_tools", "ms": 1000.0, "seq": 1}])
+    assert rb.zero_tolerance_violations([run]) == []
+
+
+def test_violation_kinds_stamped_deduped_and_sorted():
+    # Two distinct kinds on one run surface as a sorted, de-duplicated kind list (the
+    # per_case.csv column source).
+    run = _run("X", 25000.0, [{"node": "execute_tools", "ms": 25000.0, "seq": 0}],
+               verdict={"constraints": [
+                   {"type": "no_fabricated_number", "passed": False, "detail": "d"}],
+                   "forbidden_tool_violations": []})
+    run.forbidden_executed = ["web_search"]
+    import os as _os
+    _os.environ.pop("FC_BATCH_TOOL_BUDGET_S", None)
+    v = rb.zero_tolerance_violations([run])
+    kinds = sorted({e["kind"] for e in v})
+    assert kinds == ["budget_breach", "forbidden_tool_executed", "no_evidence_numbers"]

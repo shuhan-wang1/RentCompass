@@ -16,6 +16,7 @@ Verifies, WITHOUT any live Overpass / network call:
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass, field
 
@@ -85,6 +86,20 @@ class SlowProvider(FakeProvider):
         self.calls.append((name, params))
         await asyncio.sleep(self.delay)
         return FakeResult(True, {"ok": True})
+
+
+class PerToolDelayProvider(FakeProvider):
+    """execute_tool awaits a per-tool `delays[name]` — lets a slow read and a slower/faster
+    write share one batch so the read/write partition can be exercised deterministically."""
+
+    def __init__(self, specs, delays):
+        super().__init__(specs)
+        self.delays = dict(delays)
+
+    async def execute_tool(self, name, **params):
+        self.calls.append((name, params))
+        await asyncio.sleep(self.delays.get(name, 0.0))
+        return FakeResult(True, {"ok": name})
 
 
 class FakeChat:
@@ -332,3 +347,129 @@ def test_event_loop_not_blocked_by_poi(monkeypatch):
     ticks, result = asyncio.run(run())
     assert ticks >= 5, f"event loop appeared blocked (only {ticks} heartbeat ticks)"
     assert result.success is True
+
+
+# ─── Phase 2.3: per-call cap, write no-abandon, attribution ─────────
+def test_per_call_timeout_capped_by_remaining_window(monkeypatch, caplog):
+    """A tool whose TOOL_TIMEOUTS entry (25s) exceeds the batch window is clamped to the
+    window at dispatch — it does NOT burn 25s. The straggler is abandoned and the artifact
+    NAMES it, carries elapsed_ms, and the attribution log record attributes the batch kill."""
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "big_read", 25)
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")  # proxy for the 20s window
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = SlowProvider([FakeSpec("big_read")], delay=1.5)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("big_read", {"q": "x"}, "c1")])]
+
+    t0 = time.monotonic()
+    with caplog.at_level(logging.WARNING, logger="core.agent_loop"):
+        state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 1.5, f"tool ran to its 25s/1.5s completion instead of the window ({wall:.2f}s)"
+    ab = [a for a in state["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1
+    a = ab[0]
+    assert a["tool"] == "big_read"           # artifact NAMES the abandoned tool
+    assert a["outcome_unknown"] is True
+    assert a["timed_out"] is True            # kept for the eval three-way split
+    assert a["raw_data"] is None
+    assert "abandoned" in a["error"] and "batch budget" in a["error"]
+    assert isinstance(a["elapsed_ms"], int)  # per-call timing lands on the artifact
+    assert a["elapsed_ms"] <= 900             # ~window, nowhere near 25s
+    # attribution log record: names the tool, the batch budget, kind=batch, abandoned=True
+    rec = [r for r in caplog.records if "fc_loop.tool_budget_timeout" in r.getMessage()]
+    assert len(rec) == 1
+    msg = rec[0].getMessage()
+    assert "tool=big_read" in msg and "kind=batch" in msg and "abandoned=True" in msg
+
+
+def test_write_runs_past_window_while_reads_abandoned(monkeypatch):
+    """side_effect=='write' is excluded from the abandon set: the batch AWAITS the write to
+    completion even past the batch window, while a sibling read that overruns is abandoned."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)  # legacy allow path
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = PerToolDelayProvider(
+        [FakeSpec("web_search"), FakeSpec("save_note", side_effect="write")],
+        delays={"web_search": 1.5, "save_note": 0.5})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("web_search", {"q": "x"}, "c1"),
+        _tc("save_note", {"content": "note"}, "c2")])]
+
+    state = _exec_once(nodes, state)
+
+    called = sorted(n for n, _ in provider.calls)
+    assert called == ["save_note", "web_search"]  # both dispatched
+    by_tool = {a["tool"]: a for a in state["tool_artifacts"]}
+    # sibling read abandoned
+    assert by_tool["web_search"].get("abandoned") is True
+    # write completed past the 0.3s window (delay 0.5) — never abandoned / unknown
+    w = by_tool["save_note"]
+    assert w["success"] is True
+    assert w["raw_data"] == {"ok": "save_note"}
+    assert "abandoned" not in w and "outcome_unknown" not in w and "timed_out" not in w
+    assert isinstance(w["elapsed_ms"], int) and w["elapsed_ms"] >= 400
+
+
+def test_write_own_timeout_is_outcome_unknown(monkeypatch):
+    """If even the write's own wait_for fires, the artifact says outcome UNKNOWN (the write may
+    still complete in the background) — never a clean failure, mirroring MCPToolClient."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 0.3)  # tiny write wait_for
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")   # window is not the binding cap
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = PerToolDelayProvider(
+        [FakeSpec("save_note", side_effect="write")], delays={"save_note": 1.5})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("save_note", {"content": "note"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    w = next(a for a in state["tool_artifacts"] if a["tool"] == "save_note")
+    assert w["success"] is False
+    assert w["outcome_unknown"] is True
+    assert "abandoned" not in w            # a write is NEVER abandoned
+    assert "outcome unknown" in w["error"] and "background" in w["error"]
+    assert isinstance(w["elapsed_ms"], int)
+    tmsg = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    assert any("outcome_unknown" in m.content for m in tmsg)
+
+
+def test_elapsed_ms_on_executed_artifact():
+    """Every executed artifact carries elapsed_ms so the eval events show tool timing."""
+    provider = FakeProvider([FakeSpec("web_search")],
+                            {"web_search": FakeResult(True, {"results": "x"})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    a = next(x for x in state["tool_artifacts"] if x["tool"] == "web_search")
+    assert a["success"] is True
+    assert isinstance(a["elapsed_ms"], int) and a["elapsed_ms"] >= 0
+
+
+def test_turn_exhaustion_emits_turn_attribution(monkeypatch, caplog):
+    """Turn-budget exhaustion emits a kind='turn', abandoned=False attribution record."""
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "10")
+    provider = FakeProvider([FakeSpec("web_search")])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(loop_turn=3, turn_tool_budget_used_s=10.0)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    with caplog.at_level(logging.WARNING, logger="core.agent_loop"):
+        state = _exec_once(nodes, state)
+
+    rec = [r for r in caplog.records if "fc_loop.tool_budget_timeout" in r.getMessage()]
+    assert len(rec) == 1
+    msg = rec[0].getMessage()
+    assert "kind=turn" in msg and "abandoned=False" in msg
+    a = next(x for x in state["tool_artifacts"] if x["tool"] == "web_search")
+    assert a["timed_out"] is True and a["elapsed_ms"] == 0

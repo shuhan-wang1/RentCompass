@@ -60,9 +60,9 @@ def _failed_constraints(rr: Any) -> str:
 
 
 PER_CASE_COLUMNS = [
-    "case_id", "category", "arch", "passed", "route_matched", "hard_gate",
+    "case_id", "category", "arch", "repeat", "passed", "route_matched", "hard_gate",
     "llm_calls", "tool_batches", "tools_executed", "tools_denied", "tools_requested",
-    "latency_ms", "cost_usd", "failed_constraints",
+    "latency_ms", "cost_usd", "failed_constraints", "violation_kinds",
 ]
 
 
@@ -77,7 +77,8 @@ def write_per_case(out: Union[str, Path], runs: List[Any], *, arch: str) -> Path
     The three tool columns record the requested/executed/denied split (H13): a memory-write
     the gate refused shows in ``tools_denied`` but NOT ``tools_executed``, so a reviewer can
     see the write was attempted, shown, and blocked without it counting as a call the model
-    made."""
+    made. ``repeat`` disambiguates the K rows of a ``--repeat K`` case; ``violation_kinds``
+    is the pipe-joined zero-tolerance kinds that fired on that specific run (empty = clean)."""
     path = Path(out) / "per_case.csv"
     with path.open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
@@ -87,6 +88,7 @@ def write_per_case(out: Union[str, Path], runs: List[Any], *, arch: str) -> Path
                 getattr(rr, "case_id", ""),
                 getattr(rr, "category", ""),
                 arch,
+                getattr(rr, "repeat", ""),
                 getattr(rr, "passed", ""),
                 getattr(rr, "route_matched", ""),
                 getattr(rr, "hard_gate", ""),
@@ -98,6 +100,7 @@ def write_per_case(out: Union[str, Path], runs: List[Any], *, arch: str) -> Path
                 _fmt_num(getattr(rr, "turn_latency_ms", None)),
                 _fmt_num(getattr(rr, "cost_usd", None)),
                 _failed_constraints(rr),
+                "|".join(str(k) for k in (getattr(rr, "violation_kinds", None) or [])),
             ])
     return path
 

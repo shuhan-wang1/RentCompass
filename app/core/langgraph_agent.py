@@ -78,11 +78,23 @@ GRAPH_RECURSION_LIMIT = 80
 MAX_PLAN_TASKS = 8
 MAX_PLAN_WAVES = 3
 # Per-tool hard wall-clock (seconds) enforced by asyncio.wait_for in the executor. Tools not
-# listed use TOOL_TIMEOUT_DEFAULT. search_nearby_pois is bounded here (25s) AND caps itself
-# internally (POI_SEARCH_BUDGET_S=20s) so it returns partial results a few seconds before this
-# harness timeout would fire — the internal budget is the wall-clock authority, this entry is
-# the outer safety net now that the tool no longer blocks the event loop.
-TOOL_TIMEOUTS = {"web_search": 25, "search_nearby_pois": 25}
+# listed use TOOL_TIMEOUT_DEFAULT.
+#
+# PRECEDENCE (fc_loop, Phase 2.3): execute_tools dispatches each call with an EFFECTIVE
+# wait_for = min(TOOL_TIMEOUTS[name], remaining_batch_window, remaining_turn_budget). So an
+# entry ABOVE FC_BATCH_TOOL_BUDGET_S (default 20s) can never actually run that long inside a
+# batch — it is clamped at dispatch and, if it does not return, abandoned+attributed at the
+# window. Reconciliation of the two former 25s entries:
+#   * web_search — no internal budget of its own, so 25 was dead config vs the 20s window.
+#     Lowered to 18s: its own wait_for now fires a few seconds BEFORE the batch window, giving
+#     a clean, attributed per_call timeout instead of a whole-window burn ending in a batch kill.
+#   * search_nearby_pois — DELIBERATELY kept at 25s (above the window). Its authoritative
+#     wall-clock is the INTERNAL POI_SEARCH_BUDGET_S (=20s) which returns PARTIAL results a few
+#     seconds before this outer net; lowering the harness entry below 20s would preempt that
+#     partial-return and yield nothing. The fc_loop dispatch min() already clamps it to the
+#     remaining window, so it is no longer a full-window-burn risk — this entry is the safety
+#     net for the legacy execution-plan path (langgraph :~3530), where no batch window applies.
+TOOL_TIMEOUTS = {"web_search": 18, "search_nearby_pois": 25}
 TOOL_TIMEOUT_DEFAULT = 30
 
 # Tools that may participate in the loop: after they return, `reflect` gets to decide

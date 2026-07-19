@@ -222,3 +222,77 @@ def test_compare_or_rank_areas_not_blocking(monkeypatch):
         lambda: cra.compare_or_rank_areas_tool.execute(city="Manchester", reply_language="en")))
     _assert_responsive(ticks, result)
     assert result.data["status"] == "ok"
+
+
+# ─── search_properties (stays async; heavy RAG/geo/commute/rank pushed to threads) ─
+def test_search_properties_not_blocking(monkeypatch):
+    """search_properties_impl's heaviest ON-LOOP residual was the RAG pipeline —
+    ``property_store.build_index`` (embedding the whole fetched pool) followed by
+    ``enhanced_search`` (query embedding + FAISS recall) — plus geo-radius filtering
+    and MMR ranking. All are synchronous CPU that used to run inline on the event
+    loop, so a batch of concurrent tasks (and the fc-loop batch-budget timer) stalled
+    for the full duration. They are now offloaded (normalize+build_index+recall in one
+    ``asyncio.to_thread`` guarded by ``_RAG_LOCK``; geo filter and ranking in their own
+    hops). This drives the impl against a BLOCKING RAG coordinator concurrently with a
+    10ms heartbeat and asserts the loop keeps ticking. NO live network / no real model.
+
+    Directly calls ``search_properties_impl`` (it returns a plain dict, not a
+    ToolResult), so it uses a bespoke assertion rather than ``_assert_responsive``."""
+    from core.scraping import on_demand
+    from core.tools import search_properties as sp
+    import core.maps_service as maps
+
+    rows = [{
+        "Address": f"{i} Camden High St, London NW1",
+        "URL": f"https://www.onthemarket.com/details/{i}/",
+        "Price": f"£{1000 + (i % 500)} pcm",
+        "geo_location": "51.539,-0.142", "Geo_Location": "51.539,-0.142",
+        "Room_Type_Category": "1 bed Flat",
+        "Description": "Bright flat near transport. Bus 10 min.",
+        "Images": [], "similarity_score": 0.6,
+    } for i in range(120)]
+
+    class _BlockingStore:
+        def __init__(self):
+            self.rows = []
+
+        def build_index(self, r):
+            time.sleep(_BLOCK_S)   # SYNCHRONOUS embedding of the fetched pool
+            self.rows = list(r)
+
+        def search(self, q, top_k=10):
+            time.sleep(_BLOCK_S)
+            return list(self.rows)
+
+    class _BlockingCoordinator:
+        def __init__(self):
+            self.property_store = _BlockingStore()
+
+        def enhanced_search(self, q, criteria):
+            time.sleep(_BLOCK_S)   # SYNCHRONOUS query embed + FAISS recall
+            r = self.property_store.rows
+            for x in r:
+                x.setdefault("similarity_score", 0.6)
+            return list(r), [], []
+
+    meta = {"slug": "camden", "requested_location": "Camden",
+            "requested_city": "london", "source": "hit", "stale": False,
+            "count": len(rows), "elapsed_s": 0.01, "message": ""}
+    # get_listings is offloaded already; stub it so the test stays offline and the
+    # only heavy work left is the (blocking) RAG coordinator under test.
+    monkeypatch.setattr(on_demand, "get_listings",
+                        lambda *a, **k: {"rows": [dict(r) for r in rows], "meta": meta})
+    monkeypatch.setattr(maps, "geocode_address", lambda addr: {"lat": 51.539, "lng": -0.142})
+    monkeypatch.setattr(maps, "calculate_travel_time", lambda o, d, mode="transit": 20)
+    monkeypatch.setenv("AREA_RECOS_ENABLED", "0")   # keep the area recommender out of it
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "0")  # no detail-page enrichment fetches
+    sp.set_rag_coordinator(_BlockingCoordinator())
+    try:
+        ticks, result = asyncio.run(_heartbeat_run(
+            lambda: sp.search_properties_impl(
+                area="Camden", confirmed=True, current_message="flats in Camden")))
+    finally:
+        sp.set_rag_coordinator(None)
+    assert ticks >= _MIN_TICKS, f"event loop appeared blocked (only {ticks} heartbeat ticks)"
+    assert result["status"] == "found"
+    assert len(result["recommendations"]) > 0

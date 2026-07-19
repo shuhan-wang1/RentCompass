@@ -20,6 +20,7 @@ import pandas as pd
 import asyncio
 import math
 import os
+import threading
 from pathlib import Path
 from datetime import date
 import json
@@ -863,6 +864,16 @@ def _clean_explanation(desc, travel_min, location):
 
 
 _RAG_COORDINATOR = None
+# The RAG coordinator is a process-wide singleton with a MUTABLE property_store
+# (build_index overwrites its rows, enhanced_search / search read them). The
+# normalize→build_index→recall sequence used to run inline on the event loop, which
+# — being single-threaded and await-free between build_index and enhanced_search —
+# made that sequence implicitly atomic per search. Now that we offload it to a worker
+# thread (so the embedding/FAISS CPU no longer stalls the loop and its batch-budget
+# timer), this lock preserves that exact atomicity: two concurrent searches can no
+# longer interleave their build_index / recall against the shared store. It is a
+# threading.Lock (held inside worker threads), so contention waits OFF the loop.
+_RAG_LOCK = threading.Lock()
 
 
 class _DeterministicPropertyStore:
@@ -1685,8 +1696,11 @@ async def search_properties_impl(
                 _geo_radius = 2.0
 
             _before_geo = len(live_rows)
-            live_rows, geo_rejected = filter_properties_by_radius(
-                live_rows, area_centres, _geo_radius
+            # Haversine over every fetched listing is pure CPU that scales with the
+            # candidate pool (hundreds of rows across multi-area) — offload so it never
+            # stalls the loop/batch-budget timer. Deterministic: same in/out as inline.
+            live_rows, geo_rejected = await asyncio.to_thread(
+                filter_properties_by_radius, live_rows, area_centres, _geo_radius
             )
             listing_meta['count'] = len(live_rows)
             listing_meta['location_filtered_count'] = len(geo_rejected)
@@ -1707,23 +1721,6 @@ async def search_properties_impl(
                 'known_criteria': _known_criteria(),
                 'area_recommendations': area_recommendations,
             }
-
-        # 规范化真实行：解析价格、推断卧室/房型、标记过期。
-        for prop in live_rows:
-            prop['parsed_price'] = parse_price(prop.get('Price'))
-            _rt = str(prop.get('Room_Type_Category', ''))
-            prop.setdefault('Type', _rt or 'Flat')
-            _bm = re.search(r'(\d+)\s*bed', _rt, re.I)
-            if _bm:
-                prop['Bedrooms'] = int(_bm.group(1))
-            elif 'studio' in _rt.lower():
-                prop['Bedrooms'] = 'Studio'
-            if possibly_outdated:
-                prop['possibly_outdated'] = True
-
-        # 在"仅这些城市正确的真实行"上重建语义索引。
-        rag_coordinator = _get_rag_coordinator()
-        rag_coordinator.property_store.build_index(live_rows)
 
         # 🆕 构建搜索查询（无预算时避免 "£None"）。抽成小工具，便于多区域时按区域各自召回。
         def _build_search_query(_area_name):
@@ -1748,32 +1745,58 @@ async def search_properties_impl(
             'soft_preferences': all_soft_preferences,
         }
 
-        if len(search_areas) > 1:
-            # 🆕 多区域公平召回。单一（主区域）语义查询 + 全局 top-N 截断（candidates[:15]）会
-            # 系统性地把非主区域的房源挤出候选池——主区域房源较多时，其排序整体高于其它区域，
-            # 截断后其它区域一套不剩（用户报告的 Bug 1）。改为按区域各自做语义召回、以来源区域
-            # (_search_area) 归集，再轮转合并（round-robin，保持每个区域各自的排序内序），确保每个
-            # 搜索区域都被公平代表。下游特征/房型过滤、通勤标注、评分与展示截断逻辑完全不变。
-            from collections import deque
-            _per_area = {}
-            for _a in search_areas:
-                _ranked_a, _, _ = rag_coordinator.enhanced_search(_build_search_query(_a), criteria)
-                _al = _a.lower()
-                _per_area[_al] = [p for p in _ranked_a
-                                  if str(p.get('_search_area', '')).lower() == _al]
-            _queues = [deque(_per_area.get(_a.lower(), [])) for _a in search_areas]
-            ranked_properties = []
-            while any(_queues):
-                for _q in _queues:
-                    if _q:
-                        ranked_properties.append(_q.popleft())
-            past_context, area_info = [], []
-            print("   ✅ 多区域召回: " +
-                  ", ".join(f"{_a}={len(_per_area.get(_a.lower(), []))}" for _a in search_areas))
-        else:
-            ranked_properties, past_context, area_info = rag_coordinator.enhanced_search(
-                search_query, criteria
-            )
+        # 归一化 + 语义索引重建 + 召回是本工具最重的 ON-LOOP 段（build_index 对上百条房源做
+        # embedding、enhanced_search 做查询 embedding+FAISS，均为纯 CPU）。整段离线到工作线程，
+        # 使事件循环（及 batch-budget 计时器）不再被阻塞；行为逐字不变（同样的归一化、同样的
+        # 单/多区域召回与轮转合并）。_RAG_LOCK 保证共享 coordinator 的 build_index→召回 原子，
+        # 复刻此前"循环单线程、二者间无 await"的隐式互斥（并发搜索不会互相踩到同一索引）。
+        def _normalize_and_rank():
+            with _RAG_LOCK:
+                # 规范化真实行：解析价格、推断卧室/房型、标记过期。
+                for prop in live_rows:
+                    prop['parsed_price'] = parse_price(prop.get('Price'))
+                    _rt = str(prop.get('Room_Type_Category', ''))
+                    prop.setdefault('Type', _rt or 'Flat')
+                    _bm = re.search(r'(\d+)\s*bed', _rt, re.I)
+                    if _bm:
+                        prop['Bedrooms'] = int(_bm.group(1))
+                    elif 'studio' in _rt.lower():
+                        prop['Bedrooms'] = 'Studio'
+                    if possibly_outdated:
+                        prop['possibly_outdated'] = True
+
+                # 在"仅这些城市正确的真实行"上重建语义索引。
+                _coord = _get_rag_coordinator()
+                _coord.property_store.build_index(live_rows)
+
+                if len(search_areas) > 1:
+                    # 🆕 多区域公平召回。单一（主区域）语义查询 + 全局 top-N 截断（candidates[:15]）
+                    # 会系统性地把非主区域的房源挤出候选池——主区域房源较多时，其排序整体高于其它
+                    # 区域，截断后其它区域一套不剩（用户报告的 Bug 1）。改为按区域各自做语义召回、以
+                    # 来源区域 (_search_area) 归集，再轮转合并（round-robin，保持每个区域各自的排序
+                    # 内序），确保每个搜索区域都被公平代表。下游过滤/标注/评分/展示截断逻辑完全不变。
+                    from collections import deque
+                    _per_area = {}
+                    for _a in search_areas:
+                        _ranked_a, _, _ = _coord.enhanced_search(_build_search_query(_a), criteria)
+                        _al = _a.lower()
+                        _per_area[_al] = [p for p in _ranked_a
+                                          if str(p.get('_search_area', '')).lower() == _al]
+                    _queues = [deque(_per_area.get(_a.lower(), [])) for _a in search_areas]
+                    _ranked = []
+                    while any(_queues):
+                        for _q in _queues:
+                            if _q:
+                                _ranked.append(_q.popleft())
+                    print("   ✅ 多区域召回: " +
+                          ", ".join(f"{_a}={len(_per_area.get(_a.lower(), []))}" for _a in search_areas))
+                    return _ranked, [], []
+                return _coord.enhanced_search(search_query, criteria)
+
+        ranked_properties, past_context, area_info = await asyncio.to_thread(_normalize_and_rank)
+        # O(1) singleton handle (already constructed inside the offloaded pipeline);
+        # used by the similar-but-over-budget fallback below.
+        rag_coordinator = _get_rag_coordinator()
         print(f"   ✅ RAG 返回 {len(ranked_properties)} 个候选房源")
 
         # 🆕 根据房产特征过滤结果（注意：不要遮蔽函数级的 room_type 参数）
@@ -1853,30 +1876,37 @@ async def search_properties_impl(
             else:
                 tfl_times = [None] * len(candidates)
 
-            annotated = []
-            for prop, tfl in zip(candidates, tfl_times):
-                if isinstance(tfl, Exception):
-                    tfl = None
-                travel_time = tfl if (isinstance(tfl, (int, float)) and 0 < tfl <= _COMMUTE_SANITY_CAP) else None
-                if travel_time is None:
-                    travel_time = _coord_commute_minutes(
-                        prop.get('geo_location') or prop.get('Geo_Location'), dest_coords
-                    )
-                if travel_time is None and not london_dest:
-                    try:
-                        travel_time = calculate_travel_time(prop.get('Address', ''), commute_target)
-                    except Exception:
-                        travel_time = None
-                if travel_time is not None:
-                    prop['travel_time_minutes'] = travel_time
-                    prop['travel_time'] = travel_time
-                if commute_filter_enabled:
-                    if travel_time is not None and travel_time <= max_commute_time:
-                        annotated.append(prop)
-                    # 否则：超出上限，丢弃
-                else:
-                    annotated.append(prop)  # 仅标注，不过滤
-            candidates = annotated
+            # 通勤标注装配：坐标估算 _coord_commute_minutes（纯 CPU）以及非 London 分支里
+            # 的同步 calculate_travel_time（逐候选、串行网络调用）都会阻塞事件循环。整段离线到
+            # 工作线程（London 的 TfL 时间已在上面 gather 并发取回，此处仅按 tfl_times 装配），
+            # 行为逐字不变（相同的净化/回退/过滤顺序）。
+            def _annotate():
+                annotated = []
+                for prop, tfl in zip(candidates, tfl_times):
+                    if isinstance(tfl, Exception):
+                        tfl = None
+                    travel_time = tfl if (isinstance(tfl, (int, float)) and 0 < tfl <= _COMMUTE_SANITY_CAP) else None
+                    if travel_time is None:
+                        travel_time = _coord_commute_minutes(
+                            prop.get('geo_location') or prop.get('Geo_Location'), dest_coords
+                        )
+                    if travel_time is None and not london_dest:
+                        try:
+                            travel_time = calculate_travel_time(prop.get('Address', ''), commute_target)
+                        except Exception:
+                            travel_time = None
+                    if travel_time is not None:
+                        prop['travel_time_minutes'] = travel_time
+                        prop['travel_time'] = travel_time
+                    if commute_filter_enabled:
+                        if travel_time is not None and travel_time <= max_commute_time:
+                            annotated.append(prop)
+                        # 否则：超出上限，丢弃
+                    else:
+                        annotated.append(prop)  # 仅标注，不过滤
+                return annotated
+
+            candidates = await asyncio.to_thread(_annotate)
             print(f"   ✅ 通勤处理后: {len(candidates)} 个房源 (dest_in_london={london_dest})")
 
         # ================================================================
@@ -1912,8 +1942,14 @@ async def search_properties_impl(
                 'requested_features': all_property_features,
                 'move_in_date': move_in_date,
             }
-            perfect_match = rank_and_diversify(perfect_match, **rank_kwargs)
-            soft_violation = rank_and_diversify(soft_violation, **rank_kwargs)
+
+            # MMR re-rank is O(n²) over each pool with per-listing utility maths;
+            # offload both pools in a single thread hop (kept off the loop / batch timer).
+            def _rank_both():
+                return (rank_and_diversify(perfect_match, **rank_kwargs),
+                        rank_and_diversify(soft_violation, **rank_kwargs))
+
+            perfect_match, soft_violation = await asyncio.to_thread(_rank_both)
 
         # ================================================================
         # 步骤 5.5: 无匹配时的回退
@@ -1923,12 +1959,18 @@ async def search_properties_impl(
         if not perfect_match and not soft_violation:
             if has_budget:
                 print(f"\n⚠️ [SEARCH] 无符合结果，尝试 RAG 相似房源...")
-                similar_properties = rag_coordinator.property_store.search(
-                    f"flat apartment near {search_area} budget {max_budget}", top_k=10
-                )
-                if similar_properties:
-                    similar_with_commute = []
-                    for prop in similar_properties[:6]:
+
+                # 相似回退：property_store.search 为 embedding 检索，逐候选的通勤估算/同步
+                # calculate_travel_time 亦为阻塞网络。整段（检索 + 通勤装配）离线到工作线程；
+                # _RAG_LOCK 保护共享 store 的读取，与上面 build_index 互斥。行为逐字不变
+                # （相同的 top-6 截断、通勤过滤、价格归一化与保留判定）。
+                def _similar_recall():
+                    with _RAG_LOCK:
+                        sims = rag_coordinator.property_store.search(
+                            f"flat apartment near {search_area} budget {max_budget}", top_k=10
+                        )
+                    out = []
+                    for prop in (sims or [])[:6]:
                         try:
                             travel_time = None
                             if commute_annotation_enabled:
@@ -1947,11 +1989,13 @@ async def search_properties_impl(
                                 if travel_time is not None:
                                     prop['travel_time'] = travel_time
                                 prop['price'] = prop.get('parsed_price', parse_price(prop.get('Price', '')))
-                                similar_with_commute.append(prop)
+                                out.append(prop)
                         except Exception:
                             continue
+                    return out
 
-                    if similar_with_commute:
+                similar_with_commute = await asyncio.to_thread(_similar_recall)
+                if similar_with_commute:
                         similar_with_commute.sort(key=lambda x: x.get('price', float('inf')))
                         closest_3 = similar_with_commute[:3]
                         min_price_needed = min(p.get('price', 0) for p in closest_3)

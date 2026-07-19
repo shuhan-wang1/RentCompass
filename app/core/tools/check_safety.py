@@ -7,7 +7,7 @@ from core.tool_system import Tool
 from core.maps_service import get_crime_data_by_location
 from typing import Optional
 
-async def check_safety_impl(
+def check_safety_impl(
     address: str = None,
     area: str = None,
     latitude: Optional[float] = None,
@@ -16,6 +16,11 @@ async def check_safety_impl(
 ) -> dict:
     """
     检查地址附近的犯罪数据和安全指数
+
+    NOTE: this is a PLAIN SYNC function on purpose. get_crime_data_by_location performs
+    SYNCHRONOUS network I/O (data.police.uk HTTP + geocoding). Registering it as sync means
+    Tool.execute offloads it to an executor thread (tool_system.py :279-284), keeping the
+    asyncio event loop responsive so the fc-loop's per-tool timeout / batch budget can fire.
     """
     # 兼容 address 和 area 参数
     location = address or area

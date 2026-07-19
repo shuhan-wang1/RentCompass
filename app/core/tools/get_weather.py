@@ -17,13 +17,18 @@ _WEATHER_CODE = {
 }
 
 
-async def get_weather_impl(
+def get_weather_impl(
     location: str,
     latitude: Optional[float] = None,
     longitude: Optional[float] = None
 ) -> dict:
     """
     获取地点的真实天气信息（Open-Meteo —— 免费、无需 API key）
+
+    NOTE: this is a PLAIN SYNC function on purpose. It performs SYNCHRONOUS network I/O
+    (requests.get to Open-Meteo geocoding + forecast). Registering it as sync means
+    Tool.execute offloads it to an executor thread (tool_system.py :279-284), keeping the
+    asyncio event loop responsive so the fc-loop's per-tool timeout / batch budget can fire.
     """
     try:
         print(f"   🌤️  获取天气: {location}")

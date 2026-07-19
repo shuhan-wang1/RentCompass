@@ -142,7 +142,7 @@ def format_property_details(property_data: Dict) -> str:
     return details.strip()
 
 
-async def get_property_details_impl(
+def get_property_details_impl(
     property_name: str = "",
     property_address: str = "",
     property_url: str = "",
@@ -151,6 +151,12 @@ async def get_property_details_impl(
 ) -> dict:
     """
     获取特定房产的详细信息
+
+    NOTE: this is a PLAIN SYNC function on purpose. load_property_database /
+    find_cached_listing_by_url perform SYNCHRONOUS blocking I/O (sqlite reads over the
+    on-demand listing cache + pandas DataFrame construction). Registering it as sync means
+    Tool.execute offloads it to an executor thread (tool_system.py :279-284), keeping the
+    asyncio event loop responsive so the fc-loop's per-tool timeout / batch budget can fire.
 
     当用户询问数据库中某个房产的具体信息时使用此工具。
     优先通过 URL 精确命中 sqlite 缓存；否则通过房产名称或地址进行模糊匹配。

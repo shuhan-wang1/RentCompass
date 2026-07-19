@@ -7,13 +7,20 @@ from core.tool_system import Tool
 from typing import Optional
 
 
-async def calculate_commute_impl(
+def calculate_commute_impl(
     from_address: str,
     to_address: str,
     mode: str = "transit"
 ) -> dict:
     """
     计算两个地址之间的通勤时间
+
+    NOTE: this is a PLAIN SYNC function on purpose. calculate_travel_details performs
+    SYNCHRONOUS network I/O (TfL Journey Planner HTTP + geopy geocoding). Registering it
+    as sync means Tool.execute offloads it to an executor thread (tool_system.py :279-284),
+    so the asyncio event loop stays responsive and the fc-loop's per-tool asyncio.wait_for /
+    batch budget can actually fire. As an async def with these blocking calls inline, four
+    concurrent calls serialized to ~52s despite a 20s batch budget (the confirmed bug).
     """
     try:
         from core.maps_service import calculate_travel_details

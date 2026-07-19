@@ -8,6 +8,7 @@ from core.tool_system import Tool
 from core.web_search import get_search_snippets
 from uk_rent_agent.agent.critic import evidence_usable as _evidence_usable
 from typing import Optional, List, Dict
+import asyncio
 import json
 import re
 
@@ -36,6 +37,11 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
     
     Returns:
         dict: 合并的搜索结果；由 Tool.execute 统一包装。
+
+    NOTE: this stays an `async def` (it AWAITS sibling tools via _tool_registry.execute_tool
+    for the sub_queries path, so it cannot be offloaded wholesale to a thread). Every BLOCKING
+    call it makes directly — get_search_snippets performs SYNCHRONOUS SearXNG HTTP — is pushed
+    through asyncio.to_thread so it never blocks the event loop while running inline on the loop.
     """
     try:
         print(f"[WEB_SEARCH] 主查询: {query}")
@@ -55,9 +61,9 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                 print(f"       参数: {json.dumps(params, ensure_ascii=False)}")
                 
                 if tool_name == 'web_search_only':
-                    # 执行网络搜索
+                    # 执行网络搜索（阻塞 HTTP -> to_thread，避免阻塞事件循环）
                     search_query = params.get('query', query)
-                    web_result = get_search_snippets(search_query, max_results=5)
+                    web_result = await asyncio.to_thread(get_search_snippets, search_query, 5)
                     
                     results_parts.append(f"### Web Search: {search_query}")
                     results_parts.append(web_result)
@@ -86,9 +92,9 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                 results_parts.append("")  # 空行分隔
         
         else:
-            # 🆕 没有 sub_queries，只执行简单的网络搜索
+            # 🆕 没有 sub_queries，只执行简单的网络搜索（阻塞 HTTP -> to_thread）
             print(f"[WEB_SEARCH] 执行简单网络搜索...")
-            web_result = get_search_snippets(query, max_results=5)
+            web_result = await asyncio.to_thread(get_search_snippets, query, 5)
 
             # H3: report success=FALSE truthfully when the search backend returned
             # nothing usable. get_search_snippets emits a placeholder string

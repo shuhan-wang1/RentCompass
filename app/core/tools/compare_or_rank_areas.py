@@ -16,6 +16,7 @@ status ``no_data`` (suggesting a search first) instead of scraping in-line.
 
 from __future__ import annotations
 
+import asyncio
 from typing import List, Optional
 
 from core.tool_system import Tool
@@ -221,7 +222,10 @@ async def compare_or_rank_areas_impl(
     commute_by_slug = {c["slug"]: c["commute_minutes"] for c in candidates}
 
     # ---- 2) Rent aggregation (offline, from the listing cache) -----------
-    stats_by_slug = area_stats.aggregate(slugs, budget)
+    # area_stats.aggregate does a SYNCHRONOUS sqlite read over the listing cache; this tool
+    # stays async (it awaits generate_candidate_areas above), so push the blocking sqlite call
+    # through to_thread to keep the event loop responsive (never inline a blocking call on it).
+    stats_by_slug = await asyncio.to_thread(area_stats.aggregate, slugs, budget)
 
     value_available = any(st["sample_size"] > 0 for st in stats_by_slug.values())
     commute_available = (destination is not None) and any(c is not None for c in commute_by_slug.values())

@@ -258,7 +258,7 @@ def _get_zone_from_postcode(postcode: str) -> Optional[int]:
     return 6
 
 
-async def calculate_commute_cost_impl(
+def calculate_commute_cost_impl(
     from_address: str,
     to_address: str,
     travel_type: str = "student",
@@ -266,6 +266,12 @@ async def calculate_commute_cost_impl(
 ) -> dict:
     """
     计算综合通勤成本（时间 + 费用）
+
+    NOTE: this is a PLAIN SYNC function on purpose. calculate_travel_time and
+    _get_zone_from_address perform SYNCHRONOUS network I/O (TfL Journey Planner + free
+    geocoding). Registering it as sync means Tool.execute offloads it to an executor thread
+    (tool_system.py :279-284), keeping the asyncio event loop responsive so the fc-loop's
+    per-tool timeout / batch budget can fire (the confirmed four-concurrent-calls-to-52s bug).
 
     Args:
         from_address: 起点地址 (房源地址)

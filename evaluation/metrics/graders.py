@@ -101,7 +101,10 @@ _MINUTES_RE = re.compile(r"\b([0-9]{1,3})\s*(?:-|to|–)?\s*(?:min\b|mins\b|minu
 _DISTANCE_M_RE = re.compile(r"\b([0-9]{1,4})\s*m\b(?!in)", re.IGNORECASE)  # metres, not "min"
 _SCORE_RE = re.compile(r"\b([0-9]{1,3})\s*/\s*100\b")
 _POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b", re.IGNORECASE)
-_GENERIC_NUM_RE = re.compile(r"(?<![£/\w.])([0-9][0-9,]*(?:\.[0-9]+)?)(?![\w])")
+# Boundary classes are ASCII-word only: Python's \w matches CJK, which made numbers
+# embedded in Chinese prose (「最高1400英镑」) invisible to extraction — 英/高 counted
+# as word chars and killed both lookarounds. CJK must act as a boundary.
+_GENERIC_NUM_RE = re.compile(r"(?<![£/0-9A-Za-z_.])([0-9][0-9,]*(?:\.[0-9]+)?)(?![0-9A-Za-z_])")
 
 
 def _to_float(raw: str) -> Optional[float]:

@@ -352,6 +352,33 @@ def test_no_fabricated_number_still_fails_for_nowhere_number():
     assert graders._c_no_fabricated_number(con, ctx).passed is False
 
 
+# --------------------------------------------------------------------------- #
+# Number extraction must see figures embedded in CJK prose (H12 live regression:
+# 「预算是每月最高1400英镑」 was invisible because Python's \w matches CJK, so both
+# lookarounds of _GENERIC_NUM_RE rejected the digits and must_recall_value failed
+# on an answer that plainly recalled the value).
+# --------------------------------------------------------------------------- #
+def test_answer_numbers_sees_cjk_embedded_number():
+    assert 1400.0 in graders._answer_numbers("是的，我记得你的预算是每月最高1400英镑。")
+    assert 25.0 in graders._answer_numbers("通勤大约25分钟即可到达。")
+
+
+def test_must_recall_value_passes_for_cjk_embedded_number():
+    ctx = _grade_ctx(final_answer="是的，我记得你的预算是每月最高1400英镑。")
+    res = graders._c_must_recall_value({"type": "must_recall_value", "value": 1400}, ctx)
+    assert res.passed is True
+
+
+def test_generic_num_ascii_boundaries_unchanged():
+    # ASCII contexts keep the old semantics: £-prefixed handled by _MONEY_RE (not
+    # double-counted as generic), decimals stay whole, and identifier-embedded
+    # digits (v2, SW1A) stay excluded.
+    nums = graders._answer_numbers("Plan v2 costs £1,400.50 at SW1A near zone 2.")
+    assert 1400.50 in nums
+    assert 2.0 in nums  # "zone 2" — plain standalone number still extracted
+    assert not any(abs(n - 1.0) < 0.01 for n in nums)  # no fragment of SW1A / v2
+
+
 def test_reconstructed_context_number_does_not_seed_contradiction():
     # A context figure supports; it must NOT create a contradiction for a different, also
     # -supported figure (the pass gate keys on contradicted==0).

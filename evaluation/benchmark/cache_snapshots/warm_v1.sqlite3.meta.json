@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-07-19T22:20:22",
+  "created_at_epoch": 1784496022.5448518,
+  "source_path": "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\.runtime\\listing_cache.sqlite3",
+  "snapshot_path": "evaluation\\benchmark\\cache_snapshots\\warm_v1.sqlite3",
+  "row_count": 41,
+  "sha256": "01620e8b69ae3ce1295797dd9cde2ccedd31c9f34f17b4716475a3fc40965412",
+  "size_bytes": 651264
+}

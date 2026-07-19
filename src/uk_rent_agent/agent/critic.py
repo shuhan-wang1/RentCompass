@@ -350,6 +350,35 @@ async def enforce_grounding(
     )
 
 
+def has_specific_price_claims(text: str) -> bool:
+    """True when ``text`` asserts *specific* monetary figures.
+
+    Reuses the same currency/period-marked number machinery the grounding rubric
+    uses (:func:`_money_mentions`), so a plain "12 months" / "3 bedrooms" never
+    counts — only figures carrying a ``£``/``GBP`` marker or a rent-period
+    annotation. This is the numeric precondition for the deterministic
+    no-evidence 兜底 in the critic node.
+    """
+    return bool(_money_mentions(text or ""))
+
+
+def no_reliable_data_message(reply_language: str) -> str:
+    """Deterministic replacement delivered when a numeric answer has *zero* usable
+    retrieval evidence (the H3 兜底 — a hard replace, not a caveat).
+
+    Short, offers a retry, emoji-free, and localized off the turn's reply language.
+    """
+    if (reply_language or "").lower().startswith("zh"):
+        return (
+            "抱歉，我暂时无法获取可靠数据来回答这个问题里的具体数字，"
+            "为避免给出可能不准确的信息，我不便提供估算。请稍后再试，或换个方式提问。"
+        )
+    return (
+        "Sorry, I don't have reliable data to give specific figures for this right now. "
+        "Please try again shortly, or rephrase your question."
+    )
+
+
 def safe_fallback(verdict: CriticVerdict) -> str:
     """Deprecated. Retained for backward compatibility only.
 

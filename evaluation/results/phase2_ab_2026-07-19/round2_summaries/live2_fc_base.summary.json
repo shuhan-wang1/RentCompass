@@ -1,0 +1,100 @@
+{
+  "config": "routed_models",
+  "arch": "fc_loop",
+  "mode": "live",
+  "offline": false,
+  "repeats": 1,
+  "n_cases_selected": 98,
+  "n_runs": 98,
+  "passed": {
+    "num": 47,
+    "den": 98,
+    "display": "47/98",
+    "rate": 0.47959183673469385
+  },
+  "task_completion": {
+    "num": 98,
+    "den": 98,
+    "display": "98/98",
+    "rate": 1.0
+  },
+  "route_accuracy": {
+    "num": 78,
+    "den": 98,
+    "display": "78/98",
+    "rate": 0.7959183673469388
+  },
+  "forbidden_tool_rate": {
+    "num": 6,
+    "den": 98,
+    "display": "6/98",
+    "rate": 0.061224489795918366
+  },
+  "duplicate_call_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "loop_exhaustion_rate": {
+    "num": 2,
+    "den": 98,
+    "display": "2/98",
+    "rate": 0.02040816326530612
+  },
+  "schema_failure_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "hard_gate": {
+    "total": 0,
+    "passed": 0,
+    "failed_case_ids": []
+  },
+  "gate_passed": true,
+  "constraints": {
+    "num": 249,
+    "den": 321,
+    "display": "249/321",
+    "rate": 0.7757009345794392
+  },
+  "grounded_rate": {
+    "num": 240,
+    "den": 334,
+    "display": "240/334",
+    "rate": 0.718562874251497
+  },
+  "money_grounded_rate": {
+    "num": 156,
+    "den": 201,
+    "display": "156/201",
+    "rate": 0.7761194029850746
+  },
+  "contradicted_claims": 9,
+  "source_coverage": {
+    "num": 211,
+    "den": 334,
+    "display": "211/334",
+    "rate": 0.6317365269461078
+  },
+  "critic_triggers": 97,
+  "critic_repairs": 0,
+  "latency_ms": {
+    "mean": 11628.25307143289,
+    "p50": 4819.1886999993585,
+    "p95": 39193.96757000643,
+    "n": 98
+  },
+  "tokens": {
+    "input": 2458708,
+    "output": 43844
+  },
+  "total_cost_usd": 0.09484516160000003,
+  "cost_cap_usd": 5.0,
+  "stopped_reason": null,
+  "git_commit": "0b772e7",
+  "timestamp": "2026-07-19T09:40:16",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

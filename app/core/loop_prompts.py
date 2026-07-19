@@ -27,12 +27,14 @@ Public API
     build_system_directive(reply_language="en") -> str
     behaviour_rules() -> str
     build_context_sections(*, accumulated_criteria, focused_property,
-                           last_results, recommendations_index) -> str
+                           last_results, recommendations_index, discussed_areas) -> str
     compose_context_message(context_sections, memory_block="") -> str
     render_accumulated_criteria(criteria) -> str
     render_focused_property(record) -> str
     render_last_results(results) -> str
     render_recommendations_index(index) -> str
+    extract_discussed_areas(history, last_results=None) -> list[str]
+    render_discussed_areas(areas) -> str
 
 Stable substrings intended for assertions live as module constants
 (``SOFT_GATE_CONFIRMED_MARKER``, ``NO_EMOJI_MARKER``, and the ``*_RULE`` texts) so
@@ -248,15 +250,109 @@ def render_recommendations_index(index: Optional[List[Dict[str, Any]]]) -> str:
     return render_recommended_index(index)
 
 
+# ---------------------------------------------------------------------------
+# Discussed areas (zh deictic anchoring — guard case H6)
+# ---------------------------------------------------------------------------
+
+# Assertable marker for the discussed-areas context line (kept short + load-bearing).
+DISCUSSED_AREAS_MARKER = "Areas under discussion"
+
+# How many of the most-recent history turns are scanned for area mentions.
+_DISCUSSED_AREAS_RECENT_TURNS = 3
+
+
+def _find_areas_in_text(text: Any) -> List[str]:
+    """Every curated UK city / neighbourhood named in ``text`` (canonical spelling),
+    REUSING the search_properties curated tables (``_ZH_AREA_MAP`` for Chinese city
+    names, ``_KNOWN_AREAS`` for the whole-word English set). Deterministic, no LLM.
+    Import is lazy so this module stays import-time side-effect free."""
+    if not text or not str(text).strip():
+        return []
+    try:  # lazy: search_properties pulls heavier deps; only needed when actually scanning
+        from core.tools.search_properties import _KNOWN_AREAS, _ZH_AREA_MAP
+    except Exception:
+        return []
+    import re
+
+    found: List[str] = []
+    seen: set = set()
+    raw = str(text)
+    # (a) Chinese city/area names — distinctive substring match.
+    for zh, canon in _ZH_AREA_MAP.items():
+        if zh in raw and canon not in seen:
+            seen.add(canon)
+            found.append(canon)
+    # (b) English whole-word match against the curated table (apostrophes normalised,
+    #     mirrors _match_known_area's key normalisation). The curated set deliberately
+    #     excludes words that collide with common English, so false positives are rare.
+    t = re.sub(r"[’']", "", raw.lower())
+    for key, canon in _KNOWN_AREAS.items():
+        if canon in seen:
+            continue
+        if re.search(r"\b" + re.escape(key) + r"\b", t):
+            seen.add(canon)
+            found.append(canon)
+    return found
+
+
+def extract_discussed_areas(history: Optional[List[Dict[str, Any]]],
+                            last_results: Optional[List[Dict[str, Any]]] = None,
+                            *, recent_turns: int = _DISCUSSED_AREAS_RECENT_TURNS) -> List[str]:
+    """Curated UK area / neighbourhood names surfaced in the recent conversation and in
+    the last search results, so the fc context can anchor Chinese deictics (「那个区域」)
+    to a concrete area instead of asking "which area?" (guard case H6).
+
+    ``history`` is the SessionStore shape ``[{"user": str, "assistant": str}, ...]``.
+    Deterministic — reuses the search_properties curated tables; never calls an LLM.
+    Newest history turn first, then last-results areas, deduped in appearance order.
+    """
+    areas: List[str] = []
+    seen: set = set()
+
+    def _add(name: Any) -> None:
+        n = str(name).strip() if name is not None else ""
+        if n and n not in seen:
+            seen.add(n)
+            areas.append(n)
+
+    turns = [h for h in (history or []) if isinstance(h, dict)]
+    for h in reversed(turns[-recent_turns:] if recent_turns > 0 else turns):
+        for field in ("assistant", "user"):
+            for name in _find_areas_in_text(h.get(field) or ""):
+                _add(name)
+    for r in (last_results or []):
+        if isinstance(r, dict) and r.get("area"):
+            _add(r.get("area"))
+    return areas
+
+
+def render_discussed_areas(areas: Optional[List[str]]) -> str:
+    """Render the discussed-areas anchor as a compact context line. Returns '' when the
+    list is empty. The line names the areas AND states the deictic-resolution rule so
+    the model resolves 「那个区域」 to a concrete area rather than re-asking."""
+    names = [str(a).strip() for a in (areas or []) if str(a).strip()]
+    if not names:
+        return ""
+    return (
+        "=== AREAS UNDER DISCUSSION ===\n"
+        + DISCUSSED_AREAS_MARKER + ": " + ", ".join(names)
+        + " — deictic references like 那个区域 / that area refer to these.\n"
+        + "=== END AREAS UNDER DISCUSSION ==="
+    )
+
+
 def build_context_sections(*, accumulated_criteria: Optional[Dict[str, Any]] = None,
                            focused_property: Optional[Dict[str, Any]] = None,
                            last_results: Optional[List[Dict[str, Any]]] = None,
-                           recommendations_index: Optional[List[Dict[str, Any]]] = None
+                           recommendations_index: Optional[List[Dict[str, Any]]] = None,
+                           discussed_areas: Optional[List[str]] = None
                            ) -> str:
     """Concatenate the non-memory context sections in the §2.7 order, omitting every
-    empty section. Returns '' when all sections are empty."""
+    empty section. Returns '' when all sections are empty. ``discussed_areas`` (the
+    zh-deictic anchor, H6) rides right after the accumulated criteria."""
     sections = [
         render_accumulated_criteria(accumulated_criteria),
+        render_discussed_areas(discussed_areas),
         render_focused_property(focused_property),
         render_last_results(last_results),
         render_recommendations_index(recommendations_index),

@@ -1,0 +1,100 @@
+{
+  "config": "routed_models",
+  "arch": "legacy",
+  "mode": "live",
+  "offline": false,
+  "repeats": 1,
+  "n_cases_selected": 98,
+  "n_runs": 98,
+  "passed": {
+    "num": 31,
+    "den": 98,
+    "display": "31/98",
+    "rate": 0.3163265306122449
+  },
+  "task_completion": {
+    "num": 98,
+    "den": 98,
+    "display": "98/98",
+    "rate": 1.0
+  },
+  "route_accuracy": {
+    "num": 55,
+    "den": 98,
+    "display": "55/98",
+    "rate": 0.5612244897959183
+  },
+  "forbidden_tool_rate": {
+    "num": 5,
+    "den": 98,
+    "display": "5/98",
+    "rate": 0.05102040816326531
+  },
+  "duplicate_call_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "loop_exhaustion_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "schema_failure_rate": {
+    "num": 0,
+    "den": 98,
+    "display": "0/98",
+    "rate": 0.0
+  },
+  "hard_gate": {
+    "total": 0,
+    "passed": 0,
+    "failed_case_ids": []
+  },
+  "gate_passed": true,
+  "constraints": {
+    "num": 208,
+    "den": 321,
+    "display": "208/321",
+    "rate": 0.6479750778816199
+  },
+  "grounded_rate": {
+    "num": 124,
+    "den": 173,
+    "display": "124/173",
+    "rate": 0.7167630057803468
+  },
+  "money_grounded_rate": {
+    "num": 102,
+    "den": 119,
+    "display": "102/119",
+    "rate": 0.8571428571428571
+  },
+  "contradicted_claims": 1,
+  "source_coverage": {
+    "num": 109,
+    "den": 173,
+    "display": "109/173",
+    "rate": 0.630057803468208
+  },
+  "critic_triggers": 78,
+  "critic_repairs": 14,
+  "latency_ms": {
+    "mean": 4468.483985718863,
+    "p50": 2783.2042500085663,
+    "p95": 14762.199069990309,
+    "n": 98
+  },
+  "tokens": {
+    "input": 159289,
+    "output": 20141
+  },
+  "total_cost_usd": 0.009675876,
+  "cost_cap_usd": 5.0,
+  "stopped_reason": null,
+  "git_commit": "0b772e7",
+  "timestamp": "2026-07-19T09:40:11",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

@@ -307,61 +307,178 @@ def build_fake_fc_model(case: dict) -> _FakeFCModel:
 
 
 # --------------------------------------------------------------------------- #
-# Referent context reconstruction (multi-turn fidelity)
+# Referent + accumulated-state reconstruction (multi-turn fidelity)
+#
+# A real session persists two kinds of state across turns that a stateless benchmark
+# case does not carry: (1) the structured referents of the last search (last_results /
+# property_address), and (2) the ACCUMULATED search criteria (sticky budget / area /
+# room_type). Both are rebuilt here FROM the case's conversation_history, using the
+# PRODUCTION extractors (core.tools.search_properties) so eval sees exactly the state a
+# live session would — not a parallel re-implementation. This is the fidelity point:
+# reuse the same parsing the app uses (H2 sticky-budget, H8 priced last_results).
 # --------------------------------------------------------------------------- #
 _UK_POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b", re.IGNORECASE)
 _ASSISTANT_LEADIN_RE = re.compile(
     r"^\W*(?:here'?s|here is|found|i found|this is|i'd suggest|check out|noted[—:\- ]*)\s+",
     re.IGNORECASE)
+# A listing price token: £N with an optional period unit ("/month", "/月", "pcm", "pw").
+# The raw matched string is stored verbatim as the listing's ``price`` (mirrors a real
+# search record, whose price is a display string), so a comparative follow-up can read
+# the figure straight from context.
+_LISTING_PRICE_RE = re.compile(
+    r"£\s?[0-9][0-9,]*(?:\.[0-9]+)?\s*"
+    r"(?:/\s*(?:month|mo|week|wk|月|周|星期)|per\s+(?:month|week)|pcm|pm|pw)?",
+    re.IGNORECASE)
+# Split an assistant turn into per-listing segments on numbered list markers ("1)", "2.",
+# "3、"), CJK/Latin semicolons, and newlines.
+_LISTING_SPLIT_RE = re.compile(r"(?:[；;\n]+|\d+\s*[\).、])")
+# available_from surfaced in history text ("available from 1 Aug", "8月1日可入住").
+_AVAILABLE_FROM_RE = re.compile(r"available\s+from\s+([0-9][^,，；;。\n]{1,24})", re.IGNORECASE)
+_AVAILABLE_FROM_ZH_RE = re.compile(r"([0-9]{1,2}\s*月\s*[0-9]{1,2}\s*日)\s*(?:可入住|入住|起)")
+
+
+def _prod_extractors():
+    """The production deterministic extractors, imported lazily (the app package is on
+    sys.path only after bootstrap / via the tests conftest). Reusing these IS the
+    fidelity guarantee: the eval derives sticky state with the same code the live agent
+    runs, never a parallel regex."""
+    from core.tools.search_properties import (  # type: ignore
+        _extract_budget, _extract_area, _extract_room_type)
+    return _extract_budget, _extract_area, _extract_room_type
+
+
+def _parse_listing_segment(seg: str, extract_budget) -> Optional[Dict[str, Any]]:
+    """Parse one assistant-text segment into a listing record {name, address, price,
+    available_from}. A segment is a listing only if it carries an address (UK postcode)
+    OR a price; the price token is validated through the production ``_extract_budget``
+    (so a non-price number is never mistaken for a price). Returns None otherwise."""
+    seg = (seg or "").strip()
+    if not seg:
+        return None
+    pc_m = _UK_POSTCODE_RE.search(seg)
+    price_m = _LISTING_PRICE_RE.search(seg)
+    amount = period = None
+    if price_m:
+        amount, period = extract_budget(price_m.group(0))
+    if pc_m is None and amount is None:
+        return None
+    # Name: text before the first comma, stripped of a lead-in ("here's", "你正在查看：")
+    # and any leftover list marker ("1)").
+    first = re.split(r"[，,]", seg, 1)[0]
+    first = _ASSISTANT_LEADIN_RE.sub("", first).strip()
+    if "：" in first:
+        first = first.split("：")[-1].strip()
+    name = re.sub(r"^\W*\d+\s*[\).、]?\s*", "", first).strip().rstrip(".。")
+    rec: Dict[str, Any] = {}
+    if name:
+        rec["name"] = name
+    if pc_m:
+        pc = re.sub(r"\s+", " ", pc_m.group(1).strip().upper())
+        rec["address"] = f"{name}, {pc}" if name else pc
+    elif name:
+        rec["address"] = name
+    if amount is not None:
+        # Store the raw display price (faithful to a real record) plus the derived
+        # monthly figure (README weekly->monthly formula) for a numeric consumer.
+        rec["price"] = re.sub(r"\s+", "", price_m.group(0)).strip()
+        rec["monthly_price"] = round(amount * (52.0 / 12.0)) if period == "week" else int(amount)
+    af = _AVAILABLE_FROM_RE.search(seg) or _AVAILABLE_FROM_ZH_RE.search(seg)
+    if af:
+        rec["available_from"] = af.group(1).strip()
+    return rec or None
 
 
 def referent_context_from_history(hist: List[dict]) -> Dict[str, Any]:
     """Reconstruct the structured referent state a REAL multi-turn session would carry
-    into this turn, so deictic references ("the first one", "that studio", "from there")
+    into this turn, so deictic references ("the first one", "that studio", "哪个最便宜")
     resolve exactly as they would live.
 
     The harness previously only concatenated the prior turns into the query TEXT, but
-    the agent's guards (safety / commute / property-details) resolve referents from
-    STRUCTURED state — ``extracted_context['last_results']`` (the prior search hits)
-    and ``extracted_context['property_address']`` — not from free text. With that state
-    absent, C1 ("commute from the first one to UCL") and its siblings fell through to a
-    "please provide both endpoints" clarification even though the address was named one
-    turn earlier. This rebuilds that state from the assistant turns that named a
-    property/address, mirroring what the graph writes after a real search.
+    the agent's guards (safety / commute / property-details / comparative follow-up)
+    resolve referents from STRUCTURED state — ``extracted_context['last_results']`` (the
+    prior search hits, EACH carrying price/address) and ``extracted_context
+    ['property_address']`` — not from free text. This rebuilds that state from the most
+    recent results-bearing assistant turn, mirroring what the graph writes after a real
+    search:
 
-    Returns {} when no assistant turn names a resolvable property/address.
+    * ``last_results`` — every listing in the latest results turn, WITH its price (H8's
+      "哪个最便宜" is answerable only when the £1290 figure rides along in context).
+    * ``property_address`` — set ONLY when that turn named a SINGLE listing (a focused
+      property, e.g. "你正在查看：Scape Bloomsbury, WC1H 0AQ"). A multi-listing RESULT
+      SET (e.g. "为你找到 3 套：…") carries no single focus, so property_address stays
+      unset and the turn routes to the comparative-followup path rather than
+      property-focus — exactly as a live session behaves.
+
+    Returns {} when no assistant turn names a resolvable priced/addressed listing.
     """
-    results: List[dict] = []
+    extract_budget, _, _ = _prod_extractors()
+    latest: List[dict] = []
+    focus_address: Optional[str] = None
     for turn in hist or []:
         if turn.get("role") != "assistant":
             continue
         txt = (turn.get("content") or "").strip()
         if not txt:
             continue
-        body = _ASSISTANT_LEADIN_RE.sub("", txt).strip()
-        pcm = _UK_POSTCODE_RE.search(txt)
-        # An assistant turn that names neither a postcode nor a comma-separated place
-        # carries no addressable referent — skip it.
-        if not pcm and "," not in body:
+        recs: List[dict] = []
+        for seg in _LISTING_SPLIT_RE.split(txt):
+            rec = _parse_listing_segment(seg, extract_budget)
+            if rec:
+                recs.append(rec)
+        if not recs:
             continue
-        name = body.split(",", 1)[0].strip().rstrip(".") if "," in body else None
-        if pcm:
-            after_name = body.split(",", 1)[1].strip() if "," in body else body
-            pc2 = _UK_POSTCODE_RE.search(after_name)
-            address = after_name[:pc2.end()].strip() if pc2 else after_name.strip()
-        else:
-            address = name
-        rec: Dict[str, Any] = {}
-        if name:
-            rec["name"] = name
-        if address:
-            rec["address"] = address
-        if rec:
-            results.append(rec)
-    if not results:
+        latest = recs
+        # A fresh results turn resets any earlier focus; a single named listing IS a
+        # focused property.
+        focus_address = (recs[0].get("address") or recs[0].get("name")) if len(recs) == 1 else None
+    if not latest:
         return {}
-    return {"last_results": results,
-            "property_address": results[0].get("address") or results[0].get("name")}
+    out: Dict[str, Any] = {"last_results": latest}
+    if focus_address:
+        out["property_address"] = focus_address
+    return out
+
+
+def accumulated_criteria_from_history(hist: List[dict]) -> Optional[Dict[str, Any]]:
+    """Reconstruct ``accumulated_search_criteria`` (sticky max_budget / area / room_type)
+    from the USER turns of the history, via the PRODUCTION extractors. This is what makes
+    a same-conversation budget/area survive a later turn (H2: the £1500 cap set for
+    Islington must still bind when the user later says "换到 Camden 找"). Wired into the
+    initial state for BOTH archs — the fc executor's _inject_search_params and legacy's
+    param builder both read acc.max_budget / acc.area / acc.room_type.
+
+    Returns None (=> create_initial_state's default empty criteria) when nothing sticky
+    was stated, so cases with no prior criteria are unchanged.
+    """
+    extract_budget, extract_area, extract_room_type = _prod_extractors()
+    max_budget = budget_period = area = room_type = None
+    for turn in hist or []:
+        if turn.get("role") != "user":
+            continue
+        txt = turn.get("content") or ""
+        amt, period = extract_budget(txt)
+        if amt is not None:
+            max_budget, budget_period = int(amt), period
+        a = extract_area(txt)
+        if a:
+            area = a
+        rt = extract_room_type(txt)
+        if rt:
+            room_type = rt
+    if max_budget is None and area is None and room_type is None:
+        return None
+    acc: Dict[str, Any] = {
+        "destination": None, "max_budget": None, "max_travel_time": None,
+        "property_features": [], "soft_preferences": [], "amenities_of_interest": [],
+    }
+    if max_budget is not None:
+        acc["max_budget"] = max_budget
+        acc["budget_period"] = budget_period or "month"
+    if area:
+        acc["area"] = area
+    if room_type:
+        acc["room_type"] = room_type
+    return acc
 
 
 # --------------------------------------------------------------------------- #
@@ -387,7 +504,17 @@ class RunResult:
     loop_exhaustion: bool = False
     schema_failure: bool = False
     hard_gate: bool = False
-    node_latencies: Dict[str, float] = field(default_factory=dict)
+    # Per-span profile: ordered spans [{node, ms, seq}] preserve EVERY agent/execute_tools
+    # hop of the fc loop (a dict keyed by node name silently overwrote repeated hops, so
+    # the multi-hop p95 tail could not be proven). node_latencies is a backward-compatible
+    # per-node aggregate {node: {sum_ms, max_ms, count}} derived from the spans.
+    node_spans: List[dict] = field(default_factory=list)
+    node_latencies: Dict[str, Any] = field(default_factory=dict)
+    llm_calls: int = 0
+    tool_batches: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    critic_repairs: int = 0
     model_usage: List[dict] = field(default_factory=list)
     critic_verdicts: List[dict] = field(default_factory=list)
     turn_latency_ms: Optional[float] = None
@@ -672,13 +799,19 @@ class CaseRunner:
         # that a real multi-turn session would carry, so deictic references in the
         # current message ("the first one", "that studio", "from there") resolve the
         # way they would live instead of being clarification-gated.
+        hist = case.get("conversation_history") or []
         extracted_context = {"current_message": case.get("user_query", "")}
-        extracted_context.update(referent_context_from_history(
-            case.get("conversation_history") or []))
+        extracted_context.update(referent_context_from_history(hist))
+        # Reconstruct the accumulated (sticky) search criteria — budget/area/room_type set
+        # in an earlier turn — that a persistent session would carry. None => the default
+        # empty criteria. Wired into the initial state so BOTH archs' search-param
+        # injection sees the sticky budget (H2) without a parallel extractor.
+        acc_criteria = accumulated_criteria_from_history(hist)
         state = self.create_initial_state(
             user_query=query, extracted_context=extracted_context,
             user_id=eff_uid, session_id=f"conv_{case_id}",
             request_id=gconfig["configurable"].get("request_id"),
+            accumulated_search_criteria=acc_criteria,
         )
 
         started = time.perf_counter()
@@ -722,10 +855,18 @@ class CaseRunner:
         tool_events = [e for e in mine if e.get("type") == "tool_call"]
         rr.tool_call_events = tool_events
         rr.tools_called = [e.get("tool") for e in tool_events]
-        rr.node_latencies = {e.get("node"): e.get("latency_ms")
-                             for e in mine if e.get("type") == "node_span"}
+        # Per-span profile: preserve every node hop IN ORDER (repeated agent/execute_tools
+        # spans no longer overwrite each other). node_latencies is the backward-compatible
+        # per-node aggregate derived from these spans.
+        rr.node_spans = build_node_spans(mine)
+        rr.node_latencies = _aggregate_spans(rr.node_spans)
         rr.model_usage = [e for e in mine if e.get("type") == "llm_call"]
         rr.critic_verdicts = [e for e in mine if e.get("type") == "critic_verdict"]
+        rr.llm_calls = len(rr.model_usage)
+        rr.tokens_in = sum((e.get("input_tokens") or 0) for e in rr.model_usage)
+        rr.tokens_out = sum((e.get("output_tokens") or 0) for e in rr.model_usage)
+        rr.critic_repairs = sum(1 for v in rr.critic_verdicts
+                                if v.get("stage") == "regenerated")
 
         # ---- Phase 2 route/trace + failure flags -------------------------- #
         # fc_loop trace = artifacts grouped into batches by turn (batch = one agent
@@ -739,6 +880,7 @@ class CaseRunner:
         else:
             rr.tool_trace = [[t] for t in rr.tools_called]
             signatures = [(e.get("tool"), e.get("args_hash")) for e in tool_events]
+        rr.tool_batches = len(rr.tool_trace)
         rr.route_matched = self.graders.route_matches(rr.tool_trace, case)
         rr.forbidden_tool = self.graders.forbidden_tool_used(rr.tool_trace, case)
         rr.duplicate_call = self.graders.has_duplicate_calls(signatures)
@@ -792,6 +934,59 @@ class CaseRunner:
 
 
 # --------------------------------------------------------------------------- #
+# Latency-span aggregation (per-node kind: sum / max / count)
+# --------------------------------------------------------------------------- #
+def build_node_spans(events: List[dict]) -> List[dict]:
+    """Ordered per-span profile ``[{node, ms, seq}]`` from a run's events. Every node hop
+    is preserved IN EMISSION ORDER (sorted by the collector's ``ts_monotonic``), so the
+    fc loop's repeated ``agent``/``execute_tools`` spans no longer collapse into one — the
+    prerequisite for proving the p95 tail is multi-hop."""
+    spans = sorted((e for e in events or [] if e.get("type") == "node_span"),
+                   key=lambda e: e.get("ts_monotonic") or 0.0)
+    return [{"node": e.get("node"), "ms": e.get("latency_ms"), "seq": i}
+            for i, e in enumerate(spans)]
+
+
+def _aggregate_spans(spans: List[dict]) -> Dict[str, Any]:
+    """Per-node aggregate {node: {sum_ms, max_ms, count}} over an ORDERED span list.
+    Backward-compatible replacement for the old node->latency dict, which lost repeated
+    agent/execute_tools hops. Spans with a missing latency count toward ``count`` only."""
+    agg: Dict[str, Any] = {}
+    for s in spans or []:
+        node = s.get("node") or "?"
+        ms = s.get("ms")
+        a = agg.setdefault(node, {"sum_ms": 0.0, "max_ms": 0.0, "count": 0})
+        a["count"] += 1
+        if ms is not None:
+            a["sum_ms"] += ms
+            a["max_ms"] = max(a["max_ms"], ms)
+    return agg
+
+
+def aggregate_node_kinds(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Cross-case per-node-kind aggregate {node: {sum_ms, max_ms, count}} — the evidence
+    for "which node kind dominates the tail" across the whole run."""
+    all_spans: List[dict] = [s for rr in runs for s in rr.node_spans]
+    return _aggregate_spans(all_spans)
+
+
+def top_slowest_cases(runs: List["RunResult"], k: int = 10) -> List[dict]:
+    """The k slowest case-runs by turn latency, each with its FULL span timeline — so the
+    "p95 tail is multi-hop" hypothesis is provable directly from the summary."""
+    ranked = sorted(runs, key=lambda r: (r.turn_latency_ms or 0.0), reverse=True)[:k]
+    return [{
+        "run_id": rr.run_id,
+        "case_id": rr.case_id,
+        "category": rr.category,
+        "config": rr.config,
+        "latency_ms": rr.turn_latency_ms,
+        "llm_calls": rr.llm_calls,
+        "tool_batches": rr.tool_batches,
+        "spans": list(rr.node_spans),
+    } for rr in ranked]
+
+
+# --------------------------------------------------------------------------- #
 # Result writers
 # --------------------------------------------------------------------------- #
 def _percentile(values: List[float], pct: float) -> Optional[float]:
@@ -812,8 +1007,10 @@ def write_raw_runs(out: Path, runs: List[RunResult]) -> None:
             fh.write(json.dumps(rr.to_dict(), ensure_ascii=False, default=str) + "\n")
 
 
-def write_per_case(out: Path, runs: List[RunResult]) -> None:
-    with (out / "per_case.csv").open("w", encoding="utf-8", newline="") as fh:
+def write_per_case_detail(out: Path, runs: List[RunResult]) -> None:
+    """Rich grading detail (grounding rates, constraint tallies). The lean, task-specified
+    ``per_case.csv`` is written by ``results_package``; this is the deeper companion."""
+    with (out / "per_case_detail.csv").open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["case_id", "category", "config", "repeat", "passed", "task_completed",
                     "grounded_rate", "money_grounded_rate", "source_coverage",
@@ -945,6 +1142,16 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
             "p50": _percentile(latencies, 0.5),
             "p95": _percentile(latencies, 0.95),
             "n": len(latencies),
+        },
+        # Per-node-kind latency aggregate across every case + the 10 slowest case-runs
+        # with their FULL span timelines: makes the "p95 tail is multi-hop" claim provable
+        # straight from committed data (repeated agent/execute_tools hops are preserved).
+        "node_latency_by_kind": aggregate_node_kinds(runs),
+        "slowest_cases": top_slowest_cases(runs, k=10),
+        "profile_totals": {
+            "llm_calls": sum(r.llm_calls for r in runs),
+            "tool_batches": sum(r.tool_batches for r in runs),
+            "critic_repairs_cases": sum(1 for r in runs if r.critic_repairs),
         },
         "tokens": {"input": total_in, "output": total_out},
         "total_cost_usd": total_cost,
@@ -1096,9 +1303,11 @@ async def _run_all(args) -> int:
                 break
 
     # Final writers.
+    from evaluation import results_package
+    case_file = Path(args.cases) if args.cases else CASES_PATH
     all_tool_events = [e for rr in runs for e in rr.tool_call_events]
     write_raw_runs(out, runs)
-    write_per_case(out, runs)
+    write_per_case_detail(out, runs)
     write_tool_metrics(out, all_tool_events)
     write_model_usage(out, runs, pricing)
     if args.judge:
@@ -1106,6 +1315,11 @@ async def _run_all(args) -> int:
     summary = write_summary(out, runs, mode=mode, cfg_name=cfg.name, repeats=args.repeat,
                             cost_cap=args.max_cost_usd, stopped_reason=stopped_reason,
                             n_selected=len(selected), timestamp=timestamp, arch=args.arch)
+    # Reproducible results package: lean per_case.csv + manifest.json (argv, env, commit,
+    # case-file + events digests). events.jsonl stays out of git; only its SHA256 is kept.
+    results_package.write_results_package(
+        out, runs, argv=sys.argv, arch=args.arch, config=cfg.name, timestamp=timestamp,
+        case_file=case_file, events_log=events_log, mode=mode, git_commit=_git_commit)
     _save_checkpoint(out, list(done_ids), cumulative_cost, stopped_reason)
 
     print("\n=== summary ===")

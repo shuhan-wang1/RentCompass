@@ -1427,6 +1427,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # 原始当前消息（不含记忆/历史前缀）——供工具做"仅基于本条消息"的解析
     # (预算/通勤正则、postcode/序数解析)，避免误抓注入记忆里的旧值。
     extracted_context['current_message'] = user_message
+    # 会话历史（SessionStore shape: [{"user":.., "assistant":..}, ...]）——无条件写入
+    # extracted_context。legacy 字符串装配路径（assemble_context 上面已单独喂过 history）
+    # 忽略该键；fc_loop 的 assemble_messages 用它构造 user/assistant 消息对，否则 fc 模型
+    # 拿不到任何对话历史。放在这里（早于建图）保证两条路径都可用。
+    extracted_context['history'] = history_snapshot
     # 🆕 回复语言（产品规则）：本条消息含中文→'zh'；否则 UI=en→'en'；否则 'zh'。用 pristine
     # user_message（早于记忆/历史前缀），图 agent 读取该键并转发给 search 工具，使 /api/alex
     # 与 "search anyway" 路径不再中英混杂。

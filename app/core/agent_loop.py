@@ -172,12 +172,23 @@ def _build_messages(state: AgentState) -> list:
         ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
     user_message = ec.get("current_message") or _current_message(state.get("user_query") or "")
 
+    # zh-deictic anchor (guard case H6): curated area names surfaced in recent turns +
+    # last_results, so 「那个区域安全吗」resolves to a concrete area instead of "which area?".
+    # Deterministic (loop_prompts reuses the search_properties curated tables), never fatal.
+    try:
+        from core import loop_prompts as _lp  # lazy, side-effect free
+        discussed_areas = _lp.extract_discussed_areas(
+            ec.get("history") or [], ec.get("last_results") or [])
+    except Exception:
+        discussed_areas = []
+
     context_block = {
         "accumulated_criteria": state.get("accumulated_search_criteria") or {},
         "focused_property": ec.get("focused_property") or (
             {"property_address": ec.get("property_address")} if ec.get("property_address") else None),
         "last_results": ec.get("last_results") or [],
         "recommendations_index": ec.get("recommendations_index") or [],
+        "discussed_areas": discussed_areas,
     }
     try:
         from core.context_assembler import assemble_messages  # contract C
@@ -203,6 +214,10 @@ def _build_messages(state: AgentState) -> list:
                              + json.dumps(context_block["focused_property"], ensure_ascii=False, default=str))
         if context_block["last_results"]:
             ctx_lines.append(f"Last results: {len(context_block['last_results'])} listings in context.")
+        if context_block.get("discussed_areas"):
+            ctx_lines.append(
+                "Areas under discussion: " + ", ".join(context_block["discussed_areas"])
+                + " — deictic references like 那个区域 / that area refer to these.")
         if state.get("memory_context"):
             ctx_lines.append("What I remember about this user:\n" + str(state.get("memory_context")))
         if ctx_lines:
@@ -248,8 +263,14 @@ def _default_agent_llm():
     return ModelRouter().create("responder", low_latency=True, base_url=base_url)
 
 
-def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "") -> dict:
-    return {"turn": turn, "tool": tool, "raw_data": raw_data, "params_digest": params_digest}
+def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
+              success: bool = True, error: Optional[str] = None) -> dict:
+    """A tool_artifacts entry. `success`/`error` mirror the underlying ToolResult so
+    downstream readers (P2's critic, format_output_fc) can tell a failed tool apart
+    from a successful one without re-parsing the model-facing ToolMessage. The ask_user
+    terminal artifact carries success=True (it always "succeeds" as a clarification)."""
+    return {"turn": turn, "tool": tool, "raw_data": raw_data,
+            "params_digest": params_digest, "success": bool(success), "error": error}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -629,7 +650,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     tool_call_id=tcid, name=name))
                 continue
             result = result_by_idx[i]
-            artifacts.append(_artifact(turn, name, getattr(result, "data", None), digest))
+            artifacts.append(_artifact(
+                turn, name, getattr(result, "data", None), digest,
+                success=getattr(result, "success", False),
+                error=getattr(result, "error", None)))
             content, tainted = _derived_toolmsg(name, result)
             tainted_any = tainted_any or tainted
             messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))

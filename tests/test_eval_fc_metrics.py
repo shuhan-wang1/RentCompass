@@ -87,6 +87,31 @@ def test_route_matches_empty_everything_true():
 
 
 # --------------------------------------------------------------------------- #
+# route_matches — allowed_tool_paths applies to BOTH archs (README (d) contract).
+# Under --arch legacy the runner reconstructs the trace one-tool-per-batch, in call
+# order; the SAME grader consumes it (allowed_tool_paths is NOT arch-gated).
+# --------------------------------------------------------------------------- #
+def test_route_matches_allowed_paths_apply_to_legacy_one_tool_per_batch():
+    # H1-style multi-step path; legacy executed [compare_or_rank_areas, search_properties]
+    # is reconstructed as one tool per batch, matching the path of single-tool batches.
+    case = {"allowed_tool_paths": [
+        [["compare_or_rank_areas"]],
+        [["compare_or_rank_areas"], ["search_properties"]],
+    ]}
+    legacy_trace = [["compare_or_rank_areas"], ["search_properties"]]
+    assert graders.route_matches(legacy_trace, case) is True
+    # A single-batch legacy trace also matches the short allowed path.
+    assert graders.route_matches([["compare_or_rank_areas"]], case) is True
+
+
+def test_route_matches_allowed_paths_legacy_empty_trace_matches_empty_path():
+    # H8/H10-style: legacy ran no tools -> empty trace matches the empty allowed path.
+    case = {"allowed_tool_paths": [[[]]], "expected_tools": [],
+            "forbidden_tools": ["search_properties"]}
+    assert graders.route_matches([], case) is True
+
+
+# --------------------------------------------------------------------------- #
 # route_matches — recall_memory detours are ignored (IGNORABLE_TOOLS)
 # --------------------------------------------------------------------------- #
 def test_route_matches_ignores_leading_recall_memory_batch():

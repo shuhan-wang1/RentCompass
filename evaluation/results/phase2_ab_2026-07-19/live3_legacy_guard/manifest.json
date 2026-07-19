@@ -1,0 +1,40 @@
+{
+  "argv": [
+    "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "legacy",
+    "--cases",
+    "evaluation/benchmark/cases_guard_regression.jsonl",
+    "--out",
+    "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/live3_legacy_guard"
+  ],
+  "command": "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch legacy --cases evaluation/benchmark/cases_guard_regression.jsonl --out C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/live3_legacy_guard",
+  "arch": "legacy",
+  "config": "routed_models",
+  "mode": "live",
+  "timestamp": "2026-07-19T10:59:47",
+  "git_commit": "f5e7b32",
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "legacy",
+    "DEEPSEEK_STRICT": null,
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1"
+  },
+  "case_file": {
+    "path": "evaluation\\benchmark\\cases_guard_regression.jsonl",
+    "sha256": "df704ac43b0362ddc78ecb75345c268807af35f1e9b1bb6620402e37fb8a645a"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\live3_legacy_guard\\events.jsonl",
+    "sha256": "1cafebb6ccbd5d5e6f3af2a11f9819b31010f9ae6479d18524637f7cf372ee55",
+    "committed": false,
+    "note": "events.jsonl stays out of git; digest only"
+  }
+}

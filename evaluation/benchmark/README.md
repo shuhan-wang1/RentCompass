@@ -112,14 +112,21 @@ one historical bug / deleted deterministic guard from `_compute_decision`
 behaviour the old deterministic guards used to protect. Every case sets `"hard_gate": true`.
 
 Cases carry conversation history where the original bug was conversational, and stay
-meaningful under **both** architectures: `expected_tools`/`forbidden_tools` drive legacy
-grading (subset semantics), while `allowed_tool_paths` drives fc-path grading.
+meaningful under **both** architectures. The route grader (`graders.route_matches`) is the
+**same for both archs**: when a case declares `allowed_tool_paths` it is applied
+regardless of arch, and `expected_tools`/`forbidden_tools` subset semantics are only the
+**fallback** for cases that omit `allowed_tool_paths`. The archs differ only in the shape
+of the executed trace the grader receives — fc_loop emits real batches (tools the model
+called concurrently in one super-step), whereas legacy has no batch structure, so the
+runner reconstructs its trace as **one tool per batch, in call order**. A case's
+`expected_tools`/`forbidden_tools` additionally drive the per-case `must_call_tool` /
+`tools_ok` constraint checks under both archs.
 
 ### Two new (optional) case fields
 
 | Field | Meaning |
 |---|---|
-| `allowed_tool_paths` | Path-based expected trace for `--arch fc_loop`. A list of ALLOWED paths; the case matches if the actual trace equals ANY one. Each path is an ordered list of **batches**; each batch is a list of tool names run concurrently in one agent super-step. **Batch-internal order is insignificant** (set comparison); **cross-batch order is significant**. `[]` inside a path = a batch; `[[]]` = the single allowed path is the empty trace (no tools). Ignored under `--arch legacy` (there the `expected_tools`/`forbidden_tools` subset semantics apply). |
+| `allowed_tool_paths` | Path-based expected trace for `--arch fc_loop`. A list of ALLOWED paths; the case matches if the actual trace equals ANY one. Each path is an ordered list of **batches**; each batch is a list of tool names run concurrently in one agent super-step. **Batch-internal order is insignificant** (set comparison); **cross-batch order is significant**. `[]` inside a path = a batch; `[[]]` = the single allowed path is the empty trace (no tools). Applied under **both** archs when present (it is not arch-gated); under `--arch legacy` the executed trace is reconstructed one-tool-per-batch (each tool its own batch, in call order), so a path of single-tool batches matches a legacy trace directly. When a case omits `allowed_tool_paths`, the grader falls back to `expected_tools`/`forbidden_tools` subset semantics. |
 | `hard_gate` | `true` ⇒ the case is individually mandatory: it must pass on its own and failures are reported by `case_id`, never averaged into an aggregate `pass_rate`. |
 
 `allowed_tool_paths` and `hard_gate` are optional everywhere; the base `cases_base45.jsonl`

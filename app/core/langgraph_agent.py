@@ -46,7 +46,11 @@ from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from uk_rent_agent.agent.state import AgentState, create_initial_state
 from uk_rent_agent.agent.contracts import ToolInvocation
-from uk_rent_agent.agent.critic import enforce_grounding
+from uk_rent_agent.agent.critic import (
+    enforce_grounding,
+    has_specific_price_claims,
+    no_reliable_data_message,
+)
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 
 logger = logging.getLogger(__name__)
@@ -3094,6 +3098,55 @@ def _make_reflect_node(tool_registry, reflect_llm):
     return reflect_node
 
 
+# ── retrieval detection (one source of truth) ──────────────────────────────
+# Pseudo-routes / non-retrieval tools for which the grounding critic skips price
+# gating. Everything ELSE is a "retrieval-ish" tool whose figures must be grounded.
+# This is a superset of the legacy exclusion set ({"", "direct_answer",
+# "clarification"}) — ``ask_user``/``remember`` are added because an fc turn can leave
+# such an artifact while still being a clarification/write (non-retrieval) turn. The
+# check is deliberately fail-CLOSED: a newly added real tool is grounded by default.
+# Both the tool_decision path (legacy) and the tool_artifacts path (fc_loop) share it.
+NON_RETRIEVAL_TOOLS = frozenset({
+    "", "direct_answer", "clarification", "ask_user", "remember",
+})
+
+
+def _is_retrieval_tool(name) -> bool:
+    """A tool whose output is retrieved evidence the answer must be grounded in."""
+    return bool(name) and name not in NON_RETRIEVAL_TOOLS
+
+
+def _artifact_usable(artifact: dict) -> bool:
+    """An fc artifact contributes usable evidence: not marked failed AND non-empty data.
+
+    Tolerant of the pre/post P1 artifact shape — ``success`` may be absent (legacy
+    artifacts predate the field); only an explicit ``False`` is treated as a failure."""
+    if artifact.get("success", True) is False:
+        return False
+    return artifact.get("raw_data") not in (None, "", [], {})
+
+
+def _has_usable_retrieval_evidence(state: AgentState, artifacts: list) -> bool:
+    """True when at least one executed retrieval source produced usable, non-error data
+    this turn — an fc retrieval artifact OR the legacy raw_data/observation surface.
+
+    Drives the deterministic no-evidence 兜底: when this is False and the answer still
+    asserts specific figures, there is nothing to have grounded them against."""
+    for a in artifacts:
+        if _is_retrieval_tool(a.get("tool")) and _artifact_usable(a):
+            return True
+    if not _tool_errored(state):
+        if state.get("tool_raw_data"):
+            return True
+        observation = state.get("tool_observation")
+        if observation and str(observation).strip():
+            return True
+        for e in state.get("observations") or []:
+            if e.get("observation"):
+                return True
+    return False
+
+
 def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     """Everything the generator was shown, as an evidence surface for the critic.
 
@@ -3101,6 +3154,12 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     the observation text, the assembled context (previous results, comparison data,
     current-property details) and the user's own budget. Quoting any of those must
     count as grounded, so all of it is gathered here.
+
+    fc_loop: the generator saw every tool's ToolMessage, whose payload is the
+    artifact ``raw_data``. Each SUCCESSFUL artifact's raw_data joins the pool, labeled
+    ``"tool#turn"``. Failed artifacts (``success is False``) contribute no evidence —
+    their error text is not data — but their existence is tracked separately by
+    :func:`_has_usable_retrieval_evidence` for the no-evidence 兜底.
     """
     extracted_context = state.get("extracted_context") or {}
     prefs = state.get("user_preferences") or {}
@@ -3121,6 +3180,13 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     if len(loop_obs) > 1:
         for e in loop_obs:
             pieces.append(e.get("observation"))
+    # fc_loop tool_artifacts: successful, non-empty raw_data joins the evidence, per-artifact
+    # labeled "tool#turn". Failed/empty ones are skipped (not evidence).
+    for a in state.get("tool_artifacts") or []:
+        if not _artifact_usable(a):
+            continue
+        label = f"{a.get('tool', 'tool')}#{a.get('turn', '')}"
+        pieces.append({label: a.get("raw_data")})
     for key in ("property_price", "property_travel_time"):
         if extracted_context.get(key):
             pieces.append({key: extracted_context[key]})
@@ -3148,7 +3214,13 @@ def _make_critic_node():
     async def critic_node(state: AgentState) -> dict:
         decision = state.get("tool_decision") or {}
         tool_name = decision.get("tool", "")
-        retrieval_expected = tool_name not in {"", "direct_answer", "clarification"}
+        artifacts = list(state.get("tool_artifacts") or [])
+        # Retrieval detection (shared NON_RETRIEVAL_TOOLS source of truth). fc_loop turns
+        # NEVER write tool_decision, so a turn is retrieval-expected when EITHER the legacy
+        # decision names a retrieval tool OR any tool_artifact is a retrieval tool — without
+        # this an fc tool-answer would be treated as a direct answer and skip grounding.
+        retrieval_expected = _is_retrieval_tool(tool_name) or any(
+            _is_retrieval_tool(a.get("tool")) for a in artifacts)
         response = state.get("final_response", "")
         attempts_before = state.get("critic_attempts", 0)
 
@@ -3196,8 +3268,30 @@ def _make_critic_node():
             "verdict": outcome.verdict.model_dump(),
             "critic_attempts": attempts_before + outcome.attempts,
         }
-        if outcome.response != response:
-            update["final_response"] = outcome.response
+        final = outcome.response
+
+        # Deterministic no-evidence 兜底 (the H3 fix — a hard REPLACE, not a caveat): after
+        # the single repair pass, if the answer STILL asserts specific monetary figures AND
+        # no executed retrieval tool produced usable evidence this turn (all empty/failed),
+        # replace it with a localized "no reliable data" reply. Fires ONLY when retrieval was
+        # expected AND every retrieval source is empty/failed — a turn with real evidence
+        # keeps repair-then-passthrough, and a no-tools conversational turn is untouched.
+        if (
+            retrieval_expected
+            and has_specific_price_claims(final)
+            and not _has_usable_retrieval_evidence(state, artifacts)
+        ):
+            ec = state.get("extracted_context") or {}
+            reply_language = _reply_language_from_ctx(
+                ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
+            final = no_reliable_data_message(reply_language)
+            logger.info(
+                "critic.no_evidence_fallback replaced numeric answer (lang=%s)", reply_language,
+                extra={"node": "critic", "tool": tool_name},
+            )
+
+        if final != response:
+            update["final_response"] = final
         return update
 
     return critic_node

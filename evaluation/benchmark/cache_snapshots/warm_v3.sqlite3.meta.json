@@ -1,0 +1,41 @@
+{
+  "created_at": "2026-07-20T06:43:36",
+  "created_at_epoch": 1784526216.9182196,
+  "source_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\warmup2\\shared_cache.sqlite3",
+  "snapshot_path": "evaluation\\benchmark\\cache_snapshots\\warm_v3.sqlite3",
+  "row_count": 19,
+  "sha256": "af2622be92aa5c4a5043d2a4013cf67a89ac96288dd47c2e8f6a5d9dc8d06607",
+  "size_bytes": 659456,
+  "provenance": {
+    "git_commit": "f9ada88",
+    "git_dirty": false,
+    "case_files": [
+      {
+        "path": "evaluation/benchmark/cases.jsonl",
+        "sha256": "c3ea5949820a4ba6c8274c5943c5d053f25857286be9bdfbff04203e0a62cdb3"
+      },
+      {
+        "path": "evaluation/benchmark/cases_guard_regression.jsonl",
+        "sha256": "df704ac43b0362ddc78ecb75345c268807af35f1e9b1bb6620402e37fb8a645a"
+      },
+      {
+        "path": "evaluation/benchmark/cases_cold_resilience.jsonl",
+        "sha256": "a3094dda4cd696e2cd8fbe24e147a27c3364eee912196a55f69c755c3934bc47"
+      }
+    ],
+    "warmup_commands": [
+      "run_benchmark.py --live --arch fc_loop --cache-path <shared> [base98] env: FC_BATCH=120 FC_TURN=240 FC_SOFT_WRAP=200 SEARCH_TOOL=110 TOOL_TIMEOUT_SEARCH_PROPERTIES=110 TOOL_TIMEOUT_DEFAULT=60",
+      "run_benchmark.py --live --arch fc_loop --cases cases_guard_regression.jsonl --cache-path <shared> [guard] (same env)",
+      "warm_sweep.py deterministic 19-area get_listings sweep on <shared> (adds kings-cross euston kentish-town)"
+    ],
+    "budget_env": {
+      "FC_BATCH_TOOL_BUDGET_S": "120",
+      "FC_TURN_SOFT_WRAP_S": "200",
+      "FC_TURN_TOOL_BUDGET_S": "240",
+      "SEARCH_CACHE_TTL_HOURS": "8760",
+      "SEARCH_TOOL_BUDGET_S": "110",
+      "TOOL_TIMEOUT_DEFAULT": "60",
+      "TOOL_TIMEOUT_SEARCH_PROPERTIES": "110"
+    }
+  }
+}

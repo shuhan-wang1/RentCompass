@@ -20,6 +20,7 @@ import pandas as pd
 import asyncio
 import math
 import os
+import sys
 import threading
 import time
 from pathlib import Path
@@ -913,6 +914,18 @@ _RAG_COORDINATOR = None
 # threading.Lock (held inside worker threads), so contention waits OFF the loop.
 _RAG_LOCK = threading.Lock()
 
+# Guards CONSTRUCTION of the singleton coordinator (distinct from _RAG_LOCK, which guards
+# build_index/recall against the shared store). The sentence-transformer model load inside
+# RAGCoordinator() blocks ~18-20s on the first construction in a process; this lock makes
+# the background pre-warm thread and a concurrent first real search build it exactly once
+# instead of racing two loads. _RAG_COORDINATOR is only ASSIGNED after the load completes,
+# so `_embedding_store_ready()` reads False for the whole duration of the load.
+_RAG_BUILD_LOCK = threading.Lock()
+
+# Idempotent one-shot guard for the background embedding-store pre-warm.
+_PREWARM_LOCK = threading.Lock()
+_PREWARM_STARTED = False
+
 
 class _DeterministicPropertyStore:
     """Minimal in-process replacement used when optional RAG dependencies fail."""
@@ -948,15 +961,73 @@ def _get_rag_coordinator():
     the 'similar' fallback can never surface stale/other-city demo rows."""
     global _RAG_COORDINATOR
     if _RAG_COORDINATOR is None:
-        try:
-            from rag.rag_coordinator import RAGCoordinator
-            _RAG_COORDINATOR = RAGCoordinator()
-        except Exception as exc:
-            # A missing FAISS/embedding dependency must not turn a valid live
-            # listing response into a false "no results" outcome.
-            print(f"[search] RAG unavailable; using deterministic ranking: {exc}")
-            _RAG_COORDINATOR = _DeterministicRAGCoordinator()
+        # Serialise construction so the pre-warm thread and a first real search don't both
+        # pay the (~18-20s) model load. Assign only AFTER RAGCoordinator() fully returns, so
+        # a concurrent readiness probe sees "not ready" until the model is actually loaded.
+        with _RAG_BUILD_LOCK:
+            if _RAG_COORDINATOR is None:
+                try:
+                    from rag.rag_coordinator import RAGCoordinator
+                    _RAG_COORDINATOR = RAGCoordinator()
+                except Exception as exc:
+                    # A missing FAISS/embedding dependency must not turn a valid live
+                    # listing response into a false "no results" outcome.
+                    print(f"[search] RAG unavailable; using deterministic ranking: {exc}")
+                    _RAG_COORDINATOR = _DeterministicRAGCoordinator()
     return _RAG_COORDINATOR
+
+
+def _embedding_store_ready() -> bool:
+    """Cheap, side-effect-free probe: is the RAG coordinator ALREADY constructed with its
+    sentence-transformer model loaded? NEVER triggers construction — probing must not pay
+    the ~18-20s cold load we are trying to keep off the deadline path. Contract:
+      * coordinator not yet built (singleton is None)      -> False (cold / loading);
+      * a deterministic-fallback coordinator (no model)    -> True (nothing to load);
+      * a store exposing is_ready()                         -> its verdict;
+      * any other already-constructed coordinator          -> True (assume warm).
+    """
+    coord = _RAG_COORDINATOR
+    if coord is None:
+        return False
+    store = getattr(coord, "property_store", None)
+    probe = getattr(store, "is_ready", None)
+    if callable(probe):
+        try:
+            return bool(probe())
+        except Exception:
+            return False
+    return True
+
+
+def _prewarm_embedding_store():
+    """Background target: construct the coordinator (loading the sentence-transformer model)
+    so the FIRST search in a fresh process doesn't pay the cold load inside its deadline.
+    Errors are swallowed — a failed pre-warm just means the lazy path pays later."""
+    try:
+        _get_rag_coordinator()
+    except Exception as exc:  # defensive: _get_rag_coordinator already swallows, but never raise
+        print(f"[search] embedding-store pre-warm failed (lazy path will retry): {exc}")
+
+
+def start_embedding_prewarm() -> bool:
+    """Kick the embedding-store pre-warm onto a background daemon thread AT MOST ONCE per
+    process (idempotent). Returns True iff THIS call started the thread; False if it was
+    already started or is disabled via SEARCH_EMBED_PREWARM=0. Safe to call from import /
+    tool-registration time: the model load happens off the calling thread."""
+    global _PREWARM_STARTED
+    if os.getenv("SEARCH_EMBED_PREWARM", "1") == "0":
+        return False
+    with _PREWARM_LOCK:
+        if _PREWARM_STARTED:
+            return False
+        _PREWARM_STARTED = True
+    try:
+        threading.Thread(target=_prewarm_embedding_store,
+                         name="embed-store-prewarm", daemon=True).start()
+    except Exception as exc:
+        print(f"[search] could not start embedding pre-warm thread: {exc}")
+        return False
+    return True
 
 
 class PropertyFilter:
@@ -1162,7 +1233,8 @@ async def search_properties_impl(
         _return_margin_s = 1.2
     if _return_margin_s < 0:
         _return_margin_s = 0.0
-    _raw_deadline = (float(_deadline_monotonic) if _deadline_monotonic is not None
+    _deadline_injected = _deadline_monotonic is not None
+    _raw_deadline = (float(_deadline_monotonic) if _deadline_injected
                      else time.monotonic() + _self_budget_s)
     _deadline = _raw_deadline - _return_margin_s
 
@@ -1834,6 +1906,31 @@ async def search_properties_impl(
             commute_annotation_enabled = False
             commute_filter_enabled = False
 
+        # Cold embedding-store guard (latency round, H2 repeat): semantic ranking constructs
+        # PropertyEmbeddingStore on first use, whose sentence-transformer model load BLOCKS
+        # ~18-20s — a single stage the SEARCH_RETURN_MARGIN_S pacing cannot preempt (it was
+        # assumed cheap). If the store is not already warm (the background pre-warm hasn't
+        # finished) and the time left doesn't comfortably cover that cold load, degrade THIS
+        # call to the deterministic price-sorted path — reusing the existing degradation
+        # machinery — instead of risking the whole tool being abandoned at the batch window.
+        # Probing NEVER triggers the load. When the store IS warm, or time genuinely fits a
+        # relaxed warm-up budget, ranking proceeds unchanged. Applies ONLY when a deadline was
+        # actually injected — i.e. the fc-loop path with the hard 20s abandon axe. The
+        # self-imposed budget path (legacy / MCP / direct calls) has no external axe and can
+        # afford to build the store (as it always did), so it is never cold-degraded here.
+        if _deadline_injected and not degraded and not _embedding_store_ready():
+            try:
+                _EMBED_INIT_EST_S = float(os.getenv("SEARCH_EMBED_INIT_EST_S", "20.0"))
+            except (TypeError, ValueError):
+                _EMBED_INIT_EST_S = 20.0
+            if _time_left() < _EMBED_INIT_EST_S:
+                print(f"   ⏱️ 嵌入模型尚未预热且余量不足（{_time_left():.1f}s < "
+                      f"{_EMBED_INIT_EST_S:.1f}s，冷加载约需 ~18-20s）→ 本次降级为价格升序"
+                      f"（跳过语义排序/通勤/详情丰富）")
+                degraded = True
+                commute_annotation_enabled = False
+                commute_filter_enabled = False
+
         # Merge the deadline/partial contract into any post-scrape payload (found, no_results,
         # similar). cache_stats is ALWAYS present; partial/incomplete_areas/partial_note reflect
         # areas the time budget prevented us from fully searching (incomplete ≠ empty).
@@ -2017,9 +2114,12 @@ async def search_properties_impl(
             ranked_properties, past_context, area_info = _degraded_rank(), "", {}
         else:
             ranked_properties, past_context, area_info = await asyncio.to_thread(_normalize_and_rank)
-        # O(1) singleton handle (already constructed inside the offloaded pipeline);
-        # used by the similar-but-over-budget fallback below.
-        rag_coordinator = _get_rag_coordinator()
+        # Singleton handle for the similar-but-over-budget fallback below. In the NON-degraded
+        # path the offloaded pipeline already constructed it, so this is O(1). In the DEGRADED
+        # path we deliberately never built/loaded the embedding store (that cold load is what
+        # we are avoiding), so grab the existing singleton only if present — NEVER construct it
+        # here — and the similar fallback (which needs embeddings) is skipped while degraded.
+        rag_coordinator = _RAG_COORDINATOR if degraded else _get_rag_coordinator()
         print(f"   ✅ RAG 返回 {len(ranked_properties)} 个候选房源")
 
         # 🆕 根据房产特征过滤结果（注意：不要遮蔽函数级的 room_type 参数）
@@ -2201,7 +2301,10 @@ async def search_properties_impl(
         #   - 无预算：直接给出诚实的 no_results（语言感知）
         # ================================================================
         if not perfect_match and not soft_violation:
-            if has_budget:
+            # The similar-but-over-budget fallback runs an embedding search (property_store.search),
+            # so it needs a WARM store. Skip it while degraded (deadline-tight or cold store): we
+            # must not construct/query the model here — fall through to the honest no_results.
+            if has_budget and not degraded:
                 print(f"\n⚠️ [SEARCH] 无符合结果，尝试 RAG 相似房源...")
 
                 # 相似回退：property_store.search 为 embedding 检索，逐候选的通勤估算/同步
@@ -2650,3 +2753,14 @@ Required: only an area to live in (or a commute_destination to derive it from). 
 
     max_retries=2
 )
+
+
+# Tool-registration-time pre-warm: kick the ~18-20s sentence-transformer model load onto a
+# background daemon thread NOW, so the first search in a fresh process (always several
+# seconds into any process lifetime) finds the embedding store warm or warming instead of
+# paying that cold load inside its deadline (the H2 abandon / the slow-first-search prod
+# defect). Skipped under pytest — a real background model load would add CPU jitter to the
+# timing-sensitive tests; the dedicated pre-warm test drives start_embedding_prewarm()
+# explicitly. Disable in production with SEARCH_EMBED_PREWARM=0.
+if "pytest" not in sys.modules:
+    start_embedding_prewarm()

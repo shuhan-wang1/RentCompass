@@ -29,6 +29,7 @@ for _m in [m for m in sys.modules if m == "core" or m.startswith("core.")]:
 import pytest
 
 from core.scraping import on_demand
+import core.tools.search_properties as sp_mod
 from core.tools.search_properties import search_properties_impl
 
 
@@ -309,6 +310,171 @@ def test_partial_note_forbids_extrapolating_numbers(offline, monkeypatch):
     # … plus the new number-honesty clause.
     assert "only the prices and figures" in note
     assert "do not estimate or extrapolate" in note
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5e. Cold embedding-store guard: the ~18-20s model load never blocks a tight deadline.
+# ══════════════════════════════════════════════════════════════════════════
+class _FakeStore:
+    """Stands in for PropertyEmbeddingStore. `is_ready()` reports warmth WITHOUT loading;
+    build_index simulates the blocking cold model load (init_sleep) on first real use."""
+    def __init__(self, ready, init_sleep=0.0):
+        self._ready = ready
+        self._init_sleep = init_sleep
+        self.rows = []
+        self.build_index_called = False
+
+    def is_ready(self):
+        return self._ready
+
+    def build_index(self, rows):
+        self.build_index_called = True
+        if not self._ready:                 # simulate the one-time cold model load
+            time.sleep(self._init_sleep)
+            self._ready = True
+        self.rows = list(rows or [])
+
+    def search(self, q, top_k=10):
+        return list(self.rows)[:top_k]
+
+
+class _FakeCoord:
+    def __init__(self, store):
+        self.property_store = store
+
+    def enhanced_search(self, q, crit):
+        return list(self.property_store.rows), "", {}
+
+
+@pytest.fixture
+def warm_guard():
+    """Save/restore the process-wide coordinator singleton + prewarm flag so an injected
+    fake store never leaks into other tests."""
+    saved_coord = sp_mod._RAG_COORDINATOR
+    saved_prewarm = sp_mod._PREWARM_STARTED
+    try:
+        yield sp_mod
+    finally:
+        sp_mod._RAG_COORDINATOR = saved_coord
+        sp_mod._PREWARM_STARTED = saved_prewarm
+
+
+def test_embedding_store_ready_probe_never_triggers_init(warm_guard):
+    sp = warm_guard
+    sp._RAG_COORDINATOR = None
+    assert sp._embedding_store_ready() is False                 # not built -> cold
+    sp.set_rag_coordinator(_FakeCoord(_FakeStore(ready=False)))
+    assert sp._embedding_store_ready() is False                 # built but model not loaded
+    sp.set_rag_coordinator(_FakeCoord(_FakeStore(ready=True)))
+    assert sp._embedding_store_ready() is True                  # warm
+    sp.set_rag_coordinator(sp._DeterministicRAGCoordinator())
+    assert sp._embedding_store_ready() is True                  # no model to load -> ready
+
+
+def test_cold_store_tight_deadline_degrades_to_price_sorted(offline, warm_guard, monkeypatch):
+    """Store not warm + a deadline that can't fit the cold load -> degrade to the existing
+    deterministic price-sorted path: the blocking init is NEVER paid, listings still return
+    fast, and the degradation honesty (commute unverified) rides along."""
+    store = _FakeStore(ready=False, init_sleep=5.0)
+    warm_guard.set_rag_coordinator(_FakeCoord(store))
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setenv("SEARCH_EMBED_INIT_EST_S", "20.0")
+    monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "1.5")
+    rows = [_row("A high", 2000, "Camden"), _row("B low", 1000, "Camden"),
+            _row("C mid", 1500, "Camden")]
+    monkeypatch.setattr(on_demand, "get_listings",
+                        _make_fake_get_listings(cached={"Camden": rows}))   # warm cache, no scrape
+
+    t0 = time.monotonic()
+    res = _run(area="Camden", commute_destination="UCL", max_commute_time=40, confirmed=True,
+               max_budget=3000, bedrooms=1, reply_language="en",
+               _deadline_monotonic=time.monotonic() + 3.0)   # 3s: > headroom, but < 20s init est
+    wall = time.monotonic() - t0
+
+    assert res["status"] == "found"
+    assert store.build_index_called is False        # semantic ranking skipped -> no cold load
+    assert store.is_ready() is False                # init never triggered
+    assert wall < 4.0, f"paid the blocking init ({wall:.2f}s)"
+    # deterministic price-ascending order
+    prices = [int(r["price"].replace("£", "").replace("/month", "")) for r in res["recommendations"]]
+    assert prices == sorted(prices) and prices[0] == 1000
+    # degraded => commute honesty, no commute fields on listings
+    assert res["commute_unverified"] is True
+    assert res["commute_note"]
+    for r in res["recommendations"]:
+        assert "travel_time" not in r
+
+
+def test_cold_store_generous_deadline_proceeds_with_ranking(offline, warm_guard, monkeypatch):
+    """Store not warm but the deadline comfortably fits the cold load -> ranking proceeds
+    (build_index runs, store warms)."""
+    store = _FakeStore(ready=False, init_sleep=0.05)
+    warm_guard.set_rag_coordinator(_FakeCoord(store))
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setenv("SEARCH_EMBED_INIT_EST_S", "20.0")
+    monkeypatch.setattr(on_demand, "get_listings",
+                        _make_fake_get_listings(cached={"Camden": [_row("A", 1500, "Camden")]}))
+
+    res = _run(area="Camden", no_commute=True, confirmed=True, max_budget=3000, bedrooms=1,
+               reply_language="en", _deadline_monotonic=time.monotonic() + 30.0)
+
+    assert res["status"] == "found"
+    assert store.build_index_called is True         # semantic ranking ran
+    assert store.is_ready() is True                 # store warmed by the run
+
+
+def test_warm_store_ranks_even_under_tight_deadline(offline, warm_guard, monkeypatch):
+    """A warm store is never degraded by the cold-store guard: ranking proceeds normally
+    even under a tight-ish deadline (there is no blocking load to avoid)."""
+    store = _FakeStore(ready=True)
+    warm_guard.set_rag_coordinator(_FakeCoord(store))
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setattr(on_demand, "get_listings",
+                        _make_fake_get_listings(cached={"Camden": [_row("A", 1500, "Camden")]}))
+
+    res = _run(area="Camden", no_commute=True, confirmed=True, max_budget=3000, bedrooms=1,
+               reply_language="en", _deadline_monotonic=time.monotonic() + 3.0)
+
+    assert res["status"] == "found"
+    assert store.build_index_called is True
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5f. Background pre-warm: starts once, idempotent, env-disablable.
+# ══════════════════════════════════════════════════════════════════════════
+def test_prewarm_starts_once_and_is_idempotent(warm_guard, monkeypatch):
+    sp = warm_guard
+    sp._PREWARM_STARTED = False
+    monkeypatch.delenv("SEARCH_EMBED_PREWARM", raising=False)
+    started = []
+
+    class _FakeThread:
+        def __init__(self, target=None, name=None, daemon=None):
+            self.target, self.name, self.daemon = target, name, daemon
+
+        def start(self):
+            started.append(self)
+
+    monkeypatch.setattr(sp.threading, "Thread", _FakeThread)
+
+    assert sp.start_embedding_prewarm() is True        # THIS call started it
+    assert sp.start_embedding_prewarm() is False       # idempotent — not started again
+    assert len(started) == 1
+    assert started[0].target is sp._prewarm_embedding_store
+    assert started[0].daemon is True
+
+
+def test_prewarm_disabled_by_env(warm_guard, monkeypatch):
+    sp = warm_guard
+    sp._PREWARM_STARTED = False
+    monkeypatch.setenv("SEARCH_EMBED_PREWARM", "0")
+
+    def _boom(**k):
+        raise AssertionError("prewarm thread must not be spawned when disabled")
+
+    monkeypatch.setattr(sp.threading, "Thread", _boom)
+    assert sp.start_embedding_prewarm() is False
+    assert sp._PREWARM_STARTED is False                # stayed unset so a later enable still works
 
 
 # ══════════════════════════════════════════════════════════════════════════

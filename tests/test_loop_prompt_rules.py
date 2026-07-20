@@ -108,3 +108,30 @@ def test_area_ranking_rule_keeps_explicit_journey_carveout():
 def test_area_ranking_rule_reaches_the_system_directive():
     directive = loop_prompts.build_system_directive("en")
     assert loop_prompts.AREA_RANKING_MARKER in directive
+
+
+# ---------------------------------------------------------------------------
+# CR4 — complete criteria mean search first, never a pre-emptive clarification
+# ---------------------------------------------------------------------------
+
+def test_criteria_complete_rule_acts_without_clarifying():
+    rule = loop_prompts.CRITERIA_COMPLETE_RULE
+    assert loop_prompts.CRITERIA_COMPLETE_MARKER in rule      # "CRITERIA COMPLETE, ACT FIRST"
+    assert "search_properties" in rule
+    # Both observed pre-emptive questions are named as non-blockers.
+    assert "单间" in rule
+    assert "campus" in rule
+
+
+def test_criteria_complete_rule_keeps_missing_criteria_carveout():
+    # The soft criteria gate (genuinely missing fields) and contradictory input must
+    # stay askable — the rule cannot regress the clarify-once gate cases.
+    rule = loop_prompts.CRITERIA_COMPLETE_RULE
+    assert "genuinely missing" in rule
+    assert "criteria gate" in rule
+    assert "contradictory" in rule
+
+
+def test_criteria_complete_rule_reaches_the_system_directive():
+    directive = loop_prompts.build_system_directive("en")
+    assert loop_prompts.CRITERIA_COMPLETE_MARKER in directive

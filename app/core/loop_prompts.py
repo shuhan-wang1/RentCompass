@@ -59,6 +59,7 @@ WEB_SEARCH_BUDGET_MARKER = "at most 2 web_search"
 POLICE_SOURCE_MARKER = "data.police.uk"
 AREA_SWITCH_MARKER = "AREA SWITCH CONTINUATION"
 AREA_RANKING_MARKER = "AREA RANKING IS COMMUTE-AWARE"
+CRITERIA_COMPLETE_MARKER = "CRITERIA COMPLETE, ACT FIRST"
 
 # 2.6 soft criteria gate. The gate itself lives inside search_properties; the harness
 # re-injects criteria_gate_shown / confirmed. The model must know the confirmed
@@ -144,6 +145,21 @@ SAFETY_TARGET_RULE = (
     "answer. Do NOT route it to recall_memory or web_search."
 )
 
+# CR4 pre-emptive-clarify flake: with budget + room type + commute/area all present the
+# model occasionally asked which sub-type 单间 means / which Imperial campus instead of
+# searching. The soft criteria gate (inside search_properties) already handles genuinely
+# missing criteria, so the loop must act first — a wrong sub-type interpretation is
+# recoverable in-answer; a skipped search is a failed turn.
+CRITERIA_COMPLETE_RULE = (
+    CRITERIA_COMPLETE_MARKER + ": When the message/context already supplies budget, room "
+    "type, and a commute destination or target area, call search_properties DIRECTLY — do "
+    "NOT ask a clarifying question first (not about a room-type sub-type: parse 单间 as a "
+    "single room in a shared flat; not about which campus: use the institution's main "
+    "campus). State the interpretation you used in the answer and invite the user to refine "
+    "it. Asking before searching is ONLY correct when a gate criterion is genuinely missing "
+    "(the criteria gate handles that) or the request is self-contradictory."
+)
+
 # H1 area-ranking follow-up churn: after compare_or_rank_areas the loop must not "verify"
 # per-area commute via the commute tools — the ranking is already commute-aware (observed:
 # rank -> web_search -> search_properties -> a 3x calculate_commute_cost batch, the exact
@@ -172,6 +188,7 @@ _BEHAVIOUR_RULES_ORDER = (
     MEMORY_IN_CONTEXT_RULE,
     EFFICIENCY_RULE,
     SOFT_GATE_RULE,
+    CRITERIA_COMPLETE_RULE,
     NO_SEARCH_YET_RULE,
     AREA_SWITCH_RULE,
     AREA_RANKING_RULE,

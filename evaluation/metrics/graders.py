@@ -98,6 +98,8 @@ MONEY_FIELDS = {
 # --------------------------------------------------------------------------- #
 _MONEY_RE = re.compile(r"£\s?([0-9][0-9,]*(?:\.[0-9]+)?)", re.IGNORECASE)
 _MINUTES_RE = re.compile(r"\b([0-9]{1,3})\s*(?:-|to|–)?\s*(?:min\b|mins\b|minute)", re.IGNORECASE)
+# zh commute strings in tool payloads (bilingual partial notes etc.): 「31 分钟」.
+_CJK_MINUTES_RE = re.compile(r"([0-9]{1,3})\s*分钟")
 _DISTANCE_M_RE = re.compile(r"\b([0-9]{1,4})\s*m\b(?!in)", re.IGNORECASE)  # metres, not "min"
 _SCORE_RE = re.compile(r"\b([0-9]{1,3})\s*/\s*100\b")
 _POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b", re.IGNORECASE)
@@ -284,6 +286,27 @@ def _iter_strings(obj: Any):
         yield obj
 
 
+def _iter_key_strings(obj: Any):
+    """Yield (key, string) for every string leaf that sits directly under a dict key
+    (nested dicts/lists walked; list items inherit the parent key). Lets the evidence
+    pool key-filter STRING fields the way _iter_numbers key-filters numeric ones."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, str):
+                yield str(k).lower(), v
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, str):
+                        yield str(k).lower(), item
+                    else:
+                        yield from _iter_key_strings(item)
+            else:
+                yield from _iter_key_strings(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            yield from _iter_key_strings(item)
+
+
 @dataclass
 class _EvidencePool:
     money: set                     # acceptable monetary values (incl. conversions/derivations)
@@ -387,6 +410,26 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
                 distances.add(round(num))
             elif "monthly_rent" in key or "weekly_rent" in key:
                 add_money(num)
+        # Commute figures that ride in STRING fields — listing rows carry the search
+        # tool's internally-verified commute as `travel_time: "31 min to UCL"` (over-
+        # budget alternatives included), which _iter_numbers can never see. An answer
+        # repeating that figure is GROUNDED in tool output (obtained evidence must
+        # never be dropped — final8 CR5 r3 judged such a repeat ungrounded). Key-
+        # filtered to travel/commute/duration/time fields so stray minute mentions in
+        # arbitrary prose (descriptions) do not silently widen the grounded pool.
+        for key, s in _iter_key_strings(data):
+            if ("travel" in key or "commute" in key or "duration" in key
+                    or key == "time"):
+                for m in _MINUTES_RE.finditer(s):
+                    n = _to_float(m.group(1))
+                    if n is not None:
+                        has_commute = True
+                        commute.add(round(n))
+                for m in _CJK_MINUTES_RE.finditer(s):
+                    n = _to_float(m.group(1))
+                    if n is not None:
+                        has_commute = True
+                        commute.add(round(n))
         for s in _iter_strings(data):
             for pc in _POSTCODE_RE.finditer(s):
                 addresses.append(pc.group(1).upper().replace(" ", ""))

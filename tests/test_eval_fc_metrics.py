@@ -677,3 +677,65 @@ def test_room_type_if_evidence_partial_no_listings_claim_still_fails():
         evidence=[{"tool": "search_properties",
                    "data": {"partial": True, "recommendations": []}}])
     assert graders._c_room_type_match_if_evidence(con, ctx).passed is False
+
+
+# --------------------------------------------------------------------------- #
+# commute_leq_minutes — a commute figure riding in a STRING field of the tool
+# payload (listing row travel_time "31 min to UCL", over-budget alternatives
+# included) is GROUNDED evidence (final8 CR5 r3: the search tool's internally
+# verified commute was repeated by the model and judged ungrounded because the
+# evidence pool only saw numeric commute fields).
+# --------------------------------------------------------------------------- #
+def test_commute_leq_grounded_by_travel_time_string():
+    con = {"type": "commute_leq_minutes", "dest": "UCL", "value": 35}
+    ctx = _grade_ctx(
+        final_answer=("One over-budget alternative: Grosvenor Avenue, £1,650 pcm. "
+                      "Commute to UCL: 31 minutes."),
+        user_texts=["Find me a 1-bed in Islington under £1500/month, commute to UCL "
+                    "under 35 minutes."],
+        evidence=[{"tool": "search_properties",
+                   "data": {"status": "found", "recommendations": [],
+                            "over_budget_alternatives": [
+                                {"address": "Grosvenor Avenue, London N5",
+                                 "price": "£1650/month",
+                                 "travel_time": "31 min to UCL",
+                                 "alternative": True}]}}])
+    res = graders._c_commute_leq_minutes(con, ctx)
+    assert res.passed is True, res.detail
+
+
+def test_commute_leq_zh_minutes_string_grounds_too():
+    # zh payload strings (「31 分钟」) ground the same figure.
+    con = {"type": "commute_leq_minutes", "dest": "UCL", "value": 35}
+    ctx = _grade_ctx(
+        final_answer="到 UCL 通勤约 31 分钟。",
+        evidence=[{"tool": "search_properties",
+                   "data": {"recommendations": [
+                       {"address": "X", "travel_time": "31 分钟 到 UCL"}]}}])
+    assert graders._c_commute_leq_minutes(con, ctx).passed is True
+
+
+def test_commute_leq_unkeyed_prose_minutes_do_not_ground():
+    # Minutes inside an arbitrary prose field (description) must NOT widen the pool:
+    # the key filter (travel/commute/duration/time) keeps the fix targeted, so a
+    # commute claim supported only by unrelated prose still fails as ungrounded.
+    con = {"type": "commute_leq_minutes", "dest": "UCL", "value": 35}
+    ctx = _grade_ctx(
+        final_answer="Commute to UCL: 31 minutes.",
+        evidence=[{"tool": "search_properties",
+                   "data": {"recommendations": [
+                       {"address": "X", "description": "31 min to the park"}]}}])
+    res = graders._c_commute_leq_minutes(con, ctx)
+    assert res.passed is False, res.detail
+
+
+def test_commute_leq_over_limit_still_fails_even_if_grounded():
+    # Grounding does not excuse exceeding the limit: a grounded 45-min commute
+    # still fails a <=35 constraint.
+    con = {"type": "commute_leq_minutes", "dest": "UCL", "value": 35}
+    ctx = _grade_ctx(
+        final_answer="Commute to UCL: 45 minutes.",
+        evidence=[{"tool": "search_properties",
+                   "data": {"recommendations": [
+                       {"address": "X", "travel_time": "45 min to UCL"}]}}])
+    assert graders._c_commute_leq_minutes(con, ctx).passed is False

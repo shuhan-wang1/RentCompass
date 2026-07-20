@@ -58,6 +58,7 @@ NO_RECALL_MARKER = "Do NOT call recall_memory"
 WEB_SEARCH_BUDGET_MARKER = "at most 2 web_search"
 POLICE_SOURCE_MARKER = "data.police.uk"
 AREA_SWITCH_MARKER = "AREA SWITCH CONTINUATION"
+AREA_RANKING_MARKER = "AREA RANKING IS COMMUTE-AWARE"
 
 # 2.6 soft criteria gate. The gate itself lives inside search_properties; the harness
 # re-injects criteria_gate_shown / confirmed. The model must know the confirmed
@@ -143,6 +144,20 @@ SAFETY_TARGET_RULE = (
     "answer. Do NOT route it to recall_memory or web_search."
 )
 
+# H1 area-ranking follow-up churn: after compare_or_rank_areas the loop must not "verify"
+# per-area commute via the commute tools — the ranking is already commute-aware (observed:
+# rank -> web_search -> search_properties -> a 3x calculate_commute_cost batch, the exact
+# historical misroute the ranking tool exists to prevent, now appearing late-loop).
+AREA_RANKING_RULE = (
+    AREA_RANKING_MARKER + ": compare_or_rank_areas already scores each area's commute (time "
+    "AND cost) to the destination. When recommending or ranking AREAS (「哪个区域性价比高」/"
+    "「推荐住哪个区域」/ \"which area is best value\"), answer from its output — do NOT call "
+    "calculate_commute or calculate_commute_cost for candidate areas afterwards. Those tools "
+    "are ONLY for a specific journey or property the user EXPLICITLY asks to time or price "
+    "(「这套房到 UCL 通勤多久/多少钱」/ \"how long is the commute from this flat\"); commute "
+    "preferences stated as ranking criteria (通勤时间不长、价格适中) are NOT such a request."
+)
+
 # Grounded citation: surface the source attribution a tool provides.
 GROUNDED_CITATION_RULE = (
     "CITE THE SOURCE: When a tool result carries a source attribution (safety data from "
@@ -159,6 +174,7 @@ _BEHAVIOUR_RULES_ORDER = (
     SOFT_GATE_RULE,
     NO_SEARCH_YET_RULE,
     AREA_SWITCH_RULE,
+    AREA_RANKING_RULE,
     DEICTIC_RULE,
     SAFETY_TARGET_RULE,
     GROUNDED_CITATION_RULE,

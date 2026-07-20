@@ -80,3 +80,31 @@ def test_area_switch_rule_is_bilingual():
     rule = loop_prompts.AREA_SWITCH_RULE
     assert "换到" in rule and "那 Camden 呢" in rule           # zh switch cues
     assert "what about" in rule.lower()                       # en switch cue
+
+
+# ---------------------------------------------------------------------------
+# H1 — area ranking answers from compare_or_rank_areas; no per-area commute calls
+# ---------------------------------------------------------------------------
+
+def test_area_ranking_rule_forbids_commute_followup():
+    rule = loop_prompts.AREA_RANKING_RULE
+    assert loop_prompts.AREA_RANKING_MARKER in rule           # "AREA RANKING IS COMMUTE-AWARE"
+    assert "compare_or_rank_areas" in rule
+    # Must steer away from BOTH observed forbidden tools.
+    assert "calculate_commute_cost" in rule
+    assert "calculate_commute" in rule
+
+
+def test_area_ranking_rule_keeps_explicit_journey_carveout():
+    # A specific journey/property the user EXPLICITLY asks to time or price stays allowed —
+    # the rule must not regress direct commute-cost questions.
+    rule = loop_prompts.AREA_RANKING_RULE
+    assert "EXPLICITLY" in rule
+    assert "通勤多久" in rule                                  # zh explicit-ask cue
+    # Ranking criteria phrasing must be named as NOT a commute-tool request.
+    assert "通勤时间不长" in rule
+
+
+def test_area_ranking_rule_reaches_the_system_directive():
+    directive = loop_prompts.build_system_directive("en")
+    assert loop_prompts.AREA_RANKING_MARKER in directive

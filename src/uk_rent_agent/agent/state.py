@@ -52,6 +52,12 @@ class AgentState(TypedDict, total=False):
     # list (last-write-wins; agent and execute_tools alternate as sole sequential writers).
     messages: list
     tool_artifacts: list
+    # Canary telemetry (2026-07-20): set True by the fc_loop turn-wide soft-wrap path
+    # (agent_loop._wrap_up) when the WHOLE-turn wall-clock crossed the soft-wrap edge and the
+    # answer was generated tools-disabled / from gathered artifacts. A PLAIN per-turn channel
+    # reset to False by create_initial_state; _wrap_up is the sole writer. app/app.py surfaces
+    # it on the per-turn canary.turn record. Purely observational — never gates routing.
+    soft_wrapped: bool
     # Cumulative wall-clock (seconds) the fc_loop execute_tools node has spent running tool
     # batches THIS user turn. A PLAIN per-turn channel (reset by create_initial_state) that
     # accumulates across the turn's batches so FC_TURN_TOOL_BUDGET_S can be enforced turn-wide
@@ -120,6 +126,7 @@ def create_initial_state(
         observations=[],
         messages=[],
         tool_artifacts=[],
+        soft_wrapped=False,
         turn_tool_budget_used_s=0.0,
         turn_start_monotonic=0.0,
         task_plan=[],

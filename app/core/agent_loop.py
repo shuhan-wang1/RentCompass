@@ -995,6 +995,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         return Command(update={
             "messages": messages + [wrap_msg], "loop_turn": loop_turn,
             "final_response": text,
+            # Canary telemetry: mark this turn soft-wrapped so app.py's per-turn record can
+            # observe it. Observational only; format_output_fc preserves the channel untouched.
+            "soft_wrapped": True,
         }, goto="format_output_fc")
 
     async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:

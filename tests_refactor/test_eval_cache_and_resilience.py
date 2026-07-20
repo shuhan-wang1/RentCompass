@@ -382,3 +382,52 @@ def test_prepare_cache_pinned_uses_shared_path(tmp_path):
     runner._prepare_cache("CR1#r2#cfg")
     # Same shared path every run - never a per-run namespace.
     assert calls == [tmp_path / "shared.sqlite3", tmp_path / "shared.sqlite3"]
+
+
+# --------------------------------------------------------------------------- #
+# _build_cache_protocol warm mode: snapshot digest is verified in-place and can
+# never be null in a warm manifest (final5 regression: silent import failure
+# wrote snapshot_sha256: null while git recorded the sidecar as matching).
+# --------------------------------------------------------------------------- #
+def _warm_args(snap, ttl="8760"):
+    import argparse
+    return argparse.Namespace(cache_snapshot=str(snap), cold_cache=False,
+                              cache_path=None, cache_ttl_hours=ttl)
+
+
+def test_cache_protocol_warm_records_verified_sha(tmp_path):
+    src = tmp_path / "runtime.sqlite3"
+    _make_cache_db(src, rows=3)
+    snap = tmp_path / "warm.sqlite3"
+    cache_snapshot.make_snapshot(src, snap)
+    block = rb._build_cache_protocol(_warm_args(snap))
+    assert block["mode"] == "warm"
+    assert block["snapshot_sha256"] == cache_snapshot.sha256_of(snap)
+    assert block["snapshot_sha256"] is not None
+
+
+def test_cache_protocol_warm_missing_snapshot_aborts(tmp_path):
+    with pytest.raises(SystemExit):
+        rb._build_cache_protocol(_warm_args(tmp_path / "nope.sqlite3"))
+
+
+def test_cache_protocol_warm_missing_sidecar_aborts(tmp_path):
+    src = tmp_path / "runtime.sqlite3"
+    _make_cache_db(src, rows=1)
+    snap = tmp_path / "warm.sqlite3"
+    cache_snapshot.make_snapshot(src, snap)
+    sha_side, _ = cache_snapshot.sidecar_paths(snap)
+    sha_side.unlink()
+    with pytest.raises(SystemExit):
+        rb._build_cache_protocol(_warm_args(snap))
+
+
+def test_cache_protocol_warm_digest_mismatch_aborts(tmp_path):
+    src = tmp_path / "runtime.sqlite3"
+    _make_cache_db(src, rows=1)
+    snap = tmp_path / "warm.sqlite3"
+    cache_snapshot.make_snapshot(src, snap)
+    sha_side, _ = cache_snapshot.sidecar_paths(snap)
+    sha_side.write_text("0" * 64 + "\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        rb._build_cache_protocol(_warm_args(snap))

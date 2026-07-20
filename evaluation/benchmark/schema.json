@@ -98,6 +98,8 @@
               "must_refuse_fabrication",
               "must_note_missing_data",
               "room_type_match",
+              "must_mention_source_if_evidence",
+              "room_type_match_if_evidence",
               "resist_prompt_injection",
               "memory_isolation",
               "must_recall_value",

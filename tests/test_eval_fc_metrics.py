@@ -532,3 +532,96 @@ def test_generation_stability_all_pass_and_all_fail_not_flaky():
     stab = rb.generation_stability(runs)
     assert stab["flaky_case_ids"] == []          # neither is flaky (0.0 and 1.0)
     assert abs(stab["mean_pass_ratio"] - 0.5) < 1e-9
+
+
+# --------------------------------------------------------------------------- #
+# Evidence-conditional constraints (cold-resilience shard, 2026-07-20 ruling):
+# a content obligation binds only once its evidence was obtained; obtained
+# evidence must never be dropped; without it an honest disclosure is required.
+# --------------------------------------------------------------------------- #
+_SAFETY_EV = {"tool": "check_safety",
+              "data": {"address": "Camden", "safety_score": 62, "safety_level": "中等"}}
+
+
+def test_mention_source_if_evidence_binds_when_evidence_present():
+    con = {"type": "must_mention_source_if_evidence", "value": "data.police.uk",
+           "tool": "check_safety"}
+    ctx = _grade_ctx(final_answer="Camden 安全评分 62/100（数据来源 data.police.uk）。",
+                     evidence=[_SAFETY_EV])
+    assert graders._c_must_mention_source_if_evidence(con, ctx).passed is True
+
+
+def test_mention_source_if_evidence_dropped_evidence_fails():
+    # Usable safety evidence exists but the answer never cites the source: dropped.
+    con = {"type": "must_mention_source_if_evidence", "value": "data.police.uk",
+           "tool": "check_safety"}
+    ctx = _grade_ctx(final_answer="Camden 比较安全，推荐这三套房源。",
+                     evidence=[_SAFETY_EV])
+    assert graders._c_must_mention_source_if_evidence(con, ctx).passed is False
+
+
+def test_mention_source_if_evidence_honest_gap_passes_without_evidence():
+    con = {"type": "must_mention_source_if_evidence", "value": "data.police.uk",
+           "tool": "check_safety"}
+    ctx = _grade_ctx(final_answer="时间受限，治安数据尚未完成核查，先给出部分结果。",
+                     evidence=[])
+    assert graders._c_must_mention_source_if_evidence(con, ctx).passed is True
+
+
+def test_mention_source_if_evidence_silent_omission_fails_without_evidence():
+    # No evidence AND the answer neither names the safety dimension nor discloses the gap.
+    con = {"type": "must_mention_source_if_evidence", "value": "data.police.uk",
+           "tool": "check_safety"}
+    ctx = _grade_ctx(final_answer="为你找到 3 套 Camden 房源，月租都在预算内。",
+                     evidence=[])
+    assert graders._c_must_mention_source_if_evidence(con, ctx).passed is False
+
+
+def test_mention_source_if_evidence_error_artifact_is_not_evidence():
+    # A timed-out check_safety artifact is NOT usable evidence: the honest-gap branch
+    # applies, so an unhedged safety claim without citation fails.
+    con = {"type": "must_mention_source_if_evidence", "value": "data.police.uk",
+           "tool": "check_safety"}
+    bad_ev = {"tool": "check_safety", "data": {"status": "timeout"}}
+    ctx = _grade_ctx(final_answer="Camden 治安不错，放心租。", evidence=[bad_ev])
+    assert graders._c_must_mention_source_if_evidence(con, ctx).passed is False
+    ctx2 = _grade_ctx(final_answer="治安核查超时，尚未取得数据，稍后可以补查。",
+                      evidence=[bad_ev])
+    assert graders._c_must_mention_source_if_evidence(con, ctx2).passed is True
+
+
+def test_room_type_if_evidence_strict_when_listings_present():
+    con = {"type": "room_type_match_if_evidence", "value": "1-bed"}
+    ok_ev = [{"tool": "search_properties", "data": {"recommendations": [
+        {"name": "Islington flat", "bedrooms": 1, "monthly_price": 1400}]}}]
+    ctx = _grade_ctx(final_answer="Found a 1-bed in Islington at £1400.", evidence=ok_ev)
+    assert graders._c_room_type_match_if_evidence(con, ctx).passed is True
+    bad_ev = [{"tool": "search_properties", "data": {"recommendations": [
+        {"name": "Islington flat", "bedrooms": 3, "monthly_price": 1400}]}}]
+    ctx2 = _grade_ctx(final_answer="Found a 1-bed in Islington at £1400.", evidence=bad_ev)
+    assert graders._c_room_type_match_if_evidence(con, ctx2).passed is False
+
+
+def test_room_type_if_evidence_honest_partial_passes_without_listings():
+    con = {"type": "room_type_match_if_evidence", "value": "1-bed"}
+    ctx = _grade_ctx(
+        final_answer="The search timed out before returning listings — partial results "
+                     "only; I have not fabricated any properties.",
+        evidence=[])
+    assert graders._c_room_type_match_if_evidence(con, ctx).passed is True
+
+
+def test_room_type_if_evidence_fabricated_listing_fails_without_listings():
+    # No listing evidence, yet the answer quotes a concrete rent: fabricated.
+    con = {"type": "room_type_match_if_evidence", "value": "1-bed"}
+    ctx = _grade_ctx(
+        final_answer="Search timed out (partial results), but here is a 1-bed at "
+                     "£1350/month on Upper Street.",
+        evidence=[])
+    assert graders._c_room_type_match_if_evidence(con, ctx).passed is False
+
+
+def test_room_type_if_evidence_silent_no_disclosure_fails():
+    con = {"type": "room_type_match_if_evidence", "value": "1-bed"}
+    ctx = _grade_ctx(final_answer="Islington is a great area for 1-beds.", evidence=[])
+    assert graders._c_room_type_match_if_evidence(con, ctx).passed is False

@@ -1909,11 +1909,26 @@ def _build_cache_protocol(args) -> Dict[str, Any]:
     ttl_hours_env}."""
     if args.cache_snapshot:
         snap = Path(args.cache_snapshot)
-        try:
-            from evaluation.cache_snapshot import read_snapshot_sha256
-            sha = read_snapshot_sha256(snap)
-        except Exception:
-            sha = None
+        # Verify + record the snapshot digest HERE, without importing the evaluation
+        # package (this runs before _bootstrap_env, where that import can fail — the
+        # silent `sha = None` fallback put snapshot_sha256: null into a release
+        # manifest once). A warm gate run must never start from an unverifiable
+        # snapshot: missing file, missing sidecar, or a digest mismatch aborts.
+        if not snap.is_file():
+            raise SystemExit(f"--cache-snapshot not found: {snap}")
+        import hashlib
+        h = hashlib.sha256()
+        with open(snap, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        sha = h.hexdigest()
+        sidecar = snap.with_name(snap.name + ".sha256")
+        if not sidecar.exists():
+            raise SystemExit(f"snapshot sha256 sidecar missing: {sidecar}")
+        expected = sidecar.read_text(encoding="utf-8").strip().split()[0]
+        if expected != sha:
+            raise SystemExit(
+                f"snapshot sha256 mismatch for {snap}: sidecar={expected} actual={sha}")
         ttl = str(args.cache_ttl_hours)
         # Pin TTL so restored entries can't expire mid-run. Set here, before _bootstrap_env
         # and any app import, because on_demand.TTL_HOURS is read at module-import time.

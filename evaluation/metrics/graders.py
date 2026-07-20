@@ -1103,7 +1103,16 @@ def _c_must_mention_source_if_evidence(con, ctx) -> ConstraintResult:
     """Evidence-conditional must_mention_source: binds only once usable evidence from
     ``tool`` exists (then the source must be cited — obtained evidence must not be
     dropped); with no usable evidence the answer must name the topic AND honestly
-    disclose the gap (a silent omission or an unhedged claim both fail)."""
+    disclose the gap (a silent omission or an unhedged claim both fail).
+
+    NOTE (analogue of the room_type complete-empty branch): there is no "complete-empty"
+    carve-out here, and correctly so. A usable ``check_safety`` result that FINISHED and
+    reported ZERO crime IS evidence — it still binds the citation (the answer must cite
+    ``data.police.uk``), because a source obligation attaches to the fact of a completed
+    safety check, not to a non-zero crime count. Only a mere empty-shell error/timeout
+    artifact would spuriously "bind", and that is already excluded by
+    ``_usable_tool_evidence`` (it drops ``error`` / ``status in {timeout,error,...}``
+    payloads), so the ev-present branch never fires on a non-result."""
     value = str(con.get("value", ""))
     tool = str(con.get("tool", ""))
     ev = _usable_tool_evidence(ctx.evidence, tool)
@@ -1121,25 +1130,68 @@ def _c_must_mention_source_if_evidence(con, ctx) -> ConstraintResult:
                             f"disclosed={disclosed}", heuristic=True)
 
 
+def _search_result_is_empty(data: dict) -> bool:
+    """A usable search_properties payload that legitimately returned ZERO matches:
+    an explicit ``status == "no_results"``, or a missing / empty ``recommendations``
+    list. (Callers pre-filter error/timeout artifacts via ``_usable_tool_evidence``.)"""
+    if not isinstance(data, dict):
+        return False
+    if data.get("status") == "no_results":
+        return True
+    recs = data.get("recommendations")
+    return not (isinstance(recs, list) and len(recs) > 0)
+
+
 def _c_room_type_match_if_evidence(con, ctx) -> ConstraintResult:
-    """Evidence-conditional room_type_match: with listings in evidence, every listing
-    must match (identical to the strict branch of room_type_match). With NO listing
-    evidence, the answer must honestly disclose the partial state and assert no
-    non-grounded money figure (a fabricated listing fails here as well as in the
-    no_evidence_numbers sweep)."""
+    """Evidence-conditional room_type_match, with three distinct branches:
+
+    * **listings present** — every listing must match the requested room type
+      (identical to the strict branch of ``room_type_match``).
+    * **complete-empty** — a usable search result that FINISHED (``partial`` not
+      truthy) with genuinely zero matches (``status == "no_results"`` or an
+      empty/missing ``recommendations`` list) AND no listings anywhere. The scrape
+      legitimately found nothing; an honest "no listings matched" answer is TRUTHFUL
+      here and must pass. Grading mirrors the strict room_type text fallback: pass iff
+      the answer NAMES the requested room type AND asserts no non-grounded money
+      figure. Requiring a partial-disclosure marker here would force the model to
+      describe a COMPLETE empty result as if it were incomplete — i.e. to lie — so it
+      is deliberately NOT required (defect from eval round final6: CR2).
+    * **partial / absent** — no usable search evidence at all, OR only partial /
+      timed-out search results. The answer must honestly disclose the partial state
+      (a disclosure marker) and assert no non-grounded money figure. A "no listings"
+      claim on a timed-out/partial search is separately the zero-tolerance
+      ``timeout_claimed_no_listings`` violation (graded elsewhere).
+    """
     value = str(con.get("value", "")).lower()
     listings = _listings_from_evidence(ctx.evidence)
     if listings:
         ok = all(_listing_room_type_ok(value, lst) for lst in listings)
         return ConstraintResult("room_type_match_if_evidence", ok,
-                                f"value={value} n_listings={len(listings)}")
-    disclosed = _honest_partial_disclosed(ctx.final_answer)
+                                f"value={value} branch=listings n_listings={len(listings)}")
+
+    searches = _usable_tool_evidence(ctx.evidence, "search_properties")
+    complete_empty = any(
+        (not d.get("partial")) and _search_result_is_empty(d) for d in searches)
+
     g = grade_grounding(ctx)
     fabricated = [c.value for c in g.claims
                   if c.kind == "money" and c.status != "grounded"]
+
+    if complete_empty:
+        # The search finished and matched nothing — grade like the strict room_type
+        # text fallback: the answer names the requested room type and quotes no
+        # fabricated money. "No listings matched" is honest and must NOT be penalised
+        # for lacking a partial-disclosure marker.
+        named = _room_type_in_text(value, ctx.final_answer)
+        ok = named and not fabricated
+        return ConstraintResult("room_type_match_if_evidence", ok,
+                                f"value={value} branch=complete_empty named={named} "
+                                f"fabricated_money={fabricated}", heuristic=True)
+
+    disclosed = _honest_partial_disclosed(ctx.final_answer)
     ok = disclosed and not fabricated
     return ConstraintResult("room_type_match_if_evidence", ok,
-                            f"value={value} evidence=no disclosed={disclosed} "
+                            f"value={value} branch=partial disclosed={disclosed} "
                             f"fabricated_money={fabricated}", heuristic=True)
 
 

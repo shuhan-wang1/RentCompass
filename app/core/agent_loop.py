@@ -20,6 +20,8 @@ import THIS module only lazily/function-locally (build_agent_graph) to avoid a c
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import functools
 import json
 import logging
 import os
@@ -314,6 +316,64 @@ def _swallow_abandoned_task(task) -> None:
         pass
 
 
+# ─── tool-call offload (event-loop protection) ──────────────────────
+# THE fix for the batch-deadline hole (final6 CR4): several tools in this codebase are
+# `async def` yet make SYNCHRONOUS, non-yielding calls inline — e.g. search_properties'
+# clarify_and_extract_criteria LLM round-trip (search_properties.py :1387). Awaited directly on
+# the graph's event loop, such a call FREEZES the loop for its whole duration, so the batch
+# window's asyncio.wait(timeout=...) timer can never fire and sibling reads cannot even START —
+# the loop only regains control long after the folded deadline (live: a batch dispatched at
+# 18.5s ran to 38s, a sibling search only STARTING at 33.6s, ~10s past the 23s folded deadline).
+# Running each dispatch in its OWN event loop on a worker thread keeps the graph loop free, so
+# the folded deadline fires on time and stragglers are abandoned exactly like the existing
+# executor-thread abandon (the worker thread is unkillable and simply walked away from).
+_TOOL_OFFLOAD_EXECUTOR = None
+
+
+def _tool_offload_executor():
+    """Lazily-built dedicated thread pool for offloaded tool dispatches. Kept separate from the
+    loop's default executor so abandoned (unkillable, still-running) tool threads can never
+    starve the pool the loop itself uses for its own run_in_executor work."""
+    global _TOOL_OFFLOAD_EXECUTOR
+    if _TOOL_OFFLOAD_EXECUTOR is None:
+        from concurrent.futures import ThreadPoolExecutor
+        try:
+            workers = int(os.getenv("FC_TOOL_OFFLOAD_WORKERS", "32"))
+        except (TypeError, ValueError):
+            workers = 32
+        _TOOL_OFFLOAD_EXECUTOR = ThreadPoolExecutor(
+            max_workers=max(4, workers), thread_name_prefix="fc_tool")
+    return _TOOL_OFFLOAD_EXECUTOR
+
+
+def _run_coro_in_private_loop(coro_factory):
+    """Worker-thread entry point. The tool coroutine is BUILT here (not on the graph loop) so an
+    abandoned dispatch never leaves an un-awaited coroutine behind, then driven to completion in
+    a private event loop. NEVER raises: a raised exception on an abandoned future would surface
+    as an 'exception was never retrieved' log — the outcome (a value OR the exception object) is
+    returned so the awaiter re-raises it and an abandoned future still resolves cleanly."""
+    try:
+        return asyncio.run(coro_factory())
+    except BaseException as exc:  # noqa: BLE001 - returned as a value, re-raised by the awaiter
+        return exc
+
+
+async def _offload_tool_call(coro_factory):
+    """Run `coro_factory()` (a zero-arg callable returning the tool coroutine) OFF the graph
+    event loop, on a worker thread with its own loop, preserving the eval contextvars so
+    tool-call attribution still lands (run_in_executor does not copy them; ctx.run does).
+    Awaiting this never blocks the graph loop, so a blocking section inside an async tool can no
+    longer defeat the batch/turn deadline."""
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    outcome = await loop.run_in_executor(
+        _tool_offload_executor(),
+        functools.partial(ctx.run, _run_coro_in_private_loop, coro_factory))
+    if isinstance(outcome, BaseException):
+        raise outcome
+    return outcome
+
+
 def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str,
                          abandoned: bool, *, outcome: Optional[str] = None) -> None:
     """One structured attribution record per abandon/timeout (Phase 2.3 deliverable 4). The
@@ -428,6 +488,11 @@ _WRAP_DIRECTIVE = (
     "tool timed out, say so honestly and give the best answer you can from what you have. "
     "NEVER claim there are no listings / no results when a search timed out or returned "
     "partial results — describe what WAS found and note that it may be incomplete. "
+    "For EACH dimension the user explicitly asked about (e.g. safety/crime, commute time, "
+    "nearby amenities/supermarkets, the listings themselves) that has NO completed tool result "
+    "above, say EXPLICITLY that that specific dimension was NOT yet checked (name it — e.g. "
+    "'safety has not been verified yet', 'commute time was not calculated') — never stay vague "
+    "with 'this may be incomplete', and never imply a dimension was checked when it was not. "
     "For every figure you state (price, rent, distance, count, travel time), CITE its data "
     "source inline (e.g. OnTheMarket, or the tool that produced it). State ONLY numbers that "
     "actually appear in the gathered tool results above — never estimate, round, or invent a "
@@ -481,6 +546,48 @@ def _rec_summary_line(rec: dict) -> str:
     return "- " + " — ".join(parts) if parts else "- (listing)"
 
 
+# Dimension cues → the tool(s) that satisfy that dimension, plus the honest "not done" line
+# (zh, en). Used by the deterministic wrap fallback to NAME every requested-but-uncompleted
+# dimension (product bar from final6 CR4: a cut-short answer must say e.g. 「治安数据尚未完成核查」,
+# not just 「以上内容可能不完整」). The listings dimension (search_properties) is intentionally
+# omitted here — it is already named by the dedicated recommendations / search-incomplete /
+# no-results block in the fallback, so enumerating it again would double-report.
+_DIMENSION_CUES = (
+    ("safety",
+     ("治安", "安全", "犯罪", "crime", "safety", "unsafe", "police"),
+     ("check_safety",),
+     "治安数据尚未完成核查。",
+     "Safety has not been verified yet (crime data was not retrieved)."),
+    ("commute",
+     ("通勤", "commute"),
+     ("calculate_commute", "calculate_commute_cost", "check_transport_cost", "get_transport_info"),
+     "通勤时间尚未核算。",
+     "Commute time has not been calculated yet."),
+    ("nearby",
+     ("超市", "便利店", "餐厅", "附近", "周边", "设施",
+      "supermarket", "grocery", "nearby", "amenit", "restaurant", "poi"),
+     ("search_nearby_pois",),
+     "周边设施尚未查询。",
+     "Nearby amenities have not been looked up yet."),
+)
+
+
+def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: str) -> list:
+    """For EACH dimension the user's message explicitly asks about that has NO completed tool
+    result, return one honest 'not done yet' line in the reply language. Deterministic and
+    cue-based (CJK cues match the raw text, ascii cues the lowercased text); it never claims a
+    dimension was checked."""
+    msg = message or ""
+    low = msg.lower()
+    lines = []
+    for _dim, cues, tools, zh_line, en_line in _DIMENSION_CUES:
+        cued = any((cue in low) if cue.isascii() else (cue in msg) for cue in cues)
+        if not cued or any(t in executed_tools for t in tools):
+            continue
+        lines.append(zh_line if lang == "zh" else en_line)
+    return lines
+
+
 def _deterministic_wrap_answer(state: AgentState) -> str:
     """Build a compact, honest final answer directly from the gathered tool_artifacts, for the
     case where the wrap-up LLM call timed out / errored (FIX 2). Names which tools ran, renders
@@ -495,7 +602,11 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
 
     executed = [a for a in artifacts
                 if _is_executed(a) and a.get("tool") not in (None, "ask_user")]
-    tool_names = sorted({a.get("tool") for a in executed})
+    executed_tools = {a.get("tool") for a in executed}
+    tool_names = sorted(executed_tools)
+    # Requested-but-uncompleted dimensions, named explicitly (product bar): scan THIS turn's
+    # message for dimension cues and, for each with no completed tool result, an honest line.
+    missing_lines = _missing_requested_dimension_lines(cm, executed_tools, lang)
 
     recs = []
     for a in reversed(artifacts):
@@ -538,6 +649,9 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
         for place, score, level in safety_lines[:4]:
             lines.append(f"治安（数据来源 data.police.uk）：{place} 安全评分 {score}/100"
                          + (f"（{level}）" if level else "") + "。")
+        if missing_lines:
+            lines.append("以下你要求的内容本轮尚未完成：")
+            lines.extend("- " + m for m in missing_lines)
         lines.append("由于时间限制，以上内容可能不完整，你可以让我继续把它补全。")
     else:
         lines = ["Sorry — this turn ran long, so here is a brief answer from what I have "
@@ -555,6 +669,9 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
         for place, score, level in safety_lines[:4]:
             lines.append(f"Safety (source: data.police.uk): {place} scored {score}/100"
                          + (f" ({level})" if level else "") + ".")
+        if missing_lines:
+            lines.append("Still outstanding from what you asked for this turn:")
+            lines.extend("- " + m for m in missing_lines)
         lines.append("This answer was cut short by the time budget; let me know and I can "
                      "finish it.")
     return "\n".join(lines)
@@ -1038,7 +1155,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             from core.tool_system import ToolResult
             t_call = time.monotonic()
             try:
-                res = await asyncio.wait_for(provider.execute_tool(name, **call_args), timeout)
+                # Offload to a private-loop worker thread (see _offload_tool_call): a blocking,
+                # non-yielding section inside an async tool must not freeze the graph loop, or the
+                # wait_for below (and the batch window) could not fire on time. The coroutine is
+                # built inside the thread via the factory so an abandoned dispatch leaves nothing
+                # un-awaited on the graph loop.
+                res = await asyncio.wait_for(
+                    _offload_tool_call(lambda: provider.execute_tool(name, **call_args)), timeout)
                 return res, int((time.monotonic() - t_call) * 1000), "ok"
             except asyncio.TimeoutError:
                 el = int((time.monotonic() - t_call) * 1000)

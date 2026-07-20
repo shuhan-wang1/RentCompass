@@ -625,3 +625,55 @@ def test_room_type_if_evidence_silent_no_disclosure_fails():
     con = {"type": "room_type_match_if_evidence", "value": "1-bed"}
     ctx = _grade_ctx(final_answer="Islington is a great area for 1-beds.", evidence=[])
     assert graders._c_room_type_match_if_evidence(con, ctx).passed is False
+
+
+# --------------------------------------------------------------------------- #
+# COMPLETE-EMPTY branch (defect from eval round final6, CR2): a cold scrape that
+# FINISHED (partial=false) with genuinely zero matches is a legitimate empty. An
+# honest "no listings matched" answer that names the room type and fabricates no
+# rent PASSES — it must NOT be forced to add a partial-disclosure marker (that would
+# describe a complete result as incomplete). Distinct from the partial/timeout branch.
+# --------------------------------------------------------------------------- #
+def test_room_type_if_evidence_complete_empty_honest_no_match_passes():
+    # CR2: cold scrape completed in ~4s, found zero 2-beds under £1500; the answer
+    # honestly says no listings matched and names "2-bedroom". This is TRUTHFUL and
+    # must pass without any partial-disclosure marker.
+    con = {"type": "room_type_match_if_evidence", "value": "2-bed"}
+    ctx = _grade_ctx(
+        final_answer=("I searched for 2-bedroom flats in Camden with a monthly rent "
+                      "under £1,500. Unfortunately, no listings matching that criteria "
+                      "were returned by the search tool."),
+        # user's stated budget rides in via user_texts, so the £1,500 is grounded
+        user_texts=["Find me a 2-bed flat in Camden under £1500 a month."],
+        evidence=[{"tool": "search_properties",
+                   "data": {"status": "no_results", "partial": False,
+                            "recommendations": []}}])
+    assert graders._c_room_type_match_if_evidence(con, ctx).passed is True
+
+
+def test_room_type_if_evidence_complete_empty_fabricated_rent_fails():
+    # Same completed-empty scrape, but the answer invents a concrete rent for a
+    # listing that does not exist: fabrication, must fail.
+    con = {"type": "room_type_match_if_evidence", "value": "2-bed"}
+    ctx = _grade_ctx(
+        final_answer=("I found a 2-bedroom flat in Camden at £1,320/month on "
+                      "Camden High Street."),
+        user_texts=["Find me a 2-bed flat in Camden under £1500 a month."],
+        evidence=[{"tool": "search_properties",
+                   "data": {"status": "no_results", "partial": False,
+                            "recommendations": []}}])
+    assert graders._c_room_type_match_if_evidence(con, ctx).passed is False
+
+
+def test_room_type_if_evidence_partial_no_listings_claim_still_fails():
+    # PARTIAL search (partial=true, empty recommendations) — this is NOT complete-empty.
+    # A bare "no listings" claim with no honest-partial disclosure fails here; note that
+    # the zero-tolerance timeout_claimed_no_listings sweep additionally fires elsewhere
+    # (run_benchmark), so this stays a genuine violation on two independent axes.
+    con = {"type": "room_type_match_if_evidence", "value": "2-bed"}
+    ctx = _grade_ctx(
+        final_answer="There are no listings for 2-bed flats in Camden.",
+        user_texts=["Find me a 2-bed flat in Camden under £1500 a month."],
+        evidence=[{"tool": "search_properties",
+                   "data": {"partial": True, "recommendations": []}}])
+    assert graders._c_room_type_match_if_evidence(con, ctx).passed is False

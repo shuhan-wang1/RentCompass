@@ -103,6 +103,25 @@ class PerToolDelayProvider(FakeProvider):
         return FakeResult(True, {"ok": name})
 
 
+class BlockingProvider(FakeProvider):
+    """execute_tool does a REAL, non-yielding time.sleep — simulating an async tool that makes a
+    SYNCHRONOUS call inline (e.g. search_properties' clarify_and_extract_criteria LLM round-trip).
+    Awaited on the graph loop this FREEZES it and defeats the batch-window timer; offloaded to a
+    private-loop worker thread it must not. `blocks` is a scalar (all tools) or a per-tool dict."""
+
+    def __init__(self, specs, blocks):
+        super().__init__(specs)
+        self._per_tool = blocks if isinstance(blocks, dict) else None
+        self._scalar = None if isinstance(blocks, dict) else float(blocks)
+
+    async def execute_tool(self, name, **params):
+        self.calls.append((name, params))
+        b = self._scalar if self._scalar is not None else self._per_tool.get(name, 0.0)
+        if b:
+            time.sleep(b)  # BLOCKING, non-yielding — must run off the graph loop
+        return FakeResult(True, {"ok": name})
+
+
 class FakeChat:
     def __init__(self, scripted=None):
         self._scripted = list(scripted or [])
@@ -1071,3 +1090,181 @@ def test_wrap_directive_has_source_and_figure_rules():
     assert "cite" in d and "source" in d                       # source-citation instruction
     assert "only numbers" in d and ("appear" in d or "present" in d)  # no-invented-figures rule
     assert "onthemarket" in d                                  # concrete source example
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TASK 1 (final6 CR4 batch-deadline hole): a blocking, non-yielding section inside an async
+# tool must NOT freeze the graph loop / defeat the folded batch deadline. Each dispatch is
+# offloaded to a private-loop worker thread, so the batch window fires on time and stragglers
+# are abandoned regardless of the (unkillable) worker thread.
+# ═══════════════════════════════════════════════════════════════════
+
+def test_execute_tools_returns_at_window_despite_blocking_tool(monkeypatch):
+    """Root-cause regression: an async tool that makes a SYNCHRONOUS, non-yielding call inline
+    used to FREEZE the graph event loop, so the batch-window asyncio.wait timer could not fire
+    and execute_tools ran far past the folded deadline (live: dispatched 18.5s, returned 38s). A
+    concurrent heartbeat must keep ticking while a 2s-blocking tool is in flight, the tool must be
+    abandoned at the ~0.4s window, and the node must return bounded by the window."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.4")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = BlockingProvider([FakeSpec("search_properties")], blocks=2.0)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    async def run():
+        ticks = {"n": 0}
+        stop = {"v": False}
+
+        async def heartbeat():
+            while not stop["v"]:
+                ticks["n"] += 1
+                await asyncio.sleep(0.02)
+
+        hb = asyncio.ensure_future(heartbeat())
+        t0 = time.monotonic()
+        cmd = await nodes["execute_tools"](state)
+        wall = time.monotonic() - t0
+        stop["v"] = True
+        await hb
+        return ticks["n"], wall, cmd
+
+    ticks, wall, cmd = asyncio.run(run())
+
+    assert wall < 1.5, f"execute_tools ran past the window ({wall:.2f}s) — graph loop was blocked"
+    assert ticks >= 5, f"event loop appeared blocked (only {ticks} heartbeat ticks)"
+    state.update(cmd.update or {})
+    ab = [a for a in state["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1 and ab[0]["tool"] == "search_properties"
+    assert ab[0]["outcome_unknown"] is True
+
+
+def test_blocking_tool_does_not_serialize_siblings(monkeypatch):
+    """A blocking tool in a batch must not delay a sibling read's START (the live 'second search
+    only started at 33.6s' symptom). With per-dispatch offload both run concurrently: the fast
+    sibling completes within the window while the blocker is abandoned at it."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.6")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = BlockingProvider(
+        [FakeSpec("compare_or_rank_areas"), FakeSpec("web_search")],
+        blocks={"compare_or_rank_areas": 3.0, "web_search": 0.0})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("compare_or_rank_areas", {"areas": ["a", "b"]}, "c1"),
+        _tc("web_search", {"query": "x"}, "c2")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 1.5, f"blocker serialized the batch ({wall:.2f}s) — sibling could not start"
+    by_tool = {a["tool"]: a for a in state["tool_artifacts"]}
+    # fast sibling completed concurrently (not queued behind the 3s blocker)
+    assert by_tool["web_search"]["success"] is True
+    assert by_tool["web_search"]["raw_data"] == {"ok": "web_search"}
+    # the blocking read was abandoned at the window
+    assert by_tool["compare_or_rank_areas"].get("abandoned") is True
+
+
+def test_blocking_batch_near_wrap_returns_and_wraps_promptly(monkeypatch):
+    """End-to-end CR4 shape: a batch dispatched with only ~1s of soft-wrap runway left, holding a
+    tool that would block 30s, must return bounded by the soft remainder (not the 30s block), and
+    the next agent entry must wrap PROMPTLY rather than being dragged past the SLO."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.5")   # ~1s remaining >= min -> dispatch (bounded)
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "search_properties", 30)
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    provider = BlockingProvider([FakeSpec("search_properties")], blocks=30)
+    chat = WrapChat(AIMessage(content="Best-effort answer from what I have."))
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+
+    turn_start = time.monotonic() - 24.0  # soft remaining ~1.0s
+    st = _state(loop_turn=4, turn_start_monotonic=turn_start,
+                messages=[AIMessage(content="",
+                                    tool_calls=[_tc("search_properties", {"area": "x"}, "c1")])])
+
+    t0 = time.monotonic()
+    cmd1 = asyncio.run(nodes["execute_tools"](st))
+    st.update(cmd1.update or {})
+    wall = time.monotonic() - t0
+
+    assert wall < 3.0, f"blocking batch not bounded by the soft remainder ({wall:.2f}s)"
+    assert cmd1.goto == "agent"
+    ab = [a for a in st["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1 and ab[0]["tool"] == "search_properties"
+
+    # the next agent entry (elapsed ~25 > wrap edge 23) wraps promptly, no re-dispatch
+    cmd2 = asyncio.run(nodes["agent"](st))
+    assert cmd2.goto == "format_output_fc"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TASK 2 (final6 CR4 wrap honesty): a cut-short wrap must NAME every requested-but-uncompleted
+# dimension explicitly, not just say "may be incomplete".
+# ═══════════════════════════════════════════════════════════════════
+
+def _cr4_state(lang, executed_tools):
+    """CR4 zh query state with the given already-executed tools (as plain success artifacts)."""
+    cm = ("帮我找伦敦月租不超过1400镑的单间，通勤到帝国理工不超过35分钟，"
+          "附近要有超市，尽量避开治安差的区域") if lang == "zh" else (
+          "Find me a room in London under £1400/month, commute to Imperial under 35 min, "
+          "supermarkets nearby, and avoid unsafe areas")
+    arts = [{"turn": 0, "tool": t, "params_digest": f"d{i}", "success": True,
+             "raw_data": {"ok": True}} for i, t in enumerate(executed_tools)]
+    return _state(extracted_context={"current_message": cm, "reply_language": lang},
+                  tool_artifacts=arts)
+
+
+def test_wrap_fallback_names_missing_dimensions_zh():
+    """CR4 exact shape: safety/commute/nearby requested, only compare/search/web_search ran ->
+    the deterministic fallback names each uncompleted dimension explicitly (not just 可能不完整)."""
+    state = _cr4_state("zh", ["compare_or_rank_areas", "search_properties", "web_search"])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "治安数据尚未完成核查" in ans     # safety named
+    assert "通勤时间尚未核算" in ans         # commute named
+    assert "周边设施尚未查询" in ans         # nearby/POI named
+    # still the honest incomplete disclosure, and never implies a dimension was checked
+    assert "可能不完整" in ans
+
+
+def test_wrap_fallback_names_missing_dimensions_en():
+    state = _cr4_state("en", ["compare_or_rank_areas", "search_properties", "web_search"])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "Safety has not been verified yet" in ans
+    assert "Commute time has not been calculated yet" in ans
+    assert "Nearby amenities have not been looked up yet" in ans
+
+
+def test_wrap_fallback_omits_completed_dimensions():
+    """A dimension whose tool DID complete is NOT flagged as outstanding (no false 'not done')."""
+    state = _cr4_state("zh", ["search_properties", "check_safety", "calculate_commute",
+                              "search_nearby_pois"])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "尚未完成核查" not in ans     # safety completed
+    assert "尚未核算" not in ans         # commute completed
+    assert "尚未查询" not in ans         # nearby completed
+
+
+def test_missing_dimension_lines_helper_cues():
+    """Cue detection: ascii cues match case-insensitively, CJK cues match raw; a completed tool
+    removes its dimension."""
+    zh = agent_loop._missing_requested_dimension_lines(
+        "通勤和治安如何，附近有超市吗", set(), "zh")
+    assert zh == ["治安数据尚未完成核查。", "通勤时间尚未核算。", "周边设施尚未查询。"]
+    # safety satisfied by a completed check_safety -> only commute + nearby remain
+    zh2 = agent_loop._missing_requested_dimension_lines(
+        "通勤和治安如何，附近有超市吗", {"check_safety"}, "zh")
+    assert "治安数据尚未完成核查。" not in zh2
+    # no cued dimensions -> no lines
+    assert agent_loop._missing_requested_dimension_lines("find me a flat", set(), "en") == []
+
+
+def test_wrap_directive_names_uncompleted_dimensions():
+    """FIX 2(a): the wrap LLM prompt instructs naming each requested-but-uncompleted dimension."""
+    d = agent_loop._WRAP_DIRECTIVE.lower()
+    assert "dimension" in d
+    assert "not yet checked" in d or "not yet" in d or "was not" in d

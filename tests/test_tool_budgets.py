@@ -1014,6 +1014,46 @@ def test_wrapped_turn_bypasses_critic_fast(monkeypatch):
     assert wall < 0.5                          # wrapped-turn tail is fast
 
 
+def test_wrap_toolcall_markup_leak_falls_back(monkeypatch):
+    """Strict-path leak seen live (CR4 r2): with tools unbound, the model emitted raw DSML
+    tool-call tokens as plain text and that markup became the user-facing answer. Any
+    tool-call-shaped wrap output must be rejected in favor of the deterministic fallback."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    leaked = ('<｜｜DSML｜｜tool_calls>\n<｜｜DSML｜｜invoke name="check_safety">\n'
+              '<｜｜DSML｜｜parameter name="address" string="true">South Kensington'
+              '</｜｜DSML｜｜parameter>\n</｜｜DSML｜｜invoke>')
+    chat = WrapChat(AIMessage(content=leaked))
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(loop_turn=3,
+                   extracted_context={"current_message": "find flats", "reply_language": "en"},
+                   messages=[HumanMessage(content="compare areas and check safety")],
+                   turn_start_monotonic=time.monotonic() - 26.0)
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    resp = cmd.update["final_response"]
+    assert "DSML" not in resp and "invoke" not in resp   # markup never reaches the user
+    assert "cut short" in resp.lower()                    # deterministic fallback used
+
+
+def test_wrap_fallback_renders_safety_evidence(monkeypatch):
+    """Gathered check_safety evidence is renderable verbatim with its real source
+    (data.police.uk) — a cut-short answer surfaces it instead of dropping it."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    state = _state(
+        extracted_context={"current_message": "is Camden safe", "reply_language": "en"},
+        tool_artifacts=[{"turn": 0, "tool": "check_safety", "params_digest": "d",
+                         "success": True,
+                         "raw_data": {"address": "Camden, London", "safety_score": 62,
+                                      "safety_level": "Safe"}}])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "data.police.uk" in ans
+    assert "62/100" in ans and "Camden, London" in ans
+    assert "Safe" in ans
+
+
 # ─── FIX 4: retuned defaults ────────────────────────────────────────
 def test_retuned_defaults(monkeypatch):
     for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_MIN_BATCH_S",

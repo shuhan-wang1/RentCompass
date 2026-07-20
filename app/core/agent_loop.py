@@ -512,6 +512,18 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
              or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("partial")))
         for a in artifacts)
 
+    # Safety evidence already gathered is renderable verbatim (score + its real source,
+    # data.police.uk) — a cut-short answer should still surface it rather than dropping it.
+    safety_lines = []
+    for a in executed:
+        if a.get("tool") != "check_safety":
+            continue
+        raw = a.get("raw_data")
+        if isinstance(raw, dict) and raw.get("safety_score") is not None:
+            place = raw.get("address") or raw.get("area") or raw.get("location") or ""
+            level = raw.get("safety_level") or ""
+            safety_lines.append((str(place), raw.get("safety_score"), str(level)))
+
     if lang == "zh":
         lines = ["抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："]
         if tool_names:
@@ -523,6 +535,9 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
             lines.append("房源搜索还没跑完就到时间了，结果暂不完整，之后可能还会有更多房源。")
         else:
             lines.append("目前还没有可以直接展示的房源结果。")
+        for place, score, level in safety_lines[:4]:
+            lines.append(f"治安（数据来源 data.police.uk）：{place} 安全评分 {score}/100"
+                         + (f"（{level}）" if level else "") + "。")
         lines.append("由于时间限制，以上内容可能不完整，你可以让我继续把它补全。")
     else:
         lines = ["Sorry — this turn ran long, so here is a brief answer from what I have "
@@ -537,6 +552,9 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
                          "are incomplete — more listings may well exist.")
         else:
             lines.append("I do not yet have listing results ready to show.")
+        for place, score, level in safety_lines[:4]:
+            lines.append(f"Safety (source: data.police.uk): {place} scored {score}/100"
+                         + (f" ({level})" if level else "") + ".")
         lines.append("This answer was cut short by the time budget; let me know and I can "
                      "finish it.")
     return "\n".join(lines)
@@ -683,8 +701,17 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
                 if not (text and text.strip()):
                     raise ValueError("empty wrap-up response")
+                # Tool-markup leak guard: with tools unbound (strict path), a model deep in a
+                # tool-use conversation can still EMIT tool-call tokens as plain text — raw
+                # DSML markup surfaced verbatim as a user-facing answer in live gates. Any
+                # tool-call-shaped output is not an answer: fall back to the deterministic
+                # artifact rendering.
+                if (getattr(resp, "tool_calls", None)
+                        or "DSML" in text or "tool_calls>" in text
+                        or "<|invoke" in text or "｜invoke" in text):
+                    raise ValueError("wrap-up response leaked tool-call markup")
                 wrap_msg = resp
-            except Exception as e:  # LLM error -> deterministic fallback
+            except Exception as e:  # LLM error / leak -> deterministic fallback
                 logger.warning("fc_loop.wrap_llm_error %s", e)
                 text = _deterministic_wrap_answer(state)
                 wrap_msg = AIMessage(content=text)

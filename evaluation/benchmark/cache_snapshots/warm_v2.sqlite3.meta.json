@@ -1,0 +1,36 @@
+{
+  "created_at": "2026-07-20T06:20:54",
+  "created_at_epoch": 1784524854.085713,
+  "source_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\warmup2\\shared_cache.sqlite3",
+  "snapshot_path": "evaluation\\benchmark\\cache_snapshots\\warm_v2.sqlite3",
+  "row_count": 16,
+  "sha256": "810c49adab2e0068dac3fb673c1c911e22c473e87e65b4a314c7d6b5fa7ebc1b",
+  "size_bytes": 557056,
+  "provenance": {
+    "git_commit": "6bf3e68",
+    "git_dirty": false,
+    "case_files": [
+      {
+        "path": "evaluation/benchmark/cases.jsonl",
+        "sha256": "c3ea5949820a4ba6c8274c5943c5d053f25857286be9bdfbff04203e0a62cdb3"
+      },
+      {
+        "path": "evaluation/benchmark/cases_guard_regression.jsonl",
+        "sha256": "df704ac43b0362ddc78ecb75345c268807af35f1e9b1bb6620402e37fb8a645a"
+      }
+    ],
+    "warmup_commands": [
+      "run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cache-path <shared> [base98] env: FC_BATCH=120 FC_TURN=240 FC_SOFT_WRAP=200 SEARCH_TOOL=110 TOOL_TIMEOUT_SEARCH_PROPERTIES=110 TOOL_TIMEOUT_DEFAULT=60",
+      "run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cases evaluation/benchmark/cases_guard_regression.jsonl --cache-path <shared> [guard] (same env)"
+    ],
+    "budget_env": {
+      "FC_BATCH_TOOL_BUDGET_S": "120",
+      "FC_TURN_SOFT_WRAP_S": "200",
+      "FC_TURN_TOOL_BUDGET_S": "240",
+      "SEARCH_CACHE_TTL_HOURS": "8760",
+      "SEARCH_TOOL_BUDGET_S": "110",
+      "TOOL_TIMEOUT_DEFAULT": "60",
+      "TOOL_TIMEOUT_SEARCH_PROPERTIES": "110"
+    }
+  }
+}

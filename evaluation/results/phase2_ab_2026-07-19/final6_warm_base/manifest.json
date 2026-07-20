@@ -1,0 +1,51 @@
+{
+  "argv": [
+    "evaluation/run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "fc_loop",
+    "--cache-snapshot",
+    "evaluation/benchmark/cache_snapshots/warm_v3.sqlite3",
+    "--out",
+    "C:/Users/shuhan/AppData/Local/Temp/claude/C--Users-shuhan-Desktop-uk-rent-recommendation/a2db2406-19b5-466a-b242-038b0523804a/scratchpad/final6_warm_base"
+  ],
+  "command": "evaluation/run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cache-snapshot evaluation/benchmark/cache_snapshots/warm_v3.sqlite3 --out C:/Users/shuhan/AppData/Local/Temp/claude/C--Users-shuhan-Desktop-uk-rent-recommendation/a2db2406-19b5-466a-b242-038b0523804a/scratchpad/final6_warm_base",
+  "arch": "fc_loop",
+  "config": "routed_models",
+  "mode": "live",
+  "cache_protocol": {
+    "mode": "warm",
+    "snapshot_path": "evaluation\\benchmark\\cache_snapshots\\warm_v3.sqlite3",
+    "snapshot_sha256": "af2622be92aa5c4a5043d2a4013cf67a89ac96288dd47c2e8f6a5d9dc8d06607",
+    "restored_per_repeat": true,
+    "ttl_hours_env": "8760"
+  },
+  "timestamp": "2026-07-20T07:19:16",
+  "git_commit": "ffdfb48",
+  "git_dirty": false,
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "fc_loop",
+    "DEEPSEEK_STRICT": null,
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1",
+    "SEARCH_CACHE_TTL_HOURS": "8760"
+  },
+  "case_file": {
+    "path": "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\benchmark\\cases.jsonl",
+    "sha256": "c3ea5949820a4ba6c8274c5943c5d053f25857286be9bdfbff04203e0a62cdb3"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\final6_warm_base\\events.jsonl",
+    "sha256": "3eebd61d4478ac37527bc55743644cbe3a9e89dbffcc9612bdd69ca8f5e0f926",
+    "gz_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\final6_warm_base\\events.jsonl.gz",
+    "sha256_gz": "a8f06466c1bf9f49412d81a410e66c0916afb88fca077dddc9bae256fd190b89",
+    "committed": true,
+    "note": "events.jsonl.gz preserved in the package for verification; raw + gz SHA256 both recorded"
+  }
+}

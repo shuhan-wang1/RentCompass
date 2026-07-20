@@ -664,13 +664,23 @@ def _completed_empty_search_raw(artifacts: list) -> Optional[dict]:
     return None
 
 
-def _deterministic_wrap_answer(state: AgentState) -> str:
-    """Build a compact, honest final answer directly from the gathered tool_artifacts, for the
-    case where the wrap-up LLM call timed out / errored (FIX 2). Names which tools ran, renders
-    the top recommendations already present in the artifacts PLAINLY, and states clearly that
-    the answer was cut short by the time budget — in the user's language (zh default). NEVER
-    fabricates numbers not present in the artifacts, and never claims 'no listings' when a
-    search was attempted but partial/timed-out."""
+def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_budget") -> str:
+    """Build a compact, honest final answer directly from the gathered tool_artifacts. Shared
+    by two callers that differ ONLY in framing (opener + closer), never in the body:
+
+      * reason="time_budget"  — the wrap-up LLM call timed out / errored (FIX 2): the answer was
+        cut short by the turn deadline, so the framing says so.
+      * reason="no_reliable_numbers" — the grounding critic stripped fabricated figures from a
+        completed turn (the turn did NOT time out): the framing must NOT mention running long /
+        being cut short / a time budget, and the closer must NOT promise this turn contains
+        figures — it offers to look them up instead.
+
+    Names which tools ran, renders the top recommendations already present in the artifacts
+    PLAINLY, honestly reports a completed-but-empty search (naming the requested room type/area),
+    surfaces gathered safety evidence with its real source, and lists still-outstanding requested
+    dimensions — in the user's language (zh default). NEVER fabricates a number not present in
+    the artifacts, and never claims 'no listings' when a search was attempted but partial/
+    timed-out."""
     ec = state.get("extracted_context") or {}
     cm = ec.get("current_message") or _current_message(state.get("user_query") or "")
     lang = _reply_language_from_ctx(ec, cm)
@@ -724,7 +734,15 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
             safety_lines.append((str(place), raw.get("safety_score"), str(level)))
 
     if lang == "zh":
-        lines = ["抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："]
+        if reason == "no_reliable_numbers":
+            # 「未能获取」是诚实的 partial-disclosure 标记（graders._honest_partial_disclosed），
+            # 满足 must_mention_source_if_evidence 的无证据分支；不含任何「超时/时间限制」措辞。
+            opener = "抱歉，我未能获取到可靠的具体数字，先按已核实的信息回答："
+            closer = "如需具体数字，我可以再帮你查证。"
+        else:
+            opener = "抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："
+            closer = "由于时间限制，以上内容可能不完整，你可以让我继续把它补全。"
+        lines = [opener]
         if tool_names:
             lines.append("已完成的查询：" + "、".join(str(t) for t in tool_names) + "。")
         if recs:
@@ -747,10 +765,22 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
         if missing_lines:
             lines.append("以下你要求的内容本轮尚未完成：")
             lines.extend("- " + m for m in missing_lines)
-        lines.append("由于时间限制，以上内容可能不完整，你可以让我继续把它补全。")
+        lines.append(closer)
     else:
-        lines = ["Sorry — this turn ran long, so here is a brief answer from what I have "
-                 "gathered so far (it may be incomplete):"]
+        if reason == "no_reliable_numbers":
+            # "couldn't retrieve" is an honest partial-disclosure marker
+            # (graders._honest_partial_disclosed), satisfying the no-evidence branch of
+            # must_mention_source_if_evidence — with NO "ran long / cut short / time budget"
+            # wording (the turn did not time out).
+            opener = ("Sorry — I couldn't retrieve reliable specific figures right now, so "
+                      "here is what I have verified:")
+            closer = "If you want specific figures, I can look them up for you."
+        else:
+            opener = ("Sorry — this turn ran long, so here is a brief answer from what I have "
+                      "gathered so far (it may be incomplete):")
+            closer = ("This answer was cut short by the time budget; let me know and I can "
+                      "finish it.")
+        lines = [opener]
         if tool_names:
             lines.append("Completed lookups: " + ", ".join(str(t) for t in tool_names) + ".")
         if recs:
@@ -775,9 +805,15 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
         if missing_lines:
             lines.append("Still outstanding from what you asked for this turn:")
             lines.extend("- " + m for m in missing_lines)
-        lines.append("This answer was cut short by the time budget; let me know and I can "
-                     "finish it.")
+        lines.append(closer)
     return "\n".join(lines)
+
+
+def _deterministic_wrap_answer(state: AgentState) -> str:
+    """Thin wrapper preserved for the wrap-up (time-budget) call site and its tests: the answer
+    was cut short by the turn deadline. Byte-identical to the pre-refactor output for this
+    framing; the shared body lives in :func:`_artifact_grounded_fallback_answer`."""
+    return _artifact_grounded_fallback_answer(state, reason="time_budget")
 
 
 # ═══════════════════════════════════════════════════════════════════

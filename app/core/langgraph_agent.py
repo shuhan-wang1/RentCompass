@@ -3330,9 +3330,25 @@ def _make_critic_node():
             ec = state.get("extracted_context") or {}
             reply_language = _reply_language_from_ctx(
                 ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
-            final = no_reliable_data_message(reply_language)
+            if state.get("tool_artifacts"):
+                # fc arch: honest, artifact-grounded fallback (names a completed-empty search's
+                # room type/area, renders gathered safety evidence, discloses still-missing
+                # requested dimensions) instead of the generic legacy template — this satisfies
+                # the evidence-conditional cold-resilience graders while still emitting no figure
+                # absent from the artifacts. Function-local import is MANDATORY: langgraph_agent
+                # must import agent_loop only lazily to avoid a circular import (matches how
+                # build_fc_graph is imported).
+                from core.agent_loop import _artifact_grounded_fallback_answer
+                final = _artifact_grounded_fallback_answer(
+                    state, reason="no_reliable_numbers")
+                fallback_variant = "artifact_grounded"
+            else:
+                # legacy arch (no fc artifacts): unchanged generic no-reliable-data template.
+                final = no_reliable_data_message(reply_language)
+                fallback_variant = "generic_template"
             logger.info(
-                "critic.no_evidence_fallback replaced numeric answer (lang=%s)", reply_language,
+                "critic.no_evidence_fallback replaced numeric answer (lang=%s variant=%s)",
+                reply_language, fallback_variant,
                 extra={"node": "critic", "tool": tool_name},
             )
 

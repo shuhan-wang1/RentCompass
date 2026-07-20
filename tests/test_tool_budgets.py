@@ -1073,6 +1073,66 @@ def test_wrap_fallback_renders_safety_evidence(monkeypatch):
     assert "Safe" in ans
 
 
+def _completed_empty_state(**over):
+    """A completed-empty search artifact (1-bed Islington, zero matches) whose user message
+    also asks about safety — the CR5 cold-resilience shape."""
+    st = dict(
+        extracted_context={"current_message": "any 1-bed in Islington, how is the safety there?",
+                           "reply_language": "en"},
+        user_query="any 1-bed in Islington, how is the safety there?",
+        tool_artifacts=[{"turn": 0, "tool": "search_properties", "params_digest": "d",
+                         "success": True,
+                         "raw_data": {"status": "no_results", "recommendations": [],
+                                      "search_criteria": {"bedrooms": 1, "area": "islington"}}}])
+    st.update(over)
+    return _state(**st)
+
+
+def test_artifact_grounded_fallback_no_reliable_numbers(monkeypatch):
+    """reason='no_reliable_numbers' on a completed-empty 1-bed Islington search + a safety
+    request: NAMES the requested room type (room_type_match_if_evidence complete-empty branch),
+    surfaces the honest safety-not-yet line, carries a partial-disclosure marker with NO
+    time-budget wording (the turn did NOT time out), and makes no price claim (so the critic
+    cannot re-trigger the replacement on it)."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    from uk_rent_agent.agent.critic import has_specific_price_claims
+    state = _completed_empty_state()
+    ans = agent_loop._artifact_grounded_fallback_answer(state, reason="no_reliable_numbers")
+    low = ans.lower()
+    # completed-empty line NAMES the room type + area
+    assert "1-bed" in low and "islington" in low
+    assert "no 1-bed listings" in low
+    # the requested-but-unverified safety dimension is disclosed by name
+    assert "safety" in low and "not been verified yet" in low
+    # honest partial-disclosure marker present, but NO time-out / cut-short framing on this path
+    assert "couldn't retrieve" in low
+    for banned in ("ran long", "cut short", "time budget", "time limit", "incomplete"):
+        assert banned not in low, banned
+    # closer offers to look figures up; it must NOT promise this turn already contains them
+    assert "look them up" in low
+    # by construction contains no monetary figure -> the critic replacement can't re-fire
+    assert has_specific_price_claims(ans) is False
+
+
+def test_deterministic_wrap_answer_is_time_budget_builder(monkeypatch):
+    """Regression: _deterministic_wrap_answer is now a thin wrapper delegating to the shared
+    builder with reason='time_budget' — byte-identical output — and that framing (not the
+    no_reliable_numbers one) is the time-budget cut-short wording."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    state = _completed_empty_state()
+    wrapped = agent_loop._deterministic_wrap_answer(state)
+    builder_tb = agent_loop._artifact_grounded_fallback_answer(state, reason="time_budget")
+    assert wrapped == builder_tb                       # wrapper == builder(time_budget)
+    assert "cut short by the time budget" in wrapped   # time-budget framing preserved
+    # the two reasons diverge only in framing (opener/closer), never in the shared body
+    builder_nr = agent_loop._artifact_grounded_fallback_answer(state, reason="no_reliable_numbers")
+    assert builder_nr != wrapped
+    assert "cut short" not in builder_nr.lower()
+    # the shared body (completed-empty + safety line) is identical across both framings
+    for body_line in ("no 1-bed listings", "Safety has not been verified yet"):
+        assert body_line in wrapped and body_line in builder_nr
+
+
 # ─── FIX 4: retuned defaults ────────────────────────────────────────
 def test_retuned_defaults(monkeypatch):
     for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_MIN_BATCH_S",

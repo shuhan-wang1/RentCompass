@@ -167,13 +167,16 @@ def test_h3_all_failed_retrieval_numeric_answer_is_hard_replaced(monkeypatch, la
     state = _fc_state(_H3_ANSWER, [failed], reply_language=lang)
     update = _run(lga._make_critic_node()(state))
 
-    expected = no_reliable_data_message(lang)
+    # fc turn (tool_artifacts present) -> artifact-grounded fallback, NOT the generic template.
+    from core.agent_loop import _artifact_grounded_fallback_answer
+    expected = _artifact_grounded_fallback_answer(state, reason="no_reliable_numbers")
     assert update["final_response"] == expected     # HARD replace, not a caveat
+    assert update["final_response"] != no_reliable_data_message(lang)
     assert CAVEAT not in update["final_response"]
     assert update["final_response"] not in _LEGACY_FALLBACKS
     assert has_specific_price_claims(update["final_response"]) is False
     if lang == "zh":
-        assert "暂" in update["final_response"] or "可靠" in update["final_response"]
+        assert "可靠" in update["final_response"]
 
 
 def test_evidence_present_with_numbers_is_not_replaced(monkeypatch):
@@ -343,9 +346,85 @@ def test_h3_web_search_placeholder_success_true_is_hard_replaced(monkeypatch, la
     state = _fc_state(_H3_ANSWER, [art], reply_language=lang)
     update = _run(lga._make_critic_node()(state))
 
-    assert update["final_response"] == no_reliable_data_message(lang)   # hard replace
+    # fc turn -> artifact-grounded fallback replaces the fabricated table (still a hard replace).
+    from core.agent_loop import _artifact_grounded_fallback_answer
+    assert update["final_response"] == _artifact_grounded_fallback_answer(
+        state, reason="no_reliable_numbers")
+    assert update["final_response"] != no_reliable_data_message(lang)   # not the generic template
     assert CAVEAT not in update["final_response"]
     assert has_specific_price_claims(update["final_response"]) is False
+
+
+# ── 7. no-evidence 兜底 variant selection: fc artifact-grounded vs legacy template ──
+_CE_MSG = "any 1-bed in Islington, how is the safety there?"
+
+
+def _completed_empty_search_artifact():
+    """A search_properties artifact that COMPLETED and matched zero listings (retrieval tool,
+    but NOT usable evidence) — the CR5 cold shape that drives the 兜底."""
+    return _artifact(
+        "search_properties",
+        {"status": "no_results", "recommendations": [],
+         "search_criteria": {"bedrooms": 1, "area": "islington"}},
+        success=True)
+
+
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_no_evidence_fallback_fc_uses_artifact_grounded(monkeypatch, lang):
+    """fc turn (tool_artifacts present) whose only retrieval finished EMPTY and whose answer
+    fabricates a price: the critic's no-evidence 兜底 replaces it with the ARTIFACT-GROUNDED
+    fallback (names the completed-empty 1-bed search) — NOT the generic legacy template — and
+    the replacement itself asserts no price (cannot re-trigger the branch)."""
+    pytest.importorskip("langgraph")
+    llm_config, lga = _load_local_core()
+
+    fake = _FakeLLM("About £1,650 pcm on average.")  # regeneration still numeric/ungrounded
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: fake)
+
+    from uk_rent_agent.agent.state import create_initial_state
+    state = create_initial_state(
+        _CE_MSG,
+        extracted_context={"current_message": _CE_MSG, "reply_language": lang})
+    state["tool_artifacts"] = [_completed_empty_search_artifact()]
+    state["final_response"] = "1-bed flats in Islington are about £1,650 pcm."  # fabricated
+
+    update = _run(lga._make_critic_node()(state))
+    final = update["final_response"]
+
+    # artifact-grounded, NOT the generic legacy template
+    assert final != no_reliable_data_message(lang)
+    assert "1-bed" in final                              # names the completed-empty room type
+    assert "Islington" in final
+    from core.agent_loop import _artifact_grounded_fallback_answer
+    assert final == _artifact_grounded_fallback_answer(state, reason="no_reliable_numbers")
+    # sanity guard: the replacement makes no price claim -> the branch cannot re-fire on it
+    assert has_specific_price_claims(final) is False
+    # no time-budget framing (the turn did not time out)
+    for banned in ("cut short", "time budget", "ran long", "超时", "时间限制"):
+        assert banned not in final
+
+
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_no_evidence_fallback_legacy_keeps_generic_template(monkeypatch, lang):
+    """Legacy arch (NO tool_artifacts) with no usable evidence and a fabricated price keeps the
+    generic no_reliable_data_message verbatim — the artifact-grounded variant is fc-only."""
+    pytest.importorskip("langgraph")
+    llm_config, lga = _load_local_core()
+
+    fake = _FakeLLM("About £1,650 pcm on average.")
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: fake)
+
+    from uk_rent_agent.agent.state import create_initial_state
+    state = create_initial_state(
+        _CE_MSG,
+        extracted_context={"current_message": _CE_MSG, "reply_language": lang})
+    state["tool_decision"] = {"tool": "search_properties"}  # retrieval_expected via legacy decision
+    state["tool_raw_data"] = None                            # no usable evidence
+    state["final_response"] = "1-bed flats in Islington are about £1,650 pcm."  # fabricated
+    # no tool_artifacts -> legacy branch
+
+    update = _run(lga._make_critic_node()(state))
+    assert update["final_response"] == no_reliable_data_message(lang)  # generic template kept
 
 
 def test_h3_valid_web_search_evidence_still_passes(monkeypatch):

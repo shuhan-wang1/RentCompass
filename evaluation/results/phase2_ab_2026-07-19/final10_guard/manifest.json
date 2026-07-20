@@ -1,0 +1,55 @@
+{
+  "argv": [
+    "evaluation/run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "fc_loop",
+    "--cases",
+    "evaluation/benchmark/cases_guard_regression.jsonl",
+    "--repeat",
+    "3",
+    "--cache-snapshot",
+    "evaluation/benchmark/cache_snapshots/warm_v3.sqlite3",
+    "--out",
+    "C:/Users/shuhan/AppData/Local/Temp/claude/C--Users-shuhan-Desktop-uk-rent-recommendation/5cefbb8d-60e1-416a-98dc-45f56cb7c9da/scratchpad/final10_guard"
+  ],
+  "command": "evaluation/run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cases evaluation/benchmark/cases_guard_regression.jsonl --repeat 3 --cache-snapshot evaluation/benchmark/cache_snapshots/warm_v3.sqlite3 --out C:/Users/shuhan/AppData/Local/Temp/claude/C--Users-shuhan-Desktop-uk-rent-recommendation/5cefbb8d-60e1-416a-98dc-45f56cb7c9da/scratchpad/final10_guard",
+  "arch": "fc_loop",
+  "config": "routed_models",
+  "mode": "live",
+  "cache_protocol": {
+    "mode": "warm",
+    "snapshot_path": "evaluation\\benchmark\\cache_snapshots\\warm_v3.sqlite3",
+    "snapshot_sha256": "af2622be92aa5c4a5043d2a4013cf67a89ac96288dd47c2e8f6a5d9dc8d06607",
+    "restored_per_repeat": true,
+    "ttl_hours_env": "8760"
+  },
+  "timestamp": "2026-07-20T14:17:11",
+  "git_commit": "7db03e7",
+  "git_dirty": false,
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "fc_loop",
+    "DEEPSEEK_STRICT": null,
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1",
+    "SEARCH_CACHE_TTL_HOURS": "8760"
+  },
+  "case_file": {
+    "path": "evaluation\\benchmark\\cases_guard_regression.jsonl",
+    "sha256": "df704ac43b0362ddc78ecb75345c268807af35f1e9b1bb6620402e37fb8a645a"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\5cefbb8d-60e1-416a-98dc-45f56cb7c9da\\scratchpad\\final10_guard\\events.jsonl",
+    "sha256": "71946e88e89543346e8aaa1ed9295b27007cdac9992c2daabaac7b578a4fcb80",
+    "gz_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\5cefbb8d-60e1-416a-98dc-45f56cb7c9da\\scratchpad\\final10_guard\\events.jsonl.gz",
+    "sha256_gz": "d511217fc1ed1f8cd5123cf4bfdfaf1fc250face74efef9abc46354ad50c760d",
+    "committed": true,
+    "note": "events.jsonl.gz preserved in the package for verification; raw + gz SHA256 both recorded"
+  }
+}

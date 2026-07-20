@@ -12,7 +12,7 @@ from core.tools import get_property_details as gpd
 
 def _seed_cache(monkeypatch, tmp_path, rows):
     cache = on_demand.ListingCache(tmp_path / "listings.sqlite3")
-    key = on_demand._query_key("london", 1, 1, 1000, 2000)
+    key = on_demand._query_key("london")  # slug-only canonical key
     cache.set(key, rows)
     monkeypatch.setattr(on_demand, "_CACHE", cache)
     return cache

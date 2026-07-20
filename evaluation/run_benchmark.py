@@ -845,6 +845,14 @@ class CaseRunner:
         if mode == "none":
             return
         set_cache_path = self._resolve_set_cache_path()
+        if mode == "pinned":
+            # Warm-up wiring (--cache-path): every shard of the warm-up pipeline shares ONE
+            # persistent cache file so a later snapshot freeze captures the union of all
+            # shards' scrapes. _bootstrap_env's temp-dir redirect is deliberately overridden
+            # here — that redirect is exactly what made earlier warm-ups write to throwaway
+            # rc_eval_state_* dirs while the snapshot froze the stale .runtime db.
+            set_cache_path(Path(self.cache_protocol["pinned_path"]))
+            return
         safe = run_id.replace("#", "_").replace(":", "_")
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         dest = self._cache_dir / f"{safe}.sqlite3"
@@ -1916,6 +1924,13 @@ def _build_cache_protocol(args) -> Dict[str, Any]:
         return {"mode": "cold", "snapshot_path": None, "snapshot_sha256": None,
                 "restored_per_repeat": True,
                 "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
+    if getattr(args, "cache_path", None):
+        pinned = Path(args.cache_path).resolve()
+        pinned.parent.mkdir(parents=True, exist_ok=True)
+        return {"mode": "pinned", "pinned_path": str(pinned),
+                "snapshot_path": None, "snapshot_sha256": None,
+                "restored_per_repeat": False,
+                "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
     return {"mode": "none", "snapshot_path": None, "snapshot_sha256": None,
             "restored_per_repeat": False,
             "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
@@ -2108,6 +2123,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
                            help="WARM protocol: restore this listing-cache snapshot per repeat")
     cache_grp.add_argument("--cold-cache", action="store_true",
                            help="COLD protocol: fresh empty listing cache per repeat")
+    cache_grp.add_argument("--cache-path", default=None, metavar="PATH",
+                           help="WARM-UP wiring: pin the listing cache to this persistent "
+                                "path for the whole run (overrides the temp-dir redirect) so "
+                                "sequential warm-up shards share one cache that a snapshot "
+                                "freeze can capture via make_cache_snapshot --from PATH")
     p.add_argument("--cache-ttl-hours", default="8760",
                    help="TTL (hours) pinned via SEARCH_CACHE_TTL_HOURS when --cache-snapshot "
                         "is used, so snapshot entries can't expire mid-run (default 8760=1yr)")

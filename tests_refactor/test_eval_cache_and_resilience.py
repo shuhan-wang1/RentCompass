@@ -323,3 +323,62 @@ def test_budget_timeout_and_soft_wrap_noop_when_inactive(tmp_path):
                                          elapsed_ms=2.0, outcome="killed")
     collector.record_turn_soft_wrap(elapsed_ms=1.0, llm_calls=0, tool_batches=0)
     assert not log.exists()
+
+
+# --------------------------------------------------------------------------- #
+# 8) integrity check + provenance + pinned warm-up protocol (post-final4 wiring fixes)
+# --------------------------------------------------------------------------- #
+def test_integrity_check_passes_valid_and_rejects_corrupt(tmp_path):
+    good = tmp_path / "good.sqlite3"
+    _make_cache_db(good, rows=2)
+    cache_snapshot.integrity_check(good)  # must not raise
+
+    corrupt = tmp_path / "corrupt.sqlite3"
+    corrupt.write_bytes(b"SQLite format 3" + bytes([0]) + bytes([255]) * 4096)
+    with pytest.raises((ValueError, sqlite3.Error)):
+        cache_snapshot.integrity_check(corrupt)
+
+
+def test_make_snapshot_rejects_corrupt_source(tmp_path):
+    corrupt = tmp_path / "corrupt.sqlite3"
+    corrupt.write_bytes(b"SQLite format 3" + bytes([0]) + bytes([255]) * 4096)
+    with pytest.raises((ValueError, sqlite3.Error)):
+        cache_snapshot.make_snapshot(corrupt, tmp_path / "snap.sqlite3")
+
+
+def test_make_snapshot_records_provenance(tmp_path):
+    src = tmp_path / "cache.sqlite3"
+    _make_cache_db(src, rows=1)
+    out = tmp_path / "snap.sqlite3"
+    prov = {"git_commit": "abc1234", "git_dirty": False,
+            "warmup_commands": ["cmd1"], "budget_env": {"FC_X": "1"}}
+    meta = cache_snapshot.make_snapshot(src, out, provenance=prov)
+    assert meta["provenance"] == prov
+    _, meta_side = cache_snapshot.sidecar_paths(out)
+    on_disk = json.loads(meta_side.read_text(encoding="utf-8"))
+    assert on_disk["provenance"]["git_commit"] == "abc1234"
+
+
+def test_cache_protocol_pinned_mode(tmp_path):
+    import argparse
+    args = argparse.Namespace(cache_snapshot=None, cold_cache=False,
+                              cache_path=str(tmp_path / "warmup" / "shared.sqlite3"),
+                              cache_ttl_hours="8760")
+    block = rb._build_cache_protocol(args)
+    assert block["mode"] == "pinned"
+    assert block["pinned_path"].endswith("shared.sqlite3")
+    assert block["restored_per_repeat"] is False
+    assert Path(block["pinned_path"]).parent.exists()
+
+
+def test_prepare_cache_pinned_uses_shared_path(tmp_path):
+    calls = []
+    runner = rb.CaseRunner.__new__(rb.CaseRunner)
+    runner.cache_protocol = {"mode": "pinned",
+                             "pinned_path": str(tmp_path / "shared.sqlite3")}
+    runner._set_cache_path_fn = lambda p: calls.append(Path(p))
+    runner._cache_dir = tmp_path / "unused"
+    runner._prepare_cache("CR1#r1#cfg")
+    runner._prepare_cache("CR1#r2#cfg")
+    # Same shared path every run - never a per-run namespace.
+    assert calls == [tmp_path / "shared.sqlite3", tmp_path / "shared.sqlite3"]

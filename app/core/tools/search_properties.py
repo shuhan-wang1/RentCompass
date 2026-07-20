@@ -848,11 +848,29 @@ def _partial_note(incomplete_areas, is_cjk: bool) -> str:
     if is_cjk:
         names = "、".join(areas)
         return (f"（部分结果：已达搜索时间预算，{names} 尚未完成搜索，那里可能还有更多房源。"
-                f"请勿据此判断这些区域没有房源。）")
+                f"请勿据此判断这些区域没有房源。只陈述已返回房源中真实出现的价格/数字，"
+                f"不要为未搜完的区域估算或推断任何数字。）")
     names = ", ".join(areas)
     return (f"Partial results: the search time budget was reached before {names} could be "
             f"fully searched, so more listings may exist there. Do not conclude that these "
-            f"areas have no listings.")
+            f"areas have no listings. State only the prices and figures that actually appear "
+            f"in the returned listings; do not estimate or extrapolate any numbers for the "
+            f"areas that were not fully searched.")
+
+
+def _commute_note(is_cjk: bool) -> str:
+    """Model-facing HONESTY note for when commute times were NOT verified for the returned
+    listings this round — because the deadline-tight degraded path, or a per-stage time
+    guard, skipped commute annotation/filtering while the user actually had a commute
+    constraint. Forbids stating/promising any commute duration (the CR5 failure: the model
+    asserted commute figures the tool never computed) and invites narrowing so commute can
+    be checked next time. Always accompanies `commute_unverified: true` in the payload."""
+    if is_cjk:
+        return ("本轮未核实这些房源的通勤时间——请勿陈述或承诺任何通勤时长。"
+                "可邀请用户缩小范围（更少区域，或指定一个通勤目的地）以便下次核实通勤。")
+    return ("Commute times were NOT verified for these listings this round — do not state "
+            "or promise any commute duration for them. Invite the user to narrow the search "
+            "(fewer areas, or a specific destination) so the commute can be checked.")
 
 
 def _no_results_message(area: str, is_cjk: bool) -> str:
@@ -1129,8 +1147,24 @@ async def search_properties_impl(
         _self_budget_s = float(os.getenv("SEARCH_TOOL_BUDGET_S", "18"))
     except (TypeError, ValueError):
         _self_budget_s = 18.0
-    _deadline = (float(_deadline_monotonic) if _deadline_monotonic is not None
-                 else time.monotonic() + _self_budget_s)
+    # SEARCH_RETURN_MARGIN_S — safety headroom subtracted from whatever deadline governs
+    # this call (the injected executor deadline, or the self-imposed budget). The tool
+    # must RETURN before the executor's abandon axe, not race it: aiming to finish exactly
+    # at the deadline loses to any jitter and gets the whole tool ABANDONED (executed=∅,
+    # the H2 "no data" honesty failure). Shrinking the EFFECTIVE internal deadline by this
+    # margin makes EVERY pacing stage below (_time_left, scrape_left, reco cap, degraded
+    # check, and the per-stage network guards) automatically target returning ≥ margin
+    # seconds early — the −0.2/−0.3 pads those stages already carry now sit safely INSIDE
+    # this margin. Applies to the self-imposed default path too.
+    try:
+        _return_margin_s = float(os.getenv("SEARCH_RETURN_MARGIN_S", "1.2"))
+    except (TypeError, ValueError):
+        _return_margin_s = 1.2
+    if _return_margin_s < 0:
+        _return_margin_s = 0.0
+    _raw_deadline = (float(_deadline_monotonic) if _deadline_monotonic is not None
+                     else time.monotonic() + _self_budget_s)
+    _deadline = _raw_deadline - _return_margin_s
 
     def _time_left() -> float:
         return _deadline - time.monotonic()
@@ -1780,6 +1814,16 @@ async def search_properties_impl(
         # 到达此处若截止时间余量已不足以跑完（语义排序 + 通勤标注 + 详情丰富）这些 post-scrape 段，
         # 则降级为"确定性价格升序"结果——绝不返回空。降级只在时间告急时触发（有界抓取通常会预留
         # RANK_HEADROOM_S 余量），并跳过网络重的通勤标注/详情丰富，保证到点即返回已有部分结果。
+        # Commute honesty (FIX 2): does the user actually have a commute constraint this
+        # turn? If so, and commute never gets verified below (deadline-tight degrade, or a
+        # per-stage time guard skips annotation), the payload must SAY commute was not
+        # verified and the listings must carry NO commute fields — the model must not echo
+        # or promise a duration the tool never computed. `commute_verified` flips True only
+        # when the annotation stage actually runs.
+        _has_commute_constraint = (not no_commute) and (
+            commute_target is not None or _real_commute_limit(max_commute_time))
+        commute_verified = False
+
         degraded = _time_left() < RANK_HEADROOM_S
         if degraded:
             print(f"   ⏱️ 截止余量不足（{_time_left():.1f}s < {RANK_HEADROOM_S:.1f}s）→ "
@@ -1800,6 +1844,14 @@ async def search_properties_impl(
             out['partial_note'] = _partial_note(incomplete_areas, is_cjk) if incomplete_areas else ""
             out['cache_stats'] = {"hits": cache_hits, "misses": cache_misses}
             out['area_status'] = dict(_area_status)
+            # Commute honesty (FIX 2): the user had a commute constraint but commute was never
+            # verified this round. `commute_note` ALWAYS rides with the results (independent of
+            # the partial note) and forbids stating/promising any commute duration; the returned
+            # listings carry no commute fields in this case (annotation was disabled), so there
+            # is nothing stale for the model to echo.
+            _commute_unverified = bool(_has_commute_constraint and not commute_verified)
+            out['commute_unverified'] = _commute_unverified
+            out['commute_note'] = _commute_note(is_cjk) if _commute_unverified else ""
             return out
 
         # 没有任何真实房源 —— 诚实返回（语言感知），绝不使用 demo 假数据。
@@ -2030,6 +2082,22 @@ async def search_properties_impl(
         dest_coords = None
         london_dest = False
 
+        # Commute annotation is the last network-heavy post-scrape stage (a geocode plus a
+        # per-candidate TfL/geo estimate). Even on the non-degraded path, the intervening
+        # geo-validation + RAG ranking can have eroded the budget since `degraded` was
+        # decided — so gate this stage on its OWN conservative estimate too. If the time
+        # left no longer covers it, skip annotation + filtering exactly like the degraded
+        # path (leave commute unverified) rather than risk overrunning the return margin.
+        try:
+            _COMMUTE_ANNOTATE_EST_S = float(os.getenv("SEARCH_COMMUTE_ANNOTATE_EST_S", "3.0"))
+        except (TypeError, ValueError):
+            _COMMUTE_ANNOTATE_EST_S = 3.0
+        if commute_annotation_enabled and not degraded and _time_left() < _COMMUTE_ANNOTATE_EST_S:
+            print(f"   ⏱️ 通勤标注余量不足（{_time_left():.1f}s < {_COMMUTE_ANNOTATE_EST_S:.1f}s）→ "
+                  f"跳过通勤标注/过滤（通勤未核实）")
+            commute_annotation_enabled = False
+            commute_filter_enabled = False
+
         if commute_annotation_enabled and not degraded:
             print(f"\n⏱️ [SEARCH] 计算通勤时间到 {commute_target} "
                   f"(过滤={'开' if commute_filter_enabled else '关'})...")
@@ -2078,6 +2146,10 @@ async def search_properties_impl(
                 return annotated
 
             candidates = await asyncio.to_thread(_annotate)
+            # The annotation stage ran to completion: commute is now genuinely verified for
+            # the surfaced listings (they carry a real travel_time), so the honesty note is
+            # not needed.
+            commute_verified = True
             print(f"   ✅ 通勤处理后: {len(candidates)} 个房源 (dest_in_london={london_dest})")
 
         # ================================================================
@@ -2265,7 +2337,16 @@ async def search_properties_impl(
         # 🆕 用房源详情页丰富"将要展示的候选"（主推荐 + 备选）：完整描述 + 真实可入住日期
         # （有界=仅待展示项；并发；一次抓取取回两者，按 URL 缓存）。让 Agent 拿到真实房源
         # 文本以回答后续问题，并让每套房都能诚实标注"何时可入住"。
-        if os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and display_pool and not degraded:
+        # Detail enrichment is an optional network-heavy post-stage (concurrent detail-page
+        # GETs). Guard it on its own conservative estimate so it can never erode the return
+        # margin; when time is short we simply skip it — availability falls back to the
+        # honest "unknown / contact agent", never a guess.
+        try:
+            _DESC_ENRICH_EST_S = float(os.getenv("SEARCH_DESC_ENRICH_EST_S", "2.0"))
+        except (TypeError, ValueError):
+            _DESC_ENRICH_EST_S = 2.0
+        if (os.getenv("DESC_ENRICH_ENABLED", "1") != "0" and display_pool
+                and not degraded and _time_left() >= _DESC_ENRICH_EST_S):
             try:
                 from core.scraping.onthemarket import fetch_listing_details as _fetch_details
             except Exception:
@@ -2392,6 +2473,11 @@ async def search_properties_impl(
         # never claims those areas have no listings (incomplete ≠ empty, H2).
         if incomplete_areas:
             _summary += " " + _partial_note(incomplete_areas, is_cjk)
+        # Honesty: if the user had a commute constraint but commute was never verified this
+        # round (degraded / time-guarded), append the note so the headline itself never
+        # implies a checked commute (the CR5 failure).
+        if _has_commute_constraint and not commute_verified:
+            _summary += " " + _commute_note(is_cjk)
 
         # over-budget 备选的双语区块标签（reply_language / is_cjk 决定语言）。空列表时留空串。
         over_budget_label = (

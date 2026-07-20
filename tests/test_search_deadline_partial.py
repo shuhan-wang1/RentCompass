@@ -149,6 +149,7 @@ def test_generous_deadline_completes_all_areas(offline, monkeypatch):
 # 3. One slow area -> others complete, slow one incomplete, wall time bounded.
 # ══════════════════════════════════════════════════════════════════════════
 def test_one_slow_area_is_incomplete_others_complete_and_wall_bounded(offline, monkeypatch):
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")   # isolate the incomplete/complete math
     monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "0.3")
     monkeypatch.setenv("SEARCH_PER_AREA_SCRAPE_EST_S", "0.2")
     fake = _make_fake_get_listings(
@@ -194,6 +195,7 @@ def test_cached_area_served_even_at_deadline(offline, monkeypatch):
 # 5. complete-empty vs incomplete are distinct in the payload.
 # ══════════════════════════════════════════════════════════════════════════
 def test_complete_empty_distinct_from_incomplete(offline, monkeypatch):
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")   # isolate the incomplete/complete math
     monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "0.3")
     monkeypatch.setenv("SEARCH_PER_AREA_SCRAPE_EST_S", "0.2")
     fake = _make_fake_get_listings(
@@ -211,6 +213,102 @@ def test_complete_empty_distinct_from_incomplete(offline, monkeypatch):
     assert res["area_status"]["Hackney"] == "incomplete"
     assert res["incomplete_areas"] == ["Hackney"]           # NOT Islington
     assert res["partial"] is True
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5b. Return margin: the tool RETURNS before the injected deadline (never races the axe).
+# ══════════════════════════════════════════════════════════════════════════
+def test_return_margin_returns_before_the_axe(offline, monkeypatch):
+    """With the default 1.2s SEARCH_RETURN_MARGIN_S and a scraper that would run long, the
+    tool finishes at least 1.0s BEFORE the injected deadline — it paces against the
+    margin-shrunk effective deadline, never the caller's abandon axe. Without the margin
+    the bounded scrape would consume up to (deadline − headroom) and finish <1s early."""
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "1.2")
+    monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "0.3")
+    monkeypatch.setenv("SEARCH_PER_AREA_SCRAPE_EST_S", "0.2")
+    fake = _make_fake_get_listings(
+        scraped={"Camden": [_row("1 Camden Rd", 1500, "Camden")]},
+        slow={"Islington"}, slow_sleep=10.0)     # would sleep well past the raw deadline
+    monkeypatch.setattr(on_demand, "get_listings", fake)
+
+    D_OFFSET = 3.0
+    deadline = time.monotonic() + D_OFFSET
+    res = _run(area="Camden", areas=["Camden", "Islington"], no_commute=True, confirmed=True,
+               max_budget=3000, bedrooms=1, reply_language="en",
+               _deadline_monotonic=deadline)
+    ret = time.monotonic()
+
+    assert ret <= deadline - 1.0, (
+        f"tool returned only {deadline - ret:.2f}s before the axe — margin not honored")
+    # It still produced useful output rather than crashing/relying on the axe.
+    assert res["status"] in ("found", "no_results")
+    assert res["incomplete_areas"] == ["Islington"]   # slow area bounded out, not the tool
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5c. Commute honesty under degradation: unverified flagged, no commute fields, note bans claims.
+# ══════════════════════════════════════════════════════════════════════════
+def test_degraded_commute_unverified_strips_fields_and_bans_claims(offline, monkeypatch):
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "5.0")   # tiny budget -> force the degraded path
+    # Cached rows so Phase 1 serves listings without any scrape.
+    monkeypatch.setattr(on_demand, "get_listings",
+                        _make_fake_get_listings(cached={"Camden": [_row("1 Camden Rd", 1500, "Camden")]}))
+
+    res = _run(area="Camden", commute_destination="UCL", max_commute_time=40,
+               confirmed=True, max_budget=3000, bedrooms=1, reply_language="en",
+               _deadline_monotonic=time.monotonic() + 2.0)   # 2.0 < 5.0 headroom -> degraded
+
+    assert res["status"] == "found"
+    assert res["commute_unverified"] is True
+    note = res["commute_note"].lower()
+    assert note                                            # a note always rides with results
+    assert "not verified" in note
+    assert "do not state" in note or "do not promise" in note
+    # Listings must NOT carry any (stale/guessed) commute field the model could echo.
+    assert res["recommendations"]
+    for r in res["recommendations"]:
+        assert "travel_time" not in r
+    # The honesty note also rides in the headline, so the summary itself never implies a commute.
+    assert res["commute_note"] in res["summary"]
+
+
+def test_verified_commute_has_no_unverified_note_when_time_is_generous(offline, monkeypatch):
+    """Control: a no-commute search with a generous deadline is NOT flagged unverified and
+    carries no commute note (the fast path is behaviourally unchanged beyond earlier pacing)."""
+    monkeypatch.setattr(on_demand, "get_listings",
+                        _make_fake_get_listings(scraped={"Camden": [_row("1 Camden Rd", 1500, "Camden")]}))
+    res = _run(area="Camden", no_commute=True, confirmed=True, max_budget=3000,
+               bedrooms=1, reply_language="en",
+               _deadline_monotonic=time.monotonic() + 30.0)
+
+    assert res["status"] == "found"
+    assert res["commute_unverified"] is False
+    assert res["commute_note"] == ""
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5d. Number honesty: the partial note forbids estimating/extrapolating figures.
+# ══════════════════════════════════════════════════════════════════════════
+def test_partial_note_forbids_extrapolating_numbers(offline, monkeypatch):
+    fake = _make_fake_get_listings(
+        cached={"Camden": [_row("1 A St", 1500, "Camden")]},        # warm -> has real figures
+        scraped={"Islington": [_row("9 Upper St", 1400, "Islington")]})  # cold -> never reached
+    monkeypatch.setattr(on_demand, "get_listings", fake)
+
+    res = _run(area="Camden", areas=["Camden", "Islington"], no_commute=True, confirmed=True,
+               max_budget=3000, bedrooms=1, reply_language="en",
+               _deadline_monotonic=time.monotonic() - 1.0)   # Islington unsearched -> incomplete
+
+    assert res["partial"] is True
+    assert res["incomplete_areas"] == ["Islington"]
+    note = res["partial_note"].lower()
+    # unchanged honesty clauses …
+    assert "more listings may exist" in note
+    assert "do not conclude" in note
+    # … plus the new number-honesty clause.
+    assert "only the prices and figures" in note
+    assert "do not estimate or extrapolate" in note
 
 
 # ══════════════════════════════════════════════════════════════════════════

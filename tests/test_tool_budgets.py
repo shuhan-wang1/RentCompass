@@ -523,7 +523,8 @@ def test_soft_wrap_forces_answer_now(monkeypatch):
 
     cmd = asyncio.run(nodes["agent"](state))
 
-    assert cmd.goto == "critic"
+    # FIX 3: a wrapped turn skips the (LLM/expensive) critic entirely and renders directly.
+    assert cmd.goto == "format_output_fc"
     assert cmd.update["final_response"] == "Here is what I found so far."
     # tools disabled for the wrap call
     assert chat.tool_choice == "none"
@@ -566,6 +567,10 @@ def test_per_call_timeout_respects_soft_wrap_remainder(monkeypatch):
     monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
     monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
     monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    # remainder ~0.5s is still >= FC_MIN_BATCH_S here, so the batch is DISPATCHED (bounded),
+    # not skipped — this asserts the fold binds a dispatched batch (the skip path is covered
+    # by test_batch_skipped_when_below_min_batch).
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.1")
     monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "web_search", 30)
     provider = SlowProvider([FakeSpec("web_search")], delay=1.5)
     nodes = build_fc_nodes(provider, agent_llm=FakeChat())
@@ -798,3 +803,231 @@ def test_frozen_replay_bypasses_recall_gate(monkeypatch):
 
     assert [c[0] for c in provider.calls] == ["remember"]  # replay saved verbatim
     assert cmd.goto == "critic"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Latency-leak round: soft-fold must bound EVERY dispatch, bounded wrap
+# call + deterministic fallback, wrapped-turn critic bypass, retuned
+# defaults, wrap-directive source/figure rules.
+# ═══════════════════════════════════════════════════════════════════
+
+class SleepyChat:
+    """LLM whose ainvoke hangs `delay`s — used to overrun the bounded wrap-up call so the
+    deterministic fallback + cancel-and-abandon path fires."""
+
+    def __init__(self, delay, reply=None):
+        self._delay = delay
+        self._reply = reply or AIMessage(content="late answer")
+        self.bound_tools = "unset"
+        self.tool_choice = "unset"
+
+    def bind_tools(self, tools, tool_choice=None, **kw):
+        self.bound_tools = tools
+        self.tool_choice = tool_choice
+        return self
+
+    async def ainvoke(self, messages):
+        await asyncio.sleep(self._delay)
+        return self._reply
+
+
+# ─── FIX 1(b): the CR4-shape regression — soft fold bounds a dispatched batch ──
+def test_cr4_soft_fold_bounds_read_batch(monkeypatch):
+    """CR4 shape (scaled for test speed): a batch dispatched with only a small soft-wrap
+    remainder must have its window bounded to that remainder, NOT the full FC_BATCH_TOOL_BUDGET_S
+    (20s) / tool timeout (30s). Here soft remaining ~= 1.0s while the batch budget is 20s and the
+    tool would run 30s -> the soft remainder is the binding cap and the straggler is abandoned by
+    ~1s. (Live CR4: 4.4s remaining, yet the batch got a ~14.4s window — the fold missed.)"""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.5")   # 1.0s remaining >= min -> dispatch, not skip
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "search_properties", 30)
+    provider = SlowProvider([FakeSpec("search_properties")], delay=30)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic() - 24.0)  # soft remaining ~1.0s
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    # bounded by the ~1s soft remainder, nowhere near the 20s window or 30s tool timeout
+    assert wall < 4.0, f"soft fold did not bound the dispatched batch ({wall:.2f}s)"
+    ab = [a for a in state["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1 and ab[0]["tool"] == "search_properties"
+    assert ab[0]["timed_out"] is True and ab[0]["outcome_unknown"] is True
+    assert ab[0]["elapsed_ms"] <= 2500  # ~1s window, not 20s/30s
+
+
+def test_cr4_soft_fold_bounds_write_wait_for(monkeypatch):
+    """The write path was the genuinely-unbounded window: writes ran their full per-tool
+    wait_for (up to 30s) past the soft deadline because only reads folded the remainder. A write
+    dispatched with ~1s of soft runway must now have its OWN wait_for bounded to the remainder
+    (never abandoned, but never past it) -> its wait_for fires and it is outcome_unknown."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)  # legacy allow path
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.5")
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 30)  # full write timeout is 30s
+    provider = PerToolDelayProvider([FakeSpec("save_note", side_effect="write")],
+                                    delays={"save_note": 30})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False, turn_start_monotonic=time.monotonic() - 24.0)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("save_note", {"content": "n"}, "c1")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 4.0, f"write wait_for was not folded with the soft remainder ({wall:.2f}s)"
+    w = next(a for a in state["tool_artifacts"] if a["tool"] == "save_note")
+    assert w["success"] is False and w["outcome_unknown"] is True
+    assert "abandoned" not in w  # a write is never abandoned, only bounded
+
+
+# ─── FIX 1(a): batch skipped below FC_MIN_BATCH_S -> denied, then wrap ──
+def test_batch_skipped_when_below_min_batch(monkeypatch):
+    """soft_remaining < FC_MIN_BATCH_S -> the whole batch is NOT dispatched (no executor thread
+    leaked): every call becomes a denied/not-executed artifact with a clear error, and the loop
+    routes back to the agent."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    provider = FakeProvider([FakeSpec("search_properties")],
+                            {"search_properties": FakeResult(True, {"status": "found"})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic() - 24.0)  # soft remaining ~1.0 < 2.0
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    cmd = asyncio.run(nodes["execute_tools"](state))
+    state.update(cmd.update or {})
+
+    assert cmd.goto == "agent"
+    assert provider.calls == []  # nothing dispatched -> no thread leaked
+    denied = [a for a in state["tool_artifacts"] if a.get("denied")]
+    assert len(denied) == 1
+    assert denied[0]["error"] == "denied: turn time budget exhausted"
+    assert not agent_loop._is_executed(denied[0])  # must NOT count as executed
+    tmsg = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    assert any("turn time budget exhausted" in m.content for m in tmsg)
+
+
+def test_skipped_batch_leads_to_exactly_one_wrap_no_loop(monkeypatch):
+    """A skipped batch routes to the agent, which — past the wrap edge — takes the wrap branch
+    exactly once and terminates at format_output_fc (no re-plan, no infinite loop)."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event",
+                        lambda **kw: events.append(kw))
+    # A chat that would keep planning tools forever if it were ever consulted past the wrap edge.
+    chat = WrapChat(AIMessage(content="", tool_calls=[_tc("search_properties", {"area": "x"}, "cN")]))
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+
+    turn_start = time.monotonic() - 24.0  # past the wrap edge (25 - 2 = 23)
+    # 1) execute_tools skips the straddling batch (soft remaining ~1.0 < 2.0) -> back to agent
+    st = _state(loop_turn=4, turn_start_monotonic=turn_start,
+                messages=[AIMessage(content="", tool_calls=[_tc("search_properties", {"area": "x"}, "c1")])])
+    cmd1 = asyncio.run(nodes["execute_tools"](st))
+    st.update(cmd1.update or {})
+    assert cmd1.goto == "agent"
+
+    # 2) the next agent entry wraps ONCE and terminates (never dispatches the planned batch).
+    chat._reply = AIMessage(content="Best-effort answer from what I have.")
+    cmd2 = asyncio.run(nodes["agent"](st))
+    assert cmd2.goto == "format_output_fc"
+    assert len(events) == 1          # exactly one wrap
+    assert provider.calls == []      # the planned batch was never dispatched
+
+
+# ─── FIX 2: bounded wrap call + deterministic fallback ──────────────
+def test_wrap_call_timeout_falls_back_to_deterministic(monkeypatch):
+    """When the wrap-up LLM call overruns its bounded window it is cancelled-and-abandoned (the
+    call is NOT awaited to completion) and a DETERMINISTIC answer is synthesized from the
+    gathered artifacts: it names the tools that ran, renders the artifact's recommendations, and
+    states plainly that it was cut short — never fabricating numbers."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    chat = SleepyChat(delay=5.0)  # far longer than the bounded wrap window (floored at 2.0s)
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    art = {"turn": 0, "tool": "search_properties", "params_digest": "d0", "success": True,
+           "raw_data": {"status": "found",
+                        "recommendations": [{"title": "Studio in Camden", "price_display": "£1,400 pcm"}]}}
+    state = _state(loop_turn=4,
+                   extracted_context={"current_message": "find flats", "reply_language": "en"},
+                   messages=[HumanMessage(content="find flats in Camden")],
+                   turn_start_monotonic=time.monotonic() - 29.0,  # -> wrap_timeout floored at 2.0s
+                   tool_artifacts=[art])
+
+    t0 = time.monotonic()
+    cmd = asyncio.run(nodes["agent"](state))
+    wall = time.monotonic() - t0
+
+    # did not await the 5s call to completion — bounded to ~the 2s wrap window
+    assert wall < 4.0, f"wrap call was awaited past its bound ({wall:.2f}s)"
+    assert cmd.goto == "format_output_fc"
+    resp = cmd.update["final_response"]
+    assert "search_properties" in resp            # names the tool that ran
+    assert "Studio in Camden" in resp             # artifact-derived content, rendered plainly
+    assert "£1,400 pcm" in resp                   # only a figure PRESENT in the artifact
+    assert "cut short" in resp.lower()            # honest time-budget note
+    assert "late answer" not in resp              # the LLM's late reply was discarded
+
+
+def test_wrap_deterministic_fallback_never_claims_no_listings(monkeypatch):
+    """A partial/timed-out search with no clean recs must NOT be reported as 'no listings' by the
+    deterministic fallback (zero-tolerance rule)."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    state = _state(
+        extracted_context={"current_message": "find flats", "reply_language": "en"},
+        tool_artifacts=[{"turn": 0, "tool": "search_properties", "params_digest": "d",
+                         "raw_data": None, "success": False, "timed_out": True, "abandoned": True,
+                         "outcome_unknown": True, "error": "abandoned"}])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "cut short" in ans.lower()
+    assert "no listings" not in ans.lower() and "no results" not in ans.lower()
+
+
+# ─── FIX 3: wrapped-turn critic fast-path (<0.5s, bypass critic) ────
+def test_wrapped_turn_bypasses_critic_fast(monkeypatch):
+    """A wrapped turn with a fast LLM renders in well under 0.5s and routes to format_output_fc
+    (NOT the critic) — the wrapped-turn critic tail is deterministic and cheap."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    chat = WrapChat(AIMessage(content="Here is my best-effort answer."))
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(loop_turn=3, messages=[HumanMessage(content="find flats")],
+                   turn_start_monotonic=time.monotonic() - 26.0)
+
+    t0 = time.monotonic()
+    cmd = asyncio.run(nodes["agent"](state))
+    wall = time.monotonic() - t0
+
+    assert cmd.goto == "format_output_fc"      # critic bypassed
+    assert wall < 0.5                          # wrapped-turn tail is fast
+
+
+# ─── FIX 4: retuned defaults ────────────────────────────────────────
+def test_retuned_defaults(monkeypatch):
+    for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_MIN_BATCH_S",
+              "FC_WRAP_CRITIC_RESERVE_S"):
+        monkeypatch.delenv(k, raising=False)
+    assert agent_loop._turn_soft_wrap_s() == 23.0
+    assert agent_loop._final_reserve_s() == 5.0
+    assert agent_loop._min_batch_s() == 2.0
+    assert agent_loop._wrap_critic_reserve_s() == 1.0
+
+
+# ─── FIX 5: wrap directive additions ────────────────────────────────
+def test_wrap_directive_has_source_and_figure_rules():
+    d = agent_loop._WRAP_DIRECTIVE.lower()
+    assert "cite" in d and "source" in d                       # source-citation instruction
+    assert "only numbers" in d and ("appear" in d or "present" in d)  # no-invented-figures rule
+    assert "onthemarket" in d                                  # concrete source example

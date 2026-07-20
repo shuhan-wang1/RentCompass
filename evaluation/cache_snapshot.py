@@ -71,17 +71,34 @@ def sidecar_paths(snapshot_path: PathLike) -> tuple[Path, Path]:
 # --------------------------------------------------------------------------- #
 # make / restore
 # --------------------------------------------------------------------------- #
-def make_snapshot(src_cache_path: PathLike, out_path: PathLike) -> dict:
+def integrity_check(path: PathLike) -> None:
+    """Run ``PRAGMA integrity_check`` on a sqlite file; raise ValueError unless 'ok'.
+
+    A snapshot frozen from a corrupted db would poison every warm gate round that
+    restores it, so freezing fails loudly instead."""
+    with sqlite3.connect(str(path), timeout=10) as db:
+        rows = db.execute("PRAGMA integrity_check").fetchall()
+    verdicts = [str(r[0]) for r in rows]
+    if verdicts != ["ok"]:
+        raise ValueError(f"sqlite integrity_check failed for {path}: {verdicts[:5]}")
+
+
+def make_snapshot(src_cache_path: PathLike, out_path: PathLike,
+                  provenance: Optional[dict] = None) -> dict:
     """Copy a live listing-cache sqlite file to ``out_path`` and write its sidecars.
 
+    Runs ``PRAGMA integrity_check`` on the source first (hard error unless 'ok').
     Writes ``<out>.sha256`` (the hex digest, single line) and ``<out>.meta.json``
     (``created_at`` wall time ISO-ish + epoch, ``source_path``, ``row_count``, ``sha256``,
-    ``size_bytes``). Returns the metadata dict. Raises FileNotFoundError if the source
-    cache does not exist (there is nothing to snapshot)."""
+    ``size_bytes``, plus an optional ``provenance`` block: candidate commit, case-file
+    SHAs, warm-up commands, non-default budget envs — everything needed to re-derive the
+    warm-up). Returns the metadata dict. Raises FileNotFoundError if the source cache
+    does not exist (there is nothing to snapshot)."""
     src = Path(src_cache_path)
     out = Path(out_path)
     if not src.exists() or not src.is_file():
         raise FileNotFoundError(f"source listing cache not found: {src}")
+    integrity_check(src)
     out.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(src, out)
 
@@ -98,6 +115,8 @@ def make_snapshot(src_cache_path: PathLike, out_path: PathLike) -> dict:
         "sha256": digest,
         "size_bytes": out.stat().st_size,
     }
+    if provenance:
+        meta["provenance"] = provenance
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta
 

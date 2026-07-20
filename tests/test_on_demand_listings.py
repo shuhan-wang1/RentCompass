@@ -89,7 +89,15 @@ def test_scrape_on_miss_then_serve_from_cache(fresh_cache, monkeypatch):
 
     def fake_scrape(slug, radius, min_price, max_price, limit, min_bedrooms, max_bedrooms):
         calls["n"] += 1
-        assert slug == "manchester" and min_bedrooms == 1 and max_bedrooms == 1
+        # The scrape is always the CANONICAL broad query (slug-keyed cache); the
+        # caller's 1-bed/£500-1200 band is applied as a local post-filter, NOT sent
+        # to the scraper.
+        assert slug == "manchester"
+        assert (min_bedrooms, max_bedrooms) == (on_demand.CANONICAL_MIN_BEDS,
+                                                on_demand.CANONICAL_MAX_BEDS)
+        assert (min_price, max_price) == (on_demand.CANONICAL_MIN_PRICE,
+                                          on_demand.CANONICAL_MAX_PRICE)
+        assert limit == on_demand.CANONICAL_SCRAPE_LIMIT
         return _fake_rows()
 
     monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
@@ -121,7 +129,7 @@ def test_wrong_city_rows_filtered_out(fresh_cache, monkeypatch):
 
 
 def test_stale_if_error_serves_old_cache_flagged(fresh_cache, monkeypatch):
-    key = on_demand._query_key("manchester", 1, 1, 500, 1200)
+    key = on_demand._query_key("manchester")  # slug-only canonical key
     fresh_cache.set(key, _fake_rows()[:1])
     # Age the entry beyond the TTL.
     with sqlite3.connect(fresh_cache.path) as db:

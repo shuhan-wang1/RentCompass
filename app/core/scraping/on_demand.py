@@ -5,14 +5,24 @@ The demo used to serve a hardcoded London/Colchester CSV for every query, so a
 "Manchester, 1 bed" request came back with London flats. This module replaces
 that with real, city-correct OnTheMarket listings fetched on demand and cached:
 
-    resolve (location, beds, price band)
+    resolve location -> a SLUG (area/city); cache is keyed by slug ALONE
         -> look up a persistent SQLite store (TTL, default 12h)
-        -> on hit & fresh:  serve cached rows            (warm, ~ms)
-        -> on miss/stale:   scrape OnTheMarket live       (cold, a few seconds),
-                            persist, serve
-        -> stale-if-error:  if a live scrape fails but an older cached set exists
-                            for the query, serve it flagged possibly-outdated
+        -> on hit & fresh:  filter the cached CANONICAL row-set down to the caller's
+                            bed/price band and serve it                 (warm, ~ms)
+        -> on miss/stale:   scrape OnTheMarket live with a WIDE canonical query
+                            (all beds, full price sweep), persist the whole set,
+                            then serve the requested band out of it     (cold, a few s)
+        -> stale-if-error:  if a live scrape fails but an older canonical set exists
+                            for the slug, band-filter + serve it flagged possibly-outdated
         -> nothing at all:  return an honest empty result (NEVER demo rows)
+
+    Cache key is slug-only (+ a canonical-format version marker), NOT the requested
+    bed/price band. The band comes from model-generated search params that drift run
+    to run (budget present vs absent -> different price band; "2 bed" vs unspecified
+    -> different beds), so a band-keyed cache cold-scraped the same area for every
+    variation. Scraping one broad set per area and post-filtering locally makes warm
+    hits deterministic per AREA and collapses redundant scrapes. An empty band-filter
+    off a FRESH canonical entry is a real complete-empty for that band, not a miss.
 
 City-correctness is structural: the location resolves to a specific OnTheMarket
 area/city slug, so a Manchester query hits the Manchester area page. A light
@@ -57,6 +67,32 @@ ALLOW_DEMO_FALLBACK = os.getenv("SEARCH_ALLOW_DEMO_FALLBACK", "").strip().lower(
 CACHE_PATH = Path(
     os.getenv("SEARCH_LISTING_CACHE_PATH", str(REPO_ROOT / ".runtime" / "listing_cache.sqlite3"))
 )
+
+# --------------------------------------------------------------------------
+# Canonical broad-scrape / slug-keyed cache (see the module header)
+# --------------------------------------------------------------------------
+# Every scrape runs ONE deliberately WIDE query per slug (all bed counts, a full
+# price sweep) and caches the result under a slug-only key. The caller's requested
+# bed/price band is then applied as a LOCAL post-filter on that canonical row set.
+# This makes warm hits deterministic PER AREA — a repeat search of the same area
+# with a drifted band (budget present vs absent, "2 bed" vs unspecified) reuses the
+# one canonical entry instead of cold-scraping a fresh param-specific key.
+#
+# Version marker: bumping CANONICAL_KEY_VERSION (or the scrape band) instantly
+# orphans every previously-written row (the key no longer matches), so a format
+# change ages out cleanly via TTL with zero migration.
+CANONICAL_KEY_VERSION = "canonical1"
+CANONICAL_MIN_BEDS = 0
+# OnTheMarket's widest sensible bedroom bound; a real 5-bed request still filters
+# defensively (a parsed 5-bed row is simply excluded when the band caps at 4).
+CANONICAL_MAX_BEDS = int(os.getenv("SEARCH_CANONICAL_MAX_BEDS", "4"))
+CANONICAL_MIN_PRICE = 100
+CANONICAL_MAX_PRICE = 5000
+# Scrape row cap for the broad query. Higher than a single band's need so the
+# post-filter yield stays healthy across price/bed variations. Each OTM page holds
+# ~30 listings behind a ~1.2-1.8s crawl-delay, so 40 costs TWO page GETs (~1.5s
+# more than a one-page 15-row scrape) — trivial under the per-scrape budget_s.
+CANONICAL_SCRAPE_LIMIT = int(os.getenv("SEARCH_CANONICAL_SCRAPE_LIMIT", "40"))
 
 # --------------------------------------------------------------------------
 # Location -> OnTheMarket slug resolution
@@ -1175,11 +1211,86 @@ def _fallback_cache(exc: Exception) -> ListingCache:
         return _CACHE
 
 
-def _query_key(slug: str, min_beds: int, max_beds: int, min_price: int, max_price: int) -> str:
-    # Bucket the price band to 100s so near-identical budgets share a cache entry.
-    lo = (int(min_price) // 100) * 100
-    hi = ((int(max_price) + 99) // 100) * 100
-    return f"otm|{slug}|b{min_beds}-{max_beds}|p{lo}-{hi}"
+def _query_key(slug: str) -> str:
+    """Slug-only canonical cache key.
+
+    The cache holds ONE broad row-set per area (all beds, a full price sweep); the
+    caller's bed/price band is applied as a local post-filter, so the key must not
+    embed the (model-generated, run-to-run drifting) band. The ``canonical1`` version
+    marker means rows written by the OLD param-keyed scheme
+    (``otm|slug|bN-M|pLO-HI``) can never match this key, so they are simply ignored
+    and age out via TTL — no migration."""
+    return f"otm|{slug}|{CANONICAL_KEY_VERSION}"
+
+
+# Bedroom count parsed from Room_Type_Category ("2 bed Flat" -> 2, "Studio" -> 0).
+# Mirrors the search layer's own parsing (search_properties._degraded_rank).
+_ROW_BEDS_RE = re.compile(r"(\d+)\s*bed", re.I)
+
+
+def _row_beds(row: dict):
+    """Bedroom count for a listing row, or None when it cannot be determined.
+
+    "Studio" is 0 bedrooms. Falls back to the free-text Description before giving
+    up. None means UNKNOWN (never assume 0): the band filter keeps such rows so a
+    malformed/sparse row is never silently dropped."""
+    rt = str(row.get("Room_Type_Category", "") or "")
+    if "studio" in rt.lower():
+        return 0
+    m = _ROW_BEDS_RE.search(rt)
+    if m:
+        return int(m.group(1))
+    m = _ROW_BEDS_RE.search(str(row.get("Description", "") or ""))
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def _row_price(row: dict):
+    """Monthly price for a row as a float, or None when unparseable (POA / blank).
+
+    Uses the same shared parser the ranking layer uses so a row is bucketed
+    identically wherever it is filtered."""
+    try:
+        from uk_rent_agent.data.parsing import parse_price
+        return parse_price(row.get("Price"))
+    except Exception:
+        # Defensive inline fallback (parser import should always succeed in-tree).
+        raw = row.get("Price")
+        if not isinstance(raw, str) or "poa" in raw.lower():
+            return float(raw) if isinstance(raw, (int, float)) else None
+        m = re.search(r"[\d,]+(?:\.\d+)?", raw)
+        return float(m.group(0).replace(",", "")) if m else None
+
+
+def _in_band(row: dict, min_beds: int, max_beds: int,
+             min_price: int, max_price: int) -> bool:
+    """True if `row` satisfies the requested bed + price band.
+
+    DEFENSIVE by design: a row is excluded ONLY when it carries a real value that
+    provably falls outside the band. A row missing/unparseable on a field is KEPT
+    (so a full-canonical, unconstrained query never drops a sparse row, and a real
+    constraint only drops rows it can positively exclude — e.g. a parsed Studio for
+    a '2 bed' request, or a £3k flat for a £1.5k cap)."""
+    beds = _row_beds(row)
+    if beds is not None and not (min_beds <= beds <= max_beds):
+        return False
+    price = _row_price(row)
+    if price is not None and not (min_price <= price <= max_price):
+        return False
+    return True
+
+
+def _filter_band(rows: list[dict], min_beds: int, max_beds: int,
+                 min_price: int, max_price: int, limit: int) -> list[dict]:
+    """Filter a canonical row-set DOWN to the requested band, then apply `limit`
+    (limit is applied AFTER filtering so it caps matches, not the raw canonical
+    pool)."""
+    out = [r for r in (rows or [])
+           if _in_band(r, min_beds, max_beds, min_price, max_price)]
+    if limit and int(limit) > 0:
+        out = out[:int(limit)]
+    return out
 
 
 def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s):
@@ -1274,47 +1385,69 @@ def get_listings(
         meta["elapsed_s"] = round(time.time() - t0, 2)
         return {"rows": [], "meta": meta}
 
-    key = _query_key(slug, min_bedrooms, max_bedrooms, min_price, max_price)
+    # Slug-only canonical key: the cache holds ONE broad row-set per area; the
+    # requested bed/price band is applied as a local post-filter below.
+    key = _query_key(slug)
     cached = _cache().get(key)
     budget_s = SCRAPE_BUDGET_S if budget_s is None else budget_s
 
-    # 1) Fresh cache hit.
-    if cached and not force_refresh:
-        rows, fetched = cached
-        age_h = (time.time() - fetched) / 3600.0
-        if age_h < TTL_HOURS and rows:
-            meta.update(source="hit", count=len(rows),
-                        elapsed_s=round(time.time() - t0, 2))
-            return {"rows": rows, "meta": meta}
+    def _is_fresh(entry) -> bool:
+        return bool(entry) and ((time.time() - entry[1]) / 3600.0 < TTL_HOURS)
+
+    # 1) Fresh canonical hit -> filter the broad row-set DOWN to the requested band.
+    #    An EMPTY filtered result from a FRESH canonical entry is a genuine
+    #    complete-empty for this band (the area was scraped, nothing matched) — NOT a
+    #    miss — so we serve it as a hit and never re-scrape. Covers cache_only too.
+    if _is_fresh(cached) and not force_refresh:
+        rows, _fetched = cached
+        filtered = _filter_band(rows, min_bedrooms, max_bedrooms,
+                                min_price, max_price, limit)
+        meta.update(source="hit", count=len(filtered),
+                    elapsed_s=round(time.time() - t0, 2))
+        return {"rows": filtered, "meta": meta}
 
     # 1b) Cache-only lookup (no scrape): the caller (deadline-aware multi-area search) uses
     #     this to serve already-cached areas for near-free before deciding which uncached
-    #     areas it still has time to scrape. A stale/absent entry returns an honest empty so
-    #     the caller treats the area as a cache MISS.
+    #     areas it still has time to scrape. We only reach here when NO fresh canonical
+    #     entry exists (a fresh one already returned above), so this is an honest cache
+    #     MISS — no fresh canonical entry for the slug.
     if cache_only:
         meta.update(source="none", elapsed_s=round(time.time() - t0, 2),
-                    message="No fresh cached listings for this query (cache-only lookup).")
+                    message="No fresh cached listings for this area (cache-only lookup).")
         return {"rows": [], "meta": meta}
 
-    # 2) Cache miss / stale -> scrape live under budget.
-    scraped, scrape_timed_out = _scrape_live(slug, min_bedrooms, max_bedrooms,
-                                             min_price, max_price, limit, budget_s)
+    # 2) Cache miss / stale -> scrape the CANONICAL broad query (all beds, full price
+    #    sweep) so one cached row-set serves every band; store it slug-keyed; then
+    #    return the requested band filtered out of it.
+    scraped, scrape_timed_out = _scrape_live(
+        slug, CANONICAL_MIN_BEDS, CANONICAL_MAX_BEDS,
+        CANONICAL_MIN_PRICE, CANONICAL_MAX_PRICE, CANONICAL_SCRAPE_LIMIT, budget_s)
     meta["timed_out"] = bool(scrape_timed_out)
     if scraped is not None:
-        rows = _clean(scraped, city)
-        if rows:
+        canonical_rows = _clean(scraped, city)
+        if canonical_rows:
+            # Persist the WHOLE canonical set (not the band-filtered view) so the
+            # next request for any other band reuses it. A budget-abandoned partial
+            # is never reached here (_scrape_live returns None on timeout), so a
+            # stored canonical entry is always a complete harvest for its band.
             try:
-                _cache().set(key, rows)
+                _cache().set(key, canonical_rows)
             except (OSError, sqlite3.Error) as exc:
-                _fallback_cache(exc).set(key, rows)
-            meta.update(source="scraped", count=len(rows),
+                _fallback_cache(exc).set(key, canonical_rows)
+            filtered = _filter_band(canonical_rows, min_bedrooms, max_bedrooms,
+                                    min_price, max_price, limit)
+            # filtered may be empty: a genuine complete-empty for THIS band off a
+            # freshly-scraped, now-cached canonical set (source stays "scraped").
+            meta.update(source="scraped", count=len(filtered),
                         elapsed_s=round(time.time() - t0, 2))
-            return {"rows": rows, "meta": meta}
+            return {"rows": filtered, "meta": meta}
 
-    # 3) Stale-if-error: a live scrape failed/empty but we have an older set.
+    # 3) Stale-if-error: a live scrape failed (never on a mere band-empty) but we hold
+    #    an older canonical set -> serve it band-filtered, flagged possibly-outdated.
     if cached:
         rows, _fetched = cached
-        rows = _clean(rows, city)
+        rows = _filter_band(_clean(rows, city), min_bedrooms, max_bedrooms,
+                            min_price, max_price, limit)
         if rows:
             meta.update(source="stale-cache", stale=True, count=len(rows),
                         elapsed_s=round(time.time() - t0, 2),

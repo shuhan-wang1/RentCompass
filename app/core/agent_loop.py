@@ -377,12 +377,14 @@ def _turn_soft_wrap_s() -> float:
     """Turn-wide soft wrap threshold (s) measured from TURN START (FC_TURN_SOFT_WRAP_S).
     Once whole-turn elapsed (LLM + tools) crosses this, the agent node stops opening NEW tool
     batches and forces an answer-now generation from the evidence already gathered. Product
-    ruling: stop planning new tools at ~25s, reserving ~FC_FINAL_RESERVE_S for the final
-    generation. Read at call time so ops/tests can retune without a reimport."""
+    ruling: stop planning new tools at ~23s, reserving ~FC_FINAL_RESERVE_S for the final
+    generation so the whole turn closes inside the hard 30s SLO (23 wrap + <=4 wrap-call +
+    <=0.5 wrapped-critic + ~0 format ~= 27.5s worst case). Read at call time so ops/tests can
+    retune without a reimport."""
     try:
-        return float(os.getenv("FC_TURN_SOFT_WRAP_S", "25"))
+        return float(os.getenv("FC_TURN_SOFT_WRAP_S", "23.0"))
     except (TypeError, ValueError):
-        return 25.0
+        return 23.0
 
 
 def _final_reserve_s() -> float:
@@ -395,6 +397,27 @@ def _final_reserve_s() -> float:
         return 5.0
 
 
+def _min_batch_s() -> float:
+    """Minimum soft-wrap runway (s) a NEW tool batch needs to be worth dispatching
+    (FC_MIN_BATCH_S). If less than this remains before the soft wrap, opening the batch is
+    pure waste (it would be abandoned almost immediately, leaking an executor thread) — the
+    dispatch is skipped straight to the wrap path instead (deliverable: soft-fold skip)."""
+    try:
+        return float(os.getenv("FC_MIN_BATCH_S", "2.0"))
+    except (TypeError, ValueError):
+        return 2.0
+
+
+def _wrap_critic_reserve_s() -> float:
+    """Head-room (s) carved out of the wrap-call window for the trailing critic/format work
+    (FC_WRAP_CRITIC_RESERVE_S), so the bounded wrap-up LLM call always leaves room to render
+    the final answer before the hard turn ceiling."""
+    try:
+        return float(os.getenv("FC_WRAP_CRITIC_RESERVE_S", "1.0"))
+    except (TypeError, ValueError):
+        return 1.0
+
+
 # Model-facing wrap directive (never persisted into user-visible history — appended only to
 # the prompt for the single answer-now call). The last sentence is a graded zero-tolerance
 # rule: a run that claims 「没有房源」 / "no listings" after a search timed out or returned
@@ -404,7 +427,11 @@ _WRAP_DIRECTIVE = (
     "NOW using ONLY the tool results already gathered above. If the evidence is partial or a "
     "tool timed out, say so honestly and give the best answer you can from what you have. "
     "NEVER claim there are no listings / no results when a search timed out or returned "
-    "partial results — describe what WAS found and note that it may be incomplete."
+    "partial results — describe what WAS found and note that it may be incomplete. "
+    "For every figure you state (price, rent, distance, count, travel time), CITE its data "
+    "source inline (e.g. OnTheMarket, or the tool that produced it). State ONLY numbers that "
+    "actually appear in the gathered tool results above — never estimate, round, or invent a "
+    "figure that is not present in the results."
 )
 
 
@@ -435,6 +462,84 @@ def _record_turn_soft_wrap_event(*, elapsed_ms: float, llm_calls: int,
                 tool_batches=int(tool_batches))
     except Exception:
         pass
+
+
+def _rec_summary_line(rec: dict) -> str:
+    """One compact, HONEST line for a single recommendation, built ONLY from fields present
+    in the artifact — never fabricates a value. Used by the deterministic wrap fallback."""
+    if not isinstance(rec, dict):
+        return "- (listing)"
+    parts = []
+    name = (rec.get("title") or rec.get("property_address") or rec.get("address")
+            or rec.get("name") or rec.get("headline"))
+    if name:
+        parts.append(str(name))
+    price = (rec.get("price_display") or rec.get("price_pcm") or rec.get("price")
+             or rec.get("rent"))
+    if price is not None and price != "":
+        parts.append(str(price))
+    return "- " + " — ".join(parts) if parts else "- (listing)"
+
+
+def _deterministic_wrap_answer(state: AgentState) -> str:
+    """Build a compact, honest final answer directly from the gathered tool_artifacts, for the
+    case where the wrap-up LLM call timed out / errored (FIX 2). Names which tools ran, renders
+    the top recommendations already present in the artifacts PLAINLY, and states clearly that
+    the answer was cut short by the time budget — in the user's language (zh default). NEVER
+    fabricates numbers not present in the artifacts, and never claims 'no listings' when a
+    search was attempted but partial/timed-out."""
+    ec = state.get("extracted_context") or {}
+    cm = ec.get("current_message") or _current_message(state.get("user_query") or "")
+    lang = _reply_language_from_ctx(ec, cm)
+    artifacts = list(state.get("tool_artifacts") or [])
+
+    executed = [a for a in artifacts
+                if _is_executed(a) and a.get("tool") not in (None, "ask_user")]
+    tool_names = sorted({a.get("tool") for a in executed})
+
+    recs = []
+    for a in reversed(artifacts):
+        if a.get("tool") == "search_properties" and _is_executed(a):
+            raw = a.get("raw_data")
+            if isinstance(raw, dict) and raw.get("recommendations"):
+                recs = list(raw.get("recommendations") or [])
+                break
+    # A search that was attempted but did not yield a clean 'found' result (timed out / abandoned
+    # / partial). Never say 'no listings' in that case — the search was cut short, not empty.
+    search_incomplete = any(
+        a.get("tool") == "search_properties"
+        and (a.get("timed_out") or a.get("abandoned") or a.get("outcome_unknown")
+             or (isinstance(a.get("raw_data"), dict) and a["raw_data"].get("partial")))
+        for a in artifacts)
+
+    if lang == "zh":
+        lines = ["抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："]
+        if tool_names:
+            lines.append("已完成的查询：" + "、".join(str(t) for t in tool_names) + "。")
+        if recs:
+            lines.append(f"已找到 {len(recs)} 个房源（数据来自 OnTheMarket）：")
+            lines.extend(_rec_summary_line(r) for r in recs[:5])
+        elif search_incomplete:
+            lines.append("房源搜索还没跑完就到时间了，结果暂不完整，之后可能还会有更多房源。")
+        else:
+            lines.append("目前还没有可以直接展示的房源结果。")
+        lines.append("由于时间限制，以上内容可能不完整，你可以让我继续把它补全。")
+    else:
+        lines = ["Sorry — this turn ran long, so here is a brief answer from what I have "
+                 "gathered so far (it may be incomplete):"]
+        if tool_names:
+            lines.append("Completed lookups: " + ", ".join(str(t) for t in tool_names) + ".")
+        if recs:
+            lines.append(f"Found {len(recs)} listing(s) (data from OnTheMarket):")
+            lines.extend(_rec_summary_line(r) for r in recs[:5])
+        elif search_incomplete:
+            lines.append("The property search was cut short by the time budget, so these results "
+                         "are incomplete — more listings may well exist.")
+        else:
+            lines.append("I do not yet have listing results ready to show.")
+        lines.append("This answer was cut short by the time budget; let me know and I can "
+                     "finish it.")
+    return "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -542,6 +647,73 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         return ("[memory] The user confirmed, but saving the frozen candidate failed; "
                 "apologize briefly and offer to retry.")
 
+    async def _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start):
+        """Turn-wide soft-wrap answer-now generation (FIX 2 + FIX 3). Runs the tools-disabled
+        wrap-up LLM call under a hard wall-clock bound derived from the turn ceiling; on timeout
+        or LLM error it cancels-and-abandons the call (never awaiting the cancelled task, same
+        pattern as budget-abandoned tools) and synthesizes a DETERMINISTIC honest answer from
+        the gathered artifacts. Routes straight to format_output_fc — bypassing the LLM/critic
+        entirely — because a wrapped turn is out of time budget (FIX 3: <0.5s tail)."""
+        prompt_msgs = messages + [SystemMessage(content=_WRAP_DIRECTIVE)]
+        llm = _llm()
+        if _strict_on():
+            # Strict /beta path may reject tool_choice="none"; bind no tools at all so the
+            # model provably cannot request a batch.
+            call = llm
+        else:
+            try:
+                call = llm.bind_tools(_specs_to_openai(specs), tool_choice="none")
+            except Exception:
+                call = llm  # fall back to no tools if the backend rejects tool_choice
+
+        # Bound the wrap-up call so its (unbounded) LLM latency can never blow the SLO: it must
+        # finish inside turn_start + soft_wrap + reserve, minus a crumb reserved for the trailing
+        # format render. Floor of 2s so a wrap begun right at the edge still gets a real attempt.
+        now = time.monotonic()
+        hard_end = (turn_start + _turn_soft_wrap_s() + _final_reserve_s()) if turn_start else (
+            now + _final_reserve_s())
+        wrap_timeout = max(2.0, hard_end - now - _wrap_critic_reserve_s())
+
+        task = asyncio.ensure_future(call.ainvoke(prompt_msgs))
+        done, _pending = await asyncio.wait([task], timeout=wrap_timeout)
+        wrapped_by = "llm"
+        if task in done:
+            try:
+                resp = task.result()
+                text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
+                if not (text and text.strip()):
+                    raise ValueError("empty wrap-up response")
+                wrap_msg = resp
+            except Exception as e:  # LLM error -> deterministic fallback
+                logger.warning("fc_loop.wrap_llm_error %s", e)
+                text = _deterministic_wrap_answer(state)
+                wrap_msg = AIMessage(content=text)
+                wrapped_by = "fallback_error"
+        else:
+            # Timed out: cancel + swallow, NEVER await the cancelled LLM task (mirrors the
+            # budget-abandoned-tool done-callback), and answer deterministically from artifacts.
+            task.cancel()
+            task.add_done_callback(_swallow_abandoned_task)
+            text = _deterministic_wrap_answer(state)
+            wrap_msg = AIMessage(content=text)
+            wrapped_by = "fallback_timeout"
+
+        tool_batches = len({a.get("turn") for a in (state.get("tool_artifacts") or [])})
+        _record_turn_soft_wrap_event(
+            elapsed_ms=elapsed * 1000.0, llm_calls=loop_turn, tool_batches=tool_batches)
+        logger.warning(
+            "fc_loop.turn_soft_wrap elapsed_s=%.2f soft_wrap_s=%.2f llm_calls=%d "
+            "tool_batches=%d wrapped_by=%s wrap_timeout_s=%.2f", elapsed, _turn_soft_wrap_s(),
+            loop_turn, tool_batches, wrapped_by, wrap_timeout)
+        # FIX 3: skip the (LLM/expensive) critic on a wrapped turn — a 3s critic at t~=40 is
+        # pointless when the turn is already out of budget. Route straight to format_output_fc,
+        # whose work is pure-Python (<0.5s). The wrap directive text is model-facing only and
+        # never persisted into the returned messages channel.
+        return Command(update={
+            "messages": messages + [wrap_msg], "loop_turn": loop_turn,
+            "final_response": text,
+        }, goto="format_output_fc")
+
     async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
         if not messages:
@@ -579,38 +751,24 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             }, goto="critic")
 
         # Turn-wide soft wrap (deliverable 1): once the WHOLE-turn elapsed (LLM + tools,
-        # measured from the guard-captured t0) crosses FC_TURN_SOFT_WRAP_S, the model must not
+        # measured from the guard-captured t0) crosses the soft-wrap edge, the model must not
         # be able to open a NEW tool batch — call it with tools disabled (tool_choice="none",
         # or no tools bound on the strict /beta path where "none" is not guaranteed) plus a
         # wrap-up directive, and answer from the evidence already gathered. This is orthogonal
         # to the loop cap above (which counts iterations); here it is wall-clock. On a first
         # entry elapsed is ~0 so the pending-memory replay / normal flow are untouched.
+        #
+        # The edge is FC_TURN_SOFT_WRAP_S − FC_MIN_BATCH_S, not the bare soft wrap: once less
+        # than FC_MIN_BATCH_S of runway remains, any NEW batch this node could plan would be
+        # skipped at dispatch anyway (execute_tools' soft-fold skip), so planning it is pure
+        # waste (the CR3 t=24.6 wasted hop) AND — after execute_tools skips a straddling batch
+        # and routes back here — this same edge guarantees the NEXT entry wraps rather than
+        # re-planning, so a skipped batch leads to exactly one wrap call and can never loop.
         turn_start = state.get("turn_start_monotonic") or 0.0
         elapsed = (time.monotonic() - turn_start) if turn_start else 0.0
-        if turn_start and elapsed > _turn_soft_wrap_s():
-            llm = _llm()
-            prompt_msgs = messages + [SystemMessage(content=_WRAP_DIRECTIVE)]
-            if _strict_on():
-                # Strict /beta path may reject tool_choice="none"; bind no tools at all so the
-                # model provably cannot request a batch.
-                resp = await llm.ainvoke(prompt_msgs)
-            else:
-                try:
-                    bound = llm.bind_tools(_specs_to_openai(specs), tool_choice="none")
-                except Exception:
-                    bound = llm  # fall back to no tools if the backend rejects tool_choice
-                resp = await bound.ainvoke(prompt_msgs)
-            text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
-            tool_batches = len({a.get("turn") for a in (state.get("tool_artifacts") or [])})
-            _record_turn_soft_wrap_event(
-                elapsed_ms=elapsed * 1000.0, llm_calls=loop_turn, tool_batches=tool_batches)
-            logger.warning(
-                "fc_loop.turn_soft_wrap elapsed_s=%.2f soft_wrap_s=%.2f llm_calls=%d "
-                "tool_batches=%d", elapsed, _turn_soft_wrap_s(), loop_turn, tool_batches)
-            return Command(update={
-                "messages": messages + [resp], "loop_turn": loop_turn,
-                "final_response": text,
-            }, goto="critic")
+        wrap_edge = _turn_soft_wrap_s() - _min_batch_s()
+        if turn_start and elapsed > wrap_edge:
+            return await _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start)
 
         llm = _llm().bind_tools(_specs_to_openai(specs))
         resp = await llm.ainvoke(messages)
@@ -916,6 +1074,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         per_call_timeout_idx: set = set()  # reads whose OWN (tool) timeout was the binding cap
         write_timeout_idx: set = set()     # writes whose own wait_for fired -> outcome unknown
         turn_exhausted = False
+        soft_exhausted = False
         batch_window = 0.0
 
         if run_idx:
@@ -923,6 +1082,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # Turn budget already spent: skip this whole batch (nothing is dispatched, so
                 # even a write is a clean no-run, not an abandon), answer from what we have.
                 turn_exhausted = True
+            elif soft_remaining < _min_batch_s():
+                # FIX 1(a): too little soft-wrap runway left to open a NEW batch. Do NOT dispatch
+                # ANYTHING — not even a doomed sub-FC_MIN_BATCH_S window, which would leak an
+                # executor thread and burn the residual for no result (the CR3/CR4 straddle).
+                # Mark every requested call denied/not-executed; the loop routes back to the
+                # agent which, being past the wrap edge, wraps on its next entry (no re-plan,
+                # no loop). NB this is measured from turn_start (guard t0), the SAME base the
+                # agent's wrap edge uses, so the two decisions can never disagree.
+                soft_exhausted = True
             else:
                 batch_window = max(0.0, min(batch_budget, turn_budget - turn_used, soft_remaining))
                 remaining_turn = max(0.0, turn_budget - turn_used)
@@ -947,16 +1115,29 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     # of the model-visible schema, the digest (computed above) and the idempotency
                     # key (stripped in _run). The tool honors it and returns partial results.
                     if nm == "search_properties":
-                        plan[i][3]["_deadline_monotonic"] = search_deadline
+                        # Fold the per-call wait_for (eff) into the injected deadline: the tool
+                        # must pace against its ACTUAL axe. Without this, a per-tool timeout
+                        # tighter than the batch window (e.g. the 30s default vs a relaxed
+                        # 120s warm-up window) let the tool pace to the batch deadline while
+                        # the executor axed it at eff — pacing to the later bound guarantees
+                        # losing the race.
+                        plan[i][3]["_deadline_monotonic"] = min(search_deadline, _now0 + eff)
                     read_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], eff, False))
                 write_tasks: dict = {}
                 for i in write_idx:
                     nm = plan[i][0].get("name")
                     per_tool = TOOL_TIMEOUTS.get(nm, TOOL_TIMEOUT_DEFAULT)
-                    # WRITE: its own full wait_for, NOT capped by the batch window.
-                    budget_by_idx[i] = per_tool
+                    # WRITE: not capped by the batch window (the batch AWAITS it, never abandons
+                    # it), BUT its wait_for is still folded with the soft-wrap remainder and the
+                    # turn remainder (FIX 1(b)). A write dispatched near the wrap edge must not
+                    # run its full per-tool wait_for past the soft deadline — that was the
+                    # genuinely unbounded window (reads were folded, writes were not). If this
+                    # shortened wait_for fires it becomes the usual write_timeout ->
+                    # outcome_unknown (the write may still complete in the background).
+                    write_eff = max(0.0, min(per_tool, soft_remaining, remaining_turn))
+                    budget_by_idx[i] = write_eff
                     kind_by_idx[i] = "per_call"
-                    write_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], per_tool, True))
+                    write_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], write_eff, True))
                 t0 = time.monotonic()
                 # Reads share the batch window; stragglers are ABANDONED (deliverable 3).
                 if read_tasks:
@@ -1037,6 +1218,22 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         "success": False, "data": None,
                         "error": ("write blocked: this turn contains untrusted content and the "
                                   "user has not authorized saving to memory." + hint),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
+            if soft_exhausted and i in run_idx:
+                # FIX 1(a): whole batch skipped for lack of soft-wrap runway. Never dispatched,
+                # so the outcome IS known (did not run) — record a DENIED (not timed_out)
+                # placeholder that _is_executed() excludes, so it never counts as executed work
+                # or renders a card, while its digest still suppresses an identical retry.
+                err = "denied: turn time budget exhausted"
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False, error=err,
+                    denied=True, elapsed_ms=0))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": err + " — answer now from the results already gathered.",
                     }, ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue

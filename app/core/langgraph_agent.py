@@ -34,6 +34,7 @@ Graph Flow:
 
 import asyncio
 import operator
+import os
 import json
 import re
 import logging
@@ -96,6 +97,21 @@ MAX_PLAN_WAVES = 3
 #     net for the legacy execution-plan path (langgraph :~3530), where no batch window applies.
 TOOL_TIMEOUTS = {"web_search": 18, "search_nearby_pois": 25}
 TOOL_TIMEOUT_DEFAULT = 30
+
+# Env overrides — ops/warm-up tuning without code edits: TOOL_TIMEOUT_DEFAULT plus
+# TOOL_TIMEOUT_<TOOL_NAME> (upper-cased tool name, e.g. TOOL_TIMEOUT_SEARCH_PROPERTIES=110).
+# The eval warm-up pipeline relies on this: without it, search_properties fell to the 30s
+# default and the declared 110s warm-up scrape window silently never existed.
+try:
+    TOOL_TIMEOUT_DEFAULT = float(os.getenv("TOOL_TIMEOUT_DEFAULT", TOOL_TIMEOUT_DEFAULT))
+except (TypeError, ValueError):
+    pass
+for _k, _v in os.environ.items():
+    if _k.startswith("TOOL_TIMEOUT_") and _k != "TOOL_TIMEOUT_DEFAULT":
+        try:
+            TOOL_TIMEOUTS[_k[len("TOOL_TIMEOUT_"):].lower()] = float(_v)
+        except (TypeError, ValueError):
+            continue
 
 # Tools that may participate in the loop: after they return, `reflect` gets to decide
 # whether the gathered evidence already answers the question or one more DIFFERENT tool

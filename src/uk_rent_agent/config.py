@@ -14,6 +14,33 @@ def _bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _resolve_checkpoint_path(root: Path) -> Path:
+    """Resolve the LangGraph checkpoint DB path for this process.
+
+    Canary rollout (2026-07-20): the legacy and fc pools MUST use SEPARATE checkpoint DBs
+    (divergent AgentState channels — a cross-arch resume corrupts the run). Ops points each
+    pool at its own file via the documented `CHECKPOINT_DB_PATH` env var.
+
+    Precedence:
+      1. `CHECKPOINT_DB_PATH`  — the documented primary ops interface.
+      2. `CHECKPOINT_PATH`     — legacy/back-compat fallback.
+      3. `<root>/.runtime/checkpoints.sqlite3` — default.
+
+    If BOTH env vars are set and DIFFER, `CHECKPOINT_DB_PATH` wins and a one-line warning is
+    printed so the ops mistake is visible in startup logs (rather than silently no-op'ing).
+    """
+    db_path = os.getenv("CHECKPOINT_DB_PATH")
+    legacy_path = os.getenv("CHECKPOINT_PATH")
+    if db_path and legacy_path and db_path.strip() != legacy_path.strip():
+        print(
+            "[STARTUP] WARNING: both CHECKPOINT_DB_PATH and CHECKPOINT_PATH are set and "
+            f"differ; using CHECKPOINT_DB_PATH ({db_path!r}), ignoring CHECKPOINT_PATH "
+            f"({legacy_path!r})."
+        )
+    chosen = db_path or legacy_path or str(root / ".runtime" / "checkpoints.sqlite3")
+    return Path(chosen)
+
+
 @dataclass(frozen=True)
 class Config:
     project_root: Path
@@ -77,9 +104,7 @@ class Config:
             use_mcp_tools=_bool("USE_MCP_TOOLS"),
             session_max_users=int(os.getenv("SESSION_MAX_USERS", "10000")),
             session_ttl_seconds=int(os.getenv("SESSION_TTL_SECONDS", str(7 * 24 * 3600))),
-            checkpoint_path=Path(
-                os.getenv("CHECKPOINT_PATH", str(root / ".runtime" / "checkpoints.sqlite3"))
-            ),
+            checkpoint_path=_resolve_checkpoint_path(root),
             enable_checkpointer=_bool("ENABLE_CHECKPOINTER", True),
             enable_hitl=_bool("ENABLE_HITL", False),
             enable_store=_bool("ENABLE_STORE", False),

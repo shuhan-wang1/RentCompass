@@ -109,6 +109,23 @@ services:
       SESSION_COOKIE_SECURE: "true"
       ALLOW_LEGACY_CLIENT_USER_ID: "false"
       MAX_REQUEST_BYTES: "262144"
+      # --- Canary pins (legacy pool) ------------------------------------------
+      # These only make the current effective defaults EXPLICIT + turn on
+      # per-turn telemetry; they change no behaviour. They take effect the next
+      # time this container is RECREATED — ops keeps the running legacy
+      # container as-is; recreate it on a telemetry-capable image before
+      # advancing past the `internal` stage (see docs/canary_runbook.md).
+      AGENT_ARCH: "legacy"
+      CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints.sqlite3"
+      # Conversation store is SHARED between pools (same file as app-fc): the
+      # sticky per-conversation arch assignment and the user-visible message
+      # transcript live here, so on rollback legacy can rebuild any fc
+      # conversation from the shared history. Checkpoints, by contrast, are
+      # SEPARATE per arch (see CHECKPOINT_DB_PATH above / app-fc below): legacy
+      # must NEVER read fc's LangGraph checkpoints — that state is treated as
+      # untrusted/abandoned after rollback.
+      CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"
+      CANARY_LOG_PATH: "/app/.runtime/logs/canary-legacy.jsonl"
     volumes:
       # Secrets (also read directly by config.from_env via load_dotenv).
       - ./app/.env:/app/app/.env:ro
@@ -119,6 +136,96 @@ services:
       - ./app/data:/app/app/data
       - ./.runtime:/app/.runtime
       # Embedding-model cache so it is downloaded only once.
+      - hf_cache:/opt/hf-cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # --- Canary fc pool (internal stage) --------------------------------------
+  # The second pool that runs the candidate `fc_loop` arch alongside legacy.
+  # It is gated behind the "canary" profile, so the plain
+  #   docker compose up -d
+  # brings up ONLY the legacy stack (app/searxng/valkey) — unchanged. The fc
+  # pool starts explicitly with:
+  #   docker compose --profile canary up -d app-fc
+  #
+  # IMMUTABILITY: no `build:` here on purpose. The fc pool runs a fixed,
+  # pre-built image referenced by its immutable tag, so the working tree can
+  # never silently become what canary traffic executes. Build the tag out of
+  # band (git worktree/archive at the candidate sha) and set FC_CANARY_IMAGE +
+  # FC_CANARY_SHA in the compose .env — see docs/canary_runbook.md "Image build".
+  app-fc:
+    profiles: ["canary"]
+    image: "${FC_CANARY_IMAGE:?FC_CANARY_IMAGE must be set to the immutable canary image, e.g. uk-rent-agent:canary-fc-loop-<sha>}"
+    container_name: uk-rent-app-fc
+    restart: unless-stopped
+    # Identical entrypoint to `app`: same uvicorn factory, same proxy-header
+    # handling. Only the arch/strict flags and DB/telemetry paths differ (below).
+    command:
+      - python
+      - -m
+      - uvicorn
+      - uk_rent_agent.web.asgi:create_asgi_app
+      - --factory
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "5001"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    depends_on:
+      searxng:
+        condition: service_healthy
+      valkey:
+        condition: service_started
+    networks: [rentnet]
+    ports:
+      # Loopback only, and deliberately NOT wired into the host nginx: during
+      # the `internal` stage the fc pool takes internal-only traffic (curl /
+      # manual smoke) on :5002. Public canary weighting comes later, upstream.
+      - "127.0.0.1:5002:5001"
+    # Same secrets/keys as legacy.
+    env_file:
+      - ./app/.env
+    environment:
+      # Everything the legacy `app` service sets...
+      SEARXNG_URL: "http://searxng:8080"
+      PYTHONUNBUFFERED: "1"
+      REQUIRE_AUTH: "false"
+      SESSION_COOKIE_SECURE: "true"
+      ALLOW_LEGACY_CLIENT_USER_ID: "false"
+      MAX_REQUEST_BYTES: "262144"
+      # ...plus the canary knobs that make this the fc pool:
+      AGENT_ARCH: "fc_loop"
+      # Strict function-calling (1 = strict FC) for the fc_loop harness.
+      DEEPSEEK_STRICT: "1"
+      # Pinned candidate sha — surfaced in X-Agent-Version and per-turn telemetry.
+      APP_CANDIDATE_SHA: "${FC_CANARY_SHA:?FC_CANARY_SHA must be set to the candidate commit sha}"
+      # SEPARATE checkpoint DB: fc's LangGraph checkpoints live in their own
+      # file so legacy never reads them (and vice-versa). This is the state
+      # isolation boundary between the two arches.
+      CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_fc.sqlite3"
+      # SHARED conversation store: same file as legacy `app`. Sticky arch
+      # assignment + the user-visible transcript live here so either pool can
+      # rebuild a conversation from shared history (critical for rollback).
+      CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"
+      # Per-turn canary telemetry sink (event canary.turn), one bare-JSON line
+      # per turn; consumed by scripts/canary_report.py --input .runtime/logs/.
+      CANARY_LOG_PATH: "/app/.runtime/logs/canary-fc_loop.jsonl"
+    volumes:
+      # Same bind mounts as `app` — crucially the SHARED ./.runtime, which holds
+      # the shared conversation store, both (separate) checkpoint DBs, and the
+      # host-visible telemetry logs under ./.runtime/logs/.
+      - ./app/.env:/app/app/.env:ro
+      - ./chroma_db:/app/chroma_db
+      - ./chroma_db_area:/app/chroma_db_area
+      - ./app/chroma_db_agent_memory:/app/app/chroma_db_agent_memory
+      - ./app/data:/app/app/data
+      - ./.runtime:/app/.runtime
       - hf_cache:/opt/hf-cache
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:5001/health"]

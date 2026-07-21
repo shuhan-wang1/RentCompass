@@ -37,6 +37,7 @@ os.environ["ALLOW_LEGACY_CLIENT_USER_ID"] = "1"
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
 import app as appmod  # noqa: E402 — heavy one-time import after env setup
+from uk_rent_agent.config import Config  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -399,3 +400,101 @@ def test_build_fc_signals_robust_to_junk(monkeypatch):
     assert sig["tool_budget_timeout"] is False
     assert sig["security_audit"] == {"denied_writes": 0}
     assert sig["tool_batches"] == 0
+
+
+# ---------------------------------------------------------------------------
+# DEFECT 1 — checkpoint DB env-var wiring (Config.from_env)
+# ---------------------------------------------------------------------------
+
+def test_config_reads_checkpoint_db_path(monkeypatch, tmp_path):
+    """CHECKPOINT_DB_PATH (documented ops interface) is honoured as the primary env var."""
+    p = tmp_path / "fc" / "checkpoints.sqlite3"
+    monkeypatch.setenv("CHECKPOINT_DB_PATH", str(p))
+    monkeypatch.delenv("CHECKPOINT_PATH", raising=False)
+    assert Config.from_env().checkpoint_path == p
+
+
+def test_config_checkpoint_path_fallback(monkeypatch, tmp_path):
+    """CHECKPOINT_PATH still works as the back-compat fallback when DB var is unset."""
+    p = tmp_path / "legacy" / "checkpoints.sqlite3"
+    monkeypatch.delenv("CHECKPOINT_DB_PATH", raising=False)
+    monkeypatch.setenv("CHECKPOINT_PATH", str(p))
+    assert Config.from_env().checkpoint_path == p
+
+
+def test_config_checkpoint_db_wins_when_both_set(monkeypatch, tmp_path, capsys):
+    """When both are set and differ, CHECKPOINT_DB_PATH wins and a warning is printed."""
+    db = tmp_path / "db.sqlite3"
+    legacy = tmp_path / "legacy.sqlite3"
+    monkeypatch.setenv("CHECKPOINT_DB_PATH", str(db))
+    monkeypatch.setenv("CHECKPOINT_PATH", str(legacy))
+    cfg = Config.from_env()
+    assert cfg.checkpoint_path == db
+    assert "CHECKPOINT_DB_PATH" in capsys.readouterr().out
+
+
+def test_config_checkpoint_default(monkeypatch):
+    """Neither env var set → default under <root>/.runtime/checkpoints.sqlite3."""
+    monkeypatch.delenv("CHECKPOINT_DB_PATH", raising=False)
+    monkeypatch.delenv("CHECKPOINT_PATH", raising=False)
+    cp = Config.from_env().checkpoint_path
+    assert cp.name == "checkpoints.sqlite3"
+    assert cp.parent.name == ".runtime"
+
+
+# ---------------------------------------------------------------------------
+# DEFECT 2 — canary telemetry file sink (_wire_canary_sink)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def _restore_canary_sink(monkeypatch):
+    """Re-wire the sink to its default after the test so a temp-path handler cannot leak into
+    later tests. monkeypatch reverts CANARY_LOG_PATH first, then we rewire on the clean env."""
+    yield
+    monkeypatch.delenv("CANARY_LOG_PATH", raising=False)
+    appmod._wire_canary_sink()
+
+
+def test_canary_sink_writes_one_json_line(tmp_path, monkeypatch, user, _restore_canary_sink):
+    logpath = tmp_path / "canary.jsonl"
+    monkeypatch.setenv("CANARY_LOG_PATH", str(logpath))
+    appmod._wire_canary_sink()
+
+    appmod._emit_canary_turn(conversation_id="c-sink", user_id=user, request_id="req-sink",
+                             turn_latency_ms=12.3, fc_signals=None)
+    for h in appmod._canary_logger.handlers:
+        h.flush()
+
+    lines = logpath.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    rec = json.loads(lines[0])
+    assert isinstance(rec, dict)
+    assert rec["event"] == "canary.turn"
+    assert _REQUIRED_TURN_KEYS.issubset(rec.keys())
+    assert rec["request_id"] == "req-sink"
+    assert rec["conversation_id"] == "c-sink"
+    assert rec["user_id"] == user
+
+
+def test_canary_sink_idempotent_no_stacked_handlers(tmp_path, monkeypatch, _restore_canary_sink):
+    logpath = tmp_path / "canary_idem.jsonl"
+    monkeypatch.setenv("CANARY_LOG_PATH", str(logpath))
+    appmod._wire_canary_sink()
+    appmod._wire_canary_sink()
+    appmod._wire_canary_sink()
+    ours = [h for h in appmod._canary_logger.handlers
+            if getattr(h, appmod._CANARY_SINK_MARKER, False)]
+    assert len(ours) == 1
+
+
+def test_canary_sink_disabled(tmp_path, monkeypatch, _restore_canary_sink):
+    disabled_marker = tmp_path / "should_not_exist.jsonl"
+    monkeypatch.setenv("CANARY_LOG_PATH", "off")
+    appmod._wire_canary_sink()  # must not crash
+    ours = [h for h in appmod._canary_logger.handlers
+            if getattr(h, appmod._CANARY_SINK_MARKER, False)]
+    assert ours == []
+    # A turn emitted while disabled writes nothing to disk (and does not crash).
+    appmod._emit_canary_turn(conversation_id="c", user_id="u", request_id="r",
+                             turn_latency_ms=1.0, fc_signals=None)
+    assert not disabled_marker.exists()

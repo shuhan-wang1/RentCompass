@@ -216,6 +216,76 @@ print(f"[STARTUP] Canary: agent_arch={AGENT_ARCH} candidate_sha={APP_CANDIDATE_S
 # _emit_canary_turn(); the event name lives inside the JSON ("event": "canary.turn").
 _canary_logger = logging.getLogger("canary")
 
+# Marker attribute set on the FileHandler we attach so re-invocation (tests reloading the
+# module, or re-calling _wire_canary_sink after monkeypatching env) can find + replace OUR
+# handler without stacking duplicates or disturbing handlers ops may have added.
+_CANARY_SINK_MARKER = "_canary_sink"
+
+
+def _wire_canary_sink() -> None:
+    """Attach a dedicated file sink to the "canary" logger at import time.
+
+    DEFECT FIX (2026-07-21): the "canary" logger had NO handler anywhere in the repo. Under
+    uvicorn (which does not configure the root logger) INFO records hit logging.lastResort
+    (WARNING threshold) and canary.turn lines were silently DROPPED — zero telemetry to disk.
+
+    Env `CANARY_LOG_PATH` contract:
+      * a path            → write telemetry there.
+      * "off"/"0"/"disabled" (case-insensitive) → attach NO handler (telemetry disabled).
+      * UNSET / empty     → DEFAULT ENABLED at <runtime_dir>/logs/canary-<arch>.jsonl, where
+                            runtime_dir = _runtime_config.checkpoint_path.parent if set else
+                            <project_root>/.runtime, and <arch> is AGENT_ARCH.
+
+    The formatter emits ONLY the record message ("%(message)s") because each message already
+    IS a bare JSON object — scripts/canary_report.py parses one JSON line per record directly.
+    Idempotent: our previously-attached sink (marked via _CANARY_SINK_MARKER) is removed first,
+    so re-invocation replaces rather than stacks. Any failure degrades to a printed warning and
+    never crashes startup. propagate stays True so container stderr still sees the lines.
+    """
+    try:
+        _canary_logger.setLevel(logging.INFO)
+
+        # Drop any sink WE previously attached (idempotent replace). Leave foreign handlers.
+        for h in list(_canary_logger.handlers):
+            if getattr(h, _CANARY_SINK_MARKER, False):
+                _canary_logger.removeHandler(h)
+                try:
+                    h.close()
+                except Exception:
+                    pass
+
+        raw = (os.getenv("CANARY_LOG_PATH") or "").strip()
+        if raw.lower() in {"off", "0", "disabled"}:
+            print("[STARTUP] Canary telemetry: disabled")
+            return
+
+        if raw:
+            path = Path(raw)
+        else:
+            ckpt = getattr(_runtime_config, "checkpoint_path", None)
+            runtime_dir = ckpt.parent if ckpt else (Path(__file__).resolve().parents[1] / ".runtime")
+            path = runtime_dir / "logs" / f"canary-{AGENT_ARCH}.jsonl"
+
+        resolved = str(Path(path).resolve())
+        # Guard: if an equivalent sink already targets this path, do not add a second one.
+        for h in _canary_logger.handlers:
+            if isinstance(h, logging.FileHandler) and \
+                    str(Path(getattr(h, "baseFilename", "")).resolve()) == resolved:
+                print(f"[STARTUP] Canary telemetry: {resolved}")
+                return
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(path, encoding="utf-8", delay=True)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        setattr(handler, _CANARY_SINK_MARKER, True)
+        _canary_logger.addHandler(handler)
+        print(f"[STARTUP] Canary telemetry: {resolved}")
+    except Exception as e:  # pragma: no cover — telemetry wiring must never break startup
+        print(f"[STARTUP] WARNING: canary telemetry sink wiring failed: {e}")
+
+
+_wire_canary_sink()
+
 # Per-request carrier for the fc-side turn signals. handle_with_react_agent (which alone can
 # see the graph's final_state) fills this after the graph runs; the /api/alex handler reads it
 # back after the awaited call (a directly-awaited coroutine shares the caller's context, so the
@@ -1483,9 +1553,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             # Canary rollout requirement (2026-07-20): the legacy and fc pools MUST use SEPARATE
             # checkpoint DBs — a legacy process must NEVER read an fc checkpoint (their AgentState
             # channels diverge; a cross-arch resume would corrupt the run). This is an ops concern:
-            # point each pool's checkpoint_path (CHECKPOINT_DB_PATH / CONVERSATION_DB_PATH) at its
-            # own file. The emergency-rollback path deliberately rebuilds from shared MESSAGE
-            # history (ConversationStore), not from the other pool's checkpoint.
+            # point each pool's checkpoint_path at its own file via CHECKPOINT_DB_PATH (the
+            # documented primary env var; CHECKPOINT_PATH is the back-compat fallback). The
+            # conversation store (CONVERSATION_DB_PATH) is deliberately SHARED across pools — the
+            # emergency-rollback path rebuilds from that shared MESSAGE history, not from the
+            # other pool's checkpoint.
             checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
         # Cross-thread Store + HITL are opt-in (default off): identical topology when disabled.
         store = get_prefs_store() if _runtime_config.enable_store else None

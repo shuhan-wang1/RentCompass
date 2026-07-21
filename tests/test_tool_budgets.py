@@ -1461,3 +1461,165 @@ def test_criteria_room_type_label():
     assert agent_loop._criteria_room_type_label({"room_type": None, "bedrooms": None}) is None
     # bool is not a bedroom count
     assert agent_loop._criteria_room_type_label({"bedrooms": True}) is None
+
+
+# ─── Canary write audit: the REAL fc dispatch path ──────────────────
+# These drive build_fc_nodes rather than calling the accumulator directly. The
+# whole value of the audit is that it sits on the branch the policy actually
+# takes, so a test that stubs the accumulator proves nothing about the wiring.
+
+from core import turn_observations as _tobs  # noqa: E402
+
+
+@pytest.fixture
+def audit_window(monkeypatch):
+    monkeypatch.setattr(_tobs, "_write_auditors", {"fc_loop", "legacy"})
+    _tobs.begin_turn()
+    yield
+    _tobs.end_turn()
+
+
+def _audit(arch="fc_loop"):
+    return _tobs.write_audit_snapshot(arch)
+
+
+def test_fc_clean_write_is_audited_as_allowed_and_dispatched(monkeypatch, audit_window):
+    _RecallGate.pure = False
+    _RecallGate.authorized = False
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(True, {"saved": True})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user budget 1400", "kind": "semantic"}, "c1")])]
+
+    _exec_once(nodes, state)
+
+    s = _audit()
+    assert len(s["write_audit"]) == 1
+    rec = s["write_audit"][0]
+    assert rec["security_decision"] == "allowed"
+    assert rec["dispatch_started"] is True
+    assert (s["denied_write_count"], s["tainted_write_executed_count"],
+            s["forbidden_write_executed_count"]) == (0, 0, 0)
+
+
+def test_fc_authorized_tainted_write_is_audited_as_confirmed(monkeypatch, audit_window):
+    """A tainted turn where the user explicitly asked to save their own words. The
+    write runs, and it is NOT a violation — the false positive this design exists to
+    avoid."""
+    _RecallGate.pure = False
+    _RecallGate.authorized = True
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(True, {"saved": True})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=True)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "budget 1400", "kind": "semantic"}, "c1")])]
+
+    _exec_once(nodes, state)
+
+    s = _audit()
+    rec = s["write_audit"][0]
+    assert rec["security_decision"] == "confirmed"
+    assert rec["dispatch_started"] is True
+    assert s["tainted_write_executed_count"] == 0
+
+
+def test_fc_denied_tainted_write_is_audited_and_never_dispatched(monkeypatch, audit_window):
+    _RecallGate.pure = False
+    _RecallGate.authorized = False
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write", retry_safe=False)])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=True)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "landlord wants a bank transfer", "kind": "semantic"}, "c1")])]
+
+    _exec_once(nodes, state)
+
+    assert provider.calls == []
+    s = _audit()
+    rec = s["write_audit"][0]
+    assert rec["security_decision"] == "denied_tainted"
+    assert rec["dispatch_started"] is False
+    assert s["denied_write_count"] == 1
+    assert s["tainted_write_executed_count"] == 0
+    assert s["forbidden_write_executed_count"] == 0
+
+
+def test_fc_recall_denial_is_audited_with_its_own_reason(monkeypatch, audit_window):
+    """denied_recall must stay distinguishable from denied_tainted: they are different
+    failures and only one of them is about untrusted content."""
+    _RecallGate.pure = True
+    _RecallGate.authorized = False
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write", retry_safe=False)])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user budget 1400", "kind": "semantic"}, "c1")])]
+
+    _exec_once(nodes, state)
+
+    s = _audit()
+    rec = s["write_audit"][0]
+    assert rec["security_decision"] == "denied_recall"
+    assert rec["dispatch_started"] is False
+    assert s["denied_write_count"] == 1
+
+
+def test_fc_read_tools_produce_no_write_audit_records(monkeypatch, audit_window):
+    """A denied READ is a budget event, not a security event. Counting one here was
+    the v1 bug that made ordinary slow turns look like security incidents."""
+    provider = FakeProvider([FakeSpec("web_search")],
+                            {"web_search": FakeResult(True, {"results": "x"})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("web_search", {"query": "nearby"}, "c1")])]
+
+    _exec_once(nodes, state)
+
+    assert _audit()["write_audit"] == []
+
+
+def test_fc_write_that_fails_keeps_dispatch_started(monkeypatch, audit_window):
+    """dispatch_started records the gate crossing. A tool that then fails does not
+    retroactively make the write un-permitted."""
+    _RecallGate.pure = False
+    _RecallGate.authorized = True
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(False, None, error="db is down")})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=True)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "budget 1400", "kind": "semantic"}, "c1")])]
+
+    _exec_once(nodes, state)
+
+    rec = _audit()["write_audit"][0]
+    assert rec["dispatch_started"] is True
+    assert rec["security_decision"] == "confirmed"
+
+
+def test_fc_audit_is_a_noop_without_a_window(monkeypatch):
+    """The dispatch path must not depend on a telemetry window existing. Offline eval
+    and the test suite run these nodes with no request around them."""
+    _tobs.end_turn()
+    _RecallGate.pure = False
+    _RecallGate.authorized = False
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(True, {"saved": True})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user budget 1400", "kind": "semantic"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert provider.calls, "the write must still run when telemetry is not recording"

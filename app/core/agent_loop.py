@@ -267,6 +267,40 @@ def _default_agent_llm():
     return ModelRouter().create("responder", low_latency=True, base_url=base_url)
 
 
+# --- canary write audit -----------------------------------------------------
+# Telemetry only: these never alter a policy outcome, and every failure mode is
+# swallowed. An observation layer that can refuse a write is no longer an
+# observation layer.
+try:
+    from core.turn_observations import (
+        note_write_decision as _tobs_note_write_decision,
+        note_write_dispatch as _tobs_note_write_dispatch,
+        register_write_auditor as _tobs_register_write_auditor,
+    )
+    _tobs_register_write_auditor("fc_loop")
+except Exception:  # pragma: no cover - import guard
+    _tobs_note_write_decision = None
+    _tobs_note_write_dispatch = None
+
+
+def _note_write_decision(**kw) -> None:
+    if _tobs_note_write_decision is None:
+        return
+    try:
+        _tobs_note_write_decision(**kw)
+    except Exception:
+        pass
+
+
+def _note_write_dispatch(audit_key: str) -> None:
+    if _tobs_note_write_dispatch is None:
+        return
+    try:
+        _tobs_note_write_dispatch(audit_key)
+    except Exception:
+        pass
+
+
 def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
               success: bool = True, error: Optional[str] = None, *,
               timed_out: bool = False, denied: bool = False,
@@ -1230,6 +1264,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             spec = specs.get(name)
             side_effect = getattr(spec, "side_effect", "none") if spec else "none"
             if side_effect == "write":
+                # Canary write audit: the key is the idempotency digest, which both
+                # this planning pass and the dispatch loop below compute identically,
+                # so a call classified here is the same record marked dispatched there.
+                _akey = f"{name}:{digest}"
+                _tainted = bool(state.get("context_tainted", False))
                 # Candidate content is computed up-front: authorization now depends on it
                 # (A+ rule-2 refinement / H13) — a 「记住」 cue only authorizes saving what
                 # the user actually stated, not tool-derived content pulled into context.
@@ -1254,6 +1293,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     if not user_authorized:
                         ipr = getattr(mem_gate, "is_pure_recall_question", None)
                         if ipr is not None and bool(ipr(cur_msg)):
+                            _note_write_decision(
+                                tool=name, decision="denied_recall", context_tainted=_tainted,
+                                user_authorized=False, audit_key=_akey,
+                                reason="pure recall question: no new content to save")
                             plan.append((tc, digest, ("deny_recall", ""), args))
                             continue
                     allowed = bool(mem_gate.memory_write_allowed(
@@ -1265,8 +1308,20 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             frozen = mem_gate.freeze_pending_write(session_id, content, kind)
                         except Exception:
                             frozen = ""
+                        _note_write_decision(
+                            tool=name, decision="denied_tainted", context_tainted=_tainted,
+                            user_authorized=user_authorized, audit_key=_akey,
+                            reason="tainted context and content not user-authorized")
                         plan.append((tc, digest, ("deny", frozen), args))
                         continue
+                    _note_write_decision(
+                        tool=name,
+                        # A tainted write that got here passed A+ rule 2: the user asked
+                        # for it AND the content is substantially their own words. That is
+                        # an authorized write, not a violation.
+                        decision=("confirmed" if _tainted and user_authorized else "allowed"),
+                        context_tainted=_tainted, user_authorized=user_authorized,
+                        audit_key=_akey, reason=None)
                 else:
                     # No gate module yet: fall back to the legacy taint rule (deny writes in a
                     # tainted turn) so the safety property holds before Agent G lands.
@@ -1274,8 +1329,17 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     if not tool_allowed(side_effect="write",
                                         context_tainted=state.get("context_tainted", False),
                                         tool_name=name):
+                        _note_write_decision(
+                            tool=name, decision="denied_forbidden", context_tainted=_tainted,
+                            user_authorized=False, audit_key=_akey,
+                            reason="memory gate unavailable: plain guardrail refused")
                         plan.append((tc, digest, ("deny", ""), args))
                         continue
+                    # Passed the plain guardrail, which only lets an UNTAINTED write
+                    # through (allow_tainted_memory defaults to False here).
+                    _note_write_decision(
+                        tool=name, decision="allowed", context_tainted=_tainted,
+                        user_authorized=False, audit_key=_akey, reason=None)
             plan.append((tc, digest, "run", args))
 
         async def _run(name, args, digest, timeout, is_write):
@@ -1294,6 +1358,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                         tool=name, params=inv_params, version=version)
             call_args = dict(args)
             call_args["idempotency_key"] = inv.idempotency_key
+            if is_write:
+                # Stamped BEFORE the call, so a write that hangs or raises still leaves
+                # an audit trail showing the policy let it through. This marks the gate
+                # crossing, not a successful write.
+                _note_write_dispatch(f"{name}:{digest}")
             from core.tool_system import ToolResult
             t_call = time.monotonic()
             try:

@@ -2563,6 +2563,86 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
     return build_execution_plan_node
 
 
+# --- canary write audit (legacy arch) ---------------------------------------
+# SHADOW MODE. This classifies what legacy's write policy did; it never changes
+# it. legacy passes allow_tainted_memory=True, so a tainted `remember` is let
+# through — that behaviour is deliberate and stays exactly as it is. The audit
+# exists because the control pool would otherwise report a clean security record
+# for turns in which a tainted, unauthorized write actually executed, and a
+# control pool that cannot show its own risk cannot anchor an A/B.
+try:
+    from core.turn_observations import (
+        note_write_decision as _tobs_note_write_decision,
+        note_write_dispatch as _tobs_note_write_dispatch,
+        register_write_auditor as _tobs_register_write_auditor,
+    )
+    _tobs_register_write_auditor("legacy")
+except Exception:  # pragma: no cover - import guard
+    _tobs_note_write_decision = None
+    _tobs_note_write_dispatch = None
+
+
+def _shadow_write_authorized(current_message: str, params: dict) -> bool:
+    """Run the SAME A+ authorization the fc loop uses, for classification only.
+
+    Sharing the primitive is the point: if legacy scored authorization with its own
+    rule, "authorized" would mean two different things in the two pools and the
+    comparison would be meaningless. Returns False on any failure — an unknown
+    authorization must not be able to excuse a tainted write.
+    """
+    try:
+        from core import memory_gate
+        content = str(params.get("content") or params.get("fact") or "")
+        if not content:
+            return False
+        return bool(memory_gate.write_authorization(current_message or "", content))
+    except Exception:
+        return False
+
+
+def _classify_legacy_write(*, tool_name: str, params: dict, context_tainted: bool,
+                           current_message: str, policy_allowed: bool) -> tuple:
+    """(security_decision, user_authorized, reason) for one legacy write call.
+
+    Derived from the policy branch that was actually taken plus the shadow
+    authorization — never from an exception message. legacy raises a bare
+    PermissionError for its refusal, and PermissionError is also what a filesystem
+    denial raises, so error text cannot tell a security event from an ordinary one.
+    """
+    authorized = _shadow_write_authorized(current_message, params) if context_tainted else False
+    if not context_tainted:
+        return "allowed", False, None
+    if policy_allowed:
+        if authorized:
+            # A+ rule 2 was satisfied: explicit cue AND the content is the user's own
+            # words. legacy would have allowed it regardless, but it is a legitimate
+            # write either way and must not be scored as a violation.
+            return "confirmed", True, "tainted but user-authorized (A+ rule 2)"
+        return ("legacy_override", False,
+                "tainted and unauthorized; allowed by legacy allow_tainted_memory")
+    if authorized:
+        return "denied_forbidden", True, "refused despite user authorization"
+    return "denied_tainted", False, "tainted and not user-authorized"
+
+
+def _note_legacy_write_decision(**kw) -> None:
+    if _tobs_note_write_decision is None:
+        return
+    try:
+        _tobs_note_write_decision(**kw)
+    except Exception:
+        pass
+
+
+def _note_legacy_write_dispatch(audit_key: str) -> None:
+    if _tobs_note_write_dispatch is None:
+        return
+    try:
+        _tobs_note_write_dispatch(audit_key)
+    except Exception:
+        pass
+
+
 def _make_execute_tool_node(tool_registry):
     """Create the execute_tool node.
 
@@ -2723,20 +2803,44 @@ def _make_execute_tool_node(tool_registry):
                 # Standard tool execution
                 tool = tool_registry.get(tool_name) if hasattr(tool_registry, "get") else None
                 side_effect = getattr(tool, "side_effect", "none")
-                if not tool_allowed(
+                _tainted = bool(state.get("context_tainted", False))
+                _policy_allowed = tool_allowed(
                     side_effect=side_effect,
-                    context_tainted=state.get("context_tainted", False),
+                    context_tainted=_tainted,
                     tool_name=tool_name,
                     # Legacy arch keeps pre-A+ behaviour (tainted remember allowed) until
                     # Phase 3; the guardrails default flipped to deny for the fc_loop arch.
                     allow_tainted_memory=True,
-                ):
+                )
+                if side_effect == "write":
+                    # Audit key = the idempotency key this call will carry, computed the
+                    # same way below. A denial never reaches that line, so the key is
+                    # built here from the same invocation identity.
+                    _inv_key = ToolInvocation.create(
+                        run_id=state.get("run_id", "legacy"), node_id="execute_tool",
+                        tool=tool_name, params=params,
+                        version=getattr(tool, "version", "1"),
+                    ).idempotency_key
+                    _decision, _authorized, _reason = _classify_legacy_write(
+                        tool_name=tool_name, params=params, context_tainted=_tainted,
+                        current_message=extracted_context.get('current_message', '') or '',
+                        policy_allowed=bool(_policy_allowed))
+                    _note_legacy_write_decision(
+                        tool=tool_name, decision=_decision, context_tainted=_tainted,
+                        user_authorized=_authorized, audit_key=_inv_key, reason=_reason)
+                else:
+                    _inv_key = None
+                if not _policy_allowed:
                     raise PermissionError("write tool denied because this turn contains untrusted content")
                 invocation = ToolInvocation.create(
                     run_id=state.get("run_id", "legacy"), node_id="execute_tool",
                     tool=tool_name, params=params, version=getattr(tool, "version", "1"),
                 )
                 params["idempotency_key"] = invocation.idempotency_key
+                if _inv_key is not None:
+                    # Before the call: the gate has been crossed. Says nothing about
+                    # whether the write lands.
+                    _note_legacy_write_dispatch(_inv_key)
                 result = await tool_registry.execute_tool(tool_name, **params)
                 raw_data = result.data if result.success else None
 
@@ -3572,6 +3676,26 @@ def _make_task_worker_node(tool_registry):
         idx = t.get("index", 0)
         tid = t.get("id")
         timeout = TOOL_TIMEOUTS.get(tool_name, TOOL_TIMEOUT_DEFAULT)
+        # The wave executor runs NO write gate. `remember` is excluded from
+        # PLANNABLE_TOOLS and the only _resolved bypass is hardcoded to web_search, so
+        # a write cannot reach here today. Audited anyway: "unreachable by inspection"
+        # and "observed not to happen" are different claims, and if a later edit makes
+        # it reachable this reports the ungated write instead of a clean 0.
+        try:
+            _wt = tool_registry.get(tool_name) if hasattr(tool_registry, "get") else None
+            if getattr(_wt, "side_effect", "none") == "write":
+                # The Send payload carries no context_tainted, so taint is NOT
+                # observable here — which is the point: gate_bypassed says the
+                # taint/authorization fields carry no evidence, so this lands in
+                # forbidden_write_executed rather than reading as a clean 0.
+                _note_legacy_write_decision(
+                    tool=tool_name, decision="legacy_override", context_tainted=False,
+                    user_authorized=False, audit_key=f"wave:{run_id}:{tid}:{idx}",
+                    gate_bypassed=True,
+                    reason="wave executor: dispatched with no write gate")
+                _note_legacy_write_dispatch(f"wave:{run_id}:{tid}:{idx}")
+        except Exception:
+            pass
         try:
             result = await asyncio.wait_for(
                 tool_registry.execute_tool(tool_name, **params), timeout)

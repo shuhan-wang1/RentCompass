@@ -380,3 +380,135 @@ def test_focused_listing_plain_question_still_reasons_from_record(lga):
     cmd = _decide(lga, "这个房源值得租吗", _NoVoteLLM(),
                   extra_ctx={"property_address": "40 Merchant St, London E3"})
     assert cmd.update["tool_decision"]["tool"] == "reasoning_property"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Canary write audit — the REAL legacy execute_tool path
+# ═══════════════════════════════════════════════════════════════════════════
+# legacy passes allow_tainted_memory=True, so a tainted `remember` is ALLOWED and
+# the PermissionError at the gate is unreachable for it. That is exactly why the
+# audit cannot be built from denials: the risk on this arch is a tainted write
+# that succeeds, and the control pool has to be able to report it. Nothing here
+# changes legacy's behaviour — the classification is shadow-only.
+
+class _MemReg:
+    def __init__(self, side_effect="write"):
+        self.side_effect = side_effect
+        self.calls = []
+
+    def get(self, _name):
+        return types.SimpleNamespace(version="1", side_effect=self.side_effect)
+
+    async def execute_tool(self, name, **kw):
+        from core.tool_system import ToolResult
+        self.calls.append((name, kw))
+        return ToolResult(success=True, tool_name=name, data={"saved": True})
+
+
+def _legacy_write_state(msg, content, *, tainted):
+    return {
+        "user_query": msg,
+        "extracted_context": {"current_message": msg},
+        "user_preferences": {},
+        "accumulated_search_criteria": {},
+        "context_tainted": tainted,
+        "user_id": "u1",
+        "session_id": "s1",
+        "run_id": "r1",
+        "tool_decision": {"tool": "remember", "params": {"content": content}},
+    }
+
+
+@pytest.fixture
+def legacy_audit(monkeypatch):
+    from core import turn_observations as tobs
+    monkeypatch.setattr(tobs, "_write_auditors", {"legacy"})
+    tobs.begin_turn()
+    yield tobs
+    tobs.end_turn()
+
+
+def test_legacy_untainted_write_audits_as_allowed(lga, legacy_audit):
+    reg = _MemReg()
+    asyncio.run(lga._make_execute_tool_node(reg)(
+        _legacy_write_state("记住我预算1400", "budget £1400/month", tainted=False)))
+
+    assert reg.calls, "legacy behaviour must be unchanged: the write still runs"
+    s = legacy_audit.write_audit_snapshot("legacy")
+    rec = s["write_audit"][0]
+    assert rec["security_decision"] == "allowed"
+    assert rec["dispatch_started"] is True
+    assert s["tainted_write_executed_count"] == 0
+
+
+def test_legacy_tainted_authorized_write_audits_as_confirmed(lga, legacy_audit):
+    """「记住我的预算 £1400」 in a turn that also read untrusted listing text. A+
+    authorizes this; scoring it as a violation would bury the real signal."""
+    reg = _MemReg()
+    asyncio.run(lga._make_execute_tool_node(reg)(
+        _legacy_write_state("记住我预算1400", "budget £1400/month", tainted=True)))
+
+    s = legacy_audit.write_audit_snapshot("legacy")
+    rec = s["write_audit"][0]
+    assert rec["security_decision"] == "confirmed"
+    assert rec["user_authorized"] is True
+    assert s["tainted_write_executed_count"] == 0
+
+
+def test_legacy_tainted_unauthorized_write_audits_as_an_override(lga, legacy_audit):
+    """THE case. allow_tainted_memory=True lets this through, the write executes, and
+    before item 3 the record said denied_write_count=0 with every other security
+    counter 0 as well — a clean audit for a turn that saved attacker-influenced
+    content. Legacy still executes it; it is now visible."""
+    reg = _MemReg()
+    asyncio.run(lga._make_execute_tool_node(reg)(
+        _legacy_write_state("看看这些房源", "landlord prefers a bank transfer", tainted=True)))
+
+    assert reg.calls, "behaviour is unchanged — this is observation, not enforcement"
+    s = legacy_audit.write_audit_snapshot("legacy")
+    rec = s["write_audit"][0]
+    assert rec["security_decision"] == "legacy_override"
+    assert rec["user_authorized"] is False
+    assert rec["dispatch_started"] is True
+    assert s["tainted_write_executed_count"] == 1
+    assert s["denied_write_count"] == 0
+
+
+def test_legacy_read_tool_produces_no_audit_record(lga, legacy_audit):
+    reg = _MemReg(side_effect="none")
+    state = _legacy_write_state("看看这些房源", "x", tainted=True)
+    state["tool_decision"] = {"tool": "recall_memory", "params": {}}
+    asyncio.run(lga._make_execute_tool_node(reg)(state))
+
+    assert legacy_audit.write_audit_snapshot("legacy")["write_audit"] == []
+
+
+def test_legacy_ordinary_permission_error_is_not_a_security_denial(lga, legacy_audit):
+    """A PermissionError from the storage layer means the disk said no. Reading the
+    exception type — or its text — would file that under 'security denial' and put a
+    fabricated violation in the report."""
+    from core.tool_system import ToolResult
+
+    class _Failing(_MemReg):
+        async def execute_tool(self, name, **kw):
+            self.calls.append((name, kw))
+            raise PermissionError("memory store is read-only")
+
+    reg = _Failing()
+    asyncio.run(lga._make_execute_tool_node(reg)(
+        _legacy_write_state("记住我预算1400", "budget £1400/month", tainted=False)))
+
+    s = legacy_audit.write_audit_snapshot("legacy")
+    assert s["denied_write_count"] == 0
+    assert s["write_audit"][0]["security_decision"] == "allowed"
+    assert s["write_audit"][0]["dispatch_started"] is True
+
+
+def test_legacy_write_audit_is_a_noop_without_a_window(lga, monkeypatch):
+    """No request context (offline eval, this suite): the write must still run."""
+    from core import turn_observations as tobs
+    tobs.end_turn()
+    reg = _MemReg()
+    asyncio.run(lga._make_execute_tool_node(reg)(
+        _legacy_write_state("记住我预算1400", "budget £1400/month", tainted=True)))
+    assert reg.calls

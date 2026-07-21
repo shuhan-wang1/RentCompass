@@ -86,11 +86,16 @@ def _install_search_agent(monkeypatch, marker="place"):
     monkeypatch.setattr(appmod, "handle_with_react_agent", _fake)
 
 
-def _install_fc_agent(monkeypatch, final_state):
+def _install_fc_agent(monkeypatch, final_state, write_decision=None):
     """Stub the agent to publish fc-side signals derived from a synthetic final_state — exactly
-    as the real handle_with_react_agent does after the graph runs."""
+    as the real handle_with_react_agent does after the graph runs.
+
+    ``write_decision`` is recorded mid-turn, where the graph's policy branch records
+    it, so the security counters come from the same place they do in production."""
     async def _fake(user_message, context, is_continuation, user_id, conversation_id,
                     request_id, ui_language="en", turn=None):
+        if write_decision:
+            appmod.turn_observations.note_write_decision(**write_decision)
         appmod._write_back_turn(
             user_id, conversation_id, user_message, "fc reply", [],
             turn_id=(turn or {}).get("id"), reply_language="en")
@@ -318,6 +323,7 @@ def test_canary_turn_record_fc_with_signals(client, user, monkeypatch, caplog):
     monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
     monkeypatch.setattr(appmod, "APP_CANDIDATE_SHA", "7db03e7")
     monkeypatch.setattr(appmod, "DEEPSEEK_STRICT", True)
+    monkeypatch.setattr(appmod.turn_observations, "_write_auditors", {"fc_loop", "legacy"})
     # Synthetic fc final_state: soft-wrapped turn, a partial search, a budget kill, a denied write.
     final_state = {
         "soft_wrapped": True,
@@ -328,7 +334,12 @@ def test_canary_turn_record_fc_with_signals(client, user, monkeypatch, caplog):
             {"turn": 1, "tool": "remember", "denied": True, "raw_data": None},
         ],
     }
-    _install_fc_agent(monkeypatch, final_state)
+    # The denial is recorded where the policy makes it, not inferred from the artifact
+    # above. That distinction is the whole of item 3: legacy emits no artifacts at all,
+    # so an artifact-derived count handed the control pool a permanent, fabricated 0.
+    _install_fc_agent(monkeypatch, final_state, write_decision={
+        "tool": "remember", "decision": "denied_tainted", "context_tainted": True,
+        "user_authorized": False, "audit_key": "remember:abc"})
 
     with caplog.at_level(logging.INFO, logger="canary"):
         _alex(client, user, "hi")
@@ -343,6 +354,8 @@ def test_canary_turn_record_fc_with_signals(client, user, monkeypatch, caplog):
     assert rec["partial"] is True
     assert rec["tool_budget_timeout"] is True
     assert rec["security"]["denied_write_count"] == 1
+    assert rec["security"]["tainted_write_executed_count"] == 0, \
+        "denied is not executed: a refusal is the control working, not a breach"
     assert rec["llm_calls"] == 3
     assert rec["tool_batches"] == 2  # distinct artifact turns {0, 1}
 
@@ -385,6 +398,7 @@ def test_response_serialization_failure_records_500_not_200(client, user, monkey
     # once any LLM client has been built, so leaving it ambient made this assertion
     # depend on which tests ran first — the count below flipped between null and 0.
     monkeypatch.setattr(appmod.turn_observations, "_observer_installed", True)
+    monkeypatch.setattr(appmod.turn_observations, "_write_auditors", {"fc_loop", "legacy"})
 
     class _Unserializable:
         pass
@@ -407,9 +421,13 @@ def test_response_serialization_failure_records_500_not_200(client, user, monkey
     assert rec["turn_outcome"] == "server_error"
     assert rec["endpoint"] == "alex"
     assert rec["agent_arch"] == "fc_loop"
-    # The turn died at the boundary, so its own bookkeeping never ran: whether a write
-    # executed before the failure is genuinely unknown, and stays null.
-    assert rec["security"]["forbidden_write_executed_count"] is None
+    # The write audit is accumulated out-of-band at the policy decision point, so it
+    # survives the boundary failure exactly the way the provider counter below does:
+    # "no write decision was recorded" now means no write ever reached the gate.
+    # Before item 3 this asserted None, because the only source was a final_state the
+    # failure had already destroyed.
+    assert rec["security"]["forbidden_write_executed_count"] == 0
+    assert rec["security"]["tainted_write_executed_count"] == 0
     # Provider errors are the exception, and that asymmetry is the point of Layer B.
     # They are accumulated out-of-band as each LLM call happens, not derived from a
     # final_state that no longer exists — so this 0 is a real observation ("every call
@@ -489,8 +507,38 @@ def test_build_fc_signals_robust_to_junk(monkeypatch):
     sig = appmod._build_fc_signals({"tool_artifacts": "not-a-list"})
     assert sig["partial"] is False
     assert sig["tool_budget_timeout"] is False
-    assert sig["security"]["denied_write_count"] == 0
     assert sig["tool_batches"] == 0
+
+
+def test_build_fc_signals_reports_null_security_without_instrumentation(monkeypatch):
+    """Null, not 0. A 0 here would claim "the write audit ran and found nothing",
+    which is the fabricated observation item 3 removed.
+
+    _write_auditors is pinned rather than left ambient: it is a module-level global,
+    so whether an earlier test imported an arch module decided the answer and the
+    assertion flipped between null and 0 depending on run order.
+    """
+    monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
+    monkeypatch.setattr(appmod.turn_observations, "_write_auditors", set())
+    sig = appmod._build_fc_signals({"tool_artifacts": "not-a-list"})
+    assert sig["security"]["denied_write_count"] is None
+    assert sig["security"]["tainted_write_executed_count"] is None
+    assert sig["security"]["forbidden_write_executed_count"] is None
+
+
+def test_a_denied_artifact_alone_no_longer_produces_a_security_count(monkeypatch):
+    """Pins where the count comes from. The artifact says a write was denied, but no
+    policy decision was recorded — on legacy, which emits no artifacts at all, the old
+    artifact-derived path is what made every turn report a clean audit it never ran."""
+    monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
+    monkeypatch.setattr(appmod.turn_observations, "_write_auditors", {"fc_loop"})
+    appmod.turn_observations.begin_turn()
+    try:
+        sig = appmod._build_fc_signals({"tool_artifacts": [
+            {"turn": 1, "tool": "remember", "denied": True, "raw_data": None}]})
+        assert sig["security"]["denied_write_count"] == 0
+    finally:
+        appmod.turn_observations.end_turn()
 
 
 # ---------------------------------------------------------------------------

@@ -45,6 +45,13 @@ _turn_obs: contextvars.ContextVar = contextvars.ContextVar("canary_turn_obs", de
 _observer_installed = False
 
 
+# Arches whose tool-execution node carries the write-audit instrumentation. Set at
+# import of the arch module. This proves the instrumented FILE is loaded in this
+# process; it does not by itself prove the write branch ran, which is why the audit
+# records themselves are what produce a count (see write_audit_snapshot).
+_write_auditors: set = set()
+
+
 def observer_installed() -> bool:
     return _observer_installed
 
@@ -52,6 +59,17 @@ def observer_installed() -> bool:
 def _mark_observer_installed() -> None:
     global _observer_installed
     _observer_installed = True
+
+
+def register_write_auditor(arch: str) -> None:
+    """Declare that ``arch``'s tool-execution path records write decisions.
+
+    Called at import of the arch module. Without it, ``write_audit_snapshot``
+    reports null for every security counter — an arch whose instrumentation failed
+    to load must HOLD the gate, never report a clean 0 derived from the absence of
+    records it was never able to write.
+    """
+    _write_auditors.add(arch)
 
 
 def begin_turn() -> Dict[str, Any]:
@@ -77,6 +95,9 @@ def begin_turn() -> Dict[str, Any]:
         # llm_usage_status exists: a call whose tokens we failed to observe is not
         # a call that cost nothing.
         "llm_usage_missing": 0,
+        # audit_key -> one write-audit record. Keyed so a tool_call that is
+        # classified once and dispatched later yields a SINGLE record.
+        "write_audit": {},
     }
     _turn_obs.set(obs)
     return obs
@@ -299,6 +320,141 @@ def note_llm_usage(run_id: Any, response: Any, *, configured_model: Optional[str
         "cache_read_tokens": usage.get("cache_read_tokens") or 0,
     })
     return True
+
+
+# --------------------------------------------------------------------------- #
+# Write-tool security audit                                                   #
+# --------------------------------------------------------------------------- #
+#
+# Two rules shape this section.
+#
+# 1. The decision is recorded AT THE POLICY DECISION POINT, as a structured value.
+#    It is never recovered by reading an exception message. A denial and an
+#    ordinary failure can raise the same class (legacy raises a bare
+#    PermissionError for its write refusal, and PermissionError also means "the
+#    filesystem said no"), so error text cannot separate a security event from an
+#    infrastructure one. Only the branch that made the decision knows which it was.
+#
+# 2. `dispatch_started` means the call CROSSED THE POLICY GATE and entered the
+#    tool-call boundary. It does NOT mean the write landed. A write that was
+#    dispatched and then timed out, raised, or was rolled back is still a write the
+#    policy let through, which is the property being audited. The canary contract
+#    spells the derived counters `*_executed_count`; "executed" there carries this
+#    same meaning and nothing stronger.
+
+# security_decision values.
+DECISION_ALLOWED = "allowed"                    # untainted context; ordinary write
+DECISION_CONFIRMED = "confirmed"                # tainted BUT user-authorized (A+ rule 2)
+DECISION_DENIED_TAINTED = "denied_tainted"      # tainted + unauthorized -> refused
+DECISION_DENIED_RECALL = "denied_recall"        # pure recall turn: nothing new to save
+DECISION_DENIED_FORBIDDEN = "denied_forbidden"  # blocked by the plain guardrail
+DECISION_LEGACY_OVERRIDE = "legacy_override"    # legacy's allow_tainted_memory=True
+
+_DENIED_DECISIONS = frozenset({DECISION_DENIED_TAINTED, DECISION_DENIED_RECALL,
+                               DECISION_DENIED_FORBIDDEN})
+
+VALID_DECISIONS = frozenset({DECISION_ALLOWED, DECISION_CONFIRMED,
+                             DECISION_LEGACY_OVERRIDE}) | _DENIED_DECISIONS
+
+AUDIT_INSTRUMENTED = "instrumented"
+AUDIT_NOT_INSTRUMENTED = "not_instrumented"
+
+
+def note_write_decision(*, tool: str, decision: str, context_tainted: bool,
+                        user_authorized: bool, audit_key: str,
+                        reason: Optional[str] = None,
+                        gate_bypassed: bool = False) -> bool:
+    """Record the policy outcome for one write-tool call. Returns True if stored.
+
+    Idempotent per ``audit_key`` (the tool_call id or idempotency key): the first
+    decision for a key wins, so a re-planned or retried call cannot inflate the
+    turn's security counts.
+    """
+    obs = _turn_obs.get()
+    if obs is None:
+        return False
+    audit = obs.setdefault("write_audit", {})
+    if audit_key in audit:
+        return False
+    audit[audit_key] = {
+        "tool": tool,
+        # Stored VERBATIM, never validated against VALID_DECISIONS here. A producer
+        # bug must surface as an unrecognised value in the record, not get quietly
+        # coerced into a benign "allowed" that reads clean.
+        "security_decision": decision,
+        "context_tainted": bool(context_tainted),
+        "user_authorized": bool(user_authorized),
+        "dispatch_started": False,
+        # No policy gate ran on this path at all. Distinct from "the gate ran and
+        # said no": there is no decision to trust, so the taint/authorization fields
+        # carry no evidence and the counters must not read this as clean.
+        "gate_bypassed": bool(gate_bypassed),
+        "reason": reason,
+    }
+    return True
+
+
+def note_write_dispatch(audit_key: str) -> bool:
+    """Mark that a recorded write call crossed the gate and entered the tool call.
+
+    Called immediately BEFORE the dispatch, so a tool that hangs or crashes still
+    leaves the audit trail showing the policy let it through.
+    """
+    obs = _turn_obs.get()
+    if obs is None:
+        return False
+    rec = (obs.get("write_audit") or {}).get(audit_key)
+    if rec is None:
+        return False
+    rec["dispatch_started"] = True
+    return True
+
+
+def write_audit_snapshot(arch: Optional[str]) -> Dict[str, Any]:
+    """Derived security counters for this turn, or all-None when uninstrumented.
+
+    ``denied_write_count``
+        writes the policy refused. Safe events; they are not violations.
+
+    ``tainted_write_executed_count``
+        a write that crossed the gate while the context was tainted AND the user
+        had not authorized the content. The rule is STRUCTURAL, not keyed on
+        ``legacy_override`` — on legacy that decision is exactly how this arises,
+        but an fc_loop regression that let the same write through must count too,
+        or the pool that regressed would be the one reporting clean.
+
+        A tainted write the user DID authorize (A+ rule 2: an explicit cue plus
+        content that is substantially the user's own words) is a legitimate write
+        and is deliberately NOT counted. Counting it would make "记住我的预算
+        £1400" a zero-tolerance violation.
+
+    ``forbidden_write_executed_count``
+        a write that reached dispatch without a gate's permission — either the gate
+        DENIED it and it ran anyway, or no gate ran on that path at all
+        (``gate_bypassed``). Both should be unreachable; they are counted precisely
+        because an invariant that is never checked is an invariant that is not
+        enforced. An ungated dispatch cannot be scored as tainted-or-not, so it is
+        never quietly folded into the tainted counter as a 0.
+    """
+    obs = _turn_obs.get()
+    if obs is None or arch not in _write_auditors:
+        return {"denied_write_count": None,
+                "tainted_write_executed_count": None,
+                "forbidden_write_executed_count": None,
+                "write_audit_status": AUDIT_NOT_INSTRUMENTED,
+                "write_audit": None}
+    records = list((obs.get("write_audit") or {}).values())
+    denied = sum(1 for r in records if r["security_decision"] in _DENIED_DECISIONS)
+    tainted_exec = sum(1 for r in records if r["dispatch_started"]
+                       and r["context_tainted"] and not r["user_authorized"])
+    forbidden_exec = sum(1 for r in records if r["dispatch_started"]
+                         and (r["security_decision"] in _DENIED_DECISIONS
+                              or r.get("gate_bypassed")))
+    return {"denied_write_count": denied,
+            "tainted_write_executed_count": tainted_exec,
+            "forbidden_write_executed_count": forbidden_exec,
+            "write_audit_status": AUDIT_INSTRUMENTED,
+            "write_audit": records}
 
 
 # --------------------------------------------------------------------------- #

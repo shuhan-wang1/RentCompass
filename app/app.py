@@ -357,9 +357,39 @@ from core.canary_telemetry import (  # noqa: E402
 )
 from core import turn_observations  # noqa: E402
 
-# Tools with side_effect="write" (see core/tools/memory_tools.py). Only a denial on
-# one of these is a security event; a denial on a read is a budget event.
-_WRITE_TOOLS = {"remember"}
+
+def _load_write_audit_instrumentation() -> None:
+    """Import the active arch's tool-execution module at startup.
+
+    The write audit registers itself at import of the module that owns the policy
+    decision point. legacy's module is already imported above; fc_loop's
+    (``core.agent_loop``) loads lazily on first use, which would leave the very first
+    fc turn reporting ``not_instrumented`` — a HOLD caused by import timing rather
+    than by anything about the turn. Importing it here makes registration a property
+    of the process instead of of request ordering.
+    """
+    if AGENT_ARCH != "fc_loop":
+        return
+    try:
+        import core.agent_loop  # noqa: F401
+    except Exception:
+        # Left unregistered deliberately: the counters stay null and the gate HOLDs,
+        # which is the right outcome when the instrumented module will not load.
+        logger.warning("canary: fc_loop write-audit instrumentation failed to import")
+
+
+_load_write_audit_instrumentation()
+
+
+def _crashed_turn_observations() -> dict:
+    """Everything the out-of-band accumulators caught before the turn died.
+
+    Merged into one dict because ``unknown_turn_signals`` overlays a flat mapping;
+    the write-audit keys and the LLM keys do not collide.
+    """
+    merged = dict(turn_observations.snapshot())
+    merged.update(turn_observations.write_audit_snapshot(AGENT_ARCH))
+    return merged
 
 
 def _build_fc_signals(final_state) -> dict:
@@ -380,19 +410,14 @@ def _build_fc_signals(final_state) -> dict:
         isinstance(a, dict) and (a.get("timed_out") or a.get("abandoned")
                                  or a.get("outcome_unknown")) for a in artifacts)
     # --- security (v2: structured; denied != executed) ------------------------
-    # BUGFIX: v1 counted EVERY denied artifact as a denied *write*. The turn-budget
-    # denial at agent_loop._dispatch applies to all tools including READS, so a turn
-    # that merely ran out of runway reported denied_writes > 0 with zero security
-    # events — which the report scored as a non-clean audit. Count writes only.
-    denied_writes = sum(1 for a in artifacts
-                        if isinstance(a, dict) and a.get("denied")
-                        and a.get("tool") in _WRITE_TOOLS)
-    # A write whose own wait_for fired: it was NOT refused, and it may still have
-    # landed in the background — i.e. a write executed with an unobservable outcome.
-    unknown_writes = sum(1 for a in artifacts
-                         if isinstance(a, dict) and a.get("outcome_unknown")
-                         and a.get("tool") in _WRITE_TOOLS)
+    # Read from the write audit, NOT from tool_artifacts. Artifacts cannot carry this
+    # signal: legacy produces none at all, so deriving counts from them handed the
+    # control pool a fabricated 0 on every turn — a security audit that reads clean
+    # because nothing was ever looked at. The audit records the decision at the
+    # policy branch on BOTH arches, and reports null when its instrumentation is
+    # absent rather than inferring 0 from an empty list.
     _obs = turn_observations.snapshot()
+    _audit = turn_observations.write_audit_snapshot(AGENT_ARCH)
     is_fc = AGENT_ARCH == "fc_loop"
     llm_calls = final_state.get("loop_turn") if is_fc else None
     tool_batches = (len({a.get("turn") for a in artifacts if isinstance(a, dict)})
@@ -402,13 +427,16 @@ def _build_fc_signals(final_state) -> dict:
         "partial": bool(partial),
         "tool_budget_timeout": bool(tool_budget_timeout),
         "security": {
-            "denied_write_count": denied_writes,
-            # Classifying an executed bad write as *tainted* vs *forbidden* needs the
-            # denial reason, which the artifact does not carry today (see
-            # agent_loop._artifact). Until agent_loop stamps a reason these stay None,
-            # which makes the report HOLD rather than report a fabricated 0.
-            "tainted_write_executed_count": None if unknown_writes else 0,
-            "forbidden_write_executed_count": None if unknown_writes else 0,
+            "denied_write_count": _audit["denied_write_count"],
+            # A write that crossed the gate while tainted and unauthorized. A tainted
+            # write the user DID authorize (A+ rule 2) is legitimate and excluded —
+            # "记住我的预算 £1400" must not read as a zero-tolerance violation.
+            "tainted_write_executed_count": _audit["tainted_write_executed_count"],
+            # A denied write that reached dispatch anyway: an invariant breach.
+            "forbidden_write_executed_count": _audit["forbidden_write_executed_count"],
+            # The structured decisions behind the counters, so a HOLD can be
+            # diagnosed without re-running the turn.
+            "write_audit": _audit["write_audit"],
         },
         # None until agent_loop surfaces them (see the plumbing notes in the PR):
         # a null holds the gate; a 0 would falsely assert "observed, none seen".
@@ -458,7 +486,7 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
             turn_latency_ms=turn_latency_ms,
             # An unobserved turn still reports whatever the out-of-band accumulator
             # caught before it died (see core.turn_observations); the rest stays null.
-            signals=(unknown_turn_signals(turn_observations.snapshot())
+            signals=(unknown_turn_signals(_crashed_turn_observations())
                      if fc_signals is None else fc_signals),
         )
         _canary_logger.info(json.dumps(record, ensure_ascii=False, default=str))

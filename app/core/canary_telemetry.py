@@ -126,7 +126,10 @@ def search_direct_signals() -> Dict[str, Any]:
         "soft_wrapped": False, "partial": False, "tool_budget_timeout": False,
         "security": {"denied_write_count": 0,
                      "tainted_write_executed_count": 0,
-                     "forbidden_write_executed_count": 0},
+                     "forbidden_write_executed_count": 0,
+                     # Empty, not null: this endpoint dispatches no tools at all, so
+                     # "no write decisions were made" is a fact about it.
+                     "write_audit": []},
         "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0,
         # Not "we failed to measure" — this endpoint provably makes no LLM call, so
         # there is no spend to miss. That is why the status enum has a value for it
@@ -159,7 +162,8 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
         # Unobservable — a write may already have executed before the crash.
         "security": {"denied_write_count": None,
                      "tainted_write_executed_count": None,
-                     "forbidden_write_executed_count": None},
+                     "forbidden_write_executed_count": None,
+                     "write_audit": None},
         # Unobservable — partial output may already have been flushed.
         "dsml_blocked": None, "dsml_leak": None,
         # Observed out-of-band when an accumulator was running; null otherwise.
@@ -170,6 +174,14 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
     for field in ("provider_schema_400_count", "llm_usage_status"):
         if observed and observed.get(field) is not None:
             sig[field] = observed[field]
+    # The write audit is accumulated at the policy decision point, so a turn that
+    # crashed AFTER dispatching a tainted write still reports it. This is the case
+    # the docstring above warns about, and the only one that turns it from a
+    # permanent HOLD into an answer.
+    for field in ("denied_write_count", "tainted_write_executed_count",
+                  "forbidden_write_executed_count", "write_audit"):
+        if observed and observed.get(field) is not None:
+            sig["security"][field] = observed[field]
     # A crashed turn's completed calls still cost real money; report what was
     # observed rather than dropping the turn out of the cost denominator.
     if observed and observed.get("llm_usage_calls"):
@@ -248,6 +260,36 @@ def build_canary_turn_record(
         """Observed counter: absent -> 0 is WRONG, so absent stays None."""
         return _int_or_none(v)
 
+    def _audit_records(v):
+        """Per-decision write-audit detail, bounded and content-free.
+
+        Only the policy-relevant fields are copied. The write's CONTENT is
+        deliberately never included: this log is read by whoever is diagnosing a
+        HOLD, and the tainted case is precisely the one where the content may be
+        attacker-supplied text that nobody asked to have echoed into an ops log.
+
+        ``dispatch_started`` is the honest name for what was observed — the call
+        crossed the policy gate. The counters above spell it ``*_executed_count``
+        for contract continuity; both mean the gate crossing, never "the write
+        landed in the database".
+        """
+        if not isinstance(v, list):
+            return None
+        out = []
+        for r in v[:20]:  # bounded: a retry storm must not grow the record unboundedly
+            if not isinstance(r, dict):
+                continue
+            out.append({
+                "tool": r.get("tool"),
+                "security_decision": r.get("security_decision"),
+                "context_tainted": bool(r.get("context_tainted")),
+                "user_authorized": bool(r.get("user_authorized")),
+                "dispatch_started": bool(r.get("dispatch_started")),
+                "gate_bypassed": bool(r.get("gate_bypassed")),
+                "reason": r.get("reason"),
+            })
+        return out
+
     return {
         "event": EVENT_NAME,
         "telemetry_schema_version": SCHEMA_VERSION,
@@ -271,6 +313,11 @@ def build_canary_turn_record(
             "denied_write_count": _count(sec_in.get("denied_write_count")),
             "tainted_write_executed_count": _count(sec_in.get("tainted_write_executed_count")),
             "forbidden_write_executed_count": _count(sec_in.get("forbidden_write_executed_count")),
+            # The structured decisions the counters are derived from. Present so a
+            # HOLD can be diagnosed without re-running the turn: "1 tainted write
+            # executed" is actionable only once you can see which tool, on which
+            # branch, and why. Not gated on — the counters above are.
+            "write_audit": _audit_records(sec_in.get("write_audit")),
         },
         # --- tool-markup: blocked (safe) vs leaked (zero-tolerance) ----------
         "dsml_blocked": _count(sig.get("dsml_blocked")),

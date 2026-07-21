@@ -215,6 +215,9 @@ print(f"[STARTUP] Canary: agent_arch={AGENT_ARCH} candidate_sha={APP_CANDIDATE_S
 # handler to "canary" to ship these. Each completed turn emits exactly ONE JSON line via
 # _emit_canary_turn(); the event name lives inside the JSON ("event": "canary.turn").
 _canary_logger = logging.getLogger("canary")
+# General app logger. Separate from _canary_logger, which has its own JSONL sink and
+# must carry nothing but canary records.
+logger = logging.getLogger("app")
 
 # Marker attribute set on the FileHandler we attach so re-invocation (tests reloading the
 # module, or re-calling _wire_canary_sink after monkeypatching env) can find + replace OUR
@@ -356,6 +359,7 @@ from core.canary_telemetry import (  # noqa: E402
     search_direct_signals, unknown_turn_signals,
 )
 from core import turn_observations  # noqa: E402
+from core import dsml_guard  # noqa: E402
 
 
 def _load_write_audit_instrumentation() -> None:
@@ -381,6 +385,49 @@ def _load_write_audit_instrumentation() -> None:
 _load_write_audit_instrumentation()
 
 
+def _dsml_boundary_check(response, payload):
+    """Tool-markup guard, LAYER 2: the last look before the bytes leave.
+
+    Scans the SERIALIZED body, which is how it reaches every nested user-visible
+    string — card text, clarifying questions, listing descriptions — without
+    knowing the payload's shape. Shape knowledge is exactly what goes stale when
+    somebody adds a field, and a guard that silently stops covering new fields is
+    worse than none.
+
+    A hit is recorded as ``dsml_leak``, NOT ``dsml_blocked``. Layer 1 runs before
+    persistence and is the real control; if markup reaches here, layer 1's
+    detection is wrong. Scoring this as a successful block would let the gate pass
+    a release whose primary control is broken. Nothing ships either way — the body
+    is replaced — but the counter says the design failed, not that it worked.
+    """
+    try:
+        if not dsml_guard.scan_serialized(response.get_data()):
+            return response
+        turn_observations.note_dsml_leak()
+        # No raw text in the log line; see the layer-1 note.
+        logger.error("canary: tool-call markup reached the response boundary — "
+                     "layer 1 missed it (arch=%s)", AGENT_ARCH)
+        safe = dict(payload or {})
+        safe["message"] = dsml_guard.fallback_text(getattr(g, "reply_language", None))
+        safe["response_type"] = "error"
+        # Drop every other carrier of model text. Rebuilding from a whitelist rather
+        # than editing in place is the only version that stays correct when a new
+        # field is added: an unknown key is dropped, not shipped unchecked.
+        safe = {k: v for k, v in safe.items()
+                if k in ("message", "response_type", "conversation_id", "turn_id")}
+        replaced = jsonify(safe)
+        for k, v in response.headers.items():
+            if k.lower().startswith("x-"):
+                replaced.headers[k] = v
+        return replaced
+    except Exception:
+        # The guard must never be the reason a request fails. A scan that raises
+        # leaves the original response alone; the counter stays 0 and the turn is
+        # reported as it was.
+        logger.exception("canary: dsml boundary check failed")
+        return response
+
+
 def _crashed_turn_observations() -> dict:
     """Everything the out-of-band accumulators caught before the turn died.
 
@@ -389,6 +436,7 @@ def _crashed_turn_observations() -> dict:
     """
     merged = dict(turn_observations.snapshot())
     merged.update(turn_observations.write_audit_snapshot(AGENT_ARCH))
+    merged.update(turn_observations.dsml_snapshot())
     return merged
 
 
@@ -418,6 +466,7 @@ def _build_fc_signals(final_state) -> dict:
     # absent rather than inferring 0 from an empty list.
     _obs = turn_observations.snapshot()
     _audit = turn_observations.write_audit_snapshot(AGENT_ARCH)
+    _dsml = turn_observations.dsml_snapshot()
     is_fc = AGENT_ARCH == "fc_loop"
     llm_calls = final_state.get("loop_turn") if is_fc else None
     tool_batches = (len({a.get("turn") for a in artifacts if isinstance(a, dict)})
@@ -438,10 +487,12 @@ def _build_fc_signals(final_state) -> dict:
             # diagnosed without re-running the turn.
             "write_audit": _audit["write_audit"],
         },
-        # None until agent_loop surfaces them (see the plumbing notes in the PR):
-        # a null holds the gate; a 0 would falsely assert "observed, none seen".
-        "dsml_blocked": final_state.get("dsml_blocked"),
-        "dsml_leak": final_state.get("dsml_leak"),
+        # From the accumulator, NOT final_state: the guards that produce these run at
+        # the response boundary and in the wrap-up fallback, both outside anything a
+        # graph channel can carry — and one of them fires on turns where final_state
+        # no longer exists.
+        "dsml_blocked": _dsml["dsml_blocked"],
+        "dsml_leak": _dsml["dsml_leak"],
         # NOT read from final_state: nothing writes that key, and a graph channel
         # cannot carry a signal off a turn that never returned one. The accumulator
         # is arch-agnostic (the observer sits at ModelRouter.create, which both
@@ -473,6 +524,16 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
     instrumentation blocks promotion instead of silently reading as clean.
     """
     try:
+        signals = (unknown_turn_signals(_crashed_turn_observations())
+                   if fc_signals is None else dict(fc_signals))
+        # Re-read the tool-markup counters HERE rather than trusting the snapshot
+        # inside fc_signals. _build_fc_signals runs when the graph returns, which is
+        # before layer 1 sanitizes the response and well before the boundary scan —
+        # so a count taken there misses every block the guards actually made and the
+        # record reports 0 for a turn where a control fired.
+        _dsml_now = turn_observations.dsml_snapshot()
+        if _dsml_now["dsml_blocked"] is not None:
+            signals.update(_dsml_now)
         record = build_canary_turn_record(
             endpoint=endpoint,
             agent_arch=AGENT_ARCH,
@@ -484,10 +545,7 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
             http_status=http_status,
             turn_outcome=turn_outcome,
             turn_latency_ms=turn_latency_ms,
-            # An unobserved turn still reports whatever the out-of-band accumulator
-            # caught before it died (see core.turn_observations); the rest stays null.
-            signals=(unknown_turn_signals(_crashed_turn_observations())
-                     if fc_signals is None else fc_signals),
+            signals=signals,
         )
         _canary_logger.info(json.dumps(record, ensure_ascii=False, default=str))
         # One record per request. Mark it so a later failure at the response
@@ -1147,6 +1205,7 @@ async def api_alex():
     # False, so exactly one record is written and it says server_error.
     response = jsonify(payload)
     response.headers["X-Request-Id"] = request_id
+    response = _dsml_boundary_check(response, payload)
 
     # Canary: one structured record per turn (both archs; fc signals default when absent).
     # http_status is 200 here because the response above was built successfully.
@@ -1945,6 +2004,27 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     tool_data = final_state.get('tool_data', {})
     recommendations = tool_data.get('recommendations')
 
+    # ── Tool-markup guard, LAYER 1: before anything persists this ──
+    # Placement is the whole point. response_text goes into the conversation DB
+    # (_write_back_turn, just below) and into auto-memory (remember_turn_async)
+    # before any payload exists, so a guard at the HTTP boundary would still let raw
+    # control markup land in storage — where it is replayed into the next turn's
+    # context and may be acted on. Both arches converge here, so one scan covers
+    # fc_loop and legacy without either graph having to cooperate.
+    _reply_lang = extracted_context.get('reply_language', 'en')
+    try:
+        g.reply_language = _reply_lang  # so the boundary fallback matches the conversation
+    except Exception:
+        pass
+    response_text, _dsml_hit = dsml_guard.sanitize_user_text(
+        response_text, reply_language=_reply_lang)
+    if _dsml_hit:
+        turn_observations.note_dsml_blocked()
+        # No raw text in the log line: it is attacker-reachable content, and an ops
+        # log that echoes it is one more surface it can be replayed from.
+        logger.warning("canary: tool-call markup blocked before persistence (arch=%s)",
+                       AGENT_ARCH)
+
     print(f"[LangGraph] Response Type: {response_type}")
 
     # ── Phase 3: build the results context + atomic write-back of L2 state ──
@@ -2255,6 +2335,12 @@ async def api_search_direct():
     else:
         _reconcile_agent_arch(user_id, conversation_id, conv)
 
+    # Open an observation window here too. This path makes no LLM call, so
+    # search_direct_signals() can assert provable zeros for everything else — but the
+    # boundary scan still runs, and without a window note_dsml_leak() would be a
+    # silent no-op, so a leak here would report 0. A control whose alarm is
+    # disconnected on one endpoint is not a control on that endpoint.
+    turn_observations.begin_turn()
     _turn_started_ms = time.perf_counter()
     g.canary_turn_started = _turn_started_ms
     g.canary_conversation_id = conversation_id
@@ -2393,6 +2479,9 @@ async def api_search_direct():
     # record is the one and only record, and it reports the 500 the user actually got.
     response = jsonify(payload)
     response.headers["X-Request-Id"] = request_id
+    # This path is LLM-free, so a hit here would be genuinely surprising — which is
+    # the reason to check rather than to assume.
+    response = _dsml_boundary_check(response, payload)
 
     # Canary: this deterministic form path bypasses the LLM graph, so the fc-side signals
     # never apply — the record carries the process constants + arch and the fc fields default.

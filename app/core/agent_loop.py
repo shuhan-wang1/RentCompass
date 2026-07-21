@@ -301,6 +301,32 @@ def _note_write_dispatch(audit_key: str) -> None:
         pass
 
 
+def _dsml_contains_markup(text) -> bool:
+    """Shared detection, so the in-graph guard and the response boundary cannot
+    disagree about what counts as tool-call markup.
+
+    Returns False if the guard cannot be imported — i.e. this layer fails OPEN.
+    That is the deliberate choice for THIS call site and not a general policy:
+    answering True would replace every reply in the process with the fallback. The
+    closed side of the pair is layer 1 in app.py, which imports dsml_guard at module
+    scope, so the same failure stops the process from starting at all rather than
+    letting it serve unguarded.
+    """
+    try:
+        from core.dsml_guard import contains_markup
+        return contains_markup(text)
+    except Exception:
+        return False
+
+
+def _note_dsml_blocked() -> None:
+    try:
+        from core.turn_observations import note_dsml_blocked
+        note_dsml_blocked()
+    except Exception:
+        pass
+
+
 def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
               success: bool = True, error: Optional[str] = None, *,
               timed_out: bool = False, denied: bool = False,
@@ -996,9 +1022,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # DSML markup surfaced verbatim as a user-facing answer in live gates. Any
                 # tool-call-shaped output is not an answer: fall back to the deterministic
                 # artifact rendering.
-                if (getattr(resp, "tool_calls", None)
-                        or "DSML" in text or "tool_calls>" in text
-                        or "<|invoke" in text or "｜invoke" in text):
+                # Detection now comes from core.dsml_guard. The literal checks that used
+                # to live here missed full-width and zero-width variants, and
+                # `"DSML" in text` fired on the bare word in ordinary prose. The block
+                # itself always worked; what was missing is that it was never COUNTED,
+                # so a turn where this control fired reported dsml_blocked=0 and was
+                # indistinguishable from a turn that never needed it.
+                if getattr(resp, "tool_calls", None) or _dsml_contains_markup(text):
+                    _note_dsml_blocked()
                     raise ValueError("wrap-up response leaked tool-call markup")
                 wrap_msg = resp
             except Exception as e:  # LLM error / leak -> deterministic fallback

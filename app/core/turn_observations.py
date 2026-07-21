@@ -98,6 +98,11 @@ def begin_turn() -> Dict[str, Any]:
         # audit_key -> one write-audit record. Keyed so a tool_call that is
         # classified once and dispatched later yields a SINGLE record.
         "write_audit": {},
+        # Tool-call markup caught before it could reach a user-visible surface.
+        "dsml_blocked": 0,
+        # Markup that survived every in-band guard and was only stopped at the
+        # response boundary. Zero-tolerance: it means the primary control failed.
+        "dsml_leak": 0,
     }
     _turn_obs.set(obs)
     return obs
@@ -320,6 +325,54 @@ def note_llm_usage(run_id: Any, response: Any, *, configured_model: Optional[str
         "cache_read_tokens": usage.get("cache_read_tokens") or 0,
     })
     return True
+
+
+# --------------------------------------------------------------------------- #
+# Tool-markup (DSML) guard counters                                           #
+# --------------------------------------------------------------------------- #
+#
+# Counted here rather than on the graph state for the same reason as everything
+# else in this module: the guards run on paths that can end in a crash or a
+# response-boundary failure, and a block that is not counted is indistinguishable
+# from a turn that never needed one.
+
+def note_dsml_blocked() -> bool:
+    """One piece of tool-call markup stopped before any user-visible surface.
+
+    Deliberately counts turns' worth of blocks, not characters: the metric answers
+    "did a control fire", and the raw text is never recorded anywhere — it is
+    attacker-reachable content, and an ops log that echoes it is one more place it
+    gets replayed from.
+    """
+    obs = _turn_obs.get()
+    if obs is None:
+        return False
+    obs["dsml_blocked"] = obs.get("dsml_blocked", 0) + 1
+    return True
+
+
+def note_dsml_leak() -> bool:
+    """Markup that reached the serialized response body.
+
+    Recorded when only the boundary backstop caught it. That is a leak, not a
+    block: the in-band guard was supposed to have handled it, and scoring the
+    backstop as a success would let a release ship with its primary control
+    broken.
+    """
+    obs = _turn_obs.get()
+    if obs is None:
+        return False
+    obs["dsml_leak"] = obs.get("dsml_leak", 0) + 1
+    return True
+
+
+def dsml_snapshot() -> Dict[str, Any]:
+    """``dsml_blocked`` / ``dsml_leak`` for this turn, or null with no window."""
+    obs = _turn_obs.get()
+    if obs is None:
+        return {"dsml_blocked": None, "dsml_leak": None}
+    return {"dsml_blocked": int(obs.get("dsml_blocked", 0)),
+            "dsml_leak": int(obs.get("dsml_leak", 0))}
 
 
 # --------------------------------------------------------------------------- #

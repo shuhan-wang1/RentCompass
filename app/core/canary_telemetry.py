@@ -171,7 +171,8 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
         "llm_usage": None, "llm_usage_status": USAGE_NOT_INSTRUMENTED,
         "llm_calls": None, "tool_batches": None,
     }
-    for field in ("provider_schema_400_count", "llm_usage_status"):
+    for field in ("provider_schema_400_count", "llm_usage_status",
+                  "dsml_blocked", "dsml_leak"):
         if observed and observed.get(field) is not None:
             sig[field] = observed[field]
     # The write audit is accumulated at the policy decision point, so a turn that

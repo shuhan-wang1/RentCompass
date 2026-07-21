@@ -68,4 +68,18 @@ class ModelRouter:
             )
         except Exception:
             pass
+        # Canary observation. ALWAYS on, unlike the eval hook above: the canary gate
+        # is a production control, and an observer that only ran under
+        # RENTCOMPASS_EVAL would observe nothing in the very pool it is gating.
+        # This is the single construction point every LLM client in the process
+        # passes through — both arches, all call sites — so attaching here cannot be
+        # bypassed by the next call site somebody adds. If the import fails the
+        # observer is simply absent and turn_observations.snapshot() reports null,
+        # which HOLDS the gate; it never degrades to a fabricated zero.
+        try:
+            from core.turn_observations import install_observer
+
+            model = install_observer(model)
+        except Exception:
+            pass
         return model

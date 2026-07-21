@@ -119,32 +119,40 @@ def search_direct_signals() -> Dict[str, Any]:
     }
 
 
-def unknown_turn_signals() -> Dict[str, Any]:
+def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Signals for a turn whose outcome is NOT observable: an agent crash, or a
     request that died at the response boundary (5xx).
 
     Zeros would be FAIL-OPEN here, which an earlier revision of this module got
     wrong. The agent can dispatch `remember` (a write) and crash afterwards, so a
-    0 write count is an assumption, not an observation. Worse, a provider
-    strict-schema 400 is a plausible CAUSE of the crash, so reporting
-    provider_schema_400_count=0 would suppress exactly the signal the gate exists
-    to catch. Everything unobservable is therefore null -> the report HOLDs.
+    0 write count is an assumption, not an observation. Everything the turn's own
+    bookkeeping would have reported is therefore null -> the report HOLDs.
 
-    Layer B must stash the real provider status into a ContextVar BEFORE re-raising
-    so the boundary record can report an actual count instead of null.
+    ``observed`` carries the counters that were accumulated OUT-OF-BAND as the turn
+    ran (``core.turn_observations``), so they survive the crash that destroyed the
+    final_state. Only non-None values are overlaid: an accumulator that was never
+    installed reports None and the field stays null, exactly as if Layer B had not
+    landed. This is what closes the note that used to sit here — a provider
+    strict-schema 400 is a plausible CAUSE of the crash, so it is the one signal
+    that most needs to survive it.
     """
-    return {
+    sig = {
         # These are structural: no wrap-up ran, no partial artifact was produced.
         "soft_wrapped": False, "partial": False, "tool_budget_timeout": False,
         # Unobservable — a write may already have executed before the crash.
         "security": {"denied_write_count": None,
                      "tainted_write_executed_count": None,
                      "forbidden_write_executed_count": None},
-        # Unobservable — partial output may already have been flushed, and a
-        # provider 400 may itself be the crash cause.
-        "dsml_blocked": None, "dsml_leak": None, "provider_schema_400_count": None,
+        # Unobservable — partial output may already have been flushed.
+        "dsml_blocked": None, "dsml_leak": None,
+        # Observed out-of-band when an accumulator was running; null otherwise.
+        "provider_schema_400_count": None,
         "llm_usage": None, "llm_calls": None, "tool_batches": None,
     }
+    for field in ("provider_schema_400_count",):
+        if observed and observed.get(field) is not None:
+            sig[field] = observed[field]
+    return sig
 
 
 def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:

@@ -381,6 +381,10 @@ def test_response_serialization_failure_records_500_not_200(client, user, monkey
     """
     monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
     monkeypatch.setattr(appmod, "APP_CANDIDATE_SHA", "shaSER")
+    # Pin the observer state explicitly. It is a module-level global that stays True
+    # once any LLM client has been built, so leaving it ambient made this assertion
+    # depend on which tests ran first — the count below flipped between null and 0.
+    monkeypatch.setattr(appmod.turn_observations, "_observer_installed", True)
 
     class _Unserializable:
         pass
@@ -403,10 +407,15 @@ def test_response_serialization_failure_records_500_not_200(client, user, monkey
     assert rec["turn_outcome"] == "server_error"
     assert rec["endpoint"] == "alex"
     assert rec["agent_arch"] == "fc_loop"
-    # The turn died at the boundary, so its security/provider state was never observed:
-    # nulls (not zeros) so the report HOLDs instead of reading this as clean.
+    # The turn died at the boundary, so its own bookkeeping never ran: whether a write
+    # executed before the failure is genuinely unknown, and stays null.
     assert rec["security"]["forbidden_write_executed_count"] is None
-    assert rec["provider_schema_400_count"] is None
+    # Provider errors are the exception, and that asymmetry is the point of Layer B.
+    # They are accumulated out-of-band as each LLM call happens, not derived from a
+    # final_state that no longer exists — so this 0 is a real observation ("every call
+    # this turn made was watched, none returned a schema 400"), not the fabricated 0
+    # the null used to guard against. Before Layer B this asserted None.
+    assert rec["provider_schema_400_count"] == 0
 
 
 def test_search_direct_serialization_failure_records_500(client, user, monkeypatch, caplog):

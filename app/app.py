@@ -355,6 +355,7 @@ from core.canary_telemetry import (  # noqa: E402
     OUTCOME_OK, OUTCOME_SERVER_ERROR, aggregate_llm_usage, build_canary_turn_record,
     search_direct_signals, unknown_turn_signals,
 )
+from core import turn_observations  # noqa: E402
 
 # Tools with side_effect="write" (see core/tools/memory_tools.py). Only a denial on
 # one of these is a security event; a denial on a read is a budget event.
@@ -412,7 +413,12 @@ def _build_fc_signals(final_state) -> dict:
         # a null holds the gate; a 0 would falsely assert "observed, none seen".
         "dsml_blocked": final_state.get("dsml_blocked"),
         "dsml_leak": final_state.get("dsml_leak"),
-        "provider_schema_400_count": final_state.get("provider_schema_400_count"),
+        # NOT read from final_state: nothing writes that key, and a graph channel
+        # cannot carry a signal off a turn that never returned one. The accumulator
+        # is arch-agnostic (the observer sits at ModelRouter.create, which both
+        # arches build every client through) and reports null — never 0 — when no
+        # observer was installed.
+        "provider_schema_400_count": turn_observations.snapshot()["provider_schema_400_count"],
         "llm_usage": aggregate_llm_usage(final_state.get("llm_usage_calls")),
         "llm_calls": llm_calls,
         "tool_batches": tool_batches,
@@ -446,7 +452,10 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
             http_status=http_status,
             turn_outcome=turn_outcome,
             turn_latency_ms=turn_latency_ms,
-            signals=unknown_turn_signals() if fc_signals is None else fc_signals,
+            # An unobserved turn still reports whatever the out-of-band accumulator
+            # caught before it died (see core.turn_observations); the rest stays null.
+            signals=(unknown_turn_signals(turn_observations.snapshot())
+                     if fc_signals is None else fc_signals),
         )
         _canary_logger.info(json.dumps(record, ensure_ascii=False, default=str))
         # One record per request. Mark it so a later failure at the response
@@ -607,7 +616,10 @@ def _emit_canary_boundary_5xx() -> None:
             http_status=500,
             turn_outcome=OUTCOME_SERVER_ERROR,
             turn_latency_ms=latency,
-            fc_signals=unknown_turn_signals())
+            # None (not unknown_turn_signals()) so this goes through the SAME overlay
+            # as the crash path in _emit_canary_turn — a boundary 5xx must report the
+            # provider errors the accumulator saw, not a blanket null.
+            fc_signals=None)
     except Exception as e:  # pragma: no cover — never break the error response
         print(f"[canary] boundary 5xx record emit failed: {e}")
 
@@ -1033,6 +1045,12 @@ async def api_alex():
     # react_agent fills _turn_fc_signals from the graph's final_state; a crash leaves it None
     # (→ safe defaults on the record).
     _turn_fc_signals.set(None)
+    # Open the observation window BEFORE the agent runs. Unlike _turn_fc_signals (which is
+    # filled from final_state and so exists only on a turn that RETURNED), this accumulates
+    # as calls happen, so a turn that crashes — or dies at the response boundary — still
+    # reports what its provider actually did. That is the whole point: a strict-schema 400
+    # is a plausible CAUSE of a crash, so it must not vanish with the final_state.
+    turn_observations.begin_turn()
     _turn_started_ms = time.perf_counter()
     g.canary_turn_started = _turn_started_ms
     g.canary_conversation_id = conversation_id

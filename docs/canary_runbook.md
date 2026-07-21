@@ -225,6 +225,51 @@ python scripts/canary_report.py --input .runtime/logs/ --stage flip --window 168
   when a record has no `ts`, the log-line timestamp prefix is used.
 - Exit code drives CI: **0** proceed/hold-ok, **2** stage-pause, **3** zero-tolerance.
 
+### Rotating telemetry before a stage window
+
+Start every stage window on a **new** telemetry file, so a previous build's records
+cannot land inside the window being judged.
+
+```
+# CORRECT — stop first, then move, then start.
+docker compose --profile canary stop app-fc
+mv .runtime/logs/canary-fc_loop.jsonl .runtime/logs/canary-fc_loop.<old-sha>.jsonl
+docker compose --profile canary up -d app-fc
+```
+
+> **Do not `mv` the file while the pool is running.** The logger opens its sink once
+> at startup and holds the fd. A rename moves the *inode*, and the fd follows it — so
+> the pool keeps writing into the file you just "rotated away" and never creates the
+> new one. It looks like it worked: the old path is gone and a fresh file appears to
+> be waiting. It is not; the stage window then silently mixes the new build's turns
+> into the archived file, and `--expect-turns` reports zero eligible records for a run
+> that actually happened. Verify after rotating:
+>
+> ```
+> docker exec uk-rent-app-fc sh -c 'ls -l /proc/1/fd | grep canary'
+> ```
+
+### External anchor for the internal 50 rounds
+
+```
+python scripts/canary_report.py --input .runtime/logs/canary-fc_loop.jsonl --expect-turns 50
+```
+
+Counts only records that are, all at once: inside the window, `agent_arch=fc_loop`,
+`endpoint=alex`, one single `candidate_sha`, and v2 contract-valid. legacy turns,
+`search_direct` turns, v1 records from a rotated log and malformed records are each
+reported as ineligible and can never make up the count. Request IDs are reconciled
+one for one, so a duplicated record cannot stand in for a turn that emitted nothing.
+
+A mismatch is an **INSTRUMENTATION-HOLD (exit 2)** — the telemetry does not describe
+the run that was driven, so every rate in the report has an unknown denominator. It
+ranks *below* zero-tolerance: a run that both lost turns and committed a real breach
+still exits **3**.
+
+> Passing 50 rounds is a **functional** gate only. The `internal` stage still requires
+> its **24h minimum elapsed** (see the stage table) — driving 50 turns quickly does not
+> satisfy the time gate, and `--stage internal --since <start>` is what checks it.
+
 ---
 
 ## 6. Phase 3 — legacy deletion criteria

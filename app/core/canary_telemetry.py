@@ -15,8 +15,22 @@ Schema v2 changes vs v1
 * Security is a STRUCTURED object with three separate counters instead of one
   ``denied_writes`` int — "denied" (safe, blocked) is not the same event as
   "executed" (zero-tolerance).
-* ``dsml_blocked`` (safe: caught + fell back) is separated from ``dsml_leak``
-  (zero-tolerance: markup actually reached the user).
+* ``dsml_blocked`` is separated from ``dsml_leak``. The two are NOT "caught" vs
+  "delivered" — they are which LAYER caught it:
+
+    ``dsml_blocked``
+        The primary control caught it BEFORE persistence. Safe: nothing was
+        written to the conversation store or auto-memory, nothing was sent, and
+        the deterministic fallback answered instead. Reported, never gated on.
+
+    ``dsml_leak``
+        Raw markup reached the SERIALIZED response boundary. The final backstop
+        replaced the body, so it was NOT actually sent to the user — this counter
+        deliberately does not claim otherwise. It is nonetheless a zero-tolerance,
+        candidate-release-blocking event, because reaching that point means the
+        primary control failed. Scoring it as a successful block would let a
+        release ship whose real guard is broken, and the backstop is the last
+        thing standing between that bug and a delivered leak.
 * ``provider_schema_400_count`` counts ONLY provider-side strict-schema
   rejections. The app's own ApiError(400) validation failures cannot appear here:
   they are raised before the turn anchor and emit no record at all.

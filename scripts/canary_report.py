@@ -812,13 +812,106 @@ def evaluate_stage(fc: dict, stage: str, since: Optional[datetime],
 
 
 # --------------------------------------------------------------------------- #
+# External anchor: reconcile against the count of turns the driver drove       #
+# --------------------------------------------------------------------------- #
+
+def evaluate_expected_turns(windowed: Sequence[dict], expected: int) -> dict:
+    """Reconcile the run against an EXTERNAL count of turns that were driven.
+
+    The gate's own counters can only describe records that EXIST. They cannot see a
+    turn that produced no record at all — an exception before the emit, a logger
+    that lost its sink, a pool that never received the traffic. Every rate then
+    divides by a denominator that already excludes the failures, so a run in which
+    a third of the turns silently vanished reports as a clean run of a smaller
+    sample. That is the one failure this whole gate is structurally blind to.
+
+    So the driver states how many turns it drove, and this checks the telemetry
+    holds exactly that many ELIGIBLE records:
+
+      * inside the selected window
+      * agent_arch == fc_loop      (the candidate pool)
+      * endpoint == alex           (the agent path)
+      * one single candidate_sha   (one build, not a mixture)
+      * schema-valid v2            (a malformed record proves nothing)
+
+    Each is a filter, not a preference: legacy turns, search_direct turns and
+    records from an older log cannot be used to make up the count.
+
+    request_ids are then reconciled one for one. A count alone would let a
+    duplicated record cover for a missing turn — 50 records where one turn emitted
+    twice and another emitted nothing is indistinguishable from 50 clean turns by
+    count. Uniqueness is what makes "50" mean fifty distinct turns.
+    """
+    eligible: List[dict] = []
+    ineligible: Dict[str, int] = {}
+
+    def _reject(reason: str) -> None:
+        ineligible[reason] = ineligible.get(reason, 0) + 1
+
+    for r in windowed:
+        if canonical_arch(r) != "fc":
+            _reject("agent_arch is not fc_loop")
+            continue
+        if record_endpoint(r) not in GATE_ENDPOINTS:
+            _reject(f"endpoint is not one of {list(GATE_ENDPOINTS)}")
+            continue
+        if validate_record(r):
+            # A record that violates the contract is not a turn we can count. It
+            # already holds the gate via the instrumentation check; excluding it
+            # here stops the two failures cancelling out — a malformed record
+            # padding the count back up to 50 while asserting nothing.
+            _reject("record violates the v2 contract")
+            continue
+        eligible.append(r)
+
+    counts: Dict[object, int] = {}
+    for r in eligible:
+        rid = r.get("request_id")
+        counts[rid] = counts.get(rid, 0) + 1
+    duplicated = {str(k): n for k, n in counts.items() if n > 1}
+    unique_ids = len(counts)
+    shas = sorted({str(r.get("candidate_sha")) for r in eligible})
+
+    reasons: List[str] = []
+    if len(eligible) != expected:
+        reasons.append(f"expected {expected} eligible fc_loop/alex turns in the window, "
+                       f"found {len(eligible)}")
+    if unique_ids != expected:
+        reasons.append(f"expected {expected} unique request_ids, found {unique_ids}")
+    if duplicated:
+        shown = ", ".join(f"{k} x{n}" for k, n in sorted(duplicated.items())[:5])
+        reasons.append(f"{len(duplicated)} request_id(s) appear more than once: {shown}")
+    if len(shas) > 1:
+        reasons.append(f"eligible turns span {len(shas)} candidate_sha values: {shas}")
+
+    return {
+        "expected": expected,
+        "observed": len(eligible),
+        "unique_request_ids": unique_ids,
+        "duplicate_request_ids": duplicated,
+        "candidate_shas": shas,
+        "filters": {
+            "window": "the selected --window / --since range",
+            "agent_arch": "fc_loop",
+            "endpoint": list(GATE_ENDPOINTS),
+            "schema": f"v{MIN_SCHEMA_VERSION} contract-valid only",
+            "candidate_sha": "exactly one",
+        },
+        "ineligible_records": dict(sorted(ineligible.items(), key=lambda kv: -kv[1])),
+        "matched": not reasons,
+        "reasons": reasons,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Verdict                                                                     #
 # --------------------------------------------------------------------------- #
 
 def build_verdict(fc: dict, legacy: dict, deltas: dict,
                   stage_eval: Optional[dict],
                   instrumentation: Optional[dict] = None,
-                  global_zt: Optional[dict] = None) -> dict:
+                  global_zt: Optional[dict] = None,
+                  expected_turns: Optional[dict] = None) -> dict:
     """Evaluate shuhan's zero-tolerance and stage-pause rules against the fc pool.
 
     Precedence for the exit code: zero-tolerance (3) beats stage-pause (2) beats proceed (0).
@@ -847,7 +940,9 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         instr_reasons.append("DSML/tool-markup leak not instrumented")
     elif zt["dsml_leak_count"] > 0:
         zt_reasons.append(
-            f"DSML/tool-markup leak x{zt['dsml_leak_count']} ({_scope}, must be 0)")
+            f"DSML/tool-markup reached the response boundary x{zt['dsml_leak_count']} "
+            f"({_scope}, must be 0) — the backstop replaced the body so it was NOT "
+            f"sent, but the primary pre-persistence control failed")
     if zt["api_400_count"] is None:
         instr_reasons.append("provider schema 400s not instrumented")
     elif zt["api_400_count"] > 0:
@@ -855,7 +950,12 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         zt_reasons.append(
             f"provider schema 400s on {zt['api_400_count']} turn(s), {_n400} call(s) "
             f"({_scope}, must be 0)")
-    # dsml_blocked is a SAFETY signal, not a breach: report it, never gate on it.
+    # dsml_blocked is a SAFETY signal, not a breach: the primary control caught the
+    # markup before persistence, nothing was written and nothing was sent. Reported,
+    # never gated on. Its counterpart dsml_leak above IS a breach even though the
+    # boundary backstop stopped the body from being sent — see the contract note in
+    # core/canary_telemetry.py: reaching the boundary means the primary control
+    # failed, and that is what blocks the release.
     if fc.get("dsml_blocked_count"):
         zt_notes.append(
             f"DSML markup blocked+recovered x{fc['dsml_blocked_count']} (safe path, not a breach)")
@@ -907,6 +1007,15 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         instr_reasons.append(
             f"{n} record(s) violate the v{MIN_SCHEMA_VERSION} contract: "
             + "; ".join(f"{k} (x{v})" for k, v in top))
+
+    # External anchor. A mismatch is an INSTRUMENTATION failure, not a stage pause:
+    # it says the telemetry does not describe the run that was driven, so every
+    # other number in this report is computed over an unknown denominator. It is
+    # deliberately ranked BELOW zero-tolerance — if a run both lost turns and
+    # committed a real breach, the breach is the finding that matters and the exit
+    # code must stay 3.
+    if expected_turns is not None and not expected_turns["matched"]:
+        instr_reasons.extend(expected_turns["reasons"])
     instr_failed = bool(instr_reasons)
 
     # --- decision / exit code ---
@@ -934,6 +1043,7 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
                             "contract": instrumentation},
         "stage_pause": {"breached": sp_breached, "reasons": sp_reasons, "notes": sp_notes},
         "stage_progress": stage_eval,
+        "expected_turns": expected_turns,
     }
 
 
@@ -944,7 +1054,8 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
 def build_report(records: Sequence[dict], *, window_hours: Optional[float] = None,
                  now_override: Optional[datetime] = None, stage: Optional[str] = None,
                  since: Optional[datetime] = None, skipped: int = 0,
-                 inputs: Optional[Sequence[str]] = None) -> dict:
+                 inputs: Optional[Sequence[str]] = None,
+                 expect_turns: Optional[int] = None) -> dict:
     now = reference_now(records, now_override)
 
     # Partition by timestamp parseability BEFORE windowing. filter_window silently
@@ -1015,7 +1126,13 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
     excluded = {name: aggregate_arch(rs) for name, rs in buckets.items()}
 
     stage_eval = evaluate_stage(fc, stage, since, now) if stage else None
-    verdict = build_verdict(fc, legacy, deltas, stage_eval, instrumentation, global_zt)
+    # Reconciled against the WINDOWED set, before the endpoint filter, so a turn
+    # that landed on the wrong endpoint is counted as ineligible and reported —
+    # rather than disappearing from the comparison entirely.
+    expected_turns = (evaluate_expected_turns(windowed, expect_turns)
+                      if expect_turns is not None else None)
+    verdict = build_verdict(fc, legacy, deltas, stage_eval, instrumentation, global_zt,
+                            expected_turns)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1137,6 +1254,28 @@ def render_text(report: dict) -> str:
     for n in v["stage_pause"]["notes"]:
         a(f"  note: {n}")
 
+    et = v.get("expected_turns")
+    if et is not None:
+        a("")
+        a("[EXTERNAL ANCHOR] (--expect-turns: does the telemetry describe the run?):")
+        f = et["filters"]
+        a(f"  counting only: agent_arch={f['agent_arch']}  endpoint={f['endpoint']}  "
+          f"schema={f['schema']}")
+        a(f"                 candidate_sha={f['candidate_sha']}  window={f['window']}")
+        a(f"  expected turns      : {et['expected']}")
+        a(f"  observed eligible   : {et['observed']}")
+        a(f"  unique request_ids  : {et['unique_request_ids']}")
+        a(f"  candidate_sha(s)    : {et['candidate_shas'] or 'none'}")
+        if et["duplicate_request_ids"]:
+            a(f"  DUPLICATE ids       : {et['duplicate_request_ids']}")
+        if et["ineligible_records"]:
+            a("  ineligible (cannot be used to make up the count):")
+            for reason, n in et["ineligible_records"].items():
+                a(f"    x{n}  {reason}")
+        a(f"  matched             : {et['matched']}")
+        for r in et["reasons"]:
+            a(f"  MISMATCH: {r}")
+
     sp = v["stage_progress"]
     if sp is not None:
         a("")
@@ -1173,6 +1312,12 @@ def _parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
                    help="Stage start timestamp (ISO-8601) for the elapsed-hours check.")
     p.add_argument("--now", default=None, metavar="ISO",
                    help="Override the 'now' reference (ISO-8601). Default: latest record ts.")
+    p.add_argument("--expect-turns", type=int, default=None, metavar="N",
+                   help="External anchor: assert the window holds exactly N eligible "
+                        "fc_loop /api/alex turns with N unique request_ids. A mismatch "
+                        "is an INSTRUMENTATION-HOLD (exit 2) — the telemetry does not "
+                        "describe the run that was driven, so every rate in the report "
+                        "has an unknown denominator.")
     p.add_argument("--quiet", action="store_true",
                    help="Suppress the text table (still writes --json and sets exit code).")
     return p.parse_args(argv)
@@ -1195,9 +1340,13 @@ def run(argv: Optional[Sequence[str]] = None) -> int:
         sys.stderr.write(f"error: could not parse --now '{args.now}'\n")
         return 1
 
+    if args.expect_turns is not None and args.expect_turns < 0:
+        sys.stderr.write("error: --expect-turns must be >= 0\n")
+        return 1
+
     report = build_report(records, window_hours=args.window, now_override=now_override,
                           stage=args.stage, since=since, skipped=skipped,
-                          inputs=args.input)
+                          inputs=args.input, expect_turns=args.expect_turns)
 
     if args.json_out:
         payload = json.dumps(report, indent=2, sort_keys=True)

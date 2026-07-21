@@ -82,6 +82,14 @@ async def _run_all(out: Path, timestamp: str) -> dict:
     (out / "fault_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     _print_summary(summary)
+    # Persist the exit code the runner is about to return. Without it the artifact
+    # says what the scenarios found but not what the process TOLD its caller, so a
+    # CI job that swallowed the status leaves no record of the difference — and
+    # "the summary looked fine" is not evidence the run passed.
+    summary["exit_code"] = 1 if summary.get("harness_errors", 0) else 0
+    (out / "fault_summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    (out / "fault_exit_code").write_text(f"{summary['exit_code']}\n", encoding="utf-8")
     return summary
 
 
@@ -155,7 +163,9 @@ def main(argv=None) -> int:
     ts = args.timestamp or time.strftime("%Y-%m-%dT%H:%M:%S")
     summary = asyncio.run(_run_all(Path(args.out), ts))
     # Non-zero exit only on harness errors (not on scenarios that *expect* a failure).
-    return 1 if summary.get("harness_errors", 0) else 0
+    # Read back from the summary so the value returned and the value on disk cannot
+    # drift apart — two independent computations of the same thing is how they do.
+    return int(summary.get("exit_code", 1 if summary.get("harness_errors", 0) else 0))
 
 
 if __name__ == "__main__":

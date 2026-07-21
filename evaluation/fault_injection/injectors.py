@@ -182,12 +182,37 @@ class FakeMCPSession:
         return _FakeCallResult(self._text, self._is_error)
 
 
-def make_mcp_client(fallback_registry=None, *, session=None):
+class DelayingMCPSession:
+    """An MCP session that HANGS — the fault a canned response cannot reproduce.
+
+    A session that returns an error exercises the error path; a session that never
+    returns exercises the TIMEOUT path, and those are different code with different
+    outcomes. The distinction matters most for writes: a call that timed out has an
+    UNKNOWN outcome — the server may still be completing it — which is why
+    mcp_client refuses to retry a non-retry-safe tool and says so in its error.
+
+    ``delay_s`` should exceed the client's ``call_timeout`` by enough that a loaded
+    CI box cannot let the call win the race.
+    """
+
+    def __init__(self, delay_s: float = 5.0, text: str = '{"success": true}'):
+        self.delay_s = delay_s
+        self._text = text
+        self.calls: List[str] = []
+
+    async def call_tool(self, name, kwargs):
+        self.calls.append(name)
+        await asyncio.sleep(self.delay_s)
+        return _FakeCallResult(self._text)
+
+
+def make_mcp_client(fallback_registry=None, *, session=None, call_timeout: float = 2.0):
     """Build a real MCPToolClient WITHOUT starting a subprocess.
 
     With ``session=None`` it reports ``connected == False`` (so ``execute_tool``
     takes the not-connected fallback path). With a ``FakeMCPSession`` it reports
-    connected and ``_call`` will parse that session's response text.
+    connected and ``_call`` parses that session's response text. With a
+    ``DelayingMCPSession`` and a short ``call_timeout`` it drives the timeout path.
     """
     from core.mcp_client import MCPToolClient
 
@@ -196,11 +221,32 @@ def make_mcp_client(fallback_registry=None, *, session=None):
         args=["-c", "pass"],
         fallback_registry=fallback_registry,
         connect_timeout=0.1,
-        call_timeout=2.0,
+        call_timeout=call_timeout,
     )
     if session is not None:
         client._session = session
+        # A background loop is REQUIRED for the timeout path to be reachable at all.
+        # execute_tool hands the call to `self._loop` via run_coroutine_threadsafe;
+        # with _loop still None that raises immediately and is swallowed by the
+        # generic except, so the client falls back without ever arming wait_for —
+        # i.e. a "timeout test" would silently be testing the error path instead.
+        loop = asyncio.new_event_loop()
+        thread = threading.Thread(target=loop.run_forever, name="fake-mcp-loop",
+                                  daemon=True)
+        thread.start()
+        client._loop = loop
+        client._test_loop = loop  # so a test can stop it deterministically
     return client
+
+
+def stop_fake_mcp_client(client) -> None:
+    """Stop the loop started by ``make_mcp_client``. Safe to call twice."""
+    loop = getattr(client, "_test_loop", None)
+    if loop is None:
+        return
+    with contextlib.suppress(Exception):
+        loop.call_soon_threadsafe(loop.stop)
+    client._test_loop = None
 
 
 # --------------------------------------------------------------------------- #

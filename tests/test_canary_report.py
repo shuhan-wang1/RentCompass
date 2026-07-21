@@ -332,3 +332,202 @@ def test_run_cli_end_to_end_exit_and_json(tmp_path):
 
 def test_missing_input_errors():
     assert cr.run([]) == 1
+
+
+# =========================================================================== #
+# --expect-turns: the external anchor                                        #
+# =========================================================================== #
+#
+# Every other check in this report describes records that EXIST. None of them can
+# see a turn that emitted nothing at all — and when turns vanish, every rate
+# divides by a denominator that has already excluded the failures, so a run that
+# lost a third of its traffic reports as a clean run of a smaller sample. This is
+# the one blind spot the gate cannot close from the inside, which is why the count
+# has to come from the driver.
+
+
+def _fc_turns(n, **kw):
+    return [_rec("fc", 1000, **kw) for _ in range(n)]
+
+
+def _anchor(records, expected):
+    return cr.build_report(records, expect_turns=expected)
+
+
+def test_exactly_the_expected_count_passes():
+    rep = _anchor(_fc_turns(50) + [_rec("legacy", 1000) for _ in range(50)], 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["matched"] is True
+    assert (et["observed"], et["unique_request_ids"]) == (50, 50)
+    assert rep["verdict"]["exit_code"] == 0
+
+
+@pytest.mark.parametrize("n", [49, 51])
+def test_off_by_one_in_either_direction_holds(n):
+    """49 is a turn that produced no record; 51 is a record with no turn behind it.
+    Both mean the telemetry does not describe the run, and neither is a rounding
+    detail — they are the difference between a measurement and a guess."""
+    rep = _anchor(_fc_turns(n), 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["matched"] is False
+    assert et["observed"] == n
+    assert rep["verdict"]["decision"] == "INSTRUMENTATION-HOLD"
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_a_duplicate_request_id_cannot_stand_in_for_a_missing_turn():
+    """The case a bare count cannot see: 50 records, but one turn emitted twice and
+    another emitted nothing. By count that is indistinguishable from 50 clean turns,
+    which is exactly why the ids are reconciled one for one."""
+    recs = _fc_turns(49)
+    dup = dict(recs[0])
+    dup["conversation_id"] = "other"
+    recs.append(dup)
+    rep = _anchor(recs, 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["observed"] == 50
+    assert et["unique_request_ids"] == 49
+    assert et["duplicate_request_ids"]
+    assert et["matched"] is False
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_legacy_turns_cannot_make_up_the_count():
+    """The control pool ran too. If its turns counted, a candidate pool that
+    received no traffic at all would still reconcile."""
+    rep = _anchor(_fc_turns(30) + [_rec("legacy", 1000) for _ in range(20)], 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["observed"] == 30
+    assert et["matched"] is False
+    assert any("not fc_loop" in k for k in et["ineligible_records"])
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_search_direct_turns_cannot_make_up_the_count():
+    """search_direct is LLM-free and deterministic. Counting it would let 50 form
+    submissions certify an agent that was never exercised."""
+    rep = _anchor(_fc_turns(45) + _fc_turns(5, endpoint="search_direct"), 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["observed"] == 45
+    assert et["matched"] is False
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_old_v1_records_cannot_make_up_the_count():
+    """A stale log rotated in. v1 records assert none of the v2 facts, so counting
+    them would let the window be padded with turns from a build under no test."""
+    old = _fc_turns(10)
+    for r in old:
+        r["telemetry_schema_version"] = 1
+    rep = _anchor(_fc_turns(40) + old, 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["observed"] == 40
+    assert any("contract" in k for k in et["ineligible_records"])
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_malformed_records_cannot_pad_the_count():
+    """A record missing a required field holds the gate on its own. It must not
+    ALSO be counted toward 50, or the two failures would cancel: a padded count
+    plus a contract violation would still read as 'we drove 50 turns'."""
+    bad = _fc_turns(3)
+    for r in bad:
+        del r["security"]
+    rep = _anchor(_fc_turns(47) + bad, 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["observed"] == 47
+    assert et["matched"] is False
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_mixed_candidate_shas_hold_even_at_the_right_count():
+    """50 turns across two builds is not a measurement of either build."""
+    a = _fc_turns(25, candidate_sha="aaaaaaa")
+    b = _fc_turns(25, candidate_sha="bbbbbbb")
+    rep = _anchor(a + b, 50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["observed"] == 50
+    assert len(et["candidate_shas"]) == 2
+    assert et["matched"] is False
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_zero_tolerance_outranks_a_count_mismatch():
+    """Both wrong at once. The breach is the finding that matters: exiting 2 would
+    report 'telemetry incomplete' about a run that committed a real violation, and
+    a rollback driver branching on the code would take the wrong branch."""
+    recs = _fc_turns(30)
+    recs[0]["security"]["tainted_write_executed_count"] = 1
+    rep = _anchor(recs, 50)
+    assert rep["verdict"]["expected_turns"]["matched"] is False
+    assert rep["verdict"]["decision"] == "CANARY-BLOCK"
+    assert rep["verdict"]["exit_code"] == 3
+
+
+def test_dsml_leak_outranks_a_count_mismatch():
+    recs = _fc_turns(30)
+    recs[0]["dsml_leak"] = 1
+    rep = _anchor(recs, 50)
+    assert rep["verdict"]["exit_code"] == 3
+    assert any("response boundary" in r
+               for r in rep["verdict"]["zero_tolerance"]["reasons"])
+
+
+def test_provider_400_outranks_a_count_mismatch():
+    recs = _fc_turns(30)
+    recs[0]["provider_schema_400_count"] = 1
+    rep = _anchor(recs, 50)
+    assert rep["verdict"]["exit_code"] == 3
+
+
+def test_unparseable_lines_hold_even_when_the_count_matches():
+    """A truncated line is a record we lost, and the one we lost could be the one
+    carrying a violation. The remaining 50 matching is not reassurance."""
+    rep = cr.build_report(_fc_turns(50), expect_turns=50, skipped=2)
+    assert rep["verdict"]["expected_turns"]["matched"] is True
+    assert rep["verdict"]["decision"] == "INSTRUMENTATION-HOLD"
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_window_excludes_out_of_range_turns_from_the_anchor():
+    """The anchor counts the SELECTED window, so an earlier run's turns sitting in
+    the same file cannot be borrowed to reach 50."""
+    old_ts = NOW - timedelta(hours=48)
+    rep = cr.build_report(_fc_turns(40) + _fc_turns(10, ts=old_ts),
+                          window_hours=1.0, expect_turns=50)
+    et = rep["verdict"]["expected_turns"]
+    assert et["observed"] == 40
+    assert rep["verdict"]["exit_code"] == 2
+
+
+def test_report_prints_filters_expected_observed_and_unique_ids():
+    """The operator reading this has to be able to see WHY a count was rejected
+    without reading the source."""
+    text = cr.render_text(_anchor(_fc_turns(49), 50))
+    assert "[EXTERNAL ANCHOR]" in text
+    assert "expected turns      : 50" in text
+    assert "observed eligible   : 49" in text
+    assert "unique request_ids  : 49" in text
+    assert "agent_arch=fc_loop" in text
+    assert "MISMATCH:" in text
+
+
+def test_anchor_absent_when_flag_not_passed():
+    """Default behaviour is unchanged: no flag, no anchor, no new hold."""
+    rep = cr.build_report(_fc_turns(50))
+    assert rep["verdict"]["expected_turns"] is None
+    assert rep["verdict"]["exit_code"] == 0
+
+
+def test_cli_flag_is_wired_and_returns_two_on_mismatch(tmp_path):
+    p = tmp_path / "canary.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in _fc_turns(49)) + "\n",
+                 encoding="utf-8")
+    assert cr.run(["-i", str(p), "--expect-turns", "50", "--quiet"]) == 2
+    assert cr.run(["-i", str(p), "--expect-turns", "49", "--quiet"]) == 0
+
+
+def test_cli_rejects_a_negative_expectation(tmp_path, capsys):
+    p = tmp_path / "canary.jsonl"
+    p.write_text(json.dumps(_rec("fc", 1000)) + "\n", encoding="utf-8")
+    assert cr.run(["-i", str(p), "--expect-turns", "-1", "--quiet"]) == 1

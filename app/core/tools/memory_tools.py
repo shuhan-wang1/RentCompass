@@ -12,8 +12,11 @@ def _mem():
     return get_agent_memory()
 
 
-async def recall_memory_impl(query: str, n: int = 6,
-                             session_id: str = "default", user_id: str = None) -> dict:
+def recall_memory_impl(query: str, n: int = 6,
+                       session_id: str = "default", user_id: str = None) -> dict:
+    # NOTE: PLAIN SYNC on purpose. AgentMemory.retrieve performs SYNCHRONOUS blocking work
+    # (ChromaDB sqlite query + embedding). Registering it as sync means Tool.execute offloads
+    # it to an executor thread (tool_system.py :279-284), keeping the event loop responsive.
     # PRIVACY: no 'default' fallback — a missing user_id must return NOTHING, not
     # the shared bucket every id-less call site used to read (cross-user leak).
     from rag.agent_memory import _valid_user_id
@@ -29,8 +32,11 @@ async def recall_memory_impl(query: str, n: int = 6,
     }
 
 
-async def remember_impl(content: str, kind: str = "semantic",
-                        session_id: str = "default", user_id: str = None) -> dict:
+def remember_impl(content: str, kind: str = "semantic",
+                  session_id: str = "default", user_id: str = None) -> dict:
+    # NOTE: PLAIN SYNC on purpose. AgentMemory.add performs SYNCHRONOUS blocking work
+    # (ChromaDB sqlite write + embedding). Registering it as sync means Tool.execute offloads
+    # it to an executor thread (tool_system.py :279-284), keeping the event loop responsive.
     from rag.agent_memory import _valid_user_id
     if _valid_user_id(user_id) is None:
         return {"success": False, "id": None, "stored": None, "mtype": None,
@@ -43,10 +49,10 @@ async def remember_impl(content: str, kind: str = "semantic",
 recall_memory_tool = Tool(
     name="recall_memory",
     description=(
-        "Recall what is known about the CURRENT user from long-term memory — their stated "
-        "preferences, budget, target destination/university, hard constraints, areas to avoid, "
-        "and earlier requests. Use this when answering a follow-up that may depend on something "
-        "the user said in a previous turn or session. Returns the most relevant remembered facts."
+        "Recall facts about the CURRENT user from long-term memory — stated preferences, budget, "
+        "target destination/university, hard constraints, areas to avoid, earlier requests. Your "
+        "context already includes a WHAT I REMEMBER block, so call this ONLY when the user asks "
+        "about a remembered fact that is not present there. Returns the most relevant facts."
     ),
     func=recall_memory_impl,
     parameters={

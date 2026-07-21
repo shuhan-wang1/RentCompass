@@ -24,7 +24,7 @@ import threading
 from contextlib import AsyncExitStack
 from typing import List, Optional
 
-from core.tool_system import ToolResult
+from core.tool_system import ToolResult, ToolSpec
 
 
 class MCPToolClient:
@@ -54,6 +54,7 @@ class MCPToolClient:
         self._session = None
         self._stack: Optional[AsyncExitStack] = None
         self._tool_names: List[str] = []
+        self._tool_specs: List[ToolSpec] = []
         self._ready = threading.Event()
         self._connect_error: Optional[BaseException] = None
 
@@ -104,7 +105,55 @@ class MCPToolClient:
         await self._session.initialize()
         resp = await self._session.list_tools()
         self._tool_names = [t.name for t in resp.tools]
+        # Store full ToolSpecs (inputSchema + annotations), not just names, so the FC
+        # loop can bind tools and gate taint/HITL (design §2.8a). Missing annotation
+        # fields fall back to the in-process registry spec (single source of truth).
+        self._tool_specs = [self._spec_from_mcp_tool(t) for t in resp.tools]
         print(f"[MCP] connected; {len(self._tool_names)} tools: {', '.join(self._tool_names)}")
+
+    def _spec_from_mcp_tool(self, t) -> ToolSpec:
+        """Build a ToolSpec from an MCP Tool, reading ToolSpec metadata off the
+        ``annotations`` field and filling any gaps from the fallback registry."""
+        ann = getattr(t, "annotations", None)
+        meta = getattr(t, "meta", None)
+
+        def _read(key):
+            if ann is not None:
+                val = getattr(ann, key, None)
+                if val is not None:
+                    return val
+            if isinstance(meta, dict) and meta.get(key) is not None:
+                return meta.get(key)
+            return None
+
+        fb = self.fallback_registry.get(t.name) if self.fallback_registry is not None else None
+        fb_spec = fb.to_spec() if fb is not None else None
+
+        side_effect = _read("side_effect")
+        retry_safe = _read("retry_safe")
+        version = _read("version")
+        terminal = _read("terminal")
+
+        if side_effect is None and fb_spec is not None:
+            side_effect = fb_spec.side_effect
+        if retry_safe is None and fb_spec is not None:
+            retry_safe = fb_spec.retry_safe
+        if version is None and fb_spec is not None:
+            version = fb_spec.version
+        if terminal is None and fb_spec is not None:
+            terminal = fb_spec.terminal
+
+        return ToolSpec(
+            name=t.name,
+            description=(t.description if t.description is not None
+                        else (fb_spec.description if fb_spec is not None else "")),
+            input_schema=(t.inputSchema if getattr(t, "inputSchema", None)
+                          else (fb_spec.input_schema if fb_spec is not None else {})),
+            side_effect=side_effect if side_effect is not None else "none",
+            retry_safe=bool(retry_safe) if retry_safe is not None else True,
+            version=str(version) if version is not None else "1",
+            terminal=bool(terminal) if terminal is not None else False,
+        )
 
     def close(self) -> None:
         """Tear down the session and stop the background loop."""
@@ -132,6 +181,17 @@ class MCPToolClient:
             return list(self._tool_names)
         if self.fallback_registry is not None:
             return self.fallback_registry.list_tool_names()
+        return []
+
+    def list_specs(self) -> List[ToolSpec]:
+        """Full ToolSpecs advertised by the MCP server (inputSchema + annotations).
+
+        Falls back to the in-process registry's specs when no live server is
+        connected — both processes import the same tool code, so the specs match."""
+        if self._tool_specs:
+            return list(self._tool_specs)
+        if self.fallback_registry is not None:
+            return self.fallback_registry.list_specs()
         return []
 
     async def execute_tool(self, name: str, **kwargs) -> ToolResult:

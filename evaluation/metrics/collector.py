@@ -24,6 +24,8 @@ Event types & their type-specific fields
 * ``node_span``    : node, latency_ms, error
 * ``critic_verdict``: stage, grounded, issues, critic_attempts
 * ``turn``         : route, response_type, critic_attempts, verdict, latency_ms
+* ``tool_budget_timeout``: tool, phase, budget_s, elapsed_ms, outcome
+* ``turn_soft_wrap``: elapsed_ms, llm_calls, tool_batches
 
 Every event additionally carries ``type``, ``ts_monotonic`` (``perf_counter``),
 ``ts_wall`` (epoch seconds) and the ``run_id``/``case_id``/``config`` tags.
@@ -240,6 +242,54 @@ def record_tool_call(name: str, result: Any, kwargs: dict, *, mcp: bool = False)
 
 def record_node(node: str, latency_ms: Optional[float], error: Optional[str] = None) -> None:
     _emit("node_span", {"node": node, "latency_ms": latency_ms, "error": error})
+
+
+def record_tool_budget_timeout(
+    *,
+    tool: str,
+    phase: str,
+    budget_s: float,
+    elapsed_ms: float,
+    outcome: str,
+) -> None:
+    """Emit a ``tool_budget_timeout`` event when a tool call breaches its wall-clock
+    budget inside the fc loop (the loop agent calls this at the kill site).
+
+    ``phase`` is the loop phase the budget applied to (e.g. ``batch``/``per_tool``);
+    ``budget_s`` the ceiling in seconds; ``elapsed_ms`` how long it actually took before
+    the kill; ``outcome`` what the loop did (``abandoned``/``partial``/``killed``). Carries
+    the same run-context tags as :func:`record_tool_call`. No-op when capture is inactive."""
+    _emit(
+        "tool_budget_timeout",
+        {
+            "tool": tool,
+            "phase": phase,
+            "budget_s": budget_s,
+            "elapsed_ms": elapsed_ms,
+            "outcome": outcome,
+        },
+    )
+
+
+def record_turn_soft_wrap(
+    *,
+    elapsed_ms: float,
+    llm_calls: int,
+    tool_batches: int,
+) -> None:
+    """Emit a ``turn_soft_wrap`` event when a turn hits the soft time/step wrap and the
+    loop finalises with what it has (rather than running the full budget).
+
+    ``elapsed_ms`` is the turn time at the wrap; ``llm_calls`` / ``tool_batches`` the work
+    done so far. No-op when capture is inactive."""
+    _emit(
+        "turn_soft_wrap",
+        {
+            "elapsed_ms": elapsed_ms,
+            "llm_calls": llm_calls,
+            "tool_batches": tool_batches,
+        },
+    )
 
 
 def record_critic(*, stage: str, grounded: Optional[bool], issues: Any, critic_attempts: Optional[int]) -> None:

@@ -1,0 +1,20 @@
+{
+  "price_table_version": 1,
+  "currency": "USD",
+  "unit": "per_1m_tokens",
+  "effective_from": "2026-07-21",
+  "unverified": true,
+  "_note": "PLACEHOLDER RATES — these were NOT taken from a verified provider price sheet. scripts/canary_cost.py refuses to compute a cost while `unverified` is true. Replace each rate with the provider's published figure, set unverified=false, and bump price_table_version (never edit a published version in place: historical runs must stay reproducible).",
+  "models": {
+    "deepseek-v4-flash": {
+      "input": null,
+      "output": null,
+      "cache_read": null
+    },
+    "deepseek-chat": {
+      "input": null,
+      "output": null,
+      "cache_read": null
+    }
+  }
+}

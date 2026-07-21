@@ -252,12 +252,18 @@ def _validate_one(
     london: bool,
     max_commute: int,
     excludes: set[str],
+    compute_commute: bool = True,
 ) -> dict | None:
     """VALIDATE one LLM candidate against real data (blocking). Returns a finished
     item dict on success, or None if any check fails. Never raises.
 
     Checks, in order (cheapest first): resolve -> not-excluded -> right-city ->
-    not-a-destination -> geocodable -> within commute cap."""
+    not-a-destination -> geocodable -> within commute cap.
+
+    ``compute_commute=False`` (city-only ranking, no commute destination) skips the
+    geocode gate and the commute cap: the candidate is kept with
+    ``commute_minutes=None`` and a best-effort centroid, so a place is never dropped
+    for a commute that was never requested."""
     try:
         name = cand.get("name", "")
         if not name:
@@ -289,26 +295,34 @@ def _validate_one(
         # 5) Geocode to a real centroid (anchored to the destination city).
         anchor = dest_city or cand_city or ""
         geo = geocode_address(f"{name}, {anchor}" if anchor else name)
-        if not geo:
-            print(f"[AREA_RECO] drop '{name}': not geocodable")
-            return None
-        centroid = [geo["lat"], geo["lng"]]
 
-        # 6) Real commute to the destination within the cap.
-        mins = commute_minutes(
-            destination, dest_coords,
-            origin_address=name, origin_geo=geo, london=london,
-        )
-        if mins is None or mins > max_commute:
-            print(f"[AREA_RECO] drop '{name}': commute {mins} > {max_commute}")
-            return None
+        if compute_commute:
+            # Commute mode: a geocodable centroid AND a within-cap commute are BOTH
+            # required (legacy recommend_areas() semantics, unchanged).
+            if not geo:
+                print(f"[AREA_RECO] drop '{name}': not geocodable")
+                return None
+            centroid = [geo["lat"], geo["lng"]]
+            mins = commute_minutes(
+                destination, dest_coords,
+                origin_address=name, origin_geo=geo, london=london,
+            )
+            if mins is None or mins > max_commute:
+                print(f"[AREA_RECO] drop '{name}': commute {mins} > {max_commute}")
+                return None
+            commute_val = int(mins)
+        else:
+            # No-commute mode: geocode is best-effort (centroid only) and never a
+            # gate; no commute is computed or capped.
+            centroid = [geo["lat"], geo["lng"]] if geo else None
+            commute_val = None
 
         return {
             "name": name,
             "slug": slug,
             "city": cand_city or dest_city,
             "centroid": centroid,
-            "commute_minutes": int(mins),
+            "commute_minutes": commute_val,
             "reason": _reason_ok(cand.get("reason")),
             "source": "web+validated",
         }
@@ -319,6 +333,148 @@ def _validate_one(
 
 async def _run_blocking(loop, fn, *args):
     return await loop.run_in_executor(None, fn, *args)
+
+
+def _commute_key(item: dict) -> float:
+    """Sort/dedupe key: commute minutes, with None sorting last."""
+    c = item.get("commute_minutes")
+    return float(c) if c is not None else float(10 ** 9)
+
+
+# --------------------------------------------------------------------------
+# Shared candidate-generation core (design §2.5b)
+# --------------------------------------------------------------------------
+async def generate_candidate_areas(
+    destination: str,
+    *,
+    city: str | None = None,
+    dest_coords: dict | None = None,
+    london: bool | None = None,
+    max_commute_time: int | None = None,
+    exclude_slugs=None,
+    candidate_names: list[str] | None = None,
+    no_commute_mode: bool = False,
+    budget_s: float | None = None,
+    t0: float | None = None,
+) -> list[dict]:
+    """Validated residential-area candidates near ``destination``, each carrying a
+    ``commute_minutes`` — deduped by slug but NOT sorted, capped, or cached.
+
+    This is the reusable core shared by two callers (P0-3):
+
+    * ``recommend_areas()`` wraps it with its cache + a commute-ascending sort/cap
+      (its public output is unchanged);
+    * the ``compare_or_rank_areas`` tool feeds the slugs into rent aggregation +
+      scoring.
+
+    Candidate source:
+      * ``candidate_names`` given -> validate exactly those names (no web/LLM), so a
+        caller-supplied area list is honoured verbatim;
+      * otherwise -> the legacy path: web-search -> LLM-extract snippet-grounded
+        names.
+
+    ``no_commute_mode`` (caller has only a city, no commute destination): skip
+    destination geocoding, commute routing, and the commute cap entirely; every
+    resolved, right-city, non-destination candidate is kept with
+    ``commute_minutes=None``.
+
+    Item shape matches ``_validate_one``: ``{name, slug, city, centroid,
+    commute_minutes, reason, source}``. Per-candidate failures never sink the batch;
+    hard failures are left to propagate (recommend_areas wraps them so a hard error
+    never poisons its cache; the tool degrades to no_data)."""
+    if not destination or not str(destination).strip():
+        return []
+    t0 = t0 if t0 is not None else time.time()
+    max_commute = int(max_commute_time) if max_commute_time else AREA_RECO_DEFAULT_COMMUTE
+    excludes = _norm_excludes(exclude_slugs)
+    loop = asyncio.get_running_loop()
+
+    # ---- Destination coords + canonical city (only needed to compute commute) ----
+    if not no_commute_mode:
+        if not city or dest_coords is None:
+            place = await _run_blocking(loop, classify_place, destination)
+            if not city:
+                city = place.get("city")
+            geo_target = place.get("address") or destination
+        else:
+            geo_target = destination
+        if dest_coords is None:
+            dest_coords = await _run_blocking(loop, geocode_address, geo_target)
+        if not dest_coords:
+            print(f"[AREA_RECO] could not geocode destination '{destination}'")
+            return []
+        if london is None:
+            london = in_london(dest_coords)
+    else:
+        # City-only: still resolve the canonical city for the contamination guard,
+        # but never geocode the "destination" (there is none).
+        if not city:
+            place = await _run_blocking(loop, classify_place, destination)
+            city = place.get("city")
+        london = bool(london)
+
+    if budget_s is not None and (time.time() - t0) > budget_s:
+        return []
+
+    # ---- Candidate names: caller-supplied list, or web+LLM extraction ----
+    if candidate_names:
+        seen: set[str] = set()
+        candidates: list[dict] = []
+        for nm in candidate_names:
+            nm2 = re.sub(r"\s+", " ", str(nm or "").strip())
+            if not nm2 or nm2.lower() in seen:
+                continue
+            seen.add(nm2.lower())
+            candidates.append({"name": nm2, "reason": ""})
+    else:
+        queries = _build_queries(destination, city)
+        snippet_parts = await asyncio.gather(
+            *[_run_blocking(loop, get_search_snippets, q, 6) for q in queries]
+        )
+        snippets = "\n\n---\n\n".join(p for p in snippet_parts if p)
+        if _looks_empty(snippets):
+            print(f"[AREA_RECO] no web snippets for '{destination}' -> [] (grounded)")
+            return []
+        if budget_s is not None and (time.time() - t0) > budget_s:
+            return []
+        candidates = await _run_blocking(
+            loop, functools.partial(_extract_candidates, snippets, destination, city)
+        )
+    if not candidates:
+        return []
+
+    # ---- Validate every candidate concurrently against real data ----
+    compute_commute = not no_commute_mode
+    tasks = [
+        loop.run_in_executor(
+            None, _validate_one, c, destination, dest_coords,
+            city, london, max_commute, excludes, compute_commute,
+        )
+        for c in candidates
+    ]
+    if budget_s is not None:
+        remaining = max(0.1, budget_s - (time.time() - t0))
+        done, pending = await asyncio.wait(tasks, timeout=remaining)
+        for p in pending:
+            p.cancel()
+        results = []
+        for d in done:
+            try:
+                results.append(d.result())
+            except Exception:
+                pass
+    else:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+    validated = [r for r in results if isinstance(r, dict)]
+
+    # ---- Dedupe by slug (shortest commute wins; None sorts last) ----
+    deduped: dict[str, dict] = {}
+    for item in validated:
+        key = item.get("slug") or item["name"].lower()
+        prev = deduped.get(key)
+        if prev is None or _commute_key(item) < _commute_key(prev):
+            deduped[key] = item
+    return list(deduped.values())
 
 
 # --------------------------------------------------------------------------
@@ -380,7 +536,7 @@ async def recommend_areas(
 
     # ---- 2) Generate (all blocking work offloaded; never raises) ---------
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         # 2a) Destination coords + canonical city.
         if not city or dest_coords is None:
@@ -401,63 +557,22 @@ async def recommend_areas(
         if budget_s is not None and (time.time() - t0) > budget_s:
             return []
 
-        # 2b) Web search -> snippet text (the only source material).
-        queries = _build_queries(destination, city)
-        snippet_parts = await asyncio.gather(
-            *[_run_blocking(loop, get_search_snippets, q, 6) for q in queries]
+        # 2b-2e) Web-search -> LLM-extract -> validate -> dedupe (shared core).
+        # Destination coords are already resolved above, so the geocode-failure
+        # contract (cache an honest empty) stays exactly as before.
+        validated = await generate_candidate_areas(
+            destination,
+            city=city,
+            dest_coords=dest_coords,
+            london=london,
+            max_commute_time=max_commute,
+            exclude_slugs=exclude_slugs,
+            budget_s=budget_s,
+            t0=t0,
         )
-        snippets = "\n\n---\n\n".join(p for p in snippet_parts if p)
-        if _looks_empty(snippets):
-            print(f"[AREA_RECO] no web snippets for '{destination}' -> [] (grounded)")
-            _cache().set(dest_key, [])
-            return []
 
-        if budget_s is not None and (time.time() - t0) > budget_s:
-            return []
-
-        # 2c) LLM extract snippet-grounded candidates.
-        candidates = await _run_blocking(
-            loop, functools.partial(_extract_candidates, snippets, destination, city)
-        )
-        if not candidates:
-            print(f"[AREA_RECO] LLM extracted no grounded candidates for '{destination}'")
-            _cache().set(dest_key, [])
-            return []
-
-        # 2d) Validate every candidate concurrently against real data.
-        tasks = [
-            loop.run_in_executor(
-                None, _validate_one, c, destination, dest_coords,
-                city, london, max_commute, excludes,
-            )
-            for c in candidates
-        ]
-        if budget_s is not None:
-            remaining = max(0.1, budget_s - (time.time() - t0))
-            done, pending = await asyncio.wait(tasks, timeout=remaining)
-            for p in pending:
-                p.cancel()
-            results = []
-            for d in done:
-                try:
-                    results.append(d.result())
-                except Exception:
-                    pass
-        else:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        validated = [r for r in results if isinstance(r, dict)]
-
-        # 2e) Dedupe by slug, sort by commute asc, cap at limit.
-        deduped: dict[str, dict] = {}
-        for item in validated:
-            key = item.get("slug") or item["name"].lower()
-            prev = deduped.get(key)
-            if prev is None or item["commute_minutes"] < prev["commute_minutes"]:
-                deduped[key] = item
-        final = sorted(deduped.values(), key=lambda x: x["commute_minutes"])[:limit]
-
-        # 2f) Persist (including an honest empty) and return.
+        # 2f) Sort by commute ascending, cap at limit, persist (incl. honest empty).
+        final = sorted(validated, key=_commute_key)[:limit]
         _cache().set(dest_key, final)
         print(f"[AREA_RECO] '{destination}': {len(final)} validated areas "
               f"in {time.time() - t0:.1f}s")

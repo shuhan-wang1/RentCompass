@@ -157,12 +157,14 @@ async def test_memory_tools_require_user_id(memory, monkeypatch):
 
     memory.add("Budget 1500 near KCL", "semantic", user_id="user-A")
 
-    ok = await mt.recall_memory_impl("budget", user_id="user-A")
+    # recall_memory_impl / remember_impl are now PLAIN SYNC (blocking ChromaDB offloaded to an
+    # executor thread by Tool.execute) — call them directly, no await.
+    ok = mt.recall_memory_impl("budget", user_id="user-A")
     assert ok["success"] and ok["count"] == 1
 
     for bad in (None, "", "default"):
-        res = await mt.recall_memory_impl("budget", user_id=bad)
+        res = mt.recall_memory_impl("budget", user_id=bad)
         assert res["success"] is False
         assert res["count"] == 0 and res["memories"] == []
-        w = await mt.remember_impl("fact", user_id=bad)
+        w = mt.remember_impl("fact", user_id=bad)
         assert w["success"] is False and w["id"] is None

@@ -1,0 +1,43 @@
+{
+  "argv": [
+    "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "fc_loop",
+    "--cases",
+    "evaluation/benchmark/cases_guard_regression.jsonl",
+    "--out",
+    "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/g3_fc_guard"
+  ],
+  "command": "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cases evaluation/benchmark/cases_guard_regression.jsonl --out C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/g3_fc_guard",
+  "arch": "fc_loop",
+  "config": "routed_models",
+  "mode": "live",
+  "timestamp": "2026-07-19T14:17:26",
+  "git_commit": "87ccc9a",
+  "git_dirty": false,
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "fc_loop",
+    "DEEPSEEK_STRICT": null,
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1"
+  },
+  "case_file": {
+    "path": "evaluation\\benchmark\\cases_guard_regression.jsonl",
+    "sha256": "df704ac43b0362ddc78ecb75345c268807af35f1e9b1bb6620402e37fb8a645a"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\g3_fc_guard\\events.jsonl",
+    "sha256": "34772a5848efe1cecb3ed1abd345c9b236908f576c5246b5e007154897433e95",
+    "gz_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\g3_fc_guard\\events.jsonl.gz",
+    "sha256_gz": "2cd4fc41350be48cf902c1c6dfb0ec566073a14f9910489f6b849d653ef7e6f2",
+    "committed": true,
+    "note": "events.jsonl.gz preserved in the package for verification; raw + gz SHA256 both recorded"
+  }
+}

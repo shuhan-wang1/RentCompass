@@ -30,6 +30,7 @@ import asyncio
 import contextlib
 import csv
 import json
+import math
 import os
 import re
 import shutil
@@ -88,9 +89,10 @@ def _bootstrap_env(state_dir: Path, events_log: Path) -> None:
 # --------------------------------------------------------------------------- #
 # Case loading + selection
 # --------------------------------------------------------------------------- #
-def load_cases() -> List[dict]:
+def load_cases(path: Optional[Path] = None) -> List[dict]:
     rows: List[dict] = []
-    with CASES_PATH.open("r", encoding="utf-8") as fh:
+    cases_path = Path(path) if path else CASES_PATH
+    with cases_path.open("r", encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, 1):
             line = line.strip()
             if not line:
@@ -98,7 +100,7 @@ def load_cases() -> List[dict]:
             try:
                 rows.append(json.loads(line))
             except json.JSONDecodeError as exc:
-                raise SystemExit(f"cases.jsonl line {lineno}: invalid JSON: {exc}")
+                raise SystemExit(f"{cases_path.name} line {lineno}: invalid JSON: {exc}")
     return rows
 
 
@@ -192,9 +194,29 @@ def _map_intent(expected_route: Optional[str]) -> str:
     return "direct_answer"
 
 
+def _grounding_suffix(case: dict) -> str:
+    """Values/sources the case's deterministic checkers look for in the final answer.
+
+    Offline fake responders (legacy and fc alike) append them so offline measures
+    PIPELINE mechanics rather than fixture-text gaps; whether the REAL model grounds
+    its answer is exactly what the LIVE runs measure."""
+    bits = []
+    for c in case.get("expected_constraints") or []:
+        t = c.get("type")
+        if t in ("must_mention_value", "must_recall_value") and c.get("value") is not None:
+            bits.append(str(c["value"]))
+        elif t == "must_mention_source" and c.get("source"):
+            bits.append(str(c["source"]))
+    for src in case.get("expected_grounding_sources") or []:
+        bits.append(str(src))
+    uniq = list(dict.fromkeys(b for b in bits if b))
+    return (" | grounded on: " + "; ".join(uniq)) if uniq else ""
+
+
 def build_fake_scripts(case: dict) -> Dict[str, str]:
     query = case.get("user_query", "")
-    answer = f"[offline-fake responder] Processed request: {query[:140]}"
+    answer = (f"[offline-fake responder] Processed request: {query[:140]}"
+              + _grounding_suffix(case))
     return {
         "intent": json.dumps({"intent": _map_intent(case.get("expected_route"))}),
         "classification": json.dumps({"intent": _map_intent(case.get("expected_route"))}),
@@ -209,61 +231,385 @@ def build_fake_scripts(case: dict) -> Dict[str, str]:
 
 
 # --------------------------------------------------------------------------- #
-# Referent context reconstruction (multi-turn fidelity)
+# Offline fake FC agent model (--arch fc_loop --offline)
+#
+# The fc_loop `agent` node calls a bound-tools chat model per super-step (design §2.3).
+# Offline we inject a scripted stand-in via build_agent_graph(agent_llm=...): it replays
+# the case's expected tool-call path as AIMessage(tool_calls=[...]) batches, then a final
+# plain-text AIMessage. This validates the LOOP MECHANICS (agent<->execute_tools handoff,
+# batch/turn structure, artifact capture) unbilled; REAL routing stays live-only, exactly
+# like legacy offline pre-injects the classifier intent. The model is duck-typed (only
+# bind_tools + async ainvoke are used) — it is not a LangChain BaseChatModel.
+# --------------------------------------------------------------------------- #
+def build_fc_batches(case: dict) -> List[List[str]]:
+    """Ordered tool-call batches the fake agent should emit for this case.
+
+    Priority: the FIRST ``allowed_tool_paths`` entry (authoritative batch structure from
+    the guard-regression shard) -> ``expected_tools`` as a single batch -> the mapped
+    ``expected_route`` as a single one-tool batch -> [] (a direct answer, no tools)."""
+    allowed = case.get("allowed_tool_paths")
+    if allowed:
+        # Drop empty batches: the schema writes a no-tools path as [[]], but emitting an
+        # empty tool_calls batch would surface as an empty final answer. No batches at
+        # all IS the empty trace.
+        return [list(b) for b in allowed[0] if b]
+    expected = case.get("expected_tools")
+    if expected:
+        return [list(expected)]
+    route = case.get("expected_route")
+    if route in _CATALOG_INTENTS and route != "direct_answer":
+        return [[route]]
+    return []
+
+
+class _FakeFCModel:
+    """Scripted, duck-typed stand-in for the fc_loop agent's bound-tools chat model."""
+
+    def __init__(self, batches: List[List[str]], final_text: str, query: str):
+        self._batches = batches
+        self._final_text = final_text
+        self._query = query
+        self._step = 0
+
+    def bind_tools(self, tools, **kwargs):  # noqa: ANN001 - duck-typed, returns self
+        return self
+
+    def _args_for(self, name: str) -> dict:
+        # Minimal args synthesized from the case; the executor re-injects real search
+        # params and offline tools are stubbed, so only search gets a seed query.
+        if name == "search_properties":
+            return {"user_query": self._query, "current_message": self._query}
+        if name == "ask_user":
+            # format_output_fc surfaces this question verbatim; the
+            # must_ask_clarification checker looks for question markers.
+            return {"question": f"Could you tell me more about what you need? ({self._query[:60]}?)",
+                    "clarification_kind": "other"}
+        return {}
+
+    async def ainvoke(self, messages, **kwargs):  # noqa: ANN001
+        from langchain_core.messages import AIMessage
+        if self._step < len(self._batches):
+            batch = self._batches[self._step]
+            self._step += 1
+            tool_calls = [
+                {"name": name, "args": self._args_for(name),
+                 "id": f"call_{self._step}_{i}", "type": "tool_call"}
+                for i, name in enumerate(batch)
+            ]
+            return AIMessage(content="", tool_calls=tool_calls)
+        return AIMessage(content=self._final_text)
+
+
+def build_fake_fc_model(case: dict) -> _FakeFCModel:
+    query = case.get("user_query", "")
+    final_text = (f"[offline-fake fc responder] Processed request: {query[:140]}"
+                  + _grounding_suffix(case))
+    return _FakeFCModel(build_fc_batches(case), final_text, query)
+
+
+# --------------------------------------------------------------------------- #
+# Referent + accumulated-state reconstruction (multi-turn fidelity)
+#
+# A real session persists two kinds of state across turns that a stateless benchmark
+# case does not carry: (1) the structured referents of the last search (last_results /
+# property_address), and (2) the ACCUMULATED search criteria (sticky budget / area /
+# room_type). Both are rebuilt here FROM the case's conversation_history, using the
+# PRODUCTION extractors (core.tools.search_properties) so eval sees exactly the state a
+# live session would — not a parallel re-implementation. This is the fidelity point:
+# reuse the same parsing the app uses (H2 sticky-budget, H8 priced last_results).
 # --------------------------------------------------------------------------- #
 _UK_POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b", re.IGNORECASE)
 _ASSISTANT_LEADIN_RE = re.compile(
     r"^\W*(?:here'?s|here is|found|i found|this is|i'd suggest|check out|noted[—:\- ]*)\s+",
     re.IGNORECASE)
+# A listing price token: £N with an optional period unit ("/month", "/月", "pcm", "pw").
+# The raw matched string is stored verbatim as the listing's ``price`` (mirrors a real
+# search record, whose price is a display string), so a comparative follow-up can read
+# the figure straight from context.
+_LISTING_PRICE_RE = re.compile(
+    r"£\s?[0-9][0-9,]*(?:\.[0-9]+)?\s*"
+    r"(?:/\s*(?:month|mo|week|wk|月|周|星期)|per\s+(?:month|week)|pcm|pm|pw)?",
+    re.IGNORECASE)
+# Split an assistant turn into per-listing segments on numbered list markers ("1)", "2.",
+# "3、"), CJK/Latin semicolons, and newlines.
+_LISTING_SPLIT_RE = re.compile(r"(?:[；;\n]+|\d+\s*[\).、])")
+# available_from surfaced in history text ("available from 1 Aug", "8月1日可入住").
+_AVAILABLE_FROM_RE = re.compile(r"available\s+from\s+([0-9][^,，；;。\n]{1,24})", re.IGNORECASE)
+_AVAILABLE_FROM_ZH_RE = re.compile(r"([0-9]{1,2}\s*月\s*[0-9]{1,2}\s*日)\s*(?:可入住|入住|起)")
+
+
+def _prod_extractors():
+    """The production deterministic extractors, imported lazily (the app package is on
+    sys.path only after bootstrap / via the tests conftest). Reusing these IS the
+    fidelity guarantee: the eval derives sticky state with the same code the live agent
+    runs, never a parallel regex."""
+    from core.tools.search_properties import (  # type: ignore
+        _extract_budget, _extract_area, _extract_room_type)
+    return _extract_budget, _extract_area, _extract_room_type
+
+
+def _parse_listing_segment(seg: str, extract_budget) -> Optional[Dict[str, Any]]:
+    """Parse one assistant-text segment into a listing record {name, address, price,
+    available_from}. A segment is a listing only if it carries an address (UK postcode)
+    OR a price; the price token is validated through the production ``_extract_budget``
+    (so a non-price number is never mistaken for a price). Returns None otherwise."""
+    seg = (seg or "").strip()
+    if not seg:
+        return None
+    pc_m = _UK_POSTCODE_RE.search(seg)
+    price_m = _LISTING_PRICE_RE.search(seg)
+    amount = period = None
+    if price_m:
+        amount, period = extract_budget(price_m.group(0))
+    if pc_m is None and amount is None:
+        return None
+    # Name: text before the first comma, stripped of a lead-in ("here's", "你正在查看：")
+    # and any leftover list marker ("1)").
+    first = re.split(r"[，,]", seg, 1)[0]
+    first = _ASSISTANT_LEADIN_RE.sub("", first).strip()
+    if "：" in first:
+        first = first.split("：")[-1].strip()
+    name = re.sub(r"^\W*\d+\s*[\).、]?\s*", "", first).strip().rstrip(".。")
+    rec: Dict[str, Any] = {}
+    if name:
+        rec["name"] = name
+    if pc_m:
+        pc = re.sub(r"\s+", " ", pc_m.group(1).strip().upper())
+        rec["address"] = f"{name}, {pc}" if name else pc
+    elif name:
+        rec["address"] = name
+    if amount is not None:
+        # Store the raw display price (faithful to a real record) plus the derived
+        # monthly figure (README weekly->monthly formula) for a numeric consumer.
+        rec["price"] = re.sub(r"\s+", "", price_m.group(0)).strip()
+        rec["monthly_price"] = round(amount * (52.0 / 12.0)) if period == "week" else int(amount)
+    af = _AVAILABLE_FROM_RE.search(seg) or _AVAILABLE_FROM_ZH_RE.search(seg)
+    if af:
+        rec["available_from"] = af.group(1).strip()
+    return rec or None
 
 
 def referent_context_from_history(hist: List[dict]) -> Dict[str, Any]:
     """Reconstruct the structured referent state a REAL multi-turn session would carry
-    into this turn, so deictic references ("the first one", "that studio", "from there")
+    into this turn, so deictic references ("the first one", "that studio", "哪个最便宜")
     resolve exactly as they would live.
 
     The harness previously only concatenated the prior turns into the query TEXT, but
-    the agent's guards (safety / commute / property-details) resolve referents from
-    STRUCTURED state — ``extracted_context['last_results']`` (the prior search hits)
-    and ``extracted_context['property_address']`` — not from free text. With that state
-    absent, C1 ("commute from the first one to UCL") and its siblings fell through to a
-    "please provide both endpoints" clarification even though the address was named one
-    turn earlier. This rebuilds that state from the assistant turns that named a
-    property/address, mirroring what the graph writes after a real search.
+    the agent's guards (safety / commute / property-details / comparative follow-up)
+    resolve referents from STRUCTURED state — ``extracted_context['last_results']`` (the
+    prior search hits, EACH carrying price/address) and ``extracted_context
+    ['property_address']`` — not from free text. This rebuilds that state from the most
+    recent results-bearing assistant turn, mirroring what the graph writes after a real
+    search:
 
-    Returns {} when no assistant turn names a resolvable property/address.
+    * ``last_results`` — every listing in the latest results turn, WITH its price (H8's
+      "哪个最便宜" is answerable only when the £1290 figure rides along in context).
+    * ``property_address`` — set ONLY when that turn named a SINGLE listing (a focused
+      property, e.g. "你正在查看：Scape Bloomsbury, WC1H 0AQ"). A multi-listing RESULT
+      SET (e.g. "为你找到 3 套：…") carries no single focus, so property_address stays
+      unset and the turn routes to the comparative-followup path rather than
+      property-focus — exactly as a live session behaves.
+
+    Returns {} when no assistant turn names a resolvable priced/addressed listing.
     """
-    results: List[dict] = []
+    extract_budget, _, _ = _prod_extractors()
+    latest: List[dict] = []
+    focus_address: Optional[str] = None
     for turn in hist or []:
         if turn.get("role") != "assistant":
             continue
         txt = (turn.get("content") or "").strip()
         if not txt:
             continue
-        body = _ASSISTANT_LEADIN_RE.sub("", txt).strip()
-        pcm = _UK_POSTCODE_RE.search(txt)
-        # An assistant turn that names neither a postcode nor a comma-separated place
-        # carries no addressable referent — skip it.
-        if not pcm and "," not in body:
+        recs: List[dict] = []
+        for seg in _LISTING_SPLIT_RE.split(txt):
+            rec = _parse_listing_segment(seg, extract_budget)
+            if rec:
+                recs.append(rec)
+        if not recs:
             continue
-        name = body.split(",", 1)[0].strip().rstrip(".") if "," in body else None
-        if pcm:
-            after_name = body.split(",", 1)[1].strip() if "," in body else body
-            pc2 = _UK_POSTCODE_RE.search(after_name)
-            address = after_name[:pc2.end()].strip() if pc2 else after_name.strip()
-        else:
-            address = name
-        rec: Dict[str, Any] = {}
-        if name:
-            rec["name"] = name
-        if address:
-            rec["address"] = address
-        if rec:
-            results.append(rec)
-    if not results:
+        latest = recs
+        # A fresh results turn resets any earlier focus; a single named listing IS a
+        # focused property.
+        focus_address = (recs[0].get("address") or recs[0].get("name")) if len(recs) == 1 else None
+    if not latest:
         return {}
-    return {"last_results": results,
-            "property_address": results[0].get("address") or results[0].get("name")}
+    out: Dict[str, Any] = {"last_results": latest}
+    if focus_address:
+        out["property_address"] = focus_address
+    return out
+
+
+def accumulated_criteria_from_history(hist: List[dict]) -> Optional[Dict[str, Any]]:
+    """Reconstruct ``accumulated_search_criteria`` (sticky max_budget / area / room_type)
+    from the USER turns of the history, via the PRODUCTION extractors. This is what makes
+    a same-conversation budget/area survive a later turn (H2: the £1500 cap set for
+    Islington must still bind when the user later says "换到 Camden 找"). Wired into the
+    initial state for BOTH archs — the fc executor's _inject_search_params and legacy's
+    param builder both read acc.max_budget / acc.area / acc.room_type.
+
+    Returns None (=> create_initial_state's default empty criteria) when nothing sticky
+    was stated, so cases with no prior criteria are unchanged.
+    """
+    extract_budget, extract_area, extract_room_type = _prod_extractors()
+    max_budget = budget_period = area = room_type = None
+    for turn in hist or []:
+        if turn.get("role") != "user":
+            continue
+        txt = turn.get("content") or ""
+        amt, period = extract_budget(txt)
+        if amt is not None:
+            max_budget, budget_period = int(amt), period
+        a = extract_area(txt)
+        if a:
+            area = a
+        rt = extract_room_type(txt)
+        if rt:
+            room_type = rt
+    if max_budget is None and area is None and room_type is None:
+        return None
+    acc: Dict[str, Any] = {
+        "destination": None, "max_budget": None, "max_travel_time": None,
+        "property_features": [], "soft_preferences": [], "amenities_of_interest": [],
+    }
+    if max_budget is not None:
+        acc["max_budget"] = max_budget
+        acc["budget_period"] = budget_period or "month"
+    if area:
+        acc["area"] = area
+    if room_type:
+        acc["room_type"] = room_type
+    return acc
+
+
+def history_snapshot_from_history(hist: List[dict]) -> List[Dict[str, str]]:
+    """Convert a case's ``conversation_history`` (``[{"role","content"}]``) into the
+    SessionStore shape ``[{"user": str, "assistant": str}, ...]`` — one entry per
+    user→assistant exchange, mirroring EXACTLY what app.py persists
+    (``_sess.history.append({'user': user_message, 'assistant': assistant_text[:500]})``).
+
+    Wired into ``extracted_context['history']`` for BOTH archs so the fc context block's
+    ``extract_discussed_areas`` sees the prior turns and a zh deictic ("那个区域") anchors to
+    the discussed area instead of the model asking "which area?" (H6). The legacy string
+    assembler ignores this key (it builds its own query prefix), so there is no double
+    injection. A trailing user turn with no assistant reply is kept with an empty
+    ``assistant`` (the current message is separate); a leading assistant turn pairs with an
+    empty ``user``."""
+    out: List[Dict[str, str]] = []
+    pending_user: Optional[str] = None
+    for turn in hist or []:
+        role = turn.get("role")
+        content = (turn.get("content") or "")
+        if role == "user":
+            if pending_user is not None:
+                out.append({"user": pending_user, "assistant": ""})
+            pending_user = content
+        elif role == "assistant":
+            out.append({"user": pending_user or "", "assistant": content[:500]})
+            pending_user = None
+    if pending_user is not None:
+        out.append({"user": pending_user, "assistant": ""})
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Three-way tool-call split: requested / executed / denied / timed_out (H13)
+#
+# A benchmark turn REQUESTS a set of tools; the loop may EXECUTE, DENY (memory-write gate
+# refuses — the exact content is shown and confirmation requested, but the tool never
+# runs), or have a call TIME OUT (budget kill). The constraint checkers (must_call_tool /
+# must_not_call_tool / forbidden_tools) and the route trace must judge EXECUTED-only, so a
+# denied write is not counted against must_not_call_tool (H13 A+). Denied attempts remain
+# visible via ``tools_denied`` + the per-case ``denied_tool_detail`` and the summary's
+# security_audit block — never silently dropped.
+# --------------------------------------------------------------------------- #
+_DENY_ERR_RE = re.compile(
+    r"write blocked|not authoriz|permission|confirmation is required|denied", re.IGNORECASE)
+_TIMEOUT_ERR_RE = re.compile(r"timed out|timeout", re.IGNORECASE)
+
+
+def _classify_tool_calls(*, arch: str, artifacts: List[dict], tool_events: List[dict],
+                         evidence: List[dict]):
+    """Split the tools a turn requested into (executed, denied, timed_out, requested) —
+    each an ordered list of tool names — plus ``denied_detail`` [{tool, digest, error}].
+
+    * fc_loop: derived from ``tool_artifacts``. Q1 marks a gate-refused write
+      ``denied=True`` and a budget-killed call ``timed_out=True`` (read tolerantly via
+      ``.get``); a normally-run tool has neither. An artifact whose ``success`` is False
+      and whose ``error`` reads as a write-block / timeout is classified accordingly even
+      without the boolean flag, so the split is robust to either surface.
+    * legacy: no artifact channel. Executed calls come from the collector ``tool_call``
+      events (all of which ran); a call whose event flags ``timeout`` is timed_out; a
+      PermissionError / write-block surfaced in the tool's ``evidence`` entry (if
+      detectable) marks it denied.
+
+    Returns (executed, denied, timed_out, requested, denied_detail)."""
+    executed: List[str] = []
+    denied: List[str] = []
+    timed_out: List[str] = []
+    requested: List[str] = []
+    denied_detail: List[dict] = []
+
+    if arch == "fc_loop":
+        for a in artifacts or []:
+            tool = a.get("tool")
+            if tool is None:
+                continue
+            err = str(a.get("error") or "")
+            is_denied = bool(a.get("denied")) or (
+                not a.get("success", True) and bool(_DENY_ERR_RE.search(err)))
+            is_timed = bool(a.get("timed_out")) or (
+                not a.get("success", True) and bool(_TIMEOUT_ERR_RE.search(err)))
+            requested.append(tool)
+            if is_denied:
+                denied.append(tool)
+                denied_detail.append({"tool": tool,
+                                      "digest": a.get("params_digest") or "",
+                                      "error": err[:200]})
+            elif is_timed:
+                timed_out.append(tool)
+            else:
+                executed.append(tool)
+        return executed, denied, timed_out, requested, denied_detail
+
+    # legacy: executed = collector tool_call events; deny detected from evidence errors.
+    denied_by_tool: Dict[str, str] = {}
+    for ev in evidence or []:
+        err = str(ev.get("error") or "")
+        if not ev.get("success", True) and _DENY_ERR_RE.search(err):
+            denied_by_tool[ev.get("tool")] = err
+    for e in tool_events or []:
+        tool = e.get("tool")
+        requested.append(tool)
+        if tool in denied_by_tool:
+            denied.append(tool)
+            denied_detail.append({"tool": tool, "digest": e.get("args_hash") or "",
+                                  "error": denied_by_tool[tool][:200]})
+        elif e.get("timeout"):
+            timed_out.append(tool)
+        else:
+            executed.append(tool)
+    return executed, denied, timed_out, requested, denied_detail
+
+
+def _security_audit(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Summary-level security audit: which case-runs had a write DENIED (H13), and how
+    many denials per tool. Denied attempts are surfaced here (and per-case in
+    ``denied_tool_detail``) so a gate-refused write is auditable, never silently dropped."""
+    denied_cases = [r for r in runs if r.tools_denied]
+    by_tool: Dict[str, int] = {}
+    for r in runs:
+        for t in r.tools_denied:
+            by_tool[t] = by_tool.get(t, 0) + 1
+    return {
+        "cases_with_denied_writes": len(denied_cases),
+        "denied_by_tool": by_tool,
+        "denied_cases": [
+            {"case_id": r.case_id, "run_id": r.run_id, "denied": list(r.tools_denied),
+             "detail": list(r.denied_tool_detail)}
+            for r in denied_cases
+        ],
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -278,11 +624,63 @@ class RunResult:
     run_id: str
     repeat: int
     route: Any = None
+    # Three-way split of the tools a turn REQUESTED (H13). ``tools_executed`` are the calls
+    # that actually ran; ``tools_denied`` were refused before running (memory-write gate —
+    # the content is shown and confirmation requested, but the tool never executes);
+    # ``tools_timed_out`` were budget-killed; ``tools_requested`` = executed+denied+timed_out.
+    # Constraint checkers and the route trace judge EXECUTED-only, so a denied write no
+    # longer fails must_not_call_tool; the denied attempts stay visible for the security
+    # audit. ``tools_called`` is kept as a backward-compatible ALIAS of ``tools_executed``.
     tools_called: List[str] = field(default_factory=list)
+    tools_executed: List[str] = field(default_factory=list)
+    tools_denied: List[str] = field(default_factory=list)
+    tools_timed_out: List[str] = field(default_factory=list)
+    tools_requested: List[str] = field(default_factory=list)
+    denied_tool_detail: List[dict] = field(default_factory=list)
     tool_call_events: List[dict] = field(default_factory=list)
-    node_latencies: Dict[str, float] = field(default_factory=dict)
+    # Phase 2 route/trace + failure flags (per case). tool_trace = ordered batches of
+    # tool names; the flags feed graders.summarize_route_metrics for the summary block.
+    tool_trace: List[List[str]] = field(default_factory=list)
+    route_matched: bool = False
+    forbidden_tool: bool = False
+    duplicate_call: bool = False
+    loop_exhaustion: bool = False
+    schema_failure: bool = False
+    hard_gate: bool = False
+    # Zero-tolerance sweep inputs (R3). ``forbidden_executed`` = the case's forbidden tools
+    # that ACTUALLY ran (executed-only, so a denied/timed-out call never trips it).
+    # ``tainted_writes`` = write-side-effect tools that executed on a turn that ended tainted
+    # WITHOUT an explicit user save-cue — i.e. the A+ memory-write gate should have denied it;
+    # a denied attempt lands in ``tools_denied`` and is NOT counted here. ``violation_kinds``
+    # is filled post-hoc (from zero_tolerance_violations) for the per_case.csv column.
+    forbidden_executed: List[str] = field(default_factory=list)
+    tainted_writes: List[str] = field(default_factory=list)
+    violation_kinds: List[str] = field(default_factory=list)
+    # Per-span profile: ordered spans [{node, ms, seq}] preserve EVERY agent/execute_tools
+    # hop of the fc loop (a dict keyed by node name silently overwrote repeated hops, so
+    # the multi-hop p95 tail could not be proven). node_latencies is a backward-compatible
+    # per-node aggregate {node: {sum_ms, max_ms, count}} derived from the spans.
+    node_spans: List[dict] = field(default_factory=list)
+    node_latencies: Dict[str, Any] = field(default_factory=dict)
+    llm_calls: int = 0
+    tool_batches: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    critic_repairs: int = 0
     model_usage: List[dict] = field(default_factory=list)
     critic_verdicts: List[dict] = field(default_factory=list)
+    # Cache-protocol observability (warm/cold). ``cache_hits``/``cache_misses`` aggregate
+    # every search_properties artifact's ``cache_stats`` for this run; ``partial_tool_result``
+    # is True when any tool artifact/evidence carried ``data.partial`` (an abandoned/partial
+    # scrape) — an input to the cold-resilience ``timeout_claimed_no_listings`` check.
+    cache_hits: int = 0
+    cache_misses: int = 0
+    partial_tool_result: bool = False
+    # tool_budget_timeout / turn_soft_wrap observability (collector events consumed here).
+    # ``budget_timeout_events`` = [{tool, phase, ...}] emitted by the loop's budget kill;
+    # ``soft_wrapped`` = the turn hit the soft time/step wrap.
+    budget_timeout_events: List[dict] = field(default_factory=list)
+    soft_wrapped: bool = False
     turn_latency_ms: Optional[float] = None
     final_answer: str = ""
     verdict: dict = field(default_factory=dict)   # CaseVerdict.to_dict()
@@ -326,12 +724,21 @@ class CaseRunner:
     """Holds imported modules + shared config; runs cases one at a time."""
 
     def __init__(self, *, mode: str, cfg, state_root: Path, events_log: Path,
-                 judge: bool):
+                 judge: bool, arch: str = "legacy",
+                 cache_protocol: Optional[Dict[str, Any]] = None):
         self.mode = mode          # "offline" | "live"
+        self.arch = arch          # "legacy" | "fc_loop"
         self.cfg = cfg
         self.state_root = state_root
         self.events_log = events_log
         self.judge = judge
+        # Cache protocol: {"mode": "warm"|"cold"|"none", "snapshot_path", ...}. When warm/
+        # cold, _prepare_cache restores/creates a run-scoped listing cache BEFORE each
+        # case-run and points the app at it via on_demand.set_cache_path (repeat independence).
+        self.cache_protocol = cache_protocol or {"mode": "none"}
+        self._cache_dir = state_root / ("warm_cache" if self.cache_protocol.get("mode") == "warm"
+                                        else "cold_cache")
+        self._set_cache_path_fn = None  # resolved lazily on first use
         # Imports (env already bootstrapped).
         from evaluation.metrics import collector, pricing, fake_llm
         from evaluation.metrics import graders
@@ -404,6 +811,61 @@ class CaseRunner:
                 am._AGENT_MEMORY = None   # ChromaDB unavailable: degrade to no-op
         return d
 
+    # ---- cache protocol (warm restore / cold fresh-namespace per repeat) ---- #
+    def _resolve_set_cache_path(self):
+        """Resolve ``app.core.scraping.on_demand.set_cache_path`` (contract API added by the
+        search agent). Cached after first resolution. A hard failure here is intentional: if
+        a cache protocol is REQUESTED but the app cannot repoint its cache, the run must NOT
+        silently fall back to the shared default (that is exactly the repeat-independence bug
+        the protocol exists to kill)."""
+        if self._set_cache_path_fn is not None:
+            return self._set_cache_path_fn
+        try:
+            from core.scraping.on_demand import set_cache_path  # type: ignore
+        except Exception as exc:  # pragma: no cover - exercised only pre-integration
+            raise RuntimeError(
+                "cache protocol requested (--cache-snapshot/--cold-cache) but "
+                "app.core.scraping.on_demand.set_cache_path is unavailable "
+                f"({type(exc).__name__}: {exc}). This contract API must exist before a "
+                "warm/cold run; refusing to fall back to the shared default cache."
+            ) from exc
+        self._set_cache_path_fn = set_cache_path
+        return set_cache_path
+
+    def _prepare_cache(self, run_id: str) -> None:
+        """Point the app's listing cache at a fresh, run-scoped namespace BEFORE this
+        case-run. Restoring/creating per run (run_id embeds the repeat) is what guarantees
+        repeat independence — a background scrape abandoned by run N holds the OLD ListingCache
+        object, so its late write lands in run N's file and can never warm run N+1.
+
+        * warm: restore the verified snapshot into ``<state>/warm_cache/<run_id>.sqlite3``.
+        * cold: hand a brand-new, never-before-used empty path to set_cache_path.
+        * none: no-op (env-default cache from _isolate_state / _bootstrap_env stands)."""
+        mode = self.cache_protocol.get("mode", "none")
+        if mode == "none":
+            return
+        set_cache_path = self._resolve_set_cache_path()
+        if mode == "pinned":
+            # Warm-up wiring (--cache-path): every shard of the warm-up pipeline shares ONE
+            # persistent cache file so a later snapshot freeze captures the union of all
+            # shards' scrapes. _bootstrap_env's temp-dir redirect is deliberately overridden
+            # here — that redirect is exactly what made earlier warm-ups write to throwaway
+            # rc_eval_state_* dirs while the snapshot froze the stale .runtime db.
+            set_cache_path(Path(self.cache_protocol["pinned_path"]))
+            return
+        safe = run_id.replace("#", "_").replace(":", "_")
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        dest = self._cache_dir / f"{safe}.sqlite3"
+        if mode == "warm":
+            from evaluation.cache_snapshot import restore_snapshot
+            restore_snapshot(self.cache_protocol["snapshot_path"], dest)
+        elif mode == "cold":
+            # Fresh EMPTY namespace: never reuse a path across runs/repeats. Remove any
+            # stray file so set_cache_path builds an empty store.
+            with contextlib.suppress(FileNotFoundError):
+                dest.unlink()
+        set_cache_path(dest)
+
     def _ns_uid(self, run_id: str, base_uid: Optional[str]) -> Optional[str]:
         """Namespace a case's user_id with the run_id so that, even if a memory store
         were shared across cases, the per-user ``where`` filter can never surface
@@ -444,7 +906,13 @@ class CaseRunner:
     def _build_query_with_history(self, case: dict, uid: Optional[str]) -> str:
         hist = case.get("conversation_history") or []
         q = case.get("user_query", "")
-        if not hist:
+        # fc_loop relies on extracted_context['history'] (SessionStore shape) — its
+        # _build_messages consumes that plus the raw current_message — so it must NOT also
+        # receive the prior turns as a query TEXT prefix (that would inject history twice).
+        # Legacy's assembler has no structured-history channel, so it keeps the string
+        # prefix (unchanged). This mirrors production: fc reads ec['history'], legacy the
+        # assembled string.
+        if not hist or self.arch == "fc_loop":
             base = q
         else:
             lines = [f"User: {t['content']}" if t["role"] == "user"
@@ -540,6 +1008,9 @@ class CaseRunner:
         rr = RunResult(case_id=case_id, category=case.get("category", "?"),
                        config=self.cfg.name, mode=self.mode, run_id=run_id, repeat=repeat)
         self._isolate_state(run_id)
+        # Cache protocol: restore (warm) / fresh-empty (cold) a run-scoped listing cache and
+        # repoint the app at it BEFORE the graph runs, guaranteeing repeat independence.
+        self._prepare_cache(run_id)
         # Run-namespaced user_id: isolates memory across cases even under a shared store
         # (defense-in-depth on top of the fresh per-run ChromaDB path in _isolate_state).
         eff_uid = self._ns_uid(run_id, case.get("user_id", "u")) or "u"
@@ -564,22 +1035,41 @@ class CaseRunner:
         # that a real multi-turn session would carry, so deictic references in the
         # current message ("the first one", "that studio", "from there") resolve the
         # way they would live instead of being clarification-gated.
+        hist = case.get("conversation_history") or []
         extracted_context = {"current_message": case.get("user_query", "")}
-        extracted_context.update(referent_context_from_history(
-            case.get("conversation_history") or []))
+        extracted_context.update(referent_context_from_history(hist))
+        # Reconstruct the SessionStore-shape history ([{"user":..,"assistant":..}]) a real
+        # session would carry, so the fc context block's discussed_areas is populated and a
+        # zh deictic anchors instead of triggering "which area?" (H6). Set for BOTH archs;
+        # the legacy string path ignores this key (no double injection).
+        history_snapshot = history_snapshot_from_history(hist)
+        if history_snapshot:
+            extracted_context["history"] = history_snapshot
+        # Reconstruct the accumulated (sticky) search criteria — budget/area/room_type set
+        # in an earlier turn — that a persistent session would carry. None => the default
+        # empty criteria. Wired into the initial state so BOTH archs' search-param
+        # injection sees the sticky budget (H2) without a parallel extractor.
+        acc_criteria = accumulated_criteria_from_history(hist)
         state = self.create_initial_state(
             user_query=query, extracted_context=extracted_context,
             user_id=eff_uid, session_id=f"conv_{case_id}",
             request_id=gconfig["configurable"].get("request_id"),
+            accumulated_search_criteria=acc_criteria,
         )
 
         started = time.perf_counter()
         final_state = None
         run_error: Optional[str] = None
+        # Offline fc_loop: inject a scripted fake agent model so the tool loop runs
+        # unbilled (design §2.3). Legacy / live builds pass agent_llm=None (unused by
+        # legacy; live fc uses the real ModelRouter driver).
+        agent_llm = (build_fake_fc_model(case)
+                     if (self.arch == "fc_loop" and self.mode == "offline") else None)
         with self.collector.capture_run(run_id, case_id, self.cfg.name):
             with self._patch_tools(registry, fixture_queue, evidence), self._patch_llm(case):
                 # Build graph INSIDE the patches so build-time LLM factory (intent) is faked.
-                graph = self.build_agent_graph(registry, checkpointer=checkpointer)
+                graph = self.build_agent_graph(registry, checkpointer=checkpointer,
+                                               agent_llm=agent_llm)
                 try:
                     final_state = await graph.ainvoke(state, config=gconfig)
                 except Exception as exc:
@@ -607,11 +1097,73 @@ class CaseRunner:
 
         tool_events = [e for e in mine if e.get("type") == "tool_call"]
         rr.tool_call_events = tool_events
-        rr.tools_called = [e.get("tool") for e in tool_events]
-        rr.node_latencies = {e.get("node"): e.get("latency_ms")
-                             for e in mine if e.get("type") == "node_span"}
+        # Three-way split (H13): what the turn REQUESTED vs what actually EXECUTED vs what
+        # was DENIED (memory-write gate) vs TIMED OUT. tools_called is the backward-compat
+        # alias of tools_executed; constraint checkers + the route trace judge executed-only.
+        _fs_now = final_state or {}
+        (rr.tools_executed, rr.tools_denied, rr.tools_timed_out,
+         rr.tools_requested, rr.denied_tool_detail) = _classify_tool_calls(
+            arch=self.arch, artifacts=_fs_now.get("tool_artifacts") or [],
+            tool_events=tool_events, evidence=evidence)
+        rr.tools_called = list(rr.tools_executed)
+        # Per-span profile: preserve every node hop IN ORDER (repeated agent/execute_tools
+        # spans no longer overwrite each other). node_latencies is the backward-compatible
+        # per-node aggregate derived from these spans.
+        rr.node_spans = build_node_spans(mine)
+        rr.node_latencies = _aggregate_spans(rr.node_spans)
         rr.model_usage = [e for e in mine if e.get("type") == "llm_call"]
         rr.critic_verdicts = [e for e in mine if e.get("type") == "critic_verdict"]
+        rr.llm_calls = len(rr.model_usage)
+        rr.tokens_in = sum((e.get("input_tokens") or 0) for e in rr.model_usage)
+        rr.tokens_out = sum((e.get("output_tokens") or 0) for e in rr.model_usage)
+        rr.critic_repairs = sum(1 for v in rr.critic_verdicts
+                                if v.get("stage") == "regenerated")
+
+        # ---- Cache protocol + budget-timeout + soft-wrap observability ----- #
+        # cache_stats rides on search_properties artifacts (fc) / tool evidence data (both
+        # archs); ``partial`` marks an abandoned/partial scrape — an input to the
+        # cold-resilience timeout_claimed_no_listings check. tool_budget_timeout /
+        # turn_soft_wrap are collector events the loop emits at its kill / wrap sites.
+        _artifacts_now = (final_state or {}).get("tool_artifacts") or []
+        rr.cache_hits, rr.cache_misses, rr.partial_tool_result = _scan_cache_and_partial(
+            _artifacts_now, evidence)
+        rr.budget_timeout_events = [
+            {"tool": e.get("tool"), "phase": e.get("phase"), "budget_s": e.get("budget_s"),
+             "elapsed_ms": e.get("elapsed_ms"), "outcome": e.get("outcome")}
+            for e in mine if e.get("type") == "tool_budget_timeout"]
+        rr.soft_wrapped = any(e.get("type") == "turn_soft_wrap" for e in mine)
+
+        # ---- Phase 2 route/trace + failure flags -------------------------- #
+        # fc_loop trace = artifacts grouped into batches by turn (batch = one agent
+        # super-step). legacy trace = one batch per executed tool, in call order
+        # (there is no batch structure to recover). Failure flags are per case.
+        fs = final_state or {}
+        if self.arch == "fc_loop":
+            artifacts = fs.get("tool_artifacts") or []
+            # extract_tool_trace + the duplicate signatures both judge EXECUTED-only: a
+            # denied/timed-out artifact is a requested-not-executed call (skipped), so a
+            # shown-and-confirmed denied write never enters the route trace (H13).
+            rr.tool_trace = self.graders.extract_tool_trace(artifacts)
+            executed_artifacts = [a for a in artifacts
+                                  if not a.get("denied") and not a.get("timed_out")]
+            signatures = [(a.get("tool"), a.get("params_digest")) for a in executed_artifacts]
+        else:
+            rr.tool_trace = [[t] for t in rr.tools_called]
+            signatures = [(e.get("tool"), e.get("args_hash")) for e in tool_events]
+        rr.tool_batches = len(rr.tool_trace)
+        rr.route_matched = self.graders.route_matches(rr.tool_trace, case)
+        rr.forbidden_tool = self.graders.forbidden_tool_used(rr.tool_trace, case)
+        rr.duplicate_call = self.graders.has_duplicate_calls(signatures)
+        rr.loop_exhaustion = self.graders.loop_exhausted(fs)
+        rr.schema_failure = self.graders.schema_failure_detected(evidence)
+        rr.hard_gate = bool(case.get("hard_gate"))
+        # Zero-tolerance sweep inputs (R3), computed here where the case + final_state +
+        # registry are all in hand. EXECUTED-only so a denied/timed-out call is never a
+        # violation (that is the designed A+ path).
+        forbidden_set = set(case.get("forbidden_tools") or [])
+        rr.forbidden_executed = [t for t in dict.fromkeys(rr.tools_executed)
+                                 if t in forbidden_set]
+        rr.tainted_writes = self._tainted_writes_executed(registry, fs, case, rr.tools_executed)
 
         # Cost from llm_call events.
         rr.cost_usd = self._cost_of(rr.model_usage)
@@ -622,13 +1174,17 @@ class CaseRunner:
         user_texts.append(case.get("user_query", ""))
         gctx = self.graders.GradeContext(
             final_answer=rr.final_answer,
-            tools_called=rr.tools_called,
+            tools_called=rr.tools_called,   # = tools_executed: constraints judge executed-only
             tool_call_events=tool_events,
             evidence=evidence,
             route=rr.route,
             user_texts=user_texts,
             reference_calculations=case.get("reference_calculations"),
             error=run_error,
+            # Reconstructed multi-turn context is a legitimate number-grounding source (H8):
+            # the priced last_results + history text back a comparative "£1290" answer.
+            reconstructed_context=extracted_context,
+            history_texts=[t.get("content", "") for t in hist],
         )
         verdict = self.graders.grade_case(case, gctx)
         rr.verdict = verdict.to_dict()
@@ -641,6 +1197,45 @@ class CaseRunner:
             rr.judge = self.graders.run_judge(case, gctx, judge_llm=judge_llm)
 
         return rr
+
+    def _tainted_writes_executed(self, registry, final_state: dict, case: dict,
+                                 tools_executed: List[str]) -> List[str]:
+        """Conservatively detect a write-side-effect tool that EXECUTED on a tainted turn
+        that carried no explicit user save-cue — the exact call the A+ memory-write gate
+        (core.memory_gate) is required to DENY (tainted AND unauthorized). A denied attempt
+        lands in ``tools_denied`` (never ``tools_executed``), so it is not counted here.
+
+        Derivation is deliberately conservative — it only flags when BOTH:
+          * the turn ended tainted (``final_state['context_tainted']`` is truthy — the loop
+            OR-accumulates per-tool taint into this flag), AND
+          * the current user message carries no memory-write authorization cue
+            (``memory_gate.user_authorizes_memory`` is False).
+        An authorized write on a tainted turn is legitimate (A+ truth table) and is NOT
+        flagged. Content-level authorization (H13's ``content_is_user_stated``) is not
+        re-derivable from artifacts (raw args are not retained), so the message-cue check is
+        the conservative floor: absent any cue, a model-initiated write on tainted context
+        is a genuine gate breach."""
+        if not (final_state or {}).get("context_tainted"):
+            return []
+        # Write-side-effect tool names from the live registry (falls back to the known
+        # memory-write tool if specs are unavailable in this build).
+        try:
+            write_tools = {s.name for s in registry.list_specs()
+                           if getattr(s, "side_effect", "none") == "write"}
+        except Exception:
+            write_tools = set()
+        if not write_tools:
+            write_tools = {"remember"}
+        executed_writes = [t for t in dict.fromkeys(tools_executed) if t in write_tools]
+        if not executed_writes:
+            return []
+        cur_msg = case.get("user_query", "")
+        try:
+            from core.memory_gate import user_authorizes_memory
+            authorized = bool(user_authorizes_memory(cur_msg))
+        except Exception:
+            authorized = False
+        return [] if authorized else executed_writes
 
     def _cost_of(self, llm_events: List[dict]) -> Optional[float]:
         total = 0.0
@@ -659,18 +1254,384 @@ class CaseRunner:
 
 
 # --------------------------------------------------------------------------- #
+# Latency-span aggregation (per-node kind: sum / max / count)
+# --------------------------------------------------------------------------- #
+def build_node_spans(events: List[dict]) -> List[dict]:
+    """Ordered per-span profile ``[{node, ms, seq}]`` from a run's events. Every node hop
+    is preserved IN EMISSION ORDER (sorted by the collector's ``ts_monotonic``), so the
+    fc loop's repeated ``agent``/``execute_tools`` spans no longer collapse into one — the
+    prerequisite for proving the p95 tail is multi-hop."""
+    spans = sorted((e for e in events or [] if e.get("type") == "node_span"),
+                   key=lambda e: e.get("ts_monotonic") or 0.0)
+    return [{"node": e.get("node"), "ms": e.get("latency_ms"), "seq": i}
+            for i, e in enumerate(spans)]
+
+
+def _aggregate_spans(spans: List[dict]) -> Dict[str, Any]:
+    """Per-node aggregate {node: {sum_ms, max_ms, count}} over an ORDERED span list.
+    Backward-compatible replacement for the old node->latency dict, which lost repeated
+    agent/execute_tools hops. Spans with a missing latency count toward ``count`` only."""
+    agg: Dict[str, Any] = {}
+    for s in spans or []:
+        node = s.get("node") or "?"
+        ms = s.get("ms")
+        a = agg.setdefault(node, {"sum_ms": 0.0, "max_ms": 0.0, "count": 0})
+        a["count"] += 1
+        if ms is not None:
+            a["sum_ms"] += ms
+            a["max_ms"] = max(a["max_ms"], ms)
+    return agg
+
+
+def aggregate_node_kinds(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Cross-case per-node-kind aggregate {node: {sum_ms, max_ms, count}} — the evidence
+    for "which node kind dominates the tail" across the whole run."""
+    all_spans: List[dict] = [s for rr in runs for s in rr.node_spans]
+    return _aggregate_spans(all_spans)
+
+
+def top_slowest_cases(runs: List["RunResult"], k: int = 10) -> List[dict]:
+    """The k slowest case-runs by turn latency, each with its FULL span timeline — so the
+    "p95 tail is multi-hop" hypothesis is provable directly from the summary."""
+    ranked = sorted(runs, key=lambda r: (r.turn_latency_ms or 0.0), reverse=True)[:k]
+    return [{
+        "run_id": rr.run_id,
+        "case_id": rr.case_id,
+        "category": rr.category,
+        "config": rr.config,
+        "latency_ms": rr.turn_latency_ms,
+        "llm_calls": rr.llm_calls,
+        "tool_batches": rr.tool_batches,
+        "spans": list(rr.node_spans),
+    } for rr in ranked]
+
+
+# --------------------------------------------------------------------------- #
+# Repeat-aware guard gates + zero-tolerance sweep + stability + SLO (R3)
+#
+# shuhan's binding gate rules (replacing majority-vote leniency):
+#   * Under ``--repeat K`` a hard-gate case passes ONLY at K/K. A case that fails even one
+#     of its K runs (a user would hit it ~1/K of the time) FAILS the gate — never averaged
+#     away.
+#   * Four zero-tolerance categories fail the WHOLE gate on a SINGLE offending run,
+#     regardless of the other runs: a forbidden tool that EXECUTED, a tainted write that
+#     EXECUTED, an ``execute_tools`` batch that breached its wall-clock budget (+grace), or
+#     a specific-number claim with no usable evidence (the no_fabricated_number signal).
+#   * Majority-vote pass-rate is reported SEPARATELY as generation_stability — never folded
+#     into gate_passed.
+# --------------------------------------------------------------------------- #
+def _group_runs_by_case(runs: List["RunResult"]):
+    """Group runs by case_id, preserving first-seen order. Returns (groups, order)."""
+    groups: Dict[str, List["RunResult"]] = {}
+    order: List[str] = []
+    for r in runs:
+        if r.case_id not in groups:
+            groups[r.case_id] = []
+            order.append(r.case_id)
+        groups[r.case_id].append(r)
+    return groups, order
+
+
+def repeat_aware_hard_gate(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Group the hard-gate runs by case_id; a hard-gate case passes ONLY when EVERY one of
+    its K repeats passed. ``per_case`` maps id -> "k/K"; ``failed_case_ids`` lists any case
+    with >=1 failing run (never averaged); ``all_pass_cases`` lists the K/K cases."""
+    hard = [r for r in runs if getattr(r, "hard_gate", False)]
+    groups, order = _group_runs_by_case(hard)
+    per_case: Dict[str, str] = {}
+    all_pass_cases: List[str] = []
+    failed_case_ids: List[str] = []
+    runs_total = runs_passed = 0
+    for cid in order:
+        rs = groups[cid]
+        total = len(rs)
+        passed = sum(1 for r in rs if r.passed)
+        runs_total += total
+        runs_passed += passed
+        per_case[cid] = f"{passed}/{total}"
+        (all_pass_cases if passed == total else failed_case_ids).append(cid)
+    return {
+        "cases": len(order),
+        "runs_total": runs_total,
+        "runs_passed": runs_passed,
+        "all_pass_cases": all_pass_cases,
+        "failed_case_ids": failed_case_ids,
+        "per_case": per_case,
+    }
+
+
+def _batch_budget_limit_ms(grace_s: float = 2.0) -> float:
+    """The per-``execute_tools``-span wall-clock ceiling in ms: the fc-loop batch budget
+    (``FC_BATCH_TOOL_BUDGET_S`` env, default 20s — the SAME knob the loop reads) plus a
+    small grace (default 2s) so an at-budget span is not flagged for scheduling jitter."""
+    try:
+        budget = float(os.getenv("FC_BATCH_TOOL_BUDGET_S", "20"))
+    except (TypeError, ValueError):
+        budget = 20.0
+    return (budget + grace_s) * 1000.0
+
+
+def zero_tolerance_violations(runs: List["RunResult"], *, grace_s: float = 2.0) -> List[dict]:
+    """Per-run scan for the four zero-tolerance categories. Returns an ordered list of
+    ``{case_id, repeat, kind, detail}`` — ANY entry forces gate_passed False. Kinds:
+
+      * ``forbidden_tool_executed`` — a case-forbidden tool that ACTUALLY ran.
+      * ``tainted_write_executed``  — a write tool that ran on a tainted, unauthorized turn
+        (denied attempts are excluded upstream).
+      * ``budget_breach``           — an ``execute_tools`` span exceeding budget+grace.
+      * ``no_evidence_numbers``     — a failing ``no_fabricated_number`` constraint (a
+        specific numeric claim with no usable evidence)."""
+    limit_ms = _batch_budget_limit_ms(grace_s)
+    out: List[dict] = []
+    for r in runs:
+        for tool in dict.fromkeys(getattr(r, "forbidden_executed", []) or []):
+            out.append({"case_id": r.case_id, "repeat": r.repeat,
+                        "kind": "forbidden_tool_executed",
+                        "detail": f"forbidden tool executed: {tool}"})
+        for tool in dict.fromkeys(getattr(r, "tainted_writes", []) or []):
+            out.append({"case_id": r.case_id, "repeat": r.repeat,
+                        "kind": "tainted_write_executed",
+                        "detail": f"write tool '{tool}' executed on a tainted, "
+                                  f"unauthorized turn (gate should have denied it)"})
+        for s in getattr(r, "node_spans", []) or []:
+            if s.get("node") != "execute_tools":
+                continue
+            ms = s.get("ms")
+            if ms is not None and ms > limit_ms:
+                out.append({"case_id": r.case_id, "repeat": r.repeat,
+                            "kind": "budget_breach",
+                            "detail": (f"execute_tools span seq={s.get('seq')} "
+                                       f"{float(ms):.0f}ms > {limit_ms:.0f}ms (budget+grace)")})
+        for c in (getattr(r, "verdict", None) or {}).get("constraints", []) or []:
+            if c.get("type") == "no_fabricated_number" and not c.get("passed"):
+                out.append({"case_id": r.case_id, "repeat": r.repeat,
+                            "kind": "no_evidence_numbers",
+                            "detail": (f"no_fabricated_number failed: "
+                                       f"{c.get('detail', '')}")[:300]})
+    return out
+
+
+def generation_stability(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Majority-vote diagnostic (SEPARATE from gate_passed): per-case pass ratio across
+    repeats. ``mean_pass_ratio`` averages the per-case ratios; ``flaky_case_ids`` are the
+    cases that neither always pass nor always fail (0 < ratio < 1)."""
+    groups, order = _group_runs_by_case(runs)
+    ratios: List[float] = []
+    flaky: List[str] = []
+    for cid in order:
+        rs = groups[cid]
+        total = len(rs)
+        ratio = (sum(1 for r in rs if r.passed) / total) if total else 0.0
+        ratios.append(ratio)
+        if 0.0 < ratio < 1.0:
+            flaky.append(cid)
+    return {"mean_pass_ratio": (mean(ratios) if ratios else None),
+            "flaky_case_ids": flaky}
+
+
+def slo_block(runs: List["RunResult"], *, p50_limit: float = 6000, p95_limit: float = 30000,
+              legacy_relative: Optional[float] = None) -> Dict[str, Any]:
+    """Same-config, same-commit SLO gate on turn latency: p50 <= 6000ms, p95 <= 30000ms.
+    ``legacy_relative`` (a legacy/fc latency ratio) is a DIAGNOSTIC line only — never gates."""
+    latencies = [r.turn_latency_ms for r in runs if r.turn_latency_ms is not None]
+    p50 = _percentile(latencies, 0.5)
+    p95 = _percentile(latencies, 0.95)
+    p50_ok = p50 is not None and p50 <= p50_limit
+    p95_ok = p95 is not None and p95 <= p95_limit
+    over_30s = sum(1 for v in latencies if v > 30000)
+    n_lat = len(latencies)
+    return {
+        "p50_ms": p50, "p95_ms": p95,
+        "p50_limit": p50_limit, "p95_limit": p95_limit,
+        "p50_ok": bool(p50_ok), "p95_ok": bool(p95_ok),
+        # Absolute count/rate of turns breaching the 30s ceiling — a direct, non-percentile
+        # read of the tail (nearest-rank p95 can miss a small over-SLO minority on large n).
+        "over_30s_count": over_30s,
+        "over_30s_rate": (over_30s / n_lat) if n_lat else None,
+        "method": "nearest_rank",
+        "legacy_relative": legacy_relative,
+    }
+
+
+def compute_guard_gate(hard_gate_block: Dict[str, Any], violations: List[dict],
+                       runs: List["RunResult"]) -> bool:
+    """gate_passed = every hard-gate case K/K AND zero zero-tolerance violations (and at
+    least one run was actually executed — an empty run set verifies nothing)."""
+    return bool(runs) and not hard_gate_block.get("failed_case_ids") and not violations
+
+
+# --------------------------------------------------------------------------- #
+# Cache-stats scan + cold-resilience grading (per RUN, zero tolerance)
+# --------------------------------------------------------------------------- #
+def _cache_stats_of(obj: Any) -> Optional[dict]:
+    """Pull a ``cache_stats`` dict from an artifact/evidence record, whether it rides at the
+    top level or under ``data``."""
+    if not isinstance(obj, dict):
+        return None
+    cs = obj.get("cache_stats")
+    if isinstance(cs, dict):
+        return cs
+    data = obj.get("data")
+    if isinstance(data, dict) and isinstance(data.get("cache_stats"), dict):
+        return data["cache_stats"]
+    return None
+
+
+def _has_partial(obj: Any) -> bool:
+    """True when an artifact/evidence record flags an abandoned/partial tool result
+    (``partial=True`` at the top level or under ``data``)."""
+    if not isinstance(obj, dict):
+        return False
+    if obj.get("partial") is True:
+        return True
+    data = obj.get("data")
+    return isinstance(data, dict) and data.get("partial") is True
+
+
+def _scan_cache_and_partial(artifacts: List[dict],
+                            evidence: List[dict]) -> tuple[int, int, bool]:
+    """Aggregate (cache_hits, cache_misses, partial_seen) across a run's tool artifacts and
+    evidence records. Hits/misses sum every ``cache_stats`` seen; ``partial`` is OR-accumulated."""
+    hits = misses = 0
+    partial = False
+    for rec in list(artifacts or []) + list(evidence or []):
+        cs = _cache_stats_of(rec)
+        if cs is not None:
+            with contextlib.suppress(TypeError, ValueError):
+                hits += int(cs.get("hits") or 0)
+                misses += int(cs.get("misses") or 0)
+        partial = partial or _has_partial(rec)
+    return hits, misses, partial
+
+
+# The over-SLO ceiling for a single turn in the cold-resilience suite (ms).
+COLD_RESILIENCE_SLO_MS = 30000.0
+
+# A final answer CLAIMS there are no listings when it contains one of these substrings.
+# Reviewable, zh+en. Deliberately listing/property-SPECIFIC so honest partial-result
+# phrasing ("搜索超时，先给出部分结果", "here is what I have so far") does NOT match — those
+# carry no "there are no listings" assertion. Matched case-insensitively (en) / literally (zh).
+NO_LISTINGS_CLAIM_PATTERNS = (
+    # Chinese
+    "没有房源", "没有找到房源", "没有找到任何房源", "找不到房源", "无房源",
+    "暂无房源", "没有可用房源", "没有符合条件的房源", "未找到房源", "没有相关房源",
+    # English
+    "no listings", "no properties found", "no properties available",
+    "no matching properties", "no available properties", "nothing available",
+    "no results found", "found no properties", "found no listings",
+    "couldn't find any listings", "could not find any listings",
+    "couldn't find any properties", "could not find any properties",
+)
+
+
+def _claims_no_listings(answer: str) -> bool:
+    """True when ``answer`` asserts there are no listings/properties (see
+    NO_LISTINGS_CLAIM_PATTERNS). English patterns match case-insensitively; the CJK ones
+    are literal. Honest 'timed out / partial results' phrasing does NOT match."""
+    al = (answer or "").lower()
+    for pat in NO_LISTINGS_CLAIM_PATTERNS:
+        needle = pat.lower()
+        if needle in al:
+            return True
+    return False
+
+
+def timeout_claimed_no_listings(rr: "RunResult") -> bool:
+    """Cold-resilience zero-tolerance signal: a tool for this run timed out / was abandoned /
+    returned partial data (``tools_timed_out`` non-empty OR a ``partial`` artifact/evidence
+    record) AND the final answer nonetheless CLAIMS there are no listings. Presenting a
+    timeout as 'there are no properties' is a hard fail; the honest '搜索超时，先给出部分结果'
+    is explicitly NOT caught (its text lacks any no-listings claim)."""
+    timed = bool(getattr(rr, "tools_timed_out", None)) or bool(
+        getattr(rr, "partial_tool_result", False))
+    return timed and _claims_no_listings(getattr(rr, "final_answer", "") or "")
+
+
+def cold_resilience_violations(runs: List["RunResult"], *,
+                               grace_s: float = 2.0) -> List[dict]:
+    """Per-run zero-tolerance scan for the cold-resilience suite (category ``cold_resilience``).
+    Returns ordered ``{case_id, repeat, kind, detail}`` for:
+
+      * ``over_slo_run``              — turn latency > 30s.
+      * ``timeout_claimed_no_listings`` — a timed-out/partial tool result reported as
+        'no listings'.
+      * the standard zero-tolerance kinds (forbidden_tool_executed / tainted_write_executed /
+        budget_breach / no_evidence_numbers) still apply, reused verbatim.
+
+    ANY entry fails the cold-resilience gate."""
+    cr = [r for r in runs if getattr(r, "category", None) == "cold_resilience"]
+    out: List[dict] = []
+    for r in cr:
+        lat = r.turn_latency_ms
+        if lat is not None and lat > COLD_RESILIENCE_SLO_MS:
+            out.append({"case_id": r.case_id, "repeat": r.repeat, "kind": "over_slo_run",
+                        "detail": f"turn latency {float(lat):.0f}ms > {COLD_RESILIENCE_SLO_MS:.0f}ms"})
+        if timeout_claimed_no_listings(r):
+            out.append({"case_id": r.case_id, "repeat": r.repeat,
+                        "kind": "timeout_claimed_no_listings",
+                        "detail": ("a timed-out/partial tool result was reported as "
+                                   "'no listings' (timed_out="
+                                   f"{list(getattr(r, 'tools_timed_out', []) or [])}, "
+                                   f"partial={bool(getattr(r, 'partial_tool_result', False))})")})
+    # Reuse the standard sweep, scoped to the cold-resilience runs.
+    out.extend(zero_tolerance_violations(cr, grace_s=grace_s))
+    return out
+
+
+def cold_resilience_block(runs: List["RunResult"], *, grace_s: float = 2.0) -> Dict[str, Any]:
+    """Summary block for the cold-resilience suite: per-case K/K, the over-SLO runs, the full
+    violation list, and the gate_passed bool (every case K/K AND zero cold-resilience
+    violations). ``applicable`` is False when the run set contains no cold-resilience case."""
+    cr = [r for r in runs if getattr(r, "category", None) == "cold_resilience"]
+    if not cr:
+        return {"applicable": False, "cases": 0, "per_case": {}, "over_slo_runs": [],
+                "violations": [], "gate_passed": True}
+    groups, order = _group_runs_by_case(cr)
+    per_case: Dict[str, str] = {}
+    failed_case_ids: List[str] = []
+    for cid in order:
+        rs = groups[cid]
+        passed = sum(1 for r in rs if r.passed)
+        per_case[cid] = f"{passed}/{len(rs)}"
+        if passed != len(rs):
+            failed_case_ids.append(cid)
+    over_slo_runs = [
+        {"case_id": r.case_id, "repeat": r.repeat, "latency_ms": r.turn_latency_ms}
+        for r in cr if r.turn_latency_ms is not None and r.turn_latency_ms > COLD_RESILIENCE_SLO_MS]
+    violations = cold_resilience_violations(cr, grace_s=grace_s)
+    gate_passed = (not failed_case_ids) and (not violations)
+    return {
+        "applicable": True,
+        "cases": len(order),
+        "runs_total": len(cr),
+        "per_case": per_case,
+        "failed_case_ids": failed_case_ids,
+        "over_slo_runs": over_slo_runs,
+        "violations": violations,
+        "gate_passed": bool(gate_passed),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Result writers
 # --------------------------------------------------------------------------- #
 def _percentile(values: List[float], pct: float) -> Optional[float]:
+    """NEAREST-RANK percentile: the value at ordinal rank ``ceil(pct*n)`` in the sorted
+    list (1-based), i.e. 0-based index ``ceil(pct*n)-1`` clamped to ``[0, n-1]``. Returns an
+    ACTUAL observed sample — never an interpolation between two neighbours — so a reported
+    p95 is always a latency a real turn produced. Matches the final3 A/B numbers: for n=98
+    with the 7 slowest turns over 30s, p95 lands at index 93 (a ~36.5s member), not an
+    interpolated boundary."""
     vals = sorted(v for v in values if v is not None)
-    if not vals:
+    n = len(vals)
+    if not n:
         return None
-    k = (len(vals) - 1) * pct
-    lo = int(k)
-    hi = min(lo + 1, len(vals) - 1)
-    if lo == hi:
-        return vals[lo]
-    return vals[lo] + (vals[hi] - vals[lo]) * (k - lo)
+    idx = math.ceil(pct * n) - 1
+    if idx < 0:
+        idx = 0
+    elif idx > n - 1:
+        idx = n - 1
+    return vals[idx]
 
 
 def write_raw_runs(out: Path, runs: List[RunResult]) -> None:
@@ -679,8 +1640,10 @@ def write_raw_runs(out: Path, runs: List[RunResult]) -> None:
             fh.write(json.dumps(rr.to_dict(), ensure_ascii=False, default=str) + "\n")
 
 
-def write_per_case(out: Path, runs: List[RunResult]) -> None:
-    with (out / "per_case.csv").open("w", encoding="utf-8", newline="") as fh:
+def write_per_case_detail(out: Path, runs: List[RunResult]) -> None:
+    """Rich grading detail (grounding rates, constraint tallies). The lean, task-specified
+    ``per_case.csv`` is written by ``results_package``; this is the deeper companion."""
+    with (out / "per_case_detail.csv").open("w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["case_id", "category", "config", "repeat", "passed", "task_completed",
                     "grounded_rate", "money_grounded_rate", "source_coverage",
@@ -746,7 +1709,7 @@ def write_model_usage(out: Path, runs: List[RunResult], pricing) -> None:
 
 def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
                   repeats: int, cost_cap: float, stopped_reason: Optional[str],
-                  n_selected: int, timestamp: str) -> dict:
+                  n_selected: int, timestamp: str, arch: str = "legacy") -> dict:
     n = len(runs)
     passed = sum(1 for r in runs if r.passed)
     completed = sum(1 for r in runs if r.verdict.get("task_completed"))
@@ -766,13 +1729,49 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
     total_in = sum((e.get("input_tokens") or 0) for r in runs for e in r.model_usage)
     total_out = sum((e.get("output_tokens") or 0) for r in runs for e in r.model_usage)
     total_cost = sum((r.cost_usd or 0.0) for r in runs)
+    # Cache-hit rate (warm/cold protocol) aggregated across every search_properties artifact.
+    cache_hits = sum(getattr(r, "cache_hits", 0) for r in runs)
+    cache_misses = sum(getattr(r, "cache_misses", 0) for r in runs)
+    # tool_budget_timeout aggregate {tool: count} + total; soft-wrap count.
+    budget_timeouts_by_tool: Dict[str, int] = {}
+    for r in runs:
+        for e in getattr(r, "budget_timeout_events", None) or []:
+            t = e.get("tool") or "?"
+            budget_timeouts_by_tool[t] = budget_timeouts_by_tool.get(t, 0) + 1
+    budget_timeout_total = sum(budget_timeouts_by_tool.values())
+    soft_wrap_count = sum(1 for r in runs if getattr(r, "soft_wrapped", False))
 
     def ratio(num, den):
         return {"num": num, "den": den, "display": f"{num}/{den}",
                 "rate": (num / den if den else None)}
 
+    # Phase 2 route/trace + failure metrics + hard-gate block (design Phase 2). Built from
+    # the per-case flags computed in CaseRunner.run; delegates aggregation to graders so
+    # the same pure logic is unit-tested in tests/test_eval_fc_metrics.py.
+    from evaluation.metrics import graders as _graders
+    route_metrics = _graders.summarize_route_metrics([
+        {"case_id": r.case_id, "route_matched": r.route_matched,
+         "forbidden_tool": r.forbidden_tool, "duplicate_call": r.duplicate_call,
+         "loop_exhaustion": r.loop_exhaustion, "schema_failure": r.schema_failure,
+         "hard_gate": r.hard_gate, "passed": r.passed}
+        for r in runs
+    ])
+
+    # Repeat-aware guard gates (R3, binding rules). The hard-gate block is now
+    # case-grouped (K/K required per hard-gate case); the zero-tolerance sweep fails the
+    # whole gate on any single offending run; generation_stability is the SEPARATE
+    # majority-vote diagnostic; the SLO block gates latency independently (folded into
+    # slo_ok, kept SEPARATE from the guard gate — the coordinator combines them).
+    hard_gate_block = repeat_aware_hard_gate(runs)
+    violations = zero_tolerance_violations(runs)
+    guard_gate_passed = compute_guard_gate(hard_gate_block, violations, runs)
+    stability = generation_stability(runs)
+    slo = slo_block(runs)
+    slo_ok = bool(slo["p50_ok"] and slo["p95_ok"])
+
     summary = {
         "config": cfg_name,
+        "arch": arch,
         "mode": mode,
         "offline": mode == "offline",
         "repeats": repeats,
@@ -780,6 +1779,28 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
         "n_runs": n,
         "passed": ratio(passed, n),
         "task_completion": ratio(completed, n),
+        "route_accuracy": route_metrics["route_accuracy"],
+        "forbidden_tool_rate": route_metrics["forbidden_tool_rate"],
+        "duplicate_call_rate": route_metrics["duplicate_call_rate"],
+        "loop_exhaustion_rate": route_metrics["loop_exhaustion_rate"],
+        "schema_failure_rate": route_metrics["schema_failure_rate"],
+        # Repeat-aware hard-gate block (K/K per case) + zero-tolerance sweep. gate_passed
+        # is the GUARD gate only (hard gates + zero violations); SLO is kept separate.
+        "hard_gate": hard_gate_block,
+        "violations": violations,
+        "gate_passed": guard_gate_passed,
+        "generation_stability": stability,
+        "slo": slo,
+        "slo_ok": slo_ok,
+        # Cold-resilience suite gate (category cold_resilience): per-case K/K + the
+        # over-SLO / timeout-claimed-no-listings zero-tolerance sweep. Separate from the
+        # guard gate; the coordinator combines them. applicable=False when no CR cases ran.
+        "cold_resilience": cold_resilience_block(runs),
+        # Cache-protocol metrics: overall hit rate + tool_budget_timeout / soft-wrap counts.
+        "cache_hit_rate": ratio(cache_hits, cache_hits + cache_misses),
+        "tool_budget_timeouts": {"by_tool": budget_timeouts_by_tool,
+                                 "total": budget_timeout_total},
+        "soft_wrap_count": soft_wrap_count,
         "constraints": ratio(con_pass, con_tot),
         "grounded_rate": ratio(grounded, tot_claims),
         "money_grounded_rate": ratio(money_grounded, money_tot),
@@ -793,11 +1814,26 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
             "p95": _percentile(latencies, 0.95),
             "n": len(latencies),
         },
+        # Per-node-kind latency aggregate across every case + the 10 slowest case-runs
+        # with their FULL span timelines: makes the "p95 tail is multi-hop" claim provable
+        # straight from committed data (repeated agent/execute_tools hops are preserved).
+        "node_latency_by_kind": aggregate_node_kinds(runs),
+        "slowest_cases": top_slowest_cases(runs, k=10),
+        "profile_totals": {
+            "llm_calls": sum(r.llm_calls for r in runs),
+            "tool_batches": sum(r.tool_batches for r in runs),
+            "critic_repairs_cases": sum(1 for r in runs if r.critic_repairs),
+        },
         "tokens": {"input": total_in, "output": total_out},
         "total_cost_usd": total_cost,
         "cost_cap_usd": cost_cap,
         "stopped_reason": stopped_reason,
+        # Security audit: memory-write denials (H13). A denied write is EXCLUDED from
+        # tools_executed (so it never fails must_not_call_tool), but every denial is
+        # surfaced here and per-case in denied_tool_detail — never silently dropped.
+        "security_audit": _security_audit(runs),
         "git_commit": _git_commit(),
+        "git_dirty": _git_dirty(),
         "timestamp": timestamp,
         "notes": ("OFFLINE mode validates MECHANICS ONLY (routing/tool/latency/"
                   "memory-isolation); grounding numbers use FAKE responder text and are "
@@ -828,6 +1864,19 @@ def _git_commit() -> Optional[str]:
         return None
 
 
+def _git_dirty() -> Optional[bool]:
+    """True iff the working tree has uncommitted changes (``git status --porcelain`` is
+    non-empty). Recorded in the manifest so a committed A/B result can be trusted as
+    reproduced from a CLEAN tree; None if git is unavailable."""
+    try:
+        out = subprocess.check_output(
+            ["git", "status", "--porcelain"], cwd=str(REPO_ROOT),
+            stderr=subprocess.DEVNULL).decode()
+        return bool(out.strip())
+    except Exception:
+        return None
+
+
 # --------------------------------------------------------------------------- #
 # Checkpoint (resume)
 # --------------------------------------------------------------------------- #
@@ -853,19 +1902,74 @@ def _save_checkpoint(out: Path, done_run_ids: List[str], cumulative_cost: float,
 # --------------------------------------------------------------------------- #
 # Main async driver
 # --------------------------------------------------------------------------- #
+def _build_cache_protocol(args) -> Dict[str, Any]:
+    """Assemble the cache-protocol block from the CLI flags and pin the TTL env BEFORE any
+    app module import (on_demand reads SEARCH_CACHE_TTL_HOURS at import time). Returns the
+    block recorded in the manifest: {mode, snapshot_path, snapshot_sha256, restored_per_repeat,
+    ttl_hours_env}."""
+    if args.cache_snapshot:
+        snap = Path(args.cache_snapshot)
+        # Verify + record the snapshot digest HERE, without importing the evaluation
+        # package (this runs before _bootstrap_env, where that import can fail — the
+        # silent `sha = None` fallback put snapshot_sha256: null into a release
+        # manifest once). A warm gate run must never start from an unverifiable
+        # snapshot: missing file, missing sidecar, or a digest mismatch aborts.
+        if not snap.is_file():
+            raise SystemExit(f"--cache-snapshot not found: {snap}")
+        import hashlib
+        h = hashlib.sha256()
+        with open(snap, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        sha = h.hexdigest()
+        sidecar = snap.with_name(snap.name + ".sha256")
+        if not sidecar.exists():
+            raise SystemExit(f"snapshot sha256 sidecar missing: {sidecar}")
+        expected = sidecar.read_text(encoding="utf-8").strip().split()[0]
+        if expected != sha:
+            raise SystemExit(
+                f"snapshot sha256 mismatch for {snap}: sidecar={expected} actual={sha}")
+        ttl = str(args.cache_ttl_hours)
+        # Pin TTL so restored entries can't expire mid-run. Set here, before _bootstrap_env
+        # and any app import, because on_demand.TTL_HOURS is read at module-import time.
+        os.environ["SEARCH_CACHE_TTL_HOURS"] = ttl
+        return {"mode": "warm", "snapshot_path": str(snap), "snapshot_sha256": sha,
+                "restored_per_repeat": True, "ttl_hours_env": ttl}
+    if args.cold_cache:
+        return {"mode": "cold", "snapshot_path": None, "snapshot_sha256": None,
+                "restored_per_repeat": True,
+                "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
+    if getattr(args, "cache_path", None):
+        pinned = Path(args.cache_path).resolve()
+        pinned.parent.mkdir(parents=True, exist_ok=True)
+        return {"mode": "pinned", "pinned_path": str(pinned),
+                "snapshot_path": None, "snapshot_sha256": None,
+                "restored_per_repeat": False,
+                "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
+    return {"mode": "none", "snapshot_path": None, "snapshot_sha256": None,
+            "restored_per_repeat": False,
+            "ttl_hours_env": os.environ.get("SEARCH_CACHE_TTL_HOURS")}
+
+
 async def _run_all(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     events_log = out / "events.jsonl"
     state_root = Path(tempfile.mkdtemp(prefix="rc_eval_state_"))
 
+    # Build cache protocol + pin TTL env BEFORE bootstrap/app imports.
+    cache_protocol = _build_cache_protocol(args)
     _bootstrap_env(state_root, events_log)
+    # Architecture selection (design Phase 2): AGENT_ARCH is read by build_agent_graph at
+    # build time (per case), so set it here BEFORE any graph is constructed. Recorded in
+    # summary.json so A/B result dirs are self-describing.
+    os.environ["AGENT_ARCH"] = args.arch
 
     from evaluation.configs.loader import load_config, apply_config
     from evaluation.metrics import pricing as pricing_mod
 
     cfg = load_config(args.config)
-    cases = load_cases()
+    cases = load_cases(Path(args.cases) if args.cases else None)
     problems = schema_validate(cases)
     if problems:
         print("Schema problems (first 10):")
@@ -904,7 +2008,8 @@ async def _run_all(args) -> int:
 
     with apply_config(cfg):
         runner = CaseRunner(mode=mode, cfg=cfg, state_root=state_root,
-                            events_log=events_log, judge=args.judge)
+                            events_log=events_log, judge=args.judge, arch=args.arch,
+                            cache_protocol=cache_protocol)
         for repeat in range(1, args.repeat + 1):
             for case in selected:
                 run_id = f"{case.get('case_id')}#r{repeat}#{cfg.name}"
@@ -939,22 +2044,41 @@ async def _run_all(args) -> int:
                 break
 
     # Final writers.
+    from evaluation import results_package
+    case_file = Path(args.cases) if args.cases else CASES_PATH
     all_tool_events = [e for rr in runs for e in rr.tool_call_events]
+    # Stamp each run with its zero-tolerance violation kinds so per_case.csv can surface
+    # them (same pure sweep the summary uses; deterministic).
+    _viol_by_run: Dict[tuple, List[str]] = {}
+    for _v in zero_tolerance_violations(runs):
+        _viol_by_run.setdefault((_v["case_id"], _v["repeat"]), []).append(_v["kind"])
+    for rr in runs:
+        rr.violation_kinds = sorted(set(_viol_by_run.get((rr.case_id, rr.repeat), [])))
     write_raw_runs(out, runs)
-    write_per_case(out, runs)
+    write_per_case_detail(out, runs)
     write_tool_metrics(out, all_tool_events)
     write_model_usage(out, runs, pricing)
     if args.judge:
         _write_judge_io(out, runs)
     summary = write_summary(out, runs, mode=mode, cfg_name=cfg.name, repeats=args.repeat,
                             cost_cap=args.max_cost_usd, stopped_reason=stopped_reason,
-                            n_selected=len(selected), timestamp=timestamp)
+                            n_selected=len(selected), timestamp=timestamp, arch=args.arch)
+    # Reproducible results package: lean per_case.csv + manifest.json (argv, env, commit,
+    # case-file + events digests). events.jsonl stays out of git; only its SHA256 is kept.
+    results_package.write_results_package(
+        out, runs, argv=sys.argv, arch=args.arch, config=cfg.name, timestamp=timestamp,
+        case_file=case_file, events_log=events_log, mode=mode, git_commit=_git_commit,
+        git_dirty=_git_dirty, cache_protocol=cache_protocol)
     _save_checkpoint(out, list(done_ids), cumulative_cost, stopped_reason)
 
     print("\n=== summary ===")
-    print(f"config={summary['config']} mode={summary['mode']} "
+    print(f"config={summary['config']} arch={summary['arch']} mode={summary['mode']} "
           f"runs={summary['n_runs']} passed={summary['passed']['display']} "
           f"task_completed={summary['task_completion']['display']} "
+          f"route_acc={summary['route_accuracy']['display']} "
+          f"gate_passed={summary['gate_passed']} "
+          f"violations={len(summary['violations'])} "
+          f"slo_ok={summary['slo_ok']} "
           f"grounded={summary['grounded_rate']['display']} "
           f"money_grounded={summary['money_grounded_rate']['display']} "
           f"cost=${summary['total_cost_usd']:.4f}")
@@ -989,6 +2113,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
                                 description="RentCompass offline eval runner.")
     p.add_argument("--config", default="routed_models",
                    help="config name or path (default: routed_models)")
+    p.add_argument("--arch", choices=["legacy", "fc_loop"], default="legacy",
+                   help="agent architecture: 'legacy' (classify-then-execute, default) or "
+                        "'fc_loop' (native function-calling loop). Sets AGENT_ARCH before build.")
+    p.add_argument("--cases", default=None,
+                   help="path to an arbitrary case shard (.jsonl); default: benchmark/cases.jsonl")
     p.add_argument("--smoke", action="store_true", help="only smoke cases")
     p.add_argument("--limit", type=int, default=None, help="cap number of cases")
     p.add_argument("--category", default=None, help="filter by category (e.g. A_retrieval or A)")
@@ -1000,6 +2129,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="hard cost cap in USD (¥110≈$15; see README FX). Default 15.0")
     p.add_argument("--judge", action="store_true", help="enable auxiliary LLM judge (live only)")
     p.add_argument("--resume", action="store_true", help="skip runs already in checkpoint")
+    # Cache protocol (mutually exclusive). --cache-snapshot = WARM: restore a verified
+    # listing-cache snapshot into a run-scoped namespace before EACH repeat (guard runs use
+    # this so H2 is a pure ~46ms routing test). --cold-cache = COLD: a fresh EMPTY namespace
+    # per repeat (the cold-resilience suite). Neither = the env-default temp cache.
+    cache_grp = p.add_mutually_exclusive_group()
+    cache_grp.add_argument("--cache-snapshot", default=None, metavar="PATH",
+                           help="WARM protocol: restore this listing-cache snapshot per repeat")
+    cache_grp.add_argument("--cold-cache", action="store_true",
+                           help="COLD protocol: fresh empty listing cache per repeat")
+    cache_grp.add_argument("--cache-path", default=None, metavar="PATH",
+                           help="WARM-UP wiring: pin the listing cache to this persistent "
+                                "path for the whole run (overrides the temp-dir redirect) so "
+                                "sequential warm-up shards share one cache that a snapshot "
+                                "freeze can capture via make_cache_snapshot --from PATH")
+    p.add_argument("--cache-ttl-hours", default="8760",
+                   help="TTL (hours) pinned via SEARCH_CACHE_TTL_HOURS when --cache-snapshot "
+                        "is used, so snapshot entries can't expire mid-run (default 8760=1yr)")
     p.add_argument("--out", default="evaluation/results", help="output directory")
     p.add_argument("--timestamp", default=None, help="timestamp string for summary.json")
     return p

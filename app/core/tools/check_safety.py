@@ -7,7 +7,7 @@ from core.tool_system import Tool
 from core.maps_service import get_crime_data_by_location
 from typing import Optional
 
-async def check_safety_impl(
+def check_safety_impl(
     address: str = None,
     area: str = None,
     latitude: Optional[float] = None,
@@ -16,6 +16,11 @@ async def check_safety_impl(
 ) -> dict:
     """
     检查地址附近的犯罪数据和安全指数
+
+    NOTE: this is a PLAIN SYNC function on purpose. get_crime_data_by_location performs
+    SYNCHRONOUS network I/O (data.police.uk HTTP + geocoding). Registering it as sync means
+    Tool.execute offloads it to an executor thread (tool_system.py :279-284), keeping the
+    asyncio event loop responsive so the fc-loop's per-tool timeout / batch budget can fire.
     """
     # 兼容 address 和 area 参数
     location = address or area
@@ -299,42 +304,8 @@ def _generate_safety_analysis(crime_data: dict, location: str, is_chinese: bool)
 check_safety_tool = Tool(
     name="check_safety",
     
-    description="""
-检查地址附近的安全情况和犯罪数据。
-
-**CRITICAL: 地址参数要求**
-- 必须使用 **完整的详细地址**（包括街道、邮编）
-- ❌ 错误示例: "London", "Stratford", "Bloomsbury"
-- ✅ 正确示例: "Scape Bloomsbury, 19-29 Woburn Place, London WC1H 0AQ, UK"
-- ✅ 正确示例: "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK"
-
-**如何获取完整地址:**
-1. 如果用户提到房产名称（如 "Scape Bloomsbury"），从上下文的 PREVIOUSLY SHOWN PROPERTIES 中查找完整地址
-2. 提取 "Address" 字段的完整值
-3. 将完整地址传给本工具
-
-**功能:**
-- 获取具体地点的犯罪统计数据（6个月内）
-- 计算安全指数（0-100）
-- 提供安全等级评估
-- 分析夜间步行安全性
-
-**何时使用:**
-- 用户关心某个具体地点/房产的治安
-- 用户询问 "晚上安全吗"、"犯罪率高吗"
-- 需要对房源进行安全评估
-
-**何时不用:**
-- 用户没有提到安全问题
-- 用户只是一般性询问（如 "伦敦安全吗" - 应该用 web_search）
-
-**返回内容:**
-- safety_score: 安全指数（0-100）
-- safety_level: 安全等级（Very Safe/Safe/Moderate/Concerning）
-- crime_data: 详细的犯罪统计数据
-- total_crimes_6m: 6个月内总犯罪数
-- recommendation: 建议
-""",
+    description="""Check crime/safety data near a place using data.police.uk (last 6 months): safety score (0-100), level and a night-walk assessment. Prefer a FULL address (street + postcode) from the context's shown properties, but a bare area/postcode works too — use it to answer a safety question about an area under discussion ("晚上安全吗"/"犯罪率高吗"). For a generic "is London safe" use web_search.
+检查某地址/区域的治安数据（数据来源 data.police.uk）。""",
     
     func=check_safety_impl,
     

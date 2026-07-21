@@ -350,6 +350,131 @@ async def enforce_grounding(
     )
 
 
+def has_specific_price_claims(text: str) -> bool:
+    """True when ``text`` asserts *specific* monetary figures.
+
+    Reuses the same currency/period-marked number machinery the grounding rubric
+    uses (:func:`_money_mentions`), so a plain "12 months" / "3 bedrooms" never
+    counts — only figures carrying a ``£``/``GBP`` marker or a rent-period
+    annotation. This is the numeric precondition for the deterministic
+    no-evidence 兜底 in the critic node.
+    """
+    return bool(_money_mentions(text or ""))
+
+
+# ── evidence usability (H3) ──────────────────────────────────────────────────
+# Deterministic markers that a retrieval tool returned NOTHING usable. These are the
+# real strings the web-search stack emits when its backend (SearXNG) is unreachable or
+# a query yields nothing: ``get_search_snippets`` / ``SearXNGSearch.format_for_llm``
+# return "No search results found for this query."; the ``web_search`` tool's error
+# path uses "No search results"; the legacy DuckDuckGo path used "Could not retrieve
+# search information."; ``search_rent_prices`` returns "No rent price information
+# found."; the crime/cost-of-living helpers return "No area provided ...". Matched
+# case-insensitively as a whole-line signal so a real multi-result blob (whose only
+# per-entry default is "No content available") is never mistaken for empty.
+_UNUSABLE_EVIDENCE_MARKERS = (
+    "no search results found",
+    "no search results",
+    "could not retrieve search information",
+    "could not retrieve",
+    "no rent price information found",
+    "no results found",
+    "no area provided",
+    "no information found",
+)
+
+
+def _line_is_structural(line: str) -> bool:
+    """A section header / separator emitted by ``web_search`` when it stitches
+    sub-query results (``### Web Search: <q>``, ``---``), carrying no evidence itself."""
+    s = line.strip()
+    return not s or s.startswith("###") or s.startswith("---")
+
+
+def _string_has_real_content(text: str) -> bool:
+    """True when ``text`` contains at least one line of genuine retrieved content —
+    i.e. a non-blank, non-structural line that is not a known 'nothing found' marker.
+
+    Whitespace-only, a bare placeholder, or a stitched blob whose every content line is
+    a placeholder all read as *no* real content (unusable)."""
+    if not text or not str(text).strip():
+        return False
+    for line in str(text).splitlines():
+        if _line_is_structural(line):
+            continue
+        low = line.strip().lower()
+        if any(marker in low for marker in _UNUSABLE_EVIDENCE_MARKERS):
+            continue
+        return True  # a real content line survived
+    return False
+
+
+# Content-bearing fields on the tool-result / artifact dict shapes this project emits.
+_EVIDENCE_CONTENT_KEYS = (
+    "results", "content", "snippets", "answer", "text", "message",
+    "data", "detailed_data", "recommendations", "properties",
+)
+
+
+def evidence_usable(artifact_or_evidence) -> bool:
+    """Deterministic 'is this actually usable retrieval evidence?' predicate (H3).
+
+    Returns False for anything that carries no real retrieved content: an explicit
+    ``success is False`` tool result/artifact, ``None``/empty containers, whitespace,
+    a known placeholder string ("No search results found ...", "Could not retrieve ...",
+    a zero-entry result set), or a stitched web-search blob whose every content line is
+    such a placeholder. Returns True only when some genuine content survives.
+
+    Accepts either an fc ``tool_artifacts`` entry ({tool, success, raw_data, ...}), a
+    raw tool-result dict ({success, results, ...}), or a bare evidence value (string /
+    list / dict). The critic's no-reliable-data 兜底 keys off *this* function so a
+    numeric answer built on empty/failed retrieval is caught even when the tool
+    mislabels itself as ``success=True``."""
+    ev = artifact_or_evidence
+    if ev is None:
+        return False
+    if isinstance(ev, bool):
+        return ev
+    if isinstance(ev, (int, float)):
+        return True  # a concrete numeric datum is content
+    if isinstance(ev, str):
+        return _string_has_real_content(ev)
+    if isinstance(ev, (list, tuple, set)):
+        return any(evidence_usable(item) for item in ev)
+    if isinstance(ev, dict):
+        # An explicit failure flag makes the whole payload unusable regardless of shape.
+        if ev.get("success") is False:
+            return False
+        # fc artifact wrapper: the real payload lives in raw_data.
+        if "raw_data" in ev:
+            return evidence_usable(ev.get("raw_data"))
+        # Tool-result dict: judge by its content-bearing fields when present.
+        present = [k for k in _EVIDENCE_CONTENT_KEYS if k in ev]
+        if present:
+            return any(evidence_usable(ev.get(k)) for k in present)
+        # A dict with no known content keys: usable iff any value reads as real content.
+        return any(evidence_usable(v) for v in ev.values())
+    # Unknown scalar type: treat mere presence as content.
+    return bool(ev)
+
+
+def no_reliable_data_message(reply_language: str) -> str:
+    """Deterministic replacement delivered when a numeric answer has *zero* usable
+    retrieval evidence (the H3 兜底 — a hard replace, not a caveat).
+
+    Short, offers a retry, emoji-free, and localized off the turn's reply language.
+    """
+    if (reply_language or "").lower().startswith("zh"):
+        return (
+            "抱歉，我暂时无法获取可靠数据来回答这个问题里的具体数字，"
+            "为避免给出可能不准确的信息，我不便提供估算。请稍后再试，或换个方式提问。"
+        )
+    return (
+        "Sorry, I don't have reliable data to give specific figures for this right now. "
+        "Please try again shortly, or rephrase your question."
+    )
+
+
 def safe_fallback(verdict: CriticVerdict) -> str:
     """Deprecated. Retained for backward compatibility only.
 

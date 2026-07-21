@@ -605,27 +605,8 @@ def get_transport_info_impl(
 
 get_transport_info_tool = Tool(
     name="get_transport_info",
-    description="""
-Get LIVE London transport information from the official TfL Unified API.
-
-**USE THIS TOOL FOR (real-time TfL data):**
-- Journey planning: "how do I get from the flat to UCL", "how long from Kings Cross to Canary Wharf"
-- Single fares: "how much is the tube from X to Y", "what's the fare from Brixton to Bank"
-- Monthly / weekly Travelcard prices by zone: "what would a monthly travelcard cost"
-- Line status / delays: "are there delays on the Victoria line", "is the Central line running"
-
-Returns real durations, real pay-as-you-go fares (£), Travelcard prices and live line status.
-London only: for non-London places it returns an honest "TfL covers London only" note.
-
-**Parameters:**
-- query_type: journey | fare | line_status | travelcard | auto (default auto — inferred from the question)
-- from_location: start (station name, postcode, place or address) — for journey/fare
-- to_location: destination (station name, postcode, place or address) — for journey/fare
-- line: a tube/rail line name for a status check (e.g. "Victoria", "Central"); empty = all lines
-- end_zone: furthest London zone for a Travelcard (e.g. 2..6)
-- travel_type: "adult" or "student" (Travelcard discount)
-- user_query: the original user question (helps auto-infer the query type)
-""",
+    description="""Get LIVE London transport info from the official TfL Unified API: journey planning, single fares, weekly/monthly Travelcard prices by zone, and line status/delays. Returns real durations, pay-as-you-go fares (£), Travelcard prices and live line status. London only — for non-London places it returns an honest "TfL covers London only" note.
+查询伦敦公共交通实时信息（行程/票价/Travelcard/线路状态，数据来源 TfL）。""",
     func=get_transport_info_impl,
     parameters={
         "type": "object",

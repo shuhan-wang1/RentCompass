@@ -1,0 +1,1463 @@
+"""Coverage for Phase 2.2 event-loop unblocking + tool time budgets (agent Q1).
+
+Verifies, WITHOUT any live Overpass / network call:
+
+  * batch tool budget cancels an unfinished tool and emits a structured timed_out artifact
+    + matching ToolMessage;
+  * turn tool budget exhaustion skips further batches with the same structured artifact;
+  * denied-write artifact shape, its exclusion from card rendering, and that the no-progress
+    guard still suppresses an identical retry;
+  * search_nearby_pois' internal monotonic deadline: no per-type request is issued past the
+    deadline and the remaining types come back as a partial result with a skipped-types note;
+  * THE regression test for the confirmed root cause — search_nearby_pois runs off the event
+    loop (registered sync -> executor thread) so a concurrent heartbeat keeps ticking while a
+    blocking Overpass/geocode call is in flight.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+from dataclasses import dataclass, field
+
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+
+import core.agent_loop as agent_loop
+from core.agent_loop import build_fc_nodes
+
+
+# ─── fakes (mirror tests/test_fc_loop.py) ───────────────────────────
+@dataclass
+class FakeSpec:
+    name: str
+    description: str = "desc"
+    input_schema: dict = field(default_factory=lambda: {"type": "object", "properties": {}})
+    side_effect: str = "none"
+    retry_safe: bool = True
+    version: str = "1"
+    terminal: bool = False
+
+
+class FakeResult:
+    def __init__(self, success=True, data=None, error=None):
+        self.success = success
+        self.data = data
+        self.error = error
+
+
+class _FakeTool:
+    def __init__(self, version="1", side_effect="none"):
+        self.version = version
+        self.side_effect = side_effect
+
+
+class FakeProvider:
+    def __init__(self, specs, results=None):
+        self._specs = list(specs)
+        self._results = results or {}
+        self.calls = []
+
+    def list_specs(self):
+        return list(self._specs)
+
+    def get(self, name):
+        for s in self._specs:
+            if s.name == name:
+                return _FakeTool(version=s.version, side_effect=s.side_effect)
+        return None
+
+    async def execute_tool(self, name, **params):
+        self.calls.append((name, params))
+        r = self._results.get(name)
+        if callable(r):
+            r = r(**params)
+        return r if r is not None else FakeResult(True, {"ok": True})
+
+
+class SlowProvider(FakeProvider):
+    """execute_tool awaits `delay` before returning — used to overrun a budget."""
+
+    def __init__(self, specs, delay):
+        super().__init__(specs)
+        self.delay = delay
+
+    async def execute_tool(self, name, **params):
+        self.calls.append((name, params))
+        await asyncio.sleep(self.delay)
+        return FakeResult(True, {"ok": True})
+
+
+class PerToolDelayProvider(FakeProvider):
+    """execute_tool awaits a per-tool `delays[name]` — lets a slow read and a slower/faster
+    write share one batch so the read/write partition can be exercised deterministically."""
+
+    def __init__(self, specs, delays):
+        super().__init__(specs)
+        self.delays = dict(delays)
+
+    async def execute_tool(self, name, **params):
+        self.calls.append((name, params))
+        await asyncio.sleep(self.delays.get(name, 0.0))
+        return FakeResult(True, {"ok": name})
+
+
+class BlockingProvider(FakeProvider):
+    """execute_tool does a REAL, non-yielding time.sleep — simulating an async tool that makes a
+    SYNCHRONOUS call inline (e.g. search_properties' clarify_and_extract_criteria LLM round-trip).
+    Awaited on the graph loop this FREEZES it and defeats the batch-window timer; offloaded to a
+    private-loop worker thread it must not. `blocks` is a scalar (all tools) or a per-tool dict."""
+
+    def __init__(self, specs, blocks):
+        super().__init__(specs)
+        self._per_tool = blocks if isinstance(blocks, dict) else None
+        self._scalar = None if isinstance(blocks, dict) else float(blocks)
+
+    async def execute_tool(self, name, **params):
+        self.calls.append((name, params))
+        b = self._scalar if self._scalar is not None else self._per_tool.get(name, 0.0)
+        if b:
+            time.sleep(b)  # BLOCKING, non-yielding — must run off the graph loop
+        return FakeResult(True, {"ok": name})
+
+
+class FakeChat:
+    def __init__(self, scripted=None):
+        self._scripted = list(scripted or [])
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        return self._scripted.pop(0)
+
+
+def _tc(name, args, cid):
+    return {"name": name, "args": args, "id": cid, "type": "tool_call"}
+
+
+def _state(**over):
+    st = {
+        "user_query": "what is nearby",
+        "extracted_context": {"current_message": "what is nearby", "reply_language": "en"},
+        "accumulated_search_criteria": {},
+        "user_preferences": {"hard_preferences": [], "soft_preferences": [], "excluded_areas": [],
+                             "required_amenities": [], "safety_concerns": []},
+        "user_id": "u1",
+        "session_id": "s1",
+        "run_id": "r1",
+        "loop_turn": 1,
+        "messages": [],
+        "tool_artifacts": [],
+        "context_tainted": False,
+        "final_response": "",
+        "response_type": "answer",
+        "turn_tool_budget_used_s": 0.0,
+    }
+    st.update(over)
+    return st
+
+
+def _exec_once(nodes, state):
+    cmd = asyncio.run(nodes["execute_tools"](state))
+    state.update(cmd.update or {})
+    return state
+
+
+# ─── batch budget ──────────────────────────────────────────────────
+def test_batch_budget_kills_slow_tool(monkeypatch):
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = SlowProvider([FakeSpec("web_search")], delay=1.5)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"query": "x"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    timed = [a for a in state["tool_artifacts"] if a.get("timed_out")]
+    assert len(timed) == 1
+    assert timed[0]["tool"] == "web_search"
+    assert timed[0]["raw_data"] is None
+    assert timed[0]["success"] is False
+    assert timed[0]["params_digest"]  # kept so no-progress can suppress a retry
+    assert "batch budget" in timed[0]["error"]
+    # matching ToolMessage so the model sees the tool did not return
+    tmsg = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    assert len(tmsg) == 1 and "batch budget" in tmsg[0].content
+
+
+# ─── turn budget ───────────────────────────────────────────────────
+def test_turn_budget_exhaustion_skips_batch(monkeypatch):
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "10")
+    provider = FakeProvider([FakeSpec("web_search")],
+                            {"web_search": FakeResult(True, {"results": "x"})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    # turn already spent its whole budget before this batch.
+    state = _state(loop_turn=3, turn_tool_budget_used_s=10.0)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"query": "x"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert provider.calls == []  # later batch is not executed
+    timed = [a for a in state["tool_artifacts"] if a.get("timed_out")]
+    assert len(timed) == 1 and timed[0]["error"] == "turn tool budget exhausted"
+    tmsg = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    assert any("turn tool budget exhausted" in m.content for m in tmsg)
+
+
+def test_turn_budget_accumulates_across_batches(monkeypatch):
+    """turn_tool_budget_used_s grows with each executed batch (so the turn ceiling is real)."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = SlowProvider([FakeSpec("web_search")], delay=0.2)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"query": "x"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+    assert state["turn_tool_budget_used_s"] >= 0.2  # at least the batch we just ran
+
+
+# ─── denied-write artifact ─────────────────────────────────────────
+class _DenyGate:
+    frozen = []
+
+    @staticmethod
+    def user_authorizes_memory(msg):
+        return False
+
+    @staticmethod
+    def memory_write_allowed(*, context_tainted, user_authorized):
+        return False
+
+    @staticmethod
+    def freeze_pending_write(session_id, content, kind):
+        _DenyGate.frozen.append((session_id, content, kind))
+        return "digestX"
+
+
+def test_denied_artifact_shape_and_no_progress(monkeypatch):
+    _DenyGate.frozen = []
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _DenyGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write", retry_safe=False)])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+
+    state = _state(context_tainted=True)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user likes Camden", "kind": "semantic"}, "c1")])]
+
+    # batch 1: the tainted write is denied.
+    state = _exec_once(nodes, state)
+    assert provider.calls == []  # never executed
+    denied = [a for a in state["tool_artifacts"] if a.get("denied")]
+    assert len(denied) == 1
+    d = denied[0]
+    assert d["tool"] == "remember"
+    assert d["raw_data"] is None
+    assert d["success"] is False
+    assert d["error"] == "denied: tainted write requires confirmation"
+    assert d["params_digest"]
+
+    # batch 2: an identical remember call is suppressed by the no-progress guard.
+    state["messages"].append(AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user likes Camden", "kind": "semantic"}, "c2")]))
+    state = _exec_once(nodes, state)
+    assert provider.calls == []  # still never executed
+    assert any(isinstance(m, ToolMessage) and "already ran" in m.content
+               for m in state["messages"])
+
+
+def test_timed_out_and_denied_excluded_from_cards():
+    """A card tool that timed out (raw_data=None) must not render a card."""
+    provider = FakeProvider([FakeSpec("check_safety")])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["tool_artifacts"] = [
+        {"turn": 0, "tool": "check_safety", "raw_data": None, "params_digest": "d1",
+         "success": False, "error": "timeout after 20s (batch budget)", "timed_out": True},
+    ]
+    out = nodes["format_output_fc"](state)
+    # no safety card was assembled from a timed-out artifact
+    assert "safety_score" not in out["tool_data"]
+    assert out["response_type"] == "answer"
+
+
+# ─── search_nearby_pois internal deadline ──────────────────────────
+def test_poi_internal_deadline_partial(monkeypatch):
+    import core.tools.search_nearby_pois as sp
+
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(sp.time, "monotonic", lambda: clock["t"])
+    monkeypatch.setattr(sp.time, "sleep", lambda s: clock.__setitem__("t", clock["t"] + s))
+    monkeypatch.setattr(sp, "POI_SEARCH_BUDGET_S", 5.0)
+    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5, -0.1))
+
+    calls = []
+
+    def fake_query(lat, lon, ptype, *a, **k):
+        calls.append(ptype)
+        clock["t"] += 3.0  # each Overpass query costs 3s of the shared budget
+        return [{"name": f"{ptype} A", "icon": "X", "distance_display": "10m"}]
+
+    monkeypatch.setattr(sp, "query_osm_pois", fake_query)
+
+    # poi_type="all" -> [restaurant, supermarket, convenience, cafe]; budget 5s:
+    # restaurant @1000 -> 1003, pace -> 1003.3, supermarket @1003.3 -> 1006.3,
+    # convenience @1006.3 >= deadline(1005) -> skip convenience + cafe.
+    res = sp.search_nearby_pois_impl(address="x", poi_type="all")
+
+    assert calls == ["restaurant", "supermarket"]  # nothing issued past the deadline
+    assert res["partial"] is True
+    assert set(res["skipped_types"]) == {"convenience", "cafe"}
+    assert "budget" in res["note"].lower()
+    assert "convenience" in res["note"].lower() or "Convenience Store" in res["note"]
+
+
+def test_poi_no_deadline_when_fast(monkeypatch):
+    """Well within budget -> no partial flag, all types queried."""
+    import core.tools.search_nearby_pois as sp
+    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5, -0.1))
+    monkeypatch.setattr(sp, "POI_PACING_S", 0.0)
+    calls = []
+
+    def fake_query(lat, lon, ptype, *a, **k):
+        calls.append(ptype)
+        return [{"name": f"{ptype} A", "icon": "X", "distance_display": "10m"}]
+
+    monkeypatch.setattr(sp, "query_osm_pois", fake_query)
+    res = sp.search_nearby_pois_impl(address="x", poi_type="restaurant")
+    assert calls == ["restaurant"]
+    assert res.get("partial") is not True
+    assert "skipped_types" not in res
+
+
+# ─── event-loop non-blocking (THE regression test) ─────────────────
+def test_event_loop_not_blocked_by_poi(monkeypatch):
+    """search_nearby_pois is registered as a sync function, so Tool.execute offloads it to an
+    executor thread; a blocking Overpass/geocode call must therefore NOT freeze the event
+    loop. Run it concurrently with a heartbeat coroutine and assert the heartbeat keeps
+    ticking while a 0.4s blocking query is in flight. If the impl blocked the loop (the
+    original async-def-with-sync-calls bug), the heartbeat could not advance."""
+    import core.tools.search_nearby_pois as sp
+    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5, -0.1))
+
+    def blocking_query(*a, **k):
+        time.sleep(0.4)  # REAL blocking call; must run in a thread, not on the loop
+        return []
+
+    monkeypatch.setattr(sp, "query_osm_pois", blocking_query)
+
+    async def run():
+        ticks = {"n": 0}
+        stop = {"v": False}
+
+        async def heartbeat():
+            while not stop["v"]:
+                ticks["n"] += 1
+                await asyncio.sleep(0.01)
+
+        hb = asyncio.ensure_future(heartbeat())
+        result = await sp.search_nearby_pois_tool.execute(address="x", poi_type="restaurant")
+        stop["v"] = True
+        await hb
+        return ticks["n"], result
+
+    ticks, result = asyncio.run(run())
+    assert ticks >= 5, f"event loop appeared blocked (only {ticks} heartbeat ticks)"
+    assert result.success is True
+
+
+# ─── Phase 2.3: per-call cap, write no-abandon, attribution ─────────
+def test_per_call_timeout_capped_by_remaining_window(monkeypatch, caplog):
+    """A tool whose TOOL_TIMEOUTS entry (25s) exceeds the batch window is clamped to the
+    window at dispatch — it does NOT burn 25s. The straggler is abandoned and the artifact
+    NAMES it, carries elapsed_ms, and the attribution log record attributes the batch kill."""
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "big_read", 25)
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")  # proxy for the 20s window
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = SlowProvider([FakeSpec("big_read")], delay=1.5)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("big_read", {"q": "x"}, "c1")])]
+
+    t0 = time.monotonic()
+    with caplog.at_level(logging.WARNING, logger="core.agent_loop"):
+        state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 1.5, f"tool ran to its 25s/1.5s completion instead of the window ({wall:.2f}s)"
+    ab = [a for a in state["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1
+    a = ab[0]
+    assert a["tool"] == "big_read"           # artifact NAMES the abandoned tool
+    assert a["outcome_unknown"] is True
+    assert a["timed_out"] is True            # kept for the eval three-way split
+    assert a["raw_data"] is None
+    assert "abandoned" in a["error"] and "batch budget" in a["error"]
+    assert isinstance(a["elapsed_ms"], int)  # per-call timing lands on the artifact
+    assert a["elapsed_ms"] <= 900             # ~window, nowhere near 25s
+    # attribution log record: names the tool, the batch budget, kind=batch, abandoned=True
+    rec = [r for r in caplog.records if "fc_loop.tool_budget_timeout" in r.getMessage()]
+    assert len(rec) == 1
+    msg = rec[0].getMessage()
+    assert "tool=big_read" in msg and "kind=batch" in msg and "abandoned=True" in msg
+
+
+def test_write_runs_past_window_while_reads_abandoned(monkeypatch):
+    """side_effect=='write' is excluded from the abandon set: the batch AWAITS the write to
+    completion even past the batch window, while a sibling read that overruns is abandoned."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)  # legacy allow path
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = PerToolDelayProvider(
+        [FakeSpec("web_search"), FakeSpec("save_note", side_effect="write")],
+        delays={"web_search": 1.5, "save_note": 0.5})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("web_search", {"q": "x"}, "c1"),
+        _tc("save_note", {"content": "note"}, "c2")])]
+
+    state = _exec_once(nodes, state)
+
+    called = sorted(n for n, _ in provider.calls)
+    assert called == ["save_note", "web_search"]  # both dispatched
+    by_tool = {a["tool"]: a for a in state["tool_artifacts"]}
+    # sibling read abandoned
+    assert by_tool["web_search"].get("abandoned") is True
+    # write completed past the 0.3s window (delay 0.5) — never abandoned / unknown
+    w = by_tool["save_note"]
+    assert w["success"] is True
+    assert w["raw_data"] == {"ok": "save_note"}
+    assert "abandoned" not in w and "outcome_unknown" not in w and "timed_out" not in w
+    assert isinstance(w["elapsed_ms"], int) and w["elapsed_ms"] >= 400
+
+
+def test_write_own_timeout_is_outcome_unknown(monkeypatch):
+    """If even the write's own wait_for fires, the artifact says outcome UNKNOWN (the write may
+    still complete in the background) — never a clean failure, mirroring MCPToolClient."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 0.3)  # tiny write wait_for
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")   # window is not the binding cap
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = PerToolDelayProvider(
+        [FakeSpec("save_note", side_effect="write")], delays={"save_note": 1.5})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("save_note", {"content": "note"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    w = next(a for a in state["tool_artifacts"] if a["tool"] == "save_note")
+    assert w["success"] is False
+    assert w["outcome_unknown"] is True
+    assert "abandoned" not in w            # a write is NEVER abandoned
+    assert "outcome unknown" in w["error"] and "background" in w["error"]
+    assert isinstance(w["elapsed_ms"], int)
+    tmsg = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    assert any("outcome_unknown" in m.content for m in tmsg)
+
+
+def test_elapsed_ms_on_executed_artifact():
+    """Every executed artifact carries elapsed_ms so the eval events show tool timing."""
+    provider = FakeProvider([FakeSpec("web_search")],
+                            {"web_search": FakeResult(True, {"results": "x"})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    a = next(x for x in state["tool_artifacts"] if x["tool"] == "web_search")
+    assert a["success"] is True
+    assert isinstance(a["elapsed_ms"], int) and a["elapsed_ms"] >= 0
+
+
+def test_turn_exhaustion_emits_turn_attribution(monkeypatch, caplog):
+    """Turn-budget exhaustion emits a kind='turn', abandoned=False attribution record."""
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "10")
+    provider = FakeProvider([FakeSpec("web_search")])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(loop_turn=3, turn_tool_budget_used_s=10.0)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    with caplog.at_level(logging.WARNING, logger="core.agent_loop"):
+        state = _exec_once(nodes, state)
+
+    rec = [r for r in caplog.records if "fc_loop.tool_budget_timeout" in r.getMessage()]
+    assert len(rec) == 1
+    msg = rec[0].getMessage()
+    assert "kind=turn" in msg and "abandoned=False" in msg
+    a = next(x for x in state["tool_artifacts"] if x["tool"] == "web_search")
+    assert a["timed_out"] is True and a["elapsed_ms"] == 0
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Latency/observability round: turn-wide soft wrap, eval stream, deadline
+# injection, partial surfacing, H12 recall-question gate.
+# ═══════════════════════════════════════════════════════════════════
+
+class WrapChat:
+    """Records bind_tools(tools, tool_choice=...) and the messages ainvoke saw, so the
+    soft-wrap path can be asserted (tools disabled + wrap directive present)."""
+
+    def __init__(self, reply):
+        self._reply = reply
+        self.bound_tools = "unset"
+        self.tool_choice = "unset"
+        self.seen_messages = None
+
+    def bind_tools(self, tools, tool_choice=None, **kw):
+        self.bound_tools = tools
+        self.tool_choice = tool_choice
+        return self
+
+    async def ainvoke(self, messages):
+        self.seen_messages = list(messages)
+        return self._reply
+
+
+# ─── Task 1: turn-wide soft wrap ────────────────────────────────────
+def test_soft_wrap_forces_answer_now(monkeypatch):
+    """elapsed > FC_TURN_SOFT_WRAP_S -> the agent node calls the LLM with tools disabled
+    (tool_choice='none'), appends the wrap directive, records the soft-wrap event once, and
+    routes to critic with a final answer (no new tool batch)."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event",
+                        lambda **kw: events.append(kw))
+    chat = WrapChat(AIMessage(content="Here is what I found so far."))
+    provider = FakeProvider([FakeSpec("web_search"), FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(
+        loop_turn=3,
+        messages=[HumanMessage(content="find flats in Camden")],
+        turn_start_monotonic=time.monotonic() - 30.0,
+        tool_artifacts=[{"turn": 0, "tool": "web_search", "raw_data": {"x": 1},
+                         "params_digest": "d0", "success": True}],
+    )
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    # FIX 3: a wrapped turn skips the (LLM/expensive) critic entirely and renders directly.
+    assert cmd.goto == "format_output_fc"
+    assert cmd.update["final_response"] == "Here is what I found so far."
+    # tools disabled for the wrap call
+    assert chat.tool_choice == "none"
+    # wrap directive present, model-facing only (a SystemMessage on the prompt)
+    assert any("TIME BUDGET NEARLY EXHAUSTED" in getattr(m, "content", "")
+               for m in chat.seen_messages)
+    # ...but NOT persisted into the returned messages channel (user-invisible)
+    assert not any("TIME BUDGET NEARLY EXHAUSTED" in getattr(m, "content", "")
+                   for m in cmd.update["messages"])
+    # soft-wrap event fired exactly once with llm_calls/tool_batches
+    assert len(events) == 1
+    assert events[0]["llm_calls"] == 4 and events[0]["tool_batches"] == 1
+    assert events[0]["elapsed_ms"] >= 25000
+
+
+def test_no_soft_wrap_under_threshold(monkeypatch):
+    """Under the soft-wrap threshold the agent opens tool batches normally (tools bound,
+    no wrap event, routes to execute_tools)."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event",
+                        lambda **kw: events.append(kw))
+    chat = WrapChat(AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")]))
+    provider = FakeProvider([FakeSpec("web_search")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(loop_turn=1, messages=[HumanMessage(content="hi")],
+                   turn_start_monotonic=time.monotonic() - 1.0)
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    assert cmd.goto == "execute_tools"   # normal tool batch, not wrapped
+    assert events == []                   # no soft-wrap event
+    assert chat.tool_choice is None       # normal bind_tools (tool_choice not forced)
+
+
+def test_per_call_timeout_respects_soft_wrap_remainder(monkeypatch):
+    """The per-call min() folds in the soft-wrap remainder: a batch dispatched just before the
+    wrap edge cannot run its full window. Turn started 24.5s ago (remainder ~0.5s) despite a
+    20s window and a 30s tool timeout -> the tool is abandoned in well under a second."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    # remainder ~0.5s is still >= FC_MIN_BATCH_S here, so the batch is DISPATCHED (bounded),
+    # not skipped — this asserts the fold binds a dispatched batch (the skip path is covered
+    # by test_batch_skipped_when_below_min_batch).
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.1")
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "web_search", 30)
+    provider = SlowProvider([FakeSpec("web_search")], delay=1.5)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic() - 24.5)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 1.5, f"soft-wrap remainder did not bind the dispatch ({wall:.2f}s)"
+    timed = [a for a in state["tool_artifacts"] if a.get("timed_out")]
+    assert len(timed) == 1 and timed[0]["tool"] == "web_search"
+
+
+# ─── Task 2: tool_budget_timeout into the eval stream ───────────────
+def test_batch_abandon_emits_eval_budget_timeout(monkeypatch):
+    """The batch-abandon path mirrors its attribution into the eval stream via
+    record_tool_budget_timeout with phase='batch', outcome='abandoned'."""
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_budget_timeout_event",
+                        lambda **kw: events.append(kw))
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = SlowProvider([FakeSpec("web_search")], delay=1.5)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert len(events) == 1
+    e = events[0]
+    assert e["tool"] == "web_search"
+    assert e["phase"] == "batch"
+    assert e["outcome"] == "abandoned"
+    assert e["budget_s"] > 0 and e["elapsed_ms"] >= 0
+
+
+def test_turn_and_write_unknown_emit_eval_outcomes(monkeypatch):
+    """Turn exhaustion -> outcome='timed_out'/phase='turn'; write-own-timeout ->
+    outcome='outcome_unknown'/phase='per_call'."""
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_budget_timeout_event",
+                        lambda **kw: events.append(kw))
+    # turn exhaustion
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "10")
+    provider = FakeProvider([FakeSpec("web_search")])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(loop_turn=3, turn_tool_budget_used_s=10.0)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("web_search", {"q": "x"}, "c1")])]
+    _exec_once(nodes, state)
+    assert events[-1]["phase"] == "turn" and events[-1]["outcome"] == "timed_out"
+
+    # write own wait_for fires -> outcome unknown
+    events.clear()
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 0.3)
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider2 = PerToolDelayProvider([FakeSpec("save_note", side_effect="write")],
+                                     delays={"save_note": 1.5})
+    nodes2 = build_fc_nodes(provider2, agent_llm=FakeChat())
+    state2 = _state(context_tainted=False)
+    state2["messages"] = [AIMessage(content="", tool_calls=[_tc("save_note", {"content": "n"}, "c1")])]
+    _exec_once(nodes2, state2)
+    assert events[-1]["phase"] == "per_call" and events[-1]["outcome"] == "outcome_unknown"
+
+
+# ─── Task 3: deadline injection + partial surfacing ─────────────────
+def test_search_deadline_injected_and_hidden(monkeypatch):
+    """search_properties receives an absolute-monotonic _deadline_monotonic (a future time),
+    which is NOT in the model-visible tool schema and (leading underscore) is excluded from
+    the digest/idempotency identity."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    captured = {}
+
+    def sp_result(**params):
+        captured.update(params)
+        return FakeResult(True, {"status": "found", "recommendations": []})
+
+    provider = FakeProvider([FakeSpec("search_properties")], {"search_properties": sp_result})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic())
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    now = time.monotonic()
+    state = _exec_once(nodes, state)
+
+    assert "_deadline_monotonic" in captured
+    assert isinstance(captured["_deadline_monotonic"], float)
+    assert now < captured["_deadline_monotonic"] <= now + 6.0  # bounded by the 5s window
+    assert "idempotency_key" in captured
+    # not in the model-visible schema built for bind_tools
+    tools = agent_loop._specs_to_openai(provider.list_specs())
+    sp = next(t for t in tools if t["function"]["name"] == "search_properties")
+    assert "_deadline_monotonic" not in json.dumps(sp)
+
+
+def test_partial_note_surfaced_in_toolmsg():
+    """A deadline-driven partial search: the model-facing ToolMessage surfaces partial + note
+    prominently; the raw artifact keeps every field intact."""
+    data = {"status": "found", "recommendations": [{"id": 1}], "partial": True,
+            "partial_note": "Only 2 of 5 areas searched before the deadline.",
+            "incomplete_areas": ["Shoreditch", "Hackney"]}
+    provider = FakeProvider([FakeSpec("search_properties")],
+                            {"search_properties": FakeResult(True, data)})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    tmsg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
+    assert '"partial": true' in tmsg.content
+    assert "Only 2 of 5 areas searched before the deadline." in tmsg.content
+    # raw artifact keeps ALL fields untouched
+    art = next(a for a in state["tool_artifacts"] if a["tool"] == "search_properties")
+    assert art["raw_data"]["incomplete_areas"] == ["Shoreditch", "Hackney"]
+    assert art["raw_data"]["partial_note"] == "Only 2 of 5 areas searched before the deadline."
+
+
+# ─── Task 4: H12 recall-question write gate ─────────────────────────
+class _RecallGate:
+    pure = True
+    authorized = False
+
+    @staticmethod
+    def is_pure_recall_question(msg):
+        return _RecallGate.pure
+
+    @staticmethod
+    def write_authorization(msg, content):
+        return _RecallGate.authorized
+
+    @staticmethod
+    def user_authorizes_memory(msg):
+        return _RecallGate.authorized
+
+    @staticmethod
+    def content_is_user_stated(content, msg):
+        return False
+
+    @staticmethod
+    def memory_write_allowed(*, context_tainted, user_authorized):
+        return (not context_tainted) or user_authorized
+
+    @staticmethod
+    def freeze_pending_write(session_id, content, kind):
+        return "dig"
+
+
+def test_pure_recall_denies_model_remember(monkeypatch):
+    """On a CLEAN (untainted) turn, a model-initiated remember is denied when the current
+    message is a pure recall question — regardless of taint — as a distinct denied artifact."""
+    _RecallGate.pure = True
+    _RecallGate.authorized = False
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write", retry_safe=False)])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)  # CLEAN turn
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user budget 1400", "kind": "semantic"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert provider.calls == []  # never executed
+    denied = [a for a in state["tool_artifacts"] if a.get("denied")]
+    assert len(denied) == 1
+    assert denied[0]["error"] == "denied: recall-question turn, memory write blocked"
+    tmsg = next(m for m in state["messages"] if isinstance(m, ToolMessage))
+    assert "recall question" in tmsg.content.lower()
+
+
+def test_explicit_authorization_bypasses_recall_gate(monkeypatch):
+    """Explicit authorization wins over the recall gate (order-of-evaluation): the write runs."""
+    _RecallGate.pure = True
+    _RecallGate.authorized = True
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _RecallGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(True, {"saved": True})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False)
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("remember", {"content": "user budget 1400", "kind": "semantic"}, "c1")])]
+
+    state = _exec_once(nodes, state)
+
+    assert [c[0] for c in provider.calls] == ["remember"]  # executed
+    assert [a for a in state["tool_artifacts"] if a.get("denied")] == []
+
+
+class _ReplayGate:
+    @staticmethod
+    def latest_pending_digest(session_id):
+        return "digX"
+
+    @staticmethod
+    def confirmation_intent(msg):
+        return "yes"
+
+    @staticmethod
+    def user_authorizes_memory(msg):
+        return False
+
+    @staticmethod
+    def consume_pending_write(session_id, digest):
+        return {"content": "user budget 1400", "kind": "semantic"}
+
+    @staticmethod
+    def is_pure_recall_question(msg):
+        return True  # even a recall-shaped confirmation must not block the frozen replay
+
+
+def test_frozen_replay_bypasses_recall_gate(monkeypatch):
+    """The frozen pending-confirmation replay (agent node, not the executor gate) saves the
+    frozen candidate verbatim and is unaffected by the recall-question gate."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _ReplayGate)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write")],
+                            {"remember": FakeResult(True, {"saved": True})})
+    chat = FakeChat([AIMessage(content="Saved it.")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(messages=[])  # first entry -> pending-memory replay resolves
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    assert [c[0] for c in provider.calls] == ["remember"]  # replay saved verbatim
+    assert cmd.goto == "critic"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Latency-leak round: soft-fold must bound EVERY dispatch, bounded wrap
+# call + deterministic fallback, wrapped-turn critic bypass, retuned
+# defaults, wrap-directive source/figure rules.
+# ═══════════════════════════════════════════════════════════════════
+
+class SleepyChat:
+    """LLM whose ainvoke hangs `delay`s — used to overrun the bounded wrap-up call so the
+    deterministic fallback + cancel-and-abandon path fires."""
+
+    def __init__(self, delay, reply=None):
+        self._delay = delay
+        self._reply = reply or AIMessage(content="late answer")
+        self.bound_tools = "unset"
+        self.tool_choice = "unset"
+
+    def bind_tools(self, tools, tool_choice=None, **kw):
+        self.bound_tools = tools
+        self.tool_choice = tool_choice
+        return self
+
+    async def ainvoke(self, messages):
+        await asyncio.sleep(self._delay)
+        return self._reply
+
+
+# ─── FIX 1(b): the CR4-shape regression — soft fold bounds a dispatched batch ──
+def test_cr4_soft_fold_bounds_read_batch(monkeypatch):
+    """CR4 shape (scaled for test speed): a batch dispatched with only a small soft-wrap
+    remainder must have its window bounded to that remainder, NOT the full FC_BATCH_TOOL_BUDGET_S
+    (20s) / tool timeout (30s). Here soft remaining ~= 1.0s while the batch budget is 20s and the
+    tool would run 30s -> the soft remainder is the binding cap and the straggler is abandoned by
+    ~1s. (Live CR4: 4.4s remaining, yet the batch got a ~14.4s window — the fold missed.)"""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.5")   # 1.0s remaining >= min -> dispatch, not skip
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "search_properties", 30)
+    provider = SlowProvider([FakeSpec("search_properties")], delay=30)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic() - 24.0)  # soft remaining ~1.0s
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    # bounded by the ~1s soft remainder, nowhere near the 20s window or 30s tool timeout
+    assert wall < 4.0, f"soft fold did not bound the dispatched batch ({wall:.2f}s)"
+    ab = [a for a in state["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1 and ab[0]["tool"] == "search_properties"
+    assert ab[0]["timed_out"] is True and ab[0]["outcome_unknown"] is True
+    assert ab[0]["elapsed_ms"] <= 2500  # ~1s window, not 20s/30s
+
+
+def test_cr4_soft_fold_bounds_write_wait_for(monkeypatch):
+    """The write path was the genuinely-unbounded window: writes ran their full per-tool
+    wait_for (up to 30s) past the soft deadline because only reads folded the remainder. A write
+    dispatched with ~1s of soft runway must now have its OWN wait_for bounded to the remainder
+    (never abandoned, but never past it) -> its wait_for fires and it is outcome_unknown."""
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)  # legacy allow path
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.5")
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 30)  # full write timeout is 30s
+    provider = PerToolDelayProvider([FakeSpec("save_note", side_effect="write")],
+                                    delays={"save_note": 30})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(context_tainted=False, turn_start_monotonic=time.monotonic() - 24.0)
+    state["messages"] = [AIMessage(content="", tool_calls=[_tc("save_note", {"content": "n"}, "c1")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 4.0, f"write wait_for was not folded with the soft remainder ({wall:.2f}s)"
+    w = next(a for a in state["tool_artifacts"] if a["tool"] == "save_note")
+    assert w["success"] is False and w["outcome_unknown"] is True
+    assert "abandoned" not in w  # a write is never abandoned, only bounded
+
+
+# ─── FIX 1(a): batch skipped below FC_MIN_BATCH_S -> denied, then wrap ──
+def test_batch_skipped_when_below_min_batch(monkeypatch):
+    """soft_remaining < FC_MIN_BATCH_S -> the whole batch is NOT dispatched (no executor thread
+    leaked): every call becomes a denied/not-executed artifact with a clear error, and the loop
+    routes back to the agent."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    provider = FakeProvider([FakeSpec("search_properties")],
+                            {"search_properties": FakeResult(True, {"status": "found"})})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(turn_start_monotonic=time.monotonic() - 24.0)  # soft remaining ~1.0 < 2.0
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    cmd = asyncio.run(nodes["execute_tools"](state))
+    state.update(cmd.update or {})
+
+    assert cmd.goto == "agent"
+    assert provider.calls == []  # nothing dispatched -> no thread leaked
+    denied = [a for a in state["tool_artifacts"] if a.get("denied")]
+    assert len(denied) == 1
+    assert denied[0]["error"] == "denied: turn time budget exhausted"
+    assert not agent_loop._is_executed(denied[0])  # must NOT count as executed
+    tmsg = [m for m in state["messages"] if isinstance(m, ToolMessage)]
+    assert any("turn time budget exhausted" in m.content for m in tmsg)
+
+
+def test_skipped_batch_leads_to_exactly_one_wrap_no_loop(monkeypatch):
+    """A skipped batch routes to the agent, which — past the wrap edge — takes the wrap branch
+    exactly once and terminates at format_output_fc (no re-plan, no infinite loop)."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event",
+                        lambda **kw: events.append(kw))
+    # A chat that would keep planning tools forever if it were ever consulted past the wrap edge.
+    chat = WrapChat(AIMessage(content="", tool_calls=[_tc("search_properties", {"area": "x"}, "cN")]))
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+
+    turn_start = time.monotonic() - 24.0  # past the wrap edge (25 - 2 = 23)
+    # 1) execute_tools skips the straddling batch (soft remaining ~1.0 < 2.0) -> back to agent
+    st = _state(loop_turn=4, turn_start_monotonic=turn_start,
+                messages=[AIMessage(content="", tool_calls=[_tc("search_properties", {"area": "x"}, "c1")])])
+    cmd1 = asyncio.run(nodes["execute_tools"](st))
+    st.update(cmd1.update or {})
+    assert cmd1.goto == "agent"
+
+    # 2) the next agent entry wraps ONCE and terminates (never dispatches the planned batch).
+    chat._reply = AIMessage(content="Best-effort answer from what I have.")
+    cmd2 = asyncio.run(nodes["agent"](st))
+    assert cmd2.goto == "format_output_fc"
+    assert len(events) == 1          # exactly one wrap
+    assert provider.calls == []      # the planned batch was never dispatched
+
+
+# ─── FIX 2: bounded wrap call + deterministic fallback ──────────────
+def test_wrap_call_timeout_falls_back_to_deterministic(monkeypatch):
+    """When the wrap-up LLM call overruns its bounded window it is cancelled-and-abandoned (the
+    call is NOT awaited to completion) and a DETERMINISTIC answer is synthesized from the
+    gathered artifacts: it names the tools that ran, renders the artifact's recommendations, and
+    states plainly that it was cut short — never fabricating numbers."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    chat = SleepyChat(delay=5.0)  # far longer than the bounded wrap window (floored at 2.0s)
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    art = {"turn": 0, "tool": "search_properties", "params_digest": "d0", "success": True,
+           "raw_data": {"status": "found",
+                        "recommendations": [{"title": "Studio in Camden", "price_display": "£1,400 pcm"}]}}
+    state = _state(loop_turn=4,
+                   extracted_context={"current_message": "find flats", "reply_language": "en"},
+                   messages=[HumanMessage(content="find flats in Camden")],
+                   turn_start_monotonic=time.monotonic() - 29.0,  # -> wrap_timeout floored at 2.0s
+                   tool_artifacts=[art])
+
+    t0 = time.monotonic()
+    cmd = asyncio.run(nodes["agent"](state))
+    wall = time.monotonic() - t0
+
+    # did not await the 5s call to completion — bounded to ~the 2s wrap window
+    assert wall < 4.0, f"wrap call was awaited past its bound ({wall:.2f}s)"
+    assert cmd.goto == "format_output_fc"
+    resp = cmd.update["final_response"]
+    assert "search_properties" in resp            # names the tool that ran
+    assert "Studio in Camden" in resp             # artifact-derived content, rendered plainly
+    assert "£1,400 pcm" in resp                   # only a figure PRESENT in the artifact
+    assert "cut short" in resp.lower()            # honest time-budget note
+    assert "late answer" not in resp              # the LLM's late reply was discarded
+
+
+def test_wrap_deterministic_fallback_never_claims_no_listings(monkeypatch):
+    """A partial/timed-out search with no clean recs must NOT be reported as 'no listings' by the
+    deterministic fallback (zero-tolerance rule)."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    state = _state(
+        extracted_context={"current_message": "find flats", "reply_language": "en"},
+        tool_artifacts=[{"turn": 0, "tool": "search_properties", "params_digest": "d",
+                         "raw_data": None, "success": False, "timed_out": True, "abandoned": True,
+                         "outcome_unknown": True, "error": "abandoned"}])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "cut short" in ans.lower()
+    assert "no listings" not in ans.lower() and "no results" not in ans.lower()
+
+
+# ─── FIX 3: wrapped-turn critic fast-path (<0.5s, bypass critic) ────
+def test_wrapped_turn_bypasses_critic_fast(monkeypatch):
+    """A wrapped turn with a fast LLM renders in well under 0.5s and routes to format_output_fc
+    (NOT the critic) — the wrapped-turn critic tail is deterministic and cheap."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    chat = WrapChat(AIMessage(content="Here is my best-effort answer."))
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(loop_turn=3, messages=[HumanMessage(content="find flats")],
+                   turn_start_monotonic=time.monotonic() - 26.0)
+
+    t0 = time.monotonic()
+    cmd = asyncio.run(nodes["agent"](state))
+    wall = time.monotonic() - t0
+
+    assert cmd.goto == "format_output_fc"      # critic bypassed
+    assert wall < 0.5                          # wrapped-turn tail is fast
+
+
+def test_wrap_toolcall_markup_leak_falls_back(monkeypatch):
+    """Strict-path leak seen live (CR4 r2): with tools unbound, the model emitted raw DSML
+    tool-call tokens as plain text and that markup became the user-facing answer. Any
+    tool-call-shaped wrap output must be rejected in favor of the deterministic fallback."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    leaked = ('<｜｜DSML｜｜tool_calls>\n<｜｜DSML｜｜invoke name="check_safety">\n'
+              '<｜｜DSML｜｜parameter name="address" string="true">South Kensington'
+              '</｜｜DSML｜｜parameter>\n</｜｜DSML｜｜invoke>')
+    chat = WrapChat(AIMessage(content=leaked))
+    provider = FakeProvider([FakeSpec("search_properties")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(loop_turn=3,
+                   extracted_context={"current_message": "find flats", "reply_language": "en"},
+                   messages=[HumanMessage(content="compare areas and check safety")],
+                   turn_start_monotonic=time.monotonic() - 26.0)
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    resp = cmd.update["final_response"]
+    assert "DSML" not in resp and "invoke" not in resp   # markup never reaches the user
+    assert "cut short" in resp.lower()                    # deterministic fallback used
+
+
+def test_wrap_fallback_renders_safety_evidence(monkeypatch):
+    """Gathered check_safety evidence is renderable verbatim with its real source
+    (data.police.uk) — a cut-short answer surfaces it instead of dropping it."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    state = _state(
+        extracted_context={"current_message": "is Camden safe", "reply_language": "en"},
+        tool_artifacts=[{"turn": 0, "tool": "check_safety", "params_digest": "d",
+                         "success": True,
+                         "raw_data": {"address": "Camden, London", "safety_score": 62,
+                                      "safety_level": "Safe"}}])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "data.police.uk" in ans
+    assert "62/100" in ans and "Camden, London" in ans
+    assert "Safe" in ans
+
+
+def _completed_empty_state(**over):
+    """A completed-empty search artifact (1-bed Islington, zero matches) whose user message
+    also asks about safety — the CR5 cold-resilience shape."""
+    st = dict(
+        extracted_context={"current_message": "any 1-bed in Islington, how is the safety there?",
+                           "reply_language": "en"},
+        user_query="any 1-bed in Islington, how is the safety there?",
+        tool_artifacts=[{"turn": 0, "tool": "search_properties", "params_digest": "d",
+                         "success": True,
+                         "raw_data": {"status": "no_results", "recommendations": [],
+                                      "search_criteria": {"bedrooms": 1, "area": "islington"}}}])
+    st.update(over)
+    return _state(**st)
+
+
+def test_artifact_grounded_fallback_no_reliable_numbers(monkeypatch):
+    """reason='no_reliable_numbers' on a completed-empty 1-bed Islington search + a safety
+    request: NAMES the requested room type (room_type_match_if_evidence complete-empty branch),
+    surfaces the honest safety-not-yet line, carries a partial-disclosure marker with NO
+    time-budget wording (the turn did NOT time out), and makes no price claim (so the critic
+    cannot re-trigger the replacement on it)."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    from uk_rent_agent.agent.critic import has_specific_price_claims
+    state = _completed_empty_state()
+    ans = agent_loop._artifact_grounded_fallback_answer(state, reason="no_reliable_numbers")
+    low = ans.lower()
+    # completed-empty line NAMES the room type + area
+    assert "1-bed" in low and "islington" in low
+    assert "no 1-bed listings" in low
+    # the requested-but-unverified safety dimension is disclosed by name
+    assert "safety" in low and "not been verified yet" in low
+    # honest partial-disclosure marker present, but NO time-out / cut-short framing on this path
+    assert "couldn't retrieve" in low
+    for banned in ("ran long", "cut short", "time budget", "time limit", "incomplete"):
+        assert banned not in low, banned
+    # closer offers to look figures up; it must NOT promise this turn already contains them
+    assert "look them up" in low
+    # by construction contains no monetary figure -> the critic replacement can't re-fire
+    assert has_specific_price_claims(ans) is False
+
+
+def test_deterministic_wrap_answer_is_time_budget_builder(monkeypatch):
+    """Regression: _deterministic_wrap_answer is now a thin wrapper delegating to the shared
+    builder with reason='time_budget' — byte-identical output — and that framing (not the
+    no_reliable_numbers one) is the time-budget cut-short wording."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    state = _completed_empty_state()
+    wrapped = agent_loop._deterministic_wrap_answer(state)
+    builder_tb = agent_loop._artifact_grounded_fallback_answer(state, reason="time_budget")
+    assert wrapped == builder_tb                       # wrapper == builder(time_budget)
+    assert "cut short by the time budget" in wrapped   # time-budget framing preserved
+    # the two reasons diverge only in framing (opener/closer), never in the shared body
+    builder_nr = agent_loop._artifact_grounded_fallback_answer(state, reason="no_reliable_numbers")
+    assert builder_nr != wrapped
+    assert "cut short" not in builder_nr.lower()
+    # the shared body (completed-empty + safety line) is identical across both framings
+    for body_line in ("no 1-bed listings", "Safety has not been verified yet"):
+        assert body_line in wrapped and body_line in builder_nr
+
+
+# ─── FIX 4: retuned defaults ────────────────────────────────────────
+def test_retuned_defaults(monkeypatch):
+    for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_MIN_BATCH_S",
+              "FC_WRAP_CRITIC_RESERVE_S"):
+        monkeypatch.delenv(k, raising=False)
+    assert agent_loop._turn_soft_wrap_s() == 23.0
+    assert agent_loop._final_reserve_s() == 5.0
+    assert agent_loop._min_batch_s() == 2.0
+    assert agent_loop._wrap_critic_reserve_s() == 1.0
+
+
+# ─── FIX 5: wrap directive additions ────────────────────────────────
+def test_wrap_directive_has_source_and_figure_rules():
+    d = agent_loop._WRAP_DIRECTIVE.lower()
+    assert "cite" in d and "source" in d                       # source-citation instruction
+    assert "only numbers" in d and ("appear" in d or "present" in d)  # no-invented-figures rule
+    assert "onthemarket" in d                                  # concrete source example
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TASK 1 (final6 CR4 batch-deadline hole): a blocking, non-yielding section inside an async
+# tool must NOT freeze the graph loop / defeat the folded batch deadline. Each dispatch is
+# offloaded to a private-loop worker thread, so the batch window fires on time and stragglers
+# are abandoned regardless of the (unkillable) worker thread.
+# ═══════════════════════════════════════════════════════════════════
+
+def test_execute_tools_returns_at_window_despite_blocking_tool(monkeypatch):
+    """Root-cause regression: an async tool that makes a SYNCHRONOUS, non-yielding call inline
+    used to FREEZE the graph event loop, so the batch-window asyncio.wait timer could not fire
+    and execute_tools ran far past the folded deadline (live: dispatched 18.5s, returned 38s). A
+    concurrent heartbeat must keep ticking while a 2s-blocking tool is in flight, the tool must be
+    abandoned at the ~0.4s window, and the node must return bounded by the window."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.4")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = BlockingProvider([FakeSpec("search_properties")], blocks=2.0)
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="",
+                                   tool_calls=[_tc("search_properties", {"area": "Camden"}, "c1")])]
+
+    async def run():
+        ticks = {"n": 0}
+        stop = {"v": False}
+
+        async def heartbeat():
+            while not stop["v"]:
+                ticks["n"] += 1
+                await asyncio.sleep(0.02)
+
+        hb = asyncio.ensure_future(heartbeat())
+        t0 = time.monotonic()
+        cmd = await nodes["execute_tools"](state)
+        wall = time.monotonic() - t0
+        stop["v"] = True
+        await hb
+        return ticks["n"], wall, cmd
+
+    ticks, wall, cmd = asyncio.run(run())
+
+    assert wall < 1.5, f"execute_tools ran past the window ({wall:.2f}s) — graph loop was blocked"
+    assert ticks >= 5, f"event loop appeared blocked (only {ticks} heartbeat ticks)"
+    state.update(cmd.update or {})
+    ab = [a for a in state["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1 and ab[0]["tool"] == "search_properties"
+    assert ab[0]["outcome_unknown"] is True
+
+
+def test_blocking_tool_does_not_serialize_siblings(monkeypatch):
+    """A blocking tool in a batch must not delay a sibling read's START (the live 'second search
+    only started at 33.6s' symptom). With per-dispatch offload both run concurrently: the fast
+    sibling completes within the window while the blocker is abandoned at it."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.6")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    provider = BlockingProvider(
+        [FakeSpec("compare_or_rank_areas"), FakeSpec("web_search")],
+        blocks={"compare_or_rank_areas": 3.0, "web_search": 0.0})
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state()
+    state["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("compare_or_rank_areas", {"areas": ["a", "b"]}, "c1"),
+        _tc("web_search", {"query": "x"}, "c2")])]
+
+    t0 = time.monotonic()
+    state = _exec_once(nodes, state)
+    wall = time.monotonic() - t0
+
+    assert wall < 1.5, f"blocker serialized the batch ({wall:.2f}s) — sibling could not start"
+    by_tool = {a["tool"]: a for a in state["tool_artifacts"]}
+    # fast sibling completed concurrently (not queued behind the 3s blocker)
+    assert by_tool["web_search"]["success"] is True
+    assert by_tool["web_search"]["raw_data"] == {"ok": "web_search"}
+    # the blocking read was abandoned at the window
+    assert by_tool["compare_or_rank_areas"].get("abandoned") is True
+
+
+def test_blocking_batch_near_wrap_returns_and_wraps_promptly(monkeypatch):
+    """End-to-end CR4 shape: a batch dispatched with only ~1s of soft-wrap runway left, holding a
+    tool that would block 30s, must return bounded by the soft remainder (not the 30s block), and
+    the next agent entry must wrap PROMPTLY rather than being dragged past the SLO."""
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.5")   # ~1s remaining >= min -> dispatch (bounded)
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "search_properties", 30)
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    provider = BlockingProvider([FakeSpec("search_properties")], blocks=30)
+    chat = WrapChat(AIMessage(content="Best-effort answer from what I have."))
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+
+    turn_start = time.monotonic() - 24.0  # soft remaining ~1.0s
+    st = _state(loop_turn=4, turn_start_monotonic=turn_start,
+                messages=[AIMessage(content="",
+                                    tool_calls=[_tc("search_properties", {"area": "x"}, "c1")])])
+
+    t0 = time.monotonic()
+    cmd1 = asyncio.run(nodes["execute_tools"](st))
+    st.update(cmd1.update or {})
+    wall = time.monotonic() - t0
+
+    assert wall < 3.0, f"blocking batch not bounded by the soft remainder ({wall:.2f}s)"
+    assert cmd1.goto == "agent"
+    ab = [a for a in st["tool_artifacts"] if a.get("abandoned")]
+    assert len(ab) == 1 and ab[0]["tool"] == "search_properties"
+
+    # the next agent entry (elapsed ~25 > wrap edge 23) wraps promptly, no re-dispatch
+    cmd2 = asyncio.run(nodes["agent"](st))
+    assert cmd2.goto == "format_output_fc"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TASK 2 (final6 CR4 wrap honesty): a cut-short wrap must NAME every requested-but-uncompleted
+# dimension explicitly, not just say "may be incomplete".
+# ═══════════════════════════════════════════════════════════════════
+
+def _cr4_state(lang, executed_tools):
+    """CR4 zh query state with the given already-executed tools (as plain success artifacts)."""
+    cm = ("帮我找伦敦月租不超过1400镑的单间，通勤到帝国理工不超过35分钟，"
+          "附近要有超市，尽量避开治安差的区域") if lang == "zh" else (
+          "Find me a room in London under £1400/month, commute to Imperial under 35 min, "
+          "supermarkets nearby, and avoid unsafe areas")
+    arts = [{"turn": 0, "tool": t, "params_digest": f"d{i}", "success": True,
+             "raw_data": {"ok": True}} for i, t in enumerate(executed_tools)]
+    return _state(extracted_context={"current_message": cm, "reply_language": lang},
+                  tool_artifacts=arts)
+
+
+def test_wrap_fallback_names_missing_dimensions_zh():
+    """CR4 exact shape: safety/commute/nearby requested, only compare/search/web_search ran ->
+    the deterministic fallback names each uncompleted dimension explicitly (not just 可能不完整)."""
+    state = _cr4_state("zh", ["compare_or_rank_areas", "search_properties", "web_search"])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "治安数据尚未完成核查" in ans     # safety named
+    assert "通勤时间尚未核算" in ans         # commute named
+    assert "周边设施尚未查询" in ans         # nearby/POI named
+    # still the honest incomplete disclosure, and never implies a dimension was checked
+    assert "可能不完整" in ans
+
+
+def test_wrap_fallback_names_missing_dimensions_en():
+    state = _cr4_state("en", ["compare_or_rank_areas", "search_properties", "web_search"])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "Safety has not been verified yet" in ans
+    assert "Commute time has not been calculated yet" in ans
+    assert "Nearby amenities have not been looked up yet" in ans
+
+
+def test_wrap_fallback_omits_completed_dimensions():
+    """A dimension whose tool DID complete is NOT flagged as outstanding (no false 'not done')."""
+    state = _cr4_state("zh", ["search_properties", "check_safety", "calculate_commute",
+                              "search_nearby_pois"])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "尚未完成核查" not in ans     # safety completed
+    assert "尚未核算" not in ans         # commute completed
+    assert "尚未查询" not in ans         # nearby completed
+
+
+def test_missing_dimension_lines_helper_cues():
+    """Cue detection: ascii cues match case-insensitively, CJK cues match raw; a completed tool
+    removes its dimension."""
+    zh = agent_loop._missing_requested_dimension_lines(
+        "通勤和治安如何，附近有超市吗", set(), "zh")
+    assert zh == ["治安数据尚未完成核查。", "通勤时间尚未核算。", "周边设施尚未查询。"]
+    # safety satisfied by a completed check_safety -> only commute + nearby remain
+    zh2 = agent_loop._missing_requested_dimension_lines(
+        "通勤和治安如何，附近有超市吗", {"check_safety"}, "zh")
+    assert "治安数据尚未完成核查。" not in zh2
+    # no cued dimensions -> no lines
+    assert agent_loop._missing_requested_dimension_lines("find me a flat", set(), "en") == []
+
+
+def test_wrap_directive_names_uncompleted_dimensions():
+    """FIX 2(a): the wrap LLM prompt instructs naming each requested-but-uncompleted dimension."""
+    d = agent_loop._WRAP_DIRECTIVE.lower()
+    assert "dimension" in d
+    assert "not yet checked" in d or "not yet" in d or "was not" in d
+
+
+# ═══════════════════════════════════════════════════════════════════
+# TASK (final7 CR5): a COMPLETED search that genuinely matched ZERO listings must be wrapped
+# HONESTLY as "search completed, nothing matched" NAMING the requested room type — never as a
+# partial/"not ready yet" result, which is dishonest per the 2026-07-20 ruling and fails the
+# grader's complete-empty branch (room_type_match_if_evidence).
+# ═══════════════════════════════════════════════════════════════════
+
+def _empty_search_artifact(room_type=None, bedrooms=1, area="islington", budget=1500,
+                           status="no_results", lang_msg="find a flat"):
+    """A COMPLETED search_properties artifact that returned zero matches (partial falsy,
+    status=no_results, empty recommendations) — the exact shape search_properties.py emits for a
+    genuinely-searched empty (its _criteria() echo carried in search_criteria)."""
+    return {"turn": 0, "tool": "search_properties", "params_digest": "d", "success": True,
+            "raw_data": {"success": True, "status": status, "message": "no results",
+                         "recommendations": [], "data_source": "OnTheMarket",
+                         "search_criteria": {"area": area, "areas": [area] if area else [],
+                                             "room_type": room_type, "bedrooms": bedrooms,
+                                             "max_budget": budget, "budget_period": "pcm"},
+                         "known_criteria": {"area": area, "room_type": room_type,
+                                            "bedrooms": bedrooms}}}
+
+
+def test_wrap_completed_empty_names_room_type_en():
+    """CR5 exact shape: a cold Islington 1-bed search COMPLETED with zero matches. The fallback
+    must NAME the requested room type ('1-bed', grader-matchable), report a COMPLETED no-match
+    (not 'not ready yet'), and quote no fabricated money figure."""
+    state = _state(
+        extracted_context={"current_message": "Find me a 1-bed in Islington under £1500/month",
+                            "reply_language": "en"},
+        tool_artifacts=[_empty_search_artifact(bedrooms=1, area="islington")])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    low = ans.lower()
+    # grader token: one of 1-bed / 1 bed / 1-bedroom / 1 bedroom must be present
+    assert any(t in low for t in ("1-bed", "1 bed", "1-bedroom", "1 bedroom"))
+    assert "completed" in low and "no" in low           # honest completed-no-match phrasing
+    assert "Islington" in ans                           # area named
+    assert "OnTheMarket" in ans                         # data source
+    # never the dishonest genuinely-absent / not-ready phrasing
+    assert "do not yet have listing results ready" not in ans
+    # no invented budget figure
+    assert "1500" not in ans and "£1,500" not in ans
+
+
+def test_wrap_completed_empty_names_room_type_zh():
+    """zh variant: completed zero-match keeps the ascii room-type token (1-bed) for grading and
+    says 已完成 rather than the ambiguous 还没有结果 phrasing."""
+    state = _state(
+        extracted_context={"current_message": "在 Islington 帮我找一个 1-bed 的房子",
+                            "reply_language": "zh"},
+        tool_artifacts=[_empty_search_artifact(bedrooms=1, area="islington")])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "1-bed" in ans.lower()                        # ascii token kept in zh line
+    assert "房源搜索已完成" in ans                        # honest COMPLETED phrasing
+    assert "没有找到匹配的房源" in ans
+    assert "还没有可以直接展示的房源结果" not in ans      # not the genuinely-absent line
+    assert "1500" not in ans                             # no invented budget
+
+
+def test_wrap_completed_empty_studio_via_room_type():
+    """A studio search (room_type='studio', bedrooms=0) surfaces the 'studio' grader token."""
+    state = _state(
+        extracted_context={"current_message": "find a studio in Camden", "reply_language": "en"},
+        tool_artifacts=[_empty_search_artifact(room_type="studio", bedrooms=0, area="camden")])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "studio" in ans.lower()
+    assert "completed" in ans.lower()
+
+
+def test_wrap_completed_empty_missing_room_type_no_crash():
+    """Degrade gracefully: criteria echo with NO room type still emits an honest completed-empty
+    line (no crash, no fabricated token)."""
+    art = _empty_search_artifact(room_type=None, bedrooms=None, area="islington")
+    state = _state(
+        extracted_context={"current_message": "find something in Islington", "reply_language": "en"},
+        tool_artifacts=[art])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "completed" in ans.lower() and "matched your criteria" in ans.lower()
+    assert "do not yet have listing results ready" not in ans
+
+
+def test_wrap_partial_search_still_cut_short_not_completed_empty(monkeypatch):
+    """Regression / priority: a PARTIAL (timed-out) search must still be phrased as cut-short and
+    must NEVER be reported as a completed no-match, even if a sibling completed-empty exists."""
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    state = _state(
+        extracted_context={"current_message": "find a 1-bed in Islington", "reply_language": "en"},
+        tool_artifacts=[{"turn": 0, "tool": "search_properties", "params_digest": "d",
+                         "raw_data": None, "success": False, "timed_out": True,
+                         "abandoned": True, "outcome_unknown": True, "error": "abandoned"}])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    low = ans.lower()
+    assert "cut short" in low
+    assert "no listings" not in low and "no results" not in low
+    assert "completed:" not in low          # not the completed-empty phrasing
+
+
+def test_wrap_no_search_artifact_keeps_old_fallback():
+    """No search artifact at all -> the genuinely-absent fallback line is unchanged."""
+    state = _state(
+        extracted_context={"current_message": "compare Camden and Islington",
+                            "reply_language": "en"},
+        tool_artifacts=[{"turn": 0, "tool": "compare_or_rank_areas", "params_digest": "d",
+                         "success": True, "raw_data": {"ok": True}}])
+    ans = agent_loop._deterministic_wrap_answer(state)
+    assert "I do not yet have listing results ready to show." in ans
+
+
+def test_completed_empty_search_raw_helper():
+    """The detection predicate: executed + partial-falsy + status=no_results/empty recs -> raw
+    dict; a partial or non-dict payload is skipped."""
+    empty = _empty_search_artifact(bedrooms=2, area="camden")
+    raw = agent_loop._completed_empty_search_raw([empty])
+    assert isinstance(raw, dict) and raw.get("status") == "no_results"
+    # partial payload is NOT a completed-empty
+    partial = {"turn": 0, "tool": "search_properties", "success": True,
+               "raw_data": {"status": "no_results", "recommendations": [], "partial": True}}
+    assert agent_loop._completed_empty_search_raw([partial]) is None
+    # abandoned placeholder is NOT executed -> skipped
+    abandoned = {"turn": 0, "tool": "search_properties", "raw_data": None, "abandoned": True}
+    assert agent_loop._completed_empty_search_raw([abandoned]) is None
+
+
+def test_criteria_room_type_label():
+    """Label derivation: numeric room type comes from bedrooms; studio/shared from room_type."""
+    assert agent_loop._criteria_room_type_label({"bedrooms": 1, "room_type": None}) == "1-bed"
+    assert agent_loop._criteria_room_type_label({"bedrooms": 0}) == "studio"
+    assert agent_loop._criteria_room_type_label({"room_type": "studio"}) == "studio"
+    assert "room" in agent_loop._criteria_room_type_label({"room_type": "shared"})
+    assert agent_loop._criteria_room_type_label({"room_type": None, "bedrooms": None}) is None
+    # bool is not a bedroom count
+    assert agent_loop._criteria_room_type_label({"bedrooms": True}) is None

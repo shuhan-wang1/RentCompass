@@ -57,12 +57,26 @@ server = Server("uk-rent-tools")
 
 @server.list_tools()
 async def list_tools() -> list[types.Tool]:
-    """Advertise every registered tool with its existing OpenAI-format JSON schema."""
+    """Advertise every registered tool with its OpenAI-format JSON schema plus the
+    ToolSpec metadata (design §2.8a) the FC loop needs to bind tools and gate
+    taint/HITL: side_effect / retry_safe / version / terminal.
+
+    These are carried on the MCP ``annotations`` field. ``ToolAnnotations`` in the
+    installed mcp version is ``extra='allow'``, so the non-standard keys round-trip
+    intact; ``MCPToolClient.list_specs()`` reads them back (falling back to the
+    in-process registry spec when any are absent)."""
     return [
         types.Tool(
             name=tool.name,
             description=tool.description,
             inputSchema=tool.parameters,
+            annotations=types.ToolAnnotations(
+                readOnlyHint=(tool.side_effect == "none"),
+                side_effect=tool.side_effect,
+                retry_safe=tool.retry_safe,
+                version=tool.version,
+                terminal=tool.terminal,
+            ),
         )
         for tool in _registry.tools.values()
     ]

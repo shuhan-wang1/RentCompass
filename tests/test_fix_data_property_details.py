@@ -6,15 +6,13 @@ A listing that exists in the cache (because search put it there) must be
 resolvable by the detail tool, both by fuzzy address and by exact URL.
 """
 
-import asyncio
-
 from core.scraping import on_demand
 from core.tools import get_property_details as gpd
 
 
 def _seed_cache(monkeypatch, tmp_path, rows):
     cache = on_demand.ListingCache(tmp_path / "listings.sqlite3")
-    key = on_demand._query_key("london", 1, 1, 1000, 2000)
+    key = on_demand._query_key("london")  # slug-only canonical key
     cache.set(key, rows)
     monkeypatch.setattr(on_demand, "_CACHE", cache)
     return cache
@@ -41,8 +39,8 @@ def test_load_property_database_reads_on_demand_cache(monkeypatch, tmp_path):
 
 def test_details_resolves_listing_in_cache_by_address(monkeypatch, tmp_path):
     _seed_cache(monkeypatch, tmp_path, [_ROW])
-    res = asyncio.run(gpd.get_property_details_impl(
-        property_address="Woburn Place Bloomsbury"))
+    res = gpd.get_property_details_impl(
+        property_address="Woburn Place Bloomsbury")
     assert res["success"] is True and res["found"] is True
     assert "Woburn Place" in res["property"]["address"]
     assert res["property"]["room_type"] == "Studio"
@@ -53,16 +51,16 @@ def test_details_resolves_listing_in_cache_by_address(monkeypatch, tmp_path):
 
 def test_details_resolves_listing_in_cache_by_url(monkeypatch, tmp_path):
     _seed_cache(monkeypatch, tmp_path, [_ROW])
-    res = asyncio.run(gpd.get_property_details_impl(
-        property_address="https://www.onthemarket.com/details/12345/"))
+    res = gpd.get_property_details_impl(
+        property_address="https://www.onthemarket.com/details/12345/")
     assert res["success"] is True and res["found"] is True
     assert res["property"]["url"] == _ROW["URL"]
 
 
 def test_details_honest_not_found_when_absent(monkeypatch, tmp_path):
     _seed_cache(monkeypatch, tmp_path, [_ROW])
-    res = asyncio.run(gpd.get_property_details_impl(
-        property_name="Nonexistent Palace Tower"))
+    res = gpd.get_property_details_impl(
+        property_name="Nonexistent Palace Tower")
     assert res.get("found") is False
 
 

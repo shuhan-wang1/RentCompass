@@ -42,6 +42,33 @@ class AgentState(TypedDict, total=False):
     # per-turn list.)
     loop_turn: int
     observations: list
+    # Native function-calling loop (AGENT_ARCH=fc_loop; app/core/agent_loop.py). messages is
+    # the langchain_core BaseMessage list the `agent` node binds tools onto and the
+    # `execute_tools` node appends ToolMessages to; tool_artifacts is the raw-data ledger
+    # [{turn, tool, raw_data, params_digest}] format_output_fc aggregates over (design §2.8b).
+    # Both are PER-TURN plain (non-reducer) channels — exactly like loop_turn/observations —
+    # so the create_initial_state(messages=[], tool_artifacts=[]) input cleanly RESETS them at
+    # the start of every turn under the checkpointer, and each node returns the FULL updated
+    # list (last-write-wins; agent and execute_tools alternate as sole sequential writers).
+    messages: list
+    tool_artifacts: list
+    # Canary telemetry (2026-07-20): set True by the fc_loop turn-wide soft-wrap path
+    # (agent_loop._wrap_up) when the WHOLE-turn wall-clock crossed the soft-wrap edge and the
+    # answer was generated tools-disabled / from gathered artifacts. A PLAIN per-turn channel
+    # reset to False by create_initial_state; _wrap_up is the sole writer. app/app.py surfaces
+    # it on the per-turn canary.turn record. Purely observational — never gates routing.
+    soft_wrapped: bool
+    # Cumulative wall-clock (seconds) the fc_loop execute_tools node has spent running tool
+    # batches THIS user turn. A PLAIN per-turn channel (reset by create_initial_state) that
+    # accumulates across the turn's batches so FC_TURN_TOOL_BUDGET_S can be enforced turn-wide
+    # (execute_tools is the sole writer; last-write-wins is safe). See app/core/agent_loop.py.
+    turn_tool_budget_used_s: float
+    # Monotonic timestamp (time.monotonic()) captured at the fc_loop guard/entry node marking
+    # the TURN START, so the agent + execute_tools nodes can measure whole-turn elapsed (LLM +
+    # tools) and enforce the turn-wide soft wrap (FC_TURN_SOFT_WRAP_S) + search deadline. A PLAIN
+    # per-turn channel reset by create_initial_state (0.0 = not yet captured; guard is the sole
+    # writer). Process-local: never compare across a cross-process checkpoint resume.
+    turn_start_monotonic: float
     # Multi-intent execution plan (build_execution_plan -> dispatch_tasks -> task_worker x N
     # -> gather_wave). task_plan is the resolved task list [{id,index,tool,params,depends_on}];
     # plan_origin is "multi_search" (degenerate single-intent web fan-out, ends at
@@ -97,6 +124,11 @@ def create_initial_state(
         plan=[],
         loop_turn=0,
         observations=[],
+        messages=[],
+        tool_artifacts=[],
+        soft_wrapped=False,
+        turn_tool_budget_used_s=0.0,
+        turn_start_monotonic=0.0,
         task_plan=[],
         plan_origin="",
         plan_notes=[],

@@ -21,7 +21,9 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "deepseek").strip().lower()
 # DeepSeek (OpenAI-compatible) -------------------------------------------------
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+# deepseek-chat was retired 2026-07-24; deepseek-v4-flash is the successor (thinking
+# mode selected per request via extra_body — this module's callers want non-thinking).
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 
 # Ollama (local) ---------------------------------------------------------------
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -36,6 +38,9 @@ def _deepseek_llm(temperature: float, max_tokens: int):
         base_url=DEEPSEEK_BASE_URL,
         temperature=temperature,
         max_tokens=max_tokens,
+        # v4-flash defaults to thinking ENABLED; this generic helper serves fast
+        # chat-style callers, so pin it off explicitly.
+        extra_body={"thinking": {"type": "disabled"}},
     )
 
 
@@ -54,10 +59,10 @@ def _ollama_llm(temperature: float, num_predict: int, num_ctx: int,
 def get_react_llm(low_latency: bool = False):
     """LLM for agent reasoning and response generation (low temperature).
 
-    low_latency=True routes to the cheap chat model (deepseek-chat) — used for
+    low_latency=True routes to the non-thinking mode of deepseek-v4-flash — used for
     greetings, direct answers and single-observation syntheses that gain nothing
-    from chain-of-thought. The default reserves the (slower, pricier) reasoner
-    (deepseek-reasoner) for genuine multi-evidence synthesis.
+    from chain-of-thought. The default reserves the (slower, pricier) thinking mode
+    for genuine multi-evidence synthesis.
     """
     if LLM_PROVIDER == "deepseek":
         from uk_rent_agent.llm.router import ModelRouter

@@ -22,6 +22,15 @@ class PropertyEmbeddingStore:
         self._embedding_cache = {}
         print("    -> [DEBUG] PropertyEmbeddingStore initialized successfully.")
 
+    def is_ready(self) -> bool:
+        """Cheap, side-effect-free probe: True once the sentence-transformer model is loaded.
+
+        The model is loaded synchronously in ``__init__`` (a ~18-20s cold load on the first
+        construction in a process). Callers that must not pay that blocking load inside a
+        tight deadline use this to check readiness WITHOUT triggering construction — a fully
+        constructed store is, by definition, ready. Never loads anything itself."""
+        return getattr(self, "model", None) is not None
+
     @staticmethod
     def _row_key(text: str) -> str:
         return hashlib.md5(text.encode("utf-8")).hexdigest()

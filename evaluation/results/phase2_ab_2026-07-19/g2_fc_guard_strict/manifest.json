@@ -1,0 +1,43 @@
+{
+  "argv": [
+    "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "fc_loop",
+    "--cases",
+    "evaluation/benchmark/cases_guard_regression.jsonl",
+    "--out",
+    "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/g2_fc_guard_strict"
+  ],
+  "command": "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cases evaluation/benchmark/cases_guard_regression.jsonl --out C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/g2_fc_guard_strict",
+  "arch": "fc_loop",
+  "config": "routed_models",
+  "mode": "live",
+  "timestamp": "2026-07-19T13:56:35",
+  "git_commit": "07c8dfc",
+  "git_dirty": false,
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "fc_loop",
+    "DEEPSEEK_STRICT": "1",
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1"
+  },
+  "case_file": {
+    "path": "evaluation\\benchmark\\cases_guard_regression.jsonl",
+    "sha256": "df704ac43b0362ddc78ecb75345c268807af35f1e9b1bb6620402e37fb8a645a"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\g2_fc_guard_strict\\events.jsonl",
+    "sha256": "1d7b69f66b0b8810ee86d8af165803173688a976134f33a51ab53f8560fd412f",
+    "gz_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\g2_fc_guard_strict\\events.jsonl.gz",
+    "sha256_gz": "a461311831d92eb643413775560b8c0211dd03d0fbe31254d228812ccc5deb74",
+    "committed": true,
+    "note": "events.jsonl.gz preserved in the package for verification; raw + gz SHA256 both recorded"
+  }
+}

@@ -108,8 +108,13 @@ def _agg(runs: List, reasoner: str, percentile) -> dict:
     total_calls = len(llm)
     cost = sum((r.cost_usd or 0.0) for r in runs)
     lat = [r.turn_latency_ms for r in runs if r.turn_latency_ms is not None]
-    rstage = [sum(v for k, v in (r.node_latencies or {}).items()
-                  if k in RETRIEVAL_NODES and v is not None)
+    # node_latencies is now a per-node aggregate {node: {sum_ms, max_ms, count}} (it used
+    # to be {node: latency_ms}); sum the per-node sum_ms over the retrieval nodes. Tolerate
+    # the legacy flat-float shape when reloading older raw_runs.jsonl.
+    def _node_ms(v):
+        return v.get("sum_ms", 0.0) if isinstance(v, dict) else (v or 0.0)
+    rstage = [sum(_node_ms(v) for k, v in (r.node_latencies or {}).items()
+                  if k in RETRIEVAL_NODES)
               for r in runs]
     grounded = sum(r.grounding.get("grounded_claims", 0) for r in runs)
     gtot = sum(r.grounding.get("total_verifiable_claims", 0) for r in runs)

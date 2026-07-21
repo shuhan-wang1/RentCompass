@@ -35,6 +35,13 @@ CREATE TABLE IF NOT EXISTS conversations (
     context_schema_version INTEGER NOT NULL DEFAULT 1,
     fork_reason            TEXT,
     edited_slot_turn_id    TEXT,
+    -- Canary rollout (2026-07-20): the architecture that SERVES this conversation,
+    -- assigned once at creation from the creating process's env and thereafter sticky
+    -- (see create_conversation / set_agent_assignment). agent_arch is 'legacy'|'fc_loop';
+    -- agent_version is the candidate SHA (APP_CANDIDATE_SHA); strict mirrors DEEPSEEK_STRICT.
+    agent_arch             TEXT NOT NULL DEFAULT 'legacy',
+    agent_version          TEXT NOT NULL DEFAULT 'unknown',
+    strict                 INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, id)
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -159,6 +166,10 @@ class ConversationStore:
             ("context_schema_version", "INTEGER NOT NULL DEFAULT 1"),
             ("fork_reason", "TEXT"),
             ("edited_slot_turn_id", "TEXT"),
+            # Canary rollout (2026-07-20): sticky per-conversation architecture assignment.
+            ("agent_arch", "TEXT NOT NULL DEFAULT 'legacy'"),
+            ("agent_version", "TEXT NOT NULL DEFAULT 'unknown'"),
+            ("strict", "INTEGER NOT NULL DEFAULT 0"),
         ):
             if name not in conv_cols:
                 self._conn.execute(f"ALTER TABLE conversations ADD COLUMN {name} {decl}")
@@ -178,7 +189,14 @@ class ConversationStore:
                 pass
 
     # ------------------------------------------------------------ conversations
-    def create_conversation(self, user_id: str, title: str | None = None) -> dict:
+    def create_conversation(self, user_id: str, title: str | None = None, *,
+                            agent_arch: str = "legacy", agent_version: str = "unknown",
+                            strict: bool = False) -> dict:
+        """Create a conversation. The (agent_arch, agent_version, strict) triple is the
+        canary-rollout sticky assignment (2026-07-20): the creating process passes its OWN
+        process-level env constants, they are written ONCE here and never change afterwards
+        (scaling the fc pool must not flip in-flight conversations). set_agent_assignment is
+        the sole exception (emergency-rollback reconciliation)."""
         cid = uuid.uuid4().hex
         now = _now_iso()
         title = (title or "").strip() or "New chat"
@@ -187,16 +205,38 @@ class ConversationStore:
                 """INSERT INTO conversations
                    (user_id, id, title, created_at, updated_at,
                     parent_conversation_id, forked_from_turn_id,
-                    root_conversation_id, branch_depth, context_schema_version)
-                   VALUES(?,?,?,?,?,NULL,NULL,?,0,1)""",
-                (user_id, cid, title, now, now, cid),
+                    root_conversation_id, branch_depth, context_schema_version,
+                    agent_arch, agent_version, strict)
+                   VALUES(?,?,?,?,?,NULL,NULL,?,0,1,?,?,?)""",
+                (user_id, cid, title, now, now, cid,
+                 agent_arch, agent_version, 1 if strict else 0),
             )
             self._conn.commit()
         return {"id": cid, "title": title, "created_at": now,
                 "updated_at": now, "message_count": 0,
                 "parent_conversation_id": None, "forked_from_turn_id": None,
                 "root_conversation_id": cid, "branch_depth": 0,
-                "fork_reason": None, "edited_slot_turn_id": None}
+                "fork_reason": None, "edited_slot_turn_id": None,
+                "agent_arch": agent_arch, "agent_version": agent_version,
+                "strict": bool(strict)}
+
+    def set_agent_assignment(self, user_id: str, cid: str, agent_arch: str,
+                             agent_version: str, strict: bool) -> None:
+        """Overwrite the sticky (agent_arch, agent_version, strict) assignment for a
+        conversation. This is the ONLY mutator of the assignment and exists solely for the
+        emergency-rollback reconciliation path (app.py _reconcile_agent_arch): when a
+        rebuilt/rolled-back process serves a conversation whose stored arch differs from its
+        own, it serves with ITS OWN arch and rewrites the stored assignment so subsequent
+        turns are consistent. Steady-state rollout never calls this — assignment stays as
+        written at creation. Does NOT touch updated_at (this is an ops-side reconciliation,
+        not a user-visible edit that should reorder the conversation list)."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE conversations SET agent_arch=?, agent_version=?, strict=? "
+                "WHERE user_id=? AND id=?",
+                (agent_arch, agent_version, 1 if strict else 0, user_id, cid),
+            )
+            self._conn.commit()
 
     def get_conversation(self, user_id: str, cid: str) -> dict | None:
         with self._lock:
@@ -205,6 +245,7 @@ class ConversationStore:
                           parent_conversation_id, forked_from_turn_id,
                           root_conversation_id, branch_depth,
                           fork_reason, edited_slot_turn_id,
+                          agent_arch, agent_version, strict,
                           (SELECT COUNT(*) FROM messages m
                              WHERE m.user_id=? AND m.conversation_id=?) AS message_count
                    FROM conversations WHERE user_id=? AND id=?""",
@@ -219,6 +260,7 @@ class ConversationStore:
                           c.parent_conversation_id, c.forked_from_turn_id,
                           c.root_conversation_id, c.branch_depth,
                           c.fork_reason, c.edited_slot_turn_id,
+                          c.agent_arch, c.agent_version, c.strict,
                           (SELECT COUNT(*) FROM messages m
                              WHERE m.user_id=c.user_id AND m.conversation_id=c.id) AS message_count
                    FROM conversations c WHERE c.user_id=?
@@ -575,7 +617,8 @@ class ConversationStore:
 
             # 2. Validate the source conversation.
             src = self._conn.execute(
-                """SELECT id, title, root_conversation_id, branch_depth
+                """SELECT id, title, root_conversation_id, branch_depth,
+                          agent_arch, agent_version, strict
                    FROM conversations WHERE user_id=? AND id=?""",
                 (user_id, source_cid),
             ).fetchone()
@@ -615,14 +658,19 @@ class ConversationStore:
                 child_title = (title or "").strip() or f"{src['title']} (branch)"
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
+                # A branch continues the SAME conversation family, so it inherits the source's
+                # sticky canary assignment (never re-reads env) — sticky routing must keep the
+                # whole family on one arch.
                 self._conn.execute(
                     """INSERT INTO conversations
                        (user_id, id, title, created_at, updated_at,
                         parent_conversation_id, forked_from_turn_id,
-                        root_conversation_id, branch_depth, context_schema_version)
-                       VALUES(?,?,?,?,?,?,?,?,?,1)""",
+                        root_conversation_id, branch_depth, context_schema_version,
+                        agent_arch, agent_version, strict)
+                       VALUES(?,?,?,?,?,?,?,?,?,1,?,?,?)""",
                     (user_id, child_cid, child_title, now, now,
-                     source_cid, fork_turn_id, root, depth),
+                     source_cid, fork_turn_id, root, depth,
+                     src["agent_arch"], src["agent_version"], src["strict"]),
                 )
 
                 # 5-7. Copy the inherited COMPLETED turns (started_at <= fork turn's), their
@@ -847,7 +895,8 @@ class ConversationStore:
             # 2. Validate source + the edited turn (completion status is NOT required).
             src = self._conn.execute(
                 """SELECT id, title, root_conversation_id, branch_depth,
-                          forked_from_turn_id, edited_slot_turn_id
+                          forked_from_turn_id, edited_slot_turn_id,
+                          agent_arch, agent_version, strict
                    FROM conversations WHERE user_id=? AND id=?""",
                 (user_id, source_cid),
             ).fetchone()
@@ -896,14 +945,17 @@ class ConversationStore:
                 child_title = (title or "").strip() or f"{src['title']} (edit)"
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
+                # Edit branches inherit the source's sticky canary assignment too (same family).
                 self._conn.execute(
                     """INSERT INTO conversations
                        (user_id, id, title, created_at, updated_at,
                         parent_conversation_id, forked_from_turn_id, root_conversation_id,
-                        branch_depth, context_schema_version, fork_reason, edited_slot_turn_id)
-                       VALUES(?,?,?,?,?,?,?,?,?,1,'edit',?)""",
+                        branch_depth, context_schema_version, fork_reason, edited_slot_turn_id,
+                        agent_arch, agent_version, strict)
+                       VALUES(?,?,?,?,?,?,?,?,?,1,'edit',?,?,?,?)""",
                     (user_id, child_cid, child_title, now, now,
-                     source_cid, forked_from, root, depth, anchor),
+                     source_cid, forked_from, root, depth, anchor,
+                     src["agent_arch"], src["agent_version"], src["strict"]),
                 )
                 self._materialize_branch(user_id, source_cid, child_cid, src_turns,
                                          cutoff_msg_id)
@@ -1037,6 +1089,10 @@ class ConversationStore:
             "branch_depth": row["branch_depth"],
             "fork_reason": row["fork_reason"],
             "edited_slot_turn_id": row["edited_slot_turn_id"],
+            # Canary sticky assignment (2026-07-20).
+            "agent_arch": row["agent_arch"],
+            "agent_version": row["agent_version"],
+            "strict": bool(row["strict"]),
         }
 
     @staticmethod

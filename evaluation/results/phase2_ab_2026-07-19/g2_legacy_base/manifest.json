@@ -1,0 +1,41 @@
+{
+  "argv": [
+    "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "legacy",
+    "--out",
+    "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/g2_legacy_base"
+  ],
+  "command": "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch legacy --out C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/g2_legacy_base",
+  "arch": "legacy",
+  "config": "routed_models",
+  "mode": "live",
+  "timestamp": "2026-07-19T13:26:33",
+  "git_commit": "07c8dfc",
+  "git_dirty": false,
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "legacy",
+    "DEEPSEEK_STRICT": null,
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1"
+  },
+  "case_file": {
+    "path": "C:\\Users\\shuhan\\Desktop\\uk_rent_recommendation\\evaluation\\benchmark\\cases.jsonl",
+    "sha256": "c3ea5949820a4ba6c8274c5943c5d053f25857286be9bdfbff04203e0a62cdb3"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\g2_legacy_base\\events.jsonl",
+    "sha256": "ce8173e8ae4dbfb6ade896ed3916349a719630b93c621b80d7526b687d0cdb19",
+    "gz_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\g2_legacy_base\\events.jsonl.gz",
+    "sha256_gz": "a605cee3ddb7108302a52a88b1af6176f776185f7417a68e19545dbe8d2b74ab",
+    "committed": true,
+    "note": "events.jsonl.gz preserved in the package for verification; raw + gz SHA256 both recorded"
+  }
+}

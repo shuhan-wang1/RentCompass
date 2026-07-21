@@ -34,6 +34,7 @@ Graph Flow:
 
 import asyncio
 import operator
+import os
 import json
 import re
 import logging
@@ -46,7 +47,12 @@ from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from uk_rent_agent.agent.state import AgentState, create_initial_state
 from uk_rent_agent.agent.contracts import ToolInvocation
-from uk_rent_agent.agent.critic import enforce_grounding
+from uk_rent_agent.agent.critic import (
+    enforce_grounding,
+    evidence_usable,
+    has_specific_price_claims,
+    no_reliable_data_message,
+)
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 
 logger = logging.getLogger(__name__)
@@ -72,8 +78,40 @@ GRAPH_RECURSION_LIMIT = 80
 # hung tool degrades to an error observation instead of stalling the wave.
 MAX_PLAN_TASKS = 8
 MAX_PLAN_WAVES = 3
-TOOL_TIMEOUTS = {"web_search": 25}
+# Per-tool hard wall-clock (seconds) enforced by asyncio.wait_for in the executor. Tools not
+# listed use TOOL_TIMEOUT_DEFAULT.
+#
+# PRECEDENCE (fc_loop, Phase 2.3): execute_tools dispatches each call with an EFFECTIVE
+# wait_for = min(TOOL_TIMEOUTS[name], remaining_batch_window, remaining_turn_budget). So an
+# entry ABOVE FC_BATCH_TOOL_BUDGET_S (default 20s) can never actually run that long inside a
+# batch — it is clamped at dispatch and, if it does not return, abandoned+attributed at the
+# window. Reconciliation of the two former 25s entries:
+#   * web_search — no internal budget of its own, so 25 was dead config vs the 20s window.
+#     Lowered to 18s: its own wait_for now fires a few seconds BEFORE the batch window, giving
+#     a clean, attributed per_call timeout instead of a whole-window burn ending in a batch kill.
+#   * search_nearby_pois — DELIBERATELY kept at 25s (above the window). Its authoritative
+#     wall-clock is the INTERNAL POI_SEARCH_BUDGET_S (=20s) which returns PARTIAL results a few
+#     seconds before this outer net; lowering the harness entry below 20s would preempt that
+#     partial-return and yield nothing. The fc_loop dispatch min() already clamps it to the
+#     remaining window, so it is no longer a full-window-burn risk — this entry is the safety
+#     net for the legacy execution-plan path (langgraph :~3530), where no batch window applies.
+TOOL_TIMEOUTS = {"web_search": 18, "search_nearby_pois": 25}
 TOOL_TIMEOUT_DEFAULT = 30
+
+# Env overrides — ops/warm-up tuning without code edits: TOOL_TIMEOUT_DEFAULT plus
+# TOOL_TIMEOUT_<TOOL_NAME> (upper-cased tool name, e.g. TOOL_TIMEOUT_SEARCH_PROPERTIES=110).
+# The eval warm-up pipeline relies on this: without it, search_properties fell to the 30s
+# default and the declared 110s warm-up scrape window silently never existed.
+try:
+    TOOL_TIMEOUT_DEFAULT = float(os.getenv("TOOL_TIMEOUT_DEFAULT", TOOL_TIMEOUT_DEFAULT))
+except (TypeError, ValueError):
+    pass
+for _k, _v in os.environ.items():
+    if _k.startswith("TOOL_TIMEOUT_") and _k != "TOOL_TIMEOUT_DEFAULT":
+        try:
+            TOOL_TIMEOUTS[_k[len("TOOL_TIMEOUT_"):].lower()] = float(_v)
+        except (TypeError, ValueError):
+            continue
 
 # Tools that may participate in the loop: after they return, `reflect` gets to decide
 # whether the gathered evidence already answers the question or one more DIFFERENT tool
@@ -942,6 +980,19 @@ def _language_directive(lang: str) -> str:
             "Write the ENTIRE reply in English. Do NOT mix Chinese into it. Never use emoji "
             "or emoticons.\n"
             "=== END REPLY LANGUAGE ===")
+
+
+def _localized_clarification(extracted_context, fallback_text, zh: str, en: str) -> str:
+    """Deterministic clarifications are user-facing text and must obey the same
+    reply-language policy as every generated reply (they used to be English-only)."""
+    return zh if _reply_language_from_ctx(extracted_context or {}, fallback_text or "") == 'zh' else en
+
+
+_CLAR_SAFETY_EN = ("Which property or area should I check? You can give me a postcode "
+                   "(e.g. SW8 1RZ), say 'the first one' from your last search, or click "
+                   "'Ask AI' on a property card.")
+_CLAR_SAFETY_ZH = ("需要我查看哪个房源或区域的安全情况？你可以给我一个邮编（例如 SW8 1RZ）、"
+                   "说「上次搜索的第一个」，或在房源卡片上点「Ask AI」。")
 
 
 # ─── market_info negative guard (deterministic, pre-vote) ───────────────────
@@ -2107,7 +2158,9 @@ def _heuristic_fallback(user_query, extracted_context, tool_registry, accumulate
         if addr:
             return {"tool": "check_safety", "params": {"address": addr, "area": addr, "user_query": user_query}, "reason": "Heuristic: safety"}
         return {"tool": "clarification", "params": {},
-                "clarification_message": "Which property or area should I check? You can give me a postcode (e.g. SW8 1RZ), say 'the first one' from your last search, or click 'Ask AI' on a property card.",
+                "clarification_message": _localized_clarification(
+                    extracted_context, _current_message(user_query),
+                    _CLAR_SAFETY_ZH, _CLAR_SAFETY_EN),
                 "reason": "Need address for safety check"}
     if any(k in ql for k in ['weather', '\u5929\u6c14']):
         return {"tool": "get_weather", "params": {"location": "London"}, "reason": "Heuristic: weather"}
@@ -2138,7 +2191,9 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         addr = _resolve_target_address(user_query, extracted_context)
         if not addr:
             return {"tool": "clarification", "params": {},
-                    "clarification_message": "Which property or area should I check? You can give me a postcode (e.g. SW8 1RZ), say 'the first one' from your last search, or click 'Ask AI' on a property card.",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        _CLAR_SAFETY_ZH, _CLAR_SAFETY_EN),
                     "reason": "Need address for safety check"}
         return {"tool": "check_safety",
                 "params": {"address": addr, "area": addr, "user_query": user_query},
@@ -2159,12 +2214,25 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         to_addr = _resolve_destination_address(user_query, extracted_context, accumulated)
         if not from_addr and not to_addr:
             return {"tool": "clarification", "params": {},
-                    "clarification_message": "To work out the commute cost I need a starting property (a postcode, 'the first one' from your last search, or an 'Ask AI' property) and a destination (e.g. your university or workplace).",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        "要计算通勤费用，我需要一个起点房源（可以是邮编、「上次搜索的第一个」"
+                        "或 Ask AI 选中的房源）和一个目的地（例如你的学校或公司）。",
+                        "To work out the commute cost I need a starting property (a postcode, "
+                        "'the first one' from your last search, or an 'Ask AI' property) and a "
+                        "destination (e.g. your university or workplace)."),
                     "reason": "commute needs both endpoints"}
         if not from_addr or not to_addr:
-            missing = "starting property/address" if not from_addr else "destination (e.g. your university or workplace)"
+            if not from_addr:
+                missing_en, missing_zh = "starting property/address", "起点房源或地址"
+            else:
+                missing_en = "destination (e.g. your university or workplace)"
+                missing_zh = "目的地（例如你的学校或公司）"
             return {"tool": "clarification", "params": {},
-                    "clarification_message": f"To calculate the commute cost I just need the {missing}. Could you tell me?",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        f"要计算通勤费用，我还需要{missing_zh}，能告诉我吗？",
+                        f"To calculate the commute cost I just need the {missing_en}. Could you tell me?"),
                     "reason": "commute needs both endpoints"}
         return {"tool": "calculate_commute_cost",
                 "params": {"from_address": from_addr, "to_address": to_addr},
@@ -2174,7 +2242,10 @@ def _build_tool_params(tool_name, user_query, extracted_context, tool_registry, 
         to_addr = _resolve_destination_address(user_query, extracted_context, accumulated)
         if not from_addr or not to_addr:
             return {"tool": "clarification", "params": {},
-                    "clarification_message": "Please provide both the starting address and destination for the commute.",
+                    "clarification_message": _localized_clarification(
+                        extracted_context, _current_message(user_query),
+                        "请同时告诉我通勤的起点地址和目的地。",
+                        "Please provide both the starting address and destination for the commute."),
                     "reason": "commute needs both endpoints"}
         return {"tool": tool_name, "params": {"from_address": from_addr, "to_address": to_addr},
                 "reason": f"Voted: {tool_name}"}
@@ -2418,7 +2489,10 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
         # 3) Deterministic param resolution + drop-with-note; dedup by tool-call digest (also
         #    against any call already executed this turn).
         prior_digests = {e.get("params_digest") for e in (state.get("observations") or [])}
-        seen_digests, tasks, notes = set(), [], []
+        # notes feed the model-facing observations (English scaffolding is fine there);
+        # user_notes keep just the localized clarification texts for the user-facing
+        # all-tasks-dropped message below.
+        seen_digests, tasks, notes, user_notes = set(), [], [], []
         for t in expanded:
             if t.get("_resolved"):
                 tool_name, params = t["tool"], t["params"]
@@ -2430,6 +2504,7 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
                                                     extracted_context, tool_registry, accumulated)
                 if resolved is None:
                     notes.append(f"Could not run '{t['tool']}' for \"{t.get('query')}\": {clar}")
+                    user_notes.append(str(clar))
                     continue
                 tool_name, params = resolved["tool"], resolved["params"]
             digest = _params_digest(tool_name, params)
@@ -2462,7 +2537,11 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
         #    If EVERY task dropped for missing info, surface a single clarification instead.
         if len(tasks) < 2:
             if not tasks and notes:
-                msg = "I need a bit more detail before I can look into that:\n- " + "\n- ".join(notes)
+                _header = _localized_clarification(
+                    extracted_context, cm,
+                    "在继续之前，我还需要一点信息：\n- ",
+                    "I need a bit more detail before I can look into that:\n- ")
+                msg = _header + "\n- ".join(user_notes or notes)
                 return Command(update={
                     "tool_decision": {"tool": "clarification", "params": {},
                                       "clarification_message": msg,
@@ -2648,6 +2727,9 @@ def _make_execute_tool_node(tool_registry):
                     side_effect=side_effect,
                     context_tainted=state.get("context_tainted", False),
                     tool_name=tool_name,
+                    # Legacy arch keeps pre-A+ behaviour (tainted remember allowed) until
+                    # Phase 3; the guardrails default flipped to deny for the fc_loop arch.
+                    allow_tainted_memory=True,
                 ):
                     raise PermissionError("write tool denied because this turn contains untrusted content")
                 invocation = ToolInvocation.create(
@@ -3050,6 +3132,67 @@ def _make_reflect_node(tool_registry, reflect_llm):
     return reflect_node
 
 
+# ── retrieval detection (one source of truth) ──────────────────────────────
+# Pseudo-routes / non-retrieval tools for which the grounding critic skips price
+# gating. Everything ELSE is a "retrieval-ish" tool whose figures must be grounded.
+# This is a superset of the legacy exclusion set ({"", "direct_answer",
+# "clarification"}) — ``ask_user``/``remember`` are added because an fc turn can leave
+# such an artifact while still being a clarification/write (non-retrieval) turn. The
+# check is deliberately fail-CLOSED: a newly added real tool is grounded by default.
+# Both the tool_decision path (legacy) and the tool_artifacts path (fc_loop) share it.
+NON_RETRIEVAL_TOOLS = frozenset({
+    "", "direct_answer", "clarification", "ask_user", "remember",
+})
+
+
+def _is_retrieval_tool(name) -> bool:
+    """A tool whose output is retrieved evidence the answer must be grounded in."""
+    return bool(name) and name not in NON_RETRIEVAL_TOOLS
+
+
+def _artifact_usable(artifact: dict) -> bool:
+    """An fc artifact contributes usable evidence: not marked failed, non-empty data,
+    AND that data reads as real retrieved content (not an empty/placeholder result).
+
+    Tolerant of the pre/post P1 artifact shape — ``success`` may be absent (legacy
+    artifacts predate the field); only an explicit ``False`` is treated as a failure.
+
+    H3: delegates the content check to the deterministic ``evidence_usable`` so a tool
+    that mislabels an empty/placeholder payload as ``success=True`` (e.g. ``web_search``
+    returning "No search results found for this query." when SearXNG is unreachable) is
+    NOT counted as usable evidence — neither for the no-reliable-data 兜底 nor for the
+    grounding-evidence pool."""
+    if artifact.get("success", True) is False:
+        return False
+    if artifact.get("raw_data") in (None, "", [], {}):
+        return False
+    return evidence_usable(artifact)
+
+
+def _has_usable_retrieval_evidence(state: AgentState, artifacts: list) -> bool:
+    """True when at least one executed retrieval source produced usable, non-error data
+    this turn — an fc retrieval artifact OR the legacy raw_data/observation surface.
+
+    Drives the deterministic no-evidence 兜底: when this is False and the answer still
+    asserts specific figures, there is nothing to have grounded them against."""
+    for a in artifacts:
+        if _is_retrieval_tool(a.get("tool")) and _artifact_usable(a):
+            return True
+    if not _tool_errored(state):
+        # H3: a legacy raw_data surface counts only when it holds REAL retrieved content
+        # (evidence_usable), so a tool that returned an empty/placeholder payload without
+        # flagging an error can no longer masquerade as usable evidence.
+        if evidence_usable(state.get("tool_raw_data")):
+            return True
+        observation = state.get("tool_observation")
+        if observation and str(observation).strip():
+            return True
+        for e in state.get("observations") or []:
+            if e.get("observation"):
+                return True
+    return False
+
+
 def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     """Everything the generator was shown, as an evidence surface for the critic.
 
@@ -3057,6 +3200,12 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     the observation text, the assembled context (previous results, comparison data,
     current-property details) and the user's own budget. Quoting any of those must
     count as grounded, so all of it is gathered here.
+
+    fc_loop: the generator saw every tool's ToolMessage, whose payload is the
+    artifact ``raw_data``. Each SUCCESSFUL artifact's raw_data joins the pool, labeled
+    ``"tool#turn"``. Failed artifacts (``success is False``) contribute no evidence —
+    their error text is not data — but their existence is tracked separately by
+    :func:`_has_usable_retrieval_evidence` for the no-evidence 兜底.
     """
     extracted_context = state.get("extracted_context") or {}
     prefs = state.get("user_preferences") or {}
@@ -3077,6 +3226,13 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     if len(loop_obs) > 1:
         for e in loop_obs:
             pieces.append(e.get("observation"))
+    # fc_loop tool_artifacts: successful, non-empty raw_data joins the evidence, per-artifact
+    # labeled "tool#turn". Failed/empty ones are skipped (not evidence).
+    for a in state.get("tool_artifacts") or []:
+        if not _artifact_usable(a):
+            continue
+        label = f"{a.get('tool', 'tool')}#{a.get('turn', '')}"
+        pieces.append({label: a.get("raw_data")})
     for key in ("property_price", "property_travel_time"):
         if extracted_context.get(key):
             pieces.append({key: extracted_context[key]})
@@ -3104,7 +3260,13 @@ def _make_critic_node():
     async def critic_node(state: AgentState) -> dict:
         decision = state.get("tool_decision") or {}
         tool_name = decision.get("tool", "")
-        retrieval_expected = tool_name not in {"", "direct_answer", "clarification"}
+        artifacts = list(state.get("tool_artifacts") or [])
+        # Retrieval detection (shared NON_RETRIEVAL_TOOLS source of truth). fc_loop turns
+        # NEVER write tool_decision, so a turn is retrieval-expected when EITHER the legacy
+        # decision names a retrieval tool OR any tool_artifact is a retrieval tool — without
+        # this an fc tool-answer would be treated as a direct answer and skip grounding.
+        retrieval_expected = _is_retrieval_tool(tool_name) or any(
+            _is_retrieval_tool(a.get("tool")) for a in artifacts)
         response = state.get("final_response", "")
         attempts_before = state.get("critic_attempts", 0)
 
@@ -3152,8 +3314,46 @@ def _make_critic_node():
             "verdict": outcome.verdict.model_dump(),
             "critic_attempts": attempts_before + outcome.attempts,
         }
-        if outcome.response != response:
-            update["final_response"] = outcome.response
+        final = outcome.response
+
+        # Deterministic no-evidence 兜底 (the H3 fix — a hard REPLACE, not a caveat): after
+        # the single repair pass, if the answer STILL asserts specific monetary figures AND
+        # no executed retrieval tool produced usable evidence this turn (all empty/failed),
+        # replace it with a localized "no reliable data" reply. Fires ONLY when retrieval was
+        # expected AND every retrieval source is empty/failed — a turn with real evidence
+        # keeps repair-then-passthrough, and a no-tools conversational turn is untouched.
+        if (
+            retrieval_expected
+            and has_specific_price_claims(final)
+            and not _has_usable_retrieval_evidence(state, artifacts)
+        ):
+            ec = state.get("extracted_context") or {}
+            reply_language = _reply_language_from_ctx(
+                ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
+            if state.get("tool_artifacts"):
+                # fc arch: honest, artifact-grounded fallback (names a completed-empty search's
+                # room type/area, renders gathered safety evidence, discloses still-missing
+                # requested dimensions) instead of the generic legacy template — this satisfies
+                # the evidence-conditional cold-resilience graders while still emitting no figure
+                # absent from the artifacts. Function-local import is MANDATORY: langgraph_agent
+                # must import agent_loop only lazily to avoid a circular import (matches how
+                # build_fc_graph is imported).
+                from core.agent_loop import _artifact_grounded_fallback_answer
+                final = _artifact_grounded_fallback_answer(
+                    state, reason="no_reliable_numbers")
+                fallback_variant = "artifact_grounded"
+            else:
+                # legacy arch (no fc artifacts): unchanged generic no-reliable-data template.
+                final = no_reliable_data_message(reply_language)
+                fallback_variant = "generic_template"
+            logger.info(
+                "critic.no_evidence_fallback replaced numeric answer (lang=%s variant=%s)",
+                reply_language, fallback_variant,
+                extra={"node": "critic", "tool": tool_name},
+            )
+
+        if final != response:
+            update["final_response"] = final
         return update
 
     return critic_node
@@ -3476,7 +3676,7 @@ def _make_gather_wave_node():
 # ═══════════════════════════════════════════════════════════════════
 
 def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_llm=None,
-                      enable_hitl=False):
+                      enable_hitl=False, agent_llm=None):
     """Build and compile the LangGraph StateGraph.
 
     Args:
@@ -3497,6 +3697,38 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
     from core.graph_advanced import (
         make_confirm_search_node, make_hydrate_prefs_node, make_persist_prefs_node,
     )
+    import os
+
+    # Architecture selection (design Phase 1). AGENT_ARCH=fc_loop swaps the classify-then-
+    # execute topology for the native function-calling tool loop; anything else (default)
+    # keeps the legacy graph byte-identical. agent_loop is imported LAZILY here because it
+    # imports langgraph_agent helpers at module level — a top-level import would be circular.
+    if os.getenv("AGENT_ARCH", "legacy") == "fc_loop":
+        from core.agent_loop import build_fc_graph
+
+        def _n_fc(node_name, fn):
+            try:
+                from evaluation.metrics.collector import instrument_node, is_active
+                if is_active():
+                    return instrument_node(node_name, fn, logger=logger)
+            except Exception:
+                pass
+            return fn
+
+        use_store = store is not None
+        return build_fc_graph(
+            tool_registry,
+            extract_preferences_node=_make_extract_preferences_node(),
+            critic_node=_make_critic_node(),
+            checkpointer=checkpointer, store=store,
+            enable_hitl=bool(enable_hitl and checkpointer is not None),
+            hydrate_prefs_node=(make_hydrate_prefs_node() if use_store else None),
+            persist_prefs_node=(make_persist_prefs_node() if use_store else None),
+            instrument=_n_fc,
+            # Eval override: the offline fake-FC model (a scripted, bound-tools stand-in)
+            # is injected here so the loop mechanics run unbilled. None => live driver.
+            agent_llm=agent_llm,
+        )
 
     classification_llm = get_classification_llm()
     # The loop controller is a cheap decision call — reuse the classification model

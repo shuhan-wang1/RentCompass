@@ -16,7 +16,11 @@ import uuid
 import copy
 import threading
 import os
-from flask import Flask, request, jsonify, render_template, session
+import time
+import logging
+import subprocess
+import contextvars
+from flask import Flask, request, jsonify, render_template, session, g
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
 import json
@@ -164,6 +168,131 @@ def _conversation_db_path():
 conversation_store = ConversationStore(_conversation_db_path())
 print(f"[STARTUP] Conversation store: {conversation_store.db_path}")
 
+# ============================================================================
+# Canary rollout (Shuhan's design, 2026-07-20) — process-level constants.
+# ----------------------------------------------------------------------------
+# The deployment runs TWO worker pools (legacy vs fc_loop) with per-conversation sticky
+# routing; each conversation durably records the arch that serves it (ConversationStore).
+# These three values describe THIS process and are read EXACTLY ONCE at startup — never
+# per-request (hot-path getenv is forbidden). AGENT_ARCH itself is (separately) read once
+# at first graph build in core.langgraph_agent (:3706); we mirror the SAME parse here so the
+# recorded arch always matches the graph that was actually built.
+def _read_agent_arch() -> str:
+    # Mirror core.langgraph_agent's selection exactly: only "fc_loop" flips the topology.
+    return "fc_loop" if os.getenv("AGENT_ARCH", "legacy").strip() == "fc_loop" else "legacy"
+
+
+def _read_strict() -> bool:
+    # Mirror agent_loop._strict_on() exactly (DEEPSEEK_STRICT == "1").
+    return os.getenv("DEEPSEEK_STRICT", "0").strip() == "1"
+
+
+def _startup_git_sha() -> str:
+    """Short git SHA if cheaply available at startup, else 'unknown'. Called ONCE."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(Path(__file__).resolve().parents[1]),
+            capture_output=True, text=True, timeout=2,
+        )
+        sha = (out.stdout or "").strip()
+        if out.returncode == 0 and sha:
+            return sha
+    except Exception:
+        pass
+    return "unknown"
+
+
+AGENT_ARCH = _read_agent_arch()
+DEEPSEEK_STRICT = _read_strict()
+# APP_CANDIDATE_SHA is the image tag the fc pool is pinned to; fall back to the local git
+# SHA (dev), else "unknown". Read once — a process-level constant, NOT a per-request value.
+APP_CANDIDATE_SHA = (os.getenv("APP_CANDIDATE_SHA") or "").strip() or _startup_git_sha()
+print(f"[STARTUP] Canary: agent_arch={AGENT_ARCH} candidate_sha={APP_CANDIDATE_SHA} "
+      f"strict={DEEPSEEK_STRICT}")
+
+# Dedicated structured-telemetry logger. app.py otherwise logs via print(); ops attaches a
+# handler to "canary" to ship these. Each completed turn emits exactly ONE JSON line via
+# _emit_canary_turn(); the event name lives inside the JSON ("event": "canary.turn").
+_canary_logger = logging.getLogger("canary")
+
+# Marker attribute set on the FileHandler we attach so re-invocation (tests reloading the
+# module, or re-calling _wire_canary_sink after monkeypatching env) can find + replace OUR
+# handler without stacking duplicates or disturbing handlers ops may have added.
+_CANARY_SINK_MARKER = "_canary_sink"
+
+
+def _wire_canary_sink() -> None:
+    """Attach a dedicated file sink to the "canary" logger at import time.
+
+    DEFECT FIX (2026-07-21): the "canary" logger had NO handler anywhere in the repo. Under
+    uvicorn (which does not configure the root logger) INFO records hit logging.lastResort
+    (WARNING threshold) and canary.turn lines were silently DROPPED — zero telemetry to disk.
+
+    Env `CANARY_LOG_PATH` contract:
+      * a path            → write telemetry there.
+      * "off"/"0"/"disabled" (case-insensitive) → attach NO handler (telemetry disabled).
+      * UNSET / empty     → DEFAULT ENABLED at <runtime_dir>/logs/canary-<arch>.jsonl, where
+                            runtime_dir = _runtime_config.checkpoint_path.parent if set else
+                            <project_root>/.runtime, and <arch> is AGENT_ARCH.
+
+    The formatter emits ONLY the record message ("%(message)s") because each message already
+    IS a bare JSON object — scripts/canary_report.py parses one JSON line per record directly.
+    Idempotent: our previously-attached sink (marked via _CANARY_SINK_MARKER) is removed first,
+    so re-invocation replaces rather than stacks. Any failure degrades to a printed warning and
+    never crashes startup. propagate stays True so container stderr still sees the lines.
+    """
+    try:
+        _canary_logger.setLevel(logging.INFO)
+
+        # Drop any sink WE previously attached (idempotent replace). Leave foreign handlers.
+        for h in list(_canary_logger.handlers):
+            if getattr(h, _CANARY_SINK_MARKER, False):
+                _canary_logger.removeHandler(h)
+                try:
+                    h.close()
+                except Exception:
+                    pass
+
+        raw = (os.getenv("CANARY_LOG_PATH") or "").strip()
+        if raw.lower() in {"off", "0", "disabled"}:
+            print("[STARTUP] Canary telemetry: disabled")
+            return
+
+        if raw:
+            path = Path(raw)
+        else:
+            ckpt = getattr(_runtime_config, "checkpoint_path", None)
+            runtime_dir = ckpt.parent if ckpt else (Path(__file__).resolve().parents[1] / ".runtime")
+            path = runtime_dir / "logs" / f"canary-{AGENT_ARCH}.jsonl"
+
+        resolved = str(Path(path).resolve())
+        # Guard: if an equivalent sink already targets this path, do not add a second one.
+        for h in _canary_logger.handlers:
+            if isinstance(h, logging.FileHandler) and \
+                    str(Path(getattr(h, "baseFilename", "")).resolve()) == resolved:
+                print(f"[STARTUP] Canary telemetry: {resolved}")
+                return
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(path, encoding="utf-8", delay=True)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        setattr(handler, _CANARY_SINK_MARKER, True)
+        _canary_logger.addHandler(handler)
+        print(f"[STARTUP] Canary telemetry: {resolved}")
+    except Exception as e:  # pragma: no cover — telemetry wiring must never break startup
+        print(f"[STARTUP] WARNING: canary telemetry sink wiring failed: {e}")
+
+
+_wire_canary_sink()
+
+# Per-request carrier for the fc-side turn signals. handle_with_react_agent (which alone can
+# see the graph's final_state) fills this after the graph runs; the /api/alex handler reads it
+# back after the awaited call (a directly-awaited coroutine shares the caller's context, so the
+# .set() is visible on return) to assemble the canary.turn record. None => defaults (a crashed
+# turn, or a monkeypatched agent in tests that never sets it). NEVER read in a hot path.
+_turn_fc_signals: contextvars.ContextVar = contextvars.ContextVar("turn_fc_signals", default=None)
+
 MAX_HISTORY_LENGTH = 10  # 保留最近10轮对话
 
 # extracted_context 白名单：只回传前端真正需要的房产上下文标量。
@@ -179,6 +308,155 @@ def _whitelist_extracted_context(ctx) -> dict:
         return {}
     return {k: ctx[k] for k in _EXTRACTED_CONTEXT_WHITELIST
             if ctx.get(k) not in (None, "", [], {})}
+
+
+# ============================================================================
+# Canary rollout — sticky-assignment reconciliation, per-turn telemetry, headers.
+# ============================================================================
+
+@app.after_request
+def _canary_headers(response):
+    """Stamp the process arch/version on EVERY response (chat, turn, and CRUD alike). A
+    single after_request hook is cheaper and less error-prone than per-endpoint edits, and
+    the values are process constants (no per-request work). X-Request-Id stays set by the
+    turn endpoints themselves (it is per-request)."""
+    response.headers["X-Agent-Arch"] = AGENT_ARCH
+    response.headers["X-Agent-Version"] = APP_CANDIDATE_SHA
+    return response
+
+
+def _reconcile_agent_arch(user_id: str, conversation_id: str, conv: dict) -> None:
+    """Enforce the sticky per-conversation arch assignment when a turn starts on an EXISTING
+    conversation. Steady-state this is a no-op (stored arch == this process's arch).
+
+    Emergency-rollback path (documented in the design): if the stored arch differs from this
+    process's AGENT_ARCH — e.g. an fc conversation now being served by a rebuilt/rolled-back
+    legacy process — the process serves it with ITS OWN arch anyway (legacy rebuilds cleanly
+    from the shared message history), but we LOG a structured arch_mismatch warning and
+    OVERWRITE the stored assignment to this process's arch so every subsequent turn is
+    consistent. A freshly created conversation already carries this process's arch, so this
+    never fires for new conversations."""
+    stored = (conv or {}).get("agent_arch")
+    if stored and stored != AGENT_ARCH:
+        _canary_logger.warning(json.dumps({
+            "event": "canary.arch_mismatch",
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "stored_arch": stored,
+            "serving_arch": AGENT_ARCH,
+            "candidate_sha": APP_CANDIDATE_SHA,
+        }, ensure_ascii=False, default=str))
+        conversation_store.set_agent_assignment(
+            user_id, conversation_id, AGENT_ARCH, APP_CANDIDATE_SHA, DEEPSEEK_STRICT)
+
+
+from core.canary_telemetry import (  # noqa: E402
+    ENDPOINT_ALEX, ENDPOINT_SEARCH_DIRECT, OUTCOME_AGENT_ERROR, OUTCOME_CRASH,
+    OUTCOME_OK, OUTCOME_SERVER_ERROR, aggregate_llm_usage, build_canary_turn_record,
+    search_direct_signals, unknown_turn_signals,
+)
+
+# Tools with side_effect="write" (see core/tools/memory_tools.py). Only a denial on
+# one of these is a security event; a denial on a read is a budget event.
+_WRITE_TOOLS = {"remember"}
+
+
+def _build_fc_signals(final_state) -> dict:
+    """Derive the per-turn canary signals from the graph's final_state. Robust to the legacy
+    arch (whose final_state may lack the fc channels): everything defaults safely. llm_calls /
+    tool_batches are only meaningful on the fc loop (loop_turn == one bound-tools call per
+    super-step; batches == distinct tool_artifacts turns) — null on legacy, as designed."""
+    if not isinstance(final_state, dict):
+        final_state = {}
+    artifacts = final_state.get("tool_artifacts") or []
+    if not isinstance(artifacts, list):
+        artifacts = []
+    # partial: any executed tool artifact whose raw_data reports a partial result.
+    partial = any(isinstance(a, dict) and isinstance(a.get("raw_data"), dict)
+                  and a["raw_data"].get("partial") for a in artifacts)
+    # tool_budget_timeout: any per-call/batch/turn budget kill or abandoned/unknown outcome.
+    tool_budget_timeout = any(
+        isinstance(a, dict) and (a.get("timed_out") or a.get("abandoned")
+                                 or a.get("outcome_unknown")) for a in artifacts)
+    # --- security (v2: structured; denied != executed) ------------------------
+    # BUGFIX: v1 counted EVERY denied artifact as a denied *write*. The turn-budget
+    # denial at agent_loop._dispatch applies to all tools including READS, so a turn
+    # that merely ran out of runway reported denied_writes > 0 with zero security
+    # events — which the report scored as a non-clean audit. Count writes only.
+    denied_writes = sum(1 for a in artifacts
+                        if isinstance(a, dict) and a.get("denied")
+                        and a.get("tool") in _WRITE_TOOLS)
+    # A write whose own wait_for fired: it was NOT refused, and it may still have
+    # landed in the background — i.e. a write executed with an unobservable outcome.
+    unknown_writes = sum(1 for a in artifacts
+                         if isinstance(a, dict) and a.get("outcome_unknown")
+                         and a.get("tool") in _WRITE_TOOLS)
+    is_fc = AGENT_ARCH == "fc_loop"
+    llm_calls = final_state.get("loop_turn") if is_fc else None
+    tool_batches = (len({a.get("turn") for a in artifacts if isinstance(a, dict)})
+                    if is_fc else None)
+    return {
+        "soft_wrapped": bool(final_state.get("soft_wrapped")),
+        "partial": bool(partial),
+        "tool_budget_timeout": bool(tool_budget_timeout),
+        "security": {
+            "denied_write_count": denied_writes,
+            # Classifying an executed bad write as *tainted* vs *forbidden* needs the
+            # denial reason, which the artifact does not carry today (see
+            # agent_loop._artifact). Until agent_loop stamps a reason these stay None,
+            # which makes the report HOLD rather than report a fabricated 0.
+            "tainted_write_executed_count": None if unknown_writes else 0,
+            "forbidden_write_executed_count": None if unknown_writes else 0,
+        },
+        # None until agent_loop surfaces them (see the plumbing notes in the PR):
+        # a null holds the gate; a 0 would falsely assert "observed, none seen".
+        "dsml_blocked": final_state.get("dsml_blocked"),
+        "dsml_leak": final_state.get("dsml_leak"),
+        "provider_schema_400_count": final_state.get("provider_schema_400_count"),
+        "llm_usage": aggregate_llm_usage(final_state.get("llm_usage_calls")),
+        "llm_calls": llm_calls,
+        "tool_batches": tool_batches,
+    }
+
+
+
+
+def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, request_id: str,
+                      http_status: int, turn_outcome: str,
+                      turn_latency_ms: float, fc_signals: dict | None) -> None:
+    """Emit exactly ONE structured JSON line per completed turn (event: canary.turn).
+
+    Schema v2: the record is assembled by app.core.canary_telemetry so the exact
+    shape the gate consumes is testable without importing this module (see
+    tests/test_canary_contract.py). Best-effort: telemetry must never break a turn.
+
+    A signal we could not observe is passed through as None, NOT as 0/False. The
+    report treats a null required field as INSTRUMENTATION-HOLD, so partial
+    instrumentation blocks promotion instead of silently reading as clean.
+    """
+    try:
+        record = build_canary_turn_record(
+            endpoint=endpoint,
+            agent_arch=AGENT_ARCH,
+            candidate_sha=APP_CANDIDATE_SHA,
+            strict=DEEPSEEK_STRICT,
+            request_id=request_id,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            http_status=http_status,
+            turn_outcome=turn_outcome,
+            turn_latency_ms=turn_latency_ms,
+            signals=unknown_turn_signals() if fc_signals is None else fc_signals,
+        )
+        _canary_logger.info(json.dumps(record, ensure_ascii=False, default=str))
+        # One record per request. Mark it so a later failure at the response
+        # boundary does not emit a SECOND record for the same turn.
+        try:
+            g.canary_emitted = True
+        except Exception:
+            pass  # emitted outside a request context (unit tests / sink wiring)
+    except Exception as e:  # pragma: no cover — telemetry must never break a turn
+        print(f"[canary] turn record emit failed: {e}")
 
 
 def _get_session(user_id, conversation_id):
@@ -284,9 +562,54 @@ def _handle_uncaught(e: Exception):
         return _handle_http_exception(e)
     traceback.print_exc()
     if _is_api_path():
+        # http_status is finalised HERE, at the response boundary. Without this the
+        # 5xx would be structurally unobservable: the in-endpoint emit sits INSIDE
+        # the try that just blew up, so a turn that dies before (or instead of)
+        # reaching it would vanish from telemetry entirely — silently shrinking the
+        # denominator instead of recording a server error.
+        _emit_canary_boundary_5xx()
         # Generic message only — never leak a traceback to the client.
         return jsonify({"error": "internal server error"}), 500
     raise e
+
+
+# Paths whose failures belong to the canary gate. A 5xx anywhere else is a normal
+# app error, not a canary turn, and must not be injected into the A/B population.
+_CANARY_PATHS = {"/api/alex": ENDPOINT_ALEX, "/api/search_direct": ENDPOINT_SEARCH_DIRECT}
+
+
+def _emit_canary_boundary_5xx() -> None:
+    """Emit the canary record for a request that died before/instead of its normal
+    emit. Correlation ids come from `g` (stamped at the top of each canary endpoint)
+    so the record still joins to the request when the failure happened after the
+    endpoint started; when it happened earlier they are explicit sentinels rather
+    than nulls, which keeps the record contract-conformant and therefore COUNTED as
+    a 5xx instead of holding the whole gate as malformed."""
+    try:
+        if getattr(g, "canary_emitted", False):
+            # The turn already emitted its record; anything that fails afterwards
+            # (an after_request hook, the WSGI write) must not duplicate it — the
+            # gate counts turns, so a double record inflates the denominator and
+            # halves every rate. Note the endpoints emit only AFTER jsonify()
+            # succeeds, so the common "serialization blew up" case arrives here
+            # with the flag still False and is correctly recorded as a 500.
+            return
+        endpoint = _CANARY_PATHS.get(getattr(request, "path", "") or "")
+        if endpoint is None:
+            return  # not a canary endpoint — not our population
+        started = getattr(g, "canary_turn_started", None)
+        latency = ((time.perf_counter() - started) * 1000.0) if started else 0.0
+        _emit_canary_turn(
+            endpoint=endpoint,
+            conversation_id=getattr(g, "canary_conversation_id", None) or "unknown",
+            user_id=getattr(g, "canary_user_id", None),
+            request_id=getattr(g, "canary_request_id", None) or "unknown",
+            http_status=500,
+            turn_outcome=OUTCOME_SERVER_ERROR,
+            turn_latency_ms=latency,
+            fc_signals=unknown_turn_signals())
+    except Exception as e:  # pragma: no cover — never break the error response
+        print(f"[canary] boundary 5xx record emit failed: {e}")
 
 
 def _request_body():
@@ -669,12 +992,18 @@ async def api_alex():
     ui_language = _normalize_ui_language(data.get('ui_language'))
 
     # --- resolve / implicitly create the conversation --------------------------
+    # New conversations are stamped with THIS process's sticky canary assignment at creation;
+    # existing ones are reconciled (emergency-rollback path only — normally a no-op).
     conversation_id = data.get('conversation_id')
     conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
     if not conv:
-        conv = conversation_store.create_conversation(user_id, title=_derive_title(user_message))
+        conv = conversation_store.create_conversation(
+            user_id, title=_derive_title(user_message),
+            agent_arch=AGENT_ARCH, agent_version=APP_CANDIDATE_SHA, strict=DEEPSEEK_STRICT)
         conversation_id = conv['id']
         print(f"🆕 [ALEX] implicitly created conversation {conversation_id}")
+    else:
+        _reconcile_agent_arch(user_id, conversation_id, conv)
 
     print(f"\n{'='*60}")
     print(f"🤖 [ALEX - LangGraph Agent] 收到消息: {user_message}")
@@ -684,6 +1013,9 @@ async def api_alex():
     print(f"{'='*60}")
 
     request_id = new_request_id(request.headers.get("X-Request-Id"))
+    # Correlation for a boundary 5xx (see _emit_canary_boundary_5xx): stamped as
+    # early as possible so even a failure before the turn anchor is joinable.
+    g.canary_request_id = request_id
 
     # Persist the user turn up-front (survives a crash mid-generation) and open a turn.
     # begin_turn needs the user message's rowid, so the user row is written first; once the
@@ -697,6 +1029,14 @@ async def api_alex():
     conversation_store.set_message_turn(user_id, _user_msg.get("id"), turn_id)
 
     _turn_crashed = False
+    # Canary: clear any inherited fc-signal carrier, then time the whole turn. handle_with_
+    # react_agent fills _turn_fc_signals from the graph's final_state; a crash leaves it None
+    # (→ safe defaults on the record).
+    _turn_fc_signals.set(None)
+    _turn_started_ms = time.perf_counter()
+    g.canary_turn_started = _turn_started_ms
+    g.canary_conversation_id = conversation_id
+    g.canary_user_id = user_id
     try:
         # 所有请求都通过 ReAct Agent 处理
         with request_context(request_id, user_id):
@@ -746,8 +1086,30 @@ async def api_alex():
     # Always HTTP 200: an agent-side "error" is a normal response_type the client renders,
     # and returning 200 lets the frontend adopt conversation_id + persist the turn even when
     # generation failed (a 500 would orphan the freshly-created conversation).
+    #
+    # ORDER MATTERS: the response is fully materialized BEFORE the canary record is
+    # emitted. jsonify() is the last thing that can still fail (a non-serializable
+    # payload raises here), and if it does we must NOT have already logged
+    # http_status=200 + set g.canary_emitted — that combination would permanently
+    # record a 200 for a request the user received as a 500, and would suppress the
+    # boundary record that should have reported it. Emitting after serialization
+    # means a failure falls through to _handle_uncaught with canary_emitted still
+    # False, so exactly one record is written and it says server_error.
     response = jsonify(payload)
     response.headers["X-Request-Id"] = request_id
+
+    # Canary: one structured record per turn (both archs; fc signals default when absent).
+    # http_status is 200 here because the response above was built successfully.
+    _emit_canary_turn(
+        endpoint=ENDPOINT_ALEX,
+        conversation_id=conversation_id, user_id=user_id, request_id=request_id,
+        http_status=200,
+        turn_outcome=(OUTCOME_CRASH if _turn_crashed else
+                      OUTCOME_AGENT_ERROR if payload.get("response_type") == "error"
+                      else OUTCOME_OK),
+        turn_latency_ms=(time.perf_counter() - _turn_started_ms) * 1000.0,
+        fc_signals=_turn_fc_signals.get())
+
     return response
 
 
@@ -1298,6 +1660,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         print("[LangGraph] 首次请求，编译 LangGraph StateGraph...")
         checkpointer = None
         if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
+            # Canary rollout requirement (2026-07-20): the legacy and fc pools MUST use SEPARATE
+            # checkpoint DBs — a legacy process must NEVER read an fc checkpoint (their AgentState
+            # channels diverge; a cross-arch resume would corrupt the run). This is an ops concern:
+            # point each pool's checkpoint_path at its own file via CHECKPOINT_DB_PATH (the
+            # documented primary env var; CHECKPOINT_PATH is the back-compat fallback). The
+            # conversation store (CONVERSATION_DB_PATH) is deliberately SHARED across pools — the
+            # emergency-rollback path rebuilds from that shared MESSAGE history, not from the
+            # other pool's checkpoint.
             checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
         # Cross-thread Store + HITL are opt-in (default off): identical topology when disabled.
         store = get_prefs_store() if _runtime_config.enable_store else None
@@ -1427,6 +1797,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # 原始当前消息（不含记忆/历史前缀）——供工具做"仅基于本条消息"的解析
     # (预算/通勤正则、postcode/序数解析)，避免误抓注入记忆里的旧值。
     extracted_context['current_message'] = user_message
+    # 会话历史（SessionStore shape: [{"user":.., "assistant":..}, ...]）——无条件写入
+    # extracted_context。legacy 字符串装配路径（assemble_context 上面已单独喂过 history）
+    # 忽略该键；fc_loop 的 assemble_messages 用它构造 user/assistant 消息对，否则 fc 模型
+    # 拿不到任何对话历史。放在这里（早于建图）保证两条路径都可用。
+    extracted_context['history'] = history_snapshot
     # 🆕 回复语言（产品规则）：本条消息含中文→'zh'；否则 UI=en→'en'；否则 'zh'。用 pristine
     # user_message（早于记忆/历史前缀），图 agent 读取该键并转发给 search 工具，使 /api/alex
     # 与 "search anyway" 路径不再中英混杂。
@@ -1493,6 +1868,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         )
         final_state["response_type"] = "answer"
 
+    # ── Canary telemetry: publish the fc-side turn signals for /api/alex to record ──
+    # Derived from the graph's final_state (fc channels) here — the only place that sees it;
+    # the caller reads them back via the _turn_fc_signals ContextVar after this await returns.
+    try:
+        _turn_fc_signals.set(_build_fc_signals(final_state))
+    except Exception:
+        pass
+
     # ── Offline-eval turn row (additive; no-op unless RENTCOMPASS_EVAL active) ──
     try:
         from evaluation.metrics import collector as _eval_collector
@@ -1541,6 +1924,9 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             conversation_id=conversation_id,
             turn_id=(turn.get("id") if isinstance(turn, dict) else None),
             turn_started_at=(turn.get("started_at") if isinstance(turn, dict) else None),
+            # Taint A+ (§2.8c): a tainted turn hardens the auto-memory bypass to
+            # user-only fact extraction so untrusted content can't seed durable memory.
+            context_tainted=final_state.get('context_tainted', False),
         )
     except Exception as _e:
         print(f"[Memory] write skipped: {_e}")
@@ -1811,9 +2197,18 @@ async def api_search_direct():
     conversation_id = data.get('conversation_id')
     conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
     if not conv:
-        conv = conversation_store.create_conversation(user_id, title=_derive_title(readable))
+        conv = conversation_store.create_conversation(
+            user_id, title=_derive_title(readable),
+            agent_arch=AGENT_ARCH, agent_version=APP_CANDIDATE_SHA, strict=DEEPSEEK_STRICT)
         conversation_id = conv['id']
         print(f"🆕 [SEARCH_DIRECT] implicitly created conversation {conversation_id}")
+    else:
+        _reconcile_agent_arch(user_id, conversation_id, conv)
+
+    _turn_started_ms = time.perf_counter()
+    g.canary_turn_started = _turn_started_ms
+    g.canary_conversation_id = conversation_id
+    g.canary_user_id = user_id
 
     print(f"\n{'='*60}")
     print(f"🔍 [SEARCH_DIRECT] {readable}")
@@ -1821,6 +2216,9 @@ async def api_search_direct():
     print(f"{'='*60}")
 
     request_id = new_request_id(request.headers.get("X-Request-Id"))
+    # Correlation for a boundary 5xx (see _emit_canary_boundary_5xx): stamped as
+    # early as possible so even a failure before the turn anchor is joinable.
+    g.canary_request_id = request_id
 
     # Persist the user turn up-front (survives a crash mid-search) and open a turn spanning
     # this request. (See /api/alex: the user row is stamped with turn_id after begin_turn so
@@ -1940,8 +2338,26 @@ async def api_search_direct():
         conversation_store.complete_turn(user_id, turn_id, assistant_message_id=_asst_msg_id)
         _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id)
 
+    # Serialize BEFORE emitting — same ordering rule as /api/alex: a jsonify() failure
+    # must reach the 500 handler with canary_emitted still False so the boundary
+    # record is the one and only record, and it reports the 500 the user actually got.
     response = jsonify(payload)
     response.headers["X-Request-Id"] = request_id
+
+    # Canary: this deterministic form path bypasses the LLM graph, so the fc-side signals
+    # never apply — the record carries the process constants + arch and the fc fields default.
+    # Tagged as the search_direct endpoint so the gate can exclude it: this path is
+    # deterministic and LLM-free, so folding its latency/zero fc-signals into the
+    # agent A/B would dilute both sides.
+    _emit_canary_turn(
+        endpoint=ENDPOINT_SEARCH_DIRECT,
+        conversation_id=conversation_id, user_id=user_id, request_id=request_id,
+        http_status=200,
+        turn_outcome=(OUTCOME_AGENT_ERROR if payload.get("response_type") == "error"
+                      else OUTCOME_OK),
+        turn_latency_ms=(time.perf_counter() - _turn_started_ms) * 1000.0,
+        fc_signals=search_direct_signals())
+
     return response
 
 
@@ -1961,7 +2377,10 @@ def create_conversation():
     """Create a new conversation. Body: {user_id, title?}."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
-    conv = conversation_store.create_conversation(user_id, title=data.get('title'))
+    # Stamp the sticky canary assignment at creation (this process's constants).
+    conv = conversation_store.create_conversation(
+        user_id, title=data.get('title'),
+        agent_arch=AGENT_ARCH, agent_version=APP_CANDIDATE_SHA, strict=DEEPSEEK_STRICT)
     return jsonify({"conversation": conv}), 201
 
 

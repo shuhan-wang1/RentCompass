@@ -7,13 +7,20 @@ from core.tool_system import Tool
 from typing import Optional
 
 
-async def calculate_commute_impl(
+def calculate_commute_impl(
     from_address: str,
     to_address: str,
     mode: str = "transit"
 ) -> dict:
     """
     计算两个地址之间的通勤时间
+
+    NOTE: this is a PLAIN SYNC function on purpose. calculate_travel_details performs
+    SYNCHRONOUS network I/O (TfL Journey Planner HTTP + geopy geocoding). Registering it
+    as sync means Tool.execute offloads it to an executor thread (tool_system.py :279-284),
+    so the asyncio event loop stays responsive and the fc-loop's per-tool asyncio.wait_for /
+    batch budget can actually fire. As an async def with these blocking calls inline, four
+    concurrent calls serialized to ~52s despite a 20s batch budget (the confirmed bug).
     """
     try:
         from core.maps_service import calculate_travel_details
@@ -58,30 +65,8 @@ async def calculate_commute_impl(
 calculate_commute_tool = Tool(
     name="calculate_commute",
     
-    description="""
-计算两个英国地址之间的通勤时间。
-
-**功能:**
-- 支持公共交通、骑行、步行三种方式
-- 使用 TfL Journey Planner（免费，伦敦公共交通，返回真实线路）
-- 返回分钟数、通勤分类，以及具体路线/线路
-
-**何时使用:**
-- 用户提到通勤时间要求
-- 需要过滤房源（按通勤时间）
-- 用户问"到XX要多久"
-
-**何时不用:**
-- 用户没提通勤要求（可跳过）
-- 已经计算过该房源（避免重复）
-
-**返回内容:**
-- duration_minutes: 通勤时间（分钟）
-- route_summary: 具体路线（坐哪条线/公交、换乘点、步行段）
-- route_legs: 每段明细（mode/线路名/时长/起讫站）
-- is_acceptable: 是否在可接受范围内
-- duration_category: 通勤时间分类
-""",
+    description="""Calculate commute time between two UK addresses (transit / cycling / walking) via the free TfL Journey Planner; returns duration, the route (lines/changes/walking legs) and an acceptability category. Use when the user gives a commute-time requirement or asks "how long to X"; skip if none, or already computed for that listing.
+计算两个英国地址间的通勤时间与路线。""",
     
     func=calculate_commute_impl,
     

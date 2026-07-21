@@ -1,0 +1,45 @@
+{
+  "argv": [
+    "evaluation/run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "fc_loop",
+    "--cases",
+    "evaluation/benchmark/cases_guard_regression.jsonl",
+    "--repeat",
+    "3",
+    "--out",
+    "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/final3_guard"
+  ],
+  "command": "evaluation/run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cases evaluation/benchmark/cases_guard_regression.jsonl --repeat 3 --out C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad/final3_guard",
+  "arch": "fc_loop",
+  "config": "routed_models",
+  "mode": "live",
+  "timestamp": "2026-07-19T20:47:01",
+  "git_commit": "042d6b0",
+  "git_dirty": false,
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "fc_loop",
+    "DEEPSEEK_STRICT": "1",
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1"
+  },
+  "case_file": {
+    "path": "evaluation\\benchmark\\cases_guard_regression.jsonl",
+    "sha256": "df704ac43b0362ddc78ecb75345c268807af35f1e9b1bb6620402e37fb8a645a"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\final3_guard\\events.jsonl",
+    "sha256": "0a6608398d810a76b84e9e012116a7e5b643b0f936427ebb64b8ce30ba3a49b9",
+    "gz_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\a2db2406-19b5-466a-b242-038b0523804a\\scratchpad\\final3_guard\\events.jsonl.gz",
+    "sha256_gz": "a385068c9c5f7683f0fcce1b8441dc0f0aed01e7ef7ba1e280bac7e41dac86e2",
+    "committed": true,
+    "note": "events.jsonl.gz preserved in the package for verification; raw + gz SHA256 both recorded"
+  }
+}

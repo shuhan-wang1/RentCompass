@@ -1,0 +1,106 @@
+{
+  "config": "routed_models",
+  "arch": "fc_loop",
+  "mode": "live",
+  "offline": false,
+  "repeats": 1,
+  "n_cases_selected": 14,
+  "n_runs": 14,
+  "passed": {
+    "num": 9,
+    "den": 14,
+    "display": "9/14",
+    "rate": 0.6428571428571429
+  },
+  "task_completion": {
+    "num": 14,
+    "den": 14,
+    "display": "14/14",
+    "rate": 1.0
+  },
+  "route_accuracy": {
+    "num": 9,
+    "den": 14,
+    "display": "9/14",
+    "rate": 0.6428571428571429
+  },
+  "forbidden_tool_rate": {
+    "num": 1,
+    "den": 14,
+    "display": "1/14",
+    "rate": 0.07142857142857142
+  },
+  "duplicate_call_rate": {
+    "num": 0,
+    "den": 14,
+    "display": "0/14",
+    "rate": 0.0
+  },
+  "loop_exhaustion_rate": {
+    "num": 1,
+    "den": 14,
+    "display": "1/14",
+    "rate": 0.07142857142857142
+  },
+  "schema_failure_rate": {
+    "num": 0,
+    "den": 14,
+    "display": "0/14",
+    "rate": 0.0
+  },
+  "hard_gate": {
+    "total": 14,
+    "passed": 9,
+    "failed_case_ids": [
+      "H2",
+      "H5",
+      "H6",
+      "H8",
+      "H13"
+    ]
+  },
+  "gate_passed": false,
+  "constraints": {
+    "num": 22,
+    "den": 29,
+    "display": "22/29",
+    "rate": 0.7586206896551724
+  },
+  "grounded_rate": {
+    "num": 13,
+    "den": 18,
+    "display": "13/18",
+    "rate": 0.7222222222222222
+  },
+  "money_grounded_rate": {
+    "num": 12,
+    "den": 17,
+    "display": "12/17",
+    "rate": 0.7058823529411765
+  },
+  "contradicted_claims": 0,
+  "source_coverage": {
+    "num": 13,
+    "den": 18,
+    "display": "13/18",
+    "rate": 0.7222222222222222
+  },
+  "critic_triggers": 12,
+  "critic_repairs": 0,
+  "latency_ms": {
+    "mean": 8342.917564287616,
+    "p50": 5165.805800003,
+    "p95": 30914.356975012925,
+    "n": 14
+  },
+  "tokens": {
+    "input": 282624,
+    "output": 4077
+  },
+  "total_cost_usd": 0.0092560944,
+  "cost_cap_usd": 5.0,
+  "stopped_reason": null,
+  "git_commit": "0b772e7",
+  "timestamp": "2026-07-19T10:05:59",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

@@ -1,0 +1,54 @@
+{
+  "argv": [
+    "evaluation/run_benchmark.py",
+    "--live",
+    "--config",
+    "routed_models",
+    "--max-cost-usd",
+    "5",
+    "--arch",
+    "fc_loop",
+    "--cases",
+    "evaluation/benchmark/cases_cold_resilience.jsonl",
+    "--repeat",
+    "3",
+    "--cold-cache",
+    "--out",
+    "C:/Users/shuhan/AppData/Local/Temp/claude/C--Users-shuhan-Desktop-uk-rent-recommendation/5cefbb8d-60e1-416a-98dc-45f56cb7c9da/scratchpad/final11_cold"
+  ],
+  "command": "evaluation/run_benchmark.py --live --config routed_models --max-cost-usd 5 --arch fc_loop --cases evaluation/benchmark/cases_cold_resilience.jsonl --repeat 3 --cold-cache --out C:/Users/shuhan/AppData/Local/Temp/claude/C--Users-shuhan-Desktop-uk-rent-recommendation/5cefbb8d-60e1-416a-98dc-45f56cb7c9da/scratchpad/final11_cold",
+  "arch": "fc_loop",
+  "config": "routed_models",
+  "mode": "live",
+  "cache_protocol": {
+    "mode": "cold",
+    "snapshot_path": null,
+    "snapshot_sha256": null,
+    "restored_per_repeat": true,
+    "ttl_hours_env": null
+  },
+  "timestamp": "2026-07-20T14:55:34",
+  "git_commit": "7db03e7",
+  "git_dirty": false,
+  "python": "3.10.18",
+  "env": {
+    "AGENT_ARCH": "fc_loop",
+    "DEEPSEEK_STRICT": null,
+    "LLM_PROVIDER": "deepseek",
+    "USE_MCP_TOOLS": "0",
+    "RENTCOMPASS_EVAL": "1",
+    "SEARCH_CACHE_TTL_HOURS": null
+  },
+  "case_file": {
+    "path": "evaluation\\benchmark\\cases_cold_resilience.jsonl",
+    "sha256": "b9b54faee486c493379e478163029dcc3e3707d2f6e937a3d7e48f61f17806a3"
+  },
+  "events_log": {
+    "path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\5cefbb8d-60e1-416a-98dc-45f56cb7c9da\\scratchpad\\final11_cold\\events.jsonl",
+    "sha256": "ddf790d549c15f7d3211eca774c45c599b1cca6e9de1735479c63996ee3cf5f2",
+    "gz_path": "C:\\Users\\shuhan\\AppData\\Local\\Temp\\claude\\C--Users-shuhan-Desktop-uk-rent-recommendation\\5cefbb8d-60e1-416a-98dc-45f56cb7c9da\\scratchpad\\final11_cold\\events.jsonl.gz",
+    "sha256_gz": "d71043a97d2d9ac90b9166ec0c005ec7b4cf13f36e6b35f68a10caa3bfd915f5",
+    "committed": true,
+    "note": "events.jsonl.gz preserved in the package for verification; raw + gz SHA256 both recorded"
+  }
+}

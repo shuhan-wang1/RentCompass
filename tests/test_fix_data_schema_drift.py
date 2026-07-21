@@ -108,7 +108,7 @@ def test_on_demand_drift_serves_stale_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(on_demand, "_CACHE", cache)
     monkeypatch.setattr(on_demand, "ALLOW_DEMO_FALLBACK", False)
 
-    key = on_demand._query_key("manchester", 1, 1, 500, 1200)
+    key = on_demand._query_key("manchester")  # slug-only canonical key
     cache.set(key, [{"Address": "1 Old St, Manchester, M1",
                      "URL": "https://www.onthemarket.com/details/9/",
                      "Price": "£900 pcm"}])

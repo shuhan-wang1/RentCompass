@@ -76,6 +76,11 @@ def _install_search_agent(monkeypatch, marker="place"):
             user_id, conversation_id, user_message, f"Reply about {marker}.", recs,
             accumulated_search_criteria={"area": "London", "max_budget": 1500},
             turn_id=(turn or {}).get("id"), reply_language="en")
+        # Publish per-turn signals exactly as the real handle_with_react_agent does
+        # after the graph returns. Without this the stub models a turn that COMPLETED
+        # but never reported, which v2 correctly treats as unobserved (-> HOLD); the
+        # stub would then be exercising crash semantics by accident.
+        appmod._turn_fc_signals.set(appmod._build_fc_signals({}))
         return {"response_type": "search", "message": f"Reply about {marker}.",
                 "recommendations": recs, "search_criteria": {"area": "London"}}
     monkeypatch.setattr(appmod, "handle_with_react_agent", _fake)
@@ -129,9 +134,14 @@ def _mismatch_records(caplog):
     return out
 
 
+# Schema v2: the raw user_id is replaced by an HMAC hash + status, and the
+# free-form security_audit by a structured `security` object.
 _REQUIRED_TURN_KEYS = {
-    "event", "agent_arch", "candidate_sha", "strict", "request_id", "conversation_id",
-    "user_id", "soft_wrapped", "partial", "tool_budget_timeout", "security_audit",
+    "event", "telemetry_schema_version", "ts", "endpoint", "agent_arch",
+    "candidate_sha", "strict", "request_id", "conversation_id",
+    "user_id_hash_status", "http_status", "turn_outcome",
+    "soft_wrapped", "partial", "tool_budget_timeout", "security",
+    "dsml_blocked", "dsml_leak", "provider_schema_400_count",
     "turn_latency_ms", "llm_calls", "tool_batches",
 }
 
@@ -297,8 +307,10 @@ def test_canary_turn_record_legacy(client, user, monkeypatch, caplog):
     assert rec["candidate_sha"] == "shaLEGACY"
     assert rec["strict"] is False
     assert rec["conversation_id"] == cid
-    assert rec["user_id"] == user
-    assert rec["security_audit"] == {"denied_writes": 0}
+    assert rec["user_id_hash"] != user, "raw user id must never be emitted"
+    assert rec["endpoint"] == "alex"
+    assert rec["turn_outcome"] == "ok"
+    assert rec["security"]["denied_write_count"] == 0
     assert isinstance(rec["turn_latency_ms"], (int, float))
 
 
@@ -330,7 +342,7 @@ def test_canary_turn_record_fc_with_signals(client, user, monkeypatch, caplog):
     assert rec["soft_wrapped"] is True
     assert rec["partial"] is True
     assert rec["tool_budget_timeout"] is True
-    assert rec["security_audit"] == {"denied_writes": 1}
+    assert rec["security"]["denied_write_count"] == 1
     assert rec["llm_calls"] == 3
     assert rec["tool_batches"] == 2  # distinct artifact turns {0, 1}
 
@@ -354,6 +366,76 @@ def test_canary_turn_record_crashed_turn_defaults(client, user, monkeypatch, cap
     assert rec["tool_budget_timeout"] is False
     assert rec["llm_calls"] is None
     assert rec["tool_batches"] is None
+
+
+def test_response_serialization_failure_records_500_not_200(client, user, monkeypatch, caplog):
+    """The record must report the status the USER received, not the one we hoped for.
+
+    Regression for the response-boundary ordering bug: when the canary event was
+    emitted BEFORE jsonify(), a payload that failed to serialise produced a record
+    saying http_status=200 / outcome=ok AND set g.canary_emitted, which then made the
+    500 handler skip its own record. The turn was permanently logged as a success
+    while the client got a 500 — the single worst failure mode for a gate whose whole
+    job is counting server errors. Emitting after serialisation makes the boundary
+    handler the sole emitter for this path.
+    """
+    monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
+    monkeypatch.setattr(appmod, "APP_CANDIDATE_SHA", "shaSER")
+
+    class _Unserializable:
+        pass
+
+    async def _fake(user_message, context, is_continuation, user_id, conversation_id,
+                    request_id, ui_language="en", turn=None):
+        appmod._turn_fc_signals.set(appmod._build_fc_signals({}))
+        # A perfectly normal-looking turn that Flask cannot serialise.
+        return {"response_type": "chat", "message": "ok", "junk": _Unserializable()}
+    monkeypatch.setattr(appmod, "handle_with_react_agent", _fake)
+
+    with caplog.at_level(logging.INFO, logger="canary"):
+        r = _alex(client, user, "please explode at the boundary")
+
+    assert r.status_code == 500, "precondition: jsonify must actually fail here"
+    turns = _canary_turns(caplog)
+    assert len(turns) == 1, f"expected exactly one record, got {len(turns)}: {turns}"
+    rec = turns[0]
+    assert rec["http_status"] == 500
+    assert rec["turn_outcome"] == "server_error"
+    assert rec["endpoint"] == "alex"
+    assert rec["agent_arch"] == "fc_loop"
+    # The turn died at the boundary, so its security/provider state was never observed:
+    # nulls (not zeros) so the report HOLDs instead of reading this as clean.
+    assert rec["security"]["forbidden_write_executed_count"] is None
+    assert rec["provider_schema_400_count"] is None
+
+
+def test_search_direct_serialization_failure_records_500(client, user, monkeypatch, caplog):
+    """Same ordering guarantee on the deterministic endpoint."""
+    monkeypatch.setattr(appmod, "AGENT_ARCH", "legacy")
+
+    class _Unserializable:
+        pass
+
+    async def _fake_search(**kwargs):
+        return {"success": True, "status": "ok", "recommendations": [],
+                "summary": "Found 0.", "search_criteria": {"area": "Leeds"},
+                # This endpoint rebuilds the payload from named keys, so the poison
+                # has to sit in one it actually copies through — and one that is NOT
+                # persisted, so the failure lands squarely on jsonify().
+                "area_recommendations": [_Unserializable()]}
+    monkeypatch.setattr(appmod, "search_properties_impl", _fake_search)
+
+    with caplog.at_level(logging.INFO, logger="canary"):
+        r = client.post("/api/search_direct",
+                        json={"criteria": {"area": "Leeds", "max_budget": 1400}},
+                        headers=_headers(user))
+
+    assert r.status_code == 500
+    turns = _canary_turns(caplog)
+    assert len(turns) == 1, f"expected exactly one record, got {len(turns)}: {turns}"
+    assert turns[0]["http_status"] == 500
+    assert turns[0]["turn_outcome"] == "server_error"
+    assert turns[0]["endpoint"] == "search_direct"
 
 
 def test_search_direct_emits_canary_turn(client, user, monkeypatch, caplog):
@@ -398,7 +480,7 @@ def test_build_fc_signals_robust_to_junk(monkeypatch):
     sig = appmod._build_fc_signals({"tool_artifacts": "not-a-list"})
     assert sig["partial"] is False
     assert sig["tool_budget_timeout"] is False
-    assert sig["security_audit"] == {"denied_writes": 0}
+    assert sig["security"]["denied_write_count"] == 0
     assert sig["tool_batches"] == 0
 
 
@@ -460,7 +542,8 @@ def test_canary_sink_writes_one_json_line(tmp_path, monkeypatch, user, _restore_
     monkeypatch.setenv("CANARY_LOG_PATH", str(logpath))
     appmod._wire_canary_sink()
 
-    appmod._emit_canary_turn(conversation_id="c-sink", user_id=user, request_id="req-sink",
+    appmod._emit_canary_turn(endpoint="alex", conversation_id="c-sink", user_id=user,
+                             request_id="req-sink", http_status=200, turn_outcome="ok",
                              turn_latency_ms=12.3, fc_signals=None)
     for h in appmod._canary_logger.handlers:
         h.flush()
@@ -473,7 +556,7 @@ def test_canary_sink_writes_one_json_line(tmp_path, monkeypatch, user, _restore_
     assert _REQUIRED_TURN_KEYS.issubset(rec.keys())
     assert rec["request_id"] == "req-sink"
     assert rec["conversation_id"] == "c-sink"
-    assert rec["user_id"] == user
+    assert rec["user_id_hash"] != user
 
 
 def test_canary_sink_idempotent_no_stacked_handlers(tmp_path, monkeypatch, _restore_canary_sink):
@@ -495,7 +578,8 @@ def test_canary_sink_disabled(tmp_path, monkeypatch, _restore_canary_sink):
             if getattr(h, appmod._CANARY_SINK_MARKER, False)]
     assert ours == []
     # A turn emitted while disabled writes nothing to disk (and does not crash).
-    appmod._emit_canary_turn(conversation_id="c", user_id="u", request_id="r",
+    appmod._emit_canary_turn(endpoint="alex", conversation_id="c", user_id="u",
+                             request_id="r", http_status=200, turn_outcome="ok",
                              turn_latency_ms=1.0, fc_signals=None)
     assert not disabled_marker.exists()
 

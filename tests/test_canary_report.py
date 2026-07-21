@@ -29,33 +29,67 @@ cr = _load_module()
 NOW = datetime(2026, 7, 20, 12, 0, 0, tzinfo=timezone.utc)
 
 
+_RID = 0
+
+
 def _rec(arch, latency_ms, *, ts=None, soft=False, partial=False, tbt=False,
          audit="clean", conv="c", **extra):
+    """Build a schema-v2 canary.turn record.
+
+    Migrated from the v1 shape. `audit` is kept as an ergonomic shorthand for the
+    call sites below and is mapped onto the STRUCTURED security object that v2
+    requires (v1's free-form string was never actually parseable by the report —
+    ``{"denied_writes": N}`` normalised to "" and scored clean).
+    """
+    sec = {"denied_write_count": 0, "tainted_write_executed_count": 0,
+           "forbidden_write_executed_count": 0}
+    a = (audit or "clean").lower()
+    if "denied" in a:
+        sec["denied_write_count"] = 1
+    elif "forbidden_write_executed" in a:
+        sec["forbidden_write_executed_count"] = 1
+    elif "tainted" in a or "unauthorized" in a:
+        sec["tainted_write_executed_count"] = 1
+
+    # Every turn has its OWN request_id in reality; the v1 helper hardcoded "r",
+    # which the v2 contract now (correctly) rejects as duplicate records.
+    global _RID
+    _RID += 1
+    arch_full = "fc_loop" if arch in ("fc", "fc_loop") else "legacy"
+    stamp = ts if isinstance(ts, str) else (ts.isoformat() if ts is not None
+                                            else NOW.isoformat())
     r = {
         "event": "canary.turn",
-        "agent_arch": arch,
+        "telemetry_schema_version": 2,
+        "ts": stamp,
+        "endpoint": "alex",
+        "agent_arch": arch_full,
         "candidate_sha": "7db03e7",
-        "strict": arch == "fc",
-        "request_id": "r",
+        "strict": arch_full == "fc_loop",
+        "request_id": f"r{_RID}",
         "conversation_id": conv,
-        "user_id": "u",
+        "user_id_hash": "h" * 32,
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
         "soft_wrapped": soft,
         "partial": partial,
         "tool_budget_timeout": tbt,
-        "security_audit": audit,
+        "security": sec,
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
         "turn_latency_ms": latency_ms,
         "llm_calls": 2,
         "tool_batches": 1,
+        "llm_usage": None,
+        "forbidden_read": None,
+        "no_evidence_numbers": None,
+        "eval_only": ["forbidden_read", "no_evidence_numbers"],
     }
-    if ts is not None:
-        r["ts"] = ts if isinstance(ts, str) else ts.isoformat()
     r.update(extra)
     return r
 
-
-# --------------------------------------------------------------------------- #
-# 1) green fc vs legacy -> exit 0                                             #
-# --------------------------------------------------------------------------- #
 
 def test_green_fc_vs_legacy_exit0():
     records = []
@@ -72,10 +106,12 @@ def test_green_fc_vs_legacy_exit0():
     assert v["exit_code"] == 0
     assert v["zero_tolerance"]["breached"] is False
     assert v["stage_pause"]["breached"] is False
-    # forbidden-read / no-evidence / 5xx are not in prod telemetry -> noted, not breached.
+    # v2: eval-only metrics stay advisory notes, but nothing else may be "not
+    # instrumented" — a prod-observable metric that is missing now HOLDs instead.
     joined = " ".join(v["stage_pause"]["notes"])
     assert "requires eval sweep" in joined
-    assert "not instrumented" in joined
+    assert "not instrumented" not in joined
+    assert v["instrumentation"]["failed"] is False
 
 
 # --------------------------------------------------------------------------- #
@@ -146,8 +182,9 @@ def test_forbidden_write_and_dsml_and_400_zero_tolerance():
     records = [_rec("fc", 5000.0, conv=f"fc{i}") for i in range(20)]
     records += [_rec("legacy", 5000.0, conv=f"lg{i}") for i in range(20)]
     records.append(_rec("fc", 5000.0, conv="fw", audit="forbidden_write_executed",
-                        dsml_leak=True))
-    records.append(_rec("fc", 5000.0, conv="b4", audit="clean", **{"400_count": 3}))
+                        dsml_leak=1))
+    records.append(_rec("fc", 5000.0, conv="b4", audit="clean",
+                        provider_schema_400_count=3))
     report = cr.build_report(records, now_override=NOW)
     fc = report["arches"]["fc"]
     assert fc["forbidden_write_count"] == 1

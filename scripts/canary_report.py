@@ -78,6 +78,216 @@ _SAFE_AUDIT_TOKENS = ("deni", "denied", "blocked", "refused", "prevented",
 
 _CLEAN_AUDIT_VALUES = {"", "clean", "ok", "pass", "passed", "none", "clear", "green"}
 
+# --------------------------------------------------------------------------- #
+# Schema v2 contract (fail-closed)                                            #
+# --------------------------------------------------------------------------- #
+#
+# v1 inferred "is this metric instrumented?" from KEY EXISTENCE and degraded an
+# uninstrumented zero-tolerance metric to an advisory note — so a report could
+# exit 0 having never observed the metric. That is fail-OPEN. v2 requires the
+# producer to state every gate-relevant fact explicitly; missing or null is an
+# INSTRUMENTATION-HOLD (exit 2), never a pass.
+
+# EXACT set, not a floor. A ">= 2" floor is fail-open in the forward direction:
+# a future v3 that renames or re-means a field would sail through a consumer that
+# has no idea what v3 says, and the gate would score records it cannot actually
+# read. This consumer understands exactly these versions; anything else HOLDs
+# until someone teaches it the new schema.
+SUPPORTED_SCHEMA_VERSIONS = (2,)
+MIN_SCHEMA_VERSION = min(SUPPORTED_SCHEMA_VERSIONS)
+
+# Gate default: only the agent endpoint decides the A/B. The deterministic form
+# path (search_direct) is aggregated separately so it cannot dilute agent metrics.
+GATE_ENDPOINTS = ("alex",)
+
+# Every endpoint the producer is allowed to emit. A record outside this set (or
+# with no endpoint at all) is unattributable and holds the gate — it must never be
+# silently dropped, or losing the field would become a way to escape the gate.
+KNOWN_ENDPOINTS = ("alex", "search_direct")
+
+REQUIRED_TOP_FIELDS = (
+    "telemetry_schema_version", "ts", "endpoint", "agent_arch", "candidate_sha",
+    "request_id", "conversation_id", "http_status", "turn_outcome",
+    "turn_latency_ms", "soft_wrapped", "partial", "tool_budget_timeout",
+    "dsml_blocked", "dsml_leak", "provider_schema_400_count", "security",
+    "user_id_hash_status",
+    # `strict` identifies the configuration under test, so a record without it is
+    # not attributable to a config at all. Previously only fc_loop was checked, so
+    # a legacy record could omit it entirely and still validate — which meant the
+    # control arm was never pinned to a known configuration.
+    "strict",
+)
+
+# A process-random HMAC salt would re-hash the same user differently after every
+# restart, silently decorrelating user counts across windows. The producer refuses
+# to do that and reports this status instead; the gate must hold on it.
+HASH_STATUS_UNKEYED = "unkeyed_no_stable_secret"
+REQUIRED_SECURITY_FIELDS = (
+    "denied_write_count", "tainted_write_executed_count", "forbidden_write_executed_count",
+)
+
+# Metrics prod telemetry cannot determine. A record declares these in `eval_only`;
+# they are reported as EVAL-ONLY rather than counted or held on. They are NEVER
+# coerced to False/0 — an unmeasured metric is not a clean one.
+EVAL_ONLY_KNOWN = ("forbidden_read", "no_evidence_numbers")
+
+VALID_OUTCOMES = ("ok", "agent_error", "crash", "server_error")
+VALID_ARCHES = ("fc_loop", "legacy")
+VALID_HASH_STATUSES = ("keyed", "no_user", HASH_STATUS_UNKEYED)
+
+
+def _check_count(name: str, v) -> List[str]:
+    """A counter must be a non-negative int. Booleans are rejected explicitly (True
+    would sum as 1 and quietly fabricate an event)."""
+    if isinstance(v, bool):
+        return [f"{name}={v!r} is a bool, expected a non-negative int"]
+    if not isinstance(v, int):
+        return [f"{name}={v!r} is not an int"]
+    if v < 0:
+        return [f"{name}={v} is negative (would cancel a real violation when summed)"]
+    return []
+
+
+def validate_record(rec: dict) -> List[str]:
+    """Return this record's contract violations. Empty == conformant.
+
+    Missing AND null both count: ``"dsml_leak": null`` asserts nothing, so it must
+    not be allowed to satisfy the gate.
+    """
+    problems: List[str] = []
+    ver = rec.get("telemetry_schema_version")
+    if isinstance(ver, bool) or not isinstance(ver, int) or ver not in SUPPORTED_SCHEMA_VERSIONS:
+        if isinstance(ver, int) and not isinstance(ver, bool) and ver > MIN_SCHEMA_VERSION:
+            # Forward-incompatible: we cannot claim to have validated a schema we
+            # have never seen, so we refuse rather than guess.
+            problems.append(
+                f"telemetry_schema_version={ver!r} is newer than this consumer knows "
+                f"(supported: {list(SUPPORTED_SCHEMA_VERSIONS)}) — update canary_report.py")
+        else:
+            problems.append(
+                f"telemetry_schema_version={ver!r} not in supported "
+                f"{list(SUPPORTED_SCHEMA_VERSIONS)}")
+        return problems  # unknown schema: don't cascade every field as its own violation
+    declared_eval_only = set(rec.get("eval_only") or ())
+    for f in REQUIRED_TOP_FIELDS:
+        if f not in rec:
+            problems.append(f"missing required field {f!r}")
+        elif rec[f] is None:
+            problems.append(f"required field {f!r} is null")
+    sec = rec.get("security")
+    if isinstance(sec, dict):
+        for f in REQUIRED_SECURITY_FIELDS:
+            if f not in sec:
+                problems.append(f"missing required security.{f}")
+            elif sec[f] is None:
+                problems.append(f"security.{f} is null")
+            else:
+                problems += _check_count(f"security.{f}", sec[f])
+    elif "security" in rec:
+        problems.append("security is not an object")
+
+    # --- TYPE / RANGE ------------------------------------------------------
+    # Non-null is not enough. These counters are SUMMED across records, so a single
+    # negative value would silently cancel a real violation elsewhere in the window.
+    for f in ("dsml_blocked", "dsml_leak", "provider_schema_400_count"):
+        if rec.get(f) is not None:
+            problems += _check_count(f, rec[f])
+    lat = rec.get("turn_latency_ms")
+    if lat is not None and (isinstance(lat, bool) or not isinstance(lat, (int, float))
+                            or lat < 0):
+        problems.append(f"turn_latency_ms={lat!r} is not a non-negative number")
+    st = rec.get("http_status")
+    if st is not None and (isinstance(st, bool) or not isinstance(st, int)
+                           or not (100 <= st <= 599)):
+        problems.append(f"http_status={st!r} is not a valid HTTP status")
+    # Strictly boolean: "0"/"false"/"" are all truthy-or-falsy in ways that differ
+    # between _truthy() here and bool() in the producer, and this field decides
+    # whether a record counts as the candidate configuration.
+    if "strict" in rec and not isinstance(rec["strict"], bool):
+        problems.append(f"strict={rec['strict']!r} is not a boolean")
+
+    # --- ENUMS -------------------------------------------------------------
+    if rec.get("endpoint") is not None and record_endpoint(rec) not in KNOWN_ENDPOINTS:
+        problems.append(f"endpoint={rec.get('endpoint')!r} not in {list(KNOWN_ENDPOINTS)}")
+    if rec.get("turn_outcome") is not None and rec["turn_outcome"] not in VALID_OUTCOMES:
+        problems.append(f"turn_outcome={rec['turn_outcome']!r} not in {list(VALID_OUTCOMES)}")
+    if rec.get("agent_arch") is not None and rec["agent_arch"] not in VALID_ARCHES:
+        problems.append(f"agent_arch={rec['agent_arch']!r} not in {list(VALID_ARCHES)}")
+    hs = rec.get("user_id_hash_status")
+    if hs is not None and hs not in VALID_HASH_STATUSES:
+        problems.append(f"user_id_hash_status={hs!r} not in {list(VALID_HASH_STATUSES)}")
+    # keyed implies a digest actually exists — otherwise "keyed" asserts nothing.
+    if hs == "keyed" and not rec.get("user_id_hash"):
+        problems.append("user_id_hash_status=keyed but user_id_hash is absent/empty")
+    # The candidate arch is defined by strict function-calling; a non-strict fc
+    # record is not the configuration under test.
+    if rec.get("agent_arch") == "fc_loop" and not _truthy(rec.get("strict")):
+        problems.append("agent_arch=fc_loop but strict is not true (not the candidate config)")
+
+    # An eval-only metric must be declared AND null. Previously only the undeclared
+    # case was caught, so a record could declare eval_only and still ship a value —
+    # the exact opposite of what the declaration means.
+    for f in EVAL_ONLY_KNOWN:
+        if f in rec and rec[f] is not None:
+            if f in declared_eval_only:
+                problems.append(f"{f!r} is declared eval_only but carries a non-null value")
+            else:
+                problems.append(f"{f!r} carries a prod value but is not declared eval_only")
+    # No stable HMAC secret => user_id_hash is not comparable across restarts, so
+    # every per-user statistic in this window is unreliable. Hold, don't continue.
+    if rec.get("user_id_hash_status") == HASH_STATUS_UNKEYED:
+        problems.append(
+            "user_id_hash_status=unkeyed_no_stable_secret (no CANARY_USER_HASH_KEY / "
+            "FLASK_SECRET_KEY): user hashes are not stable across restarts")
+    return problems
+
+
+def validate_records(records: Sequence[dict]) -> dict:
+    """Aggregate contract validation across records."""
+    offenders: Dict[str, int] = {}
+    bad = 0
+    for r in records:
+        probs = validate_record(r)
+        if probs:
+            bad += 1
+            for p in probs:
+                offenders[p] = offenders.get(p, 0) + 1
+    # Cross-record: one record per (request_id, endpoint, arch). A duplicate would
+    # inflate the turn denominator and so halve every rate — a silent fail-open.
+    seen: Dict[tuple, int] = {}
+    for r in records:
+        k = (r.get("request_id"), record_endpoint(r), r.get("agent_arch"))
+        if None in k[:1]:
+            continue
+        seen[k] = seen.get(k, 0) + 1
+    dupes = {k: n for k, n in seen.items() if n > 1}
+    if dupes:
+        offenders[f"duplicate records for {len(dupes)} (request_id, endpoint, arch) "
+                  f"key(s) — one turn must emit exactly one record"] = sum(dupes.values())
+        bad = max(bad, sum(dupes.values()))
+
+    # Cross-record: the candidate pool must be ONE build. A window mixing two
+    # candidate shas is not a measurement of either of them.
+    shas = {r.get("candidate_sha") for r in records
+            if r.get("agent_arch") == "fc_loop" and r.get("candidate_sha") is not None}
+    if len(shas) > 1:
+        offenders[f"window mixes {len(shas)} candidate_sha values on fc_loop: "
+                  f"{sorted(str(s) for s in shas)}"] = len(shas)
+        bad = max(bad, 1)
+    return {
+        "records": len(records),
+        "conformant": len(records) - bad,
+        "violating": bad,
+        "violations": dict(sorted(offenders.items(), key=lambda kv: -kv[1])),
+        "candidate_shas": sorted(str(s) for s in shas),
+        "ok": bad == 0 and len(records) > 0,
+    }
+
+
+def record_endpoint(rec: dict) -> str:
+    v = rec.get("endpoint")
+    return str(v).strip().lower() if v is not None else ""
+
 
 # --------------------------------------------------------------------------- #
 # Line / timestamp parsing (tolerant)                                         #
@@ -295,38 +505,57 @@ def latency_ms(rec: dict) -> Optional[float]:
 
 
 def classify(rec: dict) -> dict:
-    """Per-record boolean/numeric flags used by the aggregator."""
-    o = audit_outcome(rec)
-    clean = _audit_is_clean(o)
-    safe_denied = _audit_safe_denied(o)
+    """Per-record flags used by the aggregator — schema v2, structured parsing.
 
-    # Explicit dedicated fields win; else derive from the audit outcome.
-    tainted_field = _first_present(rec, ("tainted_write_executed", "unauthorized_write"))
-    forbidden_w_field = rec.get("forbidden_write_executed")
+    The producer's ``security`` object is read DIRECTLY; there is no string-token
+    sniffing of a free-form outcome. That closes a v1 contract break: the producer
+    emitted ``security_audit: {"denied_writes": N}``, which carries none of the
+    ``outcome``/``result``/``status`` keys ``audit_outcome()`` looks for, so every
+    record — including ones with denied writes — normalised to "" and was scored
+    CLEAN.
 
-    tainted_unauth = _truthy(tainted_field) if tainted_field is not None else (
-        (("tainted" in o) or ("unauthorized" in o)) and not safe_denied and "read" not in o
-    )
-    forbidden_write = _truthy(forbidden_w_field) if forbidden_w_field is not None else (
-        ("forbidden" in o and "write" in o) and not safe_denied
-    )
+    Semantics, kept deliberately distinct:
+      * denied_write_count      -> non-clean, but SAFE (the write was blocked)
+      * *_write_executed_count  -> zero-tolerance (the bad write actually ran)
+    """
+    sec = rec.get("security")
+    sec = sec if isinstance(sec, dict) else {}
+    denied = _to_int(sec.get("denied_write_count"))
+    tainted_exec = _to_int(sec.get("tainted_write_executed_count"))
+    forbidden_exec = _to_int(sec.get("forbidden_write_executed_count"))
 
-    lat = latency_ms(rec)
+    # 5xx is observable from the turn record itself in v2 (http_status/turn_outcome).
+    status = rec.get("http_status")
+    try:
+        status_i = int(status) if status is not None else None
+    except (TypeError, ValueError):
+        status_i = None
+    is_5xx = (status_i is not None and status_i >= 500) or \
+             (str(rec.get("turn_outcome") or "").lower() == "server_error")
+
+    # A boundary 5xx never completed a turn, so its "latency" is not a turn latency.
+    # Count it as a 5xx, but keep it out of the percentile population (otherwise a
+    # burst of fast failures would *improve* p50).
+    lat = None if is_5xx else latency_ms(rec)
     return {
         "soft_wrapped": _truthy(rec.get("soft_wrapped")),
         "partial": _truthy(rec.get("partial")),
         "tool_budget_timeout": _truthy(rec.get("tool_budget_timeout")),
-        "security_non_clean": not clean,
-        "tainted_unauth_write": bool(tainted_unauth),
-        "forbidden_write": bool(forbidden_write),
+        # non-clean == any security event at all (denied OR executed)
+        "security_non_clean": bool(denied or tainted_exec or forbidden_exec),
+        "denied_write": denied,
+        "tainted_unauth_write": bool(tainted_exec),
+        "forbidden_write": bool(forbidden_exec),
         "latency_ms": lat,
         "over_slo": (lat is not None and lat > OVER_SLO_MS),
-        # optional / instrumentation-gated:
-        "dsml_leak": _truthy(_first_present(rec, _ALIASES["dsml_leak"])),
-        "api_400": _to_int(_first_present(rec, _ALIASES["api_400"])),
-        "http_5xx": _to_int(_first_present(rec, _ALIASES["http_5xx"])),
-        "forbidden_read": _truthy(_first_present(rec, _ALIASES["forbidden_read"])),
-        "no_evidence_numbers": _truthy(_first_present(rec, _ALIASES["no_evidence_numbers"])),
+        # zero-tolerance signals, now mandatory in the record (validated upstream)
+        "dsml_blocked": _to_int(rec.get("dsml_blocked")),
+        "dsml_leak": _to_int(rec.get("dsml_leak")) > 0,
+        "api_400": _to_int(rec.get("provider_schema_400_count")),
+        "http_5xx": 1 if is_5xx else 0,
+        # eval-only: never coerced to False here; aggregation reports them as None
+        "forbidden_read": rec.get("forbidden_read"),
+        "no_evidence_numbers": rec.get("no_evidence_numbers"),
     }
 
 
@@ -395,12 +624,52 @@ def _rate(count: int, total: int) -> float:
     return (count / total) if total else 0.0
 
 
+def aggregate_zero_tolerance(records: Sequence[dict]) -> dict:
+    """Aggregate the SECURITY / correctness zero-tolerance signals across ALL public
+    endpoints for one arch.
+
+    Deliberately separate from :func:`aggregate_arch`, which is endpoint-scoped for
+    the A/B: latency and degradation are only comparable on the agent endpoint, but
+    "a forbidden write executed" is a breach wherever it happened.
+    """
+    flags = [classify(r) for r in records]
+    by_ep: Dict[str, dict] = {}
+    for r, f in zip(records, flags):
+        ep = record_endpoint(r) or "unknown"
+        s = by_ep.setdefault(ep, {"turns": 0, "tainted_unauth_write_count": 0,
+                                  "forbidden_write_count": 0, "dsml_leak_count": 0,
+                                  "api_400_count": 0, "api_400_total": 0})
+        s["turns"] += 1
+        s["tainted_unauth_write_count"] += 1 if f["tainted_unauth_write"] else 0
+        s["forbidden_write_count"] += 1 if f["forbidden_write"] else 0
+        s["dsml_leak_count"] += 1 if f["dsml_leak"] else 0
+        s["api_400_count"] += 1 if f["api_400"] > 0 else 0
+        s["api_400_total"] += max(0, f["api_400"])
+    return {
+        "turns": len(records),
+        "tainted_unauth_write_count": sum(1 for f in flags if f["tainted_unauth_write"]),
+        "forbidden_write_count": sum(1 for f in flags if f["forbidden_write"]),
+        "dsml_leak_count": sum(1 for f in flags if f["dsml_leak"]),
+        # AFFECTED RECORDS, not a sum of raw counters. Every other zero-tolerance
+        # signal already counted records; this one summed values, so a negative
+        # counter anywhere in the window could cancel a real 400 and downgrade a
+        # BLOCK to a HOLD. Both still refuse to promote, but the operator would be
+        # told "instrumentation problem" when the truth was "provider rejected our
+        # schema". The magnitude is kept alongside, floored at 0.
+        "api_400_count": sum(1 for f in flags if f["api_400"] > 0),
+        "api_400_total": sum(max(0, f["api_400"]) for f in flags),
+        "by_endpoint": by_ep,
+    }
+
+
 def aggregate_arch(records: Sequence[dict]) -> dict:
     """Aggregate one arch's records into a stats dict."""
     flags = [classify(r) for r in records]
     turns = len(records)
     convos = {str(r.get("conversation_id")) for r in records if r.get("conversation_id") is not None}
-    users = {str(r.get("user_id")) for r in records if r.get("user_id") is not None}
+    # v2 removed the raw user_id; counting it would report 0 users forever.
+    users = {str(r.get("user_id_hash")) for r in records
+             if r.get("user_id_hash") is not None}
     lats = [f["latency_ms"] for f in flags if f["latency_ms"] is not None]
 
     soft = sum(1 for f in flags if f["soft_wrapped"])
@@ -410,18 +679,21 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
     over = sum(1 for f in flags if f["over_slo"])
     non_clean = sum(1 for f in flags if f["security_non_clean"])
 
-    # instrumentation presence (per arch, key-existence based)
-    instr = {
-        name: any(_has_any_key(r, keys) for r in records)
-        for name, keys in _ALIASES.items()
-    }
+    # v2: the gate-relevant metrics are MANDATORY fields validated before we get
+    # here, so they are always countable. No key-existence guessing.
+    dsml = sum(1 for f in flags if f["dsml_leak"])
+    dsml_blk = sum(f["dsml_blocked"] for f in flags)
+    api400 = sum(f["api_400"] for f in flags)
+    x5 = sum(f["http_5xx"] for f in flags)
 
-    dsml = sum(1 for f in flags if f["dsml_leak"]) if instr["dsml_leak"] else None
-    api400 = sum(f["api_400"] for f in flags) if instr["api_400"] else None
-    x5 = sum(f["http_5xx"] for f in flags) if instr["http_5xx"] else None
-    fr = sum(1 for f in flags if f["forbidden_read"]) if instr["forbidden_read"] else None
-    nen = (sum(1 for f in flags if f["no_evidence_numbers"])
-           if instr["no_evidence_numbers"] else None)
+    # Eval-only metrics: None unless a record actually carries an observation.
+    # Absent stays None — it must never collapse to 0 and read as "clean".
+    def _eval_only_count(key: str) -> Optional[int]:
+        observed = [f[key] for f in flags if f[key] is not None]
+        return sum(1 for v in observed if _truthy(v)) if observed else None
+
+    fr = _eval_only_count("forbidden_read")
+    nen = _eval_only_count("no_evidence_numbers")
 
     return {
         "turns": turns,
@@ -446,10 +718,11 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
         "degraded_count": degraded,
         "degraded_rate": _rate(degraded, turns),
         "security_non_clean_count": non_clean,
+        "denied_write_count": sum(f["denied_write"] for f in flags),
         "tainted_unauth_write_count": sum(1 for f in flags if f["tainted_unauth_write"]),
         "forbidden_write_count": sum(1 for f in flags if f["forbidden_write"]),
-        # optional (None => not instrumented for this arch)
-        "instrumented": instr,
+        # v2: mandatory + validated, so always a number (never "not instrumented")
+        "dsml_blocked_count": dsml_blk,
         "dsml_leak_count": dsml,
         "api_400_count": api400,
         "http_5xx_count": x5,
@@ -526,7 +799,9 @@ def evaluate_stage(fc: dict, stage: str, since: Optional[datetime],
 # --------------------------------------------------------------------------- #
 
 def build_verdict(fc: dict, legacy: dict, deltas: dict,
-                  stage_eval: Optional[dict]) -> dict:
+                  stage_eval: Optional[dict],
+                  instrumentation: Optional[dict] = None,
+                  global_zt: Optional[dict] = None) -> dict:
     """Evaluate shuhan's zero-tolerance and stage-pause rules against the fc pool.
 
     Precedence for the exit code: zero-tolerance (3) beats stage-pause (2) beats proceed (0).
@@ -536,21 +811,37 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
     zt_notes: List[str] = []
 
     # --- ZERO-TOLERANCE (absolute; any >0 on fc => instant rollback) ---
-    if fc["tainted_unauth_write_count"] > 0:
+    # Sourced from the GLOBAL cross-endpoint aggregate, not the gate slice: a
+    # forbidden write or a markup leak is a breach on whichever public endpoint it
+    # happened. Falling back to `fc` keeps older callers working.
+    zt = global_zt if global_zt is not None else fc
+    _scope = ("all endpoints" if global_zt is not None else "gate endpoint only")
+    if zt["tainted_unauth_write_count"] > 0:
         zt_reasons.append(
-            f"tainted/unauthorized memory write executed x{fc['tainted_unauth_write_count']} (must be 0)")
-    if fc["forbidden_write_count"] > 0:
+            f"tainted/unauthorized memory write executed "
+            f"x{zt['tainted_unauth_write_count']} ({_scope}, must be 0)")
+    if zt["forbidden_write_count"] > 0:
         zt_reasons.append(
-            f"forbidden write executed x{fc['forbidden_write_count']} (must be 0)")
-    if fc["dsml_leak_count"] is None:
-        zt_notes.append("dsml/tool-markup leak: not instrumented")
-    elif fc["dsml_leak_count"] > 0:
-        zt_reasons.append(f"DSML/tool-markup leak x{fc['dsml_leak_count']} (must be 0)")
-    if fc["api_400_count"] is None:
-        zt_notes.append("schema/API 400s: not instrumented")
-    elif fc["api_400_count"] > 0:
+            f"forbidden write executed x{zt['forbidden_write_count']} ({_scope}, must be 0)")
+    # v2 FAIL-CLOSED: an unobserved zero-tolerance metric is NOT a pass. In v1 these
+    # branches appended to zt_notes and the report still exited 0.
+    instr_reasons: List[str] = []
+    if zt["dsml_leak_count"] is None:
+        instr_reasons.append("DSML/tool-markup leak not instrumented")
+    elif zt["dsml_leak_count"] > 0:
         zt_reasons.append(
-            f"systematic schema/API 400s x{fc['api_400_count']} (must be 0)")
+            f"DSML/tool-markup leak x{zt['dsml_leak_count']} ({_scope}, must be 0)")
+    if zt["api_400_count"] is None:
+        instr_reasons.append("provider schema 400s not instrumented")
+    elif zt["api_400_count"] > 0:
+        _n400 = zt.get("api_400_total", zt["api_400_count"])
+        zt_reasons.append(
+            f"provider schema 400s on {zt['api_400_count']} turn(s), {_n400} call(s) "
+            f"({_scope}, must be 0)")
+    # dsml_blocked is a SAFETY signal, not a breach: report it, never gate on it.
+    if fc.get("dsml_blocked_count"):
+        zt_notes.append(
+            f"DSML markup blocked+recovered x{fc['dsml_blocked_count']} (safe path, not a breach)")
 
     # --- STAGE-PAUSE (SLO / degradation; relative-to-legacy where noted) ---
     sp_reasons: List[str] = []
@@ -580,7 +871,7 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
                 f"+ {RELATIVE_PP:.0f}pp (delta {pp:+.1f}pp)")
 
     if fc["http_5xx_rate"] is None or legacy["http_5xx_rate"] is None:
-        sp_notes.append("5xx rate: not instrumented")
+        instr_reasons.append("5xx rate not instrumented")
     else:
         pp5 = (fc["http_5xx_rate"] - legacy["http_5xx_rate"]) * 100.0
         if pp5 > RELATIVE_PP:
@@ -591,9 +882,23 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
     zt_breached = bool(zt_reasons)
     sp_breached = bool(sp_reasons)
 
+    # Schema-level contract violations (missing/null required fields) are an
+    # instrumentation hold too — a record that asserts nothing cannot clear a gate.
+    if instrumentation is not None and not instrumentation.get("ok"):
+        n = instrumentation.get("violating", 0)
+        top = list(instrumentation.get("violations", {}).items())[:3]
+        instr_reasons.append(
+            f"{n} record(s) violate the v{MIN_SCHEMA_VERSION} contract: "
+            + "; ".join(f"{k} (x{v})" for k, v in top))
+    instr_failed = bool(instr_reasons)
+
     # --- decision / exit code ---
+    # Precedence: a PROVEN breach (3) outranks an unprovable gate (2), which
+    # outranks an SLO pause (2). Never fall through to 0 with an unobserved metric.
     if zt_breached:
         decision, exit_code = "CANARY-BLOCK", 3
+    elif instr_failed:
+        decision, exit_code = "INSTRUMENTATION-HOLD", 2
     elif sp_breached:
         decision, exit_code = "STAGE-PAUSE", 2
     else:
@@ -608,6 +913,8 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         "decision": decision,
         "exit_code": exit_code,
         "zero_tolerance": {"breached": zt_breached, "reasons": zt_reasons, "notes": zt_notes},
+        "instrumentation": {"failed": instr_failed, "reasons": instr_reasons,
+                            "contract": instrumentation},
         "stage_pause": {"breached": sp_breached, "reasons": sp_reasons, "notes": sp_notes},
         "stage_progress": stage_eval,
     }
@@ -622,18 +929,76 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
                  since: Optional[datetime] = None, skipped: int = 0,
                  inputs: Optional[Sequence[str]] = None) -> dict:
     now = reference_now(records, now_override)
-    windowed = filter_window(records, window_hours, now)
+
+    # Partition by timestamp parseability BEFORE windowing. filter_window silently
+    # DROPS any record it cannot place, so validating only the windowed set let a
+    # record escape the contract entirely by carrying a missing or corrupt ts.
+    undated = [r for r in records if record_ts(r) is None]
+    dated = [r for r in records if record_ts(r) is not None]
+    windowed = filter_window(dated, window_hours, now)
+
+    # v2: PERFORMANCE/quality metrics are decided by the AGENT endpoint only.
+    # search_direct is a deterministic, LLM-free path — folding it in would dilute
+    # the agent A/B. Security zero-tolerance is handled separately and globally.
+    gate_records = [r for r in windowed if record_endpoint(r) in GATE_ENDPOINTS]
+    other_records = [r for r in windowed if record_endpoint(r) not in GATE_ENDPOINTS]
+
+    # Validate the WHOLE window, not just the gate slice. Validating after the
+    # endpoint filter would be fail-open: a record that lost its `endpoint` field
+    # (exactly the instrumentation regression we want to catch, and the shape every
+    # pre-v2 record has) would be filtered OUT of the gate and so never validated —
+    # it would vanish instead of holding. Telemetry integrity is global.
+    instrumentation = validate_records(windowed)
+    unattributable = [r for r in windowed if record_endpoint(r) not in KNOWN_ENDPOINTS]
+    if unattributable:
+        instrumentation["violations"][
+            f"endpoint missing/unknown (not one of {list(KNOWN_ENDPOINTS)})"
+        ] = len(unattributable)
+        instrumentation["violating"] = max(instrumentation["violating"], len(unattributable))
+        instrumentation["ok"] = False
+    if undated:
+        instrumentation["violations"][
+            "ts missing or unparseable (record cannot be placed in a window, so "
+            "windowing would silently drop it)"
+        ] = len(undated)
+        instrumentation["violating"] += len(undated)
+        instrumentation["ok"] = False
+    if skipped:
+        # An unparseable line is not a harmless comment. The writer is a single logger
+        # emitting exactly one json.dumps per line, so a line that will not parse means
+        # a truncated or interleaved write — and the record we lost could be precisely
+        # the one carrying a violation. Showing the count in a summary row and still
+        # exiting 0 is the same fail-open shape we removed everywhere else.
+        instrumentation["violations"][
+            "unparseable log line (the lost record may have carried a violation)"
+        ] = skipped
+        instrumentation["violating"] += skipped
+        instrumentation["ok"] = False
+    instrumentation["unattributable_records"] = len(unattributable)
+    instrumentation["undated_records"] = len(undated)
+    instrumentation["unparseable_lines"] = skipped
+
+    # SECURITY zero-tolerance is aggregated GLOBALLY, across every public endpoint
+    # of the candidate arch. Restricting it to the gate endpoint would mean a real
+    # forbidden write or markup leak on search_direct still shipped.
+    global_zt = aggregate_zero_tolerance([r for r in windowed if canonical_arch(r) == "fc"])
 
     by_arch: Dict[str, List[dict]] = {"fc": [], "legacy": []}
-    for r in windowed:
+    for r in gate_records:
         by_arch[canonical_arch(r)].append(r)
 
     fc = aggregate_arch(by_arch["fc"])
     legacy = aggregate_arch(by_arch["legacy"])
     deltas = compute_deltas(fc, legacy)
 
+    # Reported for visibility, never mixed into the gate.
+    buckets: Dict[str, List[dict]] = {}
+    for r in other_records:
+        buckets.setdefault(record_endpoint(r) or "unknown", []).append(r)
+    excluded = {name: aggregate_arch(rs) for name, rs in buckets.items()}
+
     stage_eval = evaluate_stage(fc, stage, since, now) if stage else None
-    verdict = build_verdict(fc, legacy, deltas, stage_eval)
+    verdict = build_verdict(fc, legacy, deltas, stage_eval, instrumentation, global_zt)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -642,8 +1007,14 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
         "window_hours": window_hours,
         "records_total": len(records),
         "records_in_window": len(windowed),
+        "records_in_gate": len(gate_records),
+        "records_excluded_from_gate": len(other_records),
         "records_skipped": skipped,
+        "gate_endpoints": list(GATE_ENDPOINTS),
+        "instrumentation": instrumentation,
+        "zero_tolerance_global": global_zt,
         "arches": {"fc": fc, "legacy": legacy},
+        "excluded_endpoints": excluded,
         "deltas": deltas,
         "verdict": verdict,
     }

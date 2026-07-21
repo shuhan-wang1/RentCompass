@@ -498,3 +498,28 @@ def test_canary_sink_disabled(tmp_path, monkeypatch, _restore_canary_sink):
     appmod._emit_canary_turn(conversation_id="c", user_id="u", request_id="r",
                              turn_latency_ms=1.0, fc_signals=None)
     assert not disabled_marker.exists()
+
+
+# ---------------------------------------------------------------------------
+# /health pool identity (Starlette-served, bypasses Flask's after_request)
+# ---------------------------------------------------------------------------
+
+def test_asgi_health_identity_headers(monkeypatch):
+    """/health is served by Starlette directly, so it must derive the X-Agent-* headers
+    from the loaded legacy app module — probing ops must see WHICH pool answered."""
+    import types
+    from uk_rent_agent.web import asgi
+
+    fake = types.ModuleType("uk_rent_agent._legacy_web_app")
+    fake.AGENT_ARCH = "fc_loop"
+    fake.APP_CANDIDATE_SHA = "abc1234"
+    monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", fake)
+    headers = asgi._canary_identity()
+    assert headers == {"X-Agent-Arch": "fc_loop", "X-Agent-Version": "abc1234"}
+
+
+def test_asgi_health_identity_degrades_when_app_not_loaded(monkeypatch):
+    from uk_rent_agent.web import asgi
+
+    monkeypatch.delitem(sys.modules, "uk_rent_agent._legacy_web_app", raising=False)
+    assert asgi._canary_identity() == {}

@@ -119,6 +119,11 @@ curl -s -D- http://127.0.0.1:5002/health
 #   → X-Agent-Version: <sha>          (== FC_CANARY_SHA)
 ```
 
+- `/health` is served by Starlette directly (it bypasses Flask's `after_request` hook); it
+  stamps the pool-identity headers itself as of the current candidate. On an image built from
+  an older commit `/health` returns 200 **without** the headers — verify against a
+  Flask-served path instead (`curl -s -D- -o /dev/null http://127.0.0.1:5002/`).
+
 - Per-turn telemetry lands on the host at `./.runtime/logs/*.jsonl` (fc →
   `canary-fc_loop.jsonl`) via the shared `./.runtime` bind mount.
 - Report on the internal stage (fc absolutes only — see the legacy-telemetry note in §1):

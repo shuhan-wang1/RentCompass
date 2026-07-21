@@ -1,0 +1,13 @@
+# Install as /etc/logrotate.d/rentcompass-monitor
+# The monitor appends one status line per 5-min run; copytruncate keeps the same
+# inode so the running writer never needs a restart.
+/var/log/rentcompass/monitor.log {
+    daily
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su root root
+}

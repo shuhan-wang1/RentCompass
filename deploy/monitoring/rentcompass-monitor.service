@@ -1,0 +1,19 @@
+[Unit]
+Description=RentCompass health monitor (legacy public + fc internal)
+Documentation=file:///home/shuhan/uk_rent_recommendation/deploy/monitoring/README.md
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root so it can read all runtime files, query docker, and write
+# /var/log/rentcompass. The script itself takes an flock, so an overrun run
+# is skipped rather than stacking.
+ExecStart=/home/shuhan/uk_rent_recommendation/deploy/monitoring/rentcompass-monitor.sh
+Nice=10
+IOSchedulingClass=idle
+# Read-only probes; harden the unit so a compromised probe can't do much.
+ProtectSystem=strict
+ReadWritePaths=/var/log/rentcompass /run
+PrivateTmp=true
+NoNewPrivileges=true

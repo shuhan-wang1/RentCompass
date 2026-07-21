@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the RentCompass health monitor every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+# Catch up on a missed run (e.g. after a reboot) instead of waiting a full cycle.
+Persistent=true
+Unit=rentcompass-monitor.service
+
+[Install]
+WantedBy=timers.target

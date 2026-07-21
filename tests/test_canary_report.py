@@ -83,6 +83,9 @@ def _rec(arch, latency_ms, *, ts=None, soft=False, partial=False, tbt=False,
         "llm_calls": 2,
         "tool_batches": 1,
         "llm_usage": None,
+        # Layer B: required, because "cost us nothing" and "we did not measure the
+        # cost" must not render as the same record.
+        "llm_usage_status": "complete",
         "forbidden_read": None,
         "no_evidence_numbers": None,
         "eval_only": ["forbidden_read", "no_evidence_numbers"],

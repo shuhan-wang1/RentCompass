@@ -67,6 +67,16 @@ def begin_turn() -> Dict[str, Any]:
         "provider_error_count": 0,
         # Bounded ring of recent classifications; diagnostics, never gated on.
         "provider_errors": [],
+        # One entry per completed LLM run, in the shape aggregate_llm_usage expects.
+        "llm_usage_calls": [],
+        # run_ids already accounted for. LangChain can deliver more than one
+        # terminal callback for a run (retries, nested runnables); counting the same
+        # run twice would double the turn's reported spend.
+        "llm_runs_seen": set(),
+        # Runs that finished but reported no usage at all. These are the reason
+        # llm_usage_status exists: a call whose tokens we failed to observe is not
+        # a call that cost nothing.
+        "llm_usage_missing": 0,
     }
     _turn_obs.set(obs)
     return obs
@@ -83,7 +93,14 @@ def end_turn() -> None:
     _turn_obs.set(None)
 
 
-def snapshot() -> Dict[str, Optional[int]]:
+# llm_usage_status values.
+USAGE_COMPLETE = "complete"                  # every observed run reported its tokens
+USAGE_PARTIAL = "partial"                    # >=1 run finished with no usage — HOLD
+USAGE_NO_CALLS = "no_llm_calls"              # the turn made none (e.g. search_direct)
+USAGE_NOT_INSTRUMENTED = "not_instrumented"  # no observer / no window — HOLD
+
+
+def snapshot() -> Dict[str, Any]:
     """The observed counters, or all-None when nothing could have been observed.
 
     None is the honest answer in two cases: no observer was installed, or no turn
@@ -91,10 +108,24 @@ def snapshot() -> Dict[str, Optional[int]]:
     """
     obs = _turn_obs.get()
     if obs is None or not _observer_installed:
-        return {"provider_schema_400_count": None, "provider_other_400_count": None}
+        return {"provider_schema_400_count": None, "provider_other_400_count": None,
+                "llm_usage_calls": None, "llm_usage_status": USAGE_NOT_INSTRUMENTED}
+    calls = list(obs.get("llm_usage_calls") or [])
+    missing = int(obs.get("llm_usage_missing", 0))
+    if missing:
+        # A run happened and we could not price it. Reporting the other runs' totals
+        # as if they were the turn's totals would understate spend by an unknown
+        # amount, which is worse than refusing to answer.
+        status = USAGE_PARTIAL
+    elif calls:
+        status = USAGE_COMPLETE
+    else:
+        status = USAGE_NO_CALLS
     return {
         "provider_schema_400_count": int(obs.get("provider_schema_400", 0)),
         "provider_other_400_count": int(obs.get("provider_other_400", 0)),
+        "llm_usage_calls": calls,
+        "llm_usage_status": status,
     }
 
 
@@ -147,6 +178,130 @@ def note_provider_error(exc: Any, *, schemas_bound: bool) -> Optional[str]:
 
 
 # --------------------------------------------------------------------------- #
+# Token usage                                                                 #
+# --------------------------------------------------------------------------- #
+
+def _first_generation(response: Any) -> Any:
+    try:
+        return response.generations[0][0]
+    except Exception:
+        return None
+
+
+def _usage_from_usage_metadata(gen: Any):
+    """LangChain's canonical, provider-normalised shape."""
+    msg = getattr(gen, "message", None)
+    um = getattr(msg, "usage_metadata", None) or {}
+    if not um:
+        return None
+    it, ot = um.get("input_tokens"), um.get("output_tokens")
+    if it is None and ot is None:
+        return None
+    cached = (um.get("input_token_details") or {}).get("cache_read")
+    return {"input_tokens": it, "output_tokens": ot, "cache_read_tokens": cached}
+
+
+def _usage_from_token_usage(blob: Any):
+    """The raw OpenAI/DeepSeek shape, wherever it is hiding."""
+    tu = (blob or {}).get("token_usage") or (blob or {}).get("usage") or {}
+    if not tu:
+        return None
+    it, ot = tu.get("prompt_tokens"), tu.get("completion_tokens")
+    if it is None and ot is None:
+        return None
+    # DeepSeek reports cache hits as a BREAKDOWN of prompt_tokens, not an extra
+    # bucket on top of it. Cost must therefore be (prompt - cache_hit) at the full
+    # rate plus cache_hit at the cached rate — never prompt + cache_hit, which is
+    # the double-count the price table is still held back to verify.
+    return {"input_tokens": it, "output_tokens": ot,
+            "cache_read_tokens": tu.get("prompt_cache_hit_tokens")}
+
+
+def extract_usage(response: Any) -> Optional[Dict[str, Any]]:
+    """Token usage for one LLM run, from the FIRST source that has it.
+
+    Three shapes carry the same numbers depending on provider and LangChain
+    version. They are tried in priority order and the first hit WINS OUTRIGHT —
+    they are never merged for the token counts, because the same run's tokens
+    appearing in two places is duplication, not extra information, and summing
+    them would silently double the turn's reported spend.
+
+    ``cache_read_tokens`` is the one field allowed to fall back to a lower-priority
+    source: it is a breakdown OF input_tokens rather than an addition to them, so
+    taking it from elsewhere cannot inflate any total.
+    """
+    gen = _first_generation(response)
+    sources = (
+        _usage_from_usage_metadata(gen),
+        _usage_from_token_usage(getattr(gen, "generation_info", None)
+                                or (getattr(getattr(gen, "message", None),
+                                            "response_metadata", None) or {})),
+        _usage_from_token_usage(getattr(response, "llm_output", None) or {}),
+    )
+    winner = next((s for s in sources if s), None)
+    if winner is None:
+        return None
+    if winner.get("cache_read_tokens") is None:
+        for other in sources:
+            if other and other.get("cache_read_tokens") is not None:
+                winner["cache_read_tokens"] = other["cache_read_tokens"]
+                break
+    return winner
+
+
+def extract_model_name(response: Any) -> Optional[str]:
+    """The model the PROVIDER says answered, or None.
+
+    Preferred over the configured route name because they can diverge — an alias
+    resolving server-side, a fallback, a silently upgraded snapshot — and cost is
+    attributed per model. The configured name is only ever used as a fallback, and
+    the record says so via ``model_source``.
+    """
+    gen = _first_generation(response)
+    for blob in (getattr(getattr(gen, "message", None), "response_metadata", None) or {},
+                 getattr(gen, "generation_info", None) or {},
+                 getattr(response, "llm_output", None) or {}):
+        name = blob.get("model_name") or blob.get("model")
+        if isinstance(name, str) and name:
+            return name
+    return None
+
+
+def note_llm_usage(run_id: Any, response: Any, *, configured_model: Optional[str]) -> bool:
+    """Record one completed LLM run. Returns True if it was counted.
+
+    De-duplicated by run_id: LangChain can deliver a terminal callback more than
+    once for the same run (retries, nested runnables), and counting a run twice
+    would double the turn's reported spend.
+    """
+    obs = _turn_obs.get()
+    if obs is None:
+        return False
+    seen = obs.setdefault("llm_runs_seen", set())
+    if run_id in seen:
+        return False
+    seen.add(run_id)
+
+    usage = extract_usage(response)
+    if usage is None:
+        # The call provably happened — we are in its completion callback — but its
+        # tokens are unknown. Recording nothing here would let the turn report the
+        # remaining calls' totals as if they were the whole turn's.
+        obs["llm_usage_missing"] = obs.get("llm_usage_missing", 0) + 1
+        return False
+    observed_model = extract_model_name(response)
+    obs.setdefault("llm_usage_calls", []).append({
+        "model": observed_model or configured_model or "unknown",
+        "model_source": ("response" if observed_model
+                         else "config" if configured_model else "unknown"),
+        "input_tokens": usage.get("input_tokens") or 0,
+        "output_tokens": usage.get("output_tokens") or 0,
+        "cache_read_tokens": usage.get("cache_read_tokens") or 0,
+    })
+    return True
+
+
+# --------------------------------------------------------------------------- #
 # LangChain callback — one seam for every call site on both arches            #
 # --------------------------------------------------------------------------- #
 
@@ -171,10 +326,12 @@ def _get_callback_cls():
     class _CanaryLLMObserver(BaseCallbackHandler):
         """Records provider failures. Never alters model output, never raises."""
 
-        def __init__(self):
+        def __init__(self, configured_model: Optional[str] = None):
             # run_id -> whether the request carried tool/function schemas. Needed
             # because on_llm_error does not describe the request that failed.
             self._schemas_bound: dict = {}
+            # Fallback only; the provider's own answer wins (see extract_model_name).
+            self.configured_model = configured_model
 
         def _note_start(self, run_id, kwargs):
             try:
@@ -193,6 +350,10 @@ def _get_callback_cls():
 
         def on_llm_end(self, response, *, run_id=None, **kwargs):
             self._schemas_bound.pop(run_id, None)
+            try:
+                note_llm_usage(run_id, response, configured_model=self.configured_model)
+            except Exception:
+                pass  # telemetry must never break a successful turn
 
         def on_llm_error(self, error, *, run_id=None, **kwargs):
             bound = self._schemas_bound.pop(run_id, False)
@@ -205,7 +366,7 @@ def _get_callback_cls():
     return _callback_cls
 
 
-def install_observer(model: Any) -> Any:
+def install_observer(model: Any, *, configured_model: Optional[str] = None) -> Any:
     """Attach the canary observer to a LangChain chat model, in place.
 
     Unlike the offline-eval instrumentation this is ALWAYS on: the canary gate is a
@@ -214,7 +375,7 @@ def install_observer(model: Any) -> Any:
     callback object per model and a dict insert per call.
     """
     try:
-        handler = _get_callback_cls()()
+        handler = _get_callback_cls()(configured_model)
         existing = list(getattr(model, "callbacks", None) or [])
         model.callbacks = existing + [handler]
         _mark_observer_installed()

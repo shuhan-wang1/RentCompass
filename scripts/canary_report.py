@@ -116,7 +116,17 @@ REQUIRED_TOP_FIELDS = (
     # a legacy record could omit it entirely and still validate — which meant the
     # control arm was never pinned to a known configuration.
     "strict",
+    # Cost is half of what this A/B decides. A turn whose token usage we failed to
+    # observe must not average in as if it were free, so the STATUS is required even
+    # though llm_usage itself is not.
+    "llm_usage_status",
 )
+
+VALID_USAGE_STATUSES = ("complete", "partial", "no_llm_calls", "not_instrumented")
+# "partial" == calls happened that we could not price; "not_instrumented" == no
+# observer at all. Either way the turn's reported spend is an undercount of unknown
+# size, which is worse than refusing to answer.
+USAGE_STATUS_HOLD = ("partial", "not_instrumented")
 
 # A process-random HMAC salt would re-hash the same user differently after every
 # restart, silently decorrelating user counts across windows. The producer refuses
@@ -213,6 +223,13 @@ def validate_record(rec: dict) -> List[str]:
         problems.append(f"turn_outcome={rec['turn_outcome']!r} not in {list(VALID_OUTCOMES)}")
     if rec.get("agent_arch") is not None and rec["agent_arch"] not in VALID_ARCHES:
         problems.append(f"agent_arch={rec['agent_arch']!r} not in {list(VALID_ARCHES)}")
+    us = rec.get("llm_usage_status")
+    if us is not None and us not in VALID_USAGE_STATUSES:
+        problems.append(f"llm_usage_status={us!r} not in {list(VALID_USAGE_STATUSES)}")
+    elif us in USAGE_STATUS_HOLD:
+        problems.append(
+            f"llm_usage_status={us!r}: this turn's token spend is an undercount of "
+            f"unknown size, so the cost side of the A/B cannot be evaluated")
     hs = rec.get("user_id_hash_status")
     if hs is not None and hs not in VALID_HASH_STATUSES:
         problems.append(f"user_id_hash_status={hs!r} not in {list(VALID_HASH_STATUSES)}")

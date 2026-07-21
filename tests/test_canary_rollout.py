@@ -142,7 +142,7 @@ _REQUIRED_TURN_KEYS = {
     "user_id_hash_status", "http_status", "turn_outcome",
     "soft_wrapped", "partial", "tool_budget_timeout", "security",
     "dsml_blocked", "dsml_leak", "provider_schema_400_count",
-    "turn_latency_ms", "llm_calls", "tool_batches",
+    "turn_latency_ms", "llm_calls", "tool_batches", "llm_usage_status",
 }
 
 

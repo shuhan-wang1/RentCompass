@@ -293,6 +293,193 @@ def test_boundary_5xx_reports_the_observed_400(client, monkeypatch, caplog, inst
 
 
 # --------------------------------------------------------------------------- #
+# Token usage                                                                 #
+# --------------------------------------------------------------------------- #
+
+def _gen(*, usage_metadata=None, response_metadata=None, generation_info=None):
+    msg = type("Msg", (), {"usage_metadata": usage_metadata,
+                           "response_metadata": response_metadata or {}})()
+    return type("Gen", (), {"message": msg, "generation_info": generation_info})()
+
+
+def _result(gen, llm_output=None):
+    return type("LLMResult", (), {"generations": [[gen]], "llm_output": llm_output})()
+
+
+def test_usage_from_usage_metadata():
+    r = _result(_gen(usage_metadata={"input_tokens": 100, "output_tokens": 20,
+                                     "input_token_details": {"cache_read": 64}}))
+    assert tobs.extract_usage(r) == {"input_tokens": 100, "output_tokens": 20,
+                                     "cache_read_tokens": 64}
+
+
+def test_usage_from_response_metadata_token_usage():
+    r = _result(_gen(response_metadata={"token_usage": {
+        "prompt_tokens": 50, "completion_tokens": 8, "prompt_cache_hit_tokens": 32}}))
+    assert tobs.extract_usage(r) == {"input_tokens": 50, "output_tokens": 8,
+                                     "cache_read_tokens": 32}
+
+
+def test_usage_from_llm_output_token_usage():
+    r = _result(_gen(), llm_output={"token_usage": {"prompt_tokens": 7,
+                                                    "completion_tokens": 3}})
+    u = tobs.extract_usage(r)
+    assert u["input_tokens"] == 7 and u["output_tokens"] == 3
+
+
+def test_the_same_usage_in_two_places_is_not_summed():
+    """The single most dangerous bug in this area: all three shapes carry the SAME
+    run's tokens, so a merge would silently double the turn's reported spend. The
+    highest-priority source must win outright."""
+    r = _result(
+        _gen(usage_metadata={"input_tokens": 100, "output_tokens": 20},
+             response_metadata={"token_usage": {"prompt_tokens": 100,
+                                                "completion_tokens": 20}}),
+        llm_output={"token_usage": {"prompt_tokens": 100, "completion_tokens": 20}})
+    u = tobs.extract_usage(r)
+    assert u["input_tokens"] == 100, "sources were summed instead of ranked"
+    assert u["output_tokens"] == 20
+
+
+def test_cache_tokens_may_fall_back_to_a_lower_priority_source():
+    """cache_read is a BREAKDOWN of input_tokens, not an addition to it, so sourcing
+    it separately cannot inflate any total."""
+    r = _result(_gen(usage_metadata={"input_tokens": 100, "output_tokens": 20}),
+                llm_output={"token_usage": {"prompt_tokens": 100, "completion_tokens": 20,
+                                            "prompt_cache_hit_tokens": 64}})
+    assert tobs.extract_usage(r)["cache_read_tokens"] == 64
+
+
+def test_no_usage_anywhere_returns_none():
+    assert tobs.extract_usage(_result(_gen())) is None
+
+
+def test_run_is_counted_once_even_if_the_callback_fires_twice(installed):
+    tobs.begin_turn()
+    r = _result(_gen(usage_metadata={"input_tokens": 10, "output_tokens": 2}))
+    run = uuid.uuid4()
+    assert tobs.note_llm_usage(run, r, configured_model="cfg") is True
+    assert tobs.note_llm_usage(run, r, configured_model="cfg") is False
+    assert len(tobs.snapshot()["llm_usage_calls"]) == 1
+
+
+def test_model_name_prefers_the_provider_response():
+    r = _result(_gen(usage_metadata={"input_tokens": 1, "output_tokens": 1},
+                     response_metadata={"model_name": "deepseek-v4-flash-0731"}))
+    tobs.begin_turn()
+    tobs.note_llm_usage(uuid.uuid4(), r, configured_model="deepseek-v4-flash")
+    call = tobs.current()["llm_usage_calls"][0]
+    assert call["model"] == "deepseek-v4-flash-0731"
+    assert call["model_source"] == "response"
+
+
+def test_configured_model_is_a_labelled_fallback():
+    """An alias can resolve to a different snapshot server-side, and cost is
+    attributed per model — so a config-sourced name must be marked as such rather
+    than passed off as what actually answered."""
+    r = _result(_gen(usage_metadata={"input_tokens": 1, "output_tokens": 1}))
+    tobs.begin_turn()
+    tobs.note_llm_usage(uuid.uuid4(), r, configured_model="deepseek-v4-flash")
+    call = tobs.current()["llm_usage_calls"][0]
+    assert call["model"] == "deepseek-v4-flash"
+    assert call["model_source"] == "config"
+
+
+def test_a_call_with_no_usage_makes_the_turn_partial_not_zero(installed):
+    """The call provably happened — we are in its completion callback. Reporting the
+    OTHER calls' totals as the turn's total would understate spend by an unknown
+    amount, so the turn is marked unpriceable instead."""
+    tobs.begin_turn()
+    tobs.note_llm_usage(uuid.uuid4(),
+                        _result(_gen(usage_metadata={"input_tokens": 10, "output_tokens": 2})),
+                        configured_model="cfg")
+    tobs.note_llm_usage(uuid.uuid4(), _result(_gen()), configured_model="cfg")
+    assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_PARTIAL
+
+
+def test_all_calls_priced_is_complete(installed):
+    tobs.begin_turn()
+    for _ in range(3):
+        tobs.note_llm_usage(uuid.uuid4(),
+                            _result(_gen(usage_metadata={"input_tokens": 5, "output_tokens": 1})),
+                            configured_model="cfg")
+    assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_COMPLETE
+
+
+def test_no_calls_is_its_own_status_not_a_failure(installed):
+    """A turn that made no LLM call did not fail to measure anything."""
+    tobs.begin_turn()
+    assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_NO_CALLS
+
+
+def test_uninstalled_observer_reports_not_instrumented(monkeypatch):
+    monkeypatch.setattr(tobs, "_observer_installed", False)
+    tobs.begin_turn()
+    assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_NOT_INSTRUMENTED
+    assert tobs.snapshot()["llm_usage_calls"] is None
+
+
+@pytest.mark.parametrize("arch", ["fc_loop", "legacy"])
+def test_usage_reaches_the_record_on_both_arches(client, monkeypatch, caplog, installed, arch):
+    monkeypatch.setattr(appmod, "AGENT_ARCH", arch)
+
+    async def _fake(user_message, context, is_continuation, user_id, conversation_id,
+                    request_id, ui_language="en", turn=None):
+        for _ in range(2):
+            tobs.note_llm_usage(
+                uuid.uuid4(),
+                _result(_gen(usage_metadata={"input_tokens": 100, "output_tokens": 20,
+                                             "input_token_details": {"cache_read": 64}},
+                             response_metadata={"model_name": "deepseek-v4-flash"})),
+                configured_model="deepseek-v4-flash")
+        appmod._turn_fc_signals.set(appmod._build_fc_signals({}))
+        return {"response_type": "chat", "message": "ok"}
+    monkeypatch.setattr(appmod, "handle_with_react_agent", _fake)
+
+    with caplog.at_level(logging.INFO, logger="canary"):
+        r = client.post("/api/alex", json={"message": "hi"},
+                        headers={"X-User-Id": "u" + uuid.uuid4().hex[:16]})
+    assert r.status_code == 200
+    rec = _canary_turns(caplog)[0]
+    assert rec["llm_usage_status"] == "complete", rec
+    assert rec["llm_usage"]["calls"] == 2
+    assert rec["llm_usage"]["input_tokens"] == 200
+    assert rec["llm_usage"]["output_tokens"] == 40
+    assert rec["llm_usage"]["cache_read_tokens"] == 128
+    assert rec["llm_usage"]["models"]["deepseek-v4-flash"]["calls"] == 2
+
+
+def test_unpriced_call_holds_the_gate(installed):
+    """End-to-end on the contract: a partial turn must not clear the report."""
+    sys.path.insert(0, os.path.join(_ROOT, "scripts"))
+    import canary_report
+
+    from core.canary_telemetry import build_canary_turn_record
+    from datetime import datetime, timedelta, timezone
+    t0 = datetime(2026, 7, 21, 12, 0, tzinfo=timezone.utc)
+
+    def rec(i, status):
+        return build_canary_turn_record(
+            endpoint="alex", agent_arch="fc_loop", candidate_sha="sha", strict=True,
+            request_id=f"r{i}", conversation_id=f"c{i}", user_id=f"u{i}",
+            http_status=200, turn_outcome="ok", turn_latency_ms=100.0,
+            ts=t0 + timedelta(seconds=i),
+            signals={"soft_wrapped": False, "partial": False, "tool_budget_timeout": False,
+                     "security": {"denied_write_count": 0,
+                                  "tainted_write_executed_count": 0,
+                                  "forbidden_write_executed_count": 0},
+                     "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0,
+                     "llm_usage_status": status})
+
+    clean = [rec(i, "complete") for i in range(10)]
+    assert canary_report.validate_records(clean)["ok"] is True
+    poisoned = clean[:-1] + [rec(99, "partial")]
+    v = canary_report.validate_records(poisoned)
+    assert v["ok"] is False
+    assert any("llm_usage_status" in k for k in v["violations"]), v["violations"]
+
+
+# --------------------------------------------------------------------------- #
 # The observer itself                                                         #
 # --------------------------------------------------------------------------- #
 

@@ -60,7 +60,20 @@ REQUIRED_FIELDS = (
     "turn_latency_ms", "soft_wrapped", "partial", "tool_budget_timeout",
     "dsml_blocked", "dsml_leak", "provider_schema_400_count", "security",
     "user_id_hash_status",
+    # Tokens are the cost side of the A/B. A turn whose spend we failed to observe
+    # must not average in as if it were free, so the STATUS is required even though
+    # llm_usage itself is not: it is the difference between "this turn cost nothing"
+    # and "we do not know what this turn cost".
+    "llm_usage_status",
 )
+
+# llm_usage_status values (mirrors core.turn_observations).
+USAGE_COMPLETE = "complete"
+USAGE_PARTIAL = "partial"
+USAGE_NO_CALLS = "no_llm_calls"
+USAGE_NOT_INSTRUMENTED = "not_instrumented"
+VALID_USAGE_STATUSES = (USAGE_COMPLETE, USAGE_PARTIAL, USAGE_NO_CALLS,
+                        USAGE_NOT_INSTRUMENTED)
 REQUIRED_SECURITY_FIELDS = (
     "denied_write_count", "tainted_write_executed_count", "forbidden_write_executed_count",
 )
@@ -115,7 +128,11 @@ def search_direct_signals() -> Dict[str, Any]:
                      "tainted_write_executed_count": 0,
                      "forbidden_write_executed_count": 0},
         "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0,
-        "llm_usage": None, "llm_calls": None, "tool_batches": None,
+        # Not "we failed to measure" — this endpoint provably makes no LLM call, so
+        # there is no spend to miss. That is why the status enum has a value for it
+        # instead of overloading null.
+        "llm_usage": None, "llm_usage_status": USAGE_NO_CALLS,
+        "llm_calls": None, "tool_batches": None,
     }
 
 
@@ -147,11 +164,16 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
         "dsml_blocked": None, "dsml_leak": None,
         # Observed out-of-band when an accumulator was running; null otherwise.
         "provider_schema_400_count": None,
-        "llm_usage": None, "llm_calls": None, "tool_batches": None,
+        "llm_usage": None, "llm_usage_status": USAGE_NOT_INSTRUMENTED,
+        "llm_calls": None, "tool_batches": None,
     }
-    for field in ("provider_schema_400_count",):
+    for field in ("provider_schema_400_count", "llm_usage_status"):
         if observed and observed.get(field) is not None:
             sig[field] = observed[field]
+    # A crashed turn's completed calls still cost real money; report what was
+    # observed rather than dropping the turn out of the cost denominator.
+    if observed and observed.get("llm_usage_calls"):
+        sig["llm_usage"] = aggregate_llm_usage(observed["llm_usage_calls"])
     return sig
 
 
@@ -260,6 +282,10 @@ def build_canary_turn_record(
         "llm_calls": _int_or_none(sig.get("llm_calls")),
         "tool_batches": _int_or_none(sig.get("tool_batches")),
         "llm_usage": sig.get("llm_usage"),
+        # Whether that usage can be trusted as the turn's WHOLE spend. Defaults to
+        # not_instrumented so a signals dict that predates this field holds the gate
+        # instead of silently claiming complete accounting.
+        "llm_usage_status": sig.get("llm_usage_status") or USAGE_NOT_INSTRUMENTED,
         # --- explicitly eval-only (null, never False) ------------------------
         "forbidden_read": None,
         "no_evidence_numbers": None,

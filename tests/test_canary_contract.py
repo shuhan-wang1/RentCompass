@@ -39,7 +39,8 @@ _T0 = datetime(2026, 7, 21, 12, 0, 0, tzinfo=timezone.utc)
 def make(i=0, *, arch="fc_loop", endpoint=ENDPOINT_ALEX, latency=1000.0,
          denied=0, tainted_exec=0, forbidden_exec=0,
          dsml_blocked=0, dsml_leak=0, provider_400=0, sha="d62628c",
-         http_status=200, outcome=OUTCOME_OK, strict=None, **sig_over):
+         http_status=200, outcome=OUTCOME_OK, strict=None,
+         usage_status="complete", **sig_over):
     """Build one record through the real producer."""
     signals = {
         "soft_wrapped": False, "partial": False, "tool_budget_timeout": False,
@@ -52,6 +53,8 @@ def make(i=0, *, arch="fc_loop", endpoint=ENDPOINT_ALEX, latency=1000.0,
         "dsml_leak": dsml_leak,
         "provider_schema_400_count": provider_400,
         "llm_calls": 1, "tool_batches": 0, "llm_usage": None,
+        # Layer B: token accounting is trusted only when every call reported usage.
+        "llm_usage_status": usage_status,
     }
     signals.update(sig_over)
     return build_canary_turn_record(

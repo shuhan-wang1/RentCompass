@@ -79,7 +79,10 @@ class ModelRouter:
         try:
             from core.turn_observations import install_observer
 
-            model = install_observer(model)
+            # route.model is the CONFIGURED name and is only a fallback: the
+            # provider's response metadata wins, because an alias can resolve to a
+            # different snapshot server-side and cost is attributed per model.
+            model = install_observer(model, configured_model=route.model)
         except Exception:
             pass
         return model

@@ -392,6 +392,7 @@ def _build_fc_signals(final_state) -> dict:
     unknown_writes = sum(1 for a in artifacts
                          if isinstance(a, dict) and a.get("outcome_unknown")
                          and a.get("tool") in _WRITE_TOOLS)
+    _obs = turn_observations.snapshot()
     is_fc = AGENT_ARCH == "fc_loop"
     llm_calls = final_state.get("loop_turn") if is_fc else None
     tool_batches = (len({a.get("turn") for a in artifacts if isinstance(a, dict)})
@@ -418,8 +419,11 @@ def _build_fc_signals(final_state) -> dict:
         # is arch-agnostic (the observer sits at ModelRouter.create, which both
         # arches build every client through) and reports null — never 0 — when no
         # observer was installed.
-        "provider_schema_400_count": turn_observations.snapshot()["provider_schema_400_count"],
-        "llm_usage": aggregate_llm_usage(final_state.get("llm_usage_calls")),
+        "provider_schema_400_count": _obs["provider_schema_400_count"],
+        # Same accumulator, same reason: usage is captured per LLM call as it
+        # completes, so it is arch-agnostic and does not depend on any graph channel.
+        "llm_usage": aggregate_llm_usage(_obs["llm_usage_calls"]),
+        "llm_usage_status": _obs["llm_usage_status"],
         "llm_calls": llm_calls,
         "tool_batches": tool_batches,
     }

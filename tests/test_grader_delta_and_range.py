@@ -66,6 +66,24 @@ def test_the_c12_shape_no_longer_reports_a_fabricated_duration():
     assert claims.get(53.0) == "grounded"
 
 
+@pytest.mark.parametrize("answer", [
+    "Cycling is clearly the winner -- it's about 10-18 minutes faster each way.",
+    "每天往返只需约 30-52 分钟。",
+    "来回一共 60 分钟。",
+    "The tube route is 12 minutes slower.",
+])
+def test_derived_aggregates_and_comparatives_are_not_journey_times(answer):
+    """Round-trip doubling and 'N minutes faster' are arithmetic over measured values."""
+    assert _minutes(answer) == {}
+
+
+def test_a_comparative_after_a_colon_does_not_eat_the_measurement():
+    """A colon is not a clause break, so comparatives are judged on a tight window right
+    after the figure rather than clause-wide."""
+    claims = _minutes("Cycling is faster: 19 minutes door to door.", _commute_evidence(19))
+    assert claims.get(19.0) == "grounded"
+
+
 def test_a_measured_duration_next_to_a_difference_is_still_graded():
     """The delta cue excuses its own clause, not the whole answer."""
     answer = "通勤时间约 41 分钟。相比之下每天多花约 50 分钟。"

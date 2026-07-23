@@ -957,16 +957,28 @@ def _is_hypothetical_constraint(text: str, start: int, end: int) -> bool:
 # This check deliberately OVERRIDES the measurement cue: 「多花约 40 分钟」 contains 约
 # ("about"), but the hedge modifies the difference, not a journey. Cues are kept
 # unambiguously comparative for that reason — bare 多 / "more" would swallow real claims.
+#
+# The second family is a DERIVED AGGREGATE: 「每天往返只需约 30-52 分钟」 is one-way
+# doubled. Same root cause — arithmetic over measured values is not itself a measurement,
+# so no evidence pool can ever contain it.
 _DELTA_CUE = ("多花", "多出", "多用", "多耗", "多走", "多绕", "少花", "少用", "节省",
-              "省下", "相差", "快了", "慢了", "长了", "短了",
+              "省下", "相差", "快了", "慢了", "长了", "短了", "往返", "来回",
               "extra", "saves", "saving", "difference of", "longer than", "shorter than",
-              "more per day", "less per day")
+              "more per day", "less per day", "round trip", "round-trip")
+# Comparatives are judged on a TIGHT window right after the figure, not clause-wide:
+# "10-18 minutes faster" qualifies the number, but "Cycling is faster: 19 minutes" is a
+# measurement, and a colon is not a clause break — clause-wide matching would eat it.
+_DELTA_POST = ("faster", "slower", "quicker", "longer", "shorter", "more", "less")
+_DELTA_POST_WINDOW = 12
 
 
 def _is_difference_figure(text: str, start: int, end: int) -> bool:
     clause = _clause_of(text, start, end)
     low = clause.lower()
-    return any((c in low) if c.isascii() else (c in clause) for c in _DELTA_CUE)
+    if any((c in low) if c.isascii() else (c in clause) for c in _DELTA_CUE):
+        return True
+    tail = text[end:end + _DELTA_POST_WINDOW].lower()
+    return any(c in tail for c in _DELTA_POST)
 
 
 # The minute regexes anchor on the UNIT, which follows the second endpoint of a range, so

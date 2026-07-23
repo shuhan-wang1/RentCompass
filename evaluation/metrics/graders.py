@@ -565,17 +565,47 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
     # "within 30", "no more than 25", "Short (< 20 min)" category labels). These are
     # thresholds, not asserted journey times; grading them would false-contradict the
     # real duration (e.g. a correct "12 minutes" answer that also names the "< 20 min"
-    # bucket). Only a genuine comparison/target marker immediately BEFORE the number
-    # disqualifies it — approximation hedges ("about", "around") do NOT.
-    _MIN_BOUNDARY = ("<", "≤", ">", "under", "less than", "within", "up to",
-                     "no more than", "at most", "below", "over", "target", "limit",
-                     "cap", "threshold", "criteria", "maximum", " max")
+    # bucket). Approximation hedges ("about", "around") do NOT disqualify — those still
+    # assert a measured value.
+    #
+    # A threshold marker may sit on EITHER side of the number (2026-07-23 ruling): a
+    # one-sided "before" window judged a correct answer by phrasing distance alone, so
+    # "under your 25-minute limit" was spared while "meets your 25-minute limit" was not.
+    # Both are the user's own threshold restated, neither is a measurement.
     for m in _MINUTES_RE.finditer(answer):
         v = _to_float(m.group(1))
         if v is None:
             continue
-        pre = answer[max(0, m.start() - 24):m.start()].lower()
-        if any(bm in pre for bm in _MIN_BOUNDARY):
+        pre, post = _clause_windows(answer, m.start(), m.end(), _MIN_WINDOW)
+        pre, post = pre.lower(), post.lower()
+        if any(bm in pre for bm in _MIN_BOUNDARY_PRE) or \
+                any(bm in post for bm in _MIN_BOUNDARY_POST):
+            continue
+        if _is_hypothetical_constraint(answer, m.start(), m.end()):
+            continue
+        key = ("min", round(v))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.claims.append(
+            classify_number(v, "commute_minutes", pool.commute_minutes,
+                            pool.raw_commute, tol=1.0))
+
+    # commute minutes, CJK. Previously NOT extracted at all: `_CJK_MINUTES_RE` built the
+    # evidence pool from tool data but never read the ANSWER, so a zh reply produced zero
+    # commute_minutes claims and `commute_leq_minutes` passed vacuously — a fabricated zh
+    # journey time could not be caught. Symmetric with the latin path, thresholds on
+    # either side: 「通勤约30分钟」 is a claim; 「30分钟上限」/「不超过30分钟」/「30分钟以内」
+    # are the user's constraint restated.
+    for m in _CJK_MINUTES_RE.finditer(answer):
+        v = _to_float(m.group(1))
+        if v is None:
+            continue
+        pre, post = _clause_windows(answer, m.start(), m.end(), _MIN_WINDOW)
+        if any(bm in pre for bm in _CJK_BOUNDARY_PRE) or \
+                any(bm in post for bm in _CJK_BOUNDARY_POST):
+            continue
+        if _is_hypothetical_constraint(answer, m.start(), m.end()):
             continue
         key = ("min", round(v))
         if key in seen:
@@ -828,6 +858,107 @@ _NONASSERTION_MARKERS = (
 # Threshold / hedge markers for a commute-minutes figure that is a BUCKET BOUNDARY or
 # target, not an asserted journey time — "< 20 min", "under 30 minutes", "within 40",
 # "no more than 25 min", "acceptable (short)". Kept distinct from the money set.
+_CLAUSE_BREAK = ("，", ",", "。", ".", "；", ";", "、", "\n", "!", "！", "?", "？")
+
+
+def _clause_windows(text: str, start: int, end: int, width: int = 24):
+    """(before, after) context around text[start:end], each truncated at the nearest
+    clause boundary. A threshold marker binds to the number it bounds inside one clause;
+    letting it reach across a comma makes a stated measurement look like a bound."""
+    pre = text[max(0, start - width):start]
+    for br in _CLAUSE_BREAK:
+        idx = pre.rfind(br)
+        if idx != -1:
+            pre = pre[idx + len(br):]
+    post = text[end:end + width]
+    cut = len(post)
+    for br in _CLAUSE_BREAK:
+        idx = post.find(br)
+        if idx != -1:
+            cut = min(cut, idx)
+    return pre, post[:cut]
+
+
+
+# ── hypothetical CONSTRAINT vs measured value (2026-07-23 ruling) ──────────────
+# "Consider a slightly longer commute (e.g. 30 minutes)" proposes a NEW BOUND; it does
+# not assert a journey time. Excluding it is a fix to the number taxonomy, NOT an
+# amnesty: `e.g.` alone is deliberately NOT a free pass, because a fabricated duration
+# could hide behind it. A number is excluded only when ALL THREE hold IN THE SAME CLAUSE
+# — a proposal cue, a constraint-adjustment cue, and NO measurement cue.
+_ABBREV_DOTS = ("e.g.", "i.e.", "approx.", "etc.")
+
+_HYPO_PROPOSAL = ("consider", "would you accept", "would you be open", "would you like",
+                  "for example", "e.g", "如果", "比如", "例如", "可以考虑", "考虑")
+_HYPO_CONSTRAINT = ("longer commute", "longer journey", "limit", "up to", "target",
+                    "cap", "maximum", "broaden", "relax", "extend",
+                    "放宽", "上限", "接受", "更长", "延长", "调整到")
+# Anything that states a MEASURED value keeps the number a claim, whatever else the
+# clause says. Deliberately narrow: bare 通勤 is not a measurement cue.
+_MEASURE_CUE = ("takes", "duration", "journey is", "journey time", "commute is",
+                "travel time", "actual", "measured", "via the",
+                "耗时", "通勤需", "通勤时间是", "实际", "约", "大约", "需要")
+
+
+def _mask_abbrev_dots(text: str) -> str:
+    """Same-length copy with the dots inside 'e.g.'/'i.e.' neutralised, so clause
+    splitting does not cut a proposal in half at an abbreviation."""
+    chars = list(text)
+    low = text.lower()
+    for ab in _ABBREV_DOTS:
+        i = low.find(ab)
+        while i != -1:
+            for j in range(i, min(i + len(ab), len(chars))):
+                if chars[j] == ".":
+                    chars[j] = "\x00"
+            i = low.find(ab, i + 1)
+    return "".join(chars)
+
+
+def _clause_of(text: str, start: int, end: int) -> str:
+    """The single clause containing text[start:end]."""
+    masked = _mask_abbrev_dots(text)
+    lo = 0
+    for br in _CLAUSE_BREAK:
+        idx = masked.rfind(br, 0, start)
+        if idx != -1:
+            lo = max(lo, idx + len(br))
+    hi = len(text)
+    for br in _CLAUSE_BREAK:
+        idx = masked.find(br, end)
+        if idx != -1:
+            hi = min(hi, idx)
+    return text[lo:hi]
+
+
+def _is_hypothetical_constraint(text: str, start: int, end: int) -> bool:
+    clause = _clause_of(text, start, end)
+    low = clause.lower()
+    def _has(cues):
+        return any((c in low) if c.isascii() else (c in clause) for c in cues)
+    if _has(_MEASURE_CUE):
+        return False
+    return _has(_HYPO_PROPOSAL) and _has(_HYPO_CONSTRAINT)
+
+
+# Threshold-marker windows for commute-minute claim extraction. A marker on EITHER side
+# of the number means the figure is a bound the user set, not a journey time measured.
+_MIN_WINDOW = 24
+_MIN_BOUNDARY_PRE = ("<", "≤", ">", "under", "less than", "within", "up to",
+                     "no more than", "at most", "below", "over", "target", "limit",
+                     "cap", "threshold", "criteria", "criterion", "requirement",
+                     "maximum", " max")
+# AFTER the number: "25-minute limit", "25 minutes or less", "25-minute requirement".
+_MIN_BOUNDARY_POST = ("limit", "cap", "threshold", "criteria", "criterion",
+                      "requirement", "maximum", " max", "or less", "or under",
+                      "or fewer", "at most", "ceiling", "budget")
+# CJK equivalents, same two-sided rule.
+_CJK_BOUNDARY_PRE = ("不超过", "不多于", "少于", "低于", "最多", "上限", "限制",
+                     "要求", "控制在", "小于")   # NOT bare 在 — far too common
+_CJK_BOUNDARY_POST = ("以内", "之内", "以下", "之下", "上限", "限制", "的要求",
+                      "内")
+
+
 _COMMUTE_THRESHOLD_MARKERS = (
     "<", "≤", "under", "less than", "within", "up to", "no more than", "at most",
     "below", "acceptable", "short", "quick", "about", "around", "roughly", "~",
@@ -1010,6 +1141,45 @@ def _c_no_fabricated_number(con, ctx) -> ConstraintResult:
     ok = not offending
     return ConstraintResult("no_fabricated_number", ok,
                             f"field={field_name} offending={[ (c.kind,c.value,c.status) for c in offending]}")
+
+
+
+# Capability families a strict multi-constraint case can REQUIRE to be completed. Kept
+# local (evaluation must not import app code) and deliberately keyed on the tools that
+# actually satisfy the dimension.
+_DIMENSION_TOOLS = {
+    "commute": ("calculate_commute", "calculate_commute_cost", "check_transport_cost",
+                "get_transport_info"),
+    "nearby": ("search_nearby_pois",),
+    "safety": ("check_safety",),
+    "listings": ("search_properties",),
+    "market": ("web_search",),
+}
+
+
+def _c_must_complete_requested_dimensions(con, ctx) -> ConstraintResult:
+    """Every named dimension must have been COMPLETED by a satisfying tool that actually
+    executed (2026-07-23 ruling).
+
+    Closes a contract hole on strict multi-constraint cases: a soft-wrapped or truncated
+    reply that openly states the commute / pharmacy / crime checks were not done used to
+    PASS, because saying less means fewer numbers to fail a grounding constraint on.
+    "Passing by declining to attempt the work" is not passing.
+
+    Deliberately judged on EXECUTED tools (``ctx.tools_called`` is tools_executed), not on
+    the answer text: a denied or timed-out call never completed the dimension, whatever the
+    prose claims, and a model cannot talk its way past this check.
+    """
+    dims = [str(d) for d in (con.get("dimensions") or [])]
+    called = set(ctx.tools_called or [])
+    missing = [d for d in dims
+               if not (set(_DIMENSION_TOOLS.get(d, ())) & called)]
+    unknown = [d for d in dims if d not in _DIMENSION_TOOLS]
+    ok = not missing and not unknown
+    detail = f"dimensions={dims} missing={missing}"
+    if unknown:
+        detail += f" UNKNOWN_DIMENSION={unknown}"
+    return ConstraintResult("must_complete_requested_dimensions", ok, detail)
 
 
 def _c_must_mention_source(con, ctx) -> ConstraintResult:
@@ -1371,6 +1541,7 @@ CONSTRAINT_CHECKERS: Dict[str, Callable[[dict, GradeContext], ConstraintResult]]
     "all_results_satisfy": _c_all_results_satisfy,
     "result_count": _c_result_count,
     "no_fabricated_number": _c_no_fabricated_number,
+    "must_complete_requested_dimensions": _c_must_complete_requested_dimensions,
     "must_mention_source": _c_must_mention_source,
     "must_mention_value": _c_must_mention_value,
     "must_not_mention_value": _c_must_not_mention_value,

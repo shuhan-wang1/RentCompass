@@ -22,7 +22,7 @@ leaf you need.
 | branch | head | state | what lives here |
 |---|---|---|---|
 | `telemetry/v2-layer-b` | `e7977e6` | **accepted mainline** | the base both experiments branched from |
-| `eval/measurement-infrastructure` | **`994be81`** | **SHIPPABLE — the only one** | measurement machinery, no product change |
+| `eval/measurement-infrastructure` | *(this branch — `git rev-parse --short HEAD`)* | **SHIPPABLE — the only one** | measurement machinery, no product change |
 | `fastpath/deterministic-phase1` | `7842f60` | **TERMINATED / NO-GO** | the deterministic fast path + its full record |
 | `hardening/correctness-only` | `ae1c035` | **TERMINATED / NO-GO** | product candidate `d2004e0`; the correctness bundle |
 | `measurement/capture-e7977e6` | `8c96c12` | retained, reproduction only | baseline capture tree (evidence probe on `e7977e6`) |
@@ -196,3 +196,7 @@ branch. That is the record, not a broken tool.
 ---
 
 *Total live API spend across the whole effort: **< $1**. Record closed 2026-07-23.*
+
+*(The other branches' SHAs are pinned because they are terminal and will not move. This
+branch's own head is deliberately NOT pinned here: a SHA written into a file that is part
+of the commit can never match it.)*

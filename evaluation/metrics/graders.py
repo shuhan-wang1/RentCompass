@@ -583,13 +583,16 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
             continue
         if _is_hypothetical_constraint(answer, m.start(), m.end()):
             continue
-        key = ("min", round(v))
-        if key in seen:
+        if _is_difference_figure(answer, m.start(), m.end()):
             continue
-        seen.add(key)
-        result.claims.append(
-            classify_number(v, "commute_minutes", pool.commute_minutes,
-                            pool.raw_commute, tol=1.0))
+        for val in _range_values(answer, m.start(), v):
+            key = ("min", round(val))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.claims.append(
+                classify_number(val, "commute_minutes", pool.commute_minutes,
+                                pool.raw_commute, tol=1.0))
 
     # commute minutes, CJK. Previously NOT extracted at all: `_CJK_MINUTES_RE` built the
     # evidence pool from tool data but never read the ANSWER, so a zh reply produced zero
@@ -607,13 +610,16 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
             continue
         if _is_hypothetical_constraint(answer, m.start(), m.end()):
             continue
-        key = ("min", round(v))
-        if key in seen:
+        if _is_difference_figure(answer, m.start(), m.end()):
             continue
-        seen.add(key)
-        result.claims.append(
-            classify_number(v, "commute_minutes", pool.commute_minutes,
-                            pool.raw_commute, tol=1.0))
+        for val in _range_values(answer, m.start(), v):
+            key = ("min", round(val))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.claims.append(
+                classify_number(val, "commute_minutes", pool.commute_minutes,
+                                pool.raw_commute, tol=1.0))
 
     # safety scores (NN/100) — check before generic crime counts
     for m in _SCORE_RE.finditer(answer):
@@ -941,6 +947,74 @@ def _is_hypothetical_constraint(text: str, start: int, end: int) -> bool:
     return _has(_HYPO_PROPOSAL) and _has(_HYPO_CONSTRAINT)
 
 
+# ── a DIFFERENCE is not a journey time (2026-07-23, from the C12 re-score) ──────
+# 「每天多花约 40-50 分钟在路上」 states how much LONGER one option is than another. It
+# is arithmetic over two measured durations, not a third duration, so the evidence pool
+# will never contain it and it was scored as a fabricated commute time. C12 passed under
+# the old contract only because CJK minutes were never read at all — the defect was
+# always there, the CJK fix merely exposed it.
+#
+# This check deliberately OVERRIDES the measurement cue: 「多花约 40 分钟」 contains 约
+# ("about"), but the hedge modifies the difference, not a journey. Cues are kept
+# unambiguously comparative for that reason — bare 多 / "more" would swallow real claims.
+_DELTA_CUE = ("多花", "多出", "多用", "多耗", "多走", "多绕", "少花", "少用", "节省",
+              "省下", "相差", "快了", "慢了", "长了", "短了",
+              "extra", "saves", "saving", "difference of", "longer than", "shorter than",
+              "more per day", "less per day")
+
+
+def _is_difference_figure(text: str, start: int, end: int) -> bool:
+    clause = _clause_of(text, start, end)
+    low = clause.lower()
+    return any((c in low) if c.isascii() else (c in clause) for c in _DELTA_CUE)
+
+
+# The minute regexes anchor on the UNIT, which follows the second endpoint of a range, so
+# 「15-26 分钟」 / "15-26 minutes" yielded only 26 and a fabricated lower bound could not
+# be caught. Recover the leading endpoint; the exclusion rules already ran on the clause
+# and apply to the whole range.
+_RANGE_LEAD_RE = re.compile(r"([0-9]{1,3})\s*(?:-|–|—|~|to|至|到)\s*$", re.IGNORECASE)
+
+
+def _range_values(text: str, start: int, value: float):
+    """[leading endpoint, value] when the number heads a range, else [value]."""
+    m = _RANGE_LEAD_RE.search(text[max(0, start - 12):start])
+    if not m:
+        return [value]
+    lead = _to_float(m.group(1))
+    return [value] if lead is None or lead == value else [lead, value]
+
+
+# ── an explicitly-labelled non-match (2026-07-23 ruling, from the E2 re-score) ──
+# E2 has no studio meeting budget AND commute. The honest answer says so and offers the
+# nearest alternative — "37 minutes … slightly over your 30-minute limit" — and was failed
+# for naming a figure it had itself ruled out. Reporting an out-of-bounds option, clearly
+# labelled, is the correct behaviour; failing it rewards silence.
+#
+# Two independent cues are required IN THE SAME CLAUSE (an exceedance word AND the noun it
+# exceeds) precisely because this is an escape hatch: one loose cue would let a model talk
+# its way past the constraint. It excuses only the OVER check — an UNGROUNDED figure stays
+# a violation however it is worded, so this can never launder a fabricated duration.
+_EXCEED_CUE = ("over", "above", "exceeds", "exceed", "beyond", "outside", "longer than",
+               "超过", "超出", "高于", "略高", "不符合", "不满足", "超标")
+_LIMIT_NOUN = ("limit", "criteria", "criterion", "requirement", "target", "threshold",
+               "maximum", " max", "cap", "budget", "preference",
+               "上限", "要求", "限制", "条件", "标准")
+
+
+def _labelled_as_over_limit(answer: str, value: float) -> bool:
+    if not answer:
+        return False
+    for m in re.finditer(rf"\b{int(round(value))}\b", answer):
+        clause = _clause_of(answer, m.start(), m.end())
+        low = clause.lower()
+        def _has(cues):
+            return any((c in low) if c.isascii() else (c in clause) for c in cues)
+        if _has(_EXCEED_CUE) and _has(_LIMIT_NOUN):
+            return True
+    return False
+
+
 # Threshold-marker windows for commute-minute claim extraction. A marker on EITHER side
 # of the number means the figure is a bound the user set, not a journey time measured.
 _MIN_WINDOW = 24
@@ -1205,12 +1279,17 @@ def _c_commute_leq_minutes(con, ctx) -> ConstraintResult:
     dest, value = con.get("dest", ""), float(con.get("value"))
     g = grade_grounding(ctx)
     minute_claims = [c for c in g.claims if c.kind == "commute_minutes"]
-    over = [c.value for c in minute_claims if c.value > value + 1.0]
+    answer = ctx.final_answer or ""
+    over, excused = [], []
+    for c in minute_claims:
+        if c.value > value + 1.0:
+            (excused if _labelled_as_over_limit(answer, c.value) else over).append(c.value)
     ungrounded = [c.value for c in minute_claims if c.status != "grounded"]
     ok = not over and not ungrounded
-    return ConstraintResult("commute_leq_minutes", ok,
-                            f"dest={dest} <= {value}; over={over} ungrounded={ungrounded}",
-                            heuristic=True)
+    detail = f"dest={dest} <= {value}; over={over} ungrounded={ungrounded}"
+    if excused:
+        detail += f" excused_as_labelled_non_match={excused}"
+    return ConstraintResult("commute_leq_minutes", ok, detail, heuristic=True)
 
 
 def _c_must_ask_clarification(con, ctx) -> ConstraintResult:

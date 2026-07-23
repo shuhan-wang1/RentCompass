@@ -102,3 +102,8 @@ fine_tuning/dataset_raw.json
 # stay tracked as provenance; only the bulky run streams are ignored.
 evaluation/results/**/*.jsonl
 evaluation/results/**/*.csv
+
+# Local schema-compaction measurement package; intentionally never committed.
+# The evaluation/results/**/*.jsonl|csv rules deliberately keep *.json/*.md tracked as
+# provenance, so this directory needs its own exact rule or `git add -A` sweeps it in.
+/evaluation/results/schema_compaction_ab_2026-07-22/

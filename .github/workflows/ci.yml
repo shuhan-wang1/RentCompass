@@ -4,7 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # telemetry/** is an accepted mainline that integration branches target
+    # before main. Without it a PR into telemetry/v2-layer-b gets no CI run at
+    # all, so the only test evidence would be a local docker invocation.
+    branches: [main, 'telemetry/**']
 
 # Cancel superseded runs on the same ref to keep CI fast.
 concurrency:

@@ -163,6 +163,17 @@ def build_manifest(
     into the package) pins the gz path + SHA256 alongside the raw event digest."""
     commit = git_commit() if callable(git_commit) else git_commit
     dirty = git_dirty() if callable(git_dirty) else git_dirty
+    # THREE-LAYER IDENTITY (capture branch, 2026-07-23). The measurement probe must never
+    # masquerade as the product under test:
+    #   product_sha   — the PRODUCT whose behaviour this run measures (PRODUCT_SHA env,
+    #                   pinned explicitly on a capture tree; falls back to the tree commit)
+    #   capture_sha   — the tree that actually ran, i.e. product + evidence probe
+    #   evaluator_sha — who SCORED it. Left null here on purpose: this tree's local
+    #                   verdicts are NOT the gate; evaluation/rescore.py stamps the real
+    #                   evaluator when it re-scores both arms together.
+    product_sha = os.environ.get("PRODUCT_SHA") or commit
+    capture_sha = commit
+    evaluator_sha = os.environ.get("EVALUATOR_SHA")
     gz_sha = sha256_of(events_gz) if events_gz else None
     env_keys = ["AGENT_ARCH", "DEEPSEEK_STRICT", "LLM_PROVIDER", "USE_MCP_TOOLS",
                 "RENTCOMPASS_EVAL", "SEARCH_CACHE_TTL_HOURS"]
@@ -172,6 +183,13 @@ def build_manifest(
     return {
         "argv": list(argv),
         "command": " ".join(str(a) for a in argv),
+        # --- identity: product vs capture tree vs evaluator (see above) -------
+        "product_sha": product_sha,
+        "capture_sha": capture_sha,
+        "evaluator_sha": evaluator_sha,
+        "capture_is_product": product_sha == capture_sha,
+        "grader_sha256": sha256_of(Path(__file__).parent / "metrics" / "graders.py"),
+        "case_contract_sha256": sha256_of(case_file),
         "arch": arch,
         "config": config,
         "mode": mode,

@@ -29,6 +29,7 @@ import argparse
 import asyncio
 import contextlib
 import csv
+import hashlib
 import json
 import math
 import os
@@ -118,6 +119,55 @@ def schema_validate(cases: List[dict]) -> List[str]:
         return problems
     except Exception:
         return []  # structural fallback: skip (validate.py has the strict path)
+
+
+
+# ── measurement preflight (2026-07-23) ───────────────────────────────
+def validate_all_shards(bench_dir: Optional[Path] = None) -> List[str]:
+    """Schema-validate EVERY benchmark shard, not just the one being run.
+
+    Learned the hard way: a constraint type was added to cases.jsonl but never to
+    schema.json, and it survived two green guard runs because the guard uses a DIFFERENT
+    shard. The Base98 contract was unloadable the whole time — both arms aborted before
+    running a single case. A green guard does not prove the other shards even load, so
+    every shard is checked before a measurement starts."""
+    d = Path(bench_dir) if bench_dir else BENCH_DIR
+    problems: List[str] = []
+    shards = sorted(d.glob("*.jsonl"))
+    if not shards:
+        return [f"no benchmark shards found in {d}"]
+    for shard in shards:
+        try:
+            cases = load_cases(shard)
+        except SystemExit as exc:
+            problems.append(f"{shard.name}: {exc}")
+            continue
+        for p in schema_validate(cases):
+            problems.append(f"{shard.name}: {p}")
+    return problems
+
+
+def guard_output_dir(out: Path, allow_reuse: bool = False) -> None:
+    """Refuse by DEFAULT to write a measurement into a non-empty output directory.
+
+    grader_input.jsonl is appended to, so a reused dir silently doubles the record count
+    (observed: 196 records for a 98-case round), and stale summary/per_case files from an
+    earlier run can be mistaken for this one's. ``--allow-reuse-out`` is the explicit
+    opt-out for a deliberate resume."""
+    if not out.exists():
+        return
+    existing = [p.name for p in out.iterdir()]
+    if not existing:
+        return
+    if allow_reuse:
+        print(f"[eval] WARNING: reusing non-empty {out} ({len(existing)} entries) — "
+              f"grader_input.jsonl APPENDS, so records may be duplicated")
+        return
+    raise SystemExit(
+        f"refusing to write into non-empty output dir {out} "
+        f"({len(existing)} entries, e.g. {sorted(existing)[:4]}). "
+        f"A reused dir double-counts appended evidence and can mix two runs' artifacts. "
+        f"Use a fresh --out, or pass --allow-reuse-out to override deliberately.")
 
 
 def select_cases(cases: List[dict], *, smoke: bool, limit: Optional[int],
@@ -1191,12 +1241,56 @@ class CaseRunner:
         rr.grounding = verdict.grounding.to_dict()
         rr.passed = verdict.passed
 
+        # MEASUREMENT PROBE ONLY (capture branch, 2026-07-23). Persists this run's grader
+        # input so the arm can be re-scored later by a single pinned evaluator. Touches no
+        # product path: it runs AFTER grading and only reads what already exists. The
+        # locally computed `passed` above is deliberately NOT the gate — it was produced
+        # by THIS tree's grader, and the gate reads only the unified re-score.
+        self._persist_grader_input(rr, case, gctx, evidence)
+
         # Optional auxiliary judge (live only).
         judge_llm = self._judge_llm()
         if judge_llm is not None:
             rr.judge = self.graders.run_judge(case, gctx, judge_llm=judge_llm)
 
         return rr
+
+
+    def _persist_grader_input(self, rr, case: dict, gctx, evidence) -> None:
+        """Append one self-describing record per run to ``<out>/grader_input.jsonl``:
+        the RAW payload digest, the NORMALIZED evidence, and the exact grader input.
+        Best-effort — a probe must never fail a run — but failures are reported, because
+        a silently missing record is what makes a round unre-scorable."""
+        try:
+            out = Path(self.events_log).parent
+            ev = [{"tool": e.get("tool"), "success": e.get("success"),
+                   "error": e.get("error"), "data": e.get("data")}
+                  for e in (evidence or [])]
+            raw_blob = json.dumps(ev, ensure_ascii=False, sort_keys=True, default=str)
+            record = {
+                "run_id": rr.run_id,
+                "case_id": rr.case_id,
+                "repeat": rr.repeat,
+                "raw_evidence_sha256": hashlib.sha256(raw_blob.encode("utf-8")).hexdigest(),
+                "evidence": ev,
+                "grader_input": {
+                    "final_answer": gctx.final_answer,
+                    "tools_called": list(gctx.tools_called or []),
+                    "tool_call_events": list(gctx.tool_call_events or []),
+                    "route": gctx.route,
+                    "user_texts": list(gctx.user_texts or []),
+                    "reference_calculations": gctx.reference_calculations,
+                    "error": gctx.error,
+                    "reconstructed_context": getattr(gctx, "reconstructed_context", None),
+                    "history_texts": list(getattr(gctx, "history_texts", None) or []),
+                },
+                "scored_passed": rr.passed,
+                "scored_route_matched": rr.route_matched,
+            }
+            with (out / "grader_input.jsonl").open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        except Exception as exc:  # pragma: no cover - never fail a run over a probe
+            print(f"[eval] WARNING: grader_input not persisted for {rr.run_id}: {exc}")
 
     def _tainted_writes_executed(self, registry, final_state: dict, case: dict,
                                  tools_executed: List[str]) -> List[str]:
@@ -1953,7 +2047,16 @@ def _build_cache_protocol(args) -> Dict[str, Any]:
 
 async def _run_all(args) -> int:
     out = Path(args.out)
+    guard_output_dir(out, allow_reuse=getattr(args, "allow_reuse_out", False))
     out.mkdir(parents=True, exist_ok=True)
+
+    # Preflight: every shard must load and validate BEFORE a measurement starts.
+    shard_problems = validate_all_shards()
+    if shard_problems:
+        print("[eval] benchmark shard preflight FAILED:")
+        for p in shard_problems[:20]:
+            print("  -", p)
+        raise SystemExit("benchmark shards do not all validate; refusing to measure")
     events_log = out / "events.jsonl"
     state_root = Path(tempfile.mkdtemp(prefix="rc_eval_state_"))
 
@@ -2147,6 +2250,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                    help="TTL (hours) pinned via SEARCH_CACHE_TTL_HOURS when --cache-snapshot "
                         "is used, so snapshot entries can't expire mid-run (default 8760=1yr)")
     p.add_argument("--out", default="evaluation/results", help="output directory")
+    p.add_argument("--allow-reuse-out", action="store_true",
+                   help="write into a NON-EMPTY --out dir. Off by default: appended "
+                        "evidence (grader_input.jsonl) double-counts on reuse and stale "
+                        "artifacts from an earlier run can be read as this one's.")
     p.add_argument("--timestamp", default=None, help="timestamp string for summary.json")
     return p
 

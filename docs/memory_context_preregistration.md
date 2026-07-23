@@ -228,7 +228,7 @@ changes what "pass" means, so per §9 it lands through its **own** branch, its o
 its own review — **before** this pre-registration is approved (P3). It is not created
 mid-experiment.
 
-Ten cases are positive (**R1–R10**, 14 required facts total). Two are **controls**:
+Ten cases are positive (**R1–R10**, **16** required facts total). Two are **controls**:
 
 | control | shape | guards against |
 |---|---|---|

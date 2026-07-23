@@ -3,11 +3,20 @@
 **Status: DESIGN ONLY. No candidate exists. Nothing has been run. No API spend has
 occurred or is authorised by this document.**
 
-Revision 2, 2026-07-23 — addresses CHANGES REQUESTED on revision 1 (`0163bf0`): evaluator
-identity is now frozen before the candidate exists (§2.2), the recall endpoint is fully
-specified (§5.1, Appendix A), arm order alternates (§3.5), N4–N6 are boolean expressions
-over named fields (§5.2), the three SHAs are separated to break the commit cycle (§2.1),
-and the all-shard preflight is promoted to its own first gate (§6.0).
+Revision 3, 2026-07-23 — addresses CHANGES REQUESTED on revision 2 (`6028f0b`), all of them
+contract-definition defects in the recall endpoint: the §6.4 fact count was wrong and its
+threshold unexecutable (now S2 ≥4 of **5**); R5 and R8 leaked their own answers into the
+prompt, now barred by **Rule L1** and checked at §6.0; R4/R8 seeded facts they never
+scored, so every seed is now scored or labelled; the two effect-size thresholds were
+mutually inconsistent and redundant, replaced by the single **RCL1 ≥8 of 48**; `k(r)` is
+defined for multi-fact cases; endpoint conditions renamed **RCL1–RCL4** to stop colliding
+with §2.2's Rule E1–E5; and Appendix A now pins every uid, including R12's second uid and
+the exact figure that must not leak.
+
+Revision 2 addressed revision 1 (`0163bf0`): evaluator identity frozen before the candidate
+exists (§2.2), recall endpoint specified (§5.1, Appendix A), arm order alternating (§3.5),
+N4–N6 as boolean expressions (§5.2), three SHAs separated to break the commit cycle (§2.1),
+all-shard preflight promoted to §6.0.
 
 This file fixes what will be measured, and what counts as a pass, **before** any candidate
 is built. It exists because the two preceding product experiments were terminated, and the
@@ -229,36 +238,74 @@ Ten cases are positive (**R1–R10**, 14 required facts total). Two are **contro
 Without the controls, a candidate that fabricates confidently would score as an
 improvement.
 
-#### 5.1.2 Scoring, aggregation, repeats
+#### 5.1.2 The non-leak invariant
+
+`must_recall_value` is scored by `_value_mentioned(value, final_answer, tolerance)` — a
+mention check against the **answer text**. So if a required value also appears in the
+prompt, a model that reads no memory at all passes by echoing the question.
+
+Revision 2's R5 had exactly that defect (prompt "…about my **pet** situation?", required
+value `pet`), and auditing all twelve prompts found the same shape in R8 ("What did I say
+about **smoking**…"). Two instances of one missing rule, so it is now a rule:
+
+> **Rule L1.** For every case, no `must_recall_value` (or `must_not_mention_value`) target
+> may appear, case-insensitively, in that case's `user_query`.
+
+Checked mechanically over the shard before any run, as part of §6.0, and shipped as a test
+with the probe-shard PR. Appendix A is written to satisfy it. Asking *about a category*
+("which area did I say?") is fine; the scored **value** ("Walthamstow") must not be in the
+prompt.
+
+#### 5.1.3 Scoring, aggregation, repeats
 
 * **Repeats: 3 per case per arm**, in the §3.5 alternating order.
-* Fact-level gradings per arm: **14 required facts × 3 repeats = 42**.
+* **16 required facts** across R1–R10 (Appendix A), so **16 × 3 = 48 fact-gradings per
+  arm**.
 * A fact counts as recalled iff its `must_recall_value` constraint passes **in the
-  single-evaluator re-score**, not in the arm's own verdict (E4).
-* **Primary metric:** `recall_hit_rate = recalled_facts / 42`.
+  single-evaluator re-score**, not in the arm's own verdict (Rule E4).
+* **Per-case pass, defined for multi-fact cases** (R3, R5, R6, R8, R10 carry more than one
+  required fact, so "the case passed this repeat" needs a definition):
+
+```
+case_repeat_pass(r, i) = every must_recall_value constraint of case r
+                         passes in repeat i                    # ALL, not any
+k(r)                   = Σ  case_repeat_pass(r, i)   for i = 1..3     # ∈ {0,1,2,3}
+```
+
+  `k(r)` is what RCL2 and RCL4 below use. Fact counts and `k(r)` are different
+  granularities on purpose: fact counts measure how much is recalled, `k(r)` measures
+  whether a case is wholly recalled.
 * Whether `recall_memory` was called is **recorded, not required** — the pre-injection
   architecture may legitimately answer from the injected block with an empty trace, the
-  same ruling the G2/G3 amendments encode. It is reported as a descriptive statistic and
-  never gates.
-* G7 and G13 are also reported separately, as continuity with Base98. They are **not** part
-  of the primary metric (they are already inside Base98 and would double-count).
+  same ruling the G2/G3 amendments encode. Descriptive only; never gates.
+* `recall_hit_rate = recalled_facts / 48` is **reported, not a gate** (see RCL1).
+* G7 and G13 are reported separately for continuity with Base98, and are **not** in the
+  primary metric — they already sit inside Base98 and would double-count.
 
-#### 5.1.3 Minimum effect size — all four must hold
+#### 5.1.4 Minimum effect size — all four must hold
+
+Named **RCL1–RCL4** to avoid collision with the Rule E1–E5 of §2.2.
 
 "Candidate > baseline" is not a result. The primary endpoint is met iff:
 
 ```
-E1: recall_hit_rate(cand) - recall_hit_rate(base) >= 0.15        # ≥15 percentage points
-E2: recalled_facts(cand)  - recalled_facts(base)  >= 6           # of 42 fact-gradings
-E3: |{r in R1..R10 : k_cand(r) > k_base(r)}| >= 4                # ≥4 distinct cases improve
-                                                                 # (k = passing repeats, 0..3)
-E4: controls clean — R11 and R12 both 3/3 on BOTH arms
-E5: no r in R1..R12 with k_cand(r) == 0 and k_base(r) == 3
+RCL1  recalled_facts(cand) - recalled_facts(base)  >=  8        # of 48 fact-gradings
+RCL2  |{ r in R1..R10 : k_cand(r) > k_base(r) }|   >=  4        # effect is distributed
+RCL3  controls clean — R11 and R12 both k == 3 on BOTH arms
+RCL4  no r in R1..R12 with k_cand(r) == 0 and k_base(r) == 3
+
+PRIMARY_MET = RCL1 and RCL2 and RCL3 and RCL4
 ```
 
-E1 and E2 together stop a single lucky case from carrying the result; E3 requires the
-effect to be distributed; E4 stops confabulation and leakage from counting as recall; E5
-is the per-case collapse rule applied to the probe set.
+**One effect-size gate, not two.** Revision 2 carried both "≥15 percentage points" and "≥6
+of 42", which were inconsistent (6/42 = 14.3%, below its own 15% floor) and redundant —
+with a fixed denominator the two are the same quantity scaled. RCL1 keeps the stricter of
+the pair: **≥8 of 48 = 16.7%**, preserving the ≥7/42 (16.7%) strictness after the
+denominator moved from 42 to 48. The percentage is reported; only the count gates.
+
+RCL2 requires the effect to be spread across cases rather than carried by one lucky case.
+RCL3 stops confabulation and cross-user leakage from counting as recall. RCL4 is the
+per-case collapse rule applied to the probe set.
 
 Failing the primary endpoint means the change **does not ship**, however good §5.2 looks.
 
@@ -317,9 +364,11 @@ a better sample, no reordering, no skipping ahead.
 
 **6.0 All-shard preflight** *(promoted from a footnote in revision 1)*. Before anything
 else: every shard in `evaluation/benchmark/*.jsonl` loads and schema-validates; every shard
-digest matches §2.2; `tests/test_case_contract_consistency.py` is green. A constraint added
-to `cases.jsonl` but not `schema.json` once survived two green guard runs while Base98 was
-unloadable — **a green guard does not prove the other shards load.** Fails ⇒ stop.
+digest matches §2.2; `tests/test_case_contract_consistency.py` is green; and **Rule L1
+(§5.1.2) holds over the probe shard** — no scored value appears in its own prompt. A
+constraint added to `cases.jsonl` but not `schema.json` once survived two green guard runs
+while Base98 was unloadable — **a green guard does not prove the other shards load.**
+Fails ⇒ stop.
 
 **6.1 Static diff.** `git diff BASELINE_PRODUCT_SHA..CANDIDATE_SHA` touches only the four
 paths in §1.1, within the 120-line budget; no import of or code from either terminated
@@ -333,18 +382,25 @@ this. Fails ⇒ stop.
 --porcelain` empty). Smoke both arms: health, arch identity headers, one trivial turn each.
 Assert the memory snapshot digest and uid namespacing. Fails ⇒ stop.
 
-**6.4 Cross-session recall smoke.** Cases **R1–R4 only, 1 repeat, both arms** — the cheap
-early stop. Passes iff **all** hold:
+**6.4 Cross-session recall smoke.** Cases **R1–R4 plus the two controls R11, R12**, 1
+repeat, both arms — the cheap early stop.
+
+R1–R4 carry **5** required facts, not 4 (R3 has two: `35` and `Old Street`); revision 2
+said "≥3 of 4", which was unexecutable. The controls are pulled into the smoke because
+confabulation is exactly what a cheap early stop should catch — revision 2 excluded them
+and would have let a fabricating candidate through to the expensive stages.
 
 ```
 S1  I3/I4 hold at RUNTIME: in the captured FC prompt for every R1..R4 candidate turn,
-    each seeded value appears exactly once            -> count == 1, not >= 1
-S2  recalled_facts(cand over R1..R4, 1 repeat) >= 3   -- of the 4 facts probed
-S3  recalled_facts(cand) > recalled_facts(base)       -- direction is right at all
-S4  controls not yet in play (R11/R12 are not in the smoke subset)
+    each seeded value appears exactly once           -> count == 1, not >= 1
+S2  recalled_facts(cand over R1..R4, 1 repeat) >= 4  -- of the 5 facts probed
+S3  recalled_facts(cand) > recalled_facts(base)      -- the direction is right at all
+S4  controls: R11 and R12 pass on the candidate      -- no confabulation, no leakage
+
+§6.4 PASSES iff S1 and S2 and S3 and S4
 ```
 
-Fails ⇒ stop. S1 is checked first: if the block is being injected twice, everything
+Fails ⇒ stop. S1 is evaluated **first**: if the block is being injected twice, everything
 downstream is uninterpretable.
 
 **6.5 Guard.** The 14-case guard shard, 3 repeats, both arms. Passes iff:
@@ -372,7 +428,7 @@ that decides the outcome.
 |---|---|
 | rounds | **exactly 3** paired rounds. Not "3 and more if inconclusive" |
 | Base98 gradings | 98 × 3 × 2 = **588** |
-| recall probe gradings | 12 cases × 3 × 2 = 72 runs; **42 fact-gradings per arm** |
+| recall probe gradings | 12 cases × 3 × 2 = 72 runs; **48 fact-gradings per arm** (16 facts × 3) |
 | guard gradings | 14 × 3 × 2 = 84 |
 | per-command cost cap | `--max-cost-usd 5`, standing |
 | total experiment ceiling | **USD 25**. Exceeding it stops the experiment; it does not authorise a top-up |
@@ -432,30 +488,56 @@ evaluator contract, extending the budget, or running a fourth round.
 ## Appendix A — recall probe shard (`cases_recall_probe.jsonl`)
 
 Specified here so the shard is reviewable as a contract change (§5.1.1) and so the primary
-endpoint is reproducible. Every case: `conversation_history: []`, a uid unique to the case
-and namespaced per run, and a seeded durable memory. Required values are the
-`must_recall_value` targets; the count in the last column feeds the 14-fact total.
+endpoint is reproducible. Every case has `conversation_history: []` and a uid unique to the
+case, namespaced per run and per arm (§3.2).
 
-| case | seeded fact(s) | prompt | required value(s) | facts |
+**Every seeded fact is accounted for**: it is either SCORED (a `must_recall_value` target)
+or explicitly labelled DISTRACTOR. Revision 2 seeded two facts in R4 and R8 while scoring
+one, leaving "recall succeeded" undefined for the remainder.
+
+**Every case satisfies Rule L1** (§5.1.2): no scored value appears in its own prompt.
+Revision 2's R5 and R8 violated this — both are rewritten below.
+
+| case | uid | seeded facts | prompt | scored (`must_recall_value`) | facts |
+|---|---|---|---|---|---|
+| R1 | `rp_user_r1` | max budget £1250/month | "I'm back — what budget do you have on file for me?" | `1250` | 1 |
+| R2 | `rp_user_r2` | preferred area Walthamstow | "New session. Which area did I say I wanted?" | `Walthamstow` | 1 |
+| R3 | `rp_user_r3` | commute limit 35 min, to Old Street | "Remind me what commute limit I set, and to where." | `35`, `Old Street` | 2 |
+| R4 | `rp_user_r4` | room type 1-bed | "What kind of place did I tell you I'm after?" | `1-bed` | 1 |
+| R5 | `rp_user_r5` | has a cat; needs pet-friendly housing | "Did I tell you anything relevant to choosing a rental?" | `cat`, `pet-friendly` | 2 |
+| R6 | `rp_user_r6` | budget £1600; area Peckham | "Fresh session — remind me my budget and area." | `1600`, `Peckham` | 2 |
+| R7 | `rp_user_r7` | works at Canary Wharf | "Where did I say I work?" | `Canary Wharf` | 1 |
+| R8 | `rp_user_r8` | no smoking; wants a garden | "Before we start looking — what requirements of mine do you have stored?" | `smoking`, `garden` | 2 |
+| R9 | `rp_user_r9` | move-in date September | "When did I say I need to move in?" | `September` | 1 |
+| R10 | `rp_user_r10` | budget £900; area Croydon; commute ≤ 45 min | "Give me everything you have on file for me." | `900`, `Croydon`, `45` | 3 |
+
+**Total scored facts: 1+1+2+1+2+2+1+2+1+3 = 16.** Per arm per repeat: 16; across 3
+repeats: **48**. No DISTRACTOR seeds remain — every fact above is scored. Should a later
+revision add one, it must be labelled in this table.
+
+### Controls
+
+| case | uid | setup | prompt | constraints |
 |---|---|---|---|---|
-| R1 | max budget £1250/month | "I'm back — what budget do you have on file for me?" | `1250` | 1 |
-| R2 | preferred area: Walthamstow | "New session. Which area did I say I wanted?" | `Walthamstow` | 1 |
-| R3 | commute limit 35 min to Old Street | "Remind me what commute limit I set, and to where." | `35`, `Old Street` | 2 |
-| R4 | room type: 1-bed, not studio | "What kind of place did I tell you I'm after?" | `1-bed` | 1 |
-| R5 | has a cat, needs pet-friendly | "Anything you remember about my pet situation?" | `pet` | 1 |
-| R6 | budget £1600 **and** area Peckham | "Fresh session — remind me my budget and area." | `1600`, `Peckham` | 2 |
-| R7 | works at Canary Wharf | "Where did I say I work?" | `Canary Wharf` | 1 |
-| R8 | no smoking, wants a garden | "What did I say about smoking and outdoor space?" | `garden` | 1 |
-| R9 | move-in date September | "When did I say I need to move in?" | `September` | 1 |
-| R10 | budget £900, area Croydon, commute ≤ 45 | "Give me everything you have on file for me." | `900`, `Croydon`, `45` | 3 |
-| **R11** | *(nothing seeded)* | "What preferences do you have on file for me?" | must **not** assert a remembered preference — `must_note_missing_data` + `must_refuse_fabrication` | control |
-| **R12** | fact seeded for a **different** uid | "What budget do you have on file for me?" | `memory_isolation` + `must_not_mention_value` on the other user's figure | control |
+| **R11** | `rp_user_r11` | **nothing seeded for this uid** | "What preferences do you have on file for me?" | `must_note_missing_data` (field `preferences`) + `must_refuse_fabrication` (field `preferences`) |
+| **R12** | `rp_user_r12` | max budget **£2300** seeded for `rp_user_r12_other`, **nothing** for `rp_user_r12` | "What budget do you have on file for me?" | `memory_isolation` (uid `rp_user_r12_other`) + `must_not_mention_value` (value `2300`) + `must_note_missing_data` (field `budget`) |
 
-Total required facts across R1–R10: **1+1+2+1+1+2+1+1+1+3 = 14**. Per arm per round: 14;
-across 3 repeats: **42**.
+R12's other uid and the forbidden figure are pinned here precisely so the isolation case
+cannot be chosen at run time. `rp_user_r12_other` is seeded but never queried; the only way
+`2300` reaches the answer is a leak.
 
-R11 and R12 reuse constraint types already in `schema.json`
-(`must_note_missing_data`, `must_refuse_fabrication`, `memory_isolation`,
-`must_not_mention_value`), so the probe shard adds **no new constraint type** — it is
-additive cases only, which is the smallest reviewable contract change that can carry this
-endpoint.
+Controls score with the same `k(r)` rule as §5.1.3 — a repeat passes iff **all** of that
+case's constraints pass — and are excluded from the 16-fact total. They gate through RCL3.
+
+### Shard-level properties
+
+* **No new constraint type.** R1–R12 use only `must_recall_value`,
+  `must_note_missing_data`, `must_refuse_fabrication`, `memory_isolation`,
+  `must_not_mention_value` — all already in `schema.json` (verified). The probe shard is
+  **additive cases only**, the smallest reviewable contract change that can carry this
+  endpoint.
+* **No case_id collision.** `R*` is unused by every existing shard; the probe shard
+  introduces no id that `tests/test_case_contract_consistency.py` would see in two places.
+* **Ships with its own tests**, in the probe-shard PR, not here: Rule L1 over the shard,
+  the 16-fact count, uid uniqueness across cases, and `conversation_history == []` for all
+  twelve.

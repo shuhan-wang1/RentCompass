@@ -137,7 +137,8 @@ def search_direct_signals() -> Dict[str, Any]:
     "no provider call happened" and "no write executed" are facts, not assumptions.
     """
     return {
-        "soft_wrapped": False, "partial": False, "tool_budget_timeout": False,
+        "soft_wrapped": False, "wrapped_by": None,
+        "partial": False, "tool_budget_timeout": False,
         "security": {"denied_write_count": 0,
                      "tainted_write_executed_count": 0,
                      "forbidden_write_executed_count": 0,
@@ -171,8 +172,10 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
     that most needs to survive it.
     """
     sig = {
-        # These are structural: no wrap-up ran, no partial artifact was produced.
-        "soft_wrapped": False, "partial": False, "tool_budget_timeout": False,
+        # These are structural: no wrap-up ran, no partial artifact was produced. wrapped_by
+        # follows soft_wrapped — with no wrap there is nothing to attribute.
+        "soft_wrapped": False, "wrapped_by": None,
+        "partial": False, "tool_budget_timeout": False,
         # Unobservable — a write may already have executed before the crash.
         "security": {"denied_write_count": None,
                      "tainted_write_executed_count": None,
@@ -321,6 +324,12 @@ def build_canary_turn_record(
         "turn_outcome": turn_outcome,
         # --- degradation -----------------------------------------------------
         "soft_wrapped": bool(sig.get("soft_wrapped", False)),
+        # Attribution for a wrapped turn. Deliberately NOT coerced to a string: null means
+        # "this turn did not wrap", and the key being ABSENT (older producer) is what the
+        # aggregator must report as not-instrumented. Coercing either case to a value would
+        # repeat the v1/v2 `security_audit` mistake of reading a gap as a clean result.
+        "wrapped_by": (str(sig["wrapped_by"])
+                       if sig.get("wrapped_by") is not None else None),
         "partial": bool(sig.get("partial", False)),
         "tool_budget_timeout": bool(sig.get("tool_budget_timeout", False)),
         # --- security (structured; denied != executed) -----------------------

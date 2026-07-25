@@ -556,6 +556,12 @@ def classify(rec: dict) -> dict:
     lat = None if is_5xx else latency_ms(rec)
     return {
         "soft_wrapped": _truthy(rec.get("soft_wrapped")),
+        # OPTIONAL field (added after v2 shipped): keep PRESENCE and VALUE apart. A producer
+        # predating it omits the KEY, which must read as not-instrumented — never as
+        # "not canned". Folding an absent field into a benign value is precisely the shape
+        # of the v1-consumer `security_audit` false-green.
+        "wrapped_by_present": "wrapped_by" in rec,
+        "wrapped_by": rec.get("wrapped_by"),
         "partial": _truthy(rec.get("partial")),
         "tool_budget_timeout": _truthy(rec.get("tool_budget_timeout")),
         # non-clean == any security event at all (denied OR executed)
@@ -694,6 +700,16 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
     tbt = sum(1 for f in flags if f["tool_budget_timeout"])
     degraded = sum(1 for f in flags if f["soft_wrapped"] or f["partial"])
     over = sum(1 for f in flags if f["over_slo"])
+
+    # Canned-fallback attribution, computed over WRAPPED turns only — the CONVERSION rate is
+    # the number that matters to a user. A wrap that still produced a model-written answer is
+    # not a degraded experience; one that emitted the deterministic renderer is. Turns whose
+    # producer predates `wrapped_by` are counted separately and reported as not-instrumented,
+    # never folded in as "not canned".
+    wrapped = [f for f in flags if f["soft_wrapped"]]
+    attributed = [f for f in wrapped if f["wrapped_by_present"]]
+    canned = sum(1 for f in attributed
+                 if str(f["wrapped_by"] or "").startswith("fallback"))
     non_clean = sum(1 for f in flags if f["security_non_clean"])
 
     # v2: the gate-relevant metrics are MANDATORY fields validated before we get
@@ -728,6 +744,12 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
         "over_30s_rate": _rate(over, turns),
         "soft_wrapped_count": soft,
         "soft_wrapped_rate": _rate(soft, turns),
+        # Of the wrapped turns that CAN be attributed, how many ended in canned text.
+        # None (-> "n/a") when nothing is attributable, so an un-instrumented producer
+        # reads as unmeasured rather than as a clean 0%.
+        "wrapped_canned_count": canned,
+        "wrapped_canned_rate": (_rate(canned, len(attributed)) if attributed else None),
+        "wrapped_unattributed_count": len(wrapped) - len(attributed),
         "partial_count": part,
         "partial_rate": _rate(part, turns),
         "tool_budget_timeout_count": tbt,
@@ -1197,6 +1219,10 @@ def render_text(report: dict) -> str:
          _fmt(d["over_30s_rate_pp"], "pp")),
         ("soft_wrapped rate", _fmt(fc["soft_wrapped_rate"], "pct"),
          _fmt(lg["soft_wrapped_rate"], "pct"), _fmt(d["soft_wrapped_rate_pp"], "pp")),
+        # Legacy has no wrap path at all, so the legacy column is structurally n/a here
+        # rather than 0 — there is nothing to compare against, not a clean comparison.
+        ("  of which canned", _fmt(fc["wrapped_canned_rate"], "pct"), "n/a", ""),
+        ("  wrapped, unattributed", str(fc["wrapped_unattributed_count"]), "n/a", ""),
         ("partial rate", _fmt(fc["partial_rate"], "pct"), _fmt(lg["partial_rate"], "pct"),
          _fmt(d["partial_rate_pp"], "pp")),
         ("partial+soft rate", _fmt(fc["degraded_rate"], "pct"),

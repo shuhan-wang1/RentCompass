@@ -535,7 +535,11 @@ def test_soft_wrap_forces_answer_now(monkeypatch):
     state = _state(
         loop_turn=3,
         messages=[HumanMessage(content="find flats in Camden")],
-        turn_start_monotonic=time.monotonic() - 30.0,
+        # 26s: past the 25s soft edge, but still inside the hard ceiling
+        # (25 + FC_FINAL_RESERVE_S 6.5 = 31.5) with a viable window. At the old -30.0 only
+        # 1.0s remained, which now correctly refuses to start a call at all — that region is
+        # covered by test_wrap_past_hard_end_starts_no_call below.
+        turn_start_monotonic=time.monotonic() - 26.0,
         tool_artifacts=[{"turn": 0, "tool": "web_search", "raw_data": {"x": 1},
                          "params_digest": "d0", "success": True}],
     )
@@ -557,6 +561,10 @@ def test_soft_wrap_forces_answer_now(monkeypatch):
     assert len(events) == 1
     assert events[0]["llm_calls"] == 4 and events[0]["tool_batches"] == 1
     assert events[0]["elapsed_ms"] >= 25000
+    # the model wrote this answer -> attribution says so, in the event AND on the state
+    assert events[0]["wrapped_by"] == "llm"
+    assert cmd.update["soft_wrapped"] is True
+    assert cmd.update["wrapped_by"] == "llm"
 
 
 def test_no_soft_wrap_under_threshold(monkeypatch):
@@ -1136,12 +1144,116 @@ def test_deterministic_wrap_answer_is_time_budget_builder(monkeypatch):
 # ─── FIX 4: retuned defaults ────────────────────────────────────────
 def test_retuned_defaults(monkeypatch):
     for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_MIN_BATCH_S",
-              "FC_WRAP_CRITIC_RESERVE_S"):
+              "FC_WRAP_CRITIC_RESERVE_S", "FC_WRAP_MIN_ATTEMPT_S"):
         monkeypatch.delenv(k, raising=False)
     assert agent_loop._turn_soft_wrap_s() == 23.0
-    assert agent_loop._final_reserve_s() == 5.0
+    # Widened 5.0 -> 6.5 / narrowed 1.0 -> 0.5: the wrap-up call was losing 80% of
+    # soft-wrapped turns to the canned renderer on window size alone, and the 1.0s crumb
+    # was head-room for a critic that a wrapped turn never runs.
+    assert agent_loop._final_reserve_s() == 6.5
     assert agent_loop._min_batch_s() == 2.0
-    assert agent_loop._wrap_critic_reserve_s() == 1.0
+    assert agent_loop._wrap_critic_reserve_s() == 0.5
+    assert agent_loop._wrap_min_attempt_s() == 2.0
+
+
+def test_wrap_budget_stays_inside_the_30s_slo(monkeypatch):
+    """The invariant the constants above exist to protect, asserted directly so a future
+    retune cannot silently push a wrapped turn past the hard ceiling. A wrapped turn is
+    soft_wrap + the bounded wrap call + the pure-Python format render, and no critic.
+
+    NOTE this is the CONSTANT half of the invariant only. Constants alone cannot bound a
+    wrapped turn, because _wrap_up can be entered after the ceiling has already passed —
+    test_wrap_past_hard_end_starts_no_call covers that runtime half."""
+    for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_WRAP_CRITIC_RESERVE_S"):
+        monkeypatch.delenv(k, raising=False)
+    # Last instant the bounded wrap call may still be running.
+    ceiling = agent_loop._turn_soft_wrap_s() + agent_loop._final_reserve_s()
+    assert ceiling <= 30.0, "wrap window must close inside the 30s turn SLO"
+    # A non-zero render crumb must remain underneath that ceiling.
+    assert agent_loop._wrap_critic_reserve_s() > 0.0
+
+
+def test_wrap_past_hard_end_starts_no_call(monkeypatch):
+    """The runtime half of the ceiling invariant.
+
+    A tool batch can overrun its window (writes are awaited past it), so _wrap_up is
+    reachable AFTER turn_start + soft_wrap + reserve. The old `max(2.0, remaining)` floor
+    then granted the turn two MORE seconds precisely when it had none left — silently
+    pushing it past the very deadline the wrap exists to respect. No call may be started
+    from there; the deterministic answer is the only correct outcome."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "23")
+    events = []
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event",
+                        lambda **kw: events.append(kw))
+    chat = WrapChat(AIMessage(content="should never be produced"))
+    provider = FakeProvider([FakeSpec("web_search")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _state(
+        loop_turn=3,
+        messages=[HumanMessage(content="find flats in Camden")],
+        # 40s elapsed against a 23 + 6.5 = 29.5s ceiling: over ten seconds past it.
+        turn_start_monotonic=time.monotonic() - 40.0,
+        tool_artifacts=[{"turn": 0, "tool": "web_search", "raw_data": {"x": 1},
+                         "params_digest": "d0", "success": True}],
+    )
+
+    cmd = asyncio.run(nodes["agent"](state))
+
+    # THE assertion: no LLM call was ever started past the ceiling.
+    assert chat.seen_messages is None
+    assert cmd.goto == "format_output_fc"
+    assert cmd.update["final_response"] == agent_loop._deterministic_wrap_answer(state)
+    # ...and it is attributed distinctly from an LLM that was tried and timed out, so a
+    # budget-overrun defect can never hide inside an LLM-slowness statistic.
+    assert cmd.update["wrapped_by"] == "fallback_deadline"
+    assert len(events) == 1 and events[0]["wrapped_by"] == "fallback_deadline"
+
+
+# ─── wrap-call de-scaffolding: evidence kept, tool-call SHAPE removed ───────────
+def test_descaffold_for_wrap_strips_tool_shape_but_keeps_evidence():
+    """The wrap call binds no tools, so feeding it the tool-call transcript invited the
+    model to imitate that shape in prose — the sole observed cause of every
+    `wrap-up response leaked tool-call markup`. The evidence must survive verbatim."""
+    msgs = [
+        SystemMessage(content="system row"),
+        HumanMessage(content="find me a studio in Islington"),
+        AIMessage(content="", tool_calls=[
+            {"name": "search_properties", "args": {"area": "Islington"}, "id": "call_1"}]),
+        ToolMessage(content='{"success": true, "data": {"price": 1450}}',
+                    tool_call_id="call_1", name="search_properties"),
+        AIMessage(content="thinking out loud", tool_calls=[
+            {"name": "check_safety", "args": {}, "id": "call_2"}]),
+        ToolMessage(content='{"success": true, "data": {"crimes": 76}}',
+                    tool_call_id="call_2", name="check_safety"),
+    ]
+    out = agent_loop._descaffold_for_wrap(msgs)
+
+    # No tool-call scaffolding survives — nothing to imitate, and no orphan tool_call_id.
+    assert not any(isinstance(m, ToolMessage) for m in out)
+    assert not any(getattr(m, "tool_calls", None) for m in out)
+
+    # ...but every figure the answer must cite is still in the prompt, verbatim.
+    blob = "\n".join(m.content for m in out)
+    assert "1450" in blob and "76" in blob
+    assert "search_properties" in blob and "check_safety" in blob
+    # Non-tool rows pass through untouched, in order.
+    assert out[0].content == "system row"
+    assert "Islington" in out[1].content
+    # An assistant row that carried real prose alongside its tool call keeps the prose.
+    assert "thinking out loud" in blob
+
+
+def test_descaffold_for_wrap_is_prompt_only(monkeypatch):
+    """De-scaffolding must not mutate the caller's list: the persisted `messages` channel
+    keeps the true transcript; only the prompt copy is rewritten."""
+    original = [
+        AIMessage(content="", tool_calls=[{"name": "t", "args": {}, "id": "c1"}]),
+        ToolMessage(content="payload", tool_call_id="c1", name="t"),
+    ]
+    snapshot = list(original)
+    out = agent_loop._descaffold_for_wrap(original)
+    assert original == snapshot          # same objects, same order, unmutated
+    assert out is not original
 
 
 # ─── FIX 5: wrap directive additions ────────────────────────────────

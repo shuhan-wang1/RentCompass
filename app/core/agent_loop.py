@@ -498,9 +498,9 @@ def _turn_soft_wrap_s() -> float:
     Once whole-turn elapsed (LLM + tools) crosses this, the agent node stops opening NEW tool
     batches and forces an answer-now generation from the evidence already gathered. Product
     ruling: stop planning new tools at ~23s, reserving ~FC_FINAL_RESERVE_S for the final
-    generation so the whole turn closes inside the hard 30s SLO (23 wrap + <=4 wrap-call +
-    <=0.5 wrapped-critic + ~0 format ~= 27.5s worst case). Read at call time so ops/tests can
-    retune without a reimport."""
+    generation so the whole turn closes inside the hard 30s SLO (23 wrap + <=6.0 wrap-call
+    + <=0.5 format ~= 29.5s worst case; the wrapped turn runs no critic at all). Read at
+    call time so ops/tests can retune without a reimport."""
     try:
         return float(os.getenv("FC_TURN_SOFT_WRAP_S", "23.0"))
     except (TypeError, ValueError):
@@ -510,11 +510,21 @@ def _turn_soft_wrap_s() -> float:
 def _final_reserve_s() -> float:
     """Head-room (s) reserved after the soft wrap for the final generation call
     (FC_FINAL_RESERVE_S). Tools dispatched near the wrap must finish inside
-    soft_wrap + reserve so the answer-now generation still has room before the turn ceiling."""
+    soft_wrap + reserve so the answer-now generation still has room before the turn ceiling.
+
+    Raised 5.0 -> 6.5: the wrap-up call was the ONLY consumer being squeezed, and it was
+    losing 80% of soft-wrapped turns to the deterministic renderer purely on window size
+    (measured wrap_timeout 3.3-6.0s, mean 4.7s). The other read of this value
+    (`turn_hard_deadline`, execute_tools) is provably non-binding — `turn_soft_deadline`
+    = turn_start + soft_wrap is always the smaller term of that `min()`, so widening the
+    reserve cannot lengthen any tool dispatch. Worst case is now
+    23 wrap + 6.5 reserve = 29.5s, minus the 0.5s wrap-critic crumb, leaving the pure-Python
+    format render inside the 30s ceiling.
+    """
     try:
-        return float(os.getenv("FC_FINAL_RESERVE_S", "5"))
+        return float(os.getenv("FC_FINAL_RESERVE_S", "6.5"))
     except (TypeError, ValueError):
-        return 5.0
+        return 6.5
 
 
 def _min_batch_s() -> float:
@@ -529,13 +539,29 @@ def _min_batch_s() -> float:
 
 
 def _wrap_critic_reserve_s() -> float:
-    """Head-room (s) carved out of the wrap-call window for the trailing critic/format work
+    """Head-room (s) carved out of the wrap-call window for the trailing format work
     (FC_WRAP_CRITIC_RESERVE_S), so the bounded wrap-up LLM call always leaves room to render
-    the final answer before the hard turn ceiling."""
+    the final answer before the hard turn ceiling.
+
+    Lowered 1.0 -> 0.5, and the name is now a misnomer kept for env-var compatibility: a
+    wrapped turn routes straight to format_output_fc and **deliberately never runs the
+    critic** (see the FIX 3 comment in _wrap_up). The full second was reserving head-room
+    for work that does not happen; format_output_fc is pure Python and measured <0.5s.
+    """
     try:
-        return float(os.getenv("FC_WRAP_CRITIC_RESERVE_S", "1.0"))
+        return float(os.getenv("FC_WRAP_CRITIC_RESERVE_S", "0.5"))
     except (TypeError, ValueError):
-        return 1.0
+        return 0.5
+
+
+def _wrap_retry_min_s() -> float:
+    """Minimum window (s) required to attempt the ONE bounded wrap-call retry
+    (FC_WRAP_RETRY_MIN_S). Below this a retry cannot plausibly complete, so the
+    deterministic renderer is used directly rather than burning the residual."""
+    try:
+        return float(os.getenv("FC_WRAP_RETRY_MIN_S", "2.0"))
+    except (TypeError, ValueError):
+        return 2.0
 
 
 # Model-facing wrap directive (never persisted into user-visible history — appended only to
@@ -563,6 +589,44 @@ _WRAP_DIRECTIVE = (
     "figure that is not present in the results."
 )
 
+# Appended for the ONE bounded retry after a first attempt leaked tool-call markup or came
+# back empty. Deliberately blunt and short: the failure being recovered from is the model
+# imitating the transcript's tool-call shape, not a comprehension failure.
+_WRAP_RETRY_DIRECTIVE = (
+    "Your previous attempt was rejected because it was not a plain-prose answer. Reply with "
+    "ONLY the final answer as ordinary prose for the user. Do NOT emit any tool call, "
+    "function call, JSON envelope, XML/DSML tag, or code fence of any kind."
+)
+
+
+def _descaffold_for_wrap(messages: list) -> list:
+    """Rewrite a tool-use transcript into plain rows for the answer-now wrap call.
+
+    The wrap call binds no tools (strict path binds neither tools nor ``tool_choice``) yet
+    was still being handed the raw tool-call scaffolding. A model deep in that transcript
+    imitates the pattern and emits tool-call tokens AS PROSE — every observed
+    ``wrap-up response leaked tool-call markup`` came from here, and each one cost the turn
+    its model-written answer. Removing the pattern removes the imitation.
+
+    The EVIDENCE is preserved verbatim; only its shape changes. Tool results become labelled
+    system rows and the tool-call requests that produced them are dropped, which also leaves
+    no orphan ``tool_call_id`` for a provider to reject.
+    """
+    out: list = []
+    for m in messages:
+        if isinstance(m, ToolMessage):
+            name = getattr(m, "name", None) or "tool"
+            out.append(SystemMessage(content=f"[tool result] {name}: {m.content}"))
+            continue
+        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
+            content = m.content if isinstance(m.content, str) else ""
+            text = content.strip()
+            if text:
+                out.append(AIMessage(content=text))
+            continue
+        out.append(m)
+    return out
+
 
 # ─── offline-eval instrumentation (additive; no-op unless the eval package is active) ──
 # Imported the same way tool_system.execute_tool imports the collector for record_tool_call:
@@ -582,13 +646,14 @@ def _record_budget_timeout_event(*, tool: str, phase: str, budget_s: float,
 
 
 def _record_turn_soft_wrap_event(*, elapsed_ms: float, llm_calls: int,
-                                 tool_batches: int) -> None:
+                                 tool_batches: int,
+                                 wrapped_by: Optional[str] = None) -> None:
     try:
         from evaluation.metrics import collector
         if collector.is_active():
             collector.record_turn_soft_wrap(
                 elapsed_ms=float(elapsed_ms or 0.0), llm_calls=int(llm_calls),
-                tool_batches=int(tool_batches))
+                tool_batches=int(tool_batches), wrapped_by=wrapped_by)
     except Exception:
         pass
 
@@ -988,7 +1053,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         pattern as budget-abandoned tools) and synthesizes a DETERMINISTIC honest answer from
         the gathered artifacts. Routes straight to format_output_fc — bypassing the LLM/critic
         entirely — because a wrapped turn is out of time budget (FIX 3: <0.5s tail)."""
-        prompt_msgs = messages + [SystemMessage(content=_WRAP_DIRECTIVE)]
+        # De-scaffolded: the wrap call binds no tools, so handing it the raw tool-call
+        # transcript only invited the model to imitate that shape in prose. See
+        # _descaffold_for_wrap — the evidence is preserved, the pattern is not.
+        prompt_msgs = _descaffold_for_wrap(messages) + [SystemMessage(content=_WRAP_DIRECTIVE)]
         llm = _llm()
         if _strict_on():
             # Strict /beta path may reject tool_choice="none"; bind no tools at all so the
@@ -1008,10 +1076,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             now + _final_reserve_s())
         wrap_timeout = max(2.0, hard_end - now - _wrap_critic_reserve_s())
 
-        task = asyncio.ensure_future(call.ainvoke(prompt_msgs))
-        done, _pending = await asyncio.wait([task], timeout=wrap_timeout)
-        wrapped_by = "llm"
-        if task in done:
+        async def _attempt(msgs, timeout_s):
+            """One bounded wrap-call attempt -> (status, text, msg).
+
+            status is "ok" | "timeout" | "error". A timed-out call is cancelled and swallowed,
+            NEVER awaited (mirrors the budget-abandoned-tool done-callback).
+            """
+            task = asyncio.ensure_future(call.ainvoke(msgs))
+            done, _pending = await asyncio.wait([task], timeout=timeout_s)
+            if task not in done:
+                task.cancel()
+                task.add_done_callback(_swallow_abandoned_task)
+                return "timeout", None, None
             try:
                 resp = task.result()
                 text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
@@ -1031,24 +1107,36 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 if getattr(resp, "tool_calls", None) or _dsml_contains_markup(text):
                     _note_dsml_blocked()
                     raise ValueError("wrap-up response leaked tool-call markup")
-                wrap_msg = resp
-            except Exception as e:  # LLM error / leak -> deterministic fallback
+                return "ok", text, resp
+            except Exception as e:  # LLM error / leak
                 logger.warning("fc_loop.wrap_llm_error %s", e)
-                text = _deterministic_wrap_answer(state)
-                wrap_msg = AIMessage(content=text)
-                wrapped_by = "fallback_error"
-        else:
-            # Timed out: cancel + swallow, NEVER await the cancelled LLM task (mirrors the
-            # budget-abandoned-tool done-callback), and answer deterministically from artifacts.
-            task.cancel()
-            task.add_done_callback(_swallow_abandoned_task)
+                return "error", None, None
+
+        status, text, wrap_msg = await _attempt(prompt_msgs, wrap_timeout)
+        wrapped_by = "llm"
+        if status == "error":
+            # ONE bounded retry inside whatever window is LEFT. A leaked or empty first
+            # attempt is the transcript pattern reasserting itself, not an incapable model,
+            # and the deterministic renderer loses the model's grasp of what was actually
+            # asked (measured: canned turns pass 35% vs 56% for model-written ones). A
+            # TIMEOUT is deliberately not retried — by definition no window remains.
+            retry_timeout = hard_end - time.monotonic() - _wrap_critic_reserve_s()
+            if retry_timeout >= _wrap_retry_min_s():
+                r_status, r_text, r_msg = await _attempt(
+                    prompt_msgs + [SystemMessage(content=_WRAP_RETRY_DIRECTIVE)], retry_timeout)
+                if r_status == "ok":
+                    status, text, wrap_msg = r_status, r_text, r_msg
+                    wrapped_by = "llm_retry"
+        if status != "ok":
+            # Only now: answer deterministically from the gathered artifacts.
             text = _deterministic_wrap_answer(state)
             wrap_msg = AIMessage(content=text)
-            wrapped_by = "fallback_timeout"
+            wrapped_by = "fallback_timeout" if status == "timeout" else "fallback_error"
 
         tool_batches = len({a.get("turn") for a in (state.get("tool_artifacts") or [])})
         _record_turn_soft_wrap_event(
-            elapsed_ms=elapsed * 1000.0, llm_calls=loop_turn, tool_batches=tool_batches)
+            elapsed_ms=elapsed * 1000.0, llm_calls=loop_turn, tool_batches=tool_batches,
+            wrapped_by=wrapped_by)
         logger.warning(
             "fc_loop.turn_soft_wrap elapsed_s=%.2f soft_wrap_s=%.2f llm_calls=%d "
             "tool_batches=%d wrapped_by=%s wrap_timeout_s=%.2f", elapsed, _turn_soft_wrap_s(),

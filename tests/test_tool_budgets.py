@@ -1136,12 +1136,76 @@ def test_deterministic_wrap_answer_is_time_budget_builder(monkeypatch):
 # ─── FIX 4: retuned defaults ────────────────────────────────────────
 def test_retuned_defaults(monkeypatch):
     for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_MIN_BATCH_S",
-              "FC_WRAP_CRITIC_RESERVE_S"):
+              "FC_WRAP_CRITIC_RESERVE_S", "FC_WRAP_RETRY_MIN_S"):
         monkeypatch.delenv(k, raising=False)
     assert agent_loop._turn_soft_wrap_s() == 23.0
-    assert agent_loop._final_reserve_s() == 5.0
+    # Widened 5.0 -> 6.5 / narrowed 1.0 -> 0.5: the wrap-up call was losing 80% of
+    # soft-wrapped turns to the canned renderer on window size alone, and the 1.0s crumb
+    # was head-room for a critic that a wrapped turn never runs.
+    assert agent_loop._final_reserve_s() == 6.5
     assert agent_loop._min_batch_s() == 2.0
-    assert agent_loop._wrap_critic_reserve_s() == 1.0
+    assert agent_loop._wrap_critic_reserve_s() == 0.5
+    assert agent_loop._wrap_retry_min_s() == 2.0
+
+
+def test_wrap_budget_stays_inside_the_30s_slo(monkeypatch):
+    """The invariant the constants above exist to protect, asserted directly so a future
+    retune cannot silently push a wrapped turn past the hard ceiling. A wrapped turn is
+    soft_wrap + the bounded wrap call + the pure-Python format render, and no critic."""
+    for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_WRAP_CRITIC_RESERVE_S"):
+        monkeypatch.delenv(k, raising=False)
+    # Last instant the bounded wrap call may still be running.
+    ceiling = agent_loop._turn_soft_wrap_s() + agent_loop._final_reserve_s()
+    assert ceiling <= 30.0, "wrap window must close inside the 30s turn SLO"
+    # A non-zero render crumb must remain underneath that ceiling.
+    assert agent_loop._wrap_critic_reserve_s() > 0.0
+
+
+# ─── wrap-call de-scaffolding: evidence kept, tool-call SHAPE removed ───────────
+def test_descaffold_for_wrap_strips_tool_shape_but_keeps_evidence():
+    """The wrap call binds no tools, so feeding it the tool-call transcript invited the
+    model to imitate that shape in prose — the sole observed cause of every
+    `wrap-up response leaked tool-call markup`. The evidence must survive verbatim."""
+    msgs = [
+        SystemMessage(content="system row"),
+        HumanMessage(content="find me a studio in Islington"),
+        AIMessage(content="", tool_calls=[
+            {"name": "search_properties", "args": {"area": "Islington"}, "id": "call_1"}]),
+        ToolMessage(content='{"success": true, "data": {"price": 1450}}',
+                    tool_call_id="call_1", name="search_properties"),
+        AIMessage(content="thinking out loud", tool_calls=[
+            {"name": "check_safety", "args": {}, "id": "call_2"}]),
+        ToolMessage(content='{"success": true, "data": {"crimes": 76}}',
+                    tool_call_id="call_2", name="check_safety"),
+    ]
+    out = agent_loop._descaffold_for_wrap(msgs)
+
+    # No tool-call scaffolding survives — nothing to imitate, and no orphan tool_call_id.
+    assert not any(isinstance(m, ToolMessage) for m in out)
+    assert not any(getattr(m, "tool_calls", None) for m in out)
+
+    # ...but every figure the answer must cite is still in the prompt, verbatim.
+    blob = "\n".join(m.content for m in out)
+    assert "1450" in blob and "76" in blob
+    assert "search_properties" in blob and "check_safety" in blob
+    # Non-tool rows pass through untouched, in order.
+    assert out[0].content == "system row"
+    assert "Islington" in out[1].content
+    # An assistant row that carried real prose alongside its tool call keeps the prose.
+    assert "thinking out loud" in blob
+
+
+def test_descaffold_for_wrap_is_prompt_only(monkeypatch):
+    """De-scaffolding must not mutate the caller's list: the persisted `messages` channel
+    keeps the true transcript; only the prompt copy is rewritten."""
+    original = [
+        AIMessage(content="", tool_calls=[{"name": "t", "args": {}, "id": "c1"}]),
+        ToolMessage(content="payload", tool_call_id="c1", name="t"),
+    ]
+    snapshot = list(original)
+    out = agent_loop._descaffold_for_wrap(original)
+    assert original == snapshot          # same objects, same order, unmutated
+    assert out is not original
 
 
 # ─── FIX 5: wrap directive additions ────────────────────────────────

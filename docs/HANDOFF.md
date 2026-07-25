@@ -13,12 +13,22 @@ that spans all branches.** Last updated 2026-07-23.
 > **Right now:**
 > * `telemetry/v2-layer-b` is the **mainline**, not `main` (43 commits / 263 files behind,
 >   not a usable base for anything).
-> * **PR #8** — gitleaks fix. OPEN, both checks green, `mergeStateStatus: CLEAN`. Merge next.
-> * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3 (`e91293f`),
->   CHANGES REQUESTED twice, awaiting a short final design review. It is **not approved or
->   frozen**: all 13 identity fields are still placeholders.
-> * **PR #11** — `fix/fc-wrap-and-critic-evidence`. fc_loop product fix (canned-fallback
->   conversion + evidence-blind critic repair). **Changes no gate threshold.**
+> * **MERGED 2026-07-25:** **#8** gitleaks fix (`5402336` — keep the scan green), **#11** fc
+>   canned-fallback + evidence-blind critic repair (`103eef8`), **#10** this refresh, which
+>   added §3.5–§3.7 (`042c477`).
+> * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3, **still OPEN**,
+>   awaiting a short final design review. It is **not approved or frozen**: all 13 identity
+>   fields are still placeholders. (Its `state.py` line citation is corrected on its own
+>   branch as a clerical-only change — see §3.3.)
+> * **OPEN — #13 / #14 / #15, and #14 gates any measurement:**
+>   * **#13** `app/config.py` defaulted to the provider-retired `deepseek-chat`, plus a
+>     one-env-var-one-default invariant. §3A records the outage it came from.
+>   * **#14** the canary LLM observer installed only on first model use, so a zero-LLM-call
+>     turn emitted a contract-invalid record and left the **denominator** of p50 and of every
+>     rate. **Merge before any verification round**, or the round measures only its expensive
+>     turns.
+>   * **#15** DESIGN ONLY pre-registration of answer length as the p50 lever, every threshold
+>     blank. §3.8 records why it is the only surviving lever.
 > * **fc is at STAGE-PAUSE: p50 6878ms > 6000ms. The SLO is unchanged and this round is not
 >   retroactively passed** — §3.5, which also records the confound that must NOT be used to
 >   relax it.
@@ -101,8 +111,8 @@ the bar is stable, product last. Do not reorder it.
    - known clerical fix before sign-off: §6.6 still says §5.1.3 (E1–E5);
      revision 3 renamed/moved these to §5.1.4 (RCL1–RCL4)
    - this is design acceptance only; placeholders still authorise nothing
-2. merge PR #8 (green)
-3. probe-shard contract PR, branched from the post-#8 mainline commit
+2. ~~merge PR #8~~ DONE (`5402336`)
+3. probe-shard contract PR, branched from the current mainline commit
    - cases_recall_probe.jsonl, 12 cases, spec'd in Appendix A of the prereg
    - its own review; NOT generated until #9's design is approved
 4. backfill the 13 <TO BE FILLED> identity fields in the prereg; FINAL FREEZE of #9
@@ -218,6 +228,34 @@ not a standing permission: producing a new merge SHA means the deploy tree AND
 `DEPLOY_PINNED_SHA` must BOTH be moved to that approved full SHA before building. The gate
 demands exact equality, so moving one without the other fails closed — which is the intended
 behaviour, not a fault.
+
+### 3.8 Latency levers — four refuted, one surviving
+
+All five were measured offline from the retained paired-control telemetry, no API spend.
+Reproduce with `/home/shuhan/fp-results/scripts/output_length_latency.py`.
+
+| lever | verdict |
+|---|---|
+| prompt / cached-prefix size | REFUTED — −78 / +186 ms over 200 turns, 2 rounds |
+| deleting the final answer call | REFUTED — 5,836 ms even at 100 % savings vs a 5,800 ms bar, plus a Base98 quality veto |
+| never-trimmed message array | REFUTED — uncached input at the median 2-call turn is **192 tokens**, 98.8 % cache hit; the array becomes cached prefix within the turn |
+| tool latency | REFUTED — fast vs slow halves of the 2-call bucket: identical tool-batch counts, zero timeouts, zero partials, and the slow half has *fewer* uncached input tokens |
+| **call count** | **closed by arithmetic** — marginal cost of the 2nd call is **−280 ms** (2-call turns are *faster* than 1-call ones); 2-call turns are 29/58 = **50.0 %** under the bar and 3+ call turns are **0/9**. A p50 under the bar needs **>50 %** of all turns under it, so collapsing everything to 2 calls lands *on* the bar with zero margin |
+| **output length** | **SURVIVES** — `latency = 2,285 ms + 14.6 ms/output-token, R² = 0.83`; at the median 312 tokens that is ~4,535 ms of a 6,885 ms turn (**66 %**) |
+
+R² = 0.83 is why every input-side lever failed: the cost is on the output side.
+
+Composition of the 50 retained fc answers: only **6.7 %** of answer tokens are protected by
+the citation/disclosure invariants; **67.2 %** carry no source, no required disclosure and no
+figure, and that pool is dominated by interpretive "Verdict:" restatements, unsourced area
+atmosphere, and route speculation beyond the tool result. Since that is also where ungrounded
+claims live (`unsupported` 23.6–28.3 %, `source_coverage` 58–64 %), cutting it should
+**improve** grounding rather than degrade it — recorded in PR #15 as a directional prediction
+that can fail.
+
+**This does not make the p50 bar adjustable** (§3.6). If a filled-in, frozen #15 runs cleanly
+and p50 still fails, the honest conclusion is that fc cannot meet 6 s at its own answer
+quality, and the decision moves to the forward-only v2 gate route — a maintainer decision.
 
 ---
 

@@ -15,7 +15,8 @@ that spans all branches.** Last updated 2026-07-23.
 >   not a usable base for anything).
 > * **PR #8** — gitleaks fix. OPEN, both checks green, `mergeStateStatus: CLEAN`. Merge next.
 > * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3 (`e91293f`),
->   CHANGES REQUESTED twice, awaiting a short final review.
+>   CHANGES REQUESTED twice, awaiting a short final design review. It is **not approved or
+>   frozen**: all 13 identity fields are still placeholders.
 > * **No product candidate exists. Do not create one.** §3 has the gating sequence.
 >
 > **Do NOT cherry-pick product code from either NO-GO branch.** Revisiting memory wiring,
@@ -87,7 +88,11 @@ the bar is stable, product last. Do not reorder it.
 ### 3.2 The gating sequence — nothing may skip ahead
 
 ```
-1. PR #9 final review passes                      <- CURRENT POSITION
+1. PR #9 rev-3 design review passes               <- CURRENT POSITION
+   - review exact head e91293f, not the stale PR body
+   - known clerical fix before sign-off: §6.6 still says §5.1.3 (E1–E5);
+     revision 3 renamed/moved these to §5.1.4 (RCL1–RCL4)
+   - this is design acceptance only; placeholders still authorise nothing
 2. merge PR #8 (green)
 3. probe-shard contract PR, branched from the post-#8 mainline commit
    - cases_recall_probe.jsonl, 12 cases, spec'd in Appendix A of the prereg
@@ -98,6 +103,9 @@ the bar is stable, product last. Do not reorder it.
 
 **Approval is of a filled-in document.** A pre-registration approved with placeholders
 authorises nothing.
+
+Until step 1 is complete, **do not open the probe-shard PR**. Until steps 2–4 are complete,
+**do not create a product candidate or run a paid command**.
 
 ### 3.3 The experiment, in one paragraph
 
@@ -134,6 +142,9 @@ this mechanically.
   The system binary is `/usr/bin/gh` 2.45.0 — old enough that `gh pr edit` hits a
   deprecated Projects-classic GraphQL field; use `gh api -X PATCH repos/.../pulls/N` for
   body edits.
+* **PR #9's GitHub body is stale.** It still uses the revision-1 `BASELINE_SHA` wording and
+  a three-step sequence. The governing design is the file at head `e91293f`:
+  `docs/memory_context_preregistration.md`. Review that file/diff, not the PR body summary.
 * **Branch protection is ON for `telemetry/v2-layer-b`**: both checks required, `strict`,
   `enforce_admins: true`, no force-push, no deletion. **`required_pull_request_reviews` is
   deliberately null** — this is a single-maintainer repo and GitHub forbids self-approval,
@@ -282,8 +293,8 @@ exactly what happened to G2/G3/E11 before PR #7 caught it.
    mid-sequence is no longer a measurement candidate.
 4. **Nothing ships on reasoning alone.** Only repeated, interleaved A/B is evidence; every
    failed round is retained, never overwritten.
-5. **Build only from clean checkouts** (`git status --porcelain` empty) — the dev tree has
-   an untracked results dir.
+5. **Build only from clean checkouts** (`git status --porcelain` empty). The dev tree was
+   clean when this handoff was refreshed; verify again immediately before every build.
 6. **Score both arms of an A/B with ONE evaluator.** Each arm ships its own grader, so
    comparing each arm's own `passed` compares two evaluators as much as two products.
 7. **Hard cost cap on every paid command** (`--max-cost-usd 5` standing).
@@ -328,7 +339,7 @@ python -m pytest tests/ -q -p no:cacheprovider'
 ```
 
 Expected: both greps print nothing · `ALLOWLIST-PASS` · `BASE98-GATE FAIL: condition 3 ['A4','A14']`
-· `1710 passed, 3 skipped`.
+· `1785 passed, 3 skipped`.
 
 Note `idp98_gate.py` is *expected to exit 1* — it reports the failure that closed the
 branch. That is the record, not a broken tool.

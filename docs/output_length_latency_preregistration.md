@@ -68,18 +68,64 @@ shorter answer. Those classes must be excluded from any verbosity comparison.)
 
 ---
 
+### 1.1 Where the output tokens actually go — and why this changes the risk direction
+
+Classifying every line of the 50 retained fc answers by whether **L1–L3 protect its content**
+(`answer_composition` in the same script, `--bodies .runtime/paired/bodies`):
+
+| content kind | lines | est. tokens | % | L1–L3 protected? |
+|---|---|---|---|---|
+| carries a source citation | 8 | 198 | 1.9 % | **YES (L1)** |
+| carries an unchecked-dimension / empty-search disclosure | 6 | 489 | 4.7 % | **YES (L2/L3)** |
+| states a figure with no citation | 118 | 2,695 | 26.1 % | no — and L1 says these *should* carry one |
+| neither a source, a disclosure, nor a figure | **412** | **6,929** | **67.2 %** | **no** |
+
+**Only 6.7 % of answer tokens are L1–L3 protected.** Two thirds carry no source, no required
+disclosure, and not even a figure.
+
+Reading the largest items in that 67 % pool, it is not padding-by-accident — it is a
+consistent category:
+
+* interpretive **"Verdict:"** paragraphs (109 / 89 / 88 est. tokens) that restate what the
+  figures above them already said;
+* **area atmosphere / general knowledge** with no retrieved basis — *"Shoreditch is a very
+  popular area … great nightlife, bars, and restaurants"* (82 t); *"Camden: Famous for Camden
+  Market, live music venues, the canal…"* (67 t);
+* **speculation beyond the tool result** — *"A faster option might be taking the Central Line
+  …"* (83 / 80 t), an unverified claim about a route the tool did not return;
+* markdown table scaffolding, and a minority of genuinely useful checklist items.
+
+So the bulk of fc's answer length is **unsourced model prose**. That is the same surface the
+grounding metrics already flag: fc's `unsupported` claim rate is 23.6–28.3 % and its
+`source_coverage` only 58–64 % — consistent with two thirds of the answer having no source.
+
+**This inverts the risk direction of this experiment.** G7/G8 were drafted as anti-cheat
+guards against buying latency with grounding. The composition says the cuttable pool *is* the
+ungrounded pool, so cutting it should **improve** both. That is now stated as a prediction
+below so it can fail, and it makes the change surface precise: the target is interpretive,
+atmospheric and speculative prose — **not** the grounded core, which is 6.7 % of the tokens
+and is exactly what L1–L3 fence off.
+
 ## 2. Hypothesis, stated so it can fail
 
 > **H:** fc_loop's median turn latency is dominated by output-token generation, and a
 > prompt-only reduction in answer length reduces p50 **without** degrading grounding,
 > disclosure or route conformance.
 
-The second clause is the whole risk and is **not** assumed. fc's answers are long **because
-the prompt demands it**: cite a source inline for every figure, name every requested
-dimension that was not checked, report a completed-empty search honestly with its criteria.
-Those are the behaviours that make fc beat legacy (45–49/98 vs 32/98 pass; 77–79/98 vs
+The second clause is the whole risk and is **not** assumed. Some of fc's length is there
+**because the prompt demands it**: cite a source inline for every figure, name every
+requested dimension that was not checked, report a completed-empty search honestly with its
+criteria. Those behaviours are why fc beats legacy (45–49/98 vs 32/98 pass; 77–79/98 vs
 54–55/98 route). **A length reduction that removes them buys latency by giving back exactly
-the advantage the arch exists for**, and must fail this experiment.
+the advantage the arch exists for**, and must fail this experiment — that is what L1–L3 and
+G7/G8 are for.
+
+But per §1.1 that protected content is only **6.7 %** of the tokens. The 67 % pool the change
+would actually target is unsourced interpretation, atmosphere and speculation. So the honest
+statement of the risk is narrower than "shortening costs quality": it is **"the change might
+not be able to distinguish the two pools in practice"** — a prompt directive is not a
+classifier, and a model told to be brief may well cut the cited figure rather than the
+atmosphere paragraph. That is the failure mode to watch, and it is what G7/G8 detect.
 
 ### Predicted effect size (stated in advance, so it can be wrong)
 
@@ -135,6 +181,7 @@ retires none.
 | G6 | no case at candidate 0/3 vs baseline 3/3 | 0 cases |
 | G7 | grounding: `unsupported` claim rate not worse than baseline by more than | `<TO BE FILLED>` pp |
 | G8 | source-coverage rate not worse than baseline by more than | `<TO BE FILLED>` pp |
+| G7′/G8′ | **directional prediction** (§1.1): both should *improve*, since the cuttable pool IS the ungrounded pool. Recorded in advance; a result where length falls but G7/G8 merely hold is a **failed prediction** and must be reported as one even if every gate passes. | improve by `<TO BE FILLED>` pp |
 | G9 | zero-tolerance violations | 0 |
 | G10 | canned-fallback rate (`wrapped_by` = `fallback_*` over wrapped turns) not worse than baseline | `<TO BE FILLED>` |
 

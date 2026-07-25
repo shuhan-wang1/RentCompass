@@ -177,6 +177,45 @@ A v2 gate, if it is ever written, is an **independent forward-only rule**. It mu
 recorded as a revision of this round's SLO, and it may not be applied to any measurement
 taken before it was frozen.
 
+### 3.6 Cutover rule — every gate is necessary; none substitutes for another
+
+**A public cutover requires ALL gates to pass, p50 included. If a verification round reports
+`STAGE-PAUSE (exit 2)` for any reason, there is no cutover.**
+
+The quality criteria the owner set on 2026-07-25 — no principled errors, no pile of
+hallucinations, not constantly falling back to fixed templates — are **additional necessary
+conditions layered on top of the existing gates**. They do not replace, outweigh or excuse
+any of them. "Quality is good enough, so ship despite p50" is the same relaxation as editing
+`P50_LIMIT_MS`, arrived at by a different route, and it is refused on the same ground
+(§3.5). This drift was proposed and corrected once already; do not re-derive it.
+
+Concretely, as of PR #11: **that fix does not target p50 and must not be expected to move
+it.** Its wrap changes affect only soft-wrapped turns (~2% of live traffic) and, if
+anything, make those turns spend longer attempting an LLM answer instead of falling
+through to the renderer; the critic-evidence change affects repair turns. Neither touches
+the median. The honest expectation for the next round is therefore **p50 still ≈6.9 s,
+still STAGE-PAUSE, still no cutover** — the fix buys answer quality on the turns it
+touches, not the latency gate.
+
+Reaching a cutover legitimately requires one of exactly two things:
+
+1. **product work that actually moves the median** — and per §4 the only data-supported
+   lever identified so far is CALL COUNT, with prompt size already refuted; or
+2. **a separately pre-registered, frozen, forward-only v2 gate** (§3.5) validated on a
+   fresh independent round.
+
+Ordering, not negotiable: #10/#11 reviewed and merged -> build from the merged mainline and
+smoke -> full verification on the new SHA -> cutover **only if every gate passes**.
+
+### 3.7 Re-pinning for any new build
+
+`/etc/rentcompass/deploy.env` currently authorises **`2d48d225bc9a99eb4c5e982a9e86105158503b4b`
+and nothing else**, and that pin is verified open (HEAD == pin, tracked tree clean). It is
+not a standing permission: producing a new merge SHA means the deploy tree AND
+`DEPLOY_PINNED_SHA` must BOTH be moved to that approved full SHA before building. The gate
+demands exact equality, so moving one without the other fails closed — which is the intended
+behaviour, not a fault.
+
 ---
 
 ## 3A. Operational facts a new session will not otherwise know

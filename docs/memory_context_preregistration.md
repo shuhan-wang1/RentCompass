@@ -52,10 +52,15 @@ condition. Both are measured; neither alone decides the outcome.
 ### 1.1 What the change may touch
 
 The candidate is `BASELINE_PRODUCT_SHA` **plus memory wiring only**. On mainline today
-`create_initial_state` hard-codes `memory_context=""`
-(`src/uk_rent_agent/agent/state.py:123`), so the retrieved block never reaches the FC
-message array. The change makes that channel an argument and hands it the block that was
+`create_initial_state` hard-codes `memory_context=""` —
+**`src/uk_rent_agent/agent/state.py` → `create_initial_state`, the `memory_context`
+initializer** (line 130 at product SHA `042c477`) — so the retrieved block never reaches the
+FC message array. The change makes that channel an argument and hands it the block that was
 already retrieved.
+
+The reference is bound to the **symbol**, not the line: a bare line number silently rots
+when anything above it moves. It already did — this cited `:123` until PR #11 inserted the
+`wrapped_by` channel above it. Resolve it by symbol and treat the line as an as-of note.
 
 | file | permitted change |
 |---|---|

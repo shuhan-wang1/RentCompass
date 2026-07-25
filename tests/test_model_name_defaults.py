@@ -105,3 +105,65 @@ def test_no_retired_name_survives_an_env_override(monkeypatch):
         pytest.xfail("router has no retired-name guard yet — see the module docstring")
     with pytest.raises(ValueError, match="retired"):
         router_mod.ModelRouter()
+
+
+# --------------------------------------------------------------------------- #
+# The generalisation: one env var, one default.
+# --------------------------------------------------------------------------- #
+# DEEPSEEK_MODEL had TWO literal defaults that disagreed — 'deepseek-chat' in
+# app/config.py and 'deepseek-v4-flash' in app/core/llm_config.py. That disagreement is
+# what made the 2026-07-25 outage possible AND what hid it: an audit comparing the
+# deployed value against "the" code default finds a match against whichever copy happens
+# to agree, and reports no override. This test is the invariant that would have caught it
+# before it shipped.
+#
+# Only LITERAL string defaults are compared. Computed defaults (str(REPO_ROOT / ...)) are
+# skipped deliberately: two modules can spell the same computed path differently — one
+# inline, one via a local — and comparing source text there yields false positives, which
+# is exactly what a first pass of this audit produced for SEARCH_LISTING_CACHE_PATH (both
+# resolve to REPO_ROOT/.runtime/listing_cache.sqlite3).
+
+_ENV_LITERAL_DEFAULT = re.compile(
+    r"""os\.(?:getenv|environ\.get)\s*\(\s*['"]([A-Z0-9_]+)['"]\s*,\s*['"]([^'"]*)['"]""")
+
+# Vars whose defaults are allowed to differ, each with the reason. Keep this EMPTY unless a
+# divergence is genuinely intended; an entry here is a standing invitation to the same bug.
+_ALLOWED_DIVERGENCE: dict[str, str] = {}
+
+
+def _scan_literal_env_defaults():
+    found: dict[str, set[tuple[str, str]]] = {}
+    for base in ("app", "src"):
+        for path in sorted((_REPO / base).rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            rel = path.relative_to(_REPO).as_posix()
+            for lineno, line in enumerate(
+                    path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                for var, default in _ENV_LITERAL_DEFAULT.findall(line):
+                    found.setdefault(var, set()).add((default, f"{rel}:{lineno}"))
+    return found
+
+
+def test_no_env_var_has_two_disagreeing_literal_defaults():
+    """One env var, one default. Two copies WILL drift, and the drift is invisible."""
+    offenders = {}
+    for var, sites in _scan_literal_env_defaults().items():
+        values = {d for d, _ in sites}
+        if len(values) > 1 and var not in _ALLOWED_DIVERGENCE:
+            offenders[var] = sorted(sites)
+
+    assert not offenders, "env vars with disagreeing literal defaults:\n" + "\n".join(
+        f"  {var}:\n" + "\n".join(f"      {d!r} at {loc}" for d, loc in sites)
+        for var, sites in sorted(offenders.items()))
+
+
+def test_the_scan_actually_sees_the_model_var():
+    """Guard the guard: a regex that silently matches nothing would pass the test above.
+
+    If DEEPSEEK_MODEL stops being read with a literal default the scan has lost its grip on
+    the very variable this file exists for, and the invariant above is vacuous.
+    """
+    found = _scan_literal_env_defaults()
+    assert "DEEPSEEK_MODEL" in found, "the literal-default scan no longer sees DEEPSEEK_MODEL"
+    assert len(found) >= 10, f"scan found only {len(found)} env defaults — regex likely broken"

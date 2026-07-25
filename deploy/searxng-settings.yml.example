@@ -16,9 +16,17 @@ general:
   enable_metrics: false
 
 server:
-  # Overridden at runtime by the SEARXNG_SECRET env var (see docker-compose.yml);
-  # this literal is only a fallback for running the file standalone.
-  secret_key: "739038e174f59b462a203f8533a2719285164b373c507d9e6cc89c1502a7621c"
+  # ALWAYS overridden at runtime by the SEARXNG_SECRET env var, which
+  # docker-compose.yml makes mandatory (`${SEARXNG_SECRET:?...}`), so this literal never
+  # applies on the deploy path — deploy/update.sh copies this file to
+  # searxng/settings.yml and compose supplies the real value.
+  #
+  # It is a PLACEHOLDER, deliberately not a valid-looking key. Running this file
+  # standalone requires substituting a real one: `openssl rand -hex 32`.
+  # It used to hold a committed 64-hex literal, which failed the gitleaks CI job on
+  # every pull request against this (public) repo — a permanently red secret scan is
+  # the condition under which a genuine leak gets merged unnoticed.
+  secret_key: "CHANGE_ME_run_openssl_rand_hex_32"
   # Private instance → turn the request limiter off so the agent can call freely.
   limiter: false
   public_instance: false

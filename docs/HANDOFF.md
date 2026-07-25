@@ -1,30 +1,36 @@
 # HANDOFF — START HERE
 
 Master index for the fc_loop work. **Every other document is a leaf; this is the only file
-that spans all branches.** Last updated 2026-07-23.
+that spans all branches.** Last updated 2026-07-25.
 
-> ## Status: ACTIVE — measurement and contract have landed; one product experiment is being pre-registered.
+> ## Status: ACTIVE — a full verification round has now been run. Verdict STAGE-PAUSE; fc beats legacy on correctness.
 >
 > The 2026-07-19 → 07-23 latency/correctness phase is **closed** (two product experiments
 > NO-GO, §4). What followed is a deliberate rebuild in order — **infrastructure → contract
-> → product**. The first two have merged. The product experiment exists **only as a design
-> under review**: no candidate has been built, no paid run has happened.
+> → product**. All of the infrastructure/contract/defect work has merged, and on 2026-07-25
+> the first complete paid verification round was run against candidate `8793c0b`.
 >
 > **Right now:**
-> * `telemetry/v2-layer-b` is the **mainline**, not `main` (43 commits / 263 files behind,
->   not a usable base for anything).
-> * **PR #8** — gitleaks fix. OPEN, both checks green, `mergeStateStatus: CLEAN`. Merge next.
-> * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3 (`e91293f`),
->   CHANGES REQUESTED twice, awaiting a short final design review. It is **not approved or
->   frozen**: all 13 identity fields are still placeholders.
-> * **PR #11** — `fix/fc-wrap-and-critic-evidence`. fc_loop product fix (canned-fallback
->   conversion + evidence-blind critic repair). **Changes no gate threshold.**
-> * **fc is at STAGE-PAUSE: p50 6878ms > 6000ms. The SLO is unchanged and this round is not
->   retroactively passed** — §3.5, which also records the confound that must NOT be used to
->   relax it.
-> * **No candidate exists for the §3.3 experiment. Do not create one.** §3 has the gating
->   sequence. (PR #11 is an ordinary defect fix on mainline, *not* a measurement candidate —
->   do not conflate the two: a candidate may carry the memory wiring and nothing else.)
+> * `telemetry/v2-layer-b` is the **mainline**, not `main`. Head is
+>   **`8793c0b17963a6a2b375903a164d3d96395dc834`**. Offline suite **1804 passed, 3 skipped,
+>   1 xfailed**.
+> * **The verification round of record is `.runtime/round-8793c0b-internal-2026-07-25/`.**
+>   Verdict **STAGE-PAUSE (exit 2)**: fc p50 **8466ms** > 6000ms and partial+soft **10.45%**
+>   > 10%. Zero-tolerance clean. **No cutover** (§3.6). §3.8 has the full result.
+> * **The Phase-2 fc-vs-legacy verdict, which had never been written, now exists** — §3.9.
+>   Both relative gate metrics PASS and fc is *better* than legacy on each: fabricated
+>   numbers 2.04% vs 3.06%, forbidden-tool 3.06% vs 4.08%, contradicted claims 0 vs 1,
+>   pass rate 60.2% vs 34.7%.
+> * **The canned-template fallback is gone.** All 7 soft wraps in the round carry
+>   `wrapped_by='llm'`; canned share **0.00%** (was ~80% conversion once a wrap fired).
+> * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3, CHANGES
+>   REQUESTED twice, awaiting a short final design review. **Not approved or frozen.**
+> * **PR #12** (lever ledger) and **PR #15** (output-length/latency pre-registration, every
+>   threshold still `<TO BE FILLED>`) are OPEN. **#15 must not be filled in against the
+>   8466ms now on record** — that is back-fitting a threshold to a known result (§3.5).
+> * **No candidate exists for the §3.3 memory experiment. Do not create one.** `8793c0b` is
+>   ordinary merged mainline, *not* a measurement candidate for §3.3 — do not conflate the
+>   two: that candidate may carry the memory wiring and nothing else.
 >
 > **Do NOT cherry-pick product code from either NO-GO branch.** Revisiting memory wiring,
 > the critic fallback or tool-surface hardening means a new hypothesis, a new candidate and
@@ -40,12 +46,17 @@ need.
 
 | branch | head | state | what lives here |
 |---|---|---|---|
-| `telemetry/v2-layer-b` | **mainline** | **the trunk — branch from this, not `main`** | infrastructure + contract, both merged |
+| `telemetry/v2-layer-b` | **`8793c0b`** | **the trunk — branch from this, not `main`** | infrastructure + contract + defect fixes, all merged |
 | `main` | `f20ad11` | **stale, do not use** | 43 commits / 263 files behind mainline |
 | `eval/measurement-infrastructure` | `0d710d3` | **MERGED** (PR #6 → `f053508`) | measurement machinery; branch kept so the SHA stays citable |
 | `eval/evaluator-contract` | `b7a61d6` | **MERGED** (PR #7 → `32454d3`) | G2/G3/E11 amendments + claim taxonomy |
-| `fix/gitleaks-example-secret` | `1f43e53` | **PR #8 OPEN, both checks green** | the searxng example-secret placeholder |
+| `fix/gitleaks-example-secret` | `1f43e53` | **MERGED** (PR #8 → `5402336`) | the searxng example-secret placeholder |
+| `fix/fc-wrap-and-critic-evidence` | `379e317` | **MERGED** (PR #11 → `103eef8`) | canned-fallback conversion + evidence-blind critic repair |
+| `docs/handoff-refresh` | `4af58e1` | **MERGED** (PR #10 → `042c477`) | HANDOFF §3.5/§3.6/§3.7 |
+| `fix/retired-model-default` | `7568513` | **MERGED** (PR #13 → `a5a5110`) | `app/config.py` retired-model default + one-env-one-default invariant test |
+| `fix/observer-wired-at-startup` | `705a33e` | **MERGED** (PR #14 → `8793c0b`) | zero-LLM-call turns stay in the population |
 | `design/memory-context-preregistration` | `e91293f` | **PR #9 OPEN, rev 3, under review** | DESIGN ONLY pre-registration. No candidate. |
+| `docs/output-length-latency-prereg` | — | **PR #15 OPEN, DESIGN ONLY** | every threshold `<TO BE FILLED>`; see §3.5 before filling any of them |
 | `fastpath/deterministic-phase1` | `7842f60` | **TERMINATED / NO-GO** | the deterministic fast path + its full record |
 | `hardening/correctness-only` | `ae1c035` | **TERMINATED / NO-GO** | product candidate `d2004e0`; the correctness bundle |
 | `measurement/capture-e7977e6` | `8c96c12` | retained, reproduction only | baseline capture tree (evidence probe on `e7977e6`) |
@@ -72,7 +83,9 @@ earlier notes that named it as the shippable SHA were wrong.
 | `docs/hardening_correctness_only.md` | `hardening/correctness-only` | what the correctness bundle carried and deliberately did not; the pre-registered Base98 gate; round 1 and round 2 results; the TERMINATED block. |
 | `docs/recall_case_audit.md` | `hardening/correctness-only` | per-case ruling on when an EMPTY tool trace is contract-legal for a recall case, with the evidential criterion. |
 | `docs/eval_infrastructure.md` | `eval/measurement-infrastructure` | what the shippable branch adds, and why items 5–6 exist (both are scars). |
-| `docs/canary_runbook.md` | all branches | pre-existing canary/rollout operations. Unrelated to these experiments. |
+| `docs/canary_runbook.md` | all branches | canary/rollout operations: image build out of band, stage table, gate metrics, rollback. **Read §1 "Image build" before building any candidate.** |
+| `docs/output_length_latency_preregistration.md` | `docs/output-length-latency-prereg` (PR #15) | the surviving latency lever, as a design. **Every threshold is `<TO BE FILLED>` and §3.5 constrains how they may be filled.** |
+| `.runtime/round-8793c0b-internal-2026-07-25/README.txt` | deploy tree, not committed | procedure and caveats for the round of record (§3.8/§3.9). Authoritative on how that round was actually run. |
 
 Verify a doc's branch: `git ls-tree -r --name-only <branch> -- docs/`
 
@@ -86,9 +99,14 @@ Verify a doc's branch: `git ls-tree -r --name-only <branch> -- docs/`
 |---|---|---|---|
 | 1 | **#6** | `eval/measurement-infrastructure` | merged as `f053508`. Three-layer identity, evidence persistence, single-evaluator re-score, shard preflight, out-dir reuse guard. |
 | 2 | **#7** | `eval/evaluator-contract` | merged as `32454d3`. G2/G3/E11 case amendments + six claim-taxonomy rules. |
-| 3 | **#8** | gitleaks fix | **OPEN, green, ready.** |
-| 4 | **#9** | pre-registration | **OPEN, rev 3, under review. Design only.** |
-| 5 | **#11** | `fix/fc-wrap-and-critic-evidence` | **OPEN.** fc_loop product fix: canned-fallback conversion + evidence-blind critic repair. Touches no gate threshold — see §3.5. |
+| 3 | **#8** | gitleaks fix | merged as `5402336`. Secret scan green — keep it that way. |
+| 4 | **#11** | `fix/fc-wrap-and-critic-evidence` | merged as `103eef8`. Canned-fallback conversion + evidence-blind critic repair. Touches no gate threshold. **Measured effect: canned share of soft wraps 0.00% (§3.8).** |
+| 5 | **#10** | `docs/handoff-refresh` | merged as `042c477`. §3.5/§3.6/§3.7. |
+| 6 | **#13** | `fix/retired-model-default` | merged as `a5a5110`. `app/config.py` still defaulted to the provider-retired `deepseek-chat`; adds a source scan, a resolved-default test and a one-env-one-literal-default invariant. |
+| 7 | **#14** | `fix/observer-wired-at-startup` | merged as **`8793c0b`**. A zero-LLM-call turn in a process that had built no model emitted a contract-invalid record and left the population — distorting p50 and every rate denominator. Verified fixed in production (§3.8). |
+| — | **#9** | pre-registration | **OPEN, rev 3, under review. Design only.** |
+| — | **#12** | lever ledger (docs) | **OPEN.** |
+| — | **#15** | output-length/latency pre-registration | **OPEN, DESIGN ONLY**, all thresholds `<TO BE FILLED>`. See §3.5. |
 
 The order is the point: measurement first so a re-score is trustworthy, contract second so
 the bar is stable, product last. Do not reorder it.
@@ -101,8 +119,8 @@ the bar is stable, product last. Do not reorder it.
    - known clerical fix before sign-off: §6.6 still says §5.1.3 (E1–E5);
      revision 3 renamed/moved these to §5.1.4 (RCL1–RCL4)
    - this is design acceptance only; placeholders still authorise nothing
-2. merge PR #8 (green)
-3. probe-shard contract PR, branched from the post-#8 mainline commit
+2. merge PR #8 (green)                            <- DONE, 5402336
+3. probe-shard contract PR, branched from the current mainline commit
    - cases_recall_probe.jsonl, 12 cases, spec'd in Appendix A of the prereg
    - its own review; NOT generated until #9's design is approved
 4. backfill the 13 <TO BE FILLED> identity fields in the prereg; FINAL FREEZE of #9
@@ -119,7 +137,9 @@ Until step 1 is complete, **do not open the probe-shard PR**. Until steps 2–4 
 
 Single hypothesis: *correctly injecting long-term memory into the FC arm improves
 cross-session recall and does not degrade other tasks.* On mainline `create_initial_state`
-hard-codes `memory_context=""` (`src/uk_rent_agent/agent/state.py:123`), so the retrieved
+hard-codes `memory_context=""` (`src/uk_rent_agent/agent/state.py` → `create_initial_state`,
+the `memory_context` initializer — line 130 at `8793c0b`; cite the symbol, not the line, since
+PR #11's `wrapped_by` channel already shifted it once), so the retrieved
 block never reaches the FC message array. Permitted change surface is three product files
 plus tests, **≤120 lines**. The trap: the production entry point **already prefixes** the
 retrieved block onto the query string, so an FC path reading both `user_query` and
@@ -140,11 +160,25 @@ this mechanically.
 
 ### 3.5 Latency position — STAGE-PAUSE stands, and the SLO is UNCHANGED
 
-Current aggregator verdict on the fc pool's retained telemetry (`2d48d22`, 100 records):
+**Two independent rounds now agree. Neither revises the other; both stand as taken.**
 
 ```
-fc p50 6878ms > 6000ms   ->   STAGE-PAUSE (exit 2)
+2026-07-22, candidate 2d48d22, 100 records      fc p50 6878ms > 6000ms  -> STAGE-PAUSE (2)
+2026-07-25, candidate 8793c0b,  67 turns        fc p50 8466ms > 6000ms  -> STAGE-PAUSE (2)
 ```
+
+The two are **not comparable to each other**: they used different probe populations (the
+07-22 round used an unrecorded 10-message set; the 07-25 round declares the 67 single-turn
+cases of `evaluation/benchmark/cases.jsonl`, an adversarial retrieval-heavy corpus that is a
+*harder* workload than real traffic). Neither number may be quoted as a trend against the
+other. Fixing one population for all future rounds is a precondition for ever claiming a
+trend. §3.8 has the second round in full.
+
+**Consequence for PR #15.** 8466ms is now a known result. Filling #15's `<TO BE FILLED>`
+thresholds against it would be choosing a pass mark after seeing the measurement it judges —
+the exact move rejected below. #15 must either be frozen on grounds independent of this
+round, or validated on a **fresh, independent** round. The 07-25 round cannot serve as #15's
+validation round.
 
 **`P50_LIMIT_MS` remains 6000. The SLO has NOT been revised, and this round is NOT
 retroactively passed.** The 6 s bar is not a number derived from this measurement: it was
@@ -189,23 +223,34 @@ any of them. "Quality is good enough, so ship despite p50" is the same relaxatio
 `P50_LIMIT_MS`, arrived at by a different route, and it is refused on the same ground
 (§3.5). This drift was proposed and corrected once already; do not re-derive it.
 
-Concretely, as of PR #11: **that fix does not target p50 and must not be expected to move
-it.** Its wrap changes affect only soft-wrapped turns (~2% of live traffic) and, if
-anything, make those turns spend longer attempting an LLM answer instead of falling
-through to the renderer; the critic-evidence change affects repair turns. Neither touches
-the median. The honest expectation for the next round is therefore **p50 still ≈6.9 s,
-still STAGE-PAUSE, still no cutover** — the fix buys answer quality on the turns it
-touches, not the latency gate.
+This prediction was **made in advance and then tested**. Before the 07-25 round this section
+said PR #11 "does not target p50 and must not be expected to move it… the honest expectation
+is p50 still ≈6.9 s, still STAGE-PAUSE, still no cutover." The round returned STAGE-PAUSE, as
+predicted; it also confirmed the fix's intended effect (canned share of soft wraps 0.00%).
+The prediction is left standing here on purpose — a pre-registration is only worth anything
+if the failed and the fulfilled ones are both kept.
+
+**The quality result does not change the answer.** The 07-25 round showed fc is *better than
+production legacy* on every principled-error metric (§3.9). That is a genuine result and it
+is still not a cutover: p50 is an absolute gate, not a comparison. "fc is better than what we
+ship today, so ship it" is the same relaxation as editing `P50_LIMIT_MS`, reached by a third
+route, and it is refused on the same ground.
 
 Reaching a cutover legitimately requires one of exactly two things:
 
-1. **product work that actually moves the median** — and per §4 the only data-supported
-   lever identified so far is CALL COUNT, with prompt size already refuted; or
+1. **product work that actually moves the median**, or
 2. **a separately pre-registered, frozen, forward-only v2 gate** (§3.5) validated on a
    fresh independent round.
 
-Ordering, not negotiable: #10/#11 reviewed and merged -> build from the merged mainline and
-smoke -> full verification on the new SHA -> cutover **only if every gate passes**.
+On (1), the lever ledger as of 2026-07-25 — prompt size, message array, call count and
+schema compaction are all **refuted**; call count was closed by arithmetic (2nd-call marginal
+cost −280 ms; 2-call turns only 50.0% under the bar; 3+ call turns 0%; a p50 under the bar
+needs >50% of *all* turns under it). Two candidate levers survive, and §3.8 shows they are
+**not yet separable**, so neither may be planned against yet.
+
+Ordering, not negotiable: build out of band from the merged mainline and smoke -> full
+verification on the new SHA -> cutover **only if every gate passes**. Note that steps 1–3 are
+now done for `8793c0b` and step 4 failed, so the next candidate must repeat all of them.
 
 ### 3.7 Re-pinning for any new build
 
@@ -216,13 +261,115 @@ not a standing permission: producing a new merge SHA means the deploy tree AND
 demands exact equality, so moving one without the other fails closed — which is the intended
 behaviour, not a fault.
 
+**The 07-25 verification round required no re-pin and did not perform one.** The fc image was
+built out of band from an isolated worktree, so `deploy/update.sh` never ran and the pin gate
+was never touched; the deploy tree is still `2d48d22` and the public container
+(`b7529f45c3c8`) was never recreated. A re-pin to `8793c0b…` is required only if a public
+cutover is ever authorised — which, per §3.6, it currently is not.
+
+### 3.8 The 2026-07-25 verification round — STAGE-PAUSE, and one unattributed 2232ms
+
+Evidence package: **`.runtime/round-8793c0b-internal-2026-07-25/`** (98 files, SHA256SUMS
+verified). Its README is authoritative on procedure; this is the summary.
+
+**Round A — canary telemetry over the live serving path.** Declared population: the 67
+single-turn cases of `evaluation/benchmark/cases.jsonl`. The 31 cases carrying a
+`conversation_history` are excluded because the HTTP path cannot faithfully replay their
+fixed assistant turns. 67/67 HTTP 200, external anchor matched 67/67, one candidate SHA,
+150 LLM calls / 1,280,356 input tokens (71.2% cache read) / 33,389 output.
+
+| gate | value | |
+|---|---|---|
+| p50 | **8466 ms** > 6000 | **BREACH** — only 20/67 (29.9%) under the bar |
+| partial+soft | **10.45%** > 10% | **BREACH** — 7 wraps, all 25–29 s |
+| p95 | 28460 ms < 30000 | pass, 1540 ms of margin |
+| zero-tolerance | all 0 | clean |
+| 5xx | 0 | pass |
+
+**PR #11's fix is confirmed in production: all 7 soft wraps carry `wrapped_by='llm'` and the
+canned share is 0.00%**, against a ~80% conversion rate before. The single "security
+non-clean" record is G1 `denied_recall` with `dispatch_started=false` — the runbook's
+documented safe path, not a zero-tolerance event.
+
+**PR #14's fix is confirmed in production**: the greeting-as-first-request turn now emits
+`llm_usage_status=no_llm_calls` with `provider_schema_400_count=0` (was
+`not_instrumented`/`null`), so `--expect-turns` matches where the same smoke on `042c477`
+observed one turn fewer than were sent.
+
+**The 2232ms nobody can attribute yet.** Round B's harness measured the same code far faster:
+
+```
+eval p50, all 98 cases        5504 ms
+eval p50, the SAME 67 cases   6234 ms   (+730ms is pure population effect —
+                                         the 31 history cases have p50 4179ms)
+canary p50, the SAME 67 cases 8466 ms   (paired median difference +1233ms)
+```
+
+Same 67 cases, soft-wrap rate: eval **2/67 = 2.99%** vs canary **7/67 = 10.45%**. Three of
+the five canary-only wraps are +18 s to +23 s against their eval run (D5, D11, E7) and all
+three had `tool_budget_timeout=true`.
+
+**Two confounds, not separable from this data:**
+
+1. **cache warmth** — Round A ran first on cold listing/crime caches; Round B reused exactly
+   what Round A had just populated.
+2. **measurement span** — canary `turn_latency_ms` wraps the whole HTTP request (Flask,
+   identity resolution, conversation store, memory retrieval, persistence, telemetry); the
+   eval harness wraps only the agent invocation.
+
+They imply completely different work — cutting output length versus profiling the serving
+path — so **do not plan an optimisation against the 2466 ms deficit until they are
+separated.** A controlled diagnostic (re-running the identical 67 cases with caches now warm)
+would decide it in one round, and **must be archived as a diagnostic**: re-running a round and
+keeping the friendlier number is the post-hoc selection this project refuses.
+
+For reference if the deficit does turn out to be generation-bound, this round's own fit is
+`latency ≈ 618 + 16.2·output_tok + 524·llm_calls + 797·tool_batches` (R²=0.69, so indicative
+only; the earlier independent fit gave 14.6 ms/token). At a median 452 output tokens, closing
+2466 ms through output length alone means cutting ~152 tokens, a **34%** reduction.
+
+### 3.9 Phase-2 fc-vs-legacy — the verdict that had never been written
+
+Both arms, 98 cases each, live, same tree, same day. This closes a gap that had been open
+since the fc work began: no fc-vs-legacy verdict had ever been recorded.
+
+**The two eval-only STAGE-PAUSE metrics are RELATIVE to legacy (+1pp), so an fc-only sweep
+cannot decide them.** Both arms were run. fc PASSES both and is better on each:
+
+| relative gate | fc | legacy | delta | |
+|---|---|---|---|---|
+| `no_evidence_numbers` | 2/98 = 2.04% | 3/98 = 3.06% | **−1.02pp** | **PASS** |
+| `forbidden_tool` | 3/98 = 3.06% | 4/98 = 4.08% | **−1.02pp** | **PASS** |
+
+| quality | fc | legacy |
+|---|---|---|
+| passed | **60.2%** | 34.7% |
+| route_accuracy | **80.6%** | 58.2% |
+| grounded | **79.6%** (n=280) | 74.3% (n=152) |
+| money_grounded | 84.4% (n=160) | **88.9%** (n=99) |
+| contradicted_claims | **0** | 1 |
+| task_completion | 100% | 100% |
+| latency p50 / p95 | 5481 / 24011 ms | **2672 / 10438 ms** |
+| cost | $0.0480 | $0.0218 |
+
+**Read the denominators before quoting the rates.** fc makes ~84% more groundable claims
+(280 vs 152) and 62% more money claims (160 vs 99). Legacy's higher `money_grounded` rate and
+its lower latency are both partly a consequence of **legacy answering less** — the same effect
+recorded on 2026-07-22, where legacy met 6 s only by returning `clarification` on 25/50 paired
+turns. A metric computed over a much smaller claim base is not evidence of a better answer.
+
+**Severity is not the same as rate.** fc's two fabrications (C6, C11) are both invented
+commute minutes — a figure a user acts on directly. 2.04% is a low rate on a high-stakes
+field, not a benign one.
+
 ---
 
 ## 3A. Operational facts a new session will not otherwise know
 
 * **Dev tree is `/home/shuhan/telemetry-v2-layer-b`.** Never develop in
   `/home/shuhan/uk_rent_recommendation` — that is the deploy tree, on detached HEAD
-  `20627c5`, and it is production.
+  `2d48d22`, and it is production. That SHA is the deploy pin (§3.7); it deliberately does
+  **not** track mainline, and a docs-only merge must never move it.
 * **`gh` is authenticated** as `shuhan-wang1` (scopes `repo`, `read:org`, `gist`,
   `admin:public_key`). PRs, checks and branch protection can all be driven from the CLI.
   The system binary is `/usr/bin/gh` 2.45.0 — old enough that `gh pr edit` hits a
@@ -244,8 +391,42 @@ behaviour, not a fault.
   scan is how a real leak gets merged unnoticed — keep it green.
 * **The repo is public.** Unauthenticated `api.github.com` reads work, which is useful for
   diagnosis but also means committed literals are exposed.
-* **Offline suite baseline: 1785 passed, 3 skipped** on mainline post-#7 (was 1710 before
-  the infrastructure and contract work). Run it in the `uk-rent-agent:bench-git` image.
+* **Offline suite baseline: 1804 passed, 3 skipped, 1 xfailed** on mainline `8793c0b`
+  (1793 at `042c477`, 1785 post-#7, 1710 before the infrastructure work). **The host has no
+  `pytest` and no virtualenv** — run it in the `uk-rent-agent:bench-git` image with the
+  worktree bind-mounted:
+  `docker run --rm -v <worktree>:/patched uk-rent-agent:bench-git bash -c 'pip install -q
+  pytest pytest-asyncio; cd /patched && OPENAI_API_KEY=dummy DEEPSEEK_API_KEY=dummy
+  HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m pytest tests/ -q -p no:cacheprovider'`.
+
+**Traps that cost time on 2026-07-25 — every one of these silently produces a plausible
+wrong answer rather than an error:**
+
+* **Never `mv` a telemetry log out from under a running pool.** The writer keeps the moved
+  inode's fd open, so subsequent turns append to the *archived* file while `.runtime/logs/`
+  stays empty. A single free greeting caught this (archive grew 2111 → 3063 bytes); a
+  67-turn round would have written entirely into the evidence package. **Archive only after
+  recreating the pool**, or `cp` and leave the original live.
+* **`canary_report.py --since` does NOT filter records.** It only feeds STAGE-PROGRESS
+  elapsed hours; only `--window HOURS` filters. The external-anchor block nevertheless prints
+  `window = the selected --window / --since range`, which is a **tool defect** — it invites
+  exactly the mistake of assuming `--since` bounded the population. First run of the 07-25
+  round counted the warm-up turn and returned INSTRUMENTATION-HOLD because of it.
+* **`canary_report.py --json` takes a PATH argument.** A bare `--json` aborts in argparse
+  with **exit 2** — indistinguishable from STAGE-PAUSE if only the exit code is checked.
+* **Telemetry field names are `telemetry_schema_version` and `strict`**, not
+  `schema_version`/`strict_mode`. Probing the wrong names returns `None` and looks like a
+  contract violation that is not there.
+* **Cold start costs 4.9–8.2 s on a zero-LLM-call turn** (4912 ms and 8172 ms measured on two
+  recreates; the same greeting warm costs 334–397 ms). Since PR #14 correctly keeps zero-call
+  turns in the population, the first turn after any recreate now lands in the p50 denominator.
+  **Warm the pool with a throwaway turn and open the window after it.**
+* **The eval harness records `git_commit: null` and `git_dirty: null`** even when `PRODUCT_SHA`
+  is passed in the environment. Its summaries **cannot self-identify the commit that produced
+  them**; the binding is external. Worth fixing.
+* **`scripts/pricing/deepseek_prices_v1.json` is `unverified: true`**, so `canary_cost.py`
+  refuses to compute — but `run_benchmark.py` prints a `total_cost_usd` anyway. Do not quote
+  the two as if they came from the same verified source.
 
 ---
 
@@ -356,6 +537,17 @@ exactly what happened to G2/G3/E11 before PR #7 caught it.
 | `pools-<sha>/` | archived canary logs of every retired pool |
 | `diagnostics-b094a04-notrun/` | prepared-but-never-run diagnostics, with `STATUS.txt` saying why |
 
+**Deploy tree, `/home/shuhan/uk_rent_recommendation/.runtime/`** (2026-07-25; all carry
+`SHA256SUMS.txt`, none is eligible for an official denominator except where stated):
+
+| path | what |
+|---|---|
+| `round-8793c0b-internal-2026-07-25/` | **THE ROUND OF RECORD** (§3.8/§3.9). Canary telemetry + both eval arms + bodies + manifests + both gate reports. A later run may diagnose this but may not replace its verdict. |
+| `archive-smoke-8793c0b-2026-07-25/` | the post-fix smoke that cleared `8793c0b` for the round. Contains `canary-fc_loop.jsonl.leaked-fd`, the file the running container kept appending to after it was moved — retained deliberately as the evidence for the `mv` trap in §3A. |
+| `diagnostics-042c477-provider400-2026-07-25/` | the failed smoke that exposed the retired-model outage: report.json, exit 3, both bodies, container log with the traceback |
+| `archive-smoke-and-restore-2026-07-25/` | the `042c477` smoke and the public-pool restore turns |
+| `logs-archive-pre-042c477/` | four earlier JSONLs including the v1 `canary-legacy.jsonl`, which must stay out of `--input` or directory aggregation fails closed on schema v1 |
+
 ---
 
 ## 7. Ops scripts — `/home/shuhan/fp-results/scripts/` (outside the repo, no SHA)
@@ -384,6 +576,18 @@ exactly what happened to G2/G3/E11 before PR #7 caught it.
 6. **Score both arms of an A/B with ONE evaluator.** Each arm ships its own grader, so
    comparing each arm's own `passed` compares two evaluators as much as two products.
 7. **Hard cost cap on every paid command** (`--max-cost-usd 5` standing).
+8. **Declare the population before the round, and reuse it.** A p50 is a statement about a
+   population, not about a build. The 07-22 and 07-25 rounds are both valid and mutually
+   incomparable because their probe sets differ (§3.5). The 07-25 population — the 67
+   single-turn cases of `evaluation/benchmark/cases.jsonl` — is now the declared one; changing
+   it forfeits every comparison against this round.
+9. **A re-run is a diagnostic, never a re-roll.** If a round is repeated to explain a result,
+   the first round stays the round of record and the repeat is archived separately as a
+   diagnostic. Keeping the friendlier of two runs is post-hoc selection, the same defect as
+   editing a threshold after seeing the measurement (§3.5).
+10. **Read denominators before quoting rates.** An arm that answers less produces fewer
+    claims and so scores better per claim while helping the user less — this is exactly how
+    legacy outscores fc on `money_grounded` and on latency (§3.9).
 
 Full binding-rule list and the 15-entry trap list: `docs/fastpath_handoff.md` §2 and §9 on
 `fastpath/deterministic-phase1`.

@@ -2887,6 +2887,27 @@ def _combine_observations(observations: list) -> str:
     return "\n\n".join(blocks)
 
 
+def _fc_artifact_observation(state: AgentState) -> Optional[str]:
+    """Render fc_loop's ``tool_artifacts`` as a generation-ready observation string.
+
+    Labelling deliberately mirrors ``_collect_grounding_evidence`` (``tool#turn``) so the
+    pass that GRADES an answer and the pass that REWRITES it are shown the same evidence,
+    filtered by the same ``_artifact_usable`` predicate. Returns None when no artifact
+    carries usable content, leaving the caller's existing behaviour untouched.
+    """
+    pieces: list[str] = []
+    for a in state.get("tool_artifacts") or []:
+        if not _artifact_usable(a):
+            continue
+        label = f"{a.get('tool', 'tool')}#{a.get('turn', '')}"
+        pieces.append(
+            f"[{label}]\n"
+            + json.dumps(a.get("raw_data"), ensure_ascii=False, default=str))
+    if not pieces:
+        return None
+    return "\n\n".join(pieces)
+
+
 def _build_generation_prompt(state: AgentState) -> str:
     """Assemble the response-generation prompt from state.
 
@@ -2920,6 +2941,27 @@ def _build_generation_prompt(state: AgentState) -> str:
         return directive + "\n\n" + body
 
     observation = state.get("tool_observation")
+
+    # fc_loop: evidence lives ONLY in `tool_artifacts`; that arch never writes `observations`
+    # or `tool_observation`. Without this branch every fc critic repair fell through to the
+    # "direct answer (no tool data)" tail below and regenerated from the query alone — and the
+    # measured fingerprint of that blindness is unambiguous: repaired answers invented
+    # BRAND-NEW figures rather than converging on the real ones (A2 50/1650/1903 -> 1450/1550;
+    # B12 nine figures -> nine different figures). The critic GRADES against these artifacts
+    # (_collect_grounding_evidence) and was REWRITING against nothing.
+    #
+    # Guarded on both legacy channels being empty, so this can only ever affect turns that
+    # today take the no-tool-data tail. `tool_artifacts` is written by fc_loop alone.
+    if not loop_obs and not observation:
+        fc_obs = _fc_artifact_observation(state)
+        if fc_obs:
+            if state.get("context_tainted"):
+                fc_obs = sanitize_untrusted(str(fc_obs)).text
+            ctx = build_context_info(extracted_context, tool_name, prefs)
+            body = SYNTHESIS_PROMPT.format(
+                context_info=ctx, user_query=user_query, observation=fc_obs)
+            return directive + "\n\n" + body
+
     if observation:
         obs = observation
         if state.get("context_tainted"):
@@ -3426,8 +3468,14 @@ def _make_critic_node():
         # replace it with a localized "no reliable data" reply. Fires ONLY when retrieval was
         # expected AND every retrieval source is empty/failed — a turn with real evidence
         # keeps repair-then-passthrough, and a no-tools conversational turn is untouched.
+        # ...and only when the critic itself did NOT clear the answer. The condition below
+        # used to ignore the verdict entirely, so an answer the critic had just certified as
+        # grounded was still hard-replaced by the renderer (reproduced on idp98_r3_base A2,
+        # verdict ('regenerated', True, [])). Discarding a verified answer for boilerplate is
+        # strictly worse for the user than the risk this 兜底 exists to cover.
         if (
             retrieval_expected
+            and not getattr(outcome.verdict, "grounded", False)
             and has_specific_price_claims(final)
             and not _has_usable_retrieval_evidence(state, artifacts)
         ):

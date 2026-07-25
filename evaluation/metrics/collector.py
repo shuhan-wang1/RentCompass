@@ -276,18 +276,24 @@ def record_turn_soft_wrap(
     elapsed_ms: float,
     llm_calls: int,
     tool_batches: int,
+    wrapped_by: Optional[str] = None,
 ) -> None:
     """Emit a ``turn_soft_wrap`` event when a turn hits the soft time/step wrap and the
     loop finalises with what it has (rather than running the full budget).
 
     ``elapsed_ms`` is the turn time at the wrap; ``llm_calls`` / ``tool_batches`` the work
-    done so far. No-op when capture is inactive."""
+    done so far. ``wrapped_by`` records HOW the turn was closed — ``llm`` / ``llm_retry``
+    (model-written) vs ``fallback_timeout`` / ``fallback_error`` (the deterministic canned
+    renderer). Without it a soft-wrap count cannot distinguish a turn that still produced a
+    real answer from one that emitted boilerplate, which is the distinction a user feels.
+    No-op when capture is inactive."""
     _emit(
         "turn_soft_wrap",
         {
             "elapsed_ms": elapsed_ms,
             "llm_calls": llm_calls,
             "tool_batches": tool_batches,
+            "wrapped_by": wrapped_by,
         },
     )
 

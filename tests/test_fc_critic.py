@@ -444,3 +444,89 @@ def test_h3_valid_web_search_evidence_still_passes(monkeypatch):
     assert fake.calls == 0                                            # grounded -> no regen
     assert update.get("final_response", original) == original
     assert update.get("final_response", original) != no_reliable_data_message("en")
+
+
+# ── 4. the repair pass must SEE the evidence it is graded against ────────────
+def test_fc_repair_prompt_is_built_from_tool_artifacts():
+    """fc_loop writes evidence ONLY into ``tool_artifacts``; it never writes
+    ``observations``/``tool_observation``. Before this branch existed, every fc critic
+    repair fell through to the "direct answer (no tool data)" tail and regenerated from the
+    query alone — measurably inventing brand-new figures instead of converging on the real
+    ones. The critic GRADED against the artifacts while REWRITING against nothing."""
+    _llm, lga = _load_local_core()
+
+    art = _artifact("search_properties",
+                    {"recommendations": [{"price_pcm": 1450, "address": "Caledonian Road"}]})
+    state = _fc_state("some answer", [art])
+    # precondition: this is exactly the shape that used to reach the no-tool-data tail
+    assert not state.get("observations")
+    assert not state.get("tool_observation")
+
+    prompt = lga._build_generation_prompt(state)
+
+    assert "1450" in prompt, "the repair prompt must carry the figure it must converge on"
+    assert "Caledonian Road" in prompt
+    assert "search_properties#1" in prompt            # label matches _collect_grounding_evidence
+    # ...and it must NOT be the direct-answer tail
+    assert "Provide a helpful response" not in prompt
+
+
+def test_fc_repair_prompt_skips_unusable_artifacts():
+    """Same predicate as the grounding-evidence pool: a failed artifact is not evidence, and
+    an fc turn carrying only failed artifacts still falls through to the existing tail."""
+    _llm, lga = _load_local_core()
+
+    dead = _artifact("web_search", {"results": []}, success=False, error="boom")
+    state = _fc_state("some answer", [dead])
+    assert lga._fc_artifact_observation(state) is None
+    assert "Provide a helpful response" in lga._build_generation_prompt(state)
+
+
+# ── 5. the no-evidence 兜底 must not discard an answer the critic CLEARED ─────
+def _stub_enforce(monkeypatch, lga, *, grounded: bool, response: str):
+    """Pin the enforcement outcome so the 兜底's own gate is what is under test."""
+    from uk_rent_agent.agent.contracts import CriticVerdict
+    from uk_rent_agent.agent.critic import GroundingOutcome
+
+    async def _fake(_response, _evidence, **_kw):
+        return GroundingOutcome(
+            response=response,
+            verdict=CriticVerdict(grounded=grounded, answered=True, retrieval_hit=grounded),
+            attempts=1,
+            regenerated=True,
+        )
+
+    monkeypatch.setattr(lga, "enforce_grounding", _fake)
+
+
+def test_no_evidence_fallback_respects_a_grounded_verdict(monkeypatch):
+    """Reproduces idp98_r3_base A2: the critic returned ('regenerated', True, []) and the
+    answer was STILL hard-replaced by the renderer, because this branch ignored the verdict.
+    Discarding a verified answer for boilerplate is strictly worse for the user."""
+    pytest.importorskip("langgraph")
+    llm_config, lga = _load_local_core()
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: _FakeLLM("unused"))
+
+    cleared = "1-bed flats in Islington are about £1,650 pcm."     # numeric, but CLEARED
+    state = _fc_state(cleared, [_completed_empty_search_artifact()])
+    _stub_enforce(monkeypatch, lga, grounded=True, response=cleared)
+
+    update = _run(lga._make_critic_node()(state))
+    assert update.get("final_response", cleared) == cleared        # passed through, not canned
+
+
+def test_no_evidence_fallback_still_fires_when_not_grounded(monkeypatch):
+    """Control for the test above: the 兜底 is unchanged for an UNCLEARED numeric answer with
+    no usable evidence — the case it was built for."""
+    pytest.importorskip("langgraph")
+    llm_config, lga = _load_local_core()
+    monkeypatch.setattr(llm_config, "get_react_llm", lambda *a, **k: _FakeLLM("unused"))
+
+    bad = "1-bed flats in Islington are about £1,650 pcm."
+    state = _fc_state(bad, [_completed_empty_search_artifact()])
+    _stub_enforce(monkeypatch, lga, grounded=False, response=bad)
+
+    update = _run(lga._make_critic_node()(state))
+    final = update["final_response"]
+    assert final != bad
+    assert has_specific_price_claims(final) is False

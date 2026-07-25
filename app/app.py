@@ -473,6 +473,11 @@ def _build_fc_signals(final_state) -> dict:
                     if is_fc else None)
     return {
         "soft_wrapped": bool(final_state.get("soft_wrapped")),
+        # HOW a wrapped turn closed ("llm"/"llm_retry" vs a fallback_* canned renderer).
+        # None on a turn that never wrapped; the KEY's absence means the producing build
+        # predates this field, which the aggregator reports as "not instrumented" rather
+        # than as a benign zero.
+        "wrapped_by": final_state.get("wrapped_by"),
         "partial": bool(partial),
         "tool_budget_timeout": bool(tool_budget_timeout),
         "security": {

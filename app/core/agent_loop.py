@@ -554,12 +554,19 @@ def _wrap_critic_reserve_s() -> float:
         return 0.5
 
 
-def _wrap_retry_min_s() -> float:
-    """Minimum window (s) required to attempt the ONE bounded wrap-call retry
-    (FC_WRAP_RETRY_MIN_S). Below this a retry cannot plausibly complete, so the
-    deterministic renderer is used directly rather than burning the residual."""
+def _wrap_min_attempt_s() -> float:
+    """Minimum window (s) a wrap-up LLM call needs to be worth starting at all
+    (FC_WRAP_MIN_ATTEMPT_S). Applies to BOTH the first attempt and the retry: below this a
+    call cannot plausibly complete, so the deterministic renderer is used directly rather
+    than burning residual the turn does not have.
+
+    This is a CEILING check, not a floor. The window is `hard_end - now - render_crumb`, so
+    when a batch overran and the turn is already at or past `hard_end` the value goes
+    negative and no call is started. The previous `max(2.0, ...)` floor did the opposite —
+    it granted two more seconds precisely when there was no budget left for them, pushing
+    the turn past the very deadline the wrap exists to respect."""
     try:
-        return float(os.getenv("FC_WRAP_RETRY_MIN_S", "2.0"))
+        return float(os.getenv("FC_WRAP_MIN_ATTEMPT_S", "2.0"))
     except (TypeError, ValueError):
         return 2.0
 
@@ -1070,11 +1077,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Bound the wrap-up call so its (unbounded) LLM latency can never blow the SLO: it must
         # finish inside turn_start + soft_wrap + reserve, minus a crumb reserved for the trailing
-        # format render. Floor of 2s so a wrap begun right at the edge still gets a real attempt.
+        # format render. NO floor is applied to this window: a tool batch can overrun (writes
+        # are awaited past their window), so _wrap_up can legitimately be entered AFTER
+        # hard_end, and a floor there would hand the turn extra seconds it has already spent.
+        # Too small a window is handled below by not starting a call at all.
         now = time.monotonic()
         hard_end = (turn_start + _turn_soft_wrap_s() + _final_reserve_s()) if turn_start else (
             now + _final_reserve_s())
-        wrap_timeout = max(2.0, hard_end - now - _wrap_critic_reserve_s())
+        wrap_timeout = hard_end - now - _wrap_critic_reserve_s()
 
         async def _attempt(msgs, timeout_s):
             """One bounded wrap-call attempt -> (status, text, msg).
@@ -1112,7 +1122,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 logger.warning("fc_loop.wrap_llm_error %s", e)
                 return "error", None, None
 
-        status, text, wrap_msg = await _attempt(prompt_msgs, wrap_timeout)
+        if wrap_timeout >= _wrap_min_attempt_s():
+            status, text, wrap_msg = await _attempt(prompt_msgs, wrap_timeout)
+        else:
+            # The turn is already at or past its hard ceiling — typically a batch that
+            # overran its window. Starting a call here could only push the turn further past
+            # the deadline, so go straight to the deterministic answer. Reported as
+            # `fallback_deadline` (not `fallback_timeout`): no call was ever made, and
+            # conflating the two would hide a budget-overrun defect inside an LLM-slowness
+            # statistic.
+            status, text, wrap_msg = "deadline", None, None
         wrapped_by = "llm"
         if status == "error":
             # ONE bounded retry inside whatever window is LEFT. A leaked or empty first
@@ -1121,7 +1140,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # asked (measured: canned turns pass 35% vs 56% for model-written ones). A
             # TIMEOUT is deliberately not retried — by definition no window remains.
             retry_timeout = hard_end - time.monotonic() - _wrap_critic_reserve_s()
-            if retry_timeout >= _wrap_retry_min_s():
+            if retry_timeout >= _wrap_min_attempt_s():
                 r_status, r_text, r_msg = await _attempt(
                     prompt_msgs + [SystemMessage(content=_WRAP_RETRY_DIRECTIVE)], retry_timeout)
                 if r_status == "ok":
@@ -1131,7 +1150,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # Only now: answer deterministically from the gathered artifacts.
             text = _deterministic_wrap_answer(state)
             wrap_msg = AIMessage(content=text)
-            wrapped_by = "fallback_timeout" if status == "timeout" else "fallback_error"
+            wrapped_by = {
+                "timeout": "fallback_timeout",
+                "deadline": "fallback_deadline",
+            }.get(status, "fallback_error")
 
         tool_batches = len({a.get("turn") for a in (state.get("tool_artifacts") or [])})
         _record_turn_soft_wrap_event(
@@ -1151,6 +1173,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # Canary telemetry: mark this turn soft-wrapped so app.py's per-turn record can
             # observe it. Observational only; format_output_fc preserves the channel untouched.
             "soft_wrapped": True,
+            # ...and HOW it was closed, so a production record can separate "the model still
+            # wrote the answer" from "the user got boilerplate". soft_wrapped alone cannot.
+            "wrapped_by": wrapped_by,
         }, goto="format_output_fc")
 
     async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:

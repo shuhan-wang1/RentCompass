@@ -58,6 +58,13 @@ class AgentState(TypedDict, total=False):
     # reset to False by create_initial_state; _wrap_up is the sole writer. app/app.py surfaces
     # it on the per-turn canary.turn record. Purely observational — never gates routing.
     soft_wrapped: bool
+    # HOW a soft-wrapped turn was closed: "llm" / "llm_retry" (the model wrote the answer) vs
+    # "fallback_timeout" / "fallback_deadline" / "fallback_error" (a deterministic canned
+    # renderer did). None on a turn that never wrapped. Same plain per-turn channel discipline
+    # and sole writer (agent_loop._wrap_up) as soft_wrapped, and likewise surfaced on the
+    # canary.turn record. soft_wrapped ALONE cannot answer "did the user get a real answer or
+    # boilerplate?" — which is exactly why the canned-fallback rate went unmeasured.
+    wrapped_by: Optional[str]
     # Cumulative wall-clock (seconds) the fc_loop execute_tools node has spent running tool
     # batches THIS user turn. A PLAIN per-turn channel (reset by create_initial_state) that
     # accumulates across the turn's batches so FC_TURN_TOOL_BUDGET_S can be enforced turn-wide
@@ -127,6 +134,7 @@ def create_initial_state(
         messages=[],
         tool_artifacts=[],
         soft_wrapped=False,
+        wrapped_by=None,
         turn_tool_budget_used_s=0.0,
         turn_start_monotonic=0.0,
         task_plan=[],

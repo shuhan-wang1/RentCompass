@@ -17,7 +17,14 @@ that spans all branches.** Last updated 2026-07-23.
 > * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3 (`e91293f`),
 >   CHANGES REQUESTED twice, awaiting a short final design review. It is **not approved or
 >   frozen**: all 13 identity fields are still placeholders.
-> * **No product candidate exists. Do not create one.** §3 has the gating sequence.
+> * **PR #11** — `fix/fc-wrap-and-critic-evidence`. fc_loop product fix (canned-fallback
+>   conversion + evidence-blind critic repair). **Changes no gate threshold.**
+> * **fc is at STAGE-PAUSE: p50 6878ms > 6000ms. The SLO is unchanged and this round is not
+>   retroactively passed** — §3.5, which also records the confound that must NOT be used to
+>   relax it.
+> * **No candidate exists for the §3.3 experiment. Do not create one.** §3 has the gating
+>   sequence. (PR #11 is an ordinary defect fix on mainline, *not* a measurement candidate —
+>   do not conflate the two: a candidate may carry the memory wiring and nothing else.)
 >
 > **Do NOT cherry-pick product code from either NO-GO branch.** Revisiting memory wiring,
 > the critic fallback or tool-surface hardening means a new hypothesis, a new candidate and
@@ -81,6 +88,7 @@ Verify a doc's branch: `git ls-tree -r --name-only <branch> -- docs/`
 | 2 | **#7** | `eval/evaluator-contract` | merged as `32454d3`. G2/G3/E11 case amendments + six claim-taxonomy rules. |
 | 3 | **#8** | gitleaks fix | **OPEN, green, ready.** |
 | 4 | **#9** | pre-registration | **OPEN, rev 3, under review. Design only.** |
+| 5 | **#11** | `fix/fc-wrap-and-critic-evidence` | **OPEN.** fc_loop product fix: canned-fallback conversion + evidence-blind critic repair. Touches no gate threshold — see §3.5. |
 
 The order is the point: measurement first so a re-score is trustworthy, contract second so
 the bar is stable, product last. Do not reorder it.
@@ -129,6 +137,45 @@ CANDIDATE_SHA         = BASELINE_PRODUCT_SHA + memory wiring only
 If the candidate branched from a mainline containing the pre-registration document, the
 static-diff gate would see that doc and fail the three-product-files rule. Rule C1 asserts
 this mechanically.
+
+### 3.5 Latency position — STAGE-PAUSE stands, and the SLO is UNCHANGED
+
+Current aggregator verdict on the fc pool's retained telemetry (`2d48d22`, 100 records):
+
+```
+fc p50 6878ms > 6000ms   ->   STAGE-PAUSE (exit 2)
+```
+
+**`P50_LIMIT_MS` remains 6000. The SLO has NOT been revised, and this round is NOT
+retroactively passed.** The 6 s bar is not a number derived from this measurement: it was
+pre-registered in `14312f0` on **2026-07-20** — `scripts/canary_report.py:48` and
+`docs/canary_runbook.md:174` — while the paired control ran on **2026-07-22**. Downgrading
+it to a non-gating "reference" *after* seeing 6878 ms would be changing the decision rule
+once the result was known, which is exactly what this project refuses to do. It was
+proposed in review on 2026-07-25 and **rejected** on that ground.
+
+**p95 does not substitute for p50.** They control different things — p95 bounds the tail,
+p50 bounds the typical user's wait. Keeping only the 30 s p95 gate would permit most turns
+to get steadily slower while the gate stayed green.
+
+**The open measurement question, recorded but NOT acted on.** Recomputation from
+`.runtime/paired/` (2026-07-25) shows the aggregate p50 comparison is confounded by
+response-type mix: legacy returned `clarification` on **25/50** paired turns (p50 1,323 ms)
+and `chat` on the other 25. On the turns legacy actually answered its p50 was **7,870 ms**
+(20/25 over 6 s) against fc's 9,322 ms, and its p95 was 47,215 ms against fc's 18,703 ms.
+So the paired control does not establish that 6 s is reachable *at fc's answer quality*.
+
+That finding does **not** license relaxing this gate. The correct handling, and the only
+one authorised:
+
+1. keep this round's verdict as it stands — no retroactive green;
+2. pre-register a **separate v2 gate** that defines the answer/clarification stratification
+   and its quality conditions **in advance**;
+3. freeze that definition, then validate it in a **fresh, independent round**.
+
+A v2 gate, if it is ever written, is an **independent forward-only rule**. It must never be
+recorded as a revision of this round's SLO, and it may not be applied to any measurement
+taken before it was frozen.
 
 ---
 

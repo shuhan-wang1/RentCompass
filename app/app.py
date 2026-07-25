@@ -382,7 +382,49 @@ def _load_write_audit_instrumentation() -> None:
         logger.warning("canary: fc_loop write-audit instrumentation failed to import")
 
 
+def _wire_canary_llm_observer() -> None:
+    """Force the canary LLM observer to install at STARTUP, not on first model use.
+
+    ``turn_observations.snapshot()`` reports all-null + ``not_instrumented`` — which HOLDs
+    the gate — whenever ``observer_installed()`` is False. That flag is set as a side effect
+    of ``install_observer``, which runs only inside ``ModelRouter.create()``. So until the
+    process builds its FIRST model the flag is False, and any turn that closes without
+    building one emits a record that violates the v2 contract (null
+    ``provider_schema_400_count``, ``llm_usage_status='not_instrumented'``).
+
+    Not hypothetical: the 2026-07-25 fc smoke reproduced it twice. Turn 1 was a greeting,
+    the guard fast path answered with ZERO LLM calls, no model was ever constructed, and the
+    record was excluded from the gate population — ``--expect-turns 2`` saw 1. A third
+    greeting, issued after a turn that HAD built a model, was contract-valid. The condition
+    is exactly "a zero-LLM-call turn in a process that has not yet constructed any model",
+    and the cost is worse than a miscount: such turns vanish from the denominator of p50 and
+    of every rate the gate computes.
+
+    Constructing a client makes no network call, so this is free. It deliberately exercises
+    the REAL router path instead of just setting the flag — the flag must mean "an LLM call
+    would have been observed", and only running the actual install proves that. On failure
+    the flag stays False and the gate keeps HOLDing; this never fabricates instrumentation.
+
+    Mirrors ``_load_write_audit_instrumentation`` above: registration becomes a property of
+    the process rather than of request ordering.
+    """
+    try:
+        from uk_rent_agent.llm.router import ModelRouter
+        from core import turn_observations
+
+        if turn_observations.observer_installed():
+            return
+        ModelRouter().create("intent")  # throwaway; construction makes no network call
+        if not turn_observations.observer_installed():
+            logger.warning("canary: LLM observer did not install at startup — the gate will "
+                           "HOLD on any turn that makes no LLM call")
+    except Exception:
+        logger.warning("canary: LLM observer startup wiring failed; zero-LLM-call turns "
+                       "will report not_instrumented and HOLD the gate", exc_info=True)
+
+
 _load_write_audit_instrumentation()
+_wire_canary_llm_observer()
 
 
 def _dsml_boundary_check(response, payload):

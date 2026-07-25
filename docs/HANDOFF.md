@@ -119,7 +119,10 @@ Until step 1 is complete, **do not open the probe-shard PR**. Until steps 2–4 
 
 Single hypothesis: *correctly injecting long-term memory into the FC arm improves
 cross-session recall and does not degrade other tasks.* On mainline `create_initial_state`
-hard-codes `memory_context=""` (`src/uk_rent_agent/agent/state.py:123`), so the retrieved
+hard-codes `memory_context=""` — **`src/uk_rent_agent/agent/state.py` →
+`create_initial_state`, the `memory_context` initializer** (line 130 at product SHA
+`042c477`; resolve by SYMBOL, the line is only an as-of note — it read `:123` until PR #11
+inserted the `wrapped_by` channel above it) — so the retrieved
 block never reaches the FC message array. Permitted change surface is three product files
 plus tests, **≤120 lines**. The trap: the production entry point **already prefixes** the
 retrieved block onto the query string, so an FC path reading both `user_query` and
@@ -222,7 +225,9 @@ behaviour, not a fault.
 
 * **Dev tree is `/home/shuhan/telemetry-v2-layer-b`.** Never develop in
   `/home/shuhan/uk_rent_recommendation` — that is the deploy tree, on detached HEAD
-  `20627c5`, and it is production.
+  **`2d48d22`** (moved there 2026-07-25; it was `20627c5`), and it is production. This must
+  agree with §3.7, which records the same SHA as the only one `/etc/rentcompass/deploy.env`
+  currently authorises — if the two ever disagree, §3.7 and the pin file are the truth.
 * **`gh` is authenticated** as `shuhan-wang1` (scopes `repo`, `read:org`, `gist`,
   `admin:public_key`). PRs, checks and branch protection can all be driven from the CLI.
   The system binary is `/usr/bin/gh` 2.45.0 — old enough that `gh pr edit` hits a

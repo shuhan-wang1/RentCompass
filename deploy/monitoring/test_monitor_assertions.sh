@@ -81,5 +81,22 @@ check "no observed call yet is silent (2/day)" "silent" "$(closure deepseek-v4-f
 check "an unresolved probe is silent here"     "silent" "$(closure '' deepseek-v4-flash)"
 echo
 
+# --- expected public arch ----------------------------------------------------
+# Hard-coding "legacy" here made the check fire sev3 every five minutes about the intended
+# state the moment the owner cut the edge over to fc. An always-on alert is an ignored
+# alert. Intent is declared; an UNDECLARED change must still page.
+pubarch() { [ "$1" != "$2" ] && echo "sev3-unexpected-arch" || echo "silent"; }
+edge_ver() { local exp_code="$1"; local p_ver="$2"; local exp_ver="$3"
+             if [ "$exp_code" = "200" ] && [ "$p_ver" != "$exp_ver" ]
+             then echo "sev3-edge-mismatch"; else echo "silent"; fi; }
+echo "--- expected public arch (declared, not assumed) ---"
+check "serving what we declared is silent"      "silent"               "$(pubarch fc_loop fc_loop)"
+check "an undeclared change still pages"        "sev3-unexpected-arch" "$(pubarch legacy fc_loop)"
+check "a rollback we forgot to declare pages"   "sev3-unexpected-arch" "$(pubarch fc_loop legacy)"
+# the version comparison must follow the SAME declaration, or it false-alarms after a cutover
+check "edge vs the EXPECTED pool is silent"     "silent"               "$(edge_ver 200 abc123 abc123)"
+check "edge vs the wrong pool would page"       "sev3-edge-mismatch"   "$(edge_ver 200 abc123 unknown)"
+echo
+
 printf 'monitor assertions: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

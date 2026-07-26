@@ -28,9 +28,24 @@ chroma_db_area/
 app/chroma_db/
 app/chroma_db_area/
 
-# Environment variables
-.env
-.env.local
+# Environment variables — EVERY variant, including operator backups.
+#
+# This used to be `.env` / `.env.local` / `**/.env` only, which matched the live files and
+# nothing else. Operators DO copy an env file aside before a cutover, and those copies were
+# untracked but NOT ignored: on 2026-07-26 `./.env.bak-pre-042c477` held the CURRENT
+# production SEARXNG_SECRET in plaintext and `app/.env.bak-pre-v4flash` held the retired
+# DEEPSEEK_MODEL value that broke both pools for a day. This repo is PUBLIC, and it already
+# has one `git add -A` contamination on record (af65e40), so "untracked" was one careless
+# stage away from a real leak. The secret was never actually committed — verified with
+# `git log --all -S<secret>` — so the hole was closed rather than a rotation performed.
+#
+# Keep the negations narrow: `*.example` files are TRACKED on purpose, and PR #8 exists
+# because one of them once carried a real-looking 64-hex secret. See
+# tests/test_env_files_cannot_be_committed.py, which fails if this block is narrowed again.
+.env*
+**/.env*
+!.env.example
+!**/.env.example
 
 # Logs
 *.log
@@ -56,6 +71,23 @@ REFACTOR_IMPLEMENTATION_PLAN.md
 /dist/
 /src/*.egg-info/
 .runtime/
+# ...and every sibling variant — the SAME hole as the env block above, different artifact.
+# `.runtime/` with a trailing slash matches that one directory and nothing else, so the
+# per-experiment trees an operator actually creates — `.runtime-fpon/`, `.runtime-fpoff/`,
+# `.runtime-hardening/`, `.runtime-legctl/`, `.runtime-fccontrol/`, `.runtime-fccompact/`,
+# all six of which are sitting untracked in the production tree right now — matched no rule.
+#
+# This is the class whose INSTANCE is already patched further down as
+# `/evaluation/results/schema_compaction_ab_2026-07-22/`: commit af65e40 is a `git add -A`
+# twin of 994be81 that swept a 3469-line untracked results package in, and the response was
+# to name that one directory. Naming instances is how this repo reached seven of one defect
+# class; HANDOFF §0 says only a guard stops the eighth.
+#
+# Evidence packages are retained on disk and deliberately NEVER committed (HANDOFF §6).
+# Scoped to `.runtime*` on purpose: `evaluation/results/<package>/` trees such as
+# `live_routed_98` and `phase2_ab_2026-07-19` ARE committed provenance and must stay tracked.
+.runtime-*/
+.runtime*.jsonl
 *.sqlite3
 
 # SearXNG live config: a runtime file the container mounts and chowns to its own

@@ -104,10 +104,16 @@ DEICTIC_RULE = (
 )
 
 # 4 no-fabrication (echoes SECURITY_DIRECTIVE point 4, kept for the loop's tool-choice path).
+# The enumerated list is load-bearing: it did NOT include station/place names, and a real
+# session reported the same WC1H property as being nearest to "Covent Garden" in one turn
+# and "Russell Square" (correct) in another. Neither the rule nor the numeric critic covered
+# it. The data-layer fix is search_nearby_pois' `nearest_station` field; this is the backstop.
 NO_FABRICATION_RULE = (
     "NO FABRICATION: Only state listing facts (address, price, commute, availability, bills, "
-    "policies) that appear in the context block or a tool result. If a detail is not present, "
-    "call get_property_details for it or say it is not available — never invent it."
+    "policies, nearest station or other named nearby places) that appear in the context block "
+    "or a tool result. If a detail is not present, call get_property_details or "
+    "search_nearby_pois for it, or say it is not available — never invent it. In particular, "
+    "never name a nearest tube/rail station that no tool returned."
 )
 
 NO_EMOJI_RULE = (

@@ -6,7 +6,9 @@ The loop executor codes against this module. It provides:
     remember something (zh+en)? An explicit request is authorization: the current
     user message is untainted by construction, so a model-initiated ``remember``
     may go through directly, no extra confirmation (A+ rule 2). Recall questions
-    ("do you remember ...", "还记得吗") are NOT authorization.
+    ("do you remember ...", "还记得吗") are NOT authorization — but the PURPOSE clause
+    of a save request ("... just so you remember", 「这样你就记得」) is not a recall
+    question, and must not veto it (benchmark G1).
   * ``is_pure_recall_question`` — True iff the CURRENT user message is a memory-recall
     question with NO store-new-content intent (H12). The executor calls it to deny a
     model-initiated ``remember`` on such a turn regardless of taint. A mixed message
@@ -80,6 +82,10 @@ _RECALL_VETO_EN = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
         r"\b(?:do|does|did|can|could|would|will)\s+you\s+(?:remember|recall)\b",
+        # Bare, auxiliary-less question — "you remember the flat we looked at?" — which
+        # the interrogative pattern above MISSES, so this pattern has to stay. Its
+        # over-breadth (it also matched the purpose clause of a save request) is fixed
+        # positionally by ``_PURPOSE_HEAD_EN`` below, not by deleting the pattern.
         r"\byou\s+(?:remember|recall)\b",
         r"\bremember\s+(?:when|what|who|where|why|how|the\s+time|that\s+time|if)\b",
         r"\bwhat\s+did\s+i\s+(?:say|tell|mention)\b",
@@ -92,18 +98,77 @@ _RECALL_VETO_ZH = (
     "我之前说过", "之前说过", "我说过", "说过什么", "上次说的", "上次说过",
 )
 
+# A recall phrase introduced by a PURPOSE / RESULT subordinator is not a question about
+# what we already know — it states WHY the user wants a fact saved, so the utterance is
+# a SAVE request:
+#     "Please note my budget is 1800. Just so you remember for next time."  (bench G1)
+#     "Note that my budget is 1800, so that you remember next time."
+#     「帮我记住，这样你就记得我的预算了」 /「记一下我的预算，免得你不记得我说过的」
+# Reading those as recall questions vetoed authorization and made the loop deny the
+# write with ``denied_recall`` (benchmark case G1, reported in PR #25).
+#
+# Both patterns are anchored at the END of the text that PRECEDES the recall phrase, so
+# the test is strictly local: a purpose clause somewhere else in a long message can
+# never exempt a genuine recall question.
+#
+# EN — bare "so" must be non-initial AND must not start a new sentence, because
+# utterance-initial "So you remember my budget?" and "… Camden. So you remember?" are
+# the DISCOURSE marker of a real question and must stay vetoed. "so that" / "in order
+# that" are unambiguously subordinating, so their position is unconstrained.
+_PURPOSE_HEAD_EN = re.compile(
+    r"(?:[^\s.!?;:]\s+so|\bso\s+that|\bin\s+order\s+that)\s+(?:you\s+)?$",
+    re.IGNORECASE,
+)
+# ZH — a purpose marker (免得/以免/省得/以便/好让/方便/为了) or the 这样…就 result
+# construction, within a few characters of the recall phrase. Punctuation is excluded
+# from the gap so a preceding clause cannot reach across it:「这样吧，你记得我的预算吗」
+# keeps its veto.
+_PURPOSE_HEAD_ZH = re.compile(
+    r"(?:免得|以免|省得|以便|好让|方便|为了)[^，,。.、;；!！?？]{0,6}$"
+    r"|这样[^，,。.、;；!！?？]{0,4}就[^，,。.、;；!！?？]{0,4}$"
+)
+
+
+def _is_purpose_clause(text: str, start: int) -> bool:
+    """True when the recall phrase at ``text[start:]`` is introduced by a purpose/result
+    subordinator — i.e. it explains why the user wants something remembered, rather than
+    asking what we remember."""
+    head = text[:start]
+    return bool(_PURPOSE_HEAD_EN.search(head) or _PURPOSE_HEAD_ZH.search(head))
+
+
+def _has_recall_cue(text: str) -> bool:
+    """True when ``text`` contains a memory-RECALL cue (zh+en), purpose clauses excluded.
+
+    The single source of recall phrasing. BOTH consumers go through here — the
+    ``user_authorizes_memory`` veto and the ``is_pure_recall_question`` cue — so the two
+    can never disagree about what counts as a recall question, and the purpose-clause
+    exemption cannot be applied in one and forgotten in the other.
+    """
+    for pat in _RECALL_VETO_EN:
+        for m in pat.finditer(text):
+            if not _is_purpose_clause(text, m.start()):
+                return True
+    for phrase in _RECALL_VETO_ZH:
+        start = text.find(phrase)
+        while start != -1:
+            if not _is_purpose_clause(text, start):
+                return True
+            start = text.find(phrase, start + 1)
+    return False
+
 
 def user_authorizes_memory(current_message: str) -> bool:
     """True when the CURRENT user message explicitly asks us to remember something.
 
-    zh + en. Recall questions ("do you remember ...", "还记得吗") return False.
+    zh + en. Recall questions ("do you remember ...", "还记得吗") return False; the
+    PURPOSE clause of a save request ("… just so you remember", 「这样你就记得」) is not a
+    recall question and does not veto — see ``_has_recall_cue``.
     """
     text = (current_message or "").strip()
     if not text:
         return False
-    if any(pat.search(text) for pat in _RECALL_VETO_EN):
-        return False
-    if any(phrase in text for phrase in _RECALL_VETO_ZH):
+    if _has_recall_cue(text):
         return False
     if any(pat.search(text) for pat in _AUTHORIZE_EN):
         return True
@@ -113,14 +178,8 @@ def user_authorizes_memory(current_message: str) -> bool:
 
 
 # -------------------------------------------------------------- pure-recall detection (H12)
-
-def _has_recall_cue(text: str) -> bool:
-    """True when ``text`` contains a memory-RECALL cue (zh+en). Shares the recall-veto
-    families used by ``user_authorizes_memory`` — the single source of recall phrasing."""
-    if any(pat.search(text) for pat in _RECALL_VETO_EN):
-        return True
-    return any(phrase in text for phrase in _RECALL_VETO_ZH)
-
+# The recall-cue family lives with the authorization veto above (``_has_recall_cue``):
+# one definition, both consumers.
 
 # Interrogative heads that turn an EN "remember ..." authorize match into a recall
 # question ("do you remember my budget"): the save cue is a false positive there.
@@ -143,9 +202,16 @@ def _has_store_intent(text: str) -> bool:
         return True
     for pat in _AUTHORIZE_EN:
         for m in pat.finditer(text):
+            head = text[:m.start()]
             if m.group(0).lower().startswith("remember") and \
-                    _REMEMBER_RECALL_HEAD.search(text[:m.start()]):
-                continue  # "… you remember <object>" is a recall question, not a save
+                    _REMEMBER_RECALL_HEAD.search(head) and \
+                    not _PURPOSE_HEAD_EN.search(head):
+                # "… you remember <object>" is a recall question, not a save — UNLESS a
+                # purpose subordinator introduces it ("just so you remember that …"),
+                # which is the save request's reason clause. Same exemption as
+                # ``_has_recall_cue``; keeping the two in step is what stops a
+                # purpose-clause save from reading as pure recall.
+                continue
             return True
     return False
 

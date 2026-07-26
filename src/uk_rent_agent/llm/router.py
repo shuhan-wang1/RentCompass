@@ -57,6 +57,17 @@ def _normalise_model_name(name: str | None) -> str:
     return (name or "").strip().strip("\"'").strip().lower()
 
 
+def is_retired_model_name(name: str | None) -> bool:
+    """True if ``name`` is a model the provider has retired, however it is formatted.
+
+    The one place that answers this question. The runtime guard below and the
+    ``*.env.example`` scan in tests/test_model_name_defaults.py both call it, so the file
+    a human copies by hand and the value the process refuses cannot disagree about what
+    counts as dead.
+    """
+    return _normalise_model_name(name) in RETIRED_MODEL_NAMES
+
+
 def retired_model_env_vars() -> dict[str, str]:
     """Every model env var in THIS process whose value is a retired name.
 
@@ -64,8 +75,7 @@ def retired_model_env_vars() -> dict[str, str]:
     variable an operator actually has to change.
     """
     return {var: os.environ[var] for var in MODEL_ENV_VARS
-            if var in os.environ
-            and _normalise_model_name(os.environ[var]) in RETIRED_MODEL_NAMES}
+            if var in os.environ and is_retired_model_name(os.environ[var])}
 
 
 def reject_retired_model_names(site: str, **models: str | None) -> None:
@@ -78,7 +88,7 @@ def reject_retired_model_names(site: str, **models: str | None) -> None:
     runs only at startup is a guard that a later ``monkeypatch``/reload walks around.
     """
     dead = {label: value for label, value in models.items()
-            if _normalise_model_name(value) in RETIRED_MODEL_NAMES}
+            if is_retired_model_name(value)}
     if not dead:
         return
 
@@ -94,11 +104,17 @@ def reject_retired_model_names(site: str, **models: str | None) -> None:
     env_hits = retired_model_env_vars()
     if env_hits:
         for var, value in sorted(env_hits.items()):
+            # Deliberately lists WHERE to look, not which file is currently guilty: a
+            # message that names today's offender goes stale the moment it is fixed, and a
+            # stale pointer in an outage message costs more than no pointer. The tracked
+            # *.env.example files are excluded from the list because a test now keeps them
+            # clean (tests/test_model_name_defaults.py); everything below is untracked
+            # deployment state that no test can see.
             lines.append(
                 f"  Source: environment variable {var}={value!r}. Set {var}="
-                f"{_successor(value)} (check app/.env, the repo-root .env and "
-                f"docker-compose.yml; app/.env.example and app/.env.bak-pre-v4flash both "
-                f"still carry the dead value).")
+                f"{_successor(value)} — it will be coming from app/.env, the repo-root "
+                f".env, a docker-compose environment:/env_file entry, or the shell that "
+                f"launched this process.")
     else:
         lines.append(
             f"  No variable in {', '.join(MODEL_ENV_VARS)} holds that value in this "

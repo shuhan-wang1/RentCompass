@@ -9,6 +9,10 @@ import requests
 from core.llm_config import (
     LLM_PROVIDER, DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
 )
+# `from ... import DEEPSEEK_MODEL` binds a COPY, so llm_config's import-time check does not
+# cover a later rebinding of the name in this module. _call_deepseek drives the raw openai
+# SDK and is the third and last place in app/ + src/ that hands a model name to a provider.
+from uk_rent_agent.llm.router import reject_retired_model_names
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL_NAME = "gemma3:27b-cloud"  # 使用 Ollama 云端模型，更强的推理能力
@@ -66,6 +70,12 @@ def _usage_blob(resp: Any) -> dict:
 def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
                    temperature: float = 0.1, max_tokens: int = 4000) -> str:
     """Call DeepSeek's OpenAI-compatible chat API. Returns text, or None on error."""
+    # DELIBERATELY OUTSIDE the try/except below. Every provider error on this path is
+    # swallowed into `return None` plus a print — which is precisely how a whole day of
+    # HTTP 400s produced no alarm. A dead model name is a configuration defect, not a
+    # transient API error, so it must propagate rather than degrade to a None answer.
+    reject_retired_model_names("core.llm_interface._call_deepseek",
+                               DEEPSEEK_MODEL=DEEPSEEK_MODEL)
     from openai import OpenAI
     import time as _time
     client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=timeout)

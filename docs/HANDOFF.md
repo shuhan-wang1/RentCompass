@@ -328,6 +328,58 @@ For reference if the deficit does turn out to be generation-bound, this round's 
 only; the earlier independent fit gave 14.6 ms/token). At a median 452 output tokens, closing
 2466 ms through output length alone means cutting ~152 tokens, a **34%** reduction.
 
+### 3.11 Two figures WITHDRAWN — `llm_calls` was undercounting
+
+**Do not cite either of these again without re-measuring.** Both appear in earlier sections
+of this document and in several PR bodies, and both were computed from a counter that could
+not see part of what it was counting.
+
+* ~~"the median turn makes 2 LLM calls"~~
+* ~~"3+ call turns never make the bar (0/9, 0/14 warm)"~~
+
+`install_observer` attaches a LangChain callback, so it only ever saw models built through
+`ModelRouter`. Two production paths were not: `core/llm_interface._call_deepseek` drives the
+raw `openai` SDK directly, and `core/llm_config._deepseek_llm` returned an unobserved
+`ChatOpenAI`. The 2026-07-25 round of record contains **48 such calls at p50 934ms** that
+`llm_calls` counted as zero.
+
+**Latency figures are unaffected** — `turn_latency_ms` is measured end to end, so every p50,
+p95 and soft-wrap number in §3.8 and §3.10 stands. What is void is the *attribution by call
+count*, which includes the arithmetic that closed CALL COUNT as a lever in §3.6's ledger.
+That lever is **re-opened as unknown**, not re-opened as promising.
+
+Fixed in the `fix/observe-every-llm-call` branch, which also adds a source guard: any file
+outside a three-entry allowlist that constructs a chat client now fails the build.
+
+### 3.12 What the 2026-07-26 agent round found
+
+Six parallel investigations. Their branches merge cleanly with each other and with mainline;
+the integrated tree passes **1963**. Findings that change what we believe, not just what the
+code does:
+
+* **The batch was already parallel.** `execute_tools` fans out with `asyncio.ensure_future`
+  before awaiting; measured 16 independent 1.0s reads complete in 1.010s. The claim in an
+  earlier draft of §3.6 that `E_multi_constraint` is slow because tools run serially was
+  **asserted without reading the code and is false**. The real cost is sequential *batches*,
+  each behind a full LLM round-trip.
+* **Layering does not reach the bar.** Simulated per-turn on the warm n=64 round: collapsing
+  every multi-batch turn to one gives p50 7,094ms and moves **zero** turns under 6,000ms.
+  ~4,900ms of the median turn is a model generating tokens, and only 12.4% of batches hold
+  ≥2 tools. It is a p95 lever.
+* **A mandatory plan hop makes the product worse while making the metric better** — p50
+  7,306ms (better than 7,402) but turns-under-bar 26 → 21, because 12 fast zero-tool turns
+  pay for a hop they do not need. Any orchestrator must be able to answer in the same call.
+* **There is no smaller model.** `chat` and `reasoner` both resolve to `deepseek-v4-flash`;
+  the only unused tier is the larger `deepseek-v4-pro`. "Small model executes tools" is not
+  currently implementable.
+* **Read tools were never gated at all.** The write gate and the time budget were the only
+  pre-dispatch refusals, which is why `tools_denied` was empty for every forbidden-tool
+  execution in the sweep.
+* **The commute estimator is 1.78x–6.0x low under 15 minutes**, measured against TfL on 14
+  London pairs. Tavistock Court → UCL estimates 2 minutes against a real 12.
+* **"Covent Garden" was invented by the model.** The string exists nowhere in the repo — no
+  table, listing field, scraper, prompt or dataset. TfL puts Russell Square at 214m.
+
 ### 3.9 Phase-2 fc-vs-legacy — the verdict that had never been written
 
 Both arms, 98 cases each, live, same tree, same day. This closes a gap that had been open

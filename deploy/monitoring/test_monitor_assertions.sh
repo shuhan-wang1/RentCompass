@@ -66,5 +66,20 @@ check "fc not matching FC_CANARY_SHA pages"  "sev3-pin-mismatch"  "$(pinmatch 87
 check "fc matching the pin is silent"        "silent"             "$(pinmatch 8793c0b 8793c0b)"
 echo
 
+# --- probe/observation closure ----------------------------------------------
+# The name app.config resolves and the name the client puts on the wire are two
+# different things. Layer B (a888160) records the latter per call, so they can be
+# tied together; disagreement means the probe is validating a model nobody sends.
+closure() { local probe="$1"; local observed="$2"
+            if [ -n "$probe" ] && [ -n "$observed" ] && [ "$observed" != "$probe" ]
+            then echo "sev3-probe-tests-wrong-model"; else echo "silent"; fi; }
+echo "--- probe/observation closure ---"
+check "agreement is silent"                    "silent" "$(closure deepseek-v4-flash deepseek-v4-flash)"
+check "a per-request override would page"      "sev3-probe-tests-wrong-model" "$(closure deepseek-v4-flash deepseek-v4-pro)"
+check "a silent fallback would page"           "sev3-probe-tests-wrong-model" "$(closure deepseek-v4-flash deepseek-chat)"
+check "no observed call yet is silent (2/day)" "silent" "$(closure deepseek-v4-flash '')"
+check "an unresolved probe is silent here"     "silent" "$(closure '' deepseek-v4-flash)"
+echo
+
 printf 'monitor assertions: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

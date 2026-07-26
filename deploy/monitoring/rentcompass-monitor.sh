@@ -27,6 +27,13 @@ set -u
 REPO="${MON_REPO:-/home/shuhan/uk_rent_recommendation}"
 RUNTIME="${MON_RUNTIME:-$REPO/.runtime}"
 LOG_FILE="${MON_LOG:-/var/log/rentcompass/monitor.log}"
+# KNOWN BLIND SPOT, documented deliberately rather than fixed: /run is tmpfs, so a
+# reboot clears this file. Every delta-based check below reads ${PREV[k]:-<current>},
+# which makes the FIRST run after a reboot compare a value against itself: restart
+# counts, and the telemetry-shrink assertion, are both silently no-ops exactly once
+# per boot. Moving STATE to a persistent path would fix it and would also make a stale
+# state file outlive a genuine reset, so it is a trade, not an oversight. Anyone
+# investigating "why did the monitor not catch X" should check uptime first.
 STATE="${MON_STATE:-/run/rentcompass-monitor.state}"
 LOCK="${MON_LOCK:-/run/rentcompass-monitor.lock}"
 
@@ -314,6 +321,35 @@ PYPROBE
       summary+="provider=? "
       ;;
   esac
+
+  # CLOSURE: the name `from app.config import DEEPSEEK_MODEL` resolves and the name the
+  # client actually put on the wire are two different things -- a per-request override or
+  # a fallback would leave the probe testing a model nobody uses. Layer B (a888160) now
+  # records the model of every real call in llm_usage.models, so the two can be tied
+  # together. Disagreement is itself the alert.
+  probe_model="$(printf '%s' "$probe_out" | awk '{print $3}')"
+  case "$PROVIDER_PROBE_CONTAINER" in
+    *-fc) probe_arch="fc_loop" ;;
+    *)    probe_arch="legacy"  ;;
+  esac
+  obs_log="$RUNTIME/logs/canary-$probe_arch.jsonl"
+  if [ -n "$probe_model" ] && [ -r "$obs_log" ]; then
+    observed="$(tac "$obs_log" 2>/dev/null | python3 -c '
+import json, sys
+for line in sys.stdin:                      # newest first
+    try:
+        models = ((json.loads(line).get("llm_usage") or {}).get("models") or {})
+    except Exception:
+        continue
+    if models:
+        print(",".join(sorted(models))); break
+' 2>/dev/null)"
+    # No observed call yet is not a failure -- at ~2 conversations/day that is the norm.
+    if [ -n "$observed" ] && [ "$observed" != "$probe_model" ]; then
+      emit_alert 3 "probe tests '$probe_model' but the last real $probe_arch call used '$observed' — the probe is validating a model the app does not send"
+      summary+="probe_model_mismatch "
+    fi
+  fi
 fi
 
 # --- persist state ----------------------------------------------------------

@@ -36,7 +36,7 @@ either arch can rebuild a conversation from the shared transcript on rollback.
 |---|---|---|
 | `AGENT_ARCH` | `legacy` | `fc_loop` |
 | `DEEPSEEK_STRICT` | (unset) | `1` |
-| `APP_CANDIDATE_SHA` | (unset) | `${FC_CANARY_SHA}` (candidate sha) |
+| `APP_CANDIDATE_SHA` | `${LEGACY_APP_SHA:-}` — wired 2026-07-26, **still empty in practice** | `${FC_CANARY_SHA}` (candidate sha) |
 | `CHECKPOINT_DB_PATH` | `/app/.runtime/checkpoints.sqlite3` | `/app/.runtime/checkpoints_fc.sqlite3` |
 | `CONVERSATION_DB_PATH` | `/app/.runtime/conversations.sqlite3` | `/app/.runtime/conversations.sqlite3` (**shared**) |
 | `CANARY_LOG_PATH` | `/app/.runtime/logs/canary-legacy.jsonl` | `/app/.runtime/logs/canary-fc_loop.jsonl` |
@@ -281,3 +281,37 @@ Delete the legacy arch **only when both hold**:
 
 Keep the **last legacy image for one more release cycle** after deletion (fast rebuild path
 if a regression surfaces post-cutover).
+
+---
+
+## Legacy pool self-identification (added 2026-07-26, inert)
+
+`APP_CANDIDATE_SHA` for the `app` service now reads `${LEGACY_APP_SHA:-}`. It is **wiring only
+and takes effect at the next planned public rebuild** — per HANDOFF §3.10, the rollback target
+is deliberately NOT rebuilt just to populate it, because rebuilding the only escape hatch right
+after moving traffic onto an unproven candidate is the worst possible timing.
+
+Until it is populated the legacy pool still answers `x-agent-version: unknown`, so a rollback
+still needs `--allow-unidentified-target`:
+
+```
+bash deploy/switch_pool.sh --to legacy --allow-unidentified-target
+```
+
+**Set it to the FULL 40-character sha**, matching the `FC_CANARY_SHA` convention.
+`switch_pool.sh` length-checks at 40, so a 7-char value populates the header, *looks* fixed, and
+still forces the override flag.
+
+**Deliberately `:-` and not `:?`.** The `FC_CANARY_IMAGE` / `FC_CANARY_SHA` pins use `:?`, and
+because compose interpolation is whole-file and ignores profiles, **an unset `FC_CANARY_*` makes
+every compose command fail — including `up -d app`, the one that restores the escape hatch**:
+
+```
+$ docker compose -f docker-compose.yml config --services      # no --profile canary
+error while interpolating services.app-fc.image: required variable FC_CANARY_IMAGE is missing a value
+```
+
+Reproducing that pattern on the rollback target would have been a regression dressed as a fix.
+Counting `SEARXNG_SECRET:?`, the rollback path currently has **three** hard prerequisites in the
+root `.env`; making `app` independent of the `app-fc` pins (e.g. moving `app-fc` into a
+canary-only override file) is the real structural fix and is not done.

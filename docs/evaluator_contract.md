@@ -130,10 +130,18 @@ from the accident.
 
 ## Deliberately excluded
 
-* **`no_false_retrieval_provenance`** — its grader imports `claims_no_retrieval` from
-  `uk_rent_agent.agent.critic`, which exists **only** on the terminated
-  `hardening/correctness-only` branch. Porting it would drag product code out of a NO-GO
-  branch. Its schema enum entry and the H3 guard-case amendment are held back with it.
+* ~~**`no_false_retrieval_provenance`**~~ — **NO LONGER EXCLUDED as of 2026-07-26.** Ported on
+  `feat/false-retrieval-provenance-port` as the deliberate, named exception HANDOFF §5 called
+  for: `claims_no_retrieval` was taken from `hardening/correctness-only` (`critic.py:557`)
+  **byte-identical and alone**, appended at end of file, with the schema enum entry and the H3
+  guard-case amendment. **It carries no dependency on that branch's fail-closed critic
+  fallback** (the A14 regression) — the predicate's whole closure is `re` plus two literal cue
+  tuples. This is the one exception; the bullet below still stands unchanged.
+  **This makes it the first constraint whose grader imports product code**, so an evaluator
+  verdict now depends on which copy of `uk_rent_agent` resolves on `sys.path`. Both real entry
+  points insert `REPO_ROOT/"src"` first (`run_benchmark.py:60-62`, `rescore.py:33-38`); a bare
+  `python -c` inside the bench image resolves its own pip-installed `/app/src` instead. Pinned
+  by test rather than left to luck.
 * **`extract_tool_trace` skipping `suppressed` artifacts** — evaluator support for
   follow-up-capability suppression, which is NO-GO and not being extended.
 * Every product change on the hardening branch: the critic grounding fallback, the
@@ -144,7 +152,13 @@ from the accident.
 ```bash
 cd /home/shuhan/telemetry-v2-layer-b
 
-# no product code, and no new product import
+# no product code, and no new product import.
+# NOTE: both invariants hold for `eval/evaluator-contract` as taken, and that is what they
+# assert. They are deliberately BROKEN by `feat/false-retrieval-provenance-port` (2026-07-26),
+# which adds `claims_no_retrieval` to src/ and a function-local product import to the grader.
+# That is the whole point of the named exception above — do not "repair" these two commands by
+# widening them to later branches, and do not run them against a tree that contains the port
+# and conclude something is wrong.
 git diff --name-only f053508 eval/evaluator-contract | grep -E '^(app/|src/)'   # prints nothing
 git diff f053508 eval/evaluator-contract -- evaluation/ \
   | grep -E '^\+.*(import|from).*(uk_rent_agent|app\.)'                         # prints nothing

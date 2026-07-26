@@ -36,8 +36,13 @@ that spans all branches.** Last updated 2026-07-26.
 >   Both relative gate metrics PASS and fc is *better* than legacy on each: fabricated
 >   numbers 2.04% vs 3.06%, forbidden-tool 3.06% vs 4.08%, contradicted claims 0 vs 1,
 >   pass rate 60.2% vs 34.7%.
-> * **The canned-template fallback is gone.** All 7 soft wraps in the round carry
->   `wrapped_by='llm'`; canned share **0.00%** (was ~80% conversion once a wrap fired).
+> * ~~**The canned-template fallback is gone.**~~ **REFUTED 2026-07-26 — see §3.14.** The
+>   quoted metric is true as worded (all 7 *soft wraps* carry `wrapped_by='llm'`, canned share
+>   of soft wraps 0.00%) but the conclusion drawn from it is false. The canned opener appears
+>   in the retained answer bodies of **B8, B12 and G16 — 3 of 98 eval cases** — reached via the
+>   critic hard-replace path, which records `soft_wrapped=False`. A soft-wrap-denominated
+>   counter cannot observe it. In B8 the discarded answer held **£3,446 — the correct
+>   reference answer.**
 > * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3, CHANGES
 >   REQUESTED twice, awaiting a short final design review. **Not approved or frozen.**
 > * **Two figures are WITHDRAWN, and one lever is re-opened as UNKNOWN** — §3.11. Do not
@@ -66,9 +71,12 @@ need.
 
 ## 0. The defect class this codebase keeps producing
 
-Read this before writing any code here. **Seven confirmed instances of one shape:** a value is
+Read this before writing any code here. **Eleven confirmed instances of one shape:** a value is
 computed, stored somewhere a reader could find it, and then never asserted on. Every one
 shipped. Every one was found by someone reading the code rather than by a test.
+
+**Instances 8–11 were found on 2026-07-26, after this section already existed and warned about
+exactly this.** Writing the warning did not stop the ninth; the guards did (practice 3).
 
 | # | where | the value that was produced | what was never done with it |
 |---|---|---|---|
@@ -79,6 +87,10 @@ shipped. Every one was found by someone reading the code rather than by a test.
 | 5 | `app/core/tools/calculate_commute.py` | `route_source` (`tfl` vs `estimate`) | zero consumers repo-wide, no prompt mentioned it — a haversine guess and a real journey plan arrived in the same field |
 | 6 | `app/core/agent_loop.py` | a `need_clarification` search payload | counted as a *completed zero-match search*, so a user was told "no studios matched" about a search that never ran |
 | 7 | `app/core/turn_observations.py` | `install_observer` only saw LangChain models | two production paths built clients directly; 48 real billed calls counted as zero |
+| 8 | `app/core/tools/get_property_details.py` | a fuzzy match resolved *which* property was returned | never compared against the request — and `found`, `total_matches`, `other_matches` had **zero readers repo-wide**, so a different property's rent was asserted as "the official monthly price" |
+| 9 | `app/core/tenancy_reference.py` | the **correct** 5-vs-6-week deposit cap | the answer path never called it. It was reachable only from a tool *denial*, and these turns call no tool — so the module was right and the user got £5,192.31 instead of £6,230.77 |
+| 10 | `app/core/langgraph_agent.py` critic hard-replace | the answer was replaced by a canned template | nothing counted it; the path records `soft_wrapped=False`, so a soft-wrap-denominated metric reported 0.00% while it fired on 3 of 98 cases |
+| 11 | `evaluation/metrics/graders.py` | `must_refuse_fabrication` received a `field` argument | never used it — the checker tested vocabulary instead, failing correct answers *and passing hedged fabrications* |
 
 **Instance 7's bypass was documented in its own sibling's module docstring** — "calls that
 bypass ModelRouter". It was known and simply never wired.
@@ -438,8 +450,9 @@ call and it is recorded here **as an override, not as a pass**:
 (§3.9): pass 60.2% vs 34.7%, fabricated numbers 2.04% vs 3.06%, forbidden-tool 3.06% vs
 4.08%, contradicted claims 0 vs 1, and fc produced 84% more groundable claims. It is slower:
 median 7.4 s versus legacy's 2.7 s, and legacy's speed comes substantially from executing no
-tool at all on 39.8% of turns. The canned-template fallback is gone (0.00% of soft wraps).
-Zero-tolerance metrics were clean.
+tool at all on 39.8% of turns. Zero-tolerance metrics were clean. (The claim made here that
+"the canned-template fallback is gone" is **refuted** — §3.14. It fired on 3 of 98 eval cases
+via a path the soft-wrap counter cannot see.)
 
 **Post-cutover verification.** A real answer-producing query through the public edge — not
 `/health`, which cannot see a broken pool (§3A) — returned HTTP 200 in 8.6 s with a sourced
@@ -561,9 +574,23 @@ its lower latency are both partly a consequence of **legacy answering less** —
 recorded on 2026-07-22, where legacy met 6 s only by returning `clarification` on 25/50 paired
 turns. A metric computed over a much smaller claim base is not evidence of a better answer.
 
-**Severity is not the same as rate.** fc's two fabrications (C6, C11) are both invented
+~~**Severity is not the same as rate.** fc's two fabrications (C6, C11) are both invented
 commute minutes — a figure a user acts on directly. 2.04% is a low rate on a high-stakes
-field, not a benign one.
+field, not a benign one.~~
+
+**REFUTED 2026-07-26 — §3.14. C6 and C11 are not fabrications.** Their offending minutes
+occur **verbatim in their own turn's evidence**: C6's 6/8/5 in `route_summary` ("Bus 30 to
+Euston, then 6 min walk"), C11's 20 in `duration_category: "Medium (20-45 min)"`, and E9's 7
+likewise. The grader's evidence-side miner key-filtered on `travel`/`commute`/`duration`
+(`graders.py:421`) and `route_summary` matched none of them, so the answer side saw the
+minutes and the evidence side could not. **fc's true `no_evidence_numbers` for this round is
+0/98, not 2/98**, making the relative gate margin **−3.06pp** rather than −1.02pp — further in
+fc's favour. Correct the table above accordingly if it is ever re-quoted.
+
+Legacy's 3/98 becomes 2/98 and **its remaining two are genuine**: C1 and C2 called no tool at
+all and invented walk times against empty evidence. The real fc minute fabrications in this
+round are **E11 (15, 20)** and **E10 (15, 20, 10)** — zero evidence occurrences. Cite those,
+not C6/C11.
 
 ---
 
@@ -600,6 +627,74 @@ Nothing below is blocked on code. All five are blocked on a decision or on a mea
 zero turns moved, PR #29); parallelise intra-batch tool dispatch (already parallel); or tier
 down to a smaller model (there isn't one — `chat` and `reasoner` both resolve to
 `deepseek-v4-flash`; the only unused tier is larger).
+
+---
+
+### 3.14 The 2026-07-26 fix round — 15 branches, and two of this document's claims refuted
+
+Sixteen branches off mainline `c9e60c2`, integrated and green: **2575 passed, 4 skipped, 0
+xfailed** against a `c9e60c2` baseline of **1965 passed, 3 skipped, 1 xfailed**. The xfail is
+gone because it became a real test. All sixteen merge pairwise clean (53 files, +10273/-403). Nothing was deployed and
+no paid round was run.
+
+**Read §3.11's lesson first: this round exists because two figures in this file were computed
+from instruments that could not see what they were counting. It happened again, twice.**
+
+| what | where | note |
+|---|---|---|
+| retired-model runtime guard | `fix/retired-model-runtime-guard` | the suite's single **xfail is now enforced**. All three provider-client constructors refuse a retired name; verified by running each entry point with `DEEPSEEK_MODEL=deepseek-chat`. `app/.env.example` shipped `deepseek-chat`, so the documented onboarding path *configured the outage* — fixed, plus a scan asserting no `*.env.example` may ever carry a retired name |
+| G1 `denied_recall` | `fix/recall-veto-purpose-clause` | `\byou\s+(?:remember|recall)\b` matched the **purpose clause** of a save ("just so you remember for next time"). The zh side had the same defect via `记得我` |
+| commute estimator | `fix/commute-estimator-calibration` | **calibrated, not just suppressed.** `t(d)=3.7+11.4·d^0.58`; worst residual **6.00x → 1.233x**, 0/14 pairs over the 1.5x gate; floor 15 → **11 min**, computed as `round(t(0.47))`. The mechanistic detour+overhead form was *rejected by the data* (observed pace spans 7.62x; circuity is 1.2–1.6) — the decline is modal, and detour vs speed is **not separable** on 14 pairs |
+| invented station names | `fix/fabricated-place-names` | "Covent Garden" exists nowhere in the repo. Station claims only, deliberately narrowed: **0 false positives on 196 retained real (answer, evidence) pairs**, positive control 196/196 |
+| `get_property_details` returned a **different property** | `fix/property-details-wrong-entity` | Spring Mews SE11 → "Raleigh Mews N1"; Chapter Kings Cross → "Pentonville Road £1,300 pcm" which F14 then asserted as *"the official monthly price"* (true £1,733.33). **Refused at the tool boundary**, not flagged — a flag would have been this defect class twice, since `found`, `total_matches` and `other_matches` had **zero readers repo-wide** |
+| deposit 5-vs-6-week cap | `fix/deposit-cap-boundary` | `tenancy_reference`'s arithmetic **was already correct**; nothing on the answer path called it — it was reachable only via a tool *denial*, and these turns call no tool. Now deterministic before any LLM call for 7 case shapes; still prompt-dependent outside them |
+| `forget` left episodic residue | `fix/memory-forget-and-history-consistency` | a deleted budget was read back to the user (`recall_memory count: 2`). Full scrub **plus a verification re-read** that sets `complete=False`. Also cross-history contradiction detection (£1200/month vs £1200/week). Found in passing: **`\b` never matches before a digit after a CJK char, so every Chinese amount was invisible** |
+| instruments that lied | `fix/canary-report-since-filter`, `fix/eval-harness-commit-binding` | `--since` now filters; argparse misuse exits 64, not 2. The eval harness records commit + dirty + **which source said so** — git is genuinely unavailable to it (a worktree's `.git` is a file pointing at a host path absent in the container), so `dirty` has a third `unknown` state rather than a false "clean" |
+| secrets & artifacts unstageable | `fix/gitignore-env-backups` | `.gitignore` matched `.env` and `**/.env` only, so `./.env.bak-pre-042c477` — holding the **live production `SEARXNG_SECRET` in plaintext**, in a PUBLIC repo — was untracked but **not ignored**. Verified never committed (`git log --all -S<secret>` empty) so **no rotation was needed**; archived out of the tree. Same hole covered `.runtime-*/`, whose instance had already been patched by name after af65e40 |
+| `no_false_retrieval_provenance` | `feat/false-retrieval-provenance-port` | see §5 |
+| legacy pool self-identification | `feat/app-candidate-sha-identity` | wiring only, **inert until a planned rebuild**, per the §3.10 ruling. Uses `:-` not `:?`: the existing `FC_CANARY_*` `:?` pins already make *every* compose command fail when unset — including the one that brings the escape hatch back — because interpolation is whole-file and ignores profiles |
+| F7's unsatisfiable route | `fix/self-defeating-case-definitions` | `expected_tools: ["market_info"]` names a **pseudo-route**, absent from `create_tool_registry()`, so the subset test was false for every possible run of every architecture. Route accuracy 80.6% → **81.6% (+1)**. `schema.json` itself had blessed the pattern ("Real registry tools OR documented pseudo-routes") |
+| forbidden retrieval on money turns | `fix/arithmetic-turn-retrieval-guard` | fc's 3.06% was **already closed at dispatch** by `13019dc`; the **legacy** 4.08% (B9/B10/B14/B15) runs `web_search` ×5 via `market_info → multi_search`, and the legacy graph never consults `tool_policy`. This is the legacy half |
+| the canned path made countable | same branch | new `critic_hard_replace` event. On the round of record it reads **3/98** where the soft-wrap counter reported 0 |
+| four evaluator constraint defects | `fix/grader-constraint-defects` | see the ruling below |
+| money grounding could be defeated by unrelated numbers | `fix/price-grounding-pool-looseness` | `unsupported_reply_prices` seeded its pool with **every bare evidence number** ×1–36 under a **1% relative** tolerance. On a nearest-station turn the evidence holds metres, so `{214,635,665}` certified £9999 (=665×15), £4321, £7777… Measured: of the 9,000 integer rents £1,000–£9,999, the old rule called **5,007 (55.6%)** supported on a metre-only turn; now **0%**. All 8 documented fabrications caught (was 0/8); 4 pre-existing false positives fixed; total flagged fell 6→3, and the one newly flagged answer is a **genuine** fabrication |
+
+**A8/A11/A13 were investigated and deliberately NOT changed.** They were reported as
+self-contradictory (`expected_route: clarification` + `expected_tools: ['search_properties']`).
+The retained `per_case.csv` refutes it: A11 scored `route_matched=True` in **both** arms, A8 and
+A13 in legacy. `expected_route` is **not read by `route_matches` at all**, and H14 (`hard_gate`)
+uses the same pairing canonically. The fc misses are a real product difference — fc terminates
+via `ask_user` — so "fixing" the cases would convert measured misses into passes after the
+fact, which §3.5 forbids.
+
+**The evaluator ruling is OPEN and belongs to the owner.** Four checker defects were fixed and
+measured on retained evidence, both arms, one evaluator:
+
+```
+                fc /98      legacy /98
+baseline          59            34
++R1               68            41     must_refuse_fabrication ignored its own `field`
++R2               74            44     must_note_missing_data lexical gaps
++R4               77            46     evidence/answer extraction asymmetry
++R5               79            46     PR #7's labelled-exception ruling, ported to money
+```
+
+32 flips, **all FAIL→PASS, zero PASS→FAIL in either arm**, and `cases.jsonl` is byte-identical
+to the round's recorded `case_contract_sha256`, so every flip is attributable to the grader.
+fc 60.2% → 80.6%; legacy 34.7% → 46.9%; **the fc-vs-legacy gap widens** from 25 to 33 cases.
+
+**All four are one-directional on this corpus, and that is stated rather than hidden.** The
+defence is that each is a defect in a checker's own logic — `must_refuse_fabrication` was
+`any(marker in answer)` and never inspected a number, so it failed correct answers *and passed
+hedged fabrications* — and each fix's added strictness is pinned by a test that **passes on the
+old checker and fails on the new one**. Merging still changes what "pass" means, so §3.5 makes
+it the owner's call, not an implementer's. Note also that `contract_delta.py compare` **refuses
+this measurement**: it gates on `case_contract_sha256`, unchanged here. That refusal was left
+intact — it should probably also key on a grader hash.
+
+**Consequence for §3.13 item 3.** The eval-only metrics still have not been re-run on a live
+round, and now they must not be re-quoted from the old grader either. Any future round must
+state which grader produced it.
 
 ---
 
@@ -672,13 +767,16 @@ wrong answer rather than an error:**
   stays empty. A single free greeting caught this (archive grew 2111 → 3063 bytes); a
   67-turn round would have written entirely into the evidence package. **Archive only after
   recreating the pool**, or `cp` and leave the original live.
-* **`canary_report.py --since` does NOT filter records.** It only feeds STAGE-PROGRESS
-  elapsed hours; only `--window HOURS` filters. The external-anchor block nevertheless prints
-  `window = the selected --window / --since range`, which is a **tool defect** — it invites
-  exactly the mistake of assuming `--since` bounded the population. First run of the 07-25
-  round counted the warm-up turn and returned INSTRUMENTATION-HOLD because of it.
-* **`canary_report.py --json` takes a PATH argument.** A bare `--json` aborts in argparse
-  with **exit 2** — indistinguishable from STAGE-PAUSE if only the exit code is checked.
+* ~~**`canary_report.py --since` does NOT filter records.**~~ **FIXED 2026-07-26** on
+  `fix/canary-report-since-filter` (§3.14). It now filters, and the anchor reports the window
+  actually applied. **Reports produced BEFORE that fix were computed over every record whatever
+  `--since` said — including the 07-25 round of record.** Re-verified: the fixed tool on that
+  round's own log with its own `since.txt` gives 68 records → 67 in window, and reproduces the
+  stored verdict number for number (p50 8466.4, degraded 10.448%, STAGE-PAUSE), i.e. the round
+  of record is unaffected because its population was declared another way.
+* ~~**A bare `canary_report.py --json` aborts with exit 2**, indistinguishable from
+  STAGE-PAUSE.~~ **FIXED 2026-07-26**: argparse misuse now exits **64**. Gate verdict codes
+  are unchanged (0 / 2 / 3) and are now pinned by test as literals. `--json` still takes a PATH.
 * **Telemetry field names are `telemetry_schema_version` and `strict`**, not
   `schema_version`/`strict_mode`. Probing the wrong names returns `None` and looks like a
   contract violation that is not there.
@@ -755,12 +853,21 @@ Passed static audit, smoke, loopback memory smoke and a **42/42** guard; failed 
 The G2/G3/E11 amendments and the claim-taxonomy changes that this section used to list as
 open **landed in PR #7**. See `docs/evaluator_contract.md`. What remains open:
 
-**Excluded from PR #7 because it needs product code from a NO-GO branch:**
-`no_false_retrieval_provenance`. Its grader imports `claims_no_retrieval` from
-`uk_rent_agent.agent.critic`, which exists **only** on `hardening/correctness-only`.
-`evidence_usable` is on mainline; `claims_no_retrieval` is not. Its `schema.json` enum entry
-and the H3 guard-case amendment are held back with it. Reviving it means porting the
-predicate deliberately, as its own change.
+~~**Excluded from PR #7 because it needs product code from a NO-GO branch:**
+`no_false_retrieval_provenance`.~~ **DONE 2026-07-26** on `feat/false-retrieval-provenance-port`
+(§3.14) — the deliberate, named-exception port this paragraph called for. `claims_no_retrieval`
+was taken from `hardening/correctness-only` (`critic.py:557`) **byte-identical and alone**,
+appended at end of file; the `schema.json` enum entry and the H3 guard-case amendment landed
+with it. **The A14 fallback dependency does not exist** — the predicate is pure text matching
+whose whole closure is `re` plus two literal cue tuples, so nothing from that branch's
+fail-closed critic path came along. `KNOWN_DIVERGENCES` did not grow (still `E8`, `F11`, `G16`).
+
+One consequence to know: this is the **first constraint whose grader imports product code**, so
+an evaluator verdict now depends on which copy of `uk_rent_agent` resolves. Both real entry
+points insert `REPO_ROOT/"src"` at `sys.path[0]` (`run_benchmark.py:60-62`, `rescore.py:33-38`)
+so it is correct in practice, but the bench image pip-installs its own snapshot and a bare
+`python -c` inside it resolves `/app/src` instead. That is now pinned by a test rather than
+left to luck.
 
 **Excluded on purpose:** `extract_tool_trace` skipping `suppressed` artifacts — evaluator
 support for follow-up-capability suppression, which is NO-GO and not being extended.

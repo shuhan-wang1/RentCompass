@@ -158,6 +158,30 @@ def _load_memory_gate():
         return None
 
 
+# ─── read-tool dispatch policy (imported defensively) ───────────────
+def _load_tool_policy():
+    """Return core.tool_policy, or None if it is unavailable. Indirected exactly like
+    _load_memory_gate so tests can inject a stub, and so the loop degrades to the previous
+    dispatch-everything behaviour rather than crashing if the module cannot import."""
+    try:
+        from core import tool_policy  # type: ignore
+        return tool_policy
+    except Exception:
+        return None
+
+
+def _read_tool_denial(policy, name: str, args: dict, current_message: str):
+    """Consult the read policy, swallowing any error. A policy that raises must never take
+    the turn down with it — the fallback is the pre-policy behaviour (dispatch)."""
+    if policy is None:
+        return None
+    try:
+        return policy.read_tool_denial(name, args, current_message=current_message)
+    except Exception:
+        logger.warning("fc_loop.read_policy_error tool=%s", name, exc_info=True)
+        return None
+
+
 # ─── message assembly (contract C, imported defensively) ────────────
 def _behaviour_directive(reply_language: str) -> str:
     return (
@@ -827,6 +851,16 @@ def _completed_empty_search_raw(artifacts: list) -> Optional[dict]:
         raw = a.get("raw_data")
         if not isinstance(raw, dict) or raw.get("partial"):
             continue
+        # A payload the TOOL marked unsuccessful never searched, so it cannot be a completed
+        # empty search. The one that matters is status=="need_clarification" (the tool asked
+        # which area, having refused to guess): it carries no `recommendations` key, so the
+        # emptiness test below used to say True and the fallback answered "The property search
+        # completed: no studio listings matched your criteria (data from OnTheMarket)" — a
+        # sourced claim about a search that did not happen. Observed verbatim on B12 of the
+        # 2026-07-25 sweep. A genuine zero-match payload sets success=True, so this costs
+        # the real complete-empty branch nothing.
+        if raw.get("success") is False or raw.get("status") == "need_clarification":
+            continue
         recs = raw.get("recommendations")
         empty = (raw.get("status") == "no_results"
                  or not (isinstance(recs, list) and len(recs) > 0))
@@ -1459,6 +1493,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         seen = {(a.get("tool"), a.get("params_digest")) for a in artifacts if a.get("params_digest")}
         turn = int(state.get("loop_turn", 0))
         mem_gate = _load_memory_gate()
+        read_policy = _load_tool_policy()
         ec = state.get("extracted_context") or {}
         session_id = state.get("session_id", "default")
         cur_msg = ec.get("current_message") or _current_message(state.get("user_query") or "")
@@ -1570,6 +1605,17 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     _note_write_decision(
                         tool=name, decision="allowed", context_tainted=_tainted,
                         user_authorized=False, audit_key=_akey, reason=None)
+            else:
+                # READ policy (core.tool_policy). Writes are gated above by memory_gate /
+                # guardrails; until now reads had NO gate at all, which is the whole of the
+                # 2026-07-25 forbidden-tool defect (B8/B12/B14). Judged on the FINAL args —
+                # after strict-null stripping and _inject_search_params — so the verdict is
+                # about the call that would actually have run.
+                denial = _read_tool_denial(read_policy, name, args, cur_msg)
+                if denial is not None:
+                    logger.info("fc_loop.read_denied tool=%s reason=%s", name, denial.reason)
+                    plan.append((tc, digest, ("deny_policy", denial), args))
+                    continue
             plan.append((tc, digest, "run", args))
 
         async def _run(name, args, digest, timeout, is_write):
@@ -1775,6 +1821,24 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     content=json.dumps({"success": False, "data": None,
                                         "error": "already ran; see the earlier result above"},
                                        ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
+            if isinstance(mode, tuple) and mode[0] == "deny_policy":
+                # Read refused before dispatch by core.tool_policy. Recorded exactly like the
+                # write refusals — denied=True, raw_data None — so it is a REQUESTED and not
+                # an EXECUTED call everywhere downstream (_is_executed, the eval's tool trace,
+                # the security audit), and its digest still suppresses an identical retry.
+                denial = mode[1]
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error=f"denied: {denial.reason}", denied=True, elapsed_ms=0))
+                payload = {"success": False, "data": None, "error": denial.guidance}
+                if getattr(denial, "reference", None):
+                    # The refusal carries the authoritative answer the tool was reaching for,
+                    # so the model ends the batch better informed than if it had run.
+                    payload["reference"] = denial.reference
+                messages.append(ToolMessage(
+                    content=json.dumps(payload, ensure_ascii=False, default=str),
                     tool_call_id=tcid, name=name))
                 continue
             if isinstance(mode, tuple) and mode[0] == "deny_recall":

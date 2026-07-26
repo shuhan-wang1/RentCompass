@@ -1,7 +1,7 @@
 # HANDOFF — START HERE
 
 Master index for the fc_loop work. **Every other document is a leaf; this is the only file
-that spans all branches.** Last updated 2026-07-25.
+that spans all branches.** Last updated 2026-07-26.
 
 > ## Status: fc_loop IS LIVE ON THE PUBLIC EDGE as of 2026-07-26. The p50 gate did NOT pass; the owner overrode it.
 >
@@ -17,8 +17,18 @@ that spans all branches.** Last updated 2026-07-25.
 >
 > **Right now:**
 > * `telemetry/v2-layer-b` is the **mainline**, not `main`. Head is
->   **`8793c0b17963a6a2b375903a164d3d96395dc834`**. Offline suite **1804 passed, 3 skipped,
->   1 xfailed**.
+>   **`c9e60c2d1ba3fadf41c731f094abdc94ba712bfd`**. Offline suite **1965 passed, 3 skipped,
+>   1 xfailed**. That is the number to reproduce before changing anything — three separate
+>   agents were each briefed with a stale figure on 2026-07-26 and all three independently
+>   recomputed and corrected it, which cost them work.
+> * **The live pool runs that same SHA.** `uk-rent-agent:canary-fc-loop-c9e60c2`, deployed
+>   2026-07-26. Confirm with the header, never with this document:
+>   `curl -sk -D- https://rentcompass.co.uk:8443/health | grep x-agent-`
+> * **The health monitor IS now running** — `systemctl list-timers rentcompass-monitor.timer`.
+>   It was listed as the top open risk in §3.10 and no longer is. It runs
+>   `/usr/local/bin/rentcompass-monitor.sh`, a deliberate stable copy, NOT the git worktree —
+>   see §3A. Current steady state is **1 alert** (`canary-legacy.jsonl missing`, genuine: the
+>   legacy pool serves nothing so it writes no telemetry).
 > * **The verification round of record is `.runtime/round-8793c0b-internal-2026-07-25/`.**
 >   Verdict **STAGE-PAUSE (exit 2)**: fc p50 **8466ms** > 6000ms and partial+soft **10.45%**
 >   > 10%. Zero-tolerance clean. **No cutover** (§3.6). §3.8 has the full result.
@@ -30,9 +40,16 @@ that spans all branches.** Last updated 2026-07-25.
 >   `wrapped_by='llm'`; canned share **0.00%** (was ~80% conversion once a wrap fired).
 > * **PR #9** — `memory_context` pre-registration, DESIGN ONLY. Revision 3, CHANGES
 >   REQUESTED twice, awaiting a short final design review. **Not approved or frozen.**
-> * **PR #12** (lever ledger) and **PR #15** (output-length/latency pre-registration, every
->   threshold still `<TO BE FILLED>`) are OPEN. **#15 must not be filled in against the
->   8466ms now on record** — that is back-fitting a threshold to a known result (§3.5).
+> * **Two figures are WITHDRAWN, and one lever is re-opened as UNKNOWN** — §3.11. Do not
+>   cite "the median turn makes 2 LLM calls" or "3+ call turns never make the bar"; both came
+>   from a counter that could not see 48 of the calls in the round of record.
+> * **Open PRs:** **#9** (`memory_context` prereg, DESIGN ONLY, rev 3, not frozen),
+>   **#12** (lever ledger), **#15** (output-length prereg, every threshold `<TO BE FILLED>`),
+>   **#19** (round-variance prereg, **awaiting the owner's freeze**). #15 and #19 both still
+>   need thresholds; **neither may be filled against a measurement already on record** (§3.5).
+> * **#19 matters more than it did.** With CALL COUNT re-opened as unknown, the next latency
+>   question has to be re-measured — and §3.12 records ~740ms of round-to-round p50 drift on
+>   identical code, so a single round cannot answer it. σ(p50) is the missing number.
 > * **No candidate exists for the §3.3 memory experiment. Do not create one.** `8793c0b` is
 >   ordinary merged mainline, *not* a measurement candidate for §3.3 — do not conflate the
 >   two: that candidate may carry the memory wiring and nothing else.
@@ -44,6 +61,47 @@ that spans all branches.** Last updated 2026-07-25.
 **Why this file exists:** the per-topic docs live on *different branches*, so whichever
 branch you check out shows only part of the picture. Read this first, then the leaf you
 need.
+
+---
+
+## 0. The defect class this codebase keeps producing
+
+Read this before writing any code here. **Seven confirmed instances of one shape:** a value is
+computed, stored somewhere a reader could find it, and then never asserted on. Every one
+shipped. Every one was found by someone reading the code rather than by a test.
+
+| # | where | the value that was produced | what was never done with it |
+|---|---|---|---|
+| 1 | `scripts/canary_report.py` | `--since` parsed a window | records were never filtered by it, while the anchor text claimed they were |
+| 2 | `deploy/monitoring/rentcompass-monitor.sh` §9 | telemetry line-count growth | pasted into the summary string; `emit_alert` was never called |
+| 3 | same file, §1–§3 | `l_ver` / `f_ver` / `p_ver` pool identities | into the summary; `p_ver` discarded at the point of capture |
+| 4 | `app/core/tools/check_safety.py` | a raw crime count | scored `100 - n//2` with no denominator — shipped "Hackney: 9 crimes, 96/100 Very Safe" against a real 1,657/month |
+| 5 | `app/core/tools/calculate_commute.py` | `route_source` (`tfl` vs `estimate`) | zero consumers repo-wide, no prompt mentioned it — a haversine guess and a real journey plan arrived in the same field |
+| 6 | `app/core/agent_loop.py` | a `need_clarification` search payload | counted as a *completed zero-match search*, so a user was told "no studios matched" about a search that never ran |
+| 7 | `app/core/turn_observations.py` | `install_observer` only saw LangChain models | two production paths built clients directly; 48 real billed calls counted as zero |
+
+**Instance 7's bypass was documented in its own sibling's module docstring** — "calls that
+bypass ModelRouter". It was known and simply never wired.
+
+Three practices exist specifically because of this, and none of them is optional:
+
+1. **A fix needs a test that FAILS on the old behaviour.** Not a happy-path test. Where the
+   bad output was observed in production, pin that literal string or number as the regression
+   (`tests/test_safety_scoring.py` asserts the retired formula really does produce 96 from 9).
+2. **Check whether an existing test asserts the bug as intended.** This has happened three
+   times: `assert "search_properties" in resp  # names the tool that ran` pinned an
+   architecture leak; `assert safety_score == 94  # 100 - 12//2` pinned the un-normalised
+   formula; `assert result.data["safety_score"] == 94` pinned it again elsewhere. Invert it and
+   say why in a comment.
+3. **Prefer a source guard over a promise.** `tests/test_all_llm_calls_are_observed.py` fails
+   the build if any file outside a three-entry allowlist constructs a chat client. Instances
+   1–6 were each fixed individually; only the guard stops the eighth.
+
+**"It ran" is not "it is verified."** The 2026-07-26 post-merge query returned HTTP 200 with a
+good answer and `llm_calls=2` — identical to the broken behaviour, because the query never
+reached the raw-SDK path. Verification was done instead by executing the wiring inside the
+deployed container. `/health` cannot see this class of fault; that is the 2026-07-24 outage in
+one sentence.
 
 ---
 
@@ -60,6 +118,16 @@ need.
 | `docs/handoff-refresh` | `4af58e1` | **MERGED** (PR #10 → `042c477`) | HANDOFF §3.5/§3.6/§3.7 |
 | `fix/retired-model-default` | `7568513` | **MERGED** (PR #13 → `a5a5110`) | `app/config.py` retired-model default + one-env-one-default invariant test |
 | `fix/observer-wired-at-startup` | `705a33e` | **MERGED** (PR #14 → `8793c0b`) | zero-LLM-call turns stay in the population |
+| `fix/dont-cache-crime-api-failures` | — | **MERGED** (PR #24 → `e24e383`) | a transient police-API 500 was frozen into the cache for a whole TTL |
+| `fix/observe-every-llm-call` | — | **MERGED** (PR #30 → `fb36cb2`) | `llm_calls` undercount + the chat-client source guard |
+| `fix/forbidden-tool-execution` | — | **MERGED** (PR #25 → `823a584`) | read tools had NO dispatch gate; `core/tool_policy.py`, `core/tenancy_reference.py` |
+| `perf/parallel-tool-batch` | — | **MERGED** (PR #26 → `814fc4a`) | the batch was already parallel; pins it, fixes worker-starvation misattribution |
+| `fix/grounded-derived-numbers` | — | **MERGED** (PR #28 → `59a2b08`) | commute estimate / nearest station / POI reference point |
+| `feat/incremental-listing-panel` | — | **MERGED** (PR #27 → `1e509f6`) | refinement in place, both arches, `core/refine_results.py` |
+| `design/layered-agent-architecture` | — | **MERGED** (PR #29 → `1022e0d`) | the multi-agent proposal, docs only |
+| `docs/agent-round-findings` | — | **MERGED** (PR #31 → `36488f4`) | §3.11 withdrawals + §3.12 findings |
+| `docs/cutover-2026-07-26` | — | **MERGED** (PR #20 → `c9e60c2`) | §3.10, the cutover recorded as an override |
+| `design/round-variance-preregistration` | `96c8ec3` | **PR #19 OPEN — awaiting the owner's FREEZE** | σ(p50); D1–D4 applied. Not runnable until frozen. |
 | `design/memory-context-preregistration` | `e91293f` | **PR #9 OPEN, rev 3, under review** | DESIGN ONLY pre-registration. No candidate. |
 | `docs/output-length-latency-prereg` | — | **PR #15 OPEN, DESIGN ONLY** | every threshold `<TO BE FILLED>`; see §3.5 before filling any of them |
 | `fastpath/deterministic-phase1` | `7842f60` | **TERMINATED / NO-GO** | the deterministic fast path + its full record |
@@ -90,6 +158,8 @@ earlier notes that named it as the shippable SHA were wrong.
 | `docs/eval_infrastructure.md` | `eval/measurement-infrastructure` | what the shippable branch adds, and why items 5–6 exist (both are scars). |
 | `docs/canary_runbook.md` | all branches | canary/rollout operations: image build out of band, stage table, gate metrics, rollback. **Read §1 "Image build" before building any candidate.** |
 | `docs/output_length_latency_preregistration.md` | `docs/output-length-latency-prereg` (PR #15) | the surviving latency lever, as a design. **Every threshold is `<TO BE FILLED>` and §3.5 constrains how they may be filled.** |
+| `docs/layered_agent_architecture_proposal.md` | mainline (PR #29) | **read before proposing any multi-agent work.** Simulated per-turn on the warm n=64 round: layering buys ~308ms of a 1,402ms gap and moves ZERO turns under the bar; a mandatory plan hop improves the median while 5 more turns miss it. Stage 1 is telemetry, not architecture. |
+| `docs/round_variance_preregistration.md` | mainline (PR #19, **unfrozen**) | σ(p50). Threshold **126ms** derived from α=0.05/power=0.80/δ=500ms, `k = ceil(2·(2.8016·σ̂/500)²)`. Read §0 first: the estimand is round-level p50, NOT per-case. |
 | `.runtime/round-8793c0b-internal-2026-07-25/README.txt` | deploy tree, not committed | procedure and caveats for the round of record (§3.8/§3.9). Authoritative on how that round was actually run. |
 
 Verify a doc's branch: `git ls-tree -r --name-only <branch> -- docs/`
@@ -109,6 +179,7 @@ Verify a doc's branch: `git ls-tree -r --name-only <branch> -- docs/`
 | 5 | **#10** | `docs/handoff-refresh` | merged as `042c477`. §3.5/§3.6/§3.7. |
 | 6 | **#13** | `fix/retired-model-default` | merged as `a5a5110`. `app/config.py` still defaulted to the provider-retired `deepseek-chat`; adds a source scan, a resolved-default test and a one-env-one-literal-default invariant. |
 | 7 | **#14** | `fix/observer-wired-at-startup` | merged as **`8793c0b`**. A zero-LLM-call turn in a process that had built no model emitted a contract-invalid record and left the population — distorting p50 and every rate denominator. Verified fixed in production (§3.8). |
+| 8 | **#24 #30 #25 #26 #28 #27 #29 #31 #20** | the 2026-07-26 wave | merged in that order to `c9e60c2`. Telemetry-correctness first (#24, #30) **on purpose**: #25/#26/#28 change tool behaviour, and judging them against a counter that missed 48 calls would have been meaningless. Integrated tree **1965 passed**; all nine branches merged pairwise clean, verified before any of them was merged. |
 | — | **#9** | pre-registration | **OPEN, rev 3, under review. Design only.** |
 | — | **#12** | lever ledger (docs) | **OPEN.** |
 | — | **#15** | output-length/latency pre-registration | **OPEN, DESIGN ONLY**, all thresholds `<TO BE FILLED>`. See §3.5. |
@@ -247,11 +318,22 @@ Reaching a cutover legitimately requires one of exactly two things:
 2. **a separately pre-registered, frozen, forward-only v2 gate** (§3.5) validated on a
    fresh independent round.
 
-On (1), the lever ledger as of 2026-07-25 — prompt size, message array, call count and
-schema compaction are all **refuted**; call count was closed by arithmetic (2nd-call marginal
-cost −280 ms; 2-call turns only 50.0% under the bar; 3+ call turns 0%; a p50 under the bar
-needs >50% of *all* turns under it). Two candidate levers survive, and §3.8 shows they are
-**not yet separable**, so neither may be planned against yet.
+On (1), the lever ledger, **as amended on 2026-07-26**:
+
+| lever | status |
+|---|---|
+| prompt size | **refuted** |
+| message array | **refuted** (median 2-call turn: 192 uncached tokens, 98.8% cache hit) |
+| schema compaction | **refuted** |
+| **call count** | **RE-OPENED AS UNKNOWN** — the arithmetic that closed it used `llm_calls`, which was undercounting (§3.11). Not re-opened as promising; re-opened as unmeasured. |
+| output length | surviving, and the only one with a fitted relationship |
+| serving-path overhead | surviving; +599ms paired median vs the in-process harness |
+| **intra-batch tool parallelism** | **NOT A LEVER — it was already parallel.** 16 concurrent 1.0s reads finish in 1.010s. An earlier draft of this section asserted the opposite without reading the code. |
+| **layered / multi-agent** | quantified and insufficient: ~308ms of a 1,402ms gap, **zero** turns moved under the bar. A p95 lever. See `docs/layered_agent_architecture_proposal.md`. |
+
+§3.8 shows the two surviving levers are **not yet separable**, so neither may be planned
+against yet. And per §3.12, ~740ms of round-to-round p50 drift on identical code means no
+single round can judge a 500ms effect — which is what PR #19 exists to fix.
 
 Ordering, not negotiable: build out of band from the merged mainline and smoke -> full
 verification on the new SHA -> cutover **only if every gate passes**. Note that steps 1–3 are
@@ -373,12 +455,16 @@ bash deploy/switch_pool.sh --to legacy --allow-unidentified-target
 `--allow-unidentified-target` is required because the legacy pool still answers
 `x-agent-version: unknown` (§3A).
 
-**Open risk, ordered.**
+**Open risk, ordered. (Item 1 was CLOSED later the same day — kept for the sequence.)**
 
-1. **The health monitor is still not running.** Units are installed but the timer is
-   `disabled`, and `ExecStart` points at the deploy tree's copy, which is the pre-#18 version
-   that would not have caught the 2026-07-24 outage. Until that is fixed, a new architecture
-   is live with nothing watching it. This is the highest-priority open item.
+1. ~~**The health monitor is still not running.**~~ **CLOSED 2026-07-26.** Timer enabled and
+   firing every 5 min, running the post-#18 script from `/usr/local/bin` via an
+   `override.conf`. It earned its keep within minutes: its first live run paged sev3 on
+   `public edge x-agent-arch=fc_loop — MUST be legacy`, an assertion written when fc was
+   internal-only that would have fired forever about the intended state. Fixed in #23 by
+   making the expectation declared (`MON_EXPECTED_PUBLIC_ARCH`) rather than assumed — and the
+   identity check added one commit earlier carried the same assumption and had to be fixed
+   with it. Steady state is 1 genuine alert.
 2. **`APP_CANDIDATE_SHA` is still unset for the `app` service**, so the rollback target cannot
    state its commit. The earlier plan was to fix this "for free" right after cutover, while
    legacy is idle. **That plan is withdrawn:** rebuilding the only rollback target immediately
@@ -386,7 +472,13 @@ bash deploy/switch_pool.sh --to legacy --allow-unidentified-target
    it is exactly when you are most likely to need it. Do it once fc has run clean for a
    sustained period, and flip back to legacy first if it must be done sooner.
 3. The variance study (PR #19) is unfrozen and unrun. Its result now matters more, not less:
-   with fc live, every future "did this change help?" question is asked against production.
+   with fc live, every future "did this change help?" question is asked against production —
+   and §3.11 re-opened CALL COUNT as unmeasured, so there is a real question waiting on it.
+4. **The p50 gate is still breached and still overridden.** Nothing in the 2026-07-26 wave
+   targeted p50 and nothing should be read as having moved it. `llm_calls` will now read
+   HIGHER than in any pre-`fb36cb2` record — that is the undercount being fixed, **not a
+   regression**, and old and new call counts are not comparable. Anyone who compares them will
+   reproduce the 7,870ms cross-instrument error this project already had to withdraw once.
 ### 3.11 Two figures WITHDRAWN — `llm_calls` was undercounting
 
 **Do not cite either of these again without re-measuring.** Both appear in earlier sections
@@ -475,6 +567,42 @@ field, not a benign one.
 
 ---
 
+### 3.13 What to do next, and why in this order
+
+Nothing below is blocked on code. All five are blocked on a decision or on a measurement.
+
+1. **The owner freezes PR #19** (round-variance prereg). Everything measurement-shaped queues
+   behind it: σ(p50) is unknown, ~740ms of drift on identical code is recorded (§3.12), and the
+   threshold is **126ms** — so a single round cannot resolve a 500ms effect and `k` cannot be
+   computed. Freezing costs one commit plus an annotated tag; §"Freeze block" says exactly how,
+   and why there is deliberately no `PREREG_SHA` or `FROZEN_AT` field.
+2. **Re-measure call count.** #30 made the counter honest; nothing has been measured with it.
+   Until a round runs on `c9e60c2` or later, every per-call figure in this document predates
+   the fix. This is what re-closes (or re-opens) the CALL COUNT lever in §3.6.
+3. **The eval-only metrics have never been re-run** since the 2026-07-26 wave. #25/#27/#28 all
+   touch behaviour graded by `no_evidence_numbers` / `forbidden_tool` / `route_accuracy`, and
+   the last figures (2.04% / 3.06% / 80.6%) are from `8793c0b`. #25 provably prevents the three
+   forbidden executions; it does **not** prove the three cases now pass.
+4. **`APP_CANDIDATE_SHA` for the `app` service.** The rollback target still cannot state its
+   commit, so rollback needs `--allow-unidentified-target`. The owner's ruling: **not fixed
+   standalone** — done at the next planned public rebuild, and "the public pool can self-identify"
+   is a cutover precondition. An earlier recommendation to fix it "for free right after cutover"
+   was **withdrawn**: rebuilding the only rollback target immediately after moving traffic onto
+   an unproven candidate is the worst possible timing.
+5. **Known-open product defects, none of them fixed** — the eval sweep's own numbers:
+   pass 60.2% (39/98 fail the contract), route accuracy 80.6% (19/98), and `G1`'s `remember`
+   denied by a false positive in `memory_gate._RECALL_VETO_EN` (`\byou\s+(?:remember|recall)\b`
+   matches the purpose clause of "just so you remember for next time"), reported in #25 and
+   deliberately not fixed there.
+
+**Do NOT**, without new evidence: re-propose prompt size, message array or schema compaction
+(refuted, §3.6); build a layered agent topology expecting a p50 win (quantified at ~308ms and
+zero turns moved, PR #29); parallelise intra-batch tool dispatch (already parallel); or tier
+down to a smaller model (there isn't one — `chat` and `reasoner` both resolve to
+`deepseek-v4-flash`; the only unused tier is larger).
+
+---
+
 ## 3A. Operational facts a new session will not otherwise know
 
 * **Dev tree is `/home/shuhan/telemetry-v2-layer-b`.** Never develop in
@@ -502,13 +630,39 @@ field, not a benign one.
   scan is how a real leak gets merged unnoticed — keep it green.
 * **The repo is public.** Unauthenticated `api.github.com` reads work, which is useful for
   diagnosis but also means committed literals are exposed.
-* **Offline suite baseline: 1804 passed, 3 skipped, 1 xfailed** on mainline `8793c0b`
+* **Offline suite baseline: 1965 passed, 3 skipped, 1 xfailed** on mainline `c9e60c2`
+  (1820 at `d285bac`, 1804 at `8793c0b`)
   (1793 at `042c477`, 1785 post-#7, 1710 before the infrastructure work). **The host has no
   `pytest` and no virtualenv** — run it in the `uk-rent-agent:bench-git` image with the
   worktree bind-mounted:
   `docker run --rm -v <worktree>:/patched uk-rent-agent:bench-git bash -c 'pip install -q
   pytest pytest-asyncio; cd /patched && OPENAI_API_KEY=dummy DEEPSEEK_API_KEY=dummy
   HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m pytest tests/ -q -p no:cacheprovider'`.
+
+**Traps that cost time on 2026-07-26:**
+
+* **A `!` prefix on a command pasted into bash is NEGATION, not a no-op.** The Claude Code UI
+  uses `! cmd` to mean "run in the shell", so instructions get written that way. In the
+  owner's own bash, `! sudo systemctl enable --now X && sudo systemctl start Y` negates the
+  first command's exit status, so `&&` short-circuits and **everything after it silently does
+  not run**. Two monitor installs failed this way and looked like they had succeeded — the
+  only clue was a missing symlink. When handing a command to a human, omit the `!`, and
+  prefer `;` over `&&` so one failure does not swallow the rest.
+* **`/var/log/rentcompass` must exist before the monitor unit can start.** The unit is
+  `ProtectSystem=strict` with `ReadWritePaths=/var/log/rentcompass`; systemd fails at mount
+  namespacing, not at the script, so the error names neither.
+* **The monitor runs `/usr/local/bin/rentcompass-monitor.sh`, installed via a systemd
+  `override.conf`.** The unit's own `ExecStart` points at the DEPLOY tree, which is pinned at
+  `2d48d22` and therefore holds a pre-#18 copy that cannot see the 2026-07-24 outage class.
+  Pointing it at a git worktree instead is worse: whoever checks out a branch changes what
+  production runs. **Re-run the install after any change to the monitor script.**
+* **`MON_EXPECTED_PUBLIC_ARCH` must be updated as part of any cutover or rollback.** It
+  defaults to `fc_loop`. A mismatch pages by design — that is the check.
+* **Merging N independent branches under `strict` branch protection is inherently serial**:
+  every merge puts the rest BEHIND and requires re-running CI. Budget ~4 min per PR. And when
+  polling `gh pr view --json statusCheckRollup`, a *queued* check reports `conclusion: ""`,
+  not `null` — a `// "P"` fallback alone misses it and a wait loop exits early. That mistake
+  aborted a merge run (safely: the guard refused a non-CLEAN merge rather than forcing it).
 
 **Traps that cost time on 2026-07-25 — every one of these silently produces a plausible
 wrong answer rather than an error:**
@@ -658,6 +812,7 @@ exactly what happened to G2/G3/E11 before PR #7 caught it.
 | `diagnostics-042c477-provider400-2026-07-25/` | the failed smoke that exposed the retired-model outage: report.json, exit 3, both bodies, container log with the traceback |
 | `archive-smoke-and-restore-2026-07-25/` | the `042c477` smoke and the public-pool restore turns |
 | `logs-archive-pre-042c477/` | four earlier JSONLs including the v1 `canary-legacy.jsonl`, which must stay out of `--input` or directory aggregation fails closed on schema v1 |
+| `diagnostic-8793c0b-warmcache-2026-07-25/` | the warm-cache diagnostic (n=64). **A DIAGNOSTIC, not a round of record** — it explains §3.8's result, it does not replace its verdict. Source of the 7,402ms warm p50, the −350ms paired cache effect and the +599ms instrument gap that PR #29's simulation is built on. |
 
 ---
 
@@ -699,6 +854,19 @@ exactly what happened to G2/G3/E11 before PR #7 caught it.
 10. **Read denominators before quoting rates.** An arm that answers less produces fewer
     claims and so scores better per claim while helping the user less — this is exactly how
     legacy outscores fc on `money_grounded` and on latency (§3.9).
+11. **Read the code before asserting how it behaves.** Two claims in this document were
+    asserted from plausibility and later measured false: that intra-batch tool dispatch was
+    serial, and that `llm_calls` counted every LLM call. Both cost real work — one sent an
+    agent to fix a non-problem, the other invalidated a lever verdict.
+12. **Brief a delegate with the CURRENT state, and expect to be corrected.** On 2026-07-26 an
+    agent was told legacy served public traffic (a day stale) and correctly scoped its fix to
+    an arm serving nobody; three agents were given a stale suite baseline and all three
+    recomputed it. A delegate that accepts a wrong premise wastes its whole run.
+13. **When a change is only observable through a code path, exercise that path.** A
+    post-deploy query that returns 200 with a good answer proves the deploy, not the fix — the
+    2026-07-26 verification query reported `llm_calls=2`, identical to the broken behaviour,
+    because it never reached the raw-SDK path. Verify inside the container if that is what it
+    takes.
 
 Full binding-rule list and the 15-entry trap list: `docs/fastpath_handoff.md` §2 and §9 on
 `fastpath/deterministic-phase1`.

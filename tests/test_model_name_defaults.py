@@ -12,21 +12,28 @@ overrode three correct defaults at once. The lesson generalises: a retired name 
 dangerous in a default AND in an override, and neither is visible from ``/health``, so the
 public pool served 400s for a day without a single alarm.
 
-These tests pin the source side. The env side cannot be pinned from a unit test, so
-``test_no_retired_name_survives_an_env_override`` documents the one thing code CAN do about
-it: fail loudly rather than pass a known-dead name to the provider.
+These tests pin the source side. The env side is pinned by the RUNTIME GUARD:
+``uk_rent_agent.llm.router.reject_retired_model_names`` refuses a known-dead name at every
+point where one can reach a provider, so a stale override fails loudly instead of
+producing a process that answers ``/health`` happily and 400s on every real turn.
 """
 from __future__ import annotations
 
+import ast
 import importlib
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
-# Names the provider no longer accepts. Add to this set when a model is retired; never
-# remove an entry — a name that was retired once is never valid again.
-RETIRED_MODEL_NAMES = frozenset({"deepseek-chat", "deepseek-reasoner"})
+# Names the provider no longer accepts. IMPORTED, not restated: this set used to be
+# defined here, which made the test the source of truth for a rule only product code can
+# enforce — and a copy in a test is a copy that drifts. Add to the set in router.py when a
+# model is retired; never remove an entry, a name retired once is never valid again.
+from uk_rent_agent.llm.router import RETIRED_MODEL_NAMES
 
 # Every config path whose default feeds a real provider call.
 _CONFIG_SOURCES = (
@@ -93,18 +100,265 @@ def test_no_retired_name_survives_an_env_override(monkeypatch):
     request time — invisible to /health, so the public pool was broken for a day.
 
     The router is the single place every model name flows through, so it is the right
-    place to refuse. Marked xfail until that guard exists: the assertion below is the
-    contract, not a description of today's behaviour.
+    place to refuse. WAS xfail while the guard was only a docstring; the guard now exists
+    (``reject_retired_model_names``), so the contract is enforced rather than described.
     """
     monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
     from uk_rent_agent.llm import router as router_mod
     importlib.reload(router_mod)
 
-    guard = getattr(router_mod, "reject_retired_model_names", None)
-    if guard is None:
-        pytest.xfail("router has no retired-name guard yet — see the module docstring")
+    assert getattr(router_mod, "reject_retired_model_names", None) is not None, (
+        "the guard IS the contract — without it ModelRouter has nothing to refuse with")
     with pytest.raises(ValueError, match="retired"):
         router_mod.ModelRouter()
+
+
+# --------------------------------------------------------------------------- #
+# The guard: one source of truth, and it is product code.                     #
+# --------------------------------------------------------------------------- #
+
+def test_the_retired_set_lives_in_product_code_and_never_shrinks():
+    from uk_rent_agent.llm import router as router_mod
+
+    # frozenset equality, not identity: earlier tests in this file reload the router
+    # module, which rebinds the object without changing the contract.
+    assert RETIRED_MODEL_NAMES == router_mod.RETIRED_MODEL_NAMES
+    assert {"deepseek-chat", "deepseek-reasoner"} <= set(router_mod.RETIRED_MODEL_NAMES), (
+        "an entry was removed — a name the provider retired is never valid again")
+    # An unactionable refusal ("that name is dead") just moves the outage to the next
+    # guess, so every retired name owes a successor.
+    for name in router_mod.RETIRED_MODEL_NAMES:
+        assert router_mod.RETIRED_MODEL_SUCCESSORS.get(name), f"{name} has no successor"
+
+
+def test_this_file_keeps_no_private_copy_of_the_retired_set():
+    """SOURCE GUARD against the regression this fix undoes.
+
+    The set was defined HERE before, so the test could pass while the product enforced
+    nothing. Re-inlining it would restore exactly that gap, silently.
+    """
+    src = Path(__file__).read_text(encoding="utf-8")
+    assert "from uk_rent_agent.llm.router import RETIRED_MODEL_NAMES" in src
+    assert not re.search(r"^RETIRED_MODEL_NAMES\s*=", src, re.M), (
+        "a second definition of the retired set can drift from the one the product "
+        "enforces — import it from uk_rent_agent.llm.router instead")
+
+
+def test_retired_model_error_is_a_value_error():
+    """Callers that already catch ValueError keep working; RetiredModelError only lets a
+    caller that WANTS to distinguish a dead-config error from a bad argument do so."""
+    from uk_rent_agent.llm import router as router_mod
+    assert issubclass(router_mod.RetiredModelError, ValueError)
+
+
+@pytest.mark.parametrize(
+    "var", ["DEEPSEEK_MODEL", "DEEPSEEK_CHAT_MODEL", "DEEPSEEK_REASONER_MODEL",
+            "DEEPSEEK_PRO_MODEL"])
+@pytest.mark.parametrize("dead", sorted(RETIRED_MODEL_NAMES))
+def test_every_model_env_var_is_refused_not_only_the_one_that_broke_prod(
+        monkeypatch, var, dead):
+    """Every previous fix in this repo addressed the single instance that was observed.
+
+    DEEPSEEK_MODEL is the var that caused the outage; the other three reach the provider by
+    exactly the same route and must be refused on the same terms.
+    """
+    monkeypatch.setenv(var, dead)
+    from uk_rent_agent.llm.router import ModelRouter
+    with pytest.raises(ValueError, match="retired"):
+        ModelRouter()
+
+
+@pytest.mark.parametrize(
+    "raw", ["deepseek-chat", " deepseek-chat ", '"deepseek-chat"', "'deepseek-chat'",
+            "DeepSeek-Chat", "DEEPSEEK-CHAT\n"])
+def test_a_mangled_env_value_is_still_refused(monkeypatch, raw):
+    """Matching only the bare lowercase form would let the worst-formatted deployment
+    through the guard. ``app/.env.example`` writes ``DEEPSEEK_MODEL="deepseek-chat"`` —
+    python-dotenv strips those quotes, docker-compose list-form env does not.
+    """
+    monkeypatch.setenv("DEEPSEEK_MODEL", raw)
+    from uk_rent_agent.llm.router import ModelRouter
+    with pytest.raises(ValueError, match="retired"):
+        ModelRouter()
+
+
+def test_the_guard_still_lets_a_live_name_through(monkeypatch):
+    """Guard the guard: refusing everything would pass every test above."""
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
+    monkeypatch.delenv("DEEPSEEK_CHAT_MODEL", raising=False)
+    from uk_rent_agent.llm.router import ModelRouter
+    assert ModelRouter().chat_model == "deepseek-v4-pro"
+
+
+def test_the_refusal_names_the_var_the_dead_value_and_the_successor(monkeypatch):
+    """An operator reading this in a boot log must not have to go and find the fix.
+
+    /health could not see the 400, so the error text is the entire diagnostic surface.
+    """
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
+    from uk_rent_agent.llm.router import ModelRouter
+    with pytest.raises(ValueError) as excinfo:
+        ModelRouter()
+    msg = str(excinfo.value)
+    assert "DEEPSEEK_MODEL" in msg, "the env var to change is not named"
+    assert "deepseek-chat" in msg, "the dead value is not quoted back"
+    assert "deepseek-v4-flash" in msg, "the successor is not named"
+
+
+def test_a_patched_route_table_cannot_smuggle_a_retired_name(monkeypatch):
+    """``__init__`` is not the only way a name reaches ChatOpenAI: the eval configs
+    monkeypatch ``ModelRouter.route`` (``model_router_override``), so ``create()`` — the
+    actual construction boundary — checks again.
+    """
+    from uk_rent_agent.llm import router as router_mod
+    r = router_mod.ModelRouter()
+    monkeypatch.setattr(
+        r, "route",
+        lambda purpose, **kw: router_mod.ModelRoute("deepseek-reasoner", 0.0, 10))
+    with pytest.raises(ValueError, match="retired"):
+        r.create("judge")
+
+
+# --------------------------------------------------------------------------- #
+# The two paths that do NOT go through the router.                            #
+# --------------------------------------------------------------------------- #
+# A router-only guard would be DECORATIVE for these. ``core/llm_interface._call_deepseek``
+# drives the raw ``openai`` SDK and ``core/llm_config._deepseek_llm`` builds its own
+# ``ChatOpenAI`` — the same two bypasses that made ``install_observer`` undercount
+# (tests/test_all_llm_calls_are_observed.py, PR #30's three-entry allowlist).
+
+def test_the_raw_openai_sdk_path_refuses_before_touching_the_provider(monkeypatch):
+    """_call_deepseek swallows EVERY provider error into ``return None`` plus a print —
+    which is how a full day of HTTP 400s produced no alarm. A dead model name is a config
+    defect, so the guard sits OUTSIDE that try/except and must propagate.
+    """
+    import openai
+
+    from core import llm_interface
+
+    monkeypatch.setattr(llm_interface, "DEEPSEEK_MODEL", "deepseek-chat")
+    monkeypatch.setenv("DEEPSEEK_MODEL", "deepseek-chat")
+    # If the guard ever regresses, this fails loudly instead of spending money.
+    monkeypatch.setattr(openai, "OpenAI", lambda *a, **k: pytest.fail(
+        "a retired model name reached the provider client"))
+
+    with pytest.raises(ValueError, match="retired"):
+        llm_interface._call_deepseek("hello")
+
+
+def test_the_second_chat_client_path_refuses_at_construction(monkeypatch):
+    """``_deepseek_llm`` reads the module global, which a caller can rebind after import,
+    so the import-time check alone does not cover it."""
+    from core import llm_config
+
+    monkeypatch.setattr(llm_config, "DEEPSEEK_MODEL", "deepseek-reasoner")
+    with pytest.raises(ValueError, match="retired"):
+        llm_config._deepseek_llm(0.1, 100)
+
+
+def test_a_stale_env_var_kills_STARTUP_rather_than_serving_400s():
+    """Startup-time refusal, proven end-to-end in a fresh interpreter.
+
+    ``app/app.py`` imports ``core.llm_interface`` -> ``core.llm_config`` at module scope,
+    so this import failing is the web app failing to boot. That is the point: the 2026-07-24
+    outage was a process that started cleanly, passed /health, and 400d every real turn for
+    a day. Loud at boot beats silent in production.
+
+    Subprocess rather than ``importlib.reload``: a failed reload leaves the poisoned
+    ``DEEPSEEK_MODEL`` bound in the live module for every later test in the session.
+    """
+    env = dict(os.environ)
+    env["DEEPSEEK_MODEL"] = "deepseek-chat"
+    env["DEEPSEEK_API_KEY"] = env.get("DEEPSEEK_API_KEY", "dummy")
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(_REPO / "src"), str(_REPO / "app")] +
+        ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+
+    proc = subprocess.run(
+        [sys.executable, "-c", "import core.llm_config"],
+        cwd=str(_REPO), env=env, capture_output=True, text=True, timeout=300)
+
+    assert proc.returncode != 0, (
+        "importing core.llm_config with a retired DEEPSEEK_MODEL succeeded — the process "
+        "would boot, pass /health, and 400 on every real turn")
+    err = proc.stderr
+    assert "RetiredModelError" in err, err[-2000:]
+    for expected in ("DEEPSEEK_MODEL", "deepseek-chat", "deepseek-v4-flash"):
+        assert expected in err, f"boot failure does not mention {expected}:\n{err[-2000:]}"
+
+
+# --------------------------------------------------------------------------- #
+# SOURCE GUARD — tomorrow's bypass, not just today's.                         #
+# --------------------------------------------------------------------------- #
+
+_CHAT_CLIENT_CTORS = {"ChatOpenAI", "OpenAI", "AsyncOpenAI"}
+_GUARD = "reject_retired_model_names"
+
+
+def _called_name(node: ast.AST) -> str | None:
+    if not isinstance(node, ast.Call):
+        return None
+    return getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+
+
+def _provider_client_files() -> dict[str, dict[str, list[int]]]:
+    """``{rel: {"clients": [lineno], "guards": [lineno]}}``, from the AST.
+
+    Derived, not listed: a hand-maintained list of call sites is the thing that goes stale.
+    Guards are counted as CALLS, never as the presence of the name — an import that is
+    never invoked is exactly this repo's recurring defect, a value produced and then never
+    consumed, and a substring check would score it as covered.
+    """
+    out: dict[str, dict[str, list[int]]] = {}
+    for base in ("app", "src"):
+        for path in sorted((_REPO / base).rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+            except SyntaxError:
+                continue
+            rel = path.relative_to(_REPO).as_posix()
+            for node in ast.walk(tree):
+                name = _called_name(node)
+                if name in _CHAT_CLIENT_CTORS:
+                    out.setdefault(rel, {}).setdefault("clients", []).append(node.lineno)
+                elif name == _GUARD:
+                    out.setdefault(rel, {}).setdefault("guards", []).append(node.lineno)
+    return out
+
+
+def test_every_file_that_builds_a_provider_client_also_refuses_retired_names():
+    """Wiring the three known paths fixes today; this is what stops tomorrow's.
+
+    The defect class in this repo is "the value was produced and nobody consumed it", and
+    every previous fix addressed the single instance that had been observed. A new client
+    constructor added without a retired-name check fails here rather than in production.
+    """
+    offenders = []
+    for rel, kinds in sorted(_provider_client_files().items()):
+        if kinds.get("clients") and not kinds.get("guards"):
+            offenders.append(f"{rel}:{kinds['clients'][0]}")
+    assert not offenders, (
+        "provider client built without a retired-name check — route it through ModelRouter, "
+        f"or call uk_rent_agent.llm.router.{_GUARD} on the model name first:\n  "
+        + "\n  ".join(offenders))
+
+
+def test_the_construction_site_scan_still_sees_all_three_known_paths():
+    """Guard the guard: a scan that matches nothing passes the test above forever.
+
+    These are the same three files as ``_CLIENT_CONSTRUCTION_ALLOWLIST`` in
+    tests/test_all_llm_calls_are_observed.py — the observation guard and this one cover the
+    identical set of provider boundaries, which is why the coverage claim is traced rather
+    than asserted.
+    """
+    found = _provider_client_files()
+    for rel in ("src/uk_rent_agent/llm/router.py", "app/core/llm_config.py",
+                "app/core/llm_interface.py"):
+        assert found.get(rel, {}).get("clients"), (
+            f"the client-construction scan no longer sees {rel}")
+        assert found.get(rel, {}).get("guards"), f"{rel} does not CALL {_GUARD}"
 
 
 # --------------------------------------------------------------------------- #

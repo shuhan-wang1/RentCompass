@@ -13,6 +13,14 @@ Per-task factories:
 import os
 from dotenv import load_dotenv
 
+# The retired-name guard lives in the router because the router is the one place every
+# model name is SUPPOSED to flow through. This module and llm_interface are the two that
+# genuinely do not (see _deepseek_llm's docstring), so they import the guard rather than
+# inherit it. Import is unconditional and at module scope on purpose: wrapping it in
+# try/except ImportError would turn a hard guarantee into a promise that silently lapses
+# the day the package layout changes.
+from uk_rent_agent.llm.router import reject_retired_model_names
+
 # Load .env from app/ regardless of the current working directory.
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
@@ -24,6 +32,13 @@ DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 # deepseek-chat was retired 2026-07-24; deepseek-v4-flash is the successor (thinking
 # mode selected per request via extra_body — this module's callers want non-thinking).
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+
+# STARTUP-time refusal. This module is imported transitively by app.py (via
+# llm_interface / langgraph_agent), so a stale DEEPSEEK_MODEL in the deployment env now
+# kills the boot with an actionable message instead of producing a process that answers
+# /health happily and 400s on every real turn. The offline suite runs with no model env
+# vars set, so this resolves to the live default and never fires there.
+reject_retired_model_names("core.llm_config (import time)", DEEPSEEK_MODEL=DEEPSEEK_MODEL)
 
 # Ollama (local) ---------------------------------------------------------------
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -40,6 +55,10 @@ def _deepseek_llm(temperature: float, max_tokens: int):
     unobserved model is to build ``ChatOpenAI`` directly, which
     ``tests/test_all_llm_calls_are_observed.py`` now forbids.
     """
+    # Re-checked here, not just at import: DEEPSEEK_MODEL is a module global that a
+    # caller or test can rebind after import, and this is the last statement before the
+    # name is baked into a client that will bill real money for an HTTP 400.
+    reject_retired_model_names("core.llm_config._deepseek_llm", DEEPSEEK_MODEL=DEEPSEEK_MODEL)
     from langchain_openai import ChatOpenAI
     model = ChatOpenAI(
         model=DEEPSEEK_MODEL,

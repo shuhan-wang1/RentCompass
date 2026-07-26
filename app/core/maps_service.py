@@ -363,6 +363,11 @@ def find_nearby_places(address: str, amenities_of_interest: list[str], radius: i
     return poi_summary
 
 
+# crimes-street returns ~1-2k rows per month per point, so each extra month costs real
+# seconds. Three is enough to establish a rate and to see a trend.
+MONTHS_OF_CRIME_DATA = 3
+
+
 def get_crime_data_by_location(address: str) -> dict | None:
     """Get crime data from UK Police API with trend analysis"""
     cache_key = create_cache_key('get_crime_data_by_location', address)
@@ -375,20 +380,28 @@ def get_crime_data_by_location(address: str) -> dict | None:
     location = _get_coordinates(address)
     
     if not location:
+        # Also deliberately uncached, for the same reason as the empty-result branch below.
         print(f"     ❌ Could not geocode address: {address}")
         return {"error": "Could not geocode address.", "total_crimes_6m": "Unknown"}
     
     print(f"     [OK] Coordinates: {location['lat']}, {location['lng']}")
 
+    # ENDPOINT, not a detail. `crimes-at-location` returns crimes at ONE pre-defined street
+    # anchor -- it answers "what happened at this exact spot". Using it to describe an area
+    # under-reports by roughly three orders of magnitude: it gave Hackney Central 9 crimes in
+    # six months, which the old scoring turned into "96/100, very safe", while
+    # `crimes-street/all-crime` returns 1,657 for ONE month at the same coordinates.
+    # `crimes-street/all-crime` covers the ~1 mile radius that people mean by "around here".
     base_date = datetime.now().replace(day=1) - pd.DateOffset(months=2)
-    dates_to_fetch = [(base_date - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(6)]
-    
+    dates_to_fetch = [(base_date - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(MONTHS_OF_CRIME_DATA)]
+
     all_crimes = []
     for date_str in dates_to_fetch:
-        api_url = f"https://data.police.uk/api/crimes-at-location?date={date_str}&lat={location['lat']}&lng={location['lng']}"
+        api_url = (f"https://data.police.uk/api/crimes-street/all-crime"
+                   f"?date={date_str}&lat={location['lat']}&lng={location['lng']}")
         try:
             print(f"     -> Fetching {date_str}...")
-            response = requests.get(api_url, timeout=5)
+            response = requests.get(api_url, timeout=15)
             response.raise_for_status()
             crimes = response.json()
             
@@ -405,15 +418,18 @@ def get_crime_data_by_location(address: str) -> dict | None:
             continue
 
     if not all_crimes:
-        print(f"     [WARN]  WARNING: No crime data found for any month!")
-        summary = {
-            "total_crimes_6m": "Unknown", 
-            "crime_trend": "unknown", 
+        # DO NOT CACHE A FAILURE. data.police.uk returns intermittent 500/502s (observed
+        # repeatedly on 2026-07-26), and caching the empty result freezes "no safety data"
+        # for the whole TTL on an area that is perfectly queryable a minute later. Observed
+        # live: Hackney Central held an `error` entry while Richmond, fetched seconds apart,
+        # cached fine. Returning without persisting means the next request simply retries.
+        print(f"     [WARN]  WARNING: No crime data found for any month (NOT cached — will retry)")
+        return {
+            "total_crimes_6m": "Unknown",
+            "crime_trend": "unknown",
             "category_breakdown": "Crime data unavailable",
-            "error": "No data returned from UK Police API"
+            "error": "No data returned from UK Police API",
         }
-        set_to_cache(cache_key, summary)
-        return summary
 
     print(f"     [OK] TOTAL: {len(all_crimes)} crimes across 6 months")
     
@@ -432,8 +448,15 @@ def get_crime_data_by_location(address: str) -> dict | None:
 
     category_counts = Counter(crime['category'].replace('-', ' ').title() for crime in all_crimes)
     
+    months_seen = len(sorted_months) or 1
     summary = {
+        # total_crimes_6m is kept under its historical name for callers, but it is now the
+        # total over MONTHS_OF_CRIME_DATA months of RADIUS data, not six months of
+        # single-anchor data. months_covered says which, so nothing has to guess.
         "total_crimes_6m": len(all_crimes),
+        "months_covered": months_seen,
+        "crimes_per_month": round(len(all_crimes) / months_seen, 1),
+        "radius_miles": 1.0,
         "most_recent_month_count": counts[-1] if counts else 0,
         "crime_trend": crime_trend,
         "data_months": sorted_months,

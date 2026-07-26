@@ -1000,7 +1000,11 @@ def test_wrap_call_timeout_falls_back_to_deterministic(monkeypatch):
     assert wall < 4.0, f"wrap call was awaited past its bound ({wall:.2f}s)"
     assert cmd.goto == "format_output_fc"
     resp = cmd.update["final_response"]
-    assert "search_properties" in resp            # names the tool that ran
+    # The fallback used to print the internal tool identifiers ("names the tool that ran"),
+    # and this assertion pinned that as intended behaviour. It reached a real user on
+    # 2026-07-26 as "已完成的查询：calculate_commute、get_property_details、...". The answer
+    # must describe what was FOUND, never which functions we called.
+    assert "search_properties" not in resp
     assert "Studio in Camden" in resp             # artifact-derived content, rendered plainly
     assert "£1,400 pcm" in resp                   # only a figure PRESENT in the artifact
     assert "cut short" in resp.lower()            # honest time-budget note
@@ -1164,13 +1168,35 @@ def test_wrap_budget_stays_inside_the_30s_slo(monkeypatch):
     NOTE this is the CONSTANT half of the invariant only. Constants alone cannot bound a
     wrapped turn, because _wrap_up can be entered after the ceiling has already passed —
     test_wrap_past_hard_end_starts_no_call covers that runtime half."""
-    for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_WRAP_CRITIC_RESERVE_S"):
+    for k in ("FC_TURN_CEILING_S", "FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S",
+              "FC_WRAP_CRITIC_RESERVE_S"):
         monkeypatch.delenv(k, raising=False)
     # Last instant the bounded wrap call may still be running.
     ceiling = agent_loop._turn_soft_wrap_s() + agent_loop._final_reserve_s()
     assert ceiling <= 30.0, "wrap window must close inside the 30s turn SLO"
     # A non-zero render crumb must remain underneath that ceiling.
     assert agent_loop._wrap_critic_reserve_s() > 0.0
+
+
+def test_raising_the_ceiling_moves_soft_wrap_with_it(monkeypatch):
+    """The owner may raise the turn ceiling (2026-07-26). The invariant must hold at ANY
+    ceiling, not just at 30s: soft-wrap and final reserve have to move together or a raised
+    ceiling silently produces a window that closes after it."""
+    for k in ("FC_TURN_SOFT_WRAP_S", "FC_FINAL_RESERVE_S", "FC_WRAP_CRITIC_RESERVE_S"):
+        monkeypatch.delenv(k, raising=False)
+    for ceiling_s in ("30.0", "45.0", "60.0"):
+        monkeypatch.setenv("FC_TURN_CEILING_S", ceiling_s)
+        window = agent_loop._turn_soft_wrap_s() + agent_loop._final_reserve_s()
+        assert window <= float(ceiling_s) + 1e-9, (
+            f"wrap window {window}s must close inside the {ceiling_s}s ceiling")
+        assert agent_loop._turn_soft_wrap_s() > 0
+
+
+def test_an_explicit_soft_wrap_still_wins(monkeypatch):
+    """Deriving from the ceiling must not take away the ability to pin one knob directly."""
+    monkeypatch.setenv("FC_TURN_CEILING_S", "45.0")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "12.0")
+    assert agent_loop._turn_soft_wrap_s() == 12.0
 
 
 def test_wrap_past_hard_end_starts_no_call(monkeypatch):

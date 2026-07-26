@@ -54,6 +54,9 @@ from uk_rent_agent.agent.critic import (
     no_reliable_data_message,
 )
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
+# Pure (stdlib-only) narrowing parser/applier for refinement-in-place; see step 1.5 in
+# _compute_decision. Safe to import at module scope — it pulls in nothing heavy.
+from core import refine_results
 
 logger = logging.getLogger(__name__)
 
@@ -1166,6 +1169,15 @@ def _route_base_decision(decision: dict, search_entry: str) -> Command:
         }, goto="generate_response")
     if tool == "direct_answer":
         return Command(update={"tool_decision": decision}, goto="generate_response")
+    if tool == REFINE_TOOL_NAME:
+        # Refinement-in-place: nothing to execute and nothing to generate — the answer is
+        # composed deterministically from the refined set in format_output, the same way a
+        # search turn's answer is composed by search_properties._found_summary. Straight to
+        # the formatter, like a clarification. context_tainted because the refined listing
+        # text (addresses, descriptions) is external content riding into the response.
+        return Command(update={"tool_decision": decision,
+                               "tool_raw_data": decision.get("raw_data"),
+                               "context_tainted": True}, goto="format_output")
     if tool == "clarification":
         return Command(update={"tool_decision": decision}, goto="format_output")
     if tool == "multi_search":
@@ -1238,9 +1250,37 @@ def _make_decide_tool_node(tool_registry, classification_llm, search_entry="disp
                     "reason": "Property context detected - use database info"
                 }
 
-        # 1.5) Follow-ups ABOUT the existing search results (no frontend property
+        # 1.5) REFINEMENT-IN-PLACE. A follow-up that NARROWS the set already on screen
+        #      ("drop anything over £2000, then sort the rest by distance to the tube")
+        #      is a filter/sort over records we still hold, not a new search. Both of
+        #      the routes it used to take were wrong: a re-search pays for a live scrape
+        #      + embeddings + FAISS + commute and repaints the panel with a DIFFERENT
+        #      set than the prose describes, while a chat/advice answer emits no
+        #      recommendations at all, so /api/alex returns a `chat` payload and the
+        #      panel silently keeps showing the pre-refinement listings. Placed BEFORE
+        #      the 1.6 interceptions because a narrowing INSTRUCTION is not a question
+        #      about the set, and because all three of them bail on
+        #      _LOCATION_INTENT_KWS ("tube") and would hand this straight to the LLM
+        #      vote. Strict by construction: plan_refinement returns None for a
+        #      widening, a changed area, an unsupported sort on its own, a no-op, or a
+        #      filter that would empty the panel — each of those still falls through to
+        #      a real search.
+        #      The pool is preference-filtered up front so it is exactly what the user can
+        #      see: format_output runs the same filter over the result, and the answer is
+        #      generated from an observation built here — narrowing an unfiltered pool
+        #      would let the prose name a listing the panel then removes.
+        _refine_pool = apply_preference_filter(
+            _refinable_previous_results(extracted_context),
+            state.get("user_preferences") or {})
+        if _refine_pool:
+            _refine_plan = refine_results.plan_refinement(_cm_raw, _refine_pool)
+            if _refine_plan is not None:
+                _spec, _kept = _refine_plan
+                return _build_refinement_decision(_refine_pool, _spec, _kept)
+
+        # 1.6) Follow-ups ABOUT the existing search results (no frontend property
         #      context). These are answerable from the conversation's own last
-        #      results, which each already carry price/commute/beds \u2014 routing them to
+        #      results, which each already carry price/commute/beds — routing them to
         #      a commute/detail tool would either loop into clarification (D1) or read
         #      stale demo-CSV data (D3). Answer from the real results instead.
         last_results = extracted_context.get('last_results') or []
@@ -1274,7 +1314,8 @@ def _make_decide_tool_node(tool_registry, classification_llm, search_entry="disp
         #      do-not-search research request (先不要搜索…) — or a research verb + a
         #      price-level noun with no listings ask — is market RESEARCH, so route it to
         #      the web_search synthesis path, NEVER search_properties or its soft gate.
-        #      PLACEMENT: after the last-results follow-up interception (1.5) so a genuine
+        #      PLACEMENT: after the last-results refinement / follow-up interceptions
+        #      (1.5/1.6) so a genuine
         #      detail/advice question about an EXISTING listing keeps its route, but BEFORE
         #      the no-commute (2.4), transport (2.5), and — critically — the soft-gate
         #      follow-up (2.6) and the LLM vote, so a research question asked right after
@@ -1510,7 +1551,7 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, accumulate
 
     if intent == 'listing_advice':
         # Opinion/suitability over listings already shown — answer from them, never a
-        # fresh search. Mirrors the deterministic step-1.5 interception.
+        # fresh search. Mirrors the deterministic step-1.6 interception.
         return _build_listing_advice_decision(user_query, extracted_context)
     if intent == 'direct_answer':
         return {"tool": "direct_answer", "params": {},
@@ -1970,7 +2011,7 @@ def _build_listing_advice_decision(user_query, extracted_context) -> dict:
     tainted); a set-level question -> direct_answer over the whole comparison; nothing
     shown yet -> a plain direct_answer so the model can say so and offer to search.
 
-    Shared by the deterministic step-1.5 interception and the LLM-router / parse-failure
+    Shared by the deterministic step-1.6 interception and the LLM-router / parse-failure
     fallback so every entry point produces the same decision."""
     last_results = extracted_context.get('last_results') or []
     if last_results:
@@ -1991,6 +2032,61 @@ def _build_listing_advice_decision(user_query, extracted_context) -> dict:
     return {
         "tool": "direct_answer", "params": {},
         "reason": "listing-advice: opinion question but no listings shown yet",
+    }
+
+
+# ─── Refinement-in-place over the listings already on screen ────────
+# The decision name is deliberately NOT a registered tool: nothing is executed. The
+# decision short-circuits at decide_tool with a pre-resolved observation (exactly like
+# the D1/D3/listing-advice paths) and carries the refined listings in raw_data so
+# format_output can hand them back to the results panel.
+REFINE_TOOL_NAME = "refine_results"
+
+
+def _refinable_previous_results(extracted_context) -> list:
+    """The listing set a refinement must operate on.
+
+    ``last_results_full`` is the COMPLETE recommendation list the panel is currently
+    rendering (app.py copies it off the session under the turn lock). ``last_results``
+    is the prompt-facing digest, truncated to 6 — refining over that would silently
+    drop listings 7..N from the panel. Prefer the full list, fall back to the digest
+    (e.g. after a restart, where only the snapshot survived)."""
+    if not isinstance(extracted_context, dict):
+        return []
+    full = extracted_context.get('last_results_full')
+    if isinstance(full, list) and full:
+        return full
+    return extracted_context.get('last_results') or []
+
+
+def build_refinement_raw_data(previous, spec, refined) -> dict:
+    """The payload a refinement hands its formatter, shared by BOTH architectures.
+
+    ``recommendations`` is what the results panel repaints from; ``refinement`` carries
+    the provenance the formatter needs to compose the (deterministic, localized) answer,
+    so the prose and the panel are the same data rendered twice rather than two
+    independent descriptions that have to be kept in agreement.
+    """
+    return {
+        "status": "found",
+        "recommendations": refined,
+        "refinement": {
+            "spec": spec,
+            "previous": previous,
+            "previous_count": len(previous),
+            "kept_count": len(refined),
+        },
+    }
+
+
+def _build_refinement_decision(previous, spec, refined) -> dict:
+    """Pre-resolved decision for a narrowing follow-up. NO tool executes and NO LLM runs:
+    the decision routes straight to format_output, exactly as a `clarification` does."""
+    return {
+        "tool": REFINE_TOOL_NAME,
+        "params": {},
+        "raw_data": build_refinement_raw_data(previous, spec, refined),
+        "reason": "Refinement of the listings already shown — filtered/sorted in place",
     }
 
 
@@ -3511,6 +3607,54 @@ def _make_critic_node():
     return critic_node
 
 
+# The subset of the accumulated criteria the frontend criteria panel understands
+# (normalizeCriteria in unified-ui.html reads exactly these, canonical + legacy names).
+# Internal bookkeeping such as criteria_gate_shown stays server-side.
+_FRONTEND_CRITERIA_KEYS = (
+    'area', 'areas', 'commute_destination', 'no_commute', 'bedrooms',
+    'budget_period', 'room_type', 'move_in_date', 'max_budget', 'max_travel_time',
+)
+
+
+def _criteria_for_frontend(accumulated) -> dict:
+    """Project the accumulated search criteria onto the frontend's criteria contract.
+
+    Used by the refinement path, which has no tool-side ``search_criteria`` of its own:
+    the panel form must still reflect the tightened budget rather than being reset by an
+    empty dict (an empty ``search_criteria`` makes applyCriteria() clear the form)."""
+    if not isinstance(accumulated, dict) or not accumulated:
+        return {}
+    out = {k: accumulated[k] for k in _FRONTEND_CRITERIA_KEYS if k in accumulated}
+    if 'areas' not in out and out.get('area'):
+        out['areas'] = [out['area']]
+    return out
+
+
+def format_refinement_output(raw_data, prefs, accumulated, reply_language):
+    """``(response_text, tool_data)`` for a refinement turn — shared by BOTH architectures
+    (legacy format_output and fc_loop format_output_fc), so the two cannot drift.
+
+    The answer text and the panel payload are built from the SAME filtered list here, in
+    one place: that is what makes "the prose says only Tavistock Court qualifies" and "the
+    panel shows six" impossible by construction rather than by instruction.
+    """
+    refinement = raw_data.get('refinement') or {}
+    recs = apply_preference_filter(raw_data.get('recommendations') or [], prefs or {})
+    response = refine_results.summarize_refinement(
+        refinement.get('spec') or {}, refinement.get('previous') or [], recs,
+        language=reply_language or 'en')
+    tool_data = {
+        'recommendations': recs,
+        # The accumulated criteria already carry this turn's tightened values
+        # (extract_preferences folds them in before the interception runs), so the
+        # criteria panel mirrors what the listings now satisfy.
+        'search_criteria': _criteria_for_frontend(accumulated),
+        'area_recommendations': [],
+        'refinement': {k: v for k, v in refinement.items() if k != 'previous'},
+    }
+    return response, tool_data
+
+
 def _make_format_output_node():
     """Create the format_output node."""
 
@@ -3564,6 +3708,18 @@ def _make_format_output_node():
                 tool_data = {'recommendations': recs, 'search_criteria': raw_data.get('search_criteria', {}),
                              # 🆕 目的地附近推荐居住区，随搜索结果一并回传前端（可点击 chips）。
                              'area_recommendations': raw_data.get('area_recommendations', [])}
+
+        elif (tool_name == REFINE_TOOL_NAME and isinstance(raw_data, dict)
+                and raw_data.get('recommendations')):
+            # Refinement-in-place. Two things happen here and both are load-bearing:
+            # the refined listings ride back out in tool_data — which is what makes
+            # /api/alex return a `search` payload so the panel repaints (without it the
+            # turn is a `chat` payload and the panel keeps rendering the pre-refinement
+            # set) — and the answer text is composed from that SAME list, so prose and
+            # panel cannot disagree.
+            response, tool_data = format_refinement_output(
+                raw_data, prefs, state.get('accumulated_search_criteria'),
+                _reply_language(state))
 
         elif tool_name == 'multi_search' and raw_data:
             tool_data = {'multi_search_results': raw_data}

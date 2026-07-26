@@ -1838,6 +1838,17 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # ── 构建本轮 extracted_context ──────────────────────────────
     extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
 
+    # Refinement-in-place needs the COMPLETE set the panel is currently rendering, not the
+    # 6-row prompt digest in extracted_context['last_results'] — narrowing over the digest
+    # would silently drop listings 7..N from the panel. _sess.last_results holds the full
+    # list (snapshotted above under the turn lock); the graph reads it via
+    # core.langgraph_agent._refinable_previous_results. Deliberately NOT persisted: it is
+    # absent from the build_turn_snapshot whitelist (so no snapshot-schema change) and from
+    # _EXTRACTED_CONTEXT_WHITELIST (so it never leaves the server); after a restart the
+    # refinement path falls back to the digest.
+    if last_results_snapshot:
+        extracted_context['last_results_full'] = last_results_snapshot
+
     # focus 栈（多聚焦）：优先读 context.focus_stack（数组，旧→新，最后一个=当前聚焦），缺失时
     # 退化为 [context.property]（向后兼容旧前端）。逐个用 _resolve_focus_listing 解析（会话 last_results
     # 快照 → 累计推荐注册表+sqlite 缓存 → demo CSV → 标量兜底），结构化记录挂 extracted_context['focus_stack']

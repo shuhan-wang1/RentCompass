@@ -3631,14 +3631,63 @@ def _tool_errored(state: AgentState) -> bool:
     return str(observation).lstrip().lower().startswith("error")
 
 
+# The event type emitted whenever the critic's no-evidence 兜底 HARD-REPLACES the answer.
+# A round counts records of this type in its own events.jsonl.
+CRITIC_HARD_REPLACE_EVENT = "critic_hard_replace"
+
+
+def _record_critic_hard_replace(*, reason: str, variant: str, tool: str,
+                                critic_attempts, reply_language: str) -> None:
+    """Count one no-evidence HARD REPLACE of the generated answer.
+
+    WHY THIS EXISTS. The replace below discards the model's answer and substitutes a
+    deterministic template. On the 2026-07-25 round of record it fired on 3 of 98 eval cases
+    (B8, B12, G16 — the canned opener "Sorry — I couldn't retrieve reliable specific
+    figures…" is in exactly those three answer bodies), and ALL THREE recorded
+    ``soft_wrapped=False``. Every counter the project has for "did the user get boilerplate
+    instead of an answer" is denominated in soft wraps, so this path is invisible to all of
+    them — which is how the record came to say "the canned-template fallback is gone" while
+    it was still replacing answers. HANDOFF §0's defect class exactly: a value produced and
+    never asserted on. This function does not change what happens; it makes it countable.
+
+    A NEW event type, deliberately not another ``critic_verdict``: run_benchmark's
+    ``critic_triggers`` is ``len(critic_verdicts)``, so reusing that type would inflate an
+    existing metric to observe a new one. An unknown type is inert to every current
+    aggregation (they all filter on ``type``), so this is purely additive.
+
+    ``variant`` distinguishes the two replacement bodies (``artifact_grounded`` vs the
+    ``generic_template``) — the same distinction ``wrapped_by`` had to add to ``soft_wrapped``
+    for the same reason. Best-effort and OFF outside eval capture, like every other
+    instrumentation call in this module.
+    """
+    try:
+        from evaluation.metrics import collector
+        if not collector.is_active():
+            return
+        collector._emit(CRITIC_HARD_REPLACE_EVENT, {
+            "reason": reason,
+            "variant": variant,
+            "tool": tool,
+            "critic_attempts": critic_attempts,
+            "reply_language": reply_language,
+        })
+    except Exception:
+        pass
+
+
 def _make_critic_node():
     """Grounding-sensitive requests are checked before reaching the formatter.
 
-    Never hard-replaces the answer: an unsupported figure triggers one corrective
-    regeneration pass (re-invoking the same generation LLM with a corrective
-    instruction); a persistently-failing answer is delivered with a caveat. The
-    recommendations payload (``tool_raw_data``) is left untouched so format_output
-    can still surface listings.
+    An unsupported figure triggers one corrective regeneration pass (re-invoking the same
+    generation LLM with a corrective instruction); a persistently-failing answer is
+    delivered with a caveat. The recommendations payload (``tool_raw_data``) is left
+    untouched so format_output can still surface listings.
+
+    This docstring used to claim the node "never hard-replaces the answer". It does — the
+    no-evidence 兜底 below (the H3 fix) replaces the answer outright, and it fired on 3 of 98
+    cases in the 2026-07-25 round. The sentence was accurate when written and was never
+    revisited because no counter could contradict it; ``_record_critic_hard_replace`` now
+    counts every occurrence.
     """
 
     async def critic_node(state: AgentState) -> dict:
@@ -3740,6 +3789,17 @@ def _make_critic_node():
                 "critic.no_evidence_fallback replaced numeric answer (lang=%s variant=%s)",
                 reply_language, fallback_variant,
                 extra={"node": "critic", "tool": tool_name},
+            )
+            # OBSERVABILITY ONLY — nothing above or below this call changes. The replacement
+            # itself is untouched: reworking it is a behaviour change that needs its own
+            # hypothesis and gate (docs/evaluator_contract.md records the fail-closed variant
+            # on hardening/correctness-only as a CONFIRMED quality regression, case A14).
+            _record_critic_hard_replace(
+                reason="no_reliable_numbers",
+                variant=fallback_variant,
+                tool=tool_name,
+                critic_attempts=attempts_before + outcome.attempts,
+                reply_language=reply_language,
             )
 
         if final != response:

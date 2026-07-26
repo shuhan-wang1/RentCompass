@@ -1316,9 +1316,47 @@ def _c_must_flag_contradiction(con, ctx) -> ConstraintResult:
 
 
 def _c_must_refuse_fabrication(con, ctx) -> ConstraintResult:
-    ok = any(mk in (ctx.final_answer or "").lower() for mk in _REFUSE_MARKERS)
-    return ConstraintResult("must_refuse_fabrication", ok,
-                            f"field={con.get('field')}", heuristic=True)
+    """PASS iff the answer does not assert an UNSUPPORTED value for the NAMED ``field``.
+
+    This used to be ``any(mk in answer for mk in _REFUSE_MARKERS)`` — a pure keyword
+    test that ignored its own ``field`` argument and never inspected a single number.
+    It was therefore wrong in BOTH directions, which is why it is a defect in the
+    checker's own logic and not a threshold preference:
+
+    * a correct answer with nothing to refuse FAILED — D9 says "No detailed crime data
+      was available for this specific development, so the score defaults to 50" and
+      states no invented crime count, yet used none of the marker phrasings;
+    * an answer that INVENTS a figure and hedges it ("I can't be certain, but expect
+      around £2,000") PASSED, because "can't" is a marker.
+
+    A refusal marker is thus neither necessary nor sufficient, so it cannot be the
+    decision rule. It survives only in the detail string, as an operator diagnostic.
+
+    The decision now depends on the field:
+
+    * a field with a numeric kind is judged by the fabrication test the constraint's
+      name promises — ``_field_number_offenders``, the SAME offender set
+      ``no_fabricated_number`` uses, so the two checkers can never disagree about what
+      a fabricated value for a field is;
+    * a field with NO numeric kind (``availability``, ``council_tax_band``,
+      ``official_monthly_rent``) has no number to check, so the only available signal
+      is whether the answer voices the field's absence at all. Keeping that test here
+      is what still fails F14, which answers "The official monthly price for this
+      property is £1,300 pcm" for a listing that carries no official monthly figure.
+    """
+    field = con.get("field") or ""
+    kind = _field_to_kind(field)
+    marker = any(mk in (ctx.final_answer or "").lower() for mk in _REFUSE_MARKERS)
+    offenders = _field_number_offenders(ctx, field)
+    if kind is None:
+        ok = marker or _asserts_data_absent(ctx.final_answer or "", field)
+    else:
+        ok = not offenders
+    return ConstraintResult(
+        "must_refuse_fabrication", ok,
+        f"field={field} kind={kind} refusal_marker={marker} "
+        f"offending={[(o.kind, o.value, o.status) for o in offenders]}",
+        heuristic=True)
 
 
 def _c_must_note_missing_data(con, ctx) -> ConstraintResult:

@@ -181,6 +181,38 @@ def _read_tool_denial(policy, name: str, args: dict, current_message: str):
         return None
 
 
+def _statutory_money_answer(current_message: str, reply_language: str):
+    """The deterministic answer text for a turn that is nothing but statutory rent
+    arithmetic, else None.
+
+    WHY THE MODEL IS SKIPPED RATHER THAN INSTRUCTED. ``tenancy_reference`` already held the
+    correct 5-vs-6-week cap and was already handed to the model on the denial path, and B7
+    still shipped £5,192.31 for a £4,500 pcm flat — in the same answer that correctly
+    recited the £50,000 rule. B14 put the right £6,000 in a trailing hedge behind a wrong
+    £5,000 headline. B4 said the holding deposit was deducted and then added it. Supplying a
+    rule is not enforcing one, so for this narrow class the arithmetic module writes the
+    answer and there is no step at which a cap can be misapplied.
+
+    Both the classification and the text live in ``core.tool_policy`` /
+    ``core.tenancy_reference``; this is only the hook. Any error hands the turn back to the
+    model — the pre-fix behaviour — because a turn answered less well is recoverable and a
+    turn answered not at all is not."""
+    policy = _load_tool_policy()
+    if policy is None or not hasattr(policy, "statutory_money_answer"):
+        return None
+    try:
+        verdict = policy.statutory_money_answer(current_message)
+        if verdict is None:
+            return None
+        kind, amount, period, holding = verdict
+        from core.tenancy_reference import statutory_answer
+        return statutory_answer(kind, amount, period, language=reply_language,
+                                holding_deposit_gbp=holding)
+    except Exception:
+        logger.warning("fc_loop.statutory_answer_error", exc_info=True)
+        return None
+
+
 # ─── message assembly (contract C, imported defensively) ────────────
 def _behaviour_directive(reply_language: str) -> str:
     return (
@@ -1132,6 +1164,21 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                        "the area you'd like to live in, or where you commute to and we'll start.")
             return Command(update={"final_response": msg, "response_type": "answer"},
                            goto="format_output_fc")
+        # 2b) Statutory rent arithmetic (deposit cap / move-in total) — deterministic,
+        #     short-circuits. Placed with the other two deterministic exits and for the same
+        #     reason: the answer is decidable here, before any LLM call, and the observed
+        #     failures (B7 £5,192.31 instead of £6,230.77; B14 a £5,000 headline; B4 a
+        #     holding deposit both deducted and added) are all the model being trusted to
+        #     apply a rule it had been given. See _statutory_money_answer.
+        #
+        #     Deliberately narrow: tool_policy.statutory_money_answer fires on 7 of the 117
+        #     benchmark cases (B3, B4, B7, B8, B10, B14, B15) and refuses anything only
+        #     PARTLY derivable — B12 asks for an all-in figure including bills, which needs
+        #     the model and a refusal to fabricate, so it still goes to the model.
+        _stat_answer = _statutory_money_answer(cm, lang)
+        if _stat_answer:
+            return Command(update={"final_response": _stat_answer,
+                                   "response_type": "answer"}, goto="format_output_fc")
         # 3) Refinement-in-place — a follow-up that NARROWS the listings already on screen
         #    ("drop anything over £2000, then sort the rest by distance to the tube") is a
         #    filter/sort over records we still hold, not a new search.

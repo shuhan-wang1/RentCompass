@@ -188,6 +188,145 @@ def self_contained_money_question(message: str) -> Optional[tuple[float, str]]:
     return rent
 
 
+# ─── turns that reduce ENTIRELY to the statutory arithmetic ──────────
+# ``self_contained_money_question`` above answers "is retrieval pointless here?" — a
+# question about the TOOL. The predicate below answers a strictly stronger one: "is this
+# turn nothing but ``tenancy_reference`` arithmetic?", which is a question about the ANSWER.
+# Only the second licenses ``guard_node`` to skip the model entirely, so it is separate and
+# it is narrower: every case the first admits but the second refuses still reaches the model
+# exactly as before, with the denial-path figures attached.
+#
+# Validated over every case id in evaluation/benchmark/cases*.jsonl — 117 of them, i.e. the
+# 98-case sweep plus the extension and guard-regression sets (see
+# tests/test_deposit_boundary.py, which re-derives this from the files rather than trusting
+# this comment): it fires on B3, B4, B7, B8, B10, B14, B15 and on nothing else.
+# Notably NOT on B12 — "what'll it cost
+# me all-in per month, including bills and council tax" is only PARTLY derivable, and its
+# contract requires refusing to fabricate the rest. A deterministic total there would be
+# confidently wrong, which is worse than the defect being fixed.
+
+# "First month plus the deposit" / "total upfront" — the total, not just the cap. Checked
+# BEFORE the deposit shape because B4, B8 and B15 say both and the total is what they want.
+_MOVE_IN_RE = re.compile(
+    r"move[\s-]?in\s+cost"
+    r"|(?:total|overall)\s+(?:up[\s-]?front|move[\s-]?in|initial|first)"
+    r"|up[\s-]?front\s+cost"
+    r"|first\s+month(?:'?s)?\s+(?:rent\s+)?(?:plus|and|\+)"
+    r"|total\s+cost\s+to\s+move"
+    r"|入住(?:前)?(?:总|一共|总共)|总花费|前期费用", re.I)
+
+_DEPOSIT_RE = re.compile(r"deposit|押金", re.I)
+
+# Cost components this module cannot derive from a rent. If the turn asks for any of them
+# the honest answer needs the model (and, per B12's contract, an explicit refusal to
+# estimate) — so hand it over. "all-in" is here rather than in the move-in shape for that
+# reason: an all-in figure is bills-inclusive by definition.
+_NON_DERIVABLE_COST_RE = re.compile(
+    r"\ball[\s-]?in\b|bills?|utilit|council\s*tax|electric|\bgas\b|\bwater\b"
+    r"|broadband|internet|wi[\s-]?fi|insur|\btv licen|service\s*charge"
+    r"|admin(?:istration)?\s*fee|agen(?:cy|t'?s?)\s*fee|referenc|inventory"
+    r"|账单|水电|市政税|网费|中介费|服务费", re.I)
+
+# Asks that are about the deposit but are not arithmetic: protection schemes, getting it
+# back, deductions, disputes, timing. The template answers none of these, so it must not
+# pre-empt them. (Deliberately does NOT veto "should I expect" — B3 is that phrasing and is
+# pure arithmetic.)
+_BEYOND_ARITHMETIC_RE = re.compile(
+    r"how\s+(?:do|can|would|will)\s+(?:i|we)\b"
+    r"|\bget\s+(?:it|my|the\s+deposit)\s+back\b|\bdeposit\s+back\b"
+    r"|\bprotect|\bscheme\b|\bdisput|\brefund|\bdeduct|\bwithhold|\bclaim\b"
+    r"|\bwhat\s+(?:if|happens)\b|\bwhen\s+(?:do|does|is|will)\b"
+    r"|\bcan\s+(?:they|the\s+landlord)\s+keep\b"
+    r"|怎么退|能退|退还|纠纷|保护计划", re.I)
+
+# A user-stated holding deposit: "I've already paid a £350 holding deposit". Matched near
+# the phrase so the rent figure is never mistaken for it. This is the ONE way an amount
+# other than the rent may appear and the turn still be answered deterministically — and it
+# exists precisely because a stated holding deposit is what B4 double-counted.
+_HOLDING_RE = re.compile(r"holding\s+(?:deposit|fee|payment)|意向金|预定金|定金", re.I)
+# Tight, for the same reason ``_PERIOD_WINDOW_CHARS`` is tight: long enough for "a £346.15
+# holding deposit" / "holding deposit of £346.15", short enough that the RENT figure in the
+# preceding clause cannot be mistaken for it.
+_HOLDING_WINDOW_CHARS = 24
+
+
+def _amount_spans(message: str) -> list[tuple[float, int, int]]:
+    out = []
+    for m in _AMOUNT_RE.finditer(message or ""):
+        try:
+            out.append((float(m.group(1).replace(",", "")), m.start(), m.end()))
+        except ValueError:
+            continue
+    return out
+
+
+def _split_holding_deposit(message: str) -> tuple[Optional[float], set]:
+    """(holding-deposit amount, indices of amount spans it consumed).
+
+    None unless the message names a holding deposit AND exactly one £ figure sits within
+    ``_HOLDING_WINDOW_CHARS`` of that phrase. Ambiguity yields None, which makes the turn
+    non-deterministic and sends it to the model — the safe direction.
+    """
+    hm = _HOLDING_RE.search(message or "")
+    if hm is None:
+        return None, set()
+    near = [(i, amt) for i, (amt, s, e) in enumerate(_amount_spans(message))
+            if s <= hm.end() + _HOLDING_WINDOW_CHARS and e >= hm.start() - _HOLDING_WINDOW_CHARS]
+    if len(near) != 1:
+        return None, set()
+    idx, amt = near[0]
+    return amt, {idx}
+
+
+def statutory_money_answer(message: str) -> Optional[tuple]:
+    """``(kind, amount, period, holding_deposit)`` when this turn is answerable ENTIRELY by
+    ``tenancy_reference``, else None.
+
+    ``kind`` is one of ``tenancy_reference.ANSWER_KINDS``. Everything
+    ``self_contained_money_question`` requires must hold, PLUS:
+
+      5. the question is a deposit-cap or a move-in-total question and nothing else;
+      6. it asks for no cost component we cannot derive from a rent (bills, council tax,
+         agency fees, an "all-in" figure);
+      7. it asks nothing non-arithmetical about the deposit (protection, deductions,
+         getting it back);
+      8. exactly ONE rent figure is in play. A second £ amount is only tolerated when it is
+         unambiguously a stated holding deposit, because picking the wrong one of two
+         amounts to price is a silent wrong answer, and silent wrong answers are the
+         defect.
+    """
+    rent = self_contained_money_question(message)
+    if rent is None:
+        return None
+    text = message or ""
+    if _NON_DERIVABLE_COST_RE.search(text) or _BEYOND_ARITHMETIC_RE.search(text):
+        return None
+
+    holding, consumed = _split_holding_deposit(text)
+    rent_amounts = {amt for i, (amt, _s, _e) in enumerate(_amount_spans(text))
+                    if i not in consumed}
+    if len(rent_amounts) != 1:
+        return None
+    if _HOLDING_RE.search(text) and holding is None:
+        return None  # holding deposit named but unpriced: let the model ask.
+
+    amount, period = rent
+    if amount not in rent_amounts:
+        return None  # the priced figure is not the one the period binds to.
+
+    if _MOVE_IN_RE.search(text):
+        kind = "move_in"
+    elif _DEPOSIT_RE.search(text):
+        kind = "deposit"
+    else:
+        return None
+    if kind == "deposit" and holding is not None:
+        # A holding deposit is a payment, not a cap. It changes a total, never the cap, so
+        # a "what's the deposit" turn that mentions one is asking something else too.
+        return None
+    return kind, amount, period, holding
+
+
 def read_tool_denial(tool: str, args: dict, *, current_message: str) -> Optional[ReadDenial]:
     """The pre-dispatch verdict for one read call. ``None`` means dispatch it.
 

@@ -493,6 +493,28 @@ def _loop_soft_cap() -> int:
         return 6
 
 
+def _turn_ceiling_s() -> float:
+    """The whole-turn ceiling a wrapped turn must close inside (FC_TURN_CEILING_S).
+
+    The owner's position on 2026-07-26 is that a complex question legitimately takes longer
+    and the ceiling may be raised. Raising it is ONE knob, not two: soft-wrap and final
+    reserve have to move together or the invariant `soft_wrap + reserve <= ceiling` breaks
+    silently, so both derive from this value unless individually overridden.
+
+    RAISING THIS BREACHES TWO GATE METRICS, deliberately and visibly:
+      * `P95_LIMIT_MS = 30000` in scripts/canary_report.py — the p95 stage-pause bar;
+      * `OVER_SLO_MS = 30000` — the over-30s tail, whose target count is zero.
+    Neither threshold is edited here. A ceiling above 30s means those two gates will report
+    breaches that are a consequence of a product decision rather than a regression, and the
+    report must be read with that in mind. Changing the gate numbers to match is a separate,
+    pre-registered decision (HANDOFF §3.5) and is NOT done by setting this variable.
+    """
+    try:
+        return float(os.getenv("FC_TURN_CEILING_S", "30.0"))
+    except (TypeError, ValueError):
+        return 30.0
+
+
 def _turn_soft_wrap_s() -> float:
     """Turn-wide soft wrap threshold (s) measured from TURN START (FC_TURN_SOFT_WRAP_S).
     Once whole-turn elapsed (LLM + tools) crosses this, the agent node stops opening NEW tool
@@ -500,11 +522,21 @@ def _turn_soft_wrap_s() -> float:
     ruling: stop planning new tools at ~23s, reserving ~FC_FINAL_RESERVE_S for the final
     generation so the whole turn closes inside the hard 30s SLO (23 wrap + <=6.0 wrap-call
     + <=0.5 format ~= 29.5s worst case; the wrapped turn runs no critic at all). Read at
-    call time so ops/tests can retune without a reimport."""
-    try:
-        return float(os.getenv("FC_TURN_SOFT_WRAP_S", "23.0"))
-    except (TypeError, ValueError):
-        return 23.0
+    call time so ops/tests can retune without a reimport.
+
+    Defaults to ceiling - FC_FINAL_RESERVE_S - FC_WRAP_CRITIC_RESERVE_S so the knobs cannot
+    drift apart when the ceiling is retuned; set FC_TURN_SOFT_WRAP_S explicitly to override.
+    """
+    explicit = os.getenv("FC_TURN_SOFT_WRAP_S")
+    if explicit:
+        try:
+            return float(explicit)
+        except (TypeError, ValueError):
+            pass
+    # ceiling - reserve - render crumb. Subtracting only the reserve would silently eat the
+    # crumb `_wrap_critic_reserve_s` leaves for the pure-Python format render, moving the
+    # default from 23.0 to 23.5 and pushing the worst case onto the ceiling exactly.
+    return max(1.0, _turn_ceiling_s() - _final_reserve_s() - _wrap_critic_reserve_s())
 
 
 def _final_reserve_s() -> float:
@@ -796,6 +828,12 @@ def _completed_empty_search_raw(artifacts: list) -> Optional[dict]:
     return None
 
 
+# How many listings the cut-short fallback enumerates. Named because the count in the
+# sentence above it must be derived from the SAME value — the two used to disagree, so a
+# live answer said "已找到 6 个房源" and then printed five, with nothing to explain the gap.
+_MAX_FALLBACK_RECS = 5
+
+
 def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_budget") -> str:
     """Build a compact, honest final answer directly from the gathered tool_artifacts. Shared
     by two callers that differ ONLY in framing (opener + closer), never in the body:
@@ -807,8 +845,7 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
         being cut short / a time budget, and the closer must NOT promise this turn contains
         figures — it offers to look them up instead.
 
-    Names which tools ran, renders the top recommendations already present in the artifacts
-    PLAINLY, honestly reports a completed-but-empty search (naming the requested room type/area),
+    Renders the top recommendations already present in the artifacts PLAINLY, honestly reports a completed-but-empty search (naming the requested room type/area),
     surfaces gathered safety evidence with its real source, and lists still-outstanding requested
     dimensions — in the user's language (zh default). NEVER fabricates a number not present in
     the artifacts, and never claims 'no listings' when a search was attempted but partial/
@@ -821,7 +858,6 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     executed = [a for a in artifacts
                 if _is_executed(a) and a.get("tool") not in (None, "ask_user")]
     executed_tools = {a.get("tool") for a in executed}
-    tool_names = sorted(executed_tools)
     # Requested-but-uncompleted dimensions, named explicitly (product bar): scan THIS turn's
     # message for dimension cues and, for each with no completed tool result, an honest line.
     missing_lines = _missing_requested_dimension_lines(cm, executed_tools, lang)
@@ -875,11 +911,17 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             opener = "抱歉，本轮处理耗时较长，我先根据已经拿到的结果给你一个简要回答（可能不完整）："
             closer = "由于时间限制，以上内容可能不完整，你可以让我继续把它补全。"
         lines = [opener]
-        if tool_names:
-            lines.append("已完成的查询：" + "、".join(str(t) for t in tool_names) + "。")
+        # Internal tool identifiers (search_properties, calculate_commute, ...) used to be
+        # listed here verbatim. They leak the architecture and mean nothing to a user, and
+        # every line below already states what was actually found or is still missing, so
+        # the line is removed rather than translated into friendlier names.
         if recs:
-            lines.append(f"已找到 {len(recs)} 个房源（数据来自 OnTheMarket）：")
-            lines.extend(_rec_summary_line(r) for r in recs[:5])
+            shown = recs[:_MAX_FALLBACK_RECS]
+            if len(recs) > len(shown):
+                lines.append(f"已找到 {len(recs)} 个房源（数据来自 OnTheMarket），先列出其中 {len(shown)} 个：")
+            else:
+                lines.append(f"已找到 {len(recs)} 个房源（数据来自 OnTheMarket）：")
+            lines.extend(_rec_summary_line(r) for r in shown)
         elif search_incomplete:
             lines.append("房源搜索还没跑完就到时间了，结果暂不完整，之后可能还会有更多房源。")
         elif empty_raw is not None:
@@ -913,11 +955,15 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             closer = ("This answer was cut short by the time budget; let me know and I can "
                       "finish it.")
         lines = [opener]
-        if tool_names:
-            lines.append("Completed lookups: " + ", ".join(str(t) for t in tool_names) + ".")
+        # See the note on the zh branch: internal tool identifiers are not user-facing.
         if recs:
-            lines.append(f"Found {len(recs)} listing(s) (data from OnTheMarket):")
-            lines.extend(_rec_summary_line(r) for r in recs[:5])
+            shown = recs[:_MAX_FALLBACK_RECS]
+            if len(recs) > len(shown):
+                lines.append(f"Found {len(recs)} listing(s) (data from OnTheMarket); "
+                             f"here are {len(shown)} of them:")
+            else:
+                lines.append(f"Found {len(recs)} listing(s) (data from OnTheMarket):")
+            lines.extend(_rec_summary_line(r) for r in shown)
         elif search_incomplete:
             lines.append("The property search was cut short by the time budget, so these results "
                          "are incomplete — more listings may well exist.")

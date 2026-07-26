@@ -274,3 +274,122 @@ def test_a_positive_poi_result_is_not_an_absence():
     """The obvious guard: reporting shops that WERE found must never read as absence."""
     assert not graders._asserts_data_absent(
         "There are two supermarkets within 300m: a Tesco Express and a Co-op.", "pois")
+
+
+# ── R4: the evidence side and the answer side must mine the same text ──────────
+
+C6_EVIDENCE = [
+    {"tool": "calculate_commute",
+     "data": {"from_address": "45 Fairfield Road, London E3 2QB, UK",
+              "duration_minutes": 32, "duration_category": "Medium (20-45 min)",
+              "route_summary": "Central line from Bow Road to Holborn, then 8 min walk",
+              "route_source": "tfl"}},
+    {"tool": "calculate_commute",
+     "data": {"from_address": "20 Liverpool Road, London N1 0RW, UK",
+              "duration_minutes": 19, "duration_category": "Short (< 20 min)",
+              "route_summary": "Bus 30 to Euston, then 6 min walk",
+              "route_source": "tfl"}},
+]
+
+
+def _minutes(answer, evidence, tools=("calculate_commute",)):
+    g = graders.grade_grounding(_ctx(answer, evidence, tools))
+    return {c.value: c.status for c in g.claims if c.kind == "commute_minutes"}
+
+
+def test_a_walk_leg_quoted_from_route_summary_is_grounded():
+    """C6/E9. The walk legs live under ``route_summary`` and nowhere else, a key that
+    matched none of travel/commute/duration/time, so the evidence side could not see
+    "then 6 min walk" while the answer side read it straight out of the prose. 6 and 8
+    occur VERBATIM in the tool output; they were recorded as fabrications."""
+    answer = ("| 20 Liverpool Road | **19 min** | Bus 30 to Euston, then 6 min walk |\n"
+              "| 45 Fairfield Road | 32 min | Central line, then 8 min walk |")
+    claims = _minutes(answer, C6_EVIDENCE)
+    assert claims.get(6.0) == "grounded", claims
+    assert claims.get(8.0) == "grounded", claims
+    assert claims.get(19.0) == "grounded", claims
+    assert claims.get(32.0) == "grounded", claims
+
+
+def test_a_bucket_label_range_grounds_both_endpoints():
+    """C11. Both minute regexes anchor on the unit, which follows the SECOND endpoint, so
+    "Medium (20-45 min)" put only 45 in the evidence pool while the answer side recovered
+    both. The 20 the answer quoted from the label became "unsupported"."""
+    evidence = [{"tool": "calculate_commute",
+                 "data": {"duration_minutes": 24,
+                          "duration_category": "Medium (20-45 min)",
+                          "route_summary": "Northern line from Old Street to Bank"}}]
+    answer = ("- **Duration:** 24 minutes via public transport (TfL data)\n"
+              "- **Category:** Medium (20-45 min) — acceptable")
+    claims = _minutes(answer, evidence)
+    assert claims.get(20.0) == "grounded", claims
+    assert claims.get(24.0) == "grounded", claims
+
+
+def test_a_markdown_bullet_is_not_a_range_dash():
+    """E1. `_RANGE_LEAD_RE` had no left digit boundary and accepted a newline before the
+    dash, so "Available from 27 July 2026\\n- 5 min commute" yielded a phantom 26-minute
+    claim that E1 was failed for fabricating."""
+    text = "Available from 27 July 2026\n- 5 min commute to UCL (TfL transit)"
+    assert graders._range_values(text, text.index("5 min"), 5.0) == [5.0]
+
+
+def test_a_year_cannot_become_a_minute_range_lead():
+    """The left digit boundary, on its own: the last three digits of a longer number are
+    not a range endpoint even on one line."""
+    text = "Listed in 2026 - 5 min from the station"
+    assert graders._range_values(text, text.index("5 min"), 5.0) == [5.0]
+
+
+def test_a_real_range_still_yields_both_endpoints():
+    """The guards must not cost the range rule its purpose."""
+    text = "The journey takes 15-26 minutes."
+    assert graders._range_values(text, text.index("26"), 26.0) == [15.0, 26.0]
+
+
+def test_a_fabricated_walk_leg_is_still_caught():
+    """The anti-amnesty pin for the whole of R4. Widening the evidence side must not make
+    an invented leg groundable: 11 appears in no route_summary, no category and no
+    duration field."""
+    answer = "Bus 30 to Euston, then 11 min walk to the campus."
+    assert _minutes(answer, C6_EVIDENCE).get(11.0) == "unsupported"
+
+
+def test_money_written_with_a_thousands_separator_can_be_labelled():
+    r"""``\b1700\b`` never matched "£1,700", which is how money is written. The
+    labelled-exception ruling could therefore never fire on a monetary figure."""
+    answer = "- **Price:** £1,700/month (200 over budget)"
+    assert graders._labelled_as_over_limit(answer, 1700)
+
+
+def test_the_thousands_separator_match_keeps_its_boundaries():
+    """1,700 must not be found inside 11,700, and 45 must not be found inside 2045."""
+    assert not graders._labelled_as_over_limit(
+        "The annual figure of £11,700 is over your budget limit", 1700)
+    assert not graders._labelled_as_over_limit(
+        "Property 2045 is over your stated limit", 45)
+
+
+def test_a_bucket_label_is_not_an_over_limit_claim():
+    """C11's `commute_leq_minutes`: the answer states a grounded 24-minute commute and
+    quotes the band beside it. The band's upper endpoint is not a claimed journey time."""
+    assert graders._labelled_as_over_limit("**Category:** Medium (20-45 min)", 45)
+    assert graders._labelled_as_over_limit("Category: Short (< 20 min)", 20)
+
+
+def test_a_bare_parenthetical_is_not_a_bucket_label():
+    """The escape hatch needs the label word: an unexplained number in brackets beside
+    an over-limit duration must not be excused."""
+    assert not graders._labelled_as_over_limit(
+        "The commute is (45 min) door to door.", 45)
+
+
+def test_an_unlabelled_overage_still_violates_the_commute_bound():
+    """The escape hatch excuses only the OVER check and only when labelled. Silence and
+    plain assertion both still fail."""
+    con = {"type": "commute_leq_minutes", "dest": "UCL", "value": 30}
+    evidence = [{"tool": "calculate_commute", "data": {"duration_minutes": 47}}]
+    r = graders.CONSTRAINT_CHECKERS["commute_leq_minutes"](
+        con, _ctx("The commute to UCL is 47 minutes by transit.", evidence,
+                  ("calculate_commute",)))
+    assert not r.passed, r.detail

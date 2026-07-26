@@ -415,21 +415,32 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
         # budget alternatives included), which _iter_numbers can never see. An answer
         # repeating that figure is GROUNDED in tool output (obtained evidence must
         # never be dropped — final8 CR5 r3 judged such a repeat ungrounded). Key-
-        # filtered to travel/commute/duration/time fields so stray minute mentions in
-        # arbitrary prose (descriptions) do not silently widen the grounded pool.
+        # filtered so stray minute mentions in arbitrary prose (descriptions) do not
+        # silently widen the grounded pool.
+        #
+        # `route` is in the filter because calculate_commute puts the WALK LEGS there
+        # and nowhere else: `route_summary: "Bus 30 to Euston, then 6 min walk"`. The
+        # answer-side extractor reads "then 6 min walk" out of the prose, so without
+        # `route` the two sides of the same comparison were mining different text and
+        # a figure quoted VERBATIM from the tool was recorded as a fabrication (C6's
+        # 6/8/5, E9's 7).
+        #
+        # `_range_values` is applied here for the same symmetry reason. Both minute
+        # regexes anchor on the UNIT, which follows the SECOND endpoint, so
+        # `duration_category: "Medium (20-45 min)"` put only 45 in the pool while the
+        # answer side recovered both endpoints — making a grounded 20 "unsupported"
+        # (C11). Range recovery must run on whichever side reads the string.
         for key, s in _iter_key_strings(data):
             if ("travel" in key or "commute" in key or "duration" in key
-                    or key == "time"):
-                for m in _MINUTES_RE.finditer(s):
-                    n = _to_float(m.group(1))
-                    if n is not None:
+                    or "route" in key or key == "time"):
+                for regex in (_MINUTES_RE, _CJK_MINUTES_RE):
+                    for m in regex.finditer(s):
+                        n = _to_float(m.group(1))
+                        if n is None:
+                            continue
                         has_commute = True
-                        commute.add(round(n))
-                for m in _CJK_MINUTES_RE.finditer(s):
-                    n = _to_float(m.group(1))
-                    if n is not None:
-                        has_commute = True
-                        commute.add(round(n))
+                        for val in _range_values(s, m.start(), n):
+                            commute.add(round(val))
         for s in _iter_strings(data):
             for pc in _POSTCODE_RE.finditer(s):
                 addresses.append(pc.group(1).upper().replace(" ", ""))
@@ -1017,7 +1028,17 @@ def _is_difference_figure(text: str, start: int, end: int) -> bool:
 # 「15-26 分钟」 / "15-26 minutes" yielded only 26 and a fabricated lower bound could not
 # be caught. Recover the leading endpoint; the exclusion rules already ran on the clause
 # and apply to the whole range.
-_RANGE_LEAD_RE = re.compile(r"([0-9]{1,3})\s*(?:-|–|—|~|to|至|到)\s*$", re.IGNORECASE)
+#
+# Two guards keep this from inventing an endpoint that was never written:
+#   * a left digit boundary. Without it the pattern took the last three digits of a
+#     longer number, so a YEAR became a minute count.
+#   * horizontal whitespace only. A markdown bullet is not a range dash: on
+#     "Available from 27 July 2026\n- 5 min commute to UCL" the old pattern read
+#     "2026" + "\n- " as "026-" and produced a phantom 26-minute claim, which E1 was
+#     then failed for fabricating. Verified by direct call: `_range_values` returned
+#     [26.0, 5.0] for that text and now returns [5.0].
+_RANGE_LEAD_RE = re.compile(r"(?<![0-9])([0-9]{1,3})[ \t]*(?:-|–|—|~|to|至|到)[ \t]*$",
+                            re.IGNORECASE)
 
 
 def _range_values(text: str, start: int, value: float):
@@ -1046,11 +1067,40 @@ _LIMIT_NOUN = ("limit", "criteria", "criterion", "requirement", "target", "thres
                "上限", "要求", "限制", "条件", "标准")
 
 
+# A BUCKET LABEL is not an asserted journey time. calculate_commute returns
+# `duration_category: "Medium (20-45 min)"` and answers quote it verbatim, so the band's
+# upper endpoint was landing in `over` as though the model had claimed a 45-minute
+# journey — C11 states a grounded 24-minute commute and was failed for the label beside
+# it. Matched as a label word immediately followed by its parenthetical, so a bare
+# number in brackets is not excused.
+_BUCKET_LABEL_RE = re.compile(
+    r"(?:very\s+long|short|medium|long|acceptable|categor(?:y|ies)|类别|等级)"
+    r"\s*[（(][^)）\n]{0,40}[)）]", re.IGNORECASE)
+
+
+def _int_occurrences(answer: str, value: float):
+    """Spans of ``value`` written as an integer, with or without thousands separators.
+
+    ``\\b1700\\b`` never matched "£1,700", which is how money is actually written — the
+    reason the labelled-exception ruling appeared to work for commute minutes and not
+    for money. Both renderings are tried; the boundaries keep 45 out of 2045 and 1,700
+    out of 11,700."""
+    iv = int(round(value))
+    spans = set()
+    for pat in {str(iv), f"{iv:,}"}:
+        for m in re.finditer(rf"(?<![0-9,.]){re.escape(pat)}(?![0-9])", answer):
+            spans.add((m.start(), m.end()))
+    return sorted(spans)
+
+
 def _labelled_as_over_limit(answer: str, value: float) -> bool:
     if not answer:
         return False
-    for m in re.finditer(rf"\b{int(round(value))}\b", answer):
-        clause = _clause_of(answer, m.start(), m.end())
+    buckets = [(m.start(), m.end()) for m in _BUCKET_LABEL_RE.finditer(answer)]
+    for s, e in _int_occurrences(answer, value):
+        if any(bs <= s and e <= be for bs, be in buckets):
+            return True
+        clause = _clause_of(answer, s, e)
         low = clause.lower()
         def _has(cues):
             return any((c in low) if c.isascii() else (c in clause) for c in cues)

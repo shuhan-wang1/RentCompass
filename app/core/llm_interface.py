@@ -2,6 +2,8 @@
 
 import json
 import re
+from typing import Any
+
 import requests
 
 from core.llm_config import (
@@ -42,6 +44,25 @@ def _record_deepseek_eval(resp, latency_ms, success, error=None):
         pass
 
 
+def _usage_blob(resp: Any) -> dict:
+    """The provider's usage dict off a raw SDK response, in whichever form it arrives."""
+    u = getattr(resp, "usage", None)
+    if u is None:
+        return {}
+    if isinstance(u, dict):
+        return u
+    for attr in ("model_dump", "dict", "to_dict"):
+        fn = getattr(u, attr, None)
+        if callable(fn):
+            try:
+                return fn()
+            except Exception:
+                pass
+    return {k: getattr(u, k) for k in
+            ("prompt_tokens", "completion_tokens", "prompt_cache_hit_tokens")
+            if getattr(u, k, None) is not None}
+
+
 def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
                    temperature: float = 0.1, max_tokens: int = 4000) -> str:
     """Call DeepSeek's OpenAI-compatible chat API. Returns text, or None on error."""
@@ -64,6 +85,17 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
             extra_body={"thinking": {"type": "disabled"}},
         )
         _record_deepseek_eval(resp, (_time.perf_counter() - _started) * 1000, True)
+        # ...and into the CANARY observation, which is what the gate reads. These two
+        # recorders had drifted apart: the eval one has always seen this path (that is how
+        # 48 calls at p50 934ms were counted in the 2026-07-25 round), while `llm_calls`
+        # saw none of them, so every per-call figure derived from the gate understated the
+        # turn. Best-effort by design — a telemetry failure must never break a real answer.
+        try:
+            from core.turn_observations import note_raw_llm_call
+            note_raw_llm_call(id(resp), usage_blob=_usage_blob(resp),
+                              configured_model=DEEPSEEK_MODEL)
+        except Exception:
+            pass
         return resp.choices[0].message.content
     except Exception as e:
         _record_deepseek_eval(None, (_time.perf_counter() - _started) * 1000, False,

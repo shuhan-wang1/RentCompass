@@ -33,7 +33,10 @@ import pytest
 # defined here, which made the test the source of truth for a rule only product code can
 # enforce — and a copy in a test is a copy that drifts. Add to the set in router.py when a
 # model is retired; never remove an entry, a name retired once is never valid again.
-from uk_rent_agent.llm.router import RETIRED_MODEL_NAMES
+#
+# `is_retired_model_name` comes with it so the *.env.example scan below and the runtime
+# guard share one definition of "dead", including the whitespace/quote/case normalisation.
+from uk_rent_agent.llm.router import RETIRED_MODEL_NAMES, is_retired_model_name
 
 # Every config path whose default feeds a real provider call.
 _CONFIG_SOURCES = (
@@ -359,6 +362,136 @@ def test_the_construction_site_scan_still_sees_all_three_known_paths():
         assert found.get(rel, {}).get("clients"), (
             f"the client-construction scan no longer sees {rel}")
         assert found.get(rel, {}).get("guards"), f"{rel} does not CALL {_GUARD}"
+
+
+# --------------------------------------------------------------------------- #
+# The OTHER injection surface: the file a human copies by hand.               #
+# --------------------------------------------------------------------------- #
+# The runtime guard covers the process. It does not cover ``app/.env.example``, which used
+# to ship ``DEEPSEEK_MODEL="deepseek-chat"`` — so the documented onboarding step
+# (``cp app/.env.example app/.env``) CONFIGURED the 2026-07-24 outage. The guard turns that
+# into a loud boot failure rather than a silent 400, which is better but is not a fix: a new
+# developer following the README simply cannot start the app and is given no reason why.
+#
+# An example file is a second write path into the very same env vars, and it is the one no
+# runtime check can reach, because the damage is done before the process exists.
+
+# Directories whose contents are not ours to police (vendored deps, virtualenvs, caches).
+_NON_SOURCE_DIRS = frozenset({
+    ".git", "__pycache__", "node_modules", "venv", ".venv", "env",
+    "site-packages", ".mypy_cache", ".pytest_cache",
+})
+
+# `KEY=value`, `export KEY=value`, and the commented-out form `# KEY=value`. The commented
+# form counts: a line a human is invited to uncomment is a value a human will end up with.
+# Prose comments do not match, because a bare sentence has no `IDENT=` in it — which is
+# what lets app/.env.example explain the retirement in words without tripping its own test.
+_ENV_EXAMPLE_ASSIGNMENT = re.compile(
+    r"""^\s*#?\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$""")
+
+
+def _env_example_files() -> list[Path]:
+    """Every example env file in the tree, DISCOVERED rather than listed by name.
+
+    ``rglob('*.env.example')`` matches both ``app/.env.example`` and the repo-root
+    ``.env.example`` (the leading ``*`` matches the empty string), so an example file added
+    next to some future service is covered the moment it lands. A hand-maintained list of
+    paths is exactly the thing that goes stale, which is the whole reason this file exists.
+
+    Filesystem discovery rather than ``git ls-files``: the offline suite runs inside a
+    container that mounts the worktree without its git dir, so shelling out to git here
+    would make the guard silently unrunnable in the only place it is ever run.
+    """
+    return [p for p in sorted(_REPO.rglob("*.env.example"))
+            if not (_NON_SOURCE_DIRS & set(p.parts))]
+
+
+def _env_example_values(text: str):
+    """Yield ``(lineno, key, value)`` as a human copying the file would read them."""
+    for lineno, line in enumerate(text.splitlines(), 1):
+        m = _ENV_EXAMPLE_ASSIGNMENT.match(line)
+        if not m:
+            continue
+        key, raw = m.group(1), m.group(2).strip()
+        if raw[:1] in ('"', "'"):
+            closing = raw.find(raw[0], 1)
+            value = raw[1:closing] if closing != -1 else raw[1:]
+        else:
+            # Unquoted values may carry a trailing `# comment`.
+            value = raw.split("#", 1)[0].strip()
+        yield lineno, key, value
+
+
+def test_no_env_example_freezes_a_retired_model_name():
+    """SOURCE GUARD, class-level: no example env file may ship a retired model name.
+
+    This is what stops the NEXT retirement from being frozen into the onboarding path.
+    ``RETIRED_MODEL_NAMES`` guarded runtime only; adding a name to that set now
+    automatically fails here too if any example file still hands it to a new developer.
+    """
+    offenders = []
+    for path in _env_example_files():
+        rel = path.relative_to(_REPO).as_posix()
+        for lineno, key, value in _env_example_values(
+                path.read_text(encoding="utf-8", errors="replace")):
+            if is_retired_model_name(value):
+                offenders.append(f"{rel}:{lineno}  {key}={value!r}")
+    assert not offenders, (
+        "example env file ships a RETIRED model name — `cp <file> .env` would configure a "
+        "provider that answers every request with HTTP 400, which /health cannot see. "
+        "Successor: deepseek-v4-flash. Offenders:\n  " + "\n  ".join(offenders))
+
+
+def test_the_env_example_scan_is_not_vacuous(tmp_path):
+    """Guard the guard, three ways, because a scan that matches nothing passes forever.
+
+    Discovery, extraction, and detection are each checked separately: the test above would
+    stay green if the glob stopped finding files, if the parser stopped yielding values, or
+    if the comparison stopped firing.
+    """
+    found = {p.relative_to(_REPO).as_posix() for p in _env_example_files()}
+    assert {".env.example", "app/.env.example"} <= found, (
+        f"the example-env discovery no longer sees both known files: {sorted(found)}")
+
+    # Extraction: the variable this whole file exists for is actually being read.
+    values = dict((k, v) for _, k, v in _env_example_values(
+        (_REPO / "app/.env.example").read_text(encoding="utf-8")))
+    assert values.get("DEEPSEEK_MODEL"), (
+        "the example-env parser no longer extracts DEEPSEEK_MODEL from app/.env.example")
+
+    # Detection: the same parser + predicate on a synthetic file that IS poisoned. Without
+    # this, a parser bug that silently yielded nothing would look like a clean repo.
+    poisoned = tmp_path / "app.env.example"
+    poisoned.write_text(
+        '# uncomment for the legacy pool\n'
+        '# DEEPSEEK_REASONER_MODEL=deepseek-reasoner\n'
+        'DEEPSEEK_MODEL="deepseek-chat"  # trailing comment\n'
+        'OLLAMA_MODEL="gemma3:27b-cloud"\n', encoding="utf-8")
+    caught = [(lineno, key) for lineno, key, value
+              in _env_example_values(poisoned.read_text(encoding="utf-8"))
+              if is_retired_model_name(value)]
+    assert caught == [(2, "DEEPSEEK_REASONER_MODEL"), (3, "DEEPSEEK_MODEL")], caught
+
+
+def test_the_example_env_boots_the_app_it_documents(tmp_path):
+    """`cp app/.env.example app/.env` must produce a process that STARTS.
+
+    Not the same assertion as "no retired name": this loads every example value through
+    python-dotenv exactly as core/llm_config does, then runs the real runtime guard over
+    the result. It is the end-to-end version — the onboarding path and the guard checked
+    together rather than each against its own idea of the other.
+    """
+    from dotenv import dotenv_values
+
+    from uk_rent_agent.llm.router import MODEL_ENV_VARS, reject_retired_model_names
+
+    for path in _env_example_files():
+        loaded = dotenv_values(str(path))
+        rel = path.relative_to(_REPO).as_posix()
+        # No exception == this example file boots clean.
+        reject_retired_model_names(
+            f"{rel} (as copied to .env)",
+            **{var: loaded[var] for var in MODEL_ENV_VARS if loaded.get(var)})
 
 
 # --------------------------------------------------------------------------- #

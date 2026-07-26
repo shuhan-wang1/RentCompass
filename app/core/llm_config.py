@@ -31,8 +31,17 @@ MODEL_NAME = os.getenv("OLLAMA_MODEL", "gemma3:27b-cloud")
 
 
 def _deepseek_llm(temperature: float, max_tokens: int):
+    """A DeepSeek chat model for callers outside ModelRouter.
+
+    The observer is attached HERE rather than left to the caller. This helper is the
+    second path that bypassed ``ModelRouter`` -- and therefore ``install_observer`` --
+    so models it returned made real, billed calls that never reached ``llm_calls``.
+    Attaching at construction means a new caller cannot forget: the only way to get an
+    unobserved model is to build ``ChatOpenAI`` directly, which
+    ``tests/test_all_llm_calls_are_observed.py`` now forbids.
+    """
     from langchain_openai import ChatOpenAI
-    return ChatOpenAI(
+    model = ChatOpenAI(
         model=DEEPSEEK_MODEL,
         api_key=DEEPSEEK_API_KEY,
         base_url=DEEPSEEK_BASE_URL,
@@ -42,6 +51,14 @@ def _deepseek_llm(temperature: float, max_tokens: int):
         # chat-style callers, so pin it off explicitly.
         extra_body={"thinking": {"type": "disabled"}},
     )
+    try:
+        from core.turn_observations import install_observer
+        model = install_observer(model, configured_model=DEEPSEEK_MODEL)
+    except Exception:
+        # Observation is best-effort; observer_installed() stays False and the gate
+        # HOLDs rather than reporting a number it cannot back.
+        pass
+    return model
 
 
 def _ollama_llm(temperature: float, num_predict: int, num_ctx: int,

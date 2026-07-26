@@ -3,6 +3,8 @@
 import os
 from dotenv import load_dotenv
 
+from uk_rent_agent.llm.router import reject_retired_model_names
+
 load_dotenv()
 
 # Gemini API (optional if using Ollama)
@@ -24,6 +26,12 @@ DEEPSEEK_BASE_URL = os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com')
 # default is a live outage waiting for someone to drop the env override — which is exactly
 # how the 2026-07-25 fc smoke failed. tests/test_model_name_defaults.py pins this.
 DEEPSEEK_MODEL = os.getenv('DEEPSEEK_MODEL', 'deepseek-v4-flash')
+# Pinning the default is only half of it — the 2026-07-24 outage came from an ENV OVERRIDE
+# of three correct defaults, which no source-scan test can see. Refuse the override here
+# too: this module reads the repo-ROOT .env (load_dotenv() with no path) while
+# core/llm_config.py reads app/.env, so the two see different files and a retired name can
+# arrive through either one.
+reject_retired_model_names('config (import time)', DEEPSEEK_MODEL=DEEPSEEK_MODEL)
 
 # LLM provider: 'deepseek' (cloud API) or 'ollama' (local). See core/llm_config.py
 LLM_PROVIDER = os.getenv('LLM_PROVIDER', 'deepseek')

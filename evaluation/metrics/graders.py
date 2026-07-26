@@ -1625,6 +1625,28 @@ def _c_must_supersede_value(con, ctx) -> ConstraintResult:
                             f"active_stale_occurrences={active_stale}", heuristic=True)
 
 
+def _c_no_false_retrieval_provenance(con, ctx) -> ConstraintResult:
+    """2026-07-22 ruling: an answer may not DENY having searched ("没有搜索" /
+    "无法搜索" / "没有任何搜索数据" and English equivalents) when an executed
+    web_search produced USABLE evidence this turn. Implements the existing
+    web-synthesis contract — an honest denial over genuinely empty/failed retrieval
+    still passes. Detection cues + usability predicate are the critic's own
+    (uk_rent_agent.agent.critic), so runtime repair and eval judgement cannot drift.
+
+    The import is function-local on purpose: importing at module scope would make the
+    evaluator package depend on the product package just to be loaded, which the
+    re-scorer and the shard preflight both rely on NOT being true."""
+    from uk_rent_agent.agent.critic import claims_no_retrieval, evidence_usable
+
+    web_evidence = [e for e in (ctx.evidence or []) if e.get("tool") == "web_search"]
+    usable = any(evidence_usable(e.get("data")) for e in web_evidence)
+    denial = claims_no_retrieval(ctx.final_answer)
+    ok = not (usable and denial)
+    return ConstraintResult(
+        "no_false_retrieval_provenance", ok,
+        f"usable_web_evidence={usable} claims_no_retrieval={denial}")
+
+
 CONSTRAINT_CHECKERS: Dict[str, Callable[[dict, GradeContext], ConstraintResult]] = {
     "must_call_tool": _c_must_call_tool,
     "must_not_call_tool": _c_must_not_call_tool,
@@ -1652,6 +1674,7 @@ CONSTRAINT_CHECKERS: Dict[str, Callable[[dict, GradeContext], ConstraintResult]]
     "must_flag_unrealistic_constraint": _c_must_flag_unrealistic_constraint,
     "must_flag_stale_data": _c_must_flag_stale_data,
     "must_supersede_value": _c_must_supersede_value,
+    "no_false_retrieval_provenance": _c_no_false_retrieval_provenance,
 }
 
 

@@ -108,7 +108,8 @@
               "reference_calc_match",
               "must_flag_unrealistic_constraint",
               "must_flag_stale_data",
-              "must_supersede_value"
+              "must_supersede_value",
+              "no_false_retrieval_provenance"
             ]
           },
           "field": { "type": "string" },

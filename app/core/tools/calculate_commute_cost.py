@@ -289,6 +289,15 @@ def calculate_commute_cost_impl(
         print(f"      类型: {travel_type}, 方式: {mode}")
 
         # Step 1: 通勤时间 (TfL Journey Planner，免费；非伦敦自动回退直线估算)
+        #
+        # KNOWN REMAINING GAP (2026-07-26). calculate_travel_time silently falls back to the
+        # straight-line estimator and returns a bare int, so the `commute.duration_minutes`
+        # below can be a guess presented as a measured journey time — the same defect that
+        # was fixed in calculate_commute via core.commute_basis. It is NOT fixed here on
+        # purpose: calculate_travel_time is the cached entry point, and switching this tool
+        # to calculate_travel_details would drop that cache on a latency-gated path, which
+        # was not measurable in this change. Closing it properly means giving
+        # calculate_travel_time a cached basis-aware return; see core/commute_basis.py.
         from core.maps_service import calculate_travel_time
 
         duration_minutes = calculate_travel_time(from_address, to_address, mode)

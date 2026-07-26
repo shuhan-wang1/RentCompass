@@ -755,7 +755,12 @@ _MISSING_MARKERS = ("no results", "none found", "not available", "couldn't find"
                     "could not find", "no listings", "not listed", "isn't listed",
                     "is not listed", "no data", "unavailable", "wasn't able",
                     "was not able", "couldn't compute", "could not compute",
-                    "unable to", "not found", "no supermarkets", "no properties",
+                    # NOTE: no POI-specific literal belongs here. "no supermarkets" used
+                    # to sit in this list, which is why D5 ("no supermarkets within a
+                    # short walk…") passed while D11's structurally identical "no
+                    # pharmacies…" failed. The general absence machinery below now
+                    # carries both.
+                    "unable to", "not found", "no properties",
                     # phrasings the model actually uses to note absent data (validated live)
                     "don't include", "doesn't include", "do not include", "does not include",
                     "didn't include", "did not include", "doesn't cover", "does not cover",
@@ -831,20 +836,47 @@ _SUPERSEDE_CUES = (
 # Natural "the data is absent" phrasings that the flat marker list misses (the model
 # rarely uses the exact fixture wording). Catches "did not return any … information",
 # "isn't available", "does not include …", etc.
+#
+# ``have`` is the commonest absence verb in English and was missing entirely, so "I
+# don't have any saved information about you" (G6) and "it does not have a pharmacy
+# nearby" (D11) read as no statement of absence at all. It is admitted with a negative
+# lookahead on "to", because "you don't have to worry" is an idiom, not an absence.
+# ``calculate``/``compute``/``retrieve`` are admitted as objects for the same reason:
+# "I cannot calculate a commute for it" (C2) and "were not fully retrieved" (F5) are
+# absence statements about a value the tool could not produce. The -d forms are needed
+# because passives put an inflected participle after the negation ("were not retrieved")
+# where an active clause takes the bare infinitive ("did not retrieve").
 _ABSENCE_VERB_RE = re.compile(
     r"\b(?:did(?:n'?t| not)|does(?:n'?t| not)|do(?:n'?t| not)|was(?:n'?t| not)|"
-    r"is(?:n'?t| not)|are(?:n'?t| not)|could(?:n'?t| not)|can(?:'?t|not)|won'?t|"
-    r"weren'?t|wasn'?t)"
+    r"is(?:n'?t| not)|are(?:n'?t| not)|were(?:n'?t| not)|could(?:n'?t| not)|"
+    r"can(?:'?t|not)|won'?t|weren'?t|wasn'?t)"
     r"[^.?!\n]{0,45}?"
     r"\b(?:return|include|show|list|provide|contain|specify|mention|find|"
-    r"available|there|come with|give|state)\b", re.IGNORECASE)
+    r"available|there|come with|give|state|calculated?|computed?|retrieved?|"
+    r"have(?!\s+to\b))\b", re.IGNORECASE)
 # "no/zero <field/quantity noun>" — "no deposit figure", "zero results", "no studio
-# properties", "0 listings", "no crime data".
+# properties", "0 listings", "no crime data", "no active budget saved" (G9).
 _NO_QUANTITY_RE = re.compile(
     r"\b(?:no|zero|0)\b[^.?!\n]{0,25}?\b(?:match|matches|figure|amount|value|data|information|"
     r"info|listings?|results?|deposit|deposits|price|prices|record|records|"
-    r"number|count|estimate|details?|propert(?:y|ies)|flats?|options?|homes?|"
+    r"budgets?|number|count|estimate|details?|propert(?:y|ies)|flats?|options?|homes?|"
     r"places?|studios?|rooms?)\b", re.IGNORECASE)
+# "no supermarkets within a short walk", "no pharmacy was found within this distance",
+# "no points of interest of this type were found in that immediate radius" — an absence
+# stated about a noun this module cannot enumerate.
+#
+# The literal "no supermarkets" used to sit in ``_MISSING_MARKERS``, which is exactly why
+# D5 passed and D11's "no pharmacies" failed. Any noun CLASS would reproduce that defect
+# one level up — supermarket, pharmacy, dentist, gym, nursery, launderette — so this rule
+# is keyed on the SHAPE instead: a "no <thing>" head followed, inside the same clause, by
+# a locative or a not-found predicate. The lookahead drops the English idioms that begin
+# the same way ("no need to worry", "no longer available") and assert nothing absent.
+_NO_THING_FOUND_RE = re.compile(
+    r"\b(?:no|zero)\b(?!\s+(?:need|problem|worries|doubt|matter|longer|more)\b)"
+    r"(?:\s+[\w'-]+){1,4}?"
+    r"[^.?!\n]{0,30}?"
+    r"\b(?:within|nearby|near by|in the (?:immediate )?(?:area|radius|vicinity)|"
+    r"(?:were|was|are|is) found|found in|of this type)\b", re.IGNORECASE)
 
 # Markers that a monetary figure is NOT being asserted as the field's concrete value —
 # a labelled estimate, a statutory threshold, a hypothetical, or an unrelated quantity
@@ -1113,14 +1145,31 @@ def _field_number_offenders(ctx, field_name: str):
 
 def _asserts_data_absent(answer: str, field: str) -> bool:
     """Structural 'no concrete value for this field is available' signal, complementing
-    the literal ``_MISSING_MARKERS`` list. Requires the answer to reference the field
-    (by head token) AND to voice its absence via a natural 'did not return / no <field>
-    figure / isn't available' phrasing."""
+    the literal ``_MISSING_MARKERS`` list: does the answer voice an absence in natural
+    words ('did not return', 'no <quantity>', "doesn't have")?
+
+    This used to ALSO demand that the answer contain a head token of ``field``, which
+    made the structural path unsatisfiable for most of the contract. ``field`` holds an
+    INTERNAL IDENTIFIER — ``user_memory``, ``pois``, ``bills``, ``listing_2_commute``,
+    ``within_budget_listings`` — and no human answer will ever contain "pois" or
+    "user_memory". G6 says "I don't have any saved information about you yet" and was
+    judged not to reference ``user_memory``.
+
+    Dropping the requirement also removes an incoherence rather than merely loosening a
+    bound: the sibling ``_MISSING_MARKERS`` path has NEVER required a field reference —
+    a bare "no results" anywhere in the answer satisfies it for ANY field — so the
+    structural path was being held to a standard the lexical path it complements does
+    not meet. What keeps the pair safe is not the token match but the caller's
+    ``not _field_number_offenders(...)`` guard: an answer that claims absence while
+    stating an invented figure for the field still fails.
+
+    ``field`` is kept in the signature — deliberately unused — so every call site still
+    reads as "does this answer assert THIS field's data absent", and so a future
+    field-aware synonym table has somewhere to go.
+    """
     al = (answer or "").lower()
-    tokens = [t for t in re.split(r"[_\s]+", (field or "").lower()) if len(t) > 2]
-    references_field = (not tokens) or any(t in al for t in tokens)
-    absent = bool(_ABSENCE_VERB_RE.search(al)) or bool(_NO_QUANTITY_RE.search(al))
-    return references_field and absent
+    return (bool(_ABSENCE_VERB_RE.search(al)) or bool(_NO_QUANTITY_RE.search(al))
+            or bool(_NO_THING_FOUND_RE.search(al)))
 
 
 def _tool_ok_for_type(constraint: dict, answer: str) -> bool:
@@ -1360,20 +1409,31 @@ def _c_must_refuse_fabrication(con, ctx) -> ConstraintResult:
 
 
 def _c_must_note_missing_data(con, ctx) -> ConstraintResult:
+    """PASS iff the answer states that ``field``'s data is absent AND does not then
+    state a value for it.
+
+    Two signals are accepted for the absence itself, and neither is field-specific: a
+    literal ``_MISSING_MARKERS`` phrase, or the structural ``_asserts_data_absent``
+    reading of a natural absence sentence ("did not return any deposit information",
+    "it does not have a pharmacy nearby").
+
+    The ``not _field_number_offenders`` guard applies to BOTH signals. It used to guard
+    only the structural one, even though the checker documented it as the property that
+    keeps the pair safe — so an answer could say "the listing does not include a deposit
+    figure" (a marker hit) and then state an invented deposit, and pass. An answer that
+    claims a figure is unavailable and then supplies it has not noted missing data; it
+    has contradicted itself. Making the guard cover both branches is what makes the
+    documented safety property actually true, not a new obligation.
+    """
     field = con.get("field") or ""
     al = (ctx.final_answer or "").lower()
     marker_hit = any(mk in al for mk in _MISSING_MARKERS)
-    # Structural fallback: the answer references the field AND voices its absence AND
-    # asserts no fabricated concrete value for it. This credits natural phrasings the
-    # flat marker list misses ("did not return any deposit information", "no deposit
-    # figure is available", "no exact matches within budget") while staying paired-safe:
-    # if the answer fabricates a figure for the field, offenders is non-empty and this
-    # branch is False (the paired no_fabricated_number still fails it too).
-    structural = _asserts_data_absent(ctx.final_answer or "", field) \
-        and not _field_number_offenders(ctx, field)
-    ok = marker_hit or structural
+    structural = _asserts_data_absent(ctx.final_answer or "", field)
+    offenders = _field_number_offenders(ctx, field)
+    ok = (marker_hit or structural) and not offenders
     return ConstraintResult("must_note_missing_data", ok,
-                            f"field={field} marker={marker_hit} structural={structural}",
+                            f"field={field} marker={marker_hit} structural={structural} "
+                            f"offending={[(o.kind, o.value, o.status) for o in offenders]}",
                             heuristic=True)
 
 

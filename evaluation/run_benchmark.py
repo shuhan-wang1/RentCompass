@@ -35,7 +35,6 @@ import math
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import time
@@ -1803,7 +1802,8 @@ def write_model_usage(out: Path, runs: List[RunResult], pricing) -> None:
 
 def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
                   repeats: int, cost_cap: float, stopped_reason: Optional[str],
-                  n_selected: int, timestamp: str, arch: str = "legacy") -> dict:
+                  n_selected: int, timestamp: str, arch: str = "legacy",
+                  identity: Optional[Dict[str, Any]] = None) -> dict:
     n = len(runs)
     passed = sum(1 for r in runs if r.passed)
     completed = sum(1 for r in runs if r.verdict.get("task_completed"))
@@ -1862,6 +1862,13 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
     stability = generation_stability(runs)
     slo = slo_block(runs)
     slo_ok = bool(slo["p50_ok"] and slo["p95_ok"])
+
+    # Commit binding for THIS summary. Shared with the manifest (one resolution per
+    # process) so the two artifacts of one run can never name different commits; re-checked
+    # here so a hand-passed identity cannot smuggle in an inconsistent provenance.
+    from evaluation import results_package as _rp
+    _ident = identity or commit_identity()
+    _rp.assert_identity_consistent(_ident)
 
     summary = {
         "config": cfg_name,
@@ -1926,8 +1933,19 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
         # tools_executed (so it never fails must_not_call_tool), but every denial is
         # surfaced here and per-case in denied_tool_detail — never silently dropped.
         "security_audit": _security_audit(runs),
-        "git_commit": _git_commit(),
-        "git_dirty": _git_dirty(),
+        # COMMIT BINDING (2026-07-26). A summary that cannot name its own commit is one
+        # careless file move away from being permanently unattributable, so the commit is
+        # resolved from git when available and from PRODUCT_SHA otherwise — and
+        # git_commit_source records WHICH, because "git read it off the tree" and "the
+        # operator asserted it" are different evidence. commit_trust / identity_warnings
+        # shout when the tree was DIRTY (rule 5) or the commit is merely asserted.
+        "git_commit": _ident["git_commit"],
+        "git_dirty": _ident["git_dirty"],
+        "git_commit_source": _ident["git_commit_source"],
+        "git_dirty_source": _ident["git_dirty_source"],
+        "commit_trust": _ident["commit_trust"],
+        "identity_warnings": list(_ident["identity_warnings"]),
+        "self_identifying": _ident["self_identifying"],
         "timestamp": timestamp,
         "notes": ("OFFLINE mode validates MECHANICS ONLY (routing/tool/latency/"
                   "memory-isolation); grounding numbers use FAKE responder text and are "
@@ -1949,26 +1967,57 @@ def _fmt(v: Optional[float]) -> str:
     return str(v)
 
 
+_IDENTITY_CACHE: Dict[str, Any] = {}
+
+
+def commit_identity(refresh: bool = False) -> Dict[str, Any]:
+    """Which commit produced this measurement, and WHO says so — resolved ONCE per process.
+
+    The harness normally runs inside a container off a bind mount with no git dir, so the
+    old git-only probe recorded ``git_commit: null`` even when the operator had pinned
+    PRODUCT_SHA: the summary could not self-identify and the binding lived outside the
+    package, manually. This resolves git first, PRODUCT_SHA second, and records WHICH
+    answered (``git_commit_source``) plus ``commit_trust`` / ``identity_warnings`` so a
+    dirty or merely-asserted measurement is self-evidently suspect.
+
+    Cached because the summary and the manifest of ONE run must never disagree about the
+    commit — including when the tree changes underneath a long round. ``refresh=True`` is
+    for tests.
+    """
+    if refresh or "record" not in _IDENTITY_CACHE:
+        from evaluation import results_package as _rp
+        _IDENTITY_CACHE["record"] = _rp.resolve_commit_identity(
+            git_probe=lambda: (_git_commit(), _git_dirty()))
+    return _IDENTITY_CACHE["record"]
+
+
+def announce_identity(ident: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Print the commit binding BEFORE a round spends anything, shouting every warning.
+    A round taken on a dirty tree (rule 5) or with no verifiable commit (rule 3) should be
+    abandoned by the operator, not discovered to be worthless after the fact."""
+    ident = ident or commit_identity()
+    print(f"[identity] commit={ident['git_commit']} source={ident['git_commit_source']} "
+          f"dirty={ident['git_dirty']} trust={ident['commit_trust']}", flush=True)
+    for w in ident["identity_warnings"]:
+        print(f"[identity] WARNING: {w}", flush=True)
+    return ident
+
+
 def _git_commit() -> Optional[str]:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=str(REPO_ROOT),
-            stderr=subprocess.DEVNULL).decode().strip()
-    except Exception:
-        return None
+    """The narrow GIT-ONLY probe: the commit of the tree that actually ran, or None when
+    git cannot answer. Deliberately does NOT fall back to PRODUCT_SHA — the capture-tree
+    identity is a claim about executed code that only git can witness. Use
+    :func:`commit_identity` for the recorded commit binding."""
+    from evaluation import results_package as _rp
+    return _rp.probe_git(REPO_ROOT)[0]
 
 
 def _git_dirty() -> Optional[bool]:
     """True iff the working tree has uncommitted changes (``git status --porcelain`` is
     non-empty). Recorded in the manifest so a committed A/B result can be trusted as
     reproduced from a CLEAN tree; None if git is unavailable."""
-    try:
-        out = subprocess.check_output(
-            ["git", "status", "--porcelain"], cwd=str(REPO_ROOT),
-            stderr=subprocess.DEVNULL).decode()
-        return bool(out.strip())
-    except Exception:
-        return None
+    from evaluation import results_package as _rp
+    return _rp.probe_git(REPO_ROOT)[1]
 
 
 # --------------------------------------------------------------------------- #
@@ -2049,6 +2098,10 @@ async def _run_all(args) -> int:
     out = Path(args.out)
     guard_output_dir(out, allow_reuse=getattr(args, "allow_reuse_out", False))
     out.mkdir(parents=True, exist_ok=True)
+
+    # Commit binding, resolved and SHOUTED before the round spends anything, and reused by
+    # both the summary and the manifest so they cannot disagree.
+    identity = announce_identity(commit_identity(refresh=True))
 
     # Preflight: every shard must load and validate BEFORE a measurement starts.
     shard_problems = validate_all_shards()
@@ -2165,13 +2218,15 @@ async def _run_all(args) -> int:
         _write_judge_io(out, runs)
     summary = write_summary(out, runs, mode=mode, cfg_name=cfg.name, repeats=args.repeat,
                             cost_cap=args.max_cost_usd, stopped_reason=stopped_reason,
-                            n_selected=len(selected), timestamp=timestamp, arch=args.arch)
-    # Reproducible results package: lean per_case.csv + manifest.json (argv, env, commit,
-    # case-file + events digests). events.jsonl stays out of git; only its SHA256 is kept.
+                            n_selected=len(selected), timestamp=timestamp, arch=args.arch,
+                            identity=identity)
+    # Reproducible results package: lean per_case.csv + manifest.json (argv, env, commit +
+    # its provenance, case-file + events digests). events.jsonl stays out of git; only its
+    # SHA256 is kept.
     results_package.write_results_package(
         out, runs, argv=sys.argv, arch=args.arch, config=cfg.name, timestamp=timestamp,
-        case_file=case_file, events_log=events_log, mode=mode, git_commit=_git_commit,
-        git_dirty=_git_dirty, cache_protocol=cache_protocol)
+        case_file=case_file, events_log=events_log, mode=mode,
+        cache_protocol=cache_protocol, identity=identity)
     _save_checkpoint(out, list(done_ids), cumulative_cost, stopped_reason)
 
     print("\n=== summary ===")
@@ -2185,6 +2240,12 @@ async def _run_all(args) -> int:
           f"grounded={summary['grounded_rate']['display']} "
           f"money_grounded={summary['money_grounded_rate']['display']} "
           f"cost=${summary['total_cost_usd']:.4f}")
+    # Repeat the commit binding where the operator actually looks — a number nobody can
+    # attribute to a SHA is not evidence.
+    print(f"commit={summary['git_commit']} source={summary['git_commit_source']} "
+          f"trust={summary['commit_trust']}")
+    for w in summary["identity_warnings"]:
+        print(f"[identity] WARNING: {w}")
     # Cleanup temp state (keep results).
     with contextlib.suppress(Exception):
         shutil.rmtree(state_root, ignore_errors=True)

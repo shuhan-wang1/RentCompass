@@ -976,9 +976,13 @@ def _dimension_location_context(state: AgentState, batch_calls: list) -> dict:
         crit = raw.get("search_criteria") or raw.get("known_criteria") or {}
         if isinstance(crit, dict):
             areas = crit.get("areas") if isinstance(crit.get("areas"), list) else []
+            # `commute_destination` ONLY. search_properties' echo also carries `destination`,
+            # but there it is a synonym for the SEARCH AREA, not the commute target — observed
+            # on F12 of the round of record, where area and destination are both
+            # "Docklands, London" while the user's actual destination (Canary Wharf) was stated
+            # in an earlier turn. Reading it as a commute target builds a self-to-self journey.
             _fill(crit.get("area") or (areas[0] if areas else None),
-                  crit.get("commute_destination") or crit.get("destination"),
-                  crit.get("no_commute"))
+                  crit.get("commute_destination"), crit.get("no_commute"))
     acc = _derive_known_criteria(state.get("accumulated_search_criteria") or {})
     _acc_areas = acc.get("areas") or []
     _fill(acc.get("area") or (_acc_areas[0] if _acc_areas else None),
@@ -1023,6 +1027,19 @@ def _dimension_read_args(dim: str, ctx: dict, message: str) -> Optional[dict]:
         # missing destination is the second gate. Both must be clear before we call.
         dest = ctx.get("commute_destination")
         if ctx.get("no_commute") or not area or not dest:
+            return None
+        # A journey from a place to ITSELF is not the commute anyone asked about, and its
+        # "0 minutes" would be a sourced number that answers a different question. Equal, or
+        # one being a whole comma-delimited component of the other: "Docklands, London" vs
+        # "Docklands" is the same self-commute, and a search area of "London" against a
+        # destination "…, London" is a commute measured at city granularity, i.e. meaningless.
+        # Deliberately NOT bare substring containment, which would also reject a genuine
+        # short hop like Camden -> Camden Town.
+        def _parts(s):
+            s = str(s).strip().lower()
+            return {s} | {p.strip() for p in s.split(",") if p.strip()}
+
+        if _parts(area) & _parts(dest):
             return None
         return {"from_address": area, "to_address": dest}
     return None
@@ -1209,7 +1226,16 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
     executed_tools = {a.get("tool") for a in executed}
     # Requested-but-uncompleted dimensions, named explicitly (product bar): scan THIS turn's
     # message for dimension cues and, for each with no completed tool result, an honest line.
-    missing_lines = _missing_requested_dimension_lines(cm, executed_tools, lang)
+    #
+    # The set handed over is the tools that SUCCEEDED, not merely the ones that ran. A tool
+    # that was dispatched and returned success=False produced no result, so its dimension is
+    # still outstanding and must still be named — the docstring above always said "no completed
+    # tool result" and this is what that means. It matters more now that the HARNESS issues
+    # these fetches itself (_dimension_fanout_calls): a fetch that came back empty must fall
+    # back to the honest line, never become a silent claim (E11 invented "about 15-20 min"
+    # exactly where a dimension had no usable evidence).
+    satisfied_tools = {a.get("tool") for a in executed if a.get("success")}
+    missing_lines = _missing_requested_dimension_lines(cm, satisfied_tools, lang)
 
     recs = []
     for a in reversed(artifacts):
@@ -1651,6 +1677,61 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     names, len(resp.tool_calls), loop_turn)
         return names
 
+    def _executed_read_count(state) -> int:
+        """Reads that COMPLETED this turn. The completion sweep is gated on this being >0: its
+        job is to finish a retrieval turn, never to turn a zero-tool turn into one. PR #29
+        measured what the latter costs — forcing a plan hop improved p50 (7,306ms vs 7,402ms)
+        yet moved turns-under-bar from 26 DOWN to 21, because 12 fast zero-tool turns paid for
+        a hop they did not need."""
+        specs = _spec_map()
+
+        def _is_read(nm):
+            sp = specs.get(nm)
+            return bool(nm) and nm != "ask_user" and (
+                getattr(sp, "side_effect", "none") if sp else "none") != "write"
+
+        return sum(1 for a in (state.get("tool_artifacts") or [])
+                   if _is_executed(a) and _is_read(a.get("tool")))
+
+    def _completion_sweep_into_batch(state, resp, loop_turn, turn_start) -> list:
+        """Normal-path completion check. Returns the tool names attached to `resp` (empty =
+        nothing changed and the caller must fall through to the answer unchanged).
+
+        THREE gates, in cost order:
+          1. the turn already completed at least one READ (see _executed_read_count) — this is
+             the PR #29 guard, and it is why a greeting, a clarification, a refusal and a
+             statutory-arithmetic turn are all provably untouched;
+          2. budget remains: whole-turn elapsed must still be inside the SAME
+             `soft_wrap - min_batch` edge the wrap decision uses above, so this can never open
+             a batch execute_tools would refuse as a straddle, and the wrap/reserve arithmetic
+             that keeps the turn inside FC_TURN_CEILING_S is unchanged. The turn tool budget
+             must also have something left;
+          3. a dimension is genuinely unserved, un-attempted and derivable
+             (_dimension_fanout_calls, shared verbatim with the plan-time fan-out).
+
+        TERMINATION. _unserved_cued_dimensions keys on "has ANY artifact", and every branch of
+        execute_tools' plan loop appends one, so after one sweep every swept dimension has an
+        artifact and a second sweep finds nothing. A dimension whose fetch is ABANDONED at the
+        batch window is therefore not retried: it lands back here already attempted, the sweep
+        declines, and _missing_requested_dimension_lines (which keys on COMPLETED results)
+        names it honestly. Abandonment degrades to the apology, never to a claim.
+        """
+        if _executed_read_count(state) <= 0:
+            return []
+        elapsed_now = (time.monotonic() - turn_start) if turn_start else 0.0
+        if turn_start and elapsed_now > (_turn_soft_wrap_s() - _min_batch_s()):
+            return []
+        if float(state.get("turn_tool_budget_used_s", 0.0) or 0.0) >= _turn_tool_budget_s():
+            return []
+        cur_msg = ((state.get("extracted_context") or {}).get("current_message")
+                   or _current_message(state.get("user_query") or ""))
+        added = _fanout_into_batch(state, resp, list(getattr(resp, "tool_calls", None) or []),
+                                   cur_msg, loop_turn)
+        if added:
+            logger.info("fc_loop.dimension_completion_sweep added=%s elapsed_s=%.2f "
+                        "loop_turn=%d", added, elapsed_now, loop_turn)
+        return added
+
     async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
         if not messages:
@@ -1744,6 +1825,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                                or _current_message(state.get("user_query") or ""),
                                loop_turn)
             # Normal tool batch: append the assistant message; execute_tools reads it back.
+            return Command(update={
+                "messages": messages + [resp], "loop_turn": loop_turn,
+            }, goto="execute_tools")
+
+        # Plain text -> the model considers the turn answerable. LAST CHANCE to complete a
+        # dimension it dropped (HANDOFF §0 instance #12, part 2): if the message cues a
+        # dimension, nothing has attempted it, its args are derivable AND budget remains,
+        # FETCH it now instead of committing to an answer that either omits it (E1), promises
+        # it (E5) or invents it (E11). If any gate says no we fall through unchanged — the
+        # apology is the correct behaviour when the budget is genuinely exhausted, and it is
+        # what makes E1 partially acceptable today.
+        if _completion_sweep_into_batch(state, resp, loop_turn, turn_start):
             return Command(update={
                 "messages": messages + [resp], "loop_turn": loop_turn,
             }, goto="execute_tools")

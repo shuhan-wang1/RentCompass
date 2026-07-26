@@ -254,21 +254,39 @@ def test_fanout_uses_the_area_the_search_resolved_not_a_guess():
 
 
 def test_no_derivable_area_means_no_call_and_no_invented_location():
-    """No area anywhere in state -> the dimensions stay unfetched and the honest 'not done yet'
-    line stands. Guessing a location would be a fabrication with a source attached."""
-    provider = _provider()
+    """No area anywhere in state — not in the accumulated criteria, not in the model's args and
+    not in the search result's criteria echo -> the dimensions stay unfetched and the honest
+    'not done yet' lines stand. Guessing a location would be a fabrication with a source
+    attached to it, which is worse than the apology."""
+    provider = FakeProvider(_specs(), {"search_properties": FakeResult(True, {
+        "success": True, "status": "no_results", "recommendations": [], "partial": False})})
     chat = FakeChat([
         AIMessage(content="", tool_calls=[_tc("search_properties", {}, "c1")]),
         AIMessage(content="ok"),
     ])
     nodes = build_fc_nodes(provider, agent_llm=chat)
     state = _run(_drive(nodes, _state_for(E11_QUERY)))
-    assert _first_batch(state) == ["search_properties"]
+    assert _batches(state) == [["search_properties"]]
+    assert [c[0] for c in provider.calls] == ["search_properties"]
     assert agent_loop._missing_requested_dimension_lines(
         E11_QUERY, {"search_properties"}, "en") == [
         "Safety has not been verified yet (crime data was not retrieved).",
         "Commute time has not been calculated yet.",
         "Nearby amenities have not been looked up yet."]
+
+
+def test_a_completed_search_makes_the_area_derivable_for_a_later_hop():
+    """The counterpart: once search_properties has ECHOED its resolved criteria, the area is
+    derivable from evidence and the dimensions become fetchable even though the model's own
+    args carried nothing. That echo is the tool's own resolution, not a guess."""
+    st = _state_for(E11_QUERY)
+    st["tool_artifacts"] = [{"turn": 0, "tool": "search_properties", "success": True,
+                             "params_digest": "d0", "raw_data": {
+                                 "search_criteria": {"area": "Stratford",
+                                                     "commute_destination": "Canary Wharf"}}}]
+    ctx = agent_loop._dimension_location_context(st, [])
+    assert ctx == {"area": "Stratford", "commute_destination": "Canary Wharf",
+                   "no_commute": False}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -461,3 +479,294 @@ def test_canonical_tool_is_the_first_of_the_satisfying_tuple():
     for dim, _cues, tools, _zh, _en in agent_loop._DIMENSION_CUES:
         assert agent_loop._canonical_dimension_tool(dim) == tools[0]
     assert agent_loop._canonical_dimension_tool("no_such_dimension") is None
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 5. Normal-path completion check: fetch before committing to an answer
+# ═══════════════════════════════════════════════════════════════════
+#
+# The plan-time fan-out above catches the case where the model opens a batch. The sweep below
+# is the safety net for the other shape — the model runs ONE tool, then answers in prose with
+# a dimension still unfetched. That is E11's fabrication shape (world-knowledge minutes) and
+# E5's promise shape. The sweep fetches instead of apologising WHEN BUDGET REMAINS; when it
+# does not, the apology stands, because the apology is honest and is what makes E1 partially
+# acceptable today.
+
+import time  # noqa: E402
+
+
+def _answered_search_state(query, **over):
+    """A turn that already completed search_properties and is about to answer in prose —
+    E11's actual shape at the moment it invented "about 15-20 min to Canary Wharf"."""
+    st = _state_for(query, accumulated_search_criteria={
+        "area": "Stratford", "commute_destination": "Canary Wharf"}, **over)
+    st["tool_artifacts"] = [{"turn": 0, "tool": "search_properties", "params_digest": "d0",
+                             "success": True, "raw_data": {
+                                 "success": True, "status": "no_results",
+                                 "recommendations": [], "partial": False,
+                                 "search_criteria": {"area": "Stratford",
+                                                     "commute_destination": "Canary Wharf"}}}]
+    st["messages"] = [AIMessage(content="", tool_calls=[
+        _tc("search_properties", {"area": "Stratford"}, "c1")])]
+    st["loop_turn"] = 1
+    return st
+
+
+def _agent_once(nodes, state):
+    import asyncio
+    cmd = asyncio.run(nodes["agent"](state))
+    state.update(cmd.update or {})
+    return cmd, state
+
+
+def test_sweep_fetches_the_dropped_dimensions_instead_of_answering_without_them():
+    """THE part-2 regression. On the old code this returns goto='critic' with the model's
+    fabricated prose as final_response; now it routes to execute_tools with the two missing
+    reads attached to the very message that tried to end the turn."""
+    provider = _provider()
+    chat = FakeChat([AIMessage(content="Commute is about 15-20 min to Canary Wharf.")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    st = _answered_search_state(E11_QUERY, turn_start_monotonic=time.monotonic() - 3.0)
+
+    cmd, st = _agent_once(nodes, st)
+
+    assert cmd.goto == "execute_tools", (
+        f"the turn committed to an answer with dimensions unfetched (goto={cmd.goto})")
+    added = [tc["name"] for tc in st["messages"][-1].tool_calls]
+    assert sorted(added) == ["calculate_commute", "check_safety", "search_nearby_pois"]
+    # the model's provisional prose is preserved on the SAME assistant message, so the
+    # transcript stays one legal assistant row (content + tool_calls), not two in a row.
+    assert st["messages"][-1].content.startswith("Commute is about 15-20 min")
+    assert "final_response" not in (cmd.update or {})
+
+
+class _SlowChat(FakeChat):
+    """A FakeChat whose ainvoke really takes `delay` seconds, so wall-clock crosses the budget
+    edge DURING the LLM call — the only way the sweep's own budget gate can bind (the wrap-edge
+    check upstream is evaluated before the call, on the same edge)."""
+
+    def __init__(self, scripted, delay):
+        super().__init__(scripted)
+        self._delay = delay
+
+    async def ainvoke(self, messages):
+        import asyncio
+        await asyncio.sleep(self._delay)
+        return self._scripted.pop(0)
+
+
+def test_sweep_does_not_fire_when_the_soft_wrap_budget_ran_out_during_the_llm_call(monkeypatch):
+    """Budget is real, and it is re-read AFTER the call. `soft_wrap - min_batch` is the SAME
+    edge the wrap decision uses, so the sweep can never open a batch execute_tools would refuse
+    as a straddle. Here the edge is 1.0s (3.0 - 2.0), the turn is 0.5s in at entry and the LLM
+    burns 0.8s — so the sweep must decline and the honest lines are what the user gets."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "3.0")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    provider = _provider()
+    chat = _SlowChat([AIMessage(content="Partial answer.")], delay=0.8)
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    st = _answered_search_state(E11_QUERY, turn_start_monotonic=time.monotonic() - 0.5)
+
+    cmd, st = _agent_once(nodes, st)
+
+    assert cmd.goto == "critic", "a batch was opened with less than FC_MIN_BATCH_S of runway"
+    assert st["final_response"] == "Partial answer."
+    assert provider.calls == []
+
+
+def test_sweep_does_fire_when_the_same_call_leaves_runway(monkeypatch):
+    """Control for the test above: identical setup, a faster LLM call. Only the elapsed clock
+    differs, so it is the budget gate that binds and nothing else."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "3.0")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "2.0")
+    provider = _provider()
+    chat = _SlowChat([AIMessage(content="Partial answer.")], delay=0.05)
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    st = _answered_search_state(E11_QUERY, turn_start_monotonic=time.monotonic() - 0.5)
+
+    cmd, st = _agent_once(nodes, st)
+    assert cmd.goto == "execute_tools"
+
+
+def test_sweep_does_not_fire_when_the_turn_tool_budget_is_spent():
+    provider = _provider()
+    chat = FakeChat([AIMessage(content="Partial answer.")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    st = _answered_search_state(E11_QUERY, turn_start_monotonic=time.monotonic() - 2.0,
+                                turn_tool_budget_used_s=40.0)
+
+    cmd, st = _agent_once(nodes, st)
+    assert cmd.goto == "critic" and provider.calls == []
+
+
+def test_sweep_never_fires_on_a_zero_tool_turn():
+    """PR #29's exact regression. A turn that executed no read is not a retrieval turn the
+    sweep may complete — it is a greeting, a clarification, a refusal or a statutory answer,
+    and those 12 fast turns are what a mandatory hop cost last time."""
+    provider = _provider()
+    chat = FakeChat([AIMessage(content="Which area are you looking at?")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    st = _state_for(E11_QUERY, accumulated_search_criteria={
+        "area": "Stratford", "commute_destination": "Canary Wharf"},
+        turn_start_monotonic=time.monotonic())
+    st["messages"] = [AIMessage(content="")]  # non-empty so _build_messages is skipped
+
+    cmd, st = _agent_once(nodes, st)
+    assert cmd.goto == "critic"
+    assert st["final_response"] == "Which area are you looking at?"
+    assert provider.calls == []
+
+
+def test_sweep_never_fires_when_only_a_write_executed():
+    """A `remember` is not a read. Completing a memory-write turn is not this sweep's job."""
+    provider = FakeProvider(_specs(["remember", "check_safety"], remember={"side_effect": "write"}))
+    chat = FakeChat([AIMessage(content="Saved.")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    st = _state_for("记住我很在意治安", accumulated_search_criteria={"area": "Stratford"},
+                    turn_start_monotonic=time.monotonic())
+    st["tool_artifacts"] = [{"turn": 0, "tool": "remember", "params_digest": "d0",
+                             "success": True, "raw_data": {"saved": True}}]
+    st["messages"] = [AIMessage(content="")]
+
+    cmd, st = _agent_once(nodes, st)
+    assert cmd.goto == "critic" and provider.calls == []
+
+
+def test_sweep_runs_at_most_once_so_an_abandoned_fetch_is_never_retried():
+    """Termination, and the required degradation. The first sweep leaves an artifact for every
+    dimension it swept WHATEVER the outcome, so a second entry declines — an abandoned fetch
+    (unkillable thread, result discarded) is not retried until the ceiling. It becomes the
+    honest apology instead."""
+    provider = _provider()
+    chat = FakeChat([AIMessage(content="Answering now.")])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    st = _answered_search_state(E11_QUERY, turn_start_monotonic=time.monotonic() - 2.0)
+    # every dimension already ATTEMPTED and abandoned at the batch window
+    for t in ("check_safety", "calculate_commute", "search_nearby_pois"):
+        st["tool_artifacts"].append({
+            "turn": 1, "tool": t, "params_digest": f"d_{t}", "success": False,
+            "raw_data": None, "error": "abandoned after 20s (batch budget); result discarded",
+            "timed_out": True, "abandoned": True, "outcome_unknown": True})
+
+    cmd, st = _agent_once(nodes, st)
+    assert cmd.goto == "critic", "an abandoned dimension must not be re-fetched"
+    assert provider.calls == []
+    # ...and the degraded builder still names all three, because it keys on COMPLETED results
+    ans = agent_loop._artifact_grounded_fallback_answer(st, reason="time_budget")
+    for line in ("Safety has not been verified yet", "Commute time has not been calculated yet",
+                 "Nearby amenities have not been looked up yet"):
+        assert line in ans, line
+
+
+def test_a_fetched_but_failed_dimension_is_still_named_as_outstanding():
+    """"Do not let a fetched-but-empty dimension become a claim." A dispatched tool that came
+    back success=False produced no result, so the dimension is still outstanding and the honest
+    line must still appear. On the old code the tool merely having RUN silenced the line."""
+    st = _state_for(E11_QUERY)
+    st["tool_artifacts"] = [
+        {"turn": 0, "tool": "search_properties", "success": True, "params_digest": "d0",
+         "raw_data": {"success": True, "status": "no_results", "recommendations": [],
+                      "partial": False}},
+        # dispatched, returned, FAILED — not timed_out, so _is_executed() is True
+        {"turn": 1, "tool": "check_safety", "success": False, "params_digest": "d1",
+         "raw_data": None, "error": "police.uk returned 503"},
+    ]
+    ans = agent_loop._artifact_grounded_fallback_answer(st, reason="time_budget")
+    assert "Safety has not been verified yet" in ans, (
+        "a check_safety that FAILED left the dimension unverified; the answer must say so")
+
+
+def test_sweep_and_plan_time_fanout_share_one_implementation():
+    """Source guard: there is ONE place that decides which reads to add. The sweep must not
+    grow its own copy of the gates (that is how the two paths start disagreeing)."""
+    src = _module_source()
+    assert src.count("def _dimension_fanout_calls") == 1
+    assert src.count("_dimension_fanout_calls(") == 2  # the def + the one call in _fanout_into_batch
+    assert src.count("_fanout_into_batch(") == 3       # def + plan-time hook + sweep
+
+
+def test_a_self_to_self_commute_is_never_built():
+    """Found in the retained data, not imagined. F12's search echo has area AND `destination`
+    both "Docklands, London" (search_properties uses `destination` as a synonym for the search
+    area; F12's real target, Canary Wharf, was stated in an earlier turn). Building a commute
+    from that echo produces a journey from a place to itself, whose "0 minutes" is a SOURCED
+    number answering a different question."""
+    st = _state_for("How long is the commute from there to Canary Wharf?")
+    st["tool_artifacts"] = [{"turn": 0, "tool": "search_properties", "success": True,
+                             "params_digest": "d0", "raw_data": {"search_criteria": {
+                                 "area": "Docklands, London",
+                                 "areas": ["Docklands, London"],
+                                 "commute_destination": None,
+                                 "destination": "Docklands, London",
+                                 "no_commute": False}}}]
+    ctx = agent_loop._dimension_location_context(st, [])
+    assert ctx["commute_destination"] is None, (
+        "the echo's `destination` is the search AREA, not a commute target")
+    # and even if a destination did arrive, the same-place test blocks the degenerate journey
+    assert agent_loop._dimension_read_args(
+        "commute", {"area": "Docklands, London",
+                    "commute_destination": "Docklands", "no_commute": False}, "x") is None
+    # a search area of the whole city against a destination inside it is a city-granularity
+    # commute — E5 of the round of record, area "London", dest "…, South Kensington, London"
+    assert agent_loop._dimension_read_args(
+        "commute", {"area": "London",
+                    "commute_destination": "Imperial College London, South Kensington, London",
+                    "no_commute": False}, "x") is None
+    # but a genuine short hop between two named places is NOT suppressed
+    assert agent_loop._dimension_read_args(
+        "commute", {"area": "Camden", "commute_destination": "Camden Town",
+                    "no_commute": False}, "x") == {"from_address": "Camden",
+                                                   "to_address": "Camden Town"}
+    assert agent_loop._dimension_read_args(
+        "commute", {"area": "Stratford", "commute_destination": "Canary Wharf",
+                    "no_commute": False}, "x") == {"from_address": "Stratford",
+                                                   "to_address": "Canary Wharf"}
+
+
+def test_a_fanned_out_straggler_is_abandoned_and_becomes_the_apology(monkeypatch):
+    """END TO END, not hand-built artifacts. A harness-added read that overruns the batch window
+    is ABANDONED (unkillable thread, result DISCARDED), and the dimension must land in the
+    honest 'not done yet' line — never as a claim, and never as a retry.
+
+    The window binds all four dispatches here (per-tool timeouts are 25s/30s vs a 0.4s window),
+    so the straggler is attributed as a BATCH abandon rather than a per-call timeout — the
+    distinction the artifact records and the next optimisation depends on."""
+    import asyncio
+
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.4")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
+
+    class _Straggler(FakeProvider):
+        async def execute_tool(self, name, **params):
+            self.calls.append((name, params))
+            if name == "search_nearby_pois":
+                await asyncio.sleep(5.0)          # overruns the 0.4s window
+            return self._results.get(name) or FakeResult(True, {"ok": name})
+
+    provider = _Straggler(_specs(), _provider()._results)
+    chat = FakeChat([
+        AIMessage(content="", tool_calls=[_tc("search_properties", {"area": "Stratford"}, "c1")]),
+        AIMessage(content="Here is what completed."),
+    ])
+    nodes = build_fc_nodes(provider, agent_llm=chat)
+    state = _run(_drive(nodes, _state_for(E11_QUERY, accumulated_search_criteria={
+        "area": "Stratford", "commute_destination": "Canary Wharf"})))
+
+    # all four were dispatched in ONE batch...
+    assert sorted(_first_batch(state)) == sorted(_ALL_DIMENSION_TOOLS)
+    pois = [a for a in state["tool_artifacts"] if a["tool"] == "search_nearby_pois"]
+    assert len(pois) == 1
+    a = pois[0]
+    # ...and the straggler is an ABANDON: outcome UNKNOWN, not a clean failure, not executed.
+    assert a["abandoned"] is True and a["outcome_unknown"] is True and a["timed_out"] is True
+    assert a["raw_data"] is None and "batch budget" in a["error"]
+    assert agent_loop._is_executed(a) is False
+    # the fast siblings are NOT tarred with its kill
+    for t in ("check_safety", "calculate_commute"):
+        sib = [x for x in state["tool_artifacts"] if x["tool"] == t]
+        assert len(sib) == 1 and sib[0]["success"] is True and agent_loop._is_executed(sib[0])
+    # the abandoned dimension degrades to the APOLOGY, and the two that completed do not
+    ans = agent_loop._artifact_grounded_fallback_answer(state, reason="time_budget")
+    assert "Nearby amenities have not been looked up yet." in ans
+    assert "Safety has not been verified yet" not in ans
+    assert "Commute time has not been calculated yet" not in ans

@@ -118,3 +118,53 @@ def test_score_is_never_a_claim_of_certainty():
     from core.safety_reference import MIN_PLAUSIBLE_MONTHLY
     assert score_from_monthly_count(MIN_PLAUSIBLE_MONTHLY)[0] <= 99
     assert score_from_monthly_count(10 ** 9)[0] >= 1
+
+
+# --------------------------------------------------------------------------- #
+# 5. A transient API failure must not be frozen into the cache.               #
+# --------------------------------------------------------------------------- #
+
+def test_a_failed_crime_fetch_is_not_cached(monkeypatch):
+    """data.police.uk returns intermittent 500/502s. Caching the empty result froze "no
+    safety data" for a whole TTL: observed live on 2026-07-26, Hackney Central held an
+    `error` entry while Richmond, fetched seconds apart, cached fine. The next request must
+    simply retry."""
+    from core import maps_service
+
+    monkeypatch.setattr(maps_service, "get_from_cache", lambda k: None)
+    monkeypatch.setattr(maps_service, "_get_coordinates",
+                        lambda a: {"lat": 51.5, "lng": -0.05})
+
+    cached: list = []
+    monkeypatch.setattr(maps_service, "set_to_cache",
+                        lambda k, v: cached.append((k, v)))
+
+    class _Boom:
+        def raise_for_status(self): raise maps_service.requests.exceptions.RequestException("500")
+        def json(self): return []
+    monkeypatch.setattr(maps_service.requests, "get", lambda *a, **k: _Boom())
+
+    out = maps_service.get_crime_data_by_location("Hackney Central, London")
+    assert out.get("error"), "a total fetch failure must report an error"
+    assert cached == [], "a failure must NOT be written to the cache"
+
+
+def test_a_successful_crime_fetch_is_cached(monkeypatch):
+    """Guard the guard: the no-cache rule must apply to failures only."""
+    from core import maps_service
+
+    monkeypatch.setattr(maps_service, "get_from_cache", lambda k: None)
+    monkeypatch.setattr(maps_service, "_get_coordinates",
+                        lambda a: {"lat": 51.5, "lng": -0.05})
+    cached: list = []
+    monkeypatch.setattr(maps_service, "set_to_cache", lambda k, v: cached.append((k, v)))
+
+    class _Ok:
+        def raise_for_status(self): return None
+        def json(self): return [{"category": "violent-crime", "month": "2026-05"}] * 400
+    monkeypatch.setattr(maps_service.requests, "get", lambda *a, **k: _Ok())
+
+    out = maps_service.get_crime_data_by_location("Richmond, London")
+    assert not out.get("error")
+    assert out["crimes_per_month"] > 0
+    assert len(cached) == 1, "a successful fetch must still be cached"

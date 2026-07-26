@@ -3,6 +3,125 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+# --------------------------------------------------------------------------- #
+# Retired provider model names — the SINGLE SOURCE OF TRUTH.                   #
+# --------------------------------------------------------------------------- #
+# DeepSeek retired these on 2026-07-24. They now return HTTP 400 ("The supported API
+# model names are deepseek-v4-pro or deepseek-v4-flash") at REQUEST time, which /health
+# cannot see: on 2026-07-24 a stale ``DEEPSEEK_MODEL=deepseek-chat`` in the deployment env
+# overrode three correct source defaults and both pools served 400s for a full day without
+# a single alarm.
+#
+# NEVER REMOVE AN ENTRY. A name that was retired once is never valid again; the only cost
+# of keeping it is one string comparison per model construction.
+#
+# ``tests/test_model_name_defaults.py`` IMPORTS this set rather than restating it. A copy
+# in the test is a copy that can drift, and a drifted copy is how this class of bug stays
+# invisible.
+RETIRED_MODEL_NAMES: frozenset[str] = frozenset({"deepseek-chat", "deepseek-reasoner"})
+
+# What to use instead, per retired name — the error message has to be ACTIONABLE, and
+# "that name is dead" without a successor just moves the outage to the next guess. The two
+# legacy aliases were the non-thinking / thinking modes of ONE model; v4-flash carries both
+# via ``extra_body {"thinking": {"type": ...}}`` (see ``create()``), so both map to it.
+RETIRED_MODEL_SUCCESSORS: dict[str, str] = {
+    "deepseek-chat": "deepseek-v4-flash",
+    "deepseek-reasoner": "deepseek-v4-flash",
+}
+
+# Env vars that can put a model name in front of the provider. Used only to name the
+# offending variable in the error: the guard checks the RESOLVED value, so a name arriving
+# by a route not listed here is still refused — it is just reported without a variable.
+MODEL_ENV_VARS: tuple[str, ...] = (
+    "DEEPSEEK_MODEL", "DEEPSEEK_CHAT_MODEL", "DEEPSEEK_REASONER_MODEL",
+    "DEEPSEEK_PRO_MODEL", "OLLAMA_MODEL",
+)
+
+
+class RetiredModelError(ValueError):
+    """A known-dead model name was about to be handed to the provider.
+
+    Subclasses ``ValueError`` so existing ``except ValueError`` handlers keep working,
+    while a caller that genuinely wants to special-case this can.
+    """
+
+
+def _normalise_model_name(name: str | None) -> str:
+    """Compare the way the provider does, minus transport damage.
+
+    A value that reaches us as ``'"deepseek-chat"'`` (docker-compose list-form env keeps
+    the quotes that python-dotenv would have stripped) or with stray whitespace is exactly
+    as dead as the bare name; matching only the bare form would let the worst-formatted
+    deployment through the guard.
+    """
+    return (name or "").strip().strip("\"'").strip().lower()
+
+
+def is_retired_model_name(name: str | None) -> bool:
+    """True if ``name`` is a model the provider has retired, however it is formatted.
+
+    The one place that answers this question. The runtime guard below and the
+    ``*.env.example`` scan in tests/test_model_name_defaults.py both call it, so the file
+    a human copies by hand and the value the process refuses cannot disagree about what
+    counts as dead.
+    """
+    return _normalise_model_name(name) in RETIRED_MODEL_NAMES
+
+
+def retired_model_env_vars() -> dict[str, str]:
+    """Every model env var in THIS process whose value is a retired name.
+
+    Read at failure time rather than remembered at import time, so the message names the
+    variable an operator actually has to change.
+    """
+    return {var: os.environ[var] for var in MODEL_ENV_VARS
+            if var in os.environ and is_retired_model_name(os.environ[var])}
+
+
+def reject_retired_model_names(site: str, **models: str | None) -> None:
+    """Refuse a retired model name BEFORE it can reach the provider.
+
+    ``site`` names the code path for the log; each keyword is ``label=resolved_value``.
+    Raises :class:`RetiredModelError` naming the env var, the dead value and the
+    successor. A no-op when every value is live, so it is safe to call on every
+    construction — and it is called on every construction precisely because a guard that
+    runs only at startup is a guard that a later ``monkeypatch``/reload walks around.
+    """
+    dead = {label: value for label, value in models.items()
+            if is_retired_model_name(value)}
+    if not dead:
+        return
+
+    def _successor(value: str | None) -> str:
+        return RETIRED_MODEL_SUCCESSORS.get(_normalise_model_name(value), "deepseek-v4-flash")
+
+    lines = [f"{site}: refusing a retired provider model name."]
+    for label, value in sorted(dead.items()):
+        lines.append(
+            f"  {label} = {value!r} was RETIRED by DeepSeek on 2026-07-24 and now returns "
+            f"HTTP 400 at request time — a failure /health cannot see. "
+            f"Use {_successor(value)!r} instead.")
+    env_hits = retired_model_env_vars()
+    if env_hits:
+        for var, value in sorted(env_hits.items()):
+            # Deliberately lists WHERE to look, not which file is currently guilty: a
+            # message that names today's offender goes stale the moment it is fixed, and a
+            # stale pointer in an outage message costs more than no pointer. The tracked
+            # *.env.example files are excluded from the list because a test now keeps them
+            # clean (tests/test_model_name_defaults.py); everything below is untracked
+            # deployment state that no test can see.
+            lines.append(
+                f"  Source: environment variable {var}={value!r}. Set {var}="
+                f"{_successor(value)} — it will be coming from app/.env, the repo-root "
+                f".env, a docker-compose environment:/env_file entry, or the shell that "
+                f"launched this process.")
+    else:
+        lines.append(
+            f"  No variable in {', '.join(MODEL_ENV_VARS)} holds that value in this "
+            f"process, so it came from a source default or a direct assignment — fix it "
+            f"at the assignment.")
+    raise RetiredModelError("\n".join(lines))
+
 
 @dataclass(frozen=True)
 class ModelRoute:
@@ -24,6 +143,14 @@ class ModelRouter:
         self.chat_model = os.getenv("DEEPSEEK_CHAT_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"))
         self.reasoner_model = os.getenv("DEEPSEEK_REASONER_MODEL", "deepseek-v4-flash")
         self.pro_model = os.getenv("DEEPSEEK_PRO_MODEL", "deepseek-v4-pro")
+        # PR #13 fixed the source-side DEFAULTS; an explicit env value still sailed
+        # straight through to the provider, which is the failure that actually happened.
+        # Refuse at CONSTRUCTION rather than at first request: the router is built during
+        # app startup (app.py's observer warm-up, and every get_*_llm factory), so a bad
+        # env is loud in the boot log instead of surfacing as a 400 on a user's turn.
+        reject_retired_model_names(
+            "ModelRouter", chat_model=self.chat_model,
+            reasoner_model=self.reasoner_model, pro_model=self.pro_model)
 
     def route(self, purpose: str, *, complex_task: bool = False, low_latency: bool = False) -> ModelRoute:
         if purpose in {"intent", "classification"}:
@@ -45,6 +172,10 @@ class ModelRouter:
         from langchain_openai import ChatOpenAI
 
         route = self.route(purpose, **route_kwargs)
+        # Second check, at the actual client-construction boundary. Not redundant:
+        # `route()` is monkeypatched by the eval configs (`model_router_override`), and a
+        # subclass or a patched route table can hand back a name __init__ never saw.
+        reject_retired_model_names(f"ModelRouter.create({purpose!r})", model=route.model)
         model = ChatOpenAI(
             model=route.model,
             api_key=os.getenv("DEEPSEEK_API_KEY", ""),

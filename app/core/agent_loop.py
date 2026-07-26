@@ -55,7 +55,14 @@ from core.langgraph_agent import (
     _format_commute_cost,
     _FAIR_HOUSING_REFUSAL_EN,
     _FAIR_HOUSING_REFUSAL_ZH,
+    # Refinement-in-place: the narrowing detector's input, its payload builder and its
+    # formatter are shared verbatim with the legacy engine so the two architectures
+    # cannot answer the same follow-up differently.
+    _refinable_previous_results,
+    build_refinement_raw_data,
+    format_refinement_output,
 )
+from core import refine_results
 from uk_rent_agent.agent.guardrails import sanitize_untrusted
 
 logger = logging.getLogger(__name__)
@@ -1125,6 +1132,39 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                        "the area you'd like to live in, or where you commute to and we'll start.")
             return Command(update={"final_response": msg, "response_type": "answer"},
                            goto="format_output_fc")
+        # 3) Refinement-in-place — a follow-up that NARROWS the listings already on screen
+        #    ("drop anything over £2000, then sort the rest by distance to the tube") is a
+        #    filter/sort over records we still hold, not a new search.
+        #
+        #    WHY HERE, and not at dispatch. The obvious alternative is to intercept the
+        #    model's search_properties tool call inside execute_tools and substitute a
+        #    refined result. That is strictly worse on every axis that matters: it has
+        #    already paid a bound-tools LLM call before it can fire, it only triggers when
+        #    the model happens to ask for the tool we want to suppress (the model choosing
+        #    NOT to call it is the other half of the reported defect — the turn then answers
+        #    in prose and the panel is never repainted at all), and it would put a second
+        #    "should this call run?" decision next to the tool_policy read-gate, which is a
+        #    genuinely separate concern. Deciding BEFORE the loop starts is deterministic,
+        #    costs zero LLM calls, and leaves the dispatch path untouched.
+        #
+        #    Placed after the fair-housing refusal (which must never be bypassed) and after
+        #    the greeting fast path, and it mirrors both: a deterministic short-circuit to
+        #    format_output_fc. Strict by construction — plan_refinement returns None for a
+        #    widening, a changed area, an unsupported sort on its own, a no-op, or a filter
+        #    that would empty the panel, so all of those still reach the model and can still
+        #    run a real search.
+        _refine_pool = apply_preference_filter(
+            _refinable_previous_results(ec), state.get("user_preferences") or {})
+        if _refine_pool:
+            _refine_plan = refine_results.plan_refinement(cm, _refine_pool)
+            if _refine_plan is not None:
+                _spec, _kept = _refine_plan
+                return Command(update={
+                    "tool_raw_data": build_refinement_raw_data(_refine_pool, _spec, _kept),
+                    # External listing text rides into the response; keep the turn tainted
+                    # so the memory write-gate treats it as it would any tool-derived text.
+                    "context_tainted": True,
+                }, goto="format_output_fc")
         # Turn-wide deadline anchor (deliverable 1): capture t0 at the entry node so the whole
         # turn (LLM + tools) is measured, not just tool time. Threaded through state so the
         # agent + execute_tools nodes can compute elapsed and enforce the soft wrap / deadline.
@@ -2057,6 +2097,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 if a.get("tool") == tool_name and _is_executed(a):
                     return a
             return None
+
+        # Refinement-in-place (guard short-circuit). No tool ran and no LLM ran, so there
+        # are no artifacts to scan — the payload arrives on tool_raw_data. Checked FIRST:
+        # a refinement is this turn's answer and must not be shadowed by an artifact from
+        # an earlier one. format_refinement_output is shared with the legacy formatter, so
+        # both architectures emit byte-identical text and the same panel payload.
+        refine_raw = state.get("tool_raw_data")
+        if (isinstance(refine_raw, dict) and refine_raw.get("refinement")
+                and refine_raw.get("recommendations")):
+            ec = state.get("extracted_context") or {}
+            response, tool_data = format_refinement_output(
+                refine_raw, prefs, acc,
+                _reply_language_from_ctx(
+                    ec, ec.get("current_message") or _current_message(
+                        state.get("user_query") or "")))
+            return {"final_response": _sanitize_final_response(response),
+                    "response_type": "search", "tool_data": tool_data}
 
         # ask_user (contract A / §2.5a): clarification payload + deterministic known_criteria.
         ask = _last("ask_user")

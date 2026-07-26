@@ -363,6 +363,11 @@ def find_nearby_places(address: str, amenities_of_interest: list[str], radius: i
     return poi_summary
 
 
+# crimes-street returns ~1-2k rows per month per point, so each extra month costs real
+# seconds. Three is enough to establish a rate and to see a trend.
+MONTHS_OF_CRIME_DATA = 3
+
+
 def get_crime_data_by_location(address: str) -> dict | None:
     """Get crime data from UK Police API with trend analysis"""
     cache_key = create_cache_key('get_crime_data_by_location', address)
@@ -380,15 +385,22 @@ def get_crime_data_by_location(address: str) -> dict | None:
     
     print(f"     [OK] Coordinates: {location['lat']}, {location['lng']}")
 
+    # ENDPOINT, not a detail. `crimes-at-location` returns crimes at ONE pre-defined street
+    # anchor -- it answers "what happened at this exact spot". Using it to describe an area
+    # under-reports by roughly three orders of magnitude: it gave Hackney Central 9 crimes in
+    # six months, which the old scoring turned into "96/100, very safe", while
+    # `crimes-street/all-crime` returns 1,657 for ONE month at the same coordinates.
+    # `crimes-street/all-crime` covers the ~1 mile radius that people mean by "around here".
     base_date = datetime.now().replace(day=1) - pd.DateOffset(months=2)
-    dates_to_fetch = [(base_date - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(6)]
-    
+    dates_to_fetch = [(base_date - pd.DateOffset(months=i)).strftime('%Y-%m') for i in range(MONTHS_OF_CRIME_DATA)]
+
     all_crimes = []
     for date_str in dates_to_fetch:
-        api_url = f"https://data.police.uk/api/crimes-at-location?date={date_str}&lat={location['lat']}&lng={location['lng']}"
+        api_url = (f"https://data.police.uk/api/crimes-street/all-crime"
+                   f"?date={date_str}&lat={location['lat']}&lng={location['lng']}")
         try:
             print(f"     -> Fetching {date_str}...")
-            response = requests.get(api_url, timeout=5)
+            response = requests.get(api_url, timeout=15)
             response.raise_for_status()
             crimes = response.json()
             
@@ -432,8 +444,15 @@ def get_crime_data_by_location(address: str) -> dict | None:
 
     category_counts = Counter(crime['category'].replace('-', ' ').title() for crime in all_crimes)
     
+    months_seen = len(sorted_months) or 1
     summary = {
+        # total_crimes_6m is kept under its historical name for callers, but it is now the
+        # total over MONTHS_OF_CRIME_DATA months of RADIUS data, not six months of
+        # single-anchor data. months_covered says which, so nothing has to guess.
         "total_crimes_6m": len(all_crimes),
+        "months_covered": months_seen,
+        "crimes_per_month": round(len(all_crimes) / months_seen, 1),
+        "radius_miles": 1.0,
         "most_recent_month_count": counts[-1] if counts else 0,
         "crime_trend": crime_trend,
         "data_months": sorted_months,

@@ -209,11 +209,34 @@ def test_an_unreadable_price_is_kept_not_silently_dropped():
     assert "Tavistock Court" in _names(kept)
 
 
-def test_describe_refinement_is_plain_and_countable():
+def test_summary_is_countable_and_admits_what_it_could_not_do():
     spec, kept = rr.plan_refinement(TURN2, _six())
-    text = rr.describe_refinement(spec, 6, len(kept))
-    assert "3 removed" in text and "3 remain" in text
-    assert "£2000" in text
+    text = rr.summarize_refinement(spec, _six(), kept, language="en")
+    assert "without running a new search" in text
+    assert "at or under £2000/month" in text
+    assert "3 removed, 3 remain" in text
+    assert "£1700–£1950/month" in text          # the range of what actually survived
+    assert "distance to the tube" in text and "isn't in the listing data" in text
+    assert "on the right" in text
+
+
+def test_summary_is_localized():
+    spec, kept = rr.plan_refinement(TURN2, _six())
+    zh = rr.summarize_refinement(spec, _six(), kept, language="zh")
+    assert "未重新搜索" in zh
+    assert "剩余 3 套" in zh
+    assert "无法按" in zh                        # the same honesty clause, in Chinese
+    assert "见右侧" in zh
+    assert "removed" not in zh                  # no language mixing
+
+
+def test_summary_never_claims_a_sort_it_did_not_do():
+    # A supported sort IS claimed...
+    spec, kept = rr.plan_refinement("sort them by price", _six())
+    assert "re-sorted by price" in rr.summarize_refinement(spec, _six(), kept)
+    # ...and an unsupported one never is.
+    spec, kept = rr.plan_refinement(TURN2, _six())
+    assert "re-sorted" not in rr.summarize_refinement(spec, _six(), kept)
 
 
 # ── guards: these are NOT narrowings ─────────────────────────────────────────
@@ -292,9 +315,9 @@ def test_turn2_narrowing_routes_to_refinement_not_search(lga):
 
     assert decision["tool"] == lga.REFINE_TOOL_NAME
     assert decision["tool"] != "search_properties"
-    # A pre-resolved observation short-circuits straight to the answer generator, so no
-    # tool node — and therefore no scrape / embedding / FAISS pass — can run.
-    assert cmd.goto == "generate_response"
+    # Straight to the formatter: no execute_tool (so no scrape / embedding / FAISS) and no
+    # generate_response (so not even an answer-generation LLM call).
+    assert cmd.goto == "format_output"
     assert cmd.update.get("context_tainted") is True   # listing text stays untrusted
 
 
@@ -306,18 +329,12 @@ def test_turn2_carries_the_filtered_listings_for_the_panel(lga):
     assert raw["refinement"]["kept_count"] == 3
 
 
-def test_turn2_observation_matches_the_panel_and_flags_the_impossible_sort(lga):
+def test_turn2_carries_no_observation_because_nothing_is_generated(lga):
+    # The old design handed a pre-resolved observation to generate_response. The answer is
+    # now composed from the refined set itself, so there is no prompt and no LLM hop at all.
     cmd = _decide(lga, TURN2, _NoVoteLLM(), extra_ctx={"last_results_full": _six()})
-    obs = cmd.update["tool_observation"]
-    # The evidence surface names exactly the listings the panel will show...
-    for name in UNDER_2000:
-        assert name in obs
-    for dropped in ("Maple House", "Gower Mews", "Rosewood"):
-        assert dropped not in obs
-    # ...and tells the generator, in so many words, not to claim the tube ordering.
-    assert "NOT DONE" in obs
-    assert "distance to the tube" in obs
-    assert "No new search was run" in obs
+    assert "tool_observation" not in cmd.update
+    assert cmd.update["tool_raw_data"]["refinement"]["kept_count"] == 3
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -411,23 +428,27 @@ def test_format_output_hands_the_refined_set_back_to_the_frontend(lga):
     out = node({
         "tool_decision": {k: decision[k] for k in ("tool", "params", "reason")},
         "tool_raw_data": decision["raw_data"],
-        "final_response": "Only three of the six are at or under £2000.",
+        "final_response": "",
         "user_preferences": {},
         "accumulated_search_criteria": {"area": "London", "max_budget": 2000,
                                         "criteria_gate_shown": True},
+        "extracted_context": {"reply_language": "en"},
         "observations": [],
     })
     tool_data = out["tool_data"]
     assert _names(tool_data["recommendations"]) == UNDER_2000
-    # The prose the generator wrote is the answer; format_output must not overwrite it
-    # with a search card.
-    assert out["final_response"] == "Only three of the six are at or under £2000."
+    # The answer is composed here, from the same list that is going to the panel.
+    assert "3 removed, 3 remain" in out["final_response"]
+    for name in ("Maple House", "Gower Mews", "Rosewood"):
+        assert name not in out["final_response"]
     # The criteria panel mirrors the tightened budget instead of being reset by an
     # empty dict, and internal bookkeeping stays server-side.
     assert tool_data["search_criteria"]["max_budget"] == 2000
     assert tool_data["search_criteria"]["areas"] == ["London"]
     assert "criteria_gate_shown" not in tool_data["search_criteria"]
     assert tool_data["refinement"]["kept_count"] == 3
+    # The pre-refinement records are provenance for the formatter, not payload.
+    assert "previous" not in tool_data["refinement"]
 
 
 def test_app_feeds_the_full_shown_list_into_the_graph_context():
@@ -451,10 +472,10 @@ def test_app_feeds_the_full_shown_list_into_the_graph_context():
     assert "last_results_full" not in snap
 
 
-def test_prose_and_panel_see_the_same_preference_filtered_pool(lga):
-    """format_output re-applies apply_preference_filter to the refined set. If the
-    observation were built from an UNFILTERED pool the prose could name a listing the
-    panel then removes, so the pool is preference-filtered before it is narrowed."""
+def test_the_narrowed_pool_is_preference_filtered_before_it_is_counted(lga):
+    """format_refinement_output re-applies apply_preference_filter to the refined set, and
+    the summary reports counts from that same list. Narrowing an UNFILTERED pool would make
+    the "N remain" claim disagree with the panel beside it."""
     recs = _six()
     recs[0]["address"] = "Tavistock Court, Brent Cross, NW4"   # the one excluded area
     node = lga._make_decide_tool_node(_DummyRegistry(), _NoVoteLLM())
@@ -464,9 +485,13 @@ def test_prose_and_panel_see_the_same_preference_filtered_pool(lga):
         "accumulated_search_criteria": {},
         "user_preferences": {"excluded_areas": ["Brent Cross"]},
     })
-    kept = _names(cmd.update["tool_raw_data"]["recommendations"])
-    assert kept == ["Elm Court", "Kings Wharf"]
-    assert "Brent Cross" not in cmd.update["tool_observation"]
+    raw = cmd.update["tool_raw_data"]
+    assert _names(raw["recommendations"]) == ["Elm Court", "Kings Wharf"]
+    assert raw["refinement"]["previous_count"] == 5            # not 6: Brent Cross is gone
+    response, tool_data = lga.format_refinement_output(
+        raw, {"excluded_areas": ["Brent Cross"]}, {}, "en")
+    assert len(tool_data["recommendations"]) == 2
+    assert "3 removed, 2 remain" in response
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -495,18 +520,14 @@ class _SearchCountingRegistry:
 
 
 class _GenLLM:
-    """Answers from the observation it is handed (keeps the critic's grounding happy)."""
+    """Records every generation call. On a refinement there must be none."""
 
     def __init__(self):
         self.prompts = []
 
     async def ainvoke(self, messages):
         self.prompts.append(messages[0].content)
-        return types.SimpleNamespace(
-            content="Three of the six are at or under £2000: Tavistock Court "
-                    "(£1,950/month), Elm Court (£1,800/month) and Kings Wharf "
-                    "(£1,700/month). I cannot order them by distance to the tube — "
-                    "that is not in the listing data I have.")
+        return types.SimpleNamespace(content="generated prose")
 
 
 def test_end_to_end_narrowing_never_touches_the_search_tool(lga, monkeypatch):
@@ -532,13 +553,14 @@ def test_end_to_end_narrowing_never_touches_the_search_tool(lga, monkeypatch):
         state, config={"recursion_limit": lga.GRAPH_RECURSION_LIMIT}))
 
     assert registry.calls == [], f"no tool may execute, saw {registry.calls}"
-    # The panel payload the frontend will repaint from.
+    assert gen.prompts == [], "a refinement must not cost an answer-generation call"
+    # The panel payload the frontend will repaint from — this is what makes /api/alex
+    # return response_type == "search" and the panel repaint.
     assert _names(out["tool_data"]["recommendations"]) == UNDER_2000
-    # ...and /api/alex turns exactly this into response_type == "search".
-    assert out["tool_data"]["recommendations"]
-    # The generator reasoned over the refined evidence, not the original six.
-    assert "Maple House" not in gen.prompts[0]
-    assert "Tavistock Court" in gen.prompts[0]
+    # The answer describes exactly that set and nothing else.
+    assert "3 removed, 3 remain" in out["final_response"]
+    for dropped in ("Maple House", "Gower Mews", "Rosewood"):
+        assert dropped not in out["final_response"]
 
 
 def test_end_to_end_widening_still_reaches_the_search_tool(lga, monkeypatch):
@@ -569,3 +591,207 @@ def test_end_to_end_widening_still_reaches_the_search_tool(lga, monkeypatch):
         user_id="u", session_id="c")
     asyncio.run(graph.ainvoke(state, config={"recursion_limit": lga.GRAPH_RECURSION_LIMIT}))
     assert "search_properties" in registry.calls
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# §5  fc_loop — THE ARCH ACTUALLY SERVING PUBLIC TRAFFIC
+# ---------------------------------------------------------------------------
+# The public edge was cut over to fc_loop on 2026-07-26 (deploy/switch_pool.sh;
+# deploy/monitoring/rentcompass-monitor.sh now defaults MON_EXPECTED_PUBLIC_ARCH to
+# fc_loop). A fix that only lands in the legacy graph changes nothing for a real user,
+# so the interception is pinned on BOTH architectures — and pinned to produce the
+# IDENTICAL answer, because legacy is the rollback target and a rollback must not
+# change what the product says.
+# ═══════════════════════════════════════════════════════════════════════════
+@pytest.fixture(scope="module")
+def fc():
+    pytest.importorskip("langgraph")
+    import importlib
+    return importlib.import_module("core.agent_loop")
+
+
+class _FcSpec:
+    def __init__(self, name, side_effect="none", terminal=False):
+        self.name = name
+        self.description = "desc"
+        self.input_schema = {"type": "object", "properties": {}}
+        self.side_effect = side_effect
+        self.retry_safe = True
+        self.version = "1"
+        self.terminal = terminal
+
+
+class _FcProvider:
+    """Records every tool execution; search_properties raises, since reaching it at all
+    on a pure narrowing is the defect."""
+
+    def __init__(self):
+        self.calls = []
+
+    def list_specs(self):
+        return [_FcSpec("search_properties"), _FcSpec("check_safety")]
+
+    def get(self, name):
+        return _FcSpec(name)
+
+    async def execute_tool(self, name, **params):
+        self.calls.append(name)
+        if name == "search_properties":
+            raise AssertionError(
+                "search_properties must not run for a pure narrowing of the shown set")
+        from core.tool_system import ToolResult
+        return ToolResult(True, {"ok": True}, tool_name=name)
+
+
+class _FcNoCallChat:
+    """The bound-tools model. Any call at all fails: the interception is pre-loop, so the
+    turn must be answered without ever reaching the LLM."""
+
+    def bind_tools(self, tools, **kw):
+        return self
+
+    async def ainvoke(self, messages):
+        raise AssertionError("fc_loop must not make an LLM call for a pure narrowing")
+
+
+def _fc_state(msg, **over):
+    st = {
+        "user_query": msg,
+        "extracted_context": {"current_message": msg, "reply_language": "en",
+                              "last_results": _six(), "last_results_full": _six()},
+        "accumulated_search_criteria": {"area": "London", "max_budget": 2000},
+        "user_preferences": {"excluded_areas": []},
+        "session_id": "s1", "run_id": "r1", "loop_turn": 0,
+        "messages": [], "tool_artifacts": [], "context_tainted": False,
+        "final_response": "", "response_type": "answer",
+    }
+    st.update(over)
+    return st
+
+
+def _fc_drive(fc, provider, state, chat=None):
+    """guard -> ... -> format_output_fc, mirroring tests/test_fc_loop.py::_drive."""
+    nodes = fc.build_fc_nodes(provider, agent_llm=chat or _FcNoCallChat())
+
+    async def _go():
+        name = "guard"
+        while True:
+            res = nodes[name](state)
+            if asyncio.iscoroutine(res):
+                res = await res
+            state.update(res.update or {})
+            goto = res.goto
+            if goto in ("critic", "format_output_fc"):
+                state.update(nodes["format_output_fc"](state))
+                return state
+            name = goto
+
+    return asyncio.run(_go())
+
+
+def test_fc_turn2_is_answered_without_a_search_and_without_an_llm_call(fc):
+    provider = _FcProvider()
+    out = _fc_drive(fc, provider, _fc_state(TURN2))
+
+    assert provider.calls == [], f"no tool may execute, saw {provider.calls}"
+    # The panel payload — this is what /api/alex turns into a `search` response.
+    assert _names(out["tool_data"]["recommendations"]) == UNDER_2000
+    assert out["response_type"] == "search"
+    assert "3 removed, 3 remain" in out["final_response"]
+    assert "distance to the tube" in out["final_response"]
+    # Pre-loop: the bound-tools call never happened, so no batch was ever planned.
+    assert out.get("loop_turn", 0) == 0
+    assert out.get("tool_artifacts") == []
+
+
+def test_fc_and_legacy_answer_a_refinement_identically(fc, lga):
+    """Legacy is the rollback target. Rolling back must not change what the product says,
+    so both formatters go through the same shared helper over the same payload."""
+    fc_out = _fc_drive(_FcProvider() and fc, _FcProvider(), _fc_state(TURN2))
+
+    cmd = _decide(lga, TURN2, _NoVoteLLM(),
+                  extra_ctx={"last_results": _six(), "last_results_full": _six()},
+                  accumulated={"area": "London", "max_budget": 2000})
+    legacy_out = lga._make_format_output_node()({
+        "tool_decision": cmd.update["tool_decision"],
+        "tool_raw_data": cmd.update["tool_raw_data"],
+        "final_response": "",
+        "user_preferences": {},
+        "accumulated_search_criteria": {"area": "London", "max_budget": 2000},
+        "extracted_context": {"reply_language": "en"},
+        "observations": [],
+    })
+
+    assert fc_out["final_response"] == legacy_out["final_response"]
+    assert (_names(fc_out["tool_data"]["recommendations"])
+            == _names(legacy_out["tool_data"]["recommendations"]))
+    assert fc_out["tool_data"]["search_criteria"] == legacy_out["tool_data"]["search_criteria"]
+
+
+def test_fc_reply_language_follows_the_conversation(fc):
+    state = _fc_state("把超过2000的去掉")
+    state["extracted_context"]["reply_language"] = "zh"
+    out = _fc_drive(fc, _FcProvider(), state)
+    assert "剩余 3 套" in out["final_response"]
+    assert "removed" not in out["final_response"]
+
+
+def test_fc_guard_order_fair_housing_still_wins(fc):
+    """The refinement check sits AFTER the fair-housing refusal; a discriminatory message
+    that also happens to carry a price cap must still be refused, not quietly filtered."""
+    msg = "drop anything over £2000 and avoid areas with too many immigrants"
+    out = _fc_drive(fc, _FcProvider(), _fc_state(msg))
+    assert out["response_type"] == "clarification"
+    assert "tool_data" in out and not out["tool_data"].get("recommendations")
+
+
+@pytest.mark.parametrize("msg", [
+    "actually raise the budget to £3000",   # widening
+    "find me something in Manchester",      # new search + changed area
+    "which of these is the cheapest?",      # a question about the set
+])
+def test_fc_non_refinements_still_reach_the_model(fc, msg):
+    """The guard must not swallow anything that genuinely needs the loop. The model stub
+    here answers in plain text, so reaching it is the assertion."""
+    class _Chat:
+        def __init__(self):
+            self.calls = 0
+
+        def bind_tools(self, tools, **kw):
+            return self
+
+        async def ainvoke(self, messages):
+            self.calls += 1
+            from langchain_core.messages import AIMessage
+            return AIMessage(content="reached the model")
+
+    chat = _Chat()
+    out = _fc_drive(fc, _FcProvider(), _fc_state(msg), chat=chat)
+    assert chat.calls == 1, msg
+    assert not out["tool_data"].get("recommendations")
+
+
+def test_fc_uses_the_full_shown_list_not_the_six_row_digest(fc):
+    full = _six() + [
+        {"name": "Seventh Place", "address": "Seventh Place, Bloomsbury",
+         "price": "£1,600/month", "travel_time": "20 min to KCL", "bedrooms": 1,
+         "area": "Bloomsbury", "property_type": "Flat"},
+    ]
+    state = _fc_state("under £2000")
+    state["extracted_context"]["last_results_full"] = full
+    out = _fc_drive(fc, _FcProvider(), state)
+    assert "Seventh Place" in _names(out["tool_data"]["recommendations"])
+
+
+def test_fc_dispatch_path_is_untouched(fc):
+    """The interception is pre-loop by design, so it adds no second 'should this call run?'
+    decision next to the dispatch-time gates in execute_tools."""
+    import inspect
+    src = inspect.getsource(fc.build_fc_nodes)
+    guard_src = src[src.index("def guard_node"):src.index("async def _resolve_pending_memory")]
+    exec_src = src[src.index("async def execute_tools_node"):
+                   src.index("def format_output_fc_node")]
+    assert "plan_refinement" in guard_src
+    for token in ("plan_refinement", "refine_results", "build_refinement_raw_data",
+                  "format_refinement_output"):
+        assert token not in exec_src, f"{token} must not appear in the dispatch path"

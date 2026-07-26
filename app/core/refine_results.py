@@ -535,38 +535,104 @@ def apply_refinement(previous: List[dict], spec: Dict[str, Any]) -> List[dict]:
     return out
 
 
-def describe_refinement(spec: Dict[str, Any], previous_count: int, kept_count: int) -> str:
-    """One-line, emoji-free English description of what the refinement did. Fed to the
-    answer generator as evidence so the prose can only describe the operation actually
-    performed (in particular it must not claim a sort that was not applied)."""
+# ═══════════════════════════════════════════════════════════════════
+# User-facing summary
+# ───────────────────────────────────────────────────────────────────
+# A listings turn already speaks in a deterministic, localized template on BOTH
+# architectures: search_properties._found_summary composes the text and both
+# formatters use it verbatim (langgraph_agent format_output / agent_loop
+# format_output_fc). A refinement IS a listings turn, so it speaks the same way.
+# Building the sentence from the spec — rather than asking a model to narrate it —
+# also makes panel/prose agreement structural instead of a prompt instruction, and
+# costs zero LLM calls, which is the "实时更新 / update in real time" the report asked
+# for. Emoji-free, per the product rule.
+# ═══════════════════════════════════════════════════════════════════
+
+_SORT_LABELS = {
+    'price': ('price', '价格'),
+    'commute': ('commute time', '通勤时间'),
+    'bedrooms': ('bedroom count', '卧室数'),
+    'score': ('match score', '匹配度'),
+}
+
+
+def _ops_clauses(spec: Dict[str, Any], zh: bool) -> List[str]:
+    """One clause per operation actually performed, in the reply language."""
     parts: List[str] = []
     for flt in spec.get('filters') or []:
         kind, value = flt.get('kind'), flt.get('value')
         if kind == 'max_price':
-            parts.append(f"kept only listings at or under £{value}/month")
+            parts.append(f"仅保留 ≤£{value}/月" if zh else f"kept only listings at or under £{value}/month")
         elif kind == 'min_price':
-            parts.append(f"kept only listings at or above £{value}/month")
+            parts.append(f"仅保留 ≥£{value}/月" if zh else f"kept only listings at or above £{value}/month")
         elif kind == 'room_type':
-            parts.append(f"kept only {value} listings")
+            parts.append(f"仅保留 {value} 房型" if zh else f"kept only {value} listings")
         elif kind == 'not_room_type':
-            parts.append(f"removed {value} listings")
+            parts.append(f"移除 {value} 房型" if zh else f"removed {value} listings")
         elif kind == 'min_bedrooms':
-            parts.append(f"kept only listings with at least {value} bedroom(s)")
+            parts.append(f"仅保留 ≥{value} 室" if zh else
+                         f"kept only listings with at least {value} bedroom(s)")
         elif kind == 'bedrooms':
-            parts.append(f"kept only {value}-bedroom listings")
+            parts.append(f"仅保留 {value} 室" if zh else f"kept only {value}-bedroom listings")
         elif kind == 'area':
-            parts.append(f"kept only listings in {value}")
+            parts.append(f"仅保留 {value} 的房源" if zh else f"kept only listings in {value}")
         elif kind == 'not_area':
-            parts.append(f"removed listings in {value}")
+            parts.append(f"移除 {value} 的房源" if zh else f"removed listings in {value}")
     sort = spec.get('sort')
     if sort:
-        direction = 'highest first' if sort.get('desc') else 'lowest first'
-        parts.append(f"re-sorted by {sort.get('key')} ({direction})")
+        en_label, zh_label = _SORT_LABELS.get(sort.get('key'), (sort.get('key'), sort.get('key')))
+        if zh:
+            parts.append(f"按{zh_label}{'从高到低' if sort.get('desc') else '从低到高'}排序")
+        else:
+            parts.append(f"re-sorted by {en_label} "
+                         f"({'highest first' if sort.get('desc') else 'lowest first'})")
     if spec.get('limit'):
-        parts.append(f"kept the top {spec['limit']}")
-    body = "; ".join(parts) if parts else "re-ordered the existing listings"
-    return (f"Refined the {previous_count} listing(s) already shown "
-            f"({previous_count - kept_count} removed, {kept_count} remain): {body}.")
+        parts.append(f"只保留前 {spec['limit']} 套" if zh else f"kept the top {spec['limit']}")
+    return parts
+
+
+def summarize_refinement(spec: Dict[str, Any], previous: List[dict], refined: List[dict],
+                         *, language: str = 'en') -> str:
+    """The user-facing answer for a refinement turn.
+
+    Says four things, all of them checkable against the panel beside it: that no new
+    search ran, what was applied, what survived (count + price range), and — when the
+    request contained one — what could NOT be done. The last part is the honesty rule
+    the search tool already follows for unverified commute and partial areas: never
+    imply an ordering we did not compute.
+    """
+    zh = str(language).lower().startswith('zh')
+    n_prev, n_kept = len(previous), len(refined)
+    parts = _ops_clauses(spec, zh)
+    body = ("、".join(parts) if zh else "; ".join(parts)) if parts else (
+        "重新排列了现有房源" if zh else "re-ordered the existing listings")
+
+    prices = sorted(p for p in (record_price(r) for r in refined) if p is not None)
+    if zh:
+        s = f"已在现有 {n_prev} 套房源上直接筛选（未重新搜索）：{body}。"
+        s += f"移除 {n_prev - n_kept} 套，剩余 {n_kept} 套。" if n_prev != n_kept \
+            else f"共 {n_kept} 套。"
+        if prices:
+            s += (f"价格约 £{prices[0]}/月。" if prices[0] == prices[-1]
+                  else f"价格区间 £{prices[0]}–£{prices[-1]}/月。")
+        if spec.get('unsupported_sort'):
+            s += f"无法按“{spec['unsupported_sort']}”排序——房源数据中没有该信息。"
+        s += "更新后的列表见右侧。"
+        return s
+
+    s = (f"Refined the {n_prev} listing{'s' if n_prev != 1 else ''} already shown, "
+         f"without running a new search: {body}.")
+    s += (f" {n_prev - n_kept} removed, {n_kept} remain." if n_prev != n_kept
+          else f" All {n_kept} still match.")
+    if prices:
+        s += (f" Price {'is' if len(prices) == 1 else 'range'} £{prices[0]}/month."
+              if prices[0] == prices[-1]
+              else f" Price range £{prices[0]}–£{prices[-1]}/month.")
+    if spec.get('unsupported_sort'):
+        s += (f" I can't order them by \"{spec['unsupported_sort']}\" — that isn't in the "
+              "listing data I hold.")
+    s += " The updated list is on the right."
+    return s
 
 
 def plan_refinement(message: str, previous: List[dict]) -> Optional[Tuple[Dict[str, Any], List[dict]]]:

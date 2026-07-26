@@ -1169,6 +1169,15 @@ def _route_base_decision(decision: dict, search_entry: str) -> Command:
         }, goto="generate_response")
     if tool == "direct_answer":
         return Command(update={"tool_decision": decision}, goto="generate_response")
+    if tool == REFINE_TOOL_NAME:
+        # Refinement-in-place: nothing to execute and nothing to generate — the answer is
+        # composed deterministically from the refined set in format_output, the same way a
+        # search turn's answer is composed by search_properties._found_summary. Straight to
+        # the formatter, like a clarification. context_tainted because the refined listing
+        # text (addresses, descriptions) is external content riding into the response.
+        return Command(update={"tool_decision": decision,
+                               "tool_raw_data": decision.get("raw_data"),
+                               "context_tainted": True}, goto="format_output")
     if tool == "clarification":
         return Command(update={"tool_decision": decision}, goto="format_output")
     if tool == "multi_search":
@@ -2050,48 +2059,33 @@ def _refinable_previous_results(extracted_context) -> list:
     return extracted_context.get('last_results') or []
 
 
-def _format_refinement_observation(spec, previous, refined) -> str:
-    """Evidence surface for a refinement: what was done, what survived, and — critically
-    — anything that was ASKED FOR but could not be done. The generator writes prose from
-    this alone, so the answer and the repainted panel describe the same listings."""
-    lines = [
-        "The user refined the listings already on screen. No new search was run: this is "
-        "a filter/sort over the listings from the previous turn.",
-        refine_results.describe_refinement(spec, len(previous), len(refined)),
-    ]
-    unsupported = spec.get('unsupported_sort')
-    if unsupported:
-        # Honesty rule (same spirit as the commute/partial notes in the search tool):
-        # never let the answer claim an ordering we did not and cannot compute.
-        lines.append(
-            f"NOT DONE: they also asked to sort by \"{unsupported}\", which is not "
-            "available in the listing data we hold. Say so plainly in one short clause "
-            "and never claim the listings are ordered that way.")
-    lines.append("")
-    lines.append("The refined set, in the order it is now shown in the results panel "
-                 "(use ONLY these listings):")
-    for i, r in enumerate(refined, 1):
-        lines.append(_format_result_line(i, r))
-    return "\n".join(lines)
+def build_refinement_raw_data(previous, spec, refined) -> dict:
+    """The payload a refinement hands its formatter, shared by BOTH architectures.
+
+    ``recommendations`` is what the results panel repaints from; ``refinement`` carries
+    the provenance the formatter needs to compose the (deterministic, localized) answer,
+    so the prose and the panel are the same data rendered twice rather than two
+    independent descriptions that have to be kept in agreement.
+    """
+    return {
+        "status": "found",
+        "recommendations": refined,
+        "refinement": {
+            "spec": spec,
+            "previous": previous,
+            "previous_count": len(previous),
+            "kept_count": len(refined),
+        },
+    }
 
 
 def _build_refinement_decision(previous, spec, refined) -> dict:
-    """Pre-resolved decision for a narrowing follow-up (no tool executes).
-
-    ``raw_data.recommendations`` is what format_output hands the frontend, so the panel
-    repaints with exactly the listings the observation describes."""
+    """Pre-resolved decision for a narrowing follow-up. NO tool executes and NO LLM runs:
+    the decision routes straight to format_output, exactly as a `clarification` does."""
     return {
         "tool": REFINE_TOOL_NAME,
         "params": {},
-        "observation": _format_refinement_observation(spec, previous, refined),
-        "raw_data": {
-            "recommendations": refined,
-            "refinement": {
-                "spec": spec,
-                "previous_count": len(previous),
-                "kept_count": len(refined),
-            },
-        },
+        "raw_data": build_refinement_raw_data(previous, spec, refined),
         "reason": "Refinement of the listings already shown — filtered/sorted in place",
     }
 
@@ -3636,6 +3630,31 @@ def _criteria_for_frontend(accumulated) -> dict:
     return out
 
 
+def format_refinement_output(raw_data, prefs, accumulated, reply_language):
+    """``(response_text, tool_data)`` for a refinement turn — shared by BOTH architectures
+    (legacy format_output and fc_loop format_output_fc), so the two cannot drift.
+
+    The answer text and the panel payload are built from the SAME filtered list here, in
+    one place: that is what makes "the prose says only Tavistock Court qualifies" and "the
+    panel shows six" impossible by construction rather than by instruction.
+    """
+    refinement = raw_data.get('refinement') or {}
+    recs = apply_preference_filter(raw_data.get('recommendations') or [], prefs or {})
+    response = refine_results.summarize_refinement(
+        refinement.get('spec') or {}, refinement.get('previous') or [], recs,
+        language=reply_language or 'en')
+    tool_data = {
+        'recommendations': recs,
+        # The accumulated criteria already carry this turn's tightened values
+        # (extract_preferences folds them in before the interception runs), so the
+        # criteria panel mirrors what the listings now satisfy.
+        'search_criteria': _criteria_for_frontend(accumulated),
+        'area_recommendations': [],
+        'refinement': {k: v for k, v in refinement.items() if k != 'previous'},
+    }
+    return response, tool_data
+
+
 def _make_format_output_node():
     """Create the format_output node."""
 
@@ -3692,23 +3711,15 @@ def _make_format_output_node():
 
         elif (tool_name == REFINE_TOOL_NAME and isinstance(raw_data, dict)
                 and raw_data.get('recommendations')):
-            # Refinement-in-place: the generated prose (written from the refinement
-            # observation) IS the answer, so `response` is passed through untouched —
-            # what changes is that the refined listings ride back out in tool_data, which
-            # is what makes /api/alex return a `search` payload and the panel repaint.
-            # Without this the turn returns a `chat` payload and the panel keeps
-            # rendering the pre-refinement set while the prose describes the new one.
-            tool_data = {
-                'recommendations': apply_preference_filter(
-                    raw_data['recommendations'], prefs),
-                # The accumulated criteria already carry this turn's tightened values
-                # (extract_preferences folds them in before decide_tool runs), so the
-                # criteria panel mirrors what the listings now satisfy.
-                'search_criteria': _criteria_for_frontend(
-                    state.get('accumulated_search_criteria')),
-                'area_recommendations': [],
-                'refinement': raw_data.get('refinement') or {},
-            }
+            # Refinement-in-place. Two things happen here and both are load-bearing:
+            # the refined listings ride back out in tool_data — which is what makes
+            # /api/alex return a `search` payload so the panel repaints (without it the
+            # turn is a `chat` payload and the panel keeps rendering the pre-refinement
+            # set) — and the answer text is composed from that SAME list, so prose and
+            # panel cannot disagree.
+            response, tool_data = format_refinement_output(
+                raw_data, prefs, state.get('accumulated_search_criteria'),
+                _reply_language(state))
 
         elif tool_name == 'multi_search' and raw_data:
             tool_data = {'multi_search_results': raw_data}

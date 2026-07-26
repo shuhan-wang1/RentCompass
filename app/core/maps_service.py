@@ -135,11 +135,21 @@ def _normalize_address_for_routing(address: str) -> str:
 
 def _free_geocode(address: str) -> dict | None:
     """Free geocoder: Postcodes.io for UK postcodes, else OSM Nominatim.
-    Returns {'lat','lng','postcode'(optional)} or None. Cached."""
+
+    Returns ``{'lat','lng','postcode'(optional),'geocoder','resolved_name','match_type',
+    'place_rank'}`` or None. Cached.
+
+    The last four are PRECISION metadata and are not decoration: "Hackney" and
+    "20 Liverpool Road N1 0RW" both come back as a lat/lng pair, and every distance measured
+    from the first one is a distance from a borough centroid. Callers that show distances
+    need to be able to say which they got — see ``core.place_reference.reference_point``.
+    """
     if not address or not isinstance(address, str):
         return None
     address = _normalize_address_for_routing(address)
-    cache_key = create_cache_key('_free_geocode', address)
+    # v2: entries cached under the old key carry no precision metadata, and silently
+    # serving those would make reference_point() report "unknown" forever.
+    cache_key = create_cache_key('_free_geocode_v2', address)
     cached = get_from_cache(cache_key)
     if cached is not None:
         return cached
@@ -155,7 +165,11 @@ def _free_geocode(address: str) -> dict | None:
                 d = (r.json() or {}).get('result') or {}
                 if d.get('latitude') is not None:
                     result = {'lat': d['latitude'], 'lng': d['longitude'],
-                              'postcode': d.get('postcode')}
+                              'postcode': d.get('postcode'),
+                              'geocoder': 'postcodes.io',
+                              'resolved_name': d.get('postcode'),
+                              'match_type': 'postcode',
+                              'place_rank': None}
         except Exception as e:
             print(f"  [geocode] Postcodes.io error: {e}")
 
@@ -173,7 +187,12 @@ def _free_geocode(address: str) -> dict | None:
                 if arr:
                     top = arr[0]
                     result = {'lat': float(top['lat']), 'lng': float(top['lon']),
-                              'postcode': (top.get('address') or {}).get('postcode')}
+                              'postcode': (top.get('address') or {}).get('postcode'),
+                              'geocoder': 'nominatim',
+                              'resolved_name': top.get('display_name'),
+                              'match_type': (top.get('addresstype') or top.get('type')
+                                             or top.get('class')),
+                              'place_rank': top.get('place_rank')}
         except Exception as e:
             print(f"  [geocode] Nominatim error: {e}")
 
@@ -272,8 +291,18 @@ def _summarise_tfl_legs(journey: dict):
 
 
 def calculate_travel_details(origin_address: str, destination_address: str, mode: str = "transit") -> dict | None:
-    """Like calculate_travel_time, but also returns the route (legs + line names).
-    Returns {'duration_minutes','route_legs','route_summary','source'} or None."""
+    """Travel time + route, with the BASIS of the number attached to the number.
+
+    ``duration_minutes`` is set if and only if the TfL Journey Planner actually returned an
+    itinerary. When it did not, the straight-line fallback figure goes into
+    ``estimated_duration_minutes`` with a range and a caveat, and ``duration_minutes`` is
+    ``None`` — a haversine guess must not arrive in a field that reads as a measured journey
+    time. See ``core.commute_basis`` for why (short trips estimate 1.8x-6x low).
+
+    Returns None only when the addresses could not be geocoded, i.e. a real failure.
+    """
+    from core.commute_basis import describe_estimate, describe_measured
+
     if not origin_address or not destination_address:
         return None
     origin_n = _normalize_address_for_routing(origin_address)
@@ -285,21 +314,26 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
     journey = _tfl_journey(o, d, mode)
     if journey is not None:
         legs, summary = _summarise_tfl_legs(journey)
-        return {
-            'duration_minutes': int(journey['duration']),
+        out = {
             'route_legs': legs,
             'route_summary': summary,
             'source': 'TfL Journey Planner',
+            'estimated_duration_minutes': None,
         }
-    est = estimate_travel_time_simple(origin_n, dest_n, mode)
+        out.update(describe_measured(int(journey['duration'])))
+        return out
+
+    est = straight_line_travel_estimate(origin_n, dest_n, mode)
     if est is None:
         return None
-    return {
-        'duration_minutes': est,
+    out = {
+        'duration_minutes': None,   # explicit: nothing measured this journey
         'route_legs': [],
-        'route_summary': 'No detailed route available (estimated; outside TfL coverage).',
+        'route_summary': 'No route available: TfL returned no journey for this pair.',
         'source': 'estimate',
     }
+    out.update(describe_estimate(est['minutes'], est.get('distance_km')))
+    return out
 
 
 def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
@@ -489,43 +523,48 @@ def get_environmental_data(address: str) -> dict:
     return summary
 
 
-def estimate_travel_time_simple(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
-    """
-    Simple distance-based travel time estimation (no API calls).
-    Used for quick filtering in the first stage.
-    More accurate results use calculate_travel_time().
+def straight_line_travel_estimate(origin_address: str, destination_address: str,
+                                  mode: str = "transit") -> dict | None:
+    """Distance-based travel-time GUESS. Returns ``{'minutes', 'distance_km'}`` or None.
+
+    This is NOT a journey time, and callers must not present it as one — see
+    ``core.commute_basis`` for what it is worth when measured against real TfL journeys
+    (short trips come out 1.8x-6x low). ``distance_km`` is returned alongside the minutes
+    precisely so the basis can be stated instead of being dropped on the floor.
     """
     if not origin_address or not destination_address:
         return None
-    
-    cache_key = create_cache_key('estimate_travel_time_simple', origin_address, destination_address, mode)
+
+    # v2: the cached value used to be a bare int; the shape changed, so the key must too.
+    cache_key = create_cache_key('straight_line_travel_estimate_v2',
+                                 origin_address, destination_address, mode)
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
         return cached_result
-    
+
     # Try to get coordinates
     origin_coords = _get_coordinates(origin_address)
     dest_coords = _get_coordinates(destination_address)
-    
+
     if not origin_coords or not dest_coords:
         return None
-    
+
     # Calculate straight-line distance using Haversine formula
     R = 6371  # Earth radius in kilometers
-    
+
     lat1_rad = math.radians(origin_coords['lat'])
     lat2_rad = math.radians(dest_coords['lat'])
     dlat = math.radians(dest_coords['lat'] - origin_coords['lat'])
     dlng = math.radians(dest_coords['lng'] - origin_coords['lng'])
-    
+
     a = math.sin(dlat/2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlng/2)**2
     c = 2 * math.asin(math.sqrt(a))
-    
+
     distance_km = R * c
-    
+
     # Apply realistic multiplier (actual route is ~1.3x straight line)
     actual_distance = distance_km * 1.3
-    
+
     # Calculate time based on mode
     if mode in ['transit', 'driving']:
         speed = 20  # km/h average
@@ -541,9 +580,22 @@ def estimate_travel_time_simple(origin_address: str, destination_address: str, m
     else:
         speed = 20
         total_minutes = int((actual_distance / speed) * 60 + 5)
-    
-    set_to_cache(cache_key, total_minutes)
-    return total_minutes
+
+    result = {'minutes': total_minutes, 'distance_km': round(distance_km, 2)}
+    set_to_cache(cache_key, result)
+    return result
+
+
+def estimate_travel_time_simple(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
+    """Minutes-only view of ``straight_line_travel_estimate`` for the filtering callers.
+
+    Kept because ``calculate_travel_time`` and the search/ranking paths want a bare int for
+    sorting and thresholds. Anything that SHOWS the figure to a user must go through
+    ``straight_line_travel_estimate`` + ``core.commute_basis`` instead, so the basis travels
+    with the number.
+    """
+    est = straight_line_travel_estimate(origin_address, destination_address, mode)
+    return None if est is None else est['minutes']
 
 
 def get_nearby_supermarkets_detailed(address: str, radius: int = 2000, 
@@ -751,31 +803,41 @@ def _deduplicate_supermarkets(results: list[dict]) -> list[dict]:
 def get_nearby_places_osm(address: str, amenity_type: str, radius_m: int = 1500) -> list[dict]:
     """
     Get nearby places using OpenStreetMap Overpass API (FREE - no API key needed)
-    
+
     Args:
         address: Property address
         amenity_type: Type of amenity (gym, park, restaurant, hospital, library, school)
         radius_m: Search radius in meters (default 1500m = 1.5km)
-    
+
     Returns:
-        List of nearby places with name, distance, address/location
+        List of nearby places with name, distance, address/location. Every place also
+        carries ``measured_from`` / ``distance_basis`` / ``reference_precision`` naming the
+        point the distance was measured FROM. That is not decoration: this function
+        geocodes whatever string it is given, so for an AREA query ("how is Hackney?")
+        ``distance_m`` is measured from the borough centroid. "Tesco 110m" then means 110 m
+        from a cartographic centre, not from any home the reader could take, and the
+        reference travels with each row so no consumer can render the number without it.
     """
-    cache_key = create_cache_key('get_nearby_places_osm', address, amenity_type, radius_m)
+    # v2: rows cached under the old key have no reference-point fields.
+    cache_key = create_cache_key('get_nearby_places_osm_v2', address, amenity_type, radius_m)
     cached_result = get_from_cache(cache_key)
     if cached_result:
         print(f"  -> [Cache HIT] OSM {amenity_type} data for: {address}")
         return cached_result
-    
+
     print(f"  -> [Overpass API] Getting {amenity_type} locations near: {address}")
-    
-    # Get coordinates for the property
-    location = _get_coordinates(address)
-    if not location:
+
+    # Get coordinates for the property, together with what the geocoder actually matched.
+    from core.place_reference import reference_point
+    ref = reference_point(address)
+    if ref.get("error") or ref.get("lat") is None:
         print(f"     ❌ Could not geocode address: {address}")
         return []
-    
-    lat, lng = location['lat'], location['lng']
-    print(f"     [OK] Coordinates: {lat:.4f}, {lng:.4f}")
+
+    lat, lng = ref['lat'], ref['lng']
+    measured_from = ref.get('measured_from')
+    ref_precision = ref.get('precision')
+    print(f"     [OK] Coordinates: {lat:.4f}, {lng:.4f} ({ref_precision})")
     
     # Map amenity types to OSM tags
     osm_amenity_map = {
@@ -865,6 +927,11 @@ out center;"""
                 'name': name,
                 'type': amenity_type,
                 'distance_m': round(distance_m),
+                # The reference point rides with every distance, so a consumer cannot
+                # render "110m" without also having what it is 110m FROM.
+                'distance_basis': 'straight_line',
+                'measured_from': measured_from,
+                'reference_precision': ref_precision,
                 'address': place_address,
                 'lat': place_lat,
                 'lon': place_lon,  # Use 'lon' to match Overpass API conventions

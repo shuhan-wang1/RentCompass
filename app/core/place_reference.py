@@ -22,6 +22,29 @@ metro-before-rail because it is picking a FARE-CHARGEABLE station, and a farther
 station beating a nearer National Rail one is correct for pricing. "Nearest station" is a
 different question and is sorted by distance, full stop.
 
+SUPPLYING the name is only half of it. Supplying it and then never checking what the
+answer actually said is the defect this repo keeps shipping, so the name a reply asserts
+is now checked too, by ``uk_rent_agent.agent.critic.ungrounded_station_names`` — the same
+place, and the same mechanism, as the fabricated-price check. That checker's reference set
+is the turn's own evidence, whose station-name sources are, exhaustively:
+
+  * ``nearest_stations`` / ``nearest_station_for_address`` here — TfL StopPoint
+    ``commonName``, the authoritative index (reached via ``search_nearby_pois``);
+  * ``get_transport_info._resolve_station`` — ``resolved_station`` / ``stations_used``;
+  * ``calculate_commute`` / ``maps_service.calculate_travel_details`` — ``route_summary``
+    and the per-leg names, which is where a commute answer's station names come from;
+  * ``search_nearby_pois`` POI rows (an OSM ``tube_station`` name);
+  * listing evidence — address / description / area in ``search_properties`` and
+    ``get_property_details``, plus the assembled context (focused listing, previously
+    shown properties, recommended index);
+  * ``reference_point`` below — the geocoder's ``resolved_name``;
+  * ``maps_service.LANDMARK_TO_ADDRESS`` — the only STATIC table in this repo naming
+    stations, and it holds seven aliases (Kings Cross, Euston, London Bridge).
+
+That last line is the point: there is no vendored gazetteer to validate against and there
+should not be one. TfL's index IS the reference table, consulted per turn, so the closed
+set a name has to belong to is what this turn's tools returned.
+
 2. WHAT THE DISTANCES ARE MEASURED FROM
 ---------------------------------------
 POI lookups geocode the query string and measure from wherever that lands. Ask "how is

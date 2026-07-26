@@ -37,13 +37,27 @@ of 2026-07-25 stands regardless of the outcome and is not re-opened by it.
 
 | | fixed value |
 |---|---|
-| **population** | the **67 single-turn cases** of `evaluation/benchmark/cases.jsonl`, in the order recorded in `.runtime/round-8793c0b-internal-2026-07-25/manifest.json` |
+| **population** | the **67 single-turn cases** of `evaluation/benchmark/cases.jsonl` **at commit `8793c0b`**, in the order recorded in `.runtime/round-8793c0b-internal-2026-07-25/manifest.json` |
 | **instrument** | **canary telemetry** `turn_latency_ms`, read from `.runtime/logs/canary-fc_loop.jsonl` |
 | **arm** | fc_loop only, `127.0.0.1:5002`, image `uk-rent-agent:canary-fc-loop-8793c0b` |
 | **commit** | `8793c0b17963a6a2b375903a164d3d96395dc834`, unchanged across every round |
 
 This is the population declared in `HANDOFF §3.8` and the instrument that produced the
 8,466 ms STAGE-PAUSE. **It must not be substituted.**
+
+**The selection rule is mechanical, and that is an assertion, not a description.** Selecting
+every case with `conversation_history == []` from `cases.jsonl` at `8793c0b` yields a set
+**exactly equal** to the 67 `case_id`s in the round-of-record manifest — zero extra, zero
+missing (verified 2026-07-26). Any round whose selection does not reproduce that equality is
+excluded. Hashing the corpus alone would not have pinned this: the 98 → 67 rule is a separate
+degree of freedom, so a different filter could yield the same corpus hash over a different
+population. Hence `SELECTION_SHA256` below, alongside `CORPUS_SHA256`.
+
+**The corpus hash is commit-qualified for a reason that has already bitten this population.**
+`cases.jsonl` differs between `2d48d22` and `8793c0b`: PR #7's contract amendments changed
+**E11, G2 and G3**. G2 and G3 are multi-turn and fall outside this population, but **E11 is
+single-turn and is one of these 67**. Taking the hash "of `cases.jsonl`" without naming the
+commit would therefore silently pin a different input.
 
 In particular, the 98-case **eval-harness** figures (`sweep/per_case.csv`) may **not** be used
 for this study, even though that instrument is cheaper and its data is already on disk. Its
@@ -101,10 +115,10 @@ Cost is not a constraint and must not be used to justify n = 3. At the rates der
 cold round 0 costs **$0.064** (71.2%). Six rounds is therefore ≈ **$0.18**.
 
 > **STOPPING RULE, frozen in advance.** If the n = 5 point estimate of σ(p50) falls within
-> **±1 SE** of the 250 ms decision threshold (§5) — i.e. in roughly **[163, 337] ms** — the
-> study **does not conclude**. It extends to **n = 10** and decides there. Any other outcome
-> decides at n = 5. Extending for any other reason, or stopping early because the answer
-> already looks clear, invalidates the study.
+> **±1 SE** of the **126 ms** decision threshold (§5) — 126 × 35.4% = 44.6, i.e. roughly
+> **[81, 171] ms** — the study **does not conclude**. It extends to **n = 10** and decides
+> there. Any other outcome decides at n = 5. Extending for any other reason, or stopping early
+> because the answer already looks clear, invalidates the study.
 
 ---
 
@@ -114,19 +128,37 @@ From the 2026-07-22 paired data: 2-call turns were **29/58 = 50.0%** under the 6
 and 3+-call turns were **0/9**. A round's p50 is therefore expected to be governed almost
 entirely by *what fraction of its turns took 3 or more LLM calls*.
 
-> **PREDICTION P1.** Across the five rounds, round-level p50 is **monotonically
-> non-decreasing** in the round's share of turns with `llm_calls >= 3`.
+> **PREDICTION P1 — CORROBORATIVE ONLY, CANNOT FALSIFY.** Across the five rounds, round-level
+> p50 is **monotonically non-decreasing** in the round's share of turns with `llm_calls >= 3`.
+> Reported as Spearman ρ over n = 5 with the raw pairs printed.
+
+**P1 carries no falsification power and this document forbids claiming any.** At n = 5 the
+exact permutation distribution gives `P(|ρ| = 1) = 2/120 = 0.0167`; that is the *only*
+attainable significant result, so any imperfect monotonicity is non-significant **by
+construction**. A non-monotone outcome is therefore recorded verbatim as
+**`P1: UNINFORMATIVE AT n=5`** and may **not** be written up as the mechanism being refuted.
+Treating a low-power null as a refutation is the same error class this document exists to
+prevent, and an earlier draft of this very section committed it.
+
+> **PREDICTION P1b — this is where the falsification power lives.** The mechanistic claim is
+> *"call count drives latency."* Its natural unit is the **case**, not the round. For every
+> case whose `llm_calls` differs across the five rounds, pair that case's high-call rounds
+> against its own low-call rounds and test the latency difference with a **Wilcoxon signed-rank
+> test**, n = the number of cases that varied.
 >
-> Reported as Spearman ρ over n = 5, with the raw pairs printed so the reader can check it by
-> eye rather than trusting the coefficient at that sample size.
+> **P1b is falsifiable and is the registered test of the mechanism.** If it fails, the
+> "non-deterministic loop iteration count" explanation for `E6` is wrong and must be written up
+> as such, not quietly dropped.
 
-This pays out in both directions, which is why it is worth registering:
+Pairing **within** a case is what makes P1b sound: across cases, call count and latency are
+confounded — hard cases both take more calls and are intrinsically slower — so a cross-case
+correlation would be uninformative about causation. Within a case that confounder is held
+fixed by construction, and the power comes from up to **67 × 5** observations rather than 5.
+`E6` is itself an instance of exactly this pairing: 2 → 5 calls, 15,382 → 29,374 ms.
 
-- **If it holds**, call-count share is a conditionable covariate. Future rounds can report a
-  p50 stratified on it and remove that component of variance by design.
-- **If it fails**, the "non-deterministic loop iteration count" explanation for `E6` is
-  **wrong**, and the mechanism must be sought elsewhere. That is an equally publishable
-  result and must be written up as such, not quietly dropped.
+If P1 holds it is reported as **supporting** evidence only; the conditionable-covariate
+conclusion — that future rounds may stratify on call-count share and design that variance out
+— requires **P1b**, not P1.
 
 Every round must record, per case: `llm_calls`, `tool_batches`, `turn_latency_ms`,
 `soft_wrapped`, `tool_budget_timeout`, `partial`; and per round: the distribution of
@@ -140,15 +172,35 @@ The gap that has to be closed, **stated on this study's own instrument and popul
 **7,402 → 6,000 ms = 1,402 ms** — the warm canary p50 measured over these 67 cases on
 2026-07-25. The 7,082 ms figure from the tool-stratified table is **not** used here: it comes
 from the eval harness over 98 cases, and importing it would be precisely the cross-instrument
-citation §6 forbids. The smallest change worth calling an effect is taken as **500 ms**.
+citation §6 forbids.
+
+**Minimum interesting effect δ = 500 ms. Significance α = 0.05, two-sided. Power 1−β = 0.80.**
+These three are the design inputs and must be restated in any document that reuses this
+threshold — the threshold is meaningless without them.
+
+The comparison a single-round A/B actually performs is a *difference of two round p50s*, so
+its noise is `σ_D = σ√2`. Detecting δ at that α and power requires
+
+```
+δ  ≥  (z₀.₀₂₅ + z₀.₂₀) · σ · √2  =  2.8016 · σ · 1.41421  =  3.9621 · σ
+σ  ≤  500 / 3.9621  =  126 ms
+```
 
 | σ̂(p50) | ruling |
 |---|---|
-| **< 250 ms** | A single round can resolve a ≥ 500 ms effect. **Current practice stands** — one round per candidate remains a valid decision procedure. |
-| **≥ 250 ms** | **Single-round A/B is retired as a decision tool.** Every subsequent verdict requires `k` repeated rounds with `σ̂/sqrt(k) < 250 ms`, and `k` is reported alongside the verdict. |
+| **< 126 ms** | A single round resolves a 500 ms effect at α=0.05, power 0.80. **Current practice stands.** |
+| **≥ 126 ms** | **Single-round A/B is retired as a decision tool.** Every subsequent verdict requires `k = ceil(2·(2.8016·σ̂/500)²)` rounds, and `k` is reported alongside the verdict. |
 
-250 ms is chosen as roughly half the minimum interesting effect, so that a real 500 ms
-improvement is not lost inside one round's noise. It is fixed **now**, before any σ̂ exists.
+The formula is self-consistent with the threshold: σ̂=126 → k=1, σ̂=250 → k=4, σ̂=400 → k=11.
+
+> **Why not 250 ms.** An earlier draft of this section set the threshold at 250 ms on the
+> reasoning that it is "roughly half the minimum interesting effect." That is a number picked
+> to look reasonable, not a number derived, and this document exists to stop exactly that
+> slide. It is recorded rather than deleted because the failure is instructive: at σ = 250 the
+> difference-of-two-rounds SD is 353.6 ms, so δ/σ_D = 1.414 and the achieved power is
+> **Φ(1.414 − 1.960) = 29%**. The rule "σ < 250 ms → current practice stands" would have
+> *certified* a decision procedure that misses seven out of ten genuine 500 ms improvements —
+> worse than having no criterion, because it carries the appearance of having been argued.
 
 **This is also the number PR #15 is waiting on.** Its thresholds are blank precisely because
 nobody knows the precision of the instrument they would be applied to. Nothing in this
@@ -180,20 +232,52 @@ single-turn population under warm caches**, and applies to nothing else without 
 A results package under `.runtime/variance-8793c0b-<date>/` containing: per-round manifests,
 per-round telemetry copied out **by request id** (never by moving the live log — see the
 `mv`/fd trap in `HANDOFF §3A`), the per-round p50 table, σ̂(p50) with its SE, the per-case SD
-diagnostic, the P1 test with raw pairs, the §5 ruling, and this document's frozen SHA.
+diagnostic, the P1 result (with raw pairs, and marked `UNINFORMATIVE AT n=5` if non-monotone),
+the **P1b** Wilcoxon signed-rank result with its n, the §5 ruling with the `k` implied by σ̂,
+and the annotated tag `prereg/round-variance-v1` identifying the frozen document.
 
 `SHA256SUMS.txt` over every file.
 
 ---
 
-## Freeze block — to be completed by the owner
+## Freeze block
 
 ```
-FROZEN_BY        : <TO BE FILLED>
-FROZEN_AT        : <TO BE FILLED>
-PREREG_SHA       : <TO BE FILLED — the commit of THIS file at freeze time>
+FROZEN_BY        : shuhan-wang1                       # the owner, and only the owner
+REVIEWED_BY      : Claude Opus 5 (design review, 2026-07-26)
 CANDIDATE_SHA    : 8793c0b17963a6a2b375903a164d3d96395dc834
-CORPUS_SHA256    : <TO BE FILLED at freeze — sha256 of evaluation/benchmark/cases.jsonl>
+CORPUS_SHA256    : 7f1ead524c421e33f4098afff036f019a92537d5f1f76deba59580aa34dc6907
+                   # git show 8793c0b:evaluation/benchmark/cases.jsonl | sha256sum
+SELECTION_SHA256 : c6438bc8a8b713fc808537941cd355756132bf34050d83a85b67426437530522
+                   # the 67 case_ids in manifest.json order, LF-separated, trailing LF
 ```
+
+**There is deliberately no `PREREG_SHA` and no `FROZEN_AT` field.** Both are self-referential:
+a commit cannot contain its own hash, and it cannot contain its own committer timestamp
+either — writing either one in changes the commit it claims to describe. `FROZEN_AT` was
+originally specified as "the freeze commit's committer timestamp, not hand-written", which is
+the same structural problem and gets the same treatment: **derive both from the commit, store
+neither in the file.**
+
+The frozen identity is an annotated tag created *after* the freeze commit:
+
+```
+git tag -a prereg/round-variance-v1 -m "frozen pre-registration, round-variance v1"
+```
+
+Its target commit **is** the PREREG_SHA, and its date is FROZEN_AT:
+
+```
+git rev-list -n1 prereg/round-variance-v1              # -> PREREG_SHA
+git log -1 --format=%cI prereg/round-variance-v1^{}    # -> FROZEN_AT
+```
+
+§7's requirement that the results package record "this document's frozen SHA" is satisfied by
+citing that tag. Neither value can drift from the commit it describes, because neither is
+written down twice.
+
+**`FROZEN_BY` must be the owner.** This document was drafted and reviewed by an assistant;
+having a non-owner sign the owner's field would be exactly the provenance error the rest of
+this document exists to prevent, which is why review is recorded on its own line.
 
 A pre-registration with placeholders authorises nothing.

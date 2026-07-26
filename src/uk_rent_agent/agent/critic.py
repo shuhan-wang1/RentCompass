@@ -485,3 +485,52 @@ def safe_fallback(verdict: CriticVerdict) -> str:
     if "retrieval_miss" in verdict.issues:
         return LEGACY_RETRIEVAL_MISS_FALLBACK
     return LEGACY_INCONSISTENCY_FALLBACK
+
+
+# ── false retrieval provenance (2026-07-22 ruling) ───────────────────────────
+# PORTED, DELIBERATELY AND ALONE, from the terminated `hardening/correctness-only`
+# branch (that branch's `src/uk_rent_agent/agent/critic.py:543-562`) so the evaluator
+# constraint `no_false_retrieval_provenance` can be re-enabled. The general rule is
+# "do not cherry-pick product code from a NO-GO branch"; this is the one exception the
+# handoff names, and it is scoped to exactly this predicate plus its two literal cue
+# tables. NOTHING else came across:
+#   * `false_retrieval_provenance(response, evidence)` — the verdict composer — did NOT
+#     come, because the grader composes `claims_no_retrieval` with `evidence_usable`
+#     itself and nothing on mainline needs the composed form.
+#   * `evaluate_grounding(..., check_provenance=...)`, `build_correction_instruction`'s
+#     `provenance_denied` arm, `minimal_honest_answer` / `WEB_EVIDENCE_INSUFFICIENT_*`
+#     and the fail-closed hard-replacement pipeline did NOT come. The fail-closed
+#     fallback is the CONFIRMED A14 quality regression ("must not be carried elsewhere
+#     in its present form"); this predicate neither calls it nor is called by it.
+#
+# `claims_no_retrieval` is a pure text predicate: its only inputs are the two cue
+# tables below and `re`. It is read ONLY by the evaluator grader
+# (`evaluation/metrics/graders.py::_c_no_false_retrieval_provenance`); no product code
+# path reads it, so porting it changes no runtime behaviour.
+#
+# Detection is deterministic cues only — matched against the ruled phrases
+# ("没有搜索" / "无法搜索" / "没有任何搜索数据") and their close variants; English via
+# word-boundary regex so ordinary prose never matches. The regex is deliberately
+# NARROW on the "retrieve" verb: the critic's own honest fallbacks say a FIGURE could
+# not be retrieved, which is not a claim that no search happened. See
+# `tests/test_false_retrieval_provenance.py::test_the_critics_own_honest_fallbacks_do_not_self_trip`.
+_PROVENANCE_DENIAL_ZH = (
+    "没有搜索", "没有进行搜索", "未进行搜索", "未搜索", "无法搜索", "未能搜索",
+    "没有任何搜索数据", "没有检索", "无法检索", "未能检索", "未进行检索",
+)
+_PROVENANCE_DENIAL_EN = re.compile(
+    r"(?:\b(?:did\s+not|didn'?t|could\s+not|couldn'?t|cannot|can'?t|unable\s+to|"
+    r"have\s+not|haven'?t|was\s+not\s+able\s+to)\s+(?:search\b|run\s+a\s+search\b|"
+    r"perform\s+a\s+search\b|do\s+a\s+(?:web\s+)?search\b|retrieve\s+(?:any\s+)?"
+    r"(?:search\s+results|web\s+results)\b)"
+    r"|\bno\s+search\s+(?:was|has\s+been)\s+(?:performed|done|run)\b"
+    r"|\bwithout\s+(?:having\s+)?search(?:ed|ing)\b)",
+    re.IGNORECASE)
+
+
+def claims_no_retrieval(text: str) -> bool:
+    """True when ``text`` asserts that no search/retrieval happened or was possible."""
+    body = text or ""
+    if any(cue in body for cue in _PROVENANCE_DENIAL_ZH):
+        return True
+    return bool(_PROVENANCE_DENIAL_EN.search(body))

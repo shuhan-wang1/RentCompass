@@ -7,6 +7,11 @@ from core.tool_system import Tool
 from core.maps_service import get_crime_data_by_location
 from typing import Optional
 
+from core.safety_reference import (
+    CAVEAT_EN, CAVEAT_ZH, reference_note, score_from_monthly_count,
+)
+
+
 def check_safety_impl(
     address: str = None,
     area: str = None,
@@ -38,38 +43,57 @@ def check_safety_impl(
         # 使用地址调用 get_crime_data_by_location
         crime_data = get_crime_data_by_location(location)
         
-        # 计算安全指数（0-100，越高越安全）
+        # Score against a reference distribution, never against a bare count. The old formula
+        # was `max(0, 100 - total_crimes // 2)`: no normalisation, so it measured how many
+        # rows the API returned rather than anything about the area.
+        band = None
         if crime_data and not crime_data.get('error'):
-            # 从 crime_data 获取总犯罪数
             total_crimes = crime_data.get('total_crimes_6m', 0)
             if isinstance(total_crimes, str):
                 try:
                     total_crimes = int(total_crimes)
-                except:
+                except Exception:
                     total_crimes = 0
-            
-            # 计算安全分数: 基准分 100，每 2 起犯罪扣 1 分
-            safety_score = max(0, 100 - total_crimes // 2)
-            
-            # 生成评分解释
-            scoring_explanation = _generate_scoring_explanation(total_crimes, safety_score, crime_data, is_chinese)
-            
-            # 生成详细的安全分析
-            safety_analysis = _generate_safety_analysis(crime_data, location, is_chinese)
-            
+
+            per_month = crime_data.get('crimes_per_month')
+            if per_month is None and total_crimes:
+                per_month = total_crimes / max(1, crime_data.get('months_covered', 1))
+
+            safety_score, band = score_from_monthly_count(per_month)
+
+            if safety_score is None:
+                # A zero or missing rate is an ABSENT ANSWER, not a quiet neighbourhood.
+                # Presenting it as a score is exactly how "9 crimes, 96/100, very safe" got
+                # in front of a user.
+                scoring_explanation = (
+                    "犯罪数据不足，无法给出评分。" if is_chinese
+                    else "Not enough crime data to produce a score.")
+                safety_analysis = (
+                    "该地点在 data.police.uk 上没有返回足够的犯罪记录，因此无法评估治安。"
+                    "这不代表该区域没有犯罪。" if is_chinese
+                    else "data.police.uk returned too few records for this point to assess "
+                         "safety. That is not evidence of low crime.")
+            else:
+                scoring_explanation = _generate_scoring_explanation(
+                    total_crimes, safety_score, crime_data, is_chinese, band=band,
+                    per_month=per_month)
+                safety_analysis = _generate_safety_analysis(crime_data, location, is_chinese)
         else:
-            safety_score = 50  # 默认值
+            # No data must NOT become a middling score that reads as a measurement.
+            safety_score = None
             total_crimes = 0
             crime_data = crime_data or {}
             if is_chinese:
-                scoring_explanation = "无法获取犯罪数据，使用默认评分 50/100"
-                safety_analysis = "由于数据不可用，无法进行详细的安全分析。建议实地考察或咨询当地居民。"
+                scoring_explanation = "无法获取犯罪数据，因此不提供评分。"
+                safety_analysis = "由于数据不可用，无法进行治安分析。建议实地考察或咨询当地居民。"
             else:
-                scoring_explanation = "Unable to retrieve crime data, using default score 50/100"
-                safety_analysis = "Unable to perform detailed safety analysis due to data unavailability. Recommend visiting in person or consulting local residents."
+                scoring_explanation = "Crime data unavailable, so no score is given."
+                safety_analysis = ("Safety could not be assessed because the data was "
+                                   "unavailable. Consider visiting in person or asking local residents.")
         
         safety_level = (
-            'Very Safe' if safety_score >= 80
+            None if safety_score is None
+            else 'Very Safe' if safety_score >= 80
             else 'Safe' if safety_score >= 60
             else 'Moderate' if safety_score >= 40
             else 'Concerning'
@@ -82,7 +106,17 @@ def check_safety_impl(
             'crime_data': crime_data,
             'scoring_explanation': scoring_explanation,
             'safety_analysis': safety_analysis,
-            'recommendation': f"This area has a safety level of {safety_level} with a safety score of {safety_score}/100",
+            'crimes_per_month': (crime_data or {}).get('crimes_per_month'),
+            'months_covered': (crime_data or {}).get('months_covered'),
+            'radius_miles': (crime_data or {}).get('radius_miles'),
+            'reference_basis': reference_note(),
+            'caveat': CAVEAT_ZH if is_chinese else CAVEAT_EN,
+            'recommendation': (
+                f"This area has a safety level of {safety_level} with a safety score of "
+                f"{safety_score}/100 ({reference_note()}). {CAVEAT_EN}"
+                if safety_score is not None else
+                "Safety could not be scored for this location: data.police.uk returned too "
+                "few records. That is not evidence of low crime."),
             'next_action_hint': 'NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations.'
         }
     
@@ -109,28 +143,23 @@ def _detect_chinese(text: str) -> bool:
     return False
 
 
-def _generate_scoring_explanation(total_crimes: int, safety_score: int, crime_data: dict, is_chinese: bool) -> str:
+def _generate_scoring_explanation(total_crimes: int, safety_score: int, crime_data: dict,
+                                  is_chinese: bool, band: str | None = None,
+                                  per_month: float | None = None) -> str:
     """生成评分计算方法的详细解释（根据语言生成）"""
     
     if is_chinese:
+        _mo = crime_data.get("months_covered", 3)
+        _pm = per_month if per_month is not None else 0
         explanation = f"""
-**评分计算方法:**
+**评分依据:**
 
-1. **数据来源**: UK Police API（英国警方官方犯罪数据）
-2. **统计周期**: 最近 6 个月
-3. **总犯罪数**: {total_crimes} 起
-
-4. **评分算法**:
-   - 基准分: 100 分（理想状态，零犯罪）
-   - 扣分规则: 每 2 起犯罪扣 1 分
-   - 计算公式: 安全分 = max(0, 100 - 总犯罪数 ÷ 2)
-   - 本区域计算: 100 - {total_crimes} ÷ 2 = **{safety_score} 分**
-
-5. **评级标准**:
-   - 80-100分: Very Safe（非常安全）
-   - 60-79分: Safe（安全）
-   - 40-59分: Moderate（中等）
-   - 0-39分: Concerning（需要注意）
+1. **数据来源**: data.police.uk（英国警方官方犯罪数据）
+2. **统计范围**: 该地点周边约 1 英里半径，最近 {_mo} 个月
+3. **记录总数**: {total_crimes} 起（平均每月约 {_pm:.0f} 起）
+4. **评分方式**: 与 13 个已采样英国区域的分布对比得出百分位，而不是按犯罪数直接扣分。
+   本区域属于「{band}」，对应 **{safety_score}/100**。
+5. **重要限制**: {CAVEAT_ZH}
 """
         
         # 添加趋势分析
@@ -143,24 +172,17 @@ def _generate_scoring_explanation(total_crimes: int, safety_score: int, crime_da
             explanation += "\n📊 **趋势**: 犯罪率相对稳定。"
     
     else:  # English
+        _mo = crime_data.get("months_covered", 3)
+        _pm = per_month if per_month is not None else 0
         explanation = f"""
-**Scoring Method:**
+**How this score was produced:**
 
-1. **Data Source**: UK Police API (Official UK Police Crime Data)
-2. **Period**: Last 6 months
-3. **Total Crimes**: {total_crimes} incidents
-
-4. **Algorithm**:
-   - Base Score: 100 points (ideal state, zero crime)
-   - Deduction Rule: -1 point per 2 crimes
-   - Formula: Safety Score = max(0, 100 - Total Crimes ÷ 2)
-   - Calculation: 100 - {total_crimes} ÷ 2 = **{safety_score} points**
-
-5. **Rating Criteria**:
-   - 80-100: Very Safe
-   - 60-79: Safe
-   - 40-59: Moderate
-   - 0-39: Concerning
+1. **Source**: data.police.uk (official UK police crime data)
+2. **Coverage**: about a 1 mile radius around this point, last {_mo} months
+3. **Records**: {total_crimes} incidents (about {_pm:.0f} per month)
+4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a
+   flat count. This area is **{band}**, which maps to **{safety_score}/100**.
+5. **Important limitation**: {CAVEAT_EN}
 """
         
         # Add trend analysis

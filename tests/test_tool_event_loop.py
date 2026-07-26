@@ -100,7 +100,12 @@ def test_check_safety_not_blocking(monkeypatch):
     ticks, result = asyncio.run(_heartbeat_run(
         lambda: cs.check_safety_tool.execute(address="Stratford, London")))
     _assert_responsive(ticks, result)
-    assert result.data["safety_score"] == 94  # 100 - 12//2
+    # 12 crimes/month inside a ~1 mile radius is an incomplete fetch, not a calm area, so
+    # it is refused rather than scored. This assertion used to read `== 94  # 100 - 12//2`,
+    # encoding the un-normalised formula that produced "Hackney: 9 crimes, 96/100, very
+    # safe" on the live site. See tests/test_safety_scoring.py.
+    assert result.data["safety_score"] is None
+    assert result.data["safety_level"] is None
 
 
 # ─── get_weather (converted async->sync) ────────────────────────────────────────

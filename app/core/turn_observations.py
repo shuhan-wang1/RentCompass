@@ -327,6 +327,55 @@ def note_llm_usage(run_id: Any, response: Any, *, configured_model: Optional[str
     return True
 
 
+def note_raw_llm_call(run_id: Any, *, usage_blob: Any,
+                      configured_model: Optional[str]) -> bool:
+    """Record one completed LLM run made WITHOUT LangChain.
+
+    ``install_observer`` attaches a LangChain callback, so it can only see models
+    built through ``ModelRouter``. Two production paths are not: ``llm_interface``
+    drives the raw ``openai`` SDK directly, and ``llm_config._deepseek_llm`` built an
+    unobserved ``ChatOpenAI``. Those calls were real, billed, and absent from
+    ``llm_calls`` — 48 of them at p50 934ms in the 2026-07-25 round of record — which
+    means every per-call figure derived from that counter understated the turn.
+
+    The bypass was not hidden: this module's own sibling documents it in a docstring.
+    It was known and simply never wired, the same shape as ``--since`` computing a
+    window it did not filter on.
+
+    Takes the provider's usage blob rather than a response object because there is no
+    LangChain envelope to unwrap; extraction, de-duplication by run id and the
+    missing-usage accounting are the SAME as ``note_llm_usage`` so the two paths
+    cannot drift into reporting different things.
+    """
+    obs = _turn_obs.get()
+    if obs is None:
+        return False
+    # Observing a call IS the proof that calls on this path are observed. Without this,
+    # snapshot() returns all-None for a turn whose only LLM work went through the raw
+    # SDK -- the record would be taken and then discarded, which is the very defect
+    # this function exists to close. In production _wire_canary_llm_observer() sets the
+    # flag at startup and would mask it; relying on that would leave the fix depending
+    # on an unrelated commit staying in place.
+    _mark_observer_installed()
+    seen = obs.setdefault("llm_runs_seen", set())
+    if run_id in seen:
+        return False
+    seen.add(run_id)
+
+    usage = _usage_from_token_usage({"usage": usage_blob or {}})
+    if usage is None:
+        obs["llm_usage_missing"] = obs.get("llm_usage_missing", 0) + 1
+        return False
+    obs.setdefault("llm_usage_calls", []).append({
+        "model": configured_model or "unknown",
+        "model_source": "config" if configured_model else "unknown",
+        "input_tokens": usage.get("input_tokens") or 0,
+        "output_tokens": usage.get("output_tokens") or 0,
+        "cache_read_tokens": usage.get("cache_read_tokens") or 0,
+    })
+    return True
+
+
 # --------------------------------------------------------------------------- #
 # Tool-markup (DSML) guard counters                                           #
 # --------------------------------------------------------------------------- #

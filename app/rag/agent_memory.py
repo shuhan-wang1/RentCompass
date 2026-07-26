@@ -175,6 +175,110 @@ def _valid_user_id(user_id) -> str | None:
     return uid
 
 
+# ---------------------------------------------------------------- targeted erasure
+# Defect G9: an explicit "forget my budget" deleted the SEMANTIC fact and left the
+# EPISODIC records — including the raw "Please remember my budget is £1400 a month."
+# — so retrieve()/recall_memory happily handed the deleted figure straight back and the
+# answer quoted it. A user who is told "done, deleted" and then quoted the value has
+# been lied to, so the erasure has to be CROSS-LAYER (every store retrieve() can read),
+# not semantic-only. See AgentMemory.forget_fact.
+#
+# Fields whose stated VALUE is worth erasing. Only money-bearing fields are listed: the
+# scrub predicate requires a value, so a field with no numeric value has nothing to
+# scrub and listing it would only widen the destructive trigger for no benefit.
+_FIELD_TERMS = {
+    "budget": ("budget", "budgets", "rent", "rents", "rental", "price", "prices",
+               "spend", "afford", "pcm", "预算", "租金", "价格", "房租"),
+}
+
+# Delete IMPERATIVES. Each requires a field term within a short, punctuation-free window
+# so a delete verb in one clause cannot reach a field in the next.
+_ERASE_EN_TEMPLATES = (
+    r"\b(?:forget|delete|remove|erase|discard|clear|wipe|scrub|drop)\b"
+    r"[^.!?;\n]{{0,24}}?\b(?:{f})\b",
+    r"\b(?:don'?t|do\s+not|stop|no\s+longer)\s+"
+    r"(?:keep|keeping|save|saving|store|storing|remember|remembering|hold|holding)\b"
+    r"[^.!?;\n]{{0,24}}?\b(?:{f})\b",
+)
+_ERASE_ZH = ("忘掉", "忘记", "删除", "删掉", "清除", "清掉", "不要记", "别记", "不用记",
+             "不要保存", "别保存", "取消记录")
+
+# The erasure must be about THIS user's own stored value. Without a first-person
+# reference ("forget my budget", "don't keep any budget for me") a delete verb next to a
+# money term is talking about something else ("forget about the price of that flat") and
+# must NOT trigger a destructive scrub.
+#
+# "user" is deliberately NOT a first-person marker: remember_turn prefixes EVERY episodic
+# turn log with "User asked: ", so including it would make the check vacuous for the whole
+# episodic layer and let a market price the user merely enquired about ("User asked: what
+# do Camden rents average? £1800") be scrubbed as if it were their own budget. The
+# distilled layers do not need it — _states_field_value exempts semantic/reflection by
+# mtype, which is what covers a pronoun-free "budget £1400/month".
+_FIRST_PERSON = re.compile(r"\b(?:my|mine|me|i|i'?m|we|our|us)\b", re.IGNORECASE)
+_FIRST_PERSON_ZH = ("我", "咱")
+
+# A record "states a value" for a field when it names the field AND carries a money-sized
+# number. Three+ digits (or a £ prefix) keeps "2 bedrooms" out of a budget scrub.
+_MONEY_RE = re.compile(r"£\s*\d[\d,]*(?:\.\d+)?|\b\d[\d,]{2,}(?:\.\d+)?\b")
+
+# field -> compiled EN delete-imperative patterns (field alternation substituted in).
+_ERASE_PATTERNS = {
+    field: tuple(
+        re.compile(tpl.format(f="|".join(re.escape(t) for t in terms)), re.IGNORECASE)
+        for tpl in _ERASE_EN_TEMPLATES
+    )
+    for field, terms in _FIELD_TERMS.items()
+}
+
+
+def _mentions_field(text: str, field: str) -> bool:
+    value = (text or "").casefold()
+    return any(term in value for term in _FIELD_TERMS.get(field, ()))
+
+
+def _states_field_value(text: str, field: str, mtype: str = "") -> bool:
+    """True when ``text`` is a statement of THIS user's value for ``field``.
+
+    Requires (a) a field term, (b) a money-sized number, and (c) first-person framing
+    OR a distilled layer (semantic/reflection records are about the user by
+    construction — "budget £1400/month" carries no pronoun). (c) is what keeps a market
+    fact the user merely asked about ("Camden rents average £1800") out of the scrub.
+    """
+    if not _mentions_field(text, field):
+        return False
+    if not _MONEY_RE.search(text or ""):
+        return False
+    if mtype in ("semantic", "reflection"):
+        return True
+    return bool(_FIRST_PERSON.search(text or "")
+                or any(ch in (text or "") for ch in _FIRST_PERSON_ZH))
+
+
+def erasure_request_fields(text: str) -> tuple:
+    """Fields the user is explicitly asking us to DELETE, from their own message.
+
+    Deterministic (no LLM). Returns () for anything that is not an unambiguous,
+    first-person delete imperative — the conservative direction, because the caller
+    acts on this destructively.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return ()
+    if not (_FIRST_PERSON.search(raw) or any(ch in raw for ch in _FIRST_PERSON_ZH)):
+        return ()
+    hits = []
+    for field, terms in _FIELD_TERMS.items():
+        matched = any(pat.search(raw) for pat in _ERASE_PATTERNS[field])
+        if not matched:
+            # zh has no word boundaries: a delete cue plus a field term anywhere in the
+            # (short) message is the signal.
+            matched = (any(cue in raw for cue in _ERASE_ZH)
+                       and any(t in raw for t in terms))
+        if matched:
+            hits.append(field)
+    return tuple(hits)
+
+
 def _classify_pii(text: str) -> str:
     """Conservative metadata tag; content stays local and remains erasable by user_id."""
     value = (text or "").casefold()
@@ -196,11 +300,131 @@ class AgentMemory:
         )
         self._lock = threading.Lock()
         self._accum = {}  # (user_id, session_id) -> accrued importance (reflection gate)
+        # Report of the most recent targeted erasure — a value that is COMPUTED and
+        # ASSERTED ON (tests pin it), not merely logged.
+        self.last_erasure_report = None
 
     # ------------------------------------------------------------------ writing
     def add(self, text, mtype, session_id="default", user_id=None,
             role="", importance=None, idempotency_key=None,
             extra_meta=None) -> str | None:
+        """Store one memory record; honour a user's DELETE instruction cross-layer.
+
+        The erasure hook fires ONLY for the user's own message as recorded by the
+        auto-episodic turn log (``mtype == "episodic" and role == "user"``). That is
+        deliberate and is the narrowest reachable surface:
+
+          * ``remember_turn`` writes that record from the CURRENT USER MESSAGE, which is
+            untainted by construction (the same premise taint policy A+ rule 2 rests on),
+            and the benchmark replays prior user turns the same way;
+          * the model-initiated ``remember`` tool and ``_consolidate`` both write
+            ``semantic``, so neither can reach the destructive path — a scraped listing or
+            an LLM-extracted fact can never delete a user's stored data.
+
+        Nothing in the taint/authorization model is relaxed: this adds a gate, it removes
+        none. ``memory_write_allowed`` still governs every write exactly as before.
+        """
+        mem_id = self._add_record(text, mtype, session_id=session_id, user_id=user_id,
+                                  role=role, importance=importance,
+                                  idempotency_key=idempotency_key, extra_meta=extra_meta)
+        uid = _valid_user_id(user_id)
+        if uid is None or mtype != "episodic" or role != "user":
+            return mem_id
+        fields = erasure_request_fields(text)
+        if not fields:
+            return mem_id
+        report = self.forget_fact(uid, fields)
+        # Truthful return: if the instruction itself carried the value ("forget my £1400
+        # budget") the scrub erased this very record, so claiming it was stored would be
+        # the same lie G9 punished.
+        if mem_id and mem_id in report.get("deleted_ids", ()):
+            return None
+        return mem_id
+
+    def forget_fact(self, user_id: str, fields, session_id: str = "default") -> dict:
+        """Erase one or more FIELDS' stated values for one user across EVERY layer.
+
+        This is a FULL SCRUB, not a truthful-partial: ``retrieve()`` reads one collection
+        with a single ``user_id`` filter and no mtype restriction, so any record left
+        behind is a record ``recall_memory`` can hand back. Retaining the episodic text
+        "for audit" while promising the user it was deleted is precisely the G9 bug, and
+        the only enforcement that survives contact with the MCP subprocess, the WHAT I
+        REMEMBER block and the recall tool alike is deleting the row.
+
+        Value-FREE mentions are retained on purpose — the user's own deletion request
+        ("forget my budget entirely") names the field but leaks nothing, and keeping it
+        is what lets the next turn answer "there is no budget on file" instead of
+        guessing. They are counted in ``retained_mentions`` so the retention is stated,
+        never implied.
+
+        Returns a report: ``{"user_id", "fields", "deleted", "deleted_ids", "by_layer",
+        "retained_mentions", "residual_ids", "complete"}``. ``complete`` is the result of
+        RE-READING the store after the delete and confirming no value-bearing record for
+        those fields survives — a source guard, not a promise. A False ``complete`` is the
+        honest partial-deletion signal for the caller to surface.
+        """
+        empty = {"user_id": None, "fields": (), "deleted": 0, "deleted_ids": (),
+                 "by_layer": {}, "retained_mentions": 0, "residual_ids": (),
+                 "complete": True}
+        uid = _valid_user_id(user_id)
+        if uid is None:
+            # Same fail-closed identity gate as every other read/write path.
+            out = dict(empty, complete=False)
+            self.last_erasure_report = out
+            return out
+        wanted = tuple(f for f in (fields or ()) if f in _FIELD_TERMS)
+        if not wanted:
+            out = dict(empty, user_id=uid)
+            self.last_erasure_report = out
+            return out
+
+        def _scan():
+            got = self.col.get(where={"user_id": uid})
+            ids = list(got.get("ids") or [])
+            docs = list(got.get("documents") or [])
+            metas = list(got.get("metadatas") or [])
+            doomed, by_layer, retained = [], {}, 0
+            for i, rid in enumerate(ids):
+                doc = docs[i] if i < len(docs) else ""
+                mtype = ((metas[i] if i < len(metas) else None) or {}).get("mtype", "")
+                if any(_states_field_value(doc, f, mtype) for f in wanted):
+                    doomed.append(rid)
+                    by_layer[mtype or "unknown"] = by_layer.get(mtype or "unknown", 0) + 1
+                elif any(_mentions_field(doc, f) for f in wanted):
+                    retained += 1
+            return doomed, by_layer, retained
+
+        deleted_ids, by_layer, retained, residual = [], {}, 0, []
+        with self._lock:
+            try:
+                deleted_ids, by_layer, retained = _scan()
+                if deleted_ids:
+                    self.col.delete(ids=deleted_ids)
+                # Verification pass: assert the scrub actually happened.
+                residual, _, retained = _scan()
+            except Exception as e:
+                print(f"[memory] forget_fact error: {e}")
+                residual = residual or ["<unverified>"]
+        report = {
+            "user_id": uid, "fields": wanted, "deleted": len(deleted_ids),
+            "deleted_ids": tuple(deleted_ids), "by_layer": by_layer,
+            "retained_mentions": retained, "residual_ids": tuple(residual),
+            "complete": not residual,
+        }
+        self.last_erasure_report = report
+        if residual:
+            print(f"[memory] forget_fact INCOMPLETE for user={uid} fields={wanted}: "
+                  f"{len(residual)} record(s) still state the value — the caller MUST "
+                  f"report a partial deletion, not a completed one")
+        else:
+            print(f"[memory] forget_fact user={uid} fields={wanted} "
+                  f"deleted={len(deleted_ids)} by_layer={by_layer} "
+                  f"retained_value_free_mentions={retained}")
+        return report
+
+    def _add_record(self, text, mtype, session_id="default", user_id=None,
+                    role="", importance=None, idempotency_key=None,
+                    extra_meta=None) -> str | None:
         user_id = _valid_user_id(user_id)
         if user_id is None:
             print("[memory] add rejected: missing/shared user_id (memory must be per-user)")

@@ -402,6 +402,39 @@ def _infer_poi_types_from_query(user_query: str) -> List[str]:
     return list(dict.fromkeys(inferred))
 
 
+def _resolve_nearest_station(address: str, lat: float, lon: float) -> dict:
+    """The grounded ``nearest_station`` block for a station query.
+
+    Uses TfL's StopPoint index (authoritative for London tube/rail, and it returns the
+    measured distance) rather than the Overpass ``["station"="subway"]`` result, which drops
+    unnamed elements and misses anything outside the caller-chosen radius — the model was
+    then free to fill the silence. Never raises: a lookup failure degrades to an explicit
+    "not established", which is a usable fact, unlike an absent key.
+    """
+    try:
+        from core.place_reference import nearest_stations, STATION_SOURCE
+        found = nearest_stations(lat, lon)
+    except Exception as e:
+        print(f"  [nearest station] lookup failed: {e}")
+        found = None
+
+    if found is None:
+        return {"nearest_station": None, "other_stations_nearby": [],
+                "note": (f"The nearest station to {address!r} could NOT be checked. Do not "
+                         f"name a station.")}
+    if not found:
+        return {"nearest_station": None, "other_stations_nearby": [],
+                "note": (f"TfL lists no tube/rail station near {address!r}. Say there is none "
+                         f"nearby rather than naming one.")}
+    top = found[0]
+    return {
+        "nearest_station": top,
+        "other_stations_nearby": found[1:],
+        "note": (f"Nearest station per {STATION_SOURCE}: {top['name']} "
+                 f"({top['distance_m']}m straight-line). Name only stations from this result."),
+    }
+
+
 def _skipped_note(skipped: List[str]) -> str:
     """Honest partial-result note. This tool has no reply_language param, so the note is
     neutral English plus a short zh hint (mirrors how other tool notes stay bilingual)."""
@@ -459,6 +492,13 @@ def search_nearby_pois_impl(
         lat, lon = coords
         print(f"📍 坐标: {lat:.6f}, {lon:.6f}")
 
+        # What every distance below is measured FROM. This tool geocodes the query string,
+        # so for an AREA question ("how is Hackney?") the origin is a borough centroid and
+        # "Tesco 110m" means 110 m from a cartographic centre, not from a home. Network-free
+        # (string classifier) so it costs the POI hot path nothing.
+        from core.place_reference import query_reference
+        ref = query_reference(address)
+
         results = {}
 
         # 确定要查询的 POI 类型
@@ -504,12 +544,25 @@ def search_nearby_pois_impl(
 
         note = _skipped_note(skipped) if skipped else None
 
+        # A station name is the one POI the model has repeatedly supplied from memory
+        # (observed: the same WC1H property reported as "Covent Garden" in one turn and
+        # "Russell Square" — the correct answer — in another). Nothing in this repo ever
+        # produced "Covent Garden", so it was invented in the gap left by a tool that can
+        # return an empty station list. When stations were asked for, the answer now comes
+        # from TfL's own index, including the case where there is none.
+        station_block = None
+        if "tube_station" in types_to_query:
+            station_block = _resolve_nearest_station(address, lat, lon)
+
         if not results:
             payload = {
                 "success": True,
                 "address": address,
+                "reference_point": ref,
                 "pois": {},
             }
+            if station_block:
+                payload.update(station_block)
             if skipped:
                 payload["message"] = (
                     "No results were gathered within the time budget. " + note)
@@ -517,7 +570,8 @@ def search_nearby_pois_impl(
                 payload["skipped_types"] = skipped
                 payload["note"] = note
             else:
-                payload["message"] = f"No {poi_type} found within {radius}m of this address."
+                payload["message"] = (
+                    f"No {poi_type} found within {radius}m of {ref['measured_from']}")
             return payload
 
         # 格式化输出
@@ -533,7 +587,13 @@ def search_nearby_pois_impl(
                     entry += f" [{poi['brand']}]"
                 formatted.append(entry)
 
-        summary = f"Found {sum(len(p) for p in results.values())} places within {radius}m:\n" + "\n".join(formatted)
+        # The reference point goes into the SUMMARY STRING, not only into a sibling field:
+        # a sibling field is exactly what route_source was, and nothing read it.
+        summary = (f"Found {sum(len(p) for p in results.values())} places within {radius}m, "
+                   f"measured in a straight line from {ref['measured_from']}\n"
+                   + "\n".join(formatted))
+        if station_block and station_block.get("note"):
+            summary = summary + "\n" + station_block["note"]
         if note:
             summary = summary + "\n" + note
 
@@ -541,9 +601,12 @@ def search_nearby_pois_impl(
             "success": True,
             "address": address,
             "radius_m": radius,
+            "reference_point": ref,
             "summary": summary,
             "pois": results,
         }
+        if station_block:
+            payload.update(station_block)
         if skipped:
             payload["partial"] = True
             payload["skipped_types"] = skipped
@@ -560,6 +623,7 @@ search_nearby_pois_tool = Tool(
     name="search_nearby_pois",
     
     description="""Find nearby places (restaurants, supermarkets, convenience stores, cafes, pharmacies, gyms, parks, bus stops, tube stations, banks, ATMs) around an address using OpenStreetMap. Use for any "what's nearby" / "is there a ... near" question. Do NOT confuse with check_safety, which is for crime/safety questions only.
+DISTANCES HAVE A REFERENCE POINT: the result's `reference_point.measured_from` says what the metres are measured from. For an AREA query it is the area's geocoded centre, not a home — quote the distance together with that reference, never as "X metres from the property". Ask with poi_type=tube_station to get a `nearest_station` field resolved from TfL; if it is null the nearest station is NOT established and you must not name one.
 搜索某地址附近的设施（餐厅/超市/交通站点等）。""",
     
     func=search_nearby_pois_impl,

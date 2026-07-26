@@ -3,7 +3,12 @@
 Master index for the fc_loop work. **Every other document is a leaf; this is the only file
 that spans all branches.** Last updated 2026-07-25.
 
-> ## Status: ACTIVE — a full verification round has now been run. Verdict STAGE-PAUSE; fc beats legacy on correctness.
+> ## Status: fc_loop IS LIVE ON THE PUBLIC EDGE as of 2026-07-26. The p50 gate did NOT pass; the owner overrode it.
+>
+> **THE GATE WAS NOT MET. IT WAS OVERRIDDEN.** Read that as written — nothing below
+> retroactively turns `8793c0b` green, and no future round may cite this cutover as evidence
+> that the gate was satisfied. §3.10 records the decision, what was known at the time, and
+> how to undo it.
 >
 > The 2026-07-19 → 07-23 latency/correctness phase is **closed** (two product experiments
 > NO-GO, §4). What followed is a deliberate rebuild in order — **infrastructure → contract
@@ -328,6 +333,60 @@ For reference if the deficit does turn out to be generation-bound, this round's 
 only; the earlier independent fit gave 14.6 ms/token). At a median 452 output tokens, closing
 2466 ms through output length alone means cutting ~152 tokens, a **34%** reduction.
 
+### 3.10 Cutover, 2026-07-26 — an owner override, recorded as one
+
+`fc_loop` serves the public edge. `deploy/nginx/…ssl.conf` upstream is `127.0.0.1:5002`.
+The cutover itself was performed on `8793c0b17963a6a2b375903a164d3d96395dc834`; the pool has
+been rebuilt on later mainline SHAs since, so read the live
+`x-agent-version` rather than trusting the number in this paragraph — that header, not this
+document, is the authority on what is running.
+
+**The p50 gate was not met.** The round of record (§3.8) returned **STAGE-PAUSE (exit 2)** at
+8,466 ms cold / 7,402 ms warm against a 6,000 ms bar, and the partial+soft rate was 10.45%
+against a 10% ceiling. Neither number improved before the cutover. The owner, who owns the
+product and its users, decided to ship anyway and to evaluate by hand. That is a legitimate
+call and it is recorded here **as an override, not as a pass**:
+
+* `P50_LIMIT_MS` is still 6000 and is NOT revised.
+* §3.8's verdict stands unchanged. This section does not amend it.
+* **No later document may cite this cutover as evidence that the gate was satisfied.** The
+  gate was not satisfied; a person with the authority to accept the risk accepted it.
+
+**What was known at the time.** fc beat the incumbent on every correctness metric measured
+(§3.9): pass 60.2% vs 34.7%, fabricated numbers 2.04% vs 3.06%, forbidden-tool 3.06% vs
+4.08%, contradicted claims 0 vs 1, and fc produced 84% more groundable claims. It is slower:
+median 7.4 s versus legacy's 2.7 s, and legacy's speed comes substantially from executing no
+tool at all on 39.8% of turns. The canned-template fallback is gone (0.00% of soft wraps).
+Zero-tolerance metrics were clean.
+
+**Post-cutover verification.** A real answer-producing query through the public edge — not
+`/health`, which cannot see a broken pool (§3A) — returned HTTP 200 in 8.6 s with a sourced
+answer, `llm_usage_status=complete`, 0 provider 400s, no soft wrap, no DSML leak. Notably it
+disclosed missing crime data rather than inventing a score.
+
+**Rollback is one command and takes seconds:**
+
+```
+bash deploy/switch_pool.sh --to legacy --allow-unidentified-target
+```
+
+`--allow-unidentified-target` is required because the legacy pool still answers
+`x-agent-version: unknown` (§3A).
+
+**Open risk, ordered.**
+
+1. **The health monitor is still not running.** Units are installed but the timer is
+   `disabled`, and `ExecStart` points at the deploy tree's copy, which is the pre-#18 version
+   that would not have caught the 2026-07-24 outage. Until that is fixed, a new architecture
+   is live with nothing watching it. This is the highest-priority open item.
+2. **`APP_CANDIDATE_SHA` is still unset for the `app` service**, so the rollback target cannot
+   state its commit. The earlier plan was to fix this "for free" right after cutover, while
+   legacy is idle. **That plan is withdrawn:** rebuilding the only rollback target immediately
+   after moving public traffic onto an unproven candidate is the worst possible timing, since
+   it is exactly when you are most likely to need it. Do it once fc has run clean for a
+   sustained period, and flip back to legacy first if it must be done sooner.
+3. The variance study (PR #19) is unfrozen and unrun. Its result now matters more, not less:
+   with fc live, every future "did this change help?" question is asked against production.
 ### 3.11 Two figures WITHDRAWN — `llm_calls` was undercounting
 
 **Do not cite either of these again without re-measuring.** Both appear in earlier sections

@@ -79,13 +79,25 @@ probe() {
   printf '%s %s %s' "${code:-000}" "${arch:-none}" "${ver:-none}"
 }
 
-# 1) PUBLIC edge MUST stay legacy --------------------------------------------
+# 1) PUBLIC edge must serve the arch we intend --------------------------------
+# This check used to hard-code "legacy" and treat anything else as a leak. On 2026-07-26 the
+# owner deliberately cut the public edge over to fc_loop, so that assertion started firing
+# sev3 every five minutes about the intended state. An alert that is always on is an alert
+# that gets ignored, which is how the next real one is missed -- the same reasoning that
+# demoted provider 429s to sev4.
+#
+# The intent is now declared, not assumed. MON_EXPECTED_PUBLIC_ARCH must be updated as part
+# of any cutover or rollback; a mismatch still pages, because an UNPLANNED change of what the
+# public edge serves is exactly what this check is for. deploy/switch_pool.sh is what moves
+# the upstream, and this variable is what records that the move was on purpose.
+EXPECTED_PUBLIC_ARCH="${MON_EXPECTED_PUBLIC_ARCH:-fc_loop}"
+
 read -r p_code p_arch p_ver <<<"$(probe "$PUBLIC_URL")"
 summary+="pub=$p_code/$p_arch "
 if [ "$p_code" != "200" ]; then
   emit_alert 3 "public $PUBLIC_URL returned HTTP $p_code (expected 200)"
-elif [ "$p_arch" != "legacy" ]; then
-  emit_alert 3 "public edge x-agent-arch=$p_arch — MUST be legacy (fc leaked to public!)"
+elif [ "$p_arch" != "$EXPECTED_PUBLIC_ARCH" ]; then
+  emit_alert 3 "public edge x-agent-arch=$p_arch but MON_EXPECTED_PUBLIC_ARCH=$EXPECTED_PUBLIC_ARCH — the public pool changed without the monitor being told"
 fi
 
 # 2) local legacy pool -------------------------------------------------------
@@ -112,9 +124,16 @@ fi
 # as `--since` computing a window it then does not filter on.
 NOW["ver_legacy"]="$l_ver"; NOW["ver_fc"]="$f_ver"
 
-# The edge must be serving the pool we think it is serving.
-if [ "$p_code" = "200" ] && [ "$l_code" = "200" ] && [ "$p_ver" != "$l_ver" ]; then
-  emit_alert 3 "public edge version '$p_ver' != legacy pool version '$l_ver' — the edge is not serving the pool it should be"
+# The edge must be serving the pool we think it is serving -- compared against the pool
+# named by MON_EXPECTED_PUBLIC_ARCH, not always legacy. This assertion shipped hard-coded to
+# the legacy pool and started false-alarming the moment the edge moved to fc: the same
+# assumption, in the check written to catch that assumption. Declared intent, one place.
+case "$EXPECTED_PUBLIC_ARCH" in
+  fc_loop) _exp_code="$f_code"; _exp_ver="$f_ver" ;;
+  *)       _exp_code="$l_code"; _exp_ver="$l_ver" ;;
+esac
+if [ "$p_code" = "200" ] && [ "$_exp_code" = "200" ] && [ "$p_ver" != "$_exp_ver" ]; then
+  emit_alert 3 "public edge version '$p_ver' != $EXPECTED_PUBLIC_ARCH pool version '$_exp_ver' — the edge is not serving the pool it should be"
 fi
 
 # An unannounced version change means something redeployed without an operator.

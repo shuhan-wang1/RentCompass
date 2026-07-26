@@ -414,6 +414,7 @@ def get_crime_data_by_location(address: str) -> dict | None:
     location = _get_coordinates(address)
     
     if not location:
+        # Also deliberately uncached, for the same reason as the empty-result branch below.
         print(f"     ❌ Could not geocode address: {address}")
         return {"error": "Could not geocode address.", "total_crimes_6m": "Unknown"}
     
@@ -451,15 +452,18 @@ def get_crime_data_by_location(address: str) -> dict | None:
             continue
 
     if not all_crimes:
-        print(f"     [WARN]  WARNING: No crime data found for any month!")
-        summary = {
-            "total_crimes_6m": "Unknown", 
-            "crime_trend": "unknown", 
+        # DO NOT CACHE A FAILURE. data.police.uk returns intermittent 500/502s (observed
+        # repeatedly on 2026-07-26), and caching the empty result freezes "no safety data"
+        # for the whole TTL on an area that is perfectly queryable a minute later. Observed
+        # live: Hackney Central held an `error` entry while Richmond, fetched seconds apart,
+        # cached fine. Returning without persisting means the next request simply retries.
+        print(f"     [WARN]  WARNING: No crime data found for any month (NOT cached — will retry)")
+        return {
+            "total_crimes_6m": "Unknown",
+            "crime_trend": "unknown",
             "category_breakdown": "Crime data unavailable",
-            "error": "No data returned from UK Police API"
+            "error": "No data returned from UK Police API",
         }
-        set_to_cache(cache_key, summary)
-        return summary
 
     print(f"     [OK] TOTAL: {len(all_crimes)} crimes across 6 months")
     

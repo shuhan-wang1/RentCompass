@@ -22,10 +22,10 @@ Percentiles use the repo's NEAREST-RANK convention (``evaluation/run_benchmark.p
 the value at 0-based index ``ceil(pct*n)-1`` (clamped) of the sorted samples — an actual
 observed latency, never an interpolation.
 
-Exit codes:
-    0  proceed / hold-ok (green, or a stage simply not yet eligible to progress)
-    2  stage-pause breached (a relative/absolute SLO or degradation threshold tripped)
-    3  zero-tolerance breached (a safety invariant tripped — instant rollback)
+Exit codes — only 0/2/3 are GATE VERDICTS (see GATE_EXIT_CODES / EXIT_USAGE below):
+    0  proceed / hold-ok        2  stage-pause or instrumentation-hold
+    3  zero-tolerance breach    1  input/runtime error (bad --input/--since/--now)
+   64  CLI usage error: argparse misuse (unknown flag, option missing its argument)
 
 Stdlib only. Deterministic: given the same input files and flags, the output is identical.
 """
@@ -50,6 +50,19 @@ P95_LIMIT_MS = 30000.0       # fc p95 hard ceiling (stage-pause above this)
 OVER_SLO_MS = 30000.0        # a turn breaching this counts toward the over-30s tail
 DEGRADED_RATE_LIMIT = 0.10   # (partial OR soft_wrapped) rate stage-pause ceiling
 RELATIVE_PP = 1.0            # relative-to-legacy tolerance in percentage points
+
+# Exit codes. 0 / 2 / 3 are GATE VERDICT codes — they mean something about the release
+# under test and a rollout driver branches on them (see build_verdict). Everything that
+# is NOT a verdict must live outside this set, or the operator cannot tell "the gate
+# spoke" from "I mistyped a flag".
+#
+# argparse's own default abort code is 2, which is STAGE-PAUSE here: `--json` typed
+# without its PATH argument therefore exited 2 and was indistinguishable from a breached
+# gate to anyone checking only `$?`. CLI misuse gets its own code instead, and no gate
+# verdict may ever be reported as EXIT_USAGE (both directions are guarded in run()).
+GATE_EXIT_CODES = (0, 2, 3)
+EXIT_INPUT_ERROR = 1     # inputs/arguments were readable but unusable
+EXIT_USAGE = 64          # sysexits.h EX_USAGE — argparse misuse, never a verdict
 
 # Stage -> (minimum fc turns, minimum elapsed hours). BOTH must be satisfied to progress.
 STAGES: Dict[str, Tuple[int, int]] = {
@@ -624,17 +637,59 @@ def reference_now(records: Sequence[dict], override: Optional[datetime]) -> date
     return datetime.now(timezone.utc)
 
 
+def window_bounds(window_hours: Optional[float], since: Optional[datetime],
+                  now: datetime) -> Tuple[Optional[datetime], str]:
+    """Return ``(cutoff, description)`` for the record filter that will ACTUALLY be applied.
+
+    ``--window HOURS`` and ``--since ISO`` are both LOWER BOUNDS on a record's ts, so
+    when both are given the effective cutoff is the LATER of the two (the intersection
+    — the most restrictive bound wins). ``cutoff`` is None only when neither was given.
+
+    The human-readable description is produced HERE, next to the cutoff it describes,
+    so no other code has to restate the filter from memory. It previously did: the
+    ``--expect-turns`` anchor printed a fixed string, ``"the selected --window / --since
+    range"``, while ``--since`` was parsed and then used ONLY to compute stage
+    elapsed-hours — it never filtered anything. The report therefore claimed a bound it
+    had not applied, and the first run of the 2026-07-25 internal round counted a
+    warm-up turn from before the stated start and returned INSTRUMENTATION-HOLD.
+    """
+    labels: List[str] = []
+    cutoff: Optional[datetime] = None
+    if window_hours is not None:
+        wcut = datetime.fromtimestamp(now.timestamp() - window_hours * 3600.0,
+                                      tz=timezone.utc)
+        cutoff = wcut
+        labels.append(f"--window {window_hours:g}h before {now.isoformat()}")
+    if since is not None:
+        labels.append(f"--since {since.isoformat()}")
+        if cutoff is None or since > cutoff:
+            cutoff = since
+    if cutoff is None:
+        return None, "UNFILTERED: every dated record in the inputs (no --window, no --since)"
+    prefix = "the later of " if len(labels) > 1 else ""
+    return cutoff, f"ts >= {cutoff.isoformat()} ({prefix}{' and '.join(labels)})"
+
+
 def filter_window(records: Sequence[dict], window_hours: Optional[float],
-                  now: datetime) -> List[dict]:
-    """Keep records whose ts is within ``window_hours`` of ``now`` (inclusive). Records
-    lacking any timestamp are dropped when a window is requested (they cannot be placed)."""
-    if window_hours is None:
+                  now: datetime, since: Optional[datetime] = None) -> List[dict]:
+    """Keep records at/after the effective cutoff from :func:`window_bounds` — i.e. within
+    ``window_hours`` of ``now`` AND not older than ``since``. Records lacking any timestamp
+    are dropped when a filter is requested (they cannot be placed; ``build_report``
+    partitions them out first and holds the gate on them).
+
+    ``since`` is honoured as a filter here. A bound that is parsed, stored where a reader
+    could find it, and then never applied is worse than no bound at all: every caller
+    reads the flag as "judge only this stage's traffic", and the population silently
+    keeps the turns the operator meant to exclude.
+    """
+    cutoff, _ = window_bounds(window_hours, since, now)
+    if cutoff is None:
         return list(records)
-    cutoff = now.timestamp() - window_hours * 3600.0
+    cut = cutoff.timestamp()
     kept = []
     for r in records:
         ts = record_ts(r)
-        if ts is not None and ts.timestamp() >= cutoff - 1e-6:
+        if ts is not None and ts.timestamp() >= cut - 1e-6:
             kept.append(r)
     return kept
 
@@ -837,7 +892,8 @@ def evaluate_stage(fc: dict, stage: str, since: Optional[datetime],
 # External anchor: reconcile against the count of turns the driver drove       #
 # --------------------------------------------------------------------------- #
 
-def evaluate_expected_turns(windowed: Sequence[dict], expected: int) -> dict:
+def evaluate_expected_turns(windowed: Sequence[dict], expected: int,
+                            window_desc: Optional[str] = None) -> dict:
     """Reconcile the run against an EXTERNAL count of turns that were driven.
 
     The gate's own counters can only describe records that EXIST. They cannot see a
@@ -863,6 +919,12 @@ def evaluate_expected_turns(windowed: Sequence[dict], expected: int) -> dict:
     duplicated record cover for a missing turn — 50 records where one turn emitted
     twice and another emitted nothing is indistinguishable from 50 clean turns by
     count. Uniqueness is what makes "50" mean fifty distinct turns.
+
+    ``window_desc`` is the description of the filter the CALLER actually applied to
+    ``windowed`` (see :func:`window_bounds`); this function cannot observe it, so it
+    reports what it was told and says so plainly when it was told nothing. It must
+    never invent one: the previous fixed string named ``--since`` as part of the
+    window when ``--since`` did not filter at all.
     """
     eligible: List[dict] = []
     ineligible: Dict[str, int] = {}
@@ -913,7 +975,7 @@ def evaluate_expected_turns(windowed: Sequence[dict], expected: int) -> dict:
         "duplicate_request_ids": duplicated,
         "candidate_shas": shas,
         "filters": {
-            "window": "the selected --window / --since range",
+            "window": window_desc or "not stated by the caller (no record filter reported)",
             "agent_arch": "fc_loop",
             "endpoint": list(GATE_ENDPOINTS),
             "schema": f"v{MIN_SCHEMA_VERSION} contract-valid only",
@@ -1085,7 +1147,11 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
     # record escape the contract entirely by carrying a missing or corrupt ts.
     undated = [r for r in records if record_ts(r) is None]
     dated = [r for r in records if record_ts(r) is not None]
-    windowed = filter_window(dated, window_hours, now)
+    # ONE source for the cutoff and for the sentence describing it, so the report can
+    # never narrate a filter it did not run. `since` bounds the POPULATION here, not
+    # just the stage elapsed-hours check it used to feed on its own.
+    window_cutoff, window_desc = window_bounds(window_hours, since, now)
+    windowed = filter_window(dated, window_hours, now, since=since)
 
     # v2: PERFORMANCE/quality metrics are decided by the AGENT endpoint only.
     # search_direct is a deterministic, LLM-free path — folding it in would dilute
@@ -1151,7 +1217,8 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
     # Reconciled against the WINDOWED set, before the endpoint filter, so a turn
     # that landed on the wrong endpoint is counted as ineligible and reported —
     # rather than disappearing from the comparison entirely.
-    expected_turns = (evaluate_expected_turns(windowed, expect_turns)
+    expected_turns = (evaluate_expected_turns(windowed, expect_turns,
+                                              window_desc=window_desc)
                       if expect_turns is not None else None)
     verdict = build_verdict(fc, legacy, deltas, stage_eval, instrumentation, global_zt,
                             expected_turns)
@@ -1161,6 +1228,12 @@ def build_report(records: Sequence[dict], *, window_hours: Optional[float] = Non
         "inputs": list(inputs or []),
         "reference_now": now.isoformat(),
         "window_hours": window_hours,
+        "since": since.isoformat() if since is not None else None,
+        # The cutoff actually applied to the population, and its plain-English form.
+        # Emitted so a JSON consumer can reconcile a rate against the exact bound the
+        # rate was computed over instead of trusting a flag it did not see applied.
+        "window_cutoff": window_cutoff.isoformat() if window_cutoff is not None else None,
+        "window_filter": window_desc,
         "records_total": len(records),
         "records_in_window": len(windowed),
         "records_in_gate": len(gate_records),
@@ -1205,6 +1278,10 @@ def render_text(report: dict) -> str:
     a(f"generated_at   : {report['generated_at']}")
     a(f"reference_now  : {report['reference_now']}")
     a(f"window_hours   : {report['window_hours']}")
+    a(f"since          : {report.get('since')}")
+    # The filter as APPLIED, printed on the report itself: the operator reading a
+    # verdict must be able to see the population it was computed over.
+    a(f"record filter  : {report.get('window_filter')}")
     a(f"records        : total={report['records_total']} "
       f"in_window={report['records_in_window']} skipped={report['records_skipped']}")
     a("")
@@ -1321,21 +1398,53 @@ def render_text(report: dict) -> str:
 # CLI                                                                         #
 # --------------------------------------------------------------------------- #
 
-def _parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(
+class _UsageExitParser(argparse.ArgumentParser):
+    """An ArgumentParser that exits :data:`EXIT_USAGE`, never 2, on misuse.
+
+    argparse's default abort code is 2, and 2 is a GATE VERDICT here (STAGE-PAUSE /
+    INSTRUMENTATION-HOLD). So ``--json`` typed without its PATH argument produced
+    exit 2, and an operator or CI driver checking only ``$?`` could not tell a typo
+    from a breached gate — it would pause a rollout that was never measured, or
+    "confirm" a pause that never happened.
+
+    Both argparse exit paths are overridden, not just ``error()``: ``exit()`` is what
+    ``error()`` and a few internal paths funnel through, so overriding only the former
+    would leave the collision reachable. ``--help`` still exits 0 — asking for help is
+    not misuse.
+    """
+
+    def error(self, message: str):        # pragma: no cover - exercised via run()
+        self.print_usage(sys.stderr)
+        sys.stderr.write(f"{self.prog}: error: {message}\n")
+        raise SystemExit(EXIT_USAGE)
+
+    def exit(self, status: int = 0, message: Optional[str] = None):
+        if message:
+            (sys.stderr if status else sys.stdout).write(message)
+        raise SystemExit(EXIT_USAGE if status else 0)
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = _UsageExitParser(
         prog="canary_report.py",
         description="Aggregate canary.turn telemetry and evaluate the fc_loop canary gate.")
     p.add_argument("--input", "-i", action="append", default=[], metavar="PATH",
                    help="JSONL/log file, directory (searched recursively), or glob. "
                         "Repeatable.")
     p.add_argument("--window", type=float, default=None, metavar="HOURS",
-                   help="Keep only records within HOURS of the latest observed timestamp.")
+                   help="Keep only records within HOURS of the 'now' reference "
+                        "(default reference: the latest observed timestamp).")
     p.add_argument("--json", dest="json_out", default=None, metavar="PATH",
-                   help="Write the full report as JSON to PATH ('-' for stdout).")
+                   help=f"Write the full report as JSON to PATH ('-' for stdout). "
+                        f"PATH is REQUIRED; omitting it is a usage error "
+                        f"(exit {EXIT_USAGE}), never a gate verdict.")
     p.add_argument("--stage", choices=sorted(STAGES), default=None,
                    help="Evaluate stage-progress minima for this stage.")
     p.add_argument("--since", default=None, metavar="ISO",
-                   help="Stage start timestamp (ISO-8601) for the elapsed-hours check.")
+                   help="Stage start timestamp (ISO-8601). FILTERS the population: "
+                        "records older than this are excluded, exactly like --window "
+                        "(both are lower bounds; the later one wins). Also supplies the "
+                        "stage elapsed-hours check.")
     p.add_argument("--now", default=None, metavar="ISO",
                    help="Override the 'now' reference (ISO-8601). Default: latest record ts.")
     p.add_argument("--expect-turns", type=int, default=None, metavar="N",
@@ -1346,29 +1455,40 @@ def _parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
                         "has an unknown denominator.")
     p.add_argument("--quiet", action="store_true",
                    help="Suppress the text table (still writes --json and sets exit code).")
-    return p.parse_args(argv)
+    return p
+
+
+def _parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
+    return _build_parser().parse_args(argv)
 
 
 def run(argv: Optional[Sequence[str]] = None) -> int:
-    args = _parse_args(argv)
+    try:
+        args = _parse_args(argv)
+    except SystemExit as exc:
+        # SOURCE GUARD, not a promise: whatever argparse decides to exit with, a CLI
+        # abort can never leave here carrying a gate verdict code. --help/--version
+        # exit 0 and are not misuse; everything else becomes EXIT_USAGE.
+        code = exc.code if isinstance(exc.code, int) else EXIT_USAGE
+        return 0 if code == 0 else EXIT_USAGE
     if not args.input:
         sys.stderr.write("error: at least one --input is required\n")
-        return 1
+        return EXIT_INPUT_ERROR
 
     records, skipped = load_records(args.input)
 
     since = parse_ts(args.since) if args.since else None
     if args.since and since is None:
         sys.stderr.write(f"error: could not parse --since '{args.since}'\n")
-        return 1
+        return EXIT_INPUT_ERROR
     now_override = parse_ts(args.now) if args.now else None
     if args.now and now_override is None:
         sys.stderr.write(f"error: could not parse --now '{args.now}'\n")
-        return 1
+        return EXIT_INPUT_ERROR
 
     if args.expect_turns is not None and args.expect_turns < 0:
         sys.stderr.write("error: --expect-turns must be >= 0\n")
-        return 1
+        return EXIT_INPUT_ERROR
 
     report = build_report(records, window_hours=args.window, now_override=now_override,
                           stage=args.stage, since=since, skipped=skipped,
@@ -1385,7 +1505,15 @@ def run(argv: Optional[Sequence[str]] = None) -> int:
     if not args.quiet:
         sys.stdout.write(render_text(report) + "\n")
 
-    return int(report["verdict"]["exit_code"])
+    code = int(report["verdict"]["exit_code"])
+    # The other half of the collision guard: a VERDICT must always speak in gate codes.
+    # If a future edit invents one, fail loudly and non-zero rather than hand a driver
+    # a code it will read as a usage error or as success.
+    if code not in GATE_EXIT_CODES:
+        sys.stderr.write(f"internal error: verdict exit code {code} is not one of "
+                         f"{list(GATE_EXIT_CODES)}\n")
+        return EXIT_INPUT_ERROR
+    return code
 
 
 def main() -> None:  # pragma: no cover - thin wrapper

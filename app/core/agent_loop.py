@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
-import functools
 import json
 import logging
 import os
@@ -362,7 +361,8 @@ def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
               success: bool = True, error: Optional[str] = None, *,
               timed_out: bool = False, denied: bool = False,
               abandoned: bool = False, outcome_unknown: bool = False,
-              elapsed_ms: Optional[int] = None) -> dict:
+              elapsed_ms: Optional[int] = None,
+              queue_wait_ms: Optional[int] = None, starved: bool = False) -> dict:
     """A tool_artifacts entry. `success`/`error` mirror the underlying ToolResult so
     downstream readers (P2's critic, format_output_fc) can tell a failed tool apart
     from a successful one without re-parsing the model-facing ToolMessage. The ask_user
@@ -381,8 +381,19 @@ def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
       * `outcome_unknown` — the true outcome is not observable: an abandoned read, or a WRITE
         whose own wait_for fired (the background write may still land). Never a clean failure.
 
+      * `starved`    — the dispatch was submitted but NO tool-offload worker ever picked it
+        up before the budget fired. Set only alongside the markers above; it is an
+        attribution correction, not a new outcome: the elapsed is queue wait, not tool work,
+        so the kill must not be read as "this tool is slow" (see `queue_wait_ms`).
+
     `elapsed_ms` is set on EVERY artifact (executed ones included) so the eval events show
-    exactly which tool consumed the window (Phase 2.3 attribution)."""
+    exactly which tool consumed the window (Phase 2.3 attribution).
+
+    `queue_wait_ms` is how much of that elapsed was spent WAITING FOR A POOL WORKER rather
+    than running the tool. It is 0 in the normal case (the pool has an idle worker, so a
+    dispatch starts within microseconds); it only grows when every worker is held by an
+    earlier, unkillable abandoned dispatch — the one way the batch's declared concurrency
+    silently degrades into serialisation. Measured, not assumed."""
     art = {"turn": turn, "tool": tool, "raw_data": raw_data,
            "params_digest": params_digest, "success": bool(success), "error": error}
     if timed_out:
@@ -393,8 +404,12 @@ def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
         art["abandoned"] = True
     if outcome_unknown:
         art["outcome_unknown"] = True
+    if starved:
+        art["starved"] = True
     if elapsed_ms is not None:
         art["elapsed_ms"] = int(elapsed_ms)
+    if queue_wait_ms is not None:
+        art["queue_wait_ms"] = int(queue_wait_ms)
     return art
 
 
@@ -418,7 +433,22 @@ def _swallow_abandoned_task(task) -> None:
 # Running each dispatch in its OWN event loop on a worker thread keeps the graph loop free, so
 # the folded deadline fires on time and stragglers are abandoned exactly like the existing
 # executor-thread abandon (the worker thread is unkillable and simply walked away from).
+#
+# THE RESIDUAL SERIALISATION THIS POOL CAN STILL CAUSE (measured, see tests/
+# test_parallel_tool_batch.py::test_worker_starvation_is_attributed_not_blamed_on_the_tool):
+# an abandoned dispatch is walked away from but its worker thread keeps running to completion.
+# Once every worker is held by such a thread, the NEXT batch's reads sit in the pool queue.
+# Their per-call `wait_for` and the batch window are both already ticking, so they can be
+# killed having never executed a single line of tool code — and the kill was, until now,
+# attributed to the tool as though the tool were slow. `queue_wait_ms` / `starved` measure
+# and correct that. The concurrency itself is NOT in question: a batch with an idle worker per
+# call runs fully in parallel (N x S completes in ~S, verified up to N=16).
 _TOOL_OFFLOAD_EXECUTOR = None
+
+# Queue wait (ms) at or above which a SUCCESSFUL dispatch records `queue_wait_ms` on its
+# artifact. With an idle worker the wait is microseconds, so anything at this scale means the
+# pool was saturated and the batch was partly serialised. Budget KILLS always record it.
+_QUEUE_WAIT_NOTE_MS = 50
 
 
 def _tool_offload_executor():
@@ -449,24 +479,37 @@ def _run_coro_in_private_loop(coro_factory):
         return exc
 
 
-async def _offload_tool_call(coro_factory):
+async def _offload_tool_call(coro_factory, *, timing: Optional[dict] = None):
     """Run `coro_factory()` (a zero-arg callable returning the tool coroutine) OFF the graph
     event loop, on a worker thread with its own loop, preserving the eval contextvars so
     tool-call attribution still lands (run_in_executor does not copy them; ctx.run does).
     Awaiting this never blocks the graph loop, so a blocking section inside an async tool can no
-    longer defeat the batch/turn deadline."""
+    longer defeat the batch/turn deadline.
+
+    `timing`, when given, is stamped with `started` = time.monotonic() at the instant a POOL
+    WORKER actually picks the dispatch up. Everything between submission and that stamp is
+    queue wait, during which the tool has not run at all while its budget ticks. If the key is
+    still ABSENT when the budget fires, the dispatch never reached a worker (starved) — a
+    different fact from "the tool was slow", and the caller must attribute it as such."""
     loop = asyncio.get_running_loop()
     ctx = contextvars.copy_context()
-    outcome = await loop.run_in_executor(
-        _tool_offload_executor(),
-        functools.partial(ctx.run, _run_coro_in_private_loop, coro_factory))
+
+    def _entry():
+        # Stamped INSIDE the worker thread, before any tool code runs, so the gap from the
+        # caller's submit stamp is pure pool-queue time.
+        if timing is not None:
+            timing["started"] = time.monotonic()
+        return ctx.run(_run_coro_in_private_loop, coro_factory)
+
+    outcome = await loop.run_in_executor(_tool_offload_executor(), _entry)
     if isinstance(outcome, BaseException):
         raise outcome
     return outcome
 
 
 def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str,
-                         abandoned: bool, *, outcome: Optional[str] = None) -> None:
+                         abandoned: bool, *, outcome: Optional[str] = None,
+                         queue_wait_ms: Optional[int] = None) -> None:
     """One structured attribution record per abandon/timeout (Phase 2.3 deliverable 4). The
     eval events read `elapsed_ms` off the artifact; this log names WHICH tool ate WHICH
     budget so a 20s span is no longer an anonymous batch kill. `kind`/`phase` is one of
@@ -474,11 +517,17 @@ def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str
 
     In addition to the Python-logger attribution, the same event is mirrored into the offline
     eval stream (record_tool_budget_timeout), so tool-budget kills are queryable alongside the
-    other events. `outcome` is one of 'timed_out' | 'abandoned' | 'outcome_unknown'; when None
-    it is derived from `abandoned` for the simple timeout/abandon split."""
+    other events. `outcome` is one of 'timed_out' | 'abandoned' | 'outcome_unknown' | 'starved';
+    when None it is derived from `abandoned` for the simple timeout/abandon split.
+
+    `queue_wait_ms` (when known) says how much of `elapsed_s` the dispatch spent waiting for a
+    tool-offload worker instead of running. A kill whose queue wait is ~= its elapsed is a
+    CAPACITY kill, not a slow tool, and reading it as the latter sends the next optimisation
+    at the wrong target."""
+    _qw = "" if queue_wait_ms is None else " queue_wait_s=%.2f" % (float(queue_wait_ms) / 1000.0)
     logger.warning(
-        "fc_loop.tool_budget_timeout tool=%s elapsed_s=%.2f budget_s=%.2f kind=%s abandoned=%s",
-        tool, float(elapsed_s or 0.0), float(budget_s or 0.0), kind, bool(abandoned))
+        "fc_loop.tool_budget_timeout tool=%s elapsed_s=%.2f budget_s=%.2f kind=%s abandoned=%s%s",
+        tool, float(elapsed_s or 0.0), float(budget_s or 0.0), kind, bool(abandoned), _qw)
     if outcome is None:
         outcome = "abandoned" if abandoned else "timed_out"
     _record_budget_timeout_event(
@@ -1618,11 +1667,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     continue
             plan.append((tc, digest, "run", args))
 
-        async def _run(name, args, digest, timeout, is_write):
+        async def _run(name, args, digest, timeout, is_write, timing=None):
             """Execute one tool under its own wait_for(`timeout`). Returns
             (ToolResult, elapsed_ms, status) where status is 'ok' | 'error' | 'timeout'
             (read/generic per-call timeout) | 'write_timeout' (a WRITE whose own wait_for
-            fired — outcome unknown, never a clean failure)."""
+            fired — outcome unknown, never a clean failure).
+
+            `timing` is the caller-owned dict this dispatch stamps `submitted` into (and that
+            _offload_tool_call stamps `started` into once a pool worker picks it up). The
+            caller keeps the reference so it can read the timings even for a dispatch that is
+            ABANDONED and therefore never returns from here."""
             tool = provider.get(name) if hasattr(provider, "get") else None
             version = getattr(tool, "version", "1") if tool else "1"
             # Harness-injected volatile params (leading underscore, e.g. _deadline_monotonic)
@@ -1641,6 +1695,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 _note_write_dispatch(f"{name}:{digest}")
             from core.tool_system import ToolResult
             t_call = time.monotonic()
+            if timing is not None:
+                timing["submitted"] = t_call
             try:
                 # Offload to a private-loop worker thread (see _offload_tool_call): a blocking,
                 # non-yielding section inside an async tool must not freeze the graph loop, or the
@@ -1648,7 +1704,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # built inside the thread via the factory so an abandoned dispatch leaves nothing
                 # un-awaited on the graph loop.
                 res = await asyncio.wait_for(
-                    _offload_tool_call(lambda: provider.execute_tool(name, **call_args)), timeout)
+                    _offload_tool_call(lambda: provider.execute_tool(name, **call_args),
+                                       timing=timing), timeout)
                 return res, int((time.monotonic() - t_call) * 1000), "ok"
             except asyncio.TimeoutError:
                 el = int((time.monotonic() - t_call) * 1000)
@@ -1710,6 +1767,28 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         abandoned_idx: set = set()    # reads dispatched then walked away from (thread leaked)
         per_call_timeout_idx: set = set()  # reads whose OWN (tool) timeout was the binding cap
         write_timeout_idx: set = set()     # writes whose own wait_for fired -> outcome unknown
+        # Per-dispatch {"submitted": t, "started": t} stamps. Owned HERE, not inside _run, so an
+        # ABANDONED dispatch (whose _run never returns) can still be attributed: if "started" is
+        # missing at the kill, no pool worker ever picked it up and the elapsed is queue wait,
+        # not tool work. This is the ONE way the batch's concurrency degrades to serial.
+        timing_by_idx: dict = {}
+
+        def _queue_wait_ms(i) -> Optional[int]:
+            """Pool-queue wait for dispatch `i` in ms; None when nothing was stamped. A dispatch
+            that never started is charged its whole observed elapsed as queue wait."""
+            t = timing_by_idx.get(i) or {}
+            sub = t.get("submitted")
+            if sub is None:
+                return None
+            started = t.get("started")
+            end = started if started is not None else time.monotonic()
+            return int(max(0.0, end - sub) * 1000)
+
+        def _starved(i) -> bool:
+            """True when the dispatch was submitted to the pool but no worker ever ran it."""
+            t = timing_by_idx.get(i) or {}
+            return t.get("submitted") is not None and t.get("started") is None
+
         turn_exhausted = False
         soft_exhausted = False
         batch_window = 0.0
@@ -1759,7 +1838,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         # the executor axed it at eff — pacing to the later bound guarantees
                         # losing the race.
                         plan[i][3]["_deadline_monotonic"] = min(search_deadline, _now0 + eff)
-                    read_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], eff, False))
+                    # Every read is dispatched BEFORE any of them is awaited (ensure_future) and
+                    # every dispatch runs on its own pool worker + private loop, so the whole read
+                    # set is genuinely concurrent: N independent calls of S seconds complete in
+                    # ~S, not N*S (pinned by tests/test_parallel_tool_batch.py).
+                    timing_by_idx[i] = {}
+                    read_tasks[i] = asyncio.ensure_future(
+                        _run(nm, plan[i][3], plan[i][1], eff, False, timing_by_idx[i]))
                 write_tasks: dict = {}
                 for i in write_idx:
                     nm = plan[i][0].get("name")
@@ -1774,7 +1859,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     write_eff = max(0.0, min(per_tool, soft_remaining, remaining_turn))
                     budget_by_idx[i] = write_eff
                     kind_by_idx[i] = "per_call"
-                    write_tasks[i] = asyncio.ensure_future(_run(nm, plan[i][3], plan[i][1], write_eff, True))
+                    timing_by_idx[i] = {}
+                    write_tasks[i] = asyncio.ensure_future(
+                        _run(nm, plan[i][3], plan[i][1], write_eff, True, timing_by_idx[i]))
                 t0 = time.monotonic()
                 # Reads share the batch window; stragglers are ABANDONED (deliverable 3).
                 if read_tasks:
@@ -1909,12 +1996,26 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # DISCARDED, so the outcome is unknown — NOT "never executed" (deliverable 3).
                 el = elapsed_by_idx.get(i, int(batch_window * 1000))
                 n = int(round(budget_by_idx.get(i, batch_window)))
-                err = f"abandoned after {n}s (batch budget); result discarded"
+                qw = _queue_wait_ms(i)
+                starved = _starved(i)
+                if starved:
+                    # ATTRIBUTION FIX: no offload worker ever picked this dispatch up, so the
+                    # tool ran for exactly zero of those n seconds. Calling it "abandoned after
+                    # Ns" reads as a slow tool and points the next optimisation at the wrong
+                    # thing; the real cause is pool capacity (FC_TOOL_OFFLOAD_WORKERS, held by
+                    # earlier unkillable abandoned dispatches).
+                    err = (f"never started: no tool worker was free within {n}s "
+                           "(batch budget); result discarded")
+                else:
+                    err = f"abandoned after {n}s (batch budget); result discarded"
                 _emit_budget_timeout(name, el / 1000.0, budget_by_idx.get(i, batch_window),
-                                     kind_by_idx.get(i, "batch"), True, outcome="abandoned")
+                                     kind_by_idx.get(i, "batch"), True,
+                                     outcome="starved" if starved else "abandoned",
+                                     queue_wait_ms=qw)
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
-                    timed_out=True, abandoned=True, outcome_unknown=True, elapsed_ms=el))
+                    timed_out=True, abandoned=True, outcome_unknown=True, elapsed_ms=el,
+                    queue_wait_ms=qw, starved=starved))
                 messages.append(ToolMessage(
                     content=json.dumps({
                         "success": False, "data": None, "abandoned": True,
@@ -1944,21 +2045,32 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 result = result_by_idx[i]
                 el = elapsed_by_idx.get(i)
                 err = getattr(result, "error", None) or f"{name} timed out"
+                qw = _queue_wait_ms(i)
                 _emit_budget_timeout(name, (el or 0) / 1000.0, budget_by_idx.get(i, 0.0),
-                                     "per_call", False, outcome="timed_out")
+                                     "per_call", False,
+                                     outcome="starved" if _starved(i) else "timed_out",
+                                     queue_wait_ms=qw)
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
-                    timed_out=True, elapsed_ms=el))
+                    timed_out=True, elapsed_ms=el,
+                    queue_wait_ms=qw, starved=_starved(i)))
                 content, tainted = _derived_toolmsg(name, result)
                 tainted_any = tainted_any or tainted
                 messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
                 continue
             result = result_by_idx[i]
+            # A SUCCESSFUL call can also have queued behind a saturated pool — that time is
+            # indistinguishable from tool latency in elapsed_ms. Recorded only when it is
+            # material (>= _QUEUE_WAIT_NOTE_MS), so the normal artifact shape is unchanged and
+            # the field's presence is itself the signal.
+            _qw_ok = _queue_wait_ms(i)
             artifacts.append(_artifact(
                 turn, name, getattr(result, "data", None), digest,
                 success=getattr(result, "success", False),
                 error=getattr(result, "error", None),
-                elapsed_ms=elapsed_by_idx.get(i)))
+                elapsed_ms=elapsed_by_idx.get(i),
+                queue_wait_ms=(_qw_ok if _qw_ok is not None
+                               and _qw_ok >= _QUEUE_WAIT_NOTE_MS else None)))
             content, tainted = _derived_toolmsg(name, result)
             tainted_any = tainted_any or tainted
             messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))

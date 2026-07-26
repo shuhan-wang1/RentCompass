@@ -827,11 +827,28 @@ def _rec_summary_line(rec: dict) -> str:
 
 
 # Dimension cues → the tool(s) that satisfy that dimension, plus the honest "not done" line
-# (zh, en). Used by the deterministic wrap fallback to NAME every requested-but-uncompleted
-# dimension (product bar from final6 CR4: a cut-short answer must say e.g. 「治安数据尚未完成核查」,
-# not just 「以上内容可能不完整」). The listings dimension (search_properties) is intentionally
-# omitted here — it is already named by the dedicated recommendations / search-incomplete /
-# no-results block in the fallback, so enumerating it again would double-report.
+# (zh, en). The listings dimension (search_properties) is intentionally omitted here — it is
+# already named by the dedicated recommendations / search-incomplete / no-results block in the
+# fallback, so enumerating it again would double-report.
+#
+# THIS IS THE ONLY CUE TABLE IN THE MODULE, and it now has TWO consumers, both routed through
+# _cued_dimensions() so a cue can never mean one thing to the fetcher and another to the
+# apology:
+#   1. _missing_requested_dimension_lines — the honest "not done yet" lines in the DEGRADED
+#      answer (product bar from final6 CR4: a cut-short answer must say e.g.
+#      「治安数据尚未完成核查」, not just 「以上内容可能不完整」).
+#   2. _dimension_fanout_calls — the NORMAL path: the harness puts the satisfying read for
+#      every cued-but-unserved dimension into the SAME batch so it is actually fetched.
+# Consumer 2 exists because, until 2026-07-26, the whole of consumer 1 was the only thing this
+# table drove: the loop knew "the user asked about safety and we never fetched it" and used
+# that knowledge exclusively to write an apology on a path reached only after the turn had
+# already blown its budget. That is instance #12 of the HANDOFF §0 defect class — a value
+# computed, stored where a reader could find it, and never acted on. The source guard in
+# tests/test_dimension_fanout.py fails the build if a second cue table appears.
+#
+# Each dimension's tools tuple is ORDERED: tools[0] is the canonical read the harness itself
+# may dispatch (see _canonical_dimension_tool); the rest are alternates that also SATISFY the
+# dimension when the model chooses them, but that the harness never picks on its own.
 _DIMENSION_CUES = (
     ("safety",
      ("治安", "安全", "犯罪", "crime", "safety", "unsafe", "police"),
@@ -852,20 +869,230 @@ _DIMENSION_CUES = (
 )
 
 
+def _cued_dimensions(message: str) -> list:
+    """The dimensions THIS message explicitly asks about, in _DIMENSION_CUES order.
+
+    THE single cue matcher. Deterministic and bilingual: CJK cues match the raw text, ascii
+    cues the lowercased text (a CJK cue lowercases to itself, so the split only matters for
+    ascii substrings embedded in CJK text). Extracted from
+    _missing_requested_dimension_lines unchanged — the fetcher and the apology must agree on
+    what "the user asked about safety" means, or the loop can fetch a dimension it then
+    apologises for, or apologise for one it fetched.
+    """
+    msg = message or ""
+    low = msg.lower()
+    return [dim for dim, cues, _tools, _zh, _en in _DIMENSION_CUES
+            if any((cue in low) if cue.isascii() else (cue in msg) for cue in cues)]
+
+
+def _dimension_satisfying_tools(dim: str) -> tuple:
+    """Every tool whose completed result SATISFIES `dim` (the model may pick any of them)."""
+    for d, _cues, tools, _zh, _en in _DIMENSION_CUES:
+        if d == dim:
+            return tuple(tools)
+    return ()
+
+
+def _canonical_dimension_tool(dim: str) -> Optional[str]:
+    """The ONE read the harness itself may dispatch for `dim` — tools[0] of its _DIMENSION_CUES
+    row. Derived from the cue table on purpose: a separate dimension->tool mapping is exactly
+    the divergence this module keeps producing (evaluation/metrics/graders.py already keeps its
+    own `_DIMENSION_TOOLS`, and the source guard in tests/test_dimension_fanout.py pins the two
+    against each other)."""
+    tools = _dimension_satisfying_tools(dim)
+    return tools[0] if tools else None
+
+
 def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: str) -> list:
     """For EACH dimension the user's message explicitly asks about that has NO completed tool
     result, return one honest 'not done yet' line in the reply language. Deterministic and
-    cue-based (CJK cues match the raw text, ascii cues the lowercased text); it never claims a
-    dimension was checked."""
-    msg = message or ""
-    low = msg.lower()
+    cue-based (see _cued_dimensions); it never claims a dimension was checked.
+
+    Keys on COMPLETED results, so a dimension whose harness-issued fetch was abandoned at the
+    batch window still gets its honest line here — that abandonment must degrade to the
+    apology, never to a claim.
+    """
+    cued = set(_cued_dimensions(message))
     lines = []
-    for _dim, cues, tools, zh_line, en_line in _DIMENSION_CUES:
-        cued = any((cue in low) if cue.isascii() else (cue in msg) for cue in cues)
-        if not cued or any(t in executed_tools for t in tools):
+    for dim, _cues, tools, zh_line, en_line in _DIMENSION_CUES:
+        if dim not in cued or any(t in executed_tools for t in tools):
             continue
         lines.append(zh_line if lang == "zh" else en_line)
     return lines
+
+
+# ─── plan-time dimension fan-out (HANDOFF §0 instance #12) ──────────────────────────────
+# Repo-wide only 12.4% of tool batches held >=2 tools, so a 4-dimension request trickled one
+# read out per LLM round-trip and ran out of budget before it reached the third — E1 answered a
+# 4-tool request from search_properties alone, E5 narrated the remaining work and stopped, and
+# E11 filled the gap with world-knowledge minutes ("about 15-20 min to Canary Wharf", where 15
+# and 20 occur zero times in its evidence). Intra-batch dispatch was ALREADY fully concurrent
+# (execute_tools ensure_futures every read before awaiting any); what was missing is putting
+# more than one read INTO a batch. These helpers do only that, and only for READ dimensions.
+
+
+def _dimension_fanout_cap() -> int:
+    """Maximum reads the harness may ADD to one batch (FC_DIMENSION_FANOUT_MAX). Default 3 =
+    every dimension in _DIMENSION_CUES, i.e. no cap in practice; the knob exists so ops can
+    disable the fan-out (0) without a deploy. Sized against FC_TOOL_OFFLOAD_WORKERS (32): a
+    4-tool batch is nowhere near pool saturation, so the added reads cannot starve each other
+    into the 'never started' attribution."""
+    try:
+        return max(0, int(os.getenv("FC_DIMENSION_FANOUT_MAX", "3")))
+    except (TypeError, ValueError):
+        return 3
+
+
+def _dimension_location_context(state: AgentState, batch_calls: list) -> dict:
+    """The location facts a harness-added dimension read is allowed to use: `area`,
+    `commute_destination`, `no_commute`. Sources, most resolved first:
+
+      1. a COMPLETED search_properties artifact's criteria echo (the tool's own resolution of
+         the area — "camden" -> "Camden"),
+      2. the harness-owned accumulated criteria (via the existing _derive_known_criteria, so
+         there is no second criteria shape),
+      3. the area/destination the model itself put in THIS batch's search_properties args.
+
+    Nothing is invented: a field absent from all three stays absent, and the caller then makes
+    NO call for the dimension that needed it. That is the whole fabrication guard — the harness
+    would rather leave the honest "not done yet" line standing than geocode a guess.
+    """
+    out = {"area": None, "commute_destination": None, "no_commute": False}
+
+    def _fill(area, dest, no_commute):
+        if area and not out["area"]:
+            out["area"] = str(area).strip() or None
+        if dest and not out["commute_destination"]:
+            out["commute_destination"] = str(dest).strip() or None
+        if no_commute:
+            out["no_commute"] = True
+
+    for a in reversed(list(state.get("tool_artifacts") or [])):
+        if a.get("tool") != "search_properties" or not _is_executed(a):
+            continue
+        raw = a.get("raw_data")
+        if not isinstance(raw, dict):
+            continue
+        crit = raw.get("search_criteria") or raw.get("known_criteria") or {}
+        if isinstance(crit, dict):
+            areas = crit.get("areas") if isinstance(crit.get("areas"), list) else []
+            _fill(crit.get("area") or (areas[0] if areas else None),
+                  crit.get("commute_destination") or crit.get("destination"),
+                  crit.get("no_commute"))
+    acc = _derive_known_criteria(state.get("accumulated_search_criteria") or {})
+    _acc_areas = acc.get("areas") or []
+    _fill(acc.get("area") or (_acc_areas[0] if _acc_areas else None),
+          acc.get("commute_destination"), acc.get("no_commute"))
+    for tc in (batch_calls or []):
+        if (tc or {}).get("name") != "search_properties":
+            continue
+        args = (tc or {}).get("args") or {}
+        if not isinstance(args, dict):
+            continue
+        areas = args.get("areas") if isinstance(args.get("areas"), list) else []
+        _fill(args.get("area") or (areas[0] if areas else None) or args.get("location"),
+              args.get("commute_destination"), args.get("no_commute"))
+    return out
+
+
+def _dimension_read_args(dim: str, ctx: dict, message: str) -> Optional[dict]:
+    """Deterministic args for the harness-added read that serves `dim`, or None when the
+    REQUIRED args cannot be derived from `ctx` (see _dimension_location_context).
+
+    Deliberately area-level, never listing-level: the harness can resolve which AREA the user
+    is searching, but picking one listing out of a result set and asserting its address is the
+    subject of the answer is HANDOFF §0 instance #8 in a new place. Per-listing refinement
+    stays the model's job on a later hop; the harness's job is to make sure the dimension has
+    real, sourced evidence instead of invented minutes.
+    """
+    area = ctx.get("area")
+    msg = message or ""
+    if dim == "safety":
+        # check_safety declares no required params, but without a location it is meaningless.
+        # `user_query` is what its own _detect_chinese reads to pick the reply language.
+        return {"area": area, "user_query": msg} if area else None
+    if dim == "nearby":
+        # poi_type is left at its "all" default ON PURPOSE: passing user_query with poi_type
+        # "all" is what makes search_nearby_pois run _infer_poi_types_from_query, so E11's
+        # "a pharmacy nearby" resolves to pharmacy from the user's own words rather than from
+        # a guess made here.
+        return {"address": area, "user_query": msg} if area else None
+    if dim == "commute":
+        # A user who said they do NOT commute ("no commute to worry about", 我不通勤) still
+        # trips the "commute" cue; no_commute is the deterministic answer to that, and a
+        # missing destination is the second gate. Both must be clear before we call.
+        dest = ctx.get("commute_destination")
+        if ctx.get("no_commute") or not area or not dest:
+            return None
+        return {"from_address": area, "to_address": dest}
+    return None
+
+
+def _unserved_cued_dimensions(message: str, artifacts: list, covered_tools=()) -> list:
+    """Cued dimensions that have NO artifact at all for any satisfying tool, and that are not
+    already covered by `covered_tools` (the tools in the batch about to be dispatched).
+
+    "No artifact at ALL" — not "no COMPLETED artifact" — is what makes the fetch terminate.
+    Every dispatched or denied call leaves an artifact (execute_tools' plan loop appends one on
+    every branch except skip_dup, which by definition means an artifact for that tool already
+    exists), so the harness attempts a dimension at most ONCE per turn. A dimension whose fetch
+    was abandoned at the batch window is therefore never retried; it falls through to
+    _missing_requested_dimension_lines' honest line, which keys on COMPLETED results. That is
+    the required degradation: an abandoned dimension becomes an apology, not a fabrication.
+    """
+    attempted = {a.get("tool") for a in (artifacts or [])}
+    attempted |= set(covered_tools or ())
+    return [dim for dim in _cued_dimensions(message)
+            if not (set(_dimension_satisfying_tools(dim)) & attempted)]
+
+
+def _dimension_fanout_calls(state: AgentState, batch_calls: list, cur_msg: str, *,
+                            specs: dict, read_policy=None) -> list:
+    """The (tool_name, args) reads the harness ADDS so every dimension this message cues is
+    actually fetched, concurrently, in ONE batch. Empty list = no change to the turn.
+
+    Every gate here is a reason NOT to expand, and the default is not to:
+      * the dimension is already served, or already attempted this turn  (_unserved_...)
+      * its canonical tool is not registered on this provider
+      * it is a WRITE (`remember` is the only one, and it drives the taint gate, the write
+        audit and the zero-tolerance records) or a TERMINAL tool (`ask_user`) — expansion is
+        for READ dimensions only, and this is asserted, not assumed
+      * its required args are not derivable from state              (_dimension_read_args)
+      * core.tool_policy would refuse the read anyway — consulted HERE with the same helper
+        execute_tools uses, so a policy-forbidden read is never dispatched and the turn does
+        not pay a batch + a hop to learn that
+      * the cap is reached                                         (_dimension_fanout_cap)
+    """
+    cap = _dimension_fanout_cap()
+    if cap <= 0:
+        return []
+    covered = {(tc or {}).get("name") for tc in (batch_calls or [])}
+    dims = _unserved_cued_dimensions(cur_msg, state.get("tool_artifacts") or [], covered)
+    if not dims:
+        return []
+    ctx = _dimension_location_context(state, batch_calls)
+    added = []
+    for dim in dims:
+        if len(added) >= cap:
+            break
+        name = _canonical_dimension_tool(dim)
+        spec = (specs or {}).get(name)
+        if not name or spec is None:
+            continue
+        if getattr(spec, "side_effect", "none") == "write" or getattr(spec, "terminal", False):
+            # Unreachable via _DIMENSION_CUES today; asserted so a future cue row that names a
+            # write or a terminal tool cannot silently be swept into a batch expansion.
+            logger.warning("fc_loop.fanout_refused_non_read tool=%s dim=%s", name, dim)
+            continue
+        if name == "ask_user":
+            continue
+        args = _dimension_read_args(dim, ctx, cur_msg)
+        if not args:
+            continue
+        if _read_tool_denial(read_policy, name, args, cur_msg) is not None:
+            continue
+        added.append((name, args))
+    return added
 
 
 def _criteria_room_type_label(criteria: dict) -> Optional[str]:
@@ -1394,6 +1621,36 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             "wrapped_by": wrapped_by,
         }, goto="format_output_fc")
 
+    def _fanout_into_batch(state, resp, batch_calls, cur_msg, loop_turn) -> list:
+        """Append the harness-added dimension reads to `resp`'s tool_calls IN PLACE, so the
+        assistant message the provider will see next round-trip carries exactly the calls whose
+        ToolMessages follow it. Returns the added tool names (empty = nothing changed).
+
+        `resp.tool_calls` is mutated rather than reassigned: langchain's OpenAI serializer
+        prefers `message.tool_calls` over `additional_kwargs["tool_calls"]` whenever the former
+        is non-empty (_convert_message_to_dict), so the added calls are serialized and every
+        tool_call_id we answer exists in the request — the alternative (a second assistant
+        message) would put two assistant rows back to back for no benefit.
+        """
+        added = _dimension_fanout_calls(state, batch_calls, cur_msg,
+                                        specs=_spec_map(), read_policy=_load_tool_policy())
+        if not added:
+            return []
+        try:
+            calls = resp.tool_calls
+            for k, (nm, args) in enumerate(added):
+                calls.append({"name": nm, "args": args,
+                              "id": f"fanout_{loop_turn}_{k}", "type": "tool_call"})
+        except Exception:
+            # A message object that will not take extra tool calls must never take the turn
+            # down: fall back to exactly the pre-fan-out behaviour.
+            logger.warning("fc_loop.fanout_attach_failed", exc_info=True)
+            return []
+        names = [nm for nm, _a in added]
+        logger.info("fc_loop.dimension_fanout added=%s batch_now=%d loop_turn=%d",
+                    names, len(resp.tool_calls), loop_turn)
+        return names
+
     async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
         if not messages:
@@ -1475,6 +1732,17 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     "messages": messages + [resp], "loop_turn": loop_turn,
                     "tool_artifacts": artifacts,
                 }, goto="format_output_fc")
+            # Plan-time dimension fan-out (HANDOFF §0 instance #12). The model is already
+            # opening a batch; every OTHER dimension this message cues, that nothing has
+            # attempted yet and whose args are derivable, goes into the SAME batch so it runs
+            # concurrently on its own pool worker instead of costing another LLM round-trip
+            # that the turn budget may never reach. This adds ZERO work to a turn that cues no
+            # extra dimension (_dimension_fanout_calls returns [] and `resp` is untouched), and
+            # it adds no LLM call ever — the hop was already happening.
+            _fanout_into_batch(state, resp, tool_calls,
+                               (state.get("extracted_context") or {}).get("current_message")
+                               or _current_message(state.get("user_query") or ""),
+                               loop_turn)
             # Normal tool batch: append the assistant message; execute_tools reads it back.
             return Command(update={
                 "messages": messages + [resp], "loop_turn": loop_turn,

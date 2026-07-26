@@ -25,9 +25,13 @@ from uk_rent_agent.agent.critic import (
     CAVEAT,
     LEGACY_INCONSISTENCY_FALLBACK,
     LEGACY_RETRIEVAL_MISS_FALLBACK,
+    STATION_CAVEAT,
     append_caveat,
+    build_correction_instruction,
     enforce_grounding,
     evaluate_grounding,
+    station_name_claims,
+    ungrounded_station_names,
     unsupported_reply_prices,
 )
 
@@ -306,3 +310,231 @@ def test_node_direct_answer_is_untouched(monkeypatch):
     assert fake.calls == 0  # no gating, no regeneration
     assert "final_response" not in update  # answer unchanged
     assert update["verdict"]["grounded"] is True
+
+
+# ── fabricated station NAMES (the "Covent Garden" incident) ────────────────
+# Prices were normalized, derived and gated; a NAME was gated by nothing. In a real
+# session the same property (Tavistock Court, WC1H, Bloomsbury) was reported as nearest
+# to "Covent Garden" in one turn and "Russell Square" in another. TfL puts Russell Square
+# 214 m from that point; "Covent Garden" exists NOWHERE in this repo — no table, no
+# listing field, no scraper, no prompt, no dataset — so it was neither geocoding drift
+# nor a lookup bug. It was an invention, and the only thing standing against it was a
+# prompt sentence. Every test below fails on the pre-fix critic, which validated money
+# figures only.
+
+# The evidence a real nearest-station turn carries: the TfL StopPoint block that
+# core.place_reference.nearest_stations returns, as it reaches the critic.
+_WC1H_EVIDENCE = [
+    {"search_nearby_pois#1": {
+        "reference_point": {"resolved_name": "Tavistock Court, Bloomsbury, London WC1H"},
+        "nearest_station": {"name": "Russell Square Underground Station",
+                            "distance_m": 214, "modes": ["tube"],
+                            "source": "TfL StopPoint API"},
+        "other_stations_nearby": [
+            {"name": "Goodge Street Underground Station", "distance_m": 635},
+            {"name": "London Euston Rail Station", "distance_m": 665}],
+        "note": "Nearest station per TfL StopPoint API: Russell Square Underground "
+                "Station, 214 m straight-line from the geocoded address."}},
+]
+
+
+def test_covent_garden_is_refused():
+    """THE regression case, the literal string. The model named a station 1.3 km away
+    that no tool supplied; the answer must not be certified as grounded."""
+    reply = ("Tavistock Court is a great spot in Bloomsbury. The nearest station is "
+             "Covent Garden, about five minutes' walk.")
+    assert ungrounded_station_names(reply, _WC1H_EVIDENCE) == ["Covent Garden"]
+    verdict = evaluate_grounding(reply, _WC1H_EVIDENCE)
+    assert verdict.grounded is False
+    assert verdict.needs_replan is True
+    assert "ungrounded_stations:Covent Garden" in verdict.issues
+
+
+def test_covent_garden_is_refused_with_no_station_evidence_at_all():
+    """The commoner shape: no tool supplied a nearest station, so nothing constrained the
+    model. An absent answer must not read as a blank to fill in."""
+    evidence = [{"search_properties#1": {"recommendations": [
+        {"address": "Tavistock Court, WC1H", "price": "£2,678 pcm"}]}}]
+    reply = "Tavistock Court's nearest tube station is Covent Garden."
+    assert ungrounded_station_names(reply, evidence) == ["Covent Garden"]
+    assert evaluate_grounding(reply, evidence).grounded is False
+
+
+def test_the_station_the_data_layer_supplied_is_grounded():
+    """The other half of the incident: the turn that got it right must stay right, in
+    every spelling an answer plausibly uses for TfL's 'Russell Square Underground
+    Station'."""
+    for reply in (
+        "The nearest station is Russell Square, 214 m away.",
+        "The nearest station is Russell Square Underground Station (214 m).",
+        "It is a 3-minute walk to Russell Square station.",
+        "Russell Square Underground Station is the closest, with Goodge Street and "
+        "London Euston stations a little further.",
+    ):
+        assert ungrounded_station_names(reply, _WC1H_EVIDENCE) == [], reply
+        assert evaluate_grounding(reply, _WC1H_EVIDENCE).grounded is True, reply
+
+
+def test_the_issue_is_surfaced_the_same_way_unsupported_prices_is():
+    """Mechanism, not just detection: the evaluator, the critic log line and the
+    regeneration pass all read CriticVerdict.issues, so a new failure mode is only
+    visible if it is reported there in the same '<kind>:<detail>' shape."""
+    reply = "The nearest station is Covent Garden and the rent is £1,234 pcm."
+    issues = evaluate_grounding(reply, _WC1H_EVIDENCE).issues
+    kinds = [i.split(":", 1)[0] for i in issues]
+    assert "unsupported_prices" in kinds
+    assert "ungrounded_stations" in kinds
+    detail = next(i for i in issues if i.startswith("ungrounded_stations:"))
+    assert detail.split(":", 1)[1] == "Covent Garden"  # the name, not a bare flag
+
+
+def test_correction_instruction_names_the_invented_station():
+    """A generic 'do not fabricate' line was already in the prompt when Covent Garden
+    shipped. The corrective pass must name it, as it names invented prices."""
+    text = build_correction_instruction([], ["Covent Garden"])
+    assert "'Covent Garden'" in text
+    assert "Name a station ONLY if that exact name is present in the data" in text
+    # ...and the price wording must not claim a price problem that did not happen.
+    assert "NOT present in the data above: £" not in text
+
+
+def test_station_failure_regenerates_and_delivers_the_fixed_answer():
+    regen = _Recorder("The nearest station is Russell Square, 214 m away.")
+    outcome = _run(enforce_grounding(
+        "The nearest station is Covent Garden.", _WC1H_EVIDENCE, regenerate=regen))
+    assert len(regen.calls) == 1
+    assert "Covent Garden" in regen.calls[0]
+    assert outcome.verdict.grounded is True
+    assert outcome.response == "The nearest station is Russell Square, 214 m away."
+    assert outcome.response not in _LEGACY_FALLBACKS
+
+
+def test_persistent_station_failure_is_caveated_never_deleted():
+    """Asymmetry preserved: catching an invented name must not destroy the answer, and
+    the caveat must point at the name rather than at the prices, which were fine."""
+    regen = _Recorder("Actually the nearest station is Leicester Square.")
+    outcome = _run(enforce_grounding(
+        "The nearest station is Covent Garden.", _WC1H_EVIDENCE, regenerate=regen))
+    assert outcome.response.startswith("Actually the nearest station is Leicester Square.")
+    assert STATION_CAVEAT in outcome.response
+    assert CAVEAT not in outcome.response
+    assert outcome.response not in _LEGACY_FALLBACKS
+
+
+def test_a_price_failure_still_gets_the_price_caveat():
+    """Non-regression on the caveat split."""
+    regen = _Recorder("Actually it is £8,888 pcm.")
+    outcome = _run(enforce_grounding("The rent is £9,999 pcm.", "£1500 pcm", regenerate=regen))
+    assert CAVEAT in outcome.response
+    assert STATION_CAVEAT not in outcome.response
+
+
+def test_station_gating_is_skipped_for_direct_answers():
+    """A chat turn that echoes a station the user just named is not a fabrication."""
+    verdict = evaluate_grounding(
+        "Covent Garden station is on the Piccadilly line, yes.", None,
+        retrieval_expected=False)
+    assert verdict.grounded is True
+    assert verdict.issues == []
+
+
+# ── the other direction: legitimate prose must NOT be flagged ──────────────
+# An over-eager name check is worse than no check: it burns a regeneration pass and
+# caveats a correct answer. Every string below is real prose from a retained answer of
+# the 2026-07-25 internal round (.runtime/round-8793c0b-internal-2026-07-25/bodies),
+# or the exact trap phrasings — borough names, "central London", "the West End", generic
+# area words and the user's own words echoed back.
+
+_LEGITIMATE_MENTIONS = [
+    # generic, unnamed station references (D10 / D12 / D6)
+    "Walking from the station on main roads is considered relatively safe.",
+    "Night safety is rated as relatively good -- walking from the tube station on main "
+    "roads is considered safe.",
+    "Standard city precautions apply -- especially at night, and around the station and "
+    "high street.",
+    # a mode/network named where a station is not (E4, C8)
+    "Chessington does not have a London Underground (Tube) station.",
+    "Did you mean a 15-min walk to a **train station** instead?",
+    "Manchester does not have a \"Tube\" (London Underground) -- it has the "
+    "**Manchester Metrolink** tram system.",
+    # line names, which collide with real station names (Victoria, Piccadilly, Waterloo)
+    "A Northern line station would put you 20 minutes from campus.",
+    "There is a Victoria line station within walking distance.",
+    # areas, boroughs and generic geography — never station claims
+    "This is a well-connected part of central London with fast links to the West End.",
+    "Camden and Islington are both boroughs with good transport, and Zone 2 stations "
+    "are cheap to travel from.",
+    "The property is in the West End, close to Covent Garden and Soho.",
+    "Rents in Hackney, Peckham and Bloomsbury vary a lot by street.",
+    "It is well connected to central London stations.",
+    # attributes of a station rather than another station's name
+    "The station is in Zone 2 and is step-free.",
+    "The nearest station is a 5-minute walk away.",
+    "The nearest station is NOT known from the data I retrieved, so I will not name one.",
+]
+
+
+@pytest.mark.parametrize("prose", _LEGITIMATE_MENTIONS)
+def test_legitimate_prose_is_not_flagged(prose):
+    """Both directions, measured. Evidence is deliberately EMPTY: nothing in these
+    sentences may be treated as an asserted station name even with no evidence at all,
+    because none of them names a station."""
+    assert station_name_claims(prose) == [], prose
+    assert ungrounded_station_names(prose, "") == [], prose
+    assert evaluate_grounding(prose, "").grounded is True, prose
+
+
+def test_the_users_own_station_is_grounded():
+    """'Covent Garden' echoed back because the USER asked about it is not an invention.
+    The user's area reaches the critic through the search criteria in the artifact."""
+    evidence = [{"search_properties#1": {
+        "search_criteria": {"area": "Covent Garden", "max_budget": 2500},
+        "status": "no_results"}}]
+    reply = ("I could not find anything in Covent Garden under £2,500 pcm. Covent Garden "
+             "station is very central, so stock is thin there.")
+    assert ungrounded_station_names(reply, evidence) == []
+    assert evaluate_grounding(reply, evidence).grounded is True
+
+
+def test_route_leg_stations_are_grounded():
+    """The real C6 shape: every station in a commute answer comes from the route legs of
+    the journey plan, so a multi-leg answer must pass unflagged."""
+    evidence = [{"calculate_commute#1": {
+        "duration_minutes": 26, "route_source": "tfl",
+        "route_summary": "Walk to Angel (7 min) -> Northern line to Euston (4 min) -> "
+                         "Walk to UCL (15 min)"}}]
+    reply = ("From 20 Liverpool Road it is 26 minutes: walk to Angel station, then the "
+             "Northern line to Euston station.")
+    assert ungrounded_station_names(reply, evidence) == []
+
+
+def test_a_listing_description_grounds_the_stations_it_names():
+    """A4, verbatim: the names come from the listing's own text, not from the model."""
+    evidence = [{"search_properties#1": {"recommendations": [{
+        "address": "419-437 Hackney Road E2",
+        "description": "Close to Old Street and Liverpool Street stations, with the "
+                       "Overground at Hoxton."}]}}]
+    reply = "Close to Old Street and Liverpool Street stations."
+    assert station_name_claims(reply) == ["Old Street and Liverpool Street"]
+    assert ungrounded_station_names(reply, evidence) == []
+
+
+def test_an_ampersand_name_matches_either_spelling():
+    """A9, verbatim: '~10 min walk to Highbury & Islington Station'. TfL spells it with
+    '&', a listing may spell it 'and'; the same station either way."""
+    reply = "~10 min walk to Highbury & Islington Station and Upper Street"
+    assert station_name_claims(reply) == ["Highbury & Islington"]
+    assert ungrounded_station_names(
+        reply, [{"nearest_station": {"name": "Highbury and Islington"}}]) == []
+    assert ungrounded_station_names(
+        reply, [{"nearest_station": {"name": "Highbury & Islington"}}]) == []
+    # ...but it is still caught when nothing supplied it.
+    assert ungrounded_station_names(reply, [{"area": "Camden"}]) == ["Highbury & Islington"]
+
+
+def test_a_list_of_stations_flags_only_the_invented_one():
+    """Precision matters: flagging the whole run would send a correct name back for
+    rewriting along with the invented one."""
+    evidence = [{"nearest_station": {"name": "Russell Square Underground Station"}}]
+    reply = "The nearest stations are Russell Square and Covent Garden."
+    assert ungrounded_station_names(reply, evidence) == ["Covent Garden"]

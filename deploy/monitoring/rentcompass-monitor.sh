@@ -154,12 +154,45 @@ if [ "$f_code" = "200" ] && [ -r "$REPO/.env" ]; then
   fi
 fi
 
-# The legacy pool answers 'unknown' because compose marks APP_CANDIDATE_SHA
-# :?-required for app-fc and sets no equivalent for `app`. Production cannot state
-# which commit it runs. Warn once per state change, not every five minutes.
+# The legacy pool still answers 'unknown', but NOT because the knob is missing any more.
+# CORRECTED 2026-07-27: this comment used to say "APP_CANDIDATE_SHA is unset for the 'app'
+# service". That stopped being true when the `app` service was wired with
+#   APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}"
+# (docker-compose.yml; DEFAULTING `:-`, deliberately not `:?` like app-fc, so a missing value
+# can never block the rollback target from starting). The wiring is INERT today for two
+# independent reasons, and both must clear before the pool can name its commit:
+#   1. LEGACY_APP_SHA is not set in the root .env, so the container gets "", which app.py
+#      reads as indistinguishable from unset and falls through to the git probe -> "unknown";
+#   2. even once it IS set, the running `app` container predates the wiring, and ops
+#      deliberately does not recreate it — it is the standing escape hatch while fc_loop
+#      holds the public edge. It picks the value up at the next PLANNED rebuild.
+# The ALERT LOGIC below is unchanged and still correct: it fires on the OBSERVED header value
+# ('unknown'/'none'), which is the thing that actually blocks `switch_pool.sh --to legacy`,
+# not on the configuration that produces it. Warn once per state change, not every five
+# minutes. Only the explanation was wrong.
 if [ "$l_code" = "200" ] && { [ "$l_ver" = "unknown" ] || [ "$l_ver" = "none" ]; } \
    && [ "${PREV[ver_legacy]:-}" != "$l_ver" ]; then
-  emit_alert 4 "legacy pool cannot state its commit (x-agent-version: $l_ver) — APP_CANDIDATE_SHA is unset for the 'app' service"
+  emit_alert 4 "legacy pool cannot state its commit (x-agent-version: $l_ver) — set LEGACY_APP_SHA in the root .env and recreate 'app' at the next planned rebuild"
+fi
+
+# Symmetry with the fc pin check above: once the legacy pool CAN name its commit, it must be
+# the commit the compose .env pins, or the rollback target is not the image anyone believes
+# it is. Added 2026-07-27; deliberately INERT in today's steady state, which is exactly one
+# genuine alert (canary-legacy.jsonl missing, because the legacy pool serves no traffic and
+# therefore writes no telemetry). It cannot fire today for two independent reasons:
+#   * LEGACY_APP_SHA is absent from the root .env, so $pinned is empty; and
+#   * l_ver is 'unknown', which is EXCLUDED below.
+# That exclusion is not belt-and-braces, it is the contract: "the pool cannot state its
+# commit" already has its own alert immediately above, and this check must not double-report
+# it. In particular, setting LEGACY_APP_SHA WITHOUT recreating the container — the documented
+# intermediate state — leaves l_ver at 'unknown' and must stay silent here. This fires only on
+# the genuinely new failure: a legacy pool that names a REAL sha which is not the pinned one.
+if [ "$l_code" = "200" ] && [ -r "$REPO/.env" ]; then
+  l_pinned="$(sed -n 's/^LEGACY_APP_SHA=//p' "$REPO/.env" | tr -d '\r\"' | head -1)"
+  if [ -n "$l_pinned" ] && [ "$l_ver" != "none" ] && [ "$l_ver" != "unknown" ] \
+     && [ "$l_ver" != "$l_pinned" ]; then
+    emit_alert 3 "legacy pool serves $l_ver but .env pins LEGACY_APP_SHA=$l_pinned"
+  fi
 fi
 
 # 4) containers: health + restart delta --------------------------------------

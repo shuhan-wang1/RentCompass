@@ -36,12 +36,14 @@ No network, no LLM, no real tools: the FakeChat/FakeProvider harness from tests/
 """
 from __future__ import annotations
 
+import inspect
 import re
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 import core.agent_loop as agent_loop
+from core import dimensions
 from core.agent_loop import build_fc_nodes
 from tests.test_fc_loop import (FakeChat, FakeProvider, FakeResult, FakeSpec, _base_state,
                                 _drive, _run, _tc)
@@ -372,7 +374,7 @@ def test_expansion_never_adds_a_write_tool():
     assert [n for n, _a in added] == ["search_nearby_pois"]
     # and no canonical dimension tool is a write in the real registry's terms
     assert "remember" not in {agent_loop._canonical_dimension_tool(d)
-                              for d, *_ in agent_loop._DIMENSION_CUES}
+                              for d in dimensions.DIMENSIONS}
 
 
 def test_expansion_never_adds_a_terminal_tool_or_ask_user():
@@ -380,7 +382,7 @@ def test_expansion_never_adds_a_terminal_tool_or_ask_user():
     terminal_specs = {s.name: s for s in [FakeSpec("check_safety", terminal=True)]}
     assert agent_loop._dimension_fanout_calls(st, [], E11_QUERY, specs=terminal_specs) == []
     assert "ask_user" not in {agent_loop._canonical_dimension_tool(d)
-                             for d, *_ in agent_loop._DIMENSION_CUES}
+                             for d in dimensions.DIMENSIONS}
 
 
 def test_expansion_respects_the_read_policy():
@@ -432,6 +434,14 @@ def _module_source():
     return inspect.getsource(agent_loop)
 
 
+# NOTE (2026-07-27). The two guards below were LEGITIMATE — "one cue table, one matcher" is
+# the right invariant and it is the reason a third copy never appeared inside agent_loop.py.
+# They were simply scoped to ONE MODULE, and the second copy that actually shipped was in the
+# OTHER arch (langgraph_agent._SEARCH_DIMENSION_CUES), where an agent_loop-only source scan
+# could never see it. Not inverted: widened to the product, and re-pointed at the shared
+# module. The full cross-arch form lives in tests/test_dimension_table_is_shared.py.
+
+
 @pytest.mark.parametrize("cue", ["治安", "unsafe", "supermarket", "amenit", "通勤"])
 def test_cue_vocabulary_appears_exactly_once_in_the_module(cue):
     """A source guard, not a promise. Instances 1-6 of the §0 defect class were each fixed
@@ -439,16 +449,22 @@ def test_cue_vocabulary_appears_exactly_once_in_the_module(cue):
     producing is a second copy of a table. If a cue word appears twice, someone has pasted a
     second cue table and the fetcher and the apology can now disagree."""
     src = _module_source()
-    assert src.count(f'"{cue}"') == 1, (
+    assert src.count(f'"{cue}"') == 0, (
         f"cue {cue!r} occurs {src.count(chr(34) + cue + chr(34))} times in agent_loop.py — "
-        "_DIMENSION_CUES must remain the only cue table")
+        "the cue vocabulary belongs to core.dimensions ONLY; a literal here is a second table")
+    assert inspect.getsource(dimensions).count(f'"{cue}"') == 1, (
+        f"cue {cue!r} is not in core.dimensions exactly once")
 
 
 def test_cue_matching_happens_in_exactly_one_place():
-    """The ascii/CJK split is the subtle half of the cue contract. It must exist once."""
-    src = _module_source()
-    assert src.count("cue.isascii()") == 1, (
-        "cue matching is duplicated; both consumers must route through _cued_dimensions")
+    """The ascii/CJK split is the subtle half of the cue contract. It must exist once — and
+    now once across BOTH arches, not once per arch."""
+    import core.langgraph_agent as lga
+    total = sum(inspect.getsource(m).count("cue.isascii()")
+                for m in (agent_loop, lga, dimensions))
+    assert total == 1, (
+        "cue matching is duplicated; every consumer in every arch must route through "
+        "core.dimensions.cues_hit")
 
 
 def test_both_consumers_read_the_one_cue_table():
@@ -467,7 +483,7 @@ def test_canonical_tool_agrees_with_the_graders_dimension_table():
     contract and must not import the product). The two are allowed to exist; they are NOT
     allowed to disagree, or the loop can fetch a tool the grader does not count."""
     from evaluation.metrics.graders import _DIMENSION_TOOLS
-    for dim, _cues, tools, _zh, _en in agent_loop._DIMENSION_CUES:
+    for dim, _cues, tools in dimensions.DIMENSION_CUES:
         assert dim in _DIMENSION_TOOLS, f"{dim} unknown to the grader"
         assert set(tools) == set(_DIMENSION_TOOLS[dim]), (
             f"{dim}: loop={sorted(tools)} grader={sorted(_DIMENSION_TOOLS[dim])}")
@@ -476,7 +492,7 @@ def test_canonical_tool_agrees_with_the_graders_dimension_table():
 
 def test_canonical_tool_is_the_first_of_the_satisfying_tuple():
     """No second dimension->tool mapping: the canonical read is derived from the cue table."""
-    for dim, _cues, tools, _zh, _en in agent_loop._DIMENSION_CUES:
+    for dim, _cues, tools in dimensions.DIMENSION_CUES:
         assert agent_loop._canonical_dimension_tool(dim) == tools[0]
     assert agent_loop._canonical_dimension_tool("no_such_dimension") is None
 

@@ -45,6 +45,11 @@ from collections import Counter
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
+# THE shared dimension vocabulary — one table, both arches (see core/dimensions.py). Aliased
+# because `dimensions` is a common local name in this module. Imports nothing from either
+# arch, so it can never be part of an import cycle.
+from core import dimensions as _dimensions
 from uk_rent_agent.agent.state import AgentState, create_initial_state
 from uk_rent_agent.agent.contracts import ToolInvocation
 from uk_rent_agent.agent.critic import (
@@ -2909,41 +2914,34 @@ def _note_legacy_write_dispatch(audit_key: str) -> None:
 # evidence). READ dimensions only: `remember` is the sole write tool and is not reachable here.
 _PLAN_ORIGIN_DIMENSIONS = "dimension_followup"
 
-# dimension -> (cue words, tools that ALREADY satisfy it, the tool to run to fetch it).
-# Mirrors agent_loop._DIMENSION_CUES so the two arches recognise the same user-visible
-# dimensions; CJK cues match the raw text, ascii cues the lowercased text.
-_SEARCH_DIMENSION_CUES = (
-    ("safety",
-     ("治安", "安全", "犯罪", "crime", "safety", "safe", "unsafe", "police"),
-     ("check_safety",),
-     "check_safety"),
-    ("commute",
-     ("通勤", "commute", "travel time", "how long", "how far"),
-     ("calculate_commute", "calculate_commute_cost", "check_transport_cost",
-      "get_transport_info"),
-     "calculate_commute"),
-    ("nearby",
-     ("超市", "便利店", "餐厅", "药店", "附近", "周边", "设施",
-      "supermarket", "grocery", "nearby", "amenit", "restaurant", "pharmacy", "poi"),
-     ("search_nearby_pois",),
-     "search_nearby_pois"),
-)
+# The cue table is NOT here. It is core.dimensions.DIMENSION_CUES, shared with the fc arch.
+#
+# This module used to carry its own copy, `_SEARCH_DIMENSION_CUES`, documented as "mirrors
+# agent_loop._DIMENSION_CUES". By 2026-07-27 it did not: six cues of drift had accumulated
+# (`safe`; `travel time`/`how long`/`how far`; `药店`/`pharmacy`), all on this side, so the two
+# arches disagreed about what the user had asked for — the exact failure the copy was written
+# to prevent. The merged table takes the union; see the DRIFT RECORD in core/dimensions.py.
+#
+# What stays here is legacy's CONSUMER, which is genuinely its own: it turns an unserved cued
+# dimension into a FETCH through the existing wave engine, where fc turns the same fact into
+# an honest "not done yet" line. Same nouns, different verbs — that separation is deliberate.
+#
+# `tool to run` is not a fourth column any more either: it is dimensions.canonical_tool(dim)
+# (== tools[0]), which is what this table's fourth column always held. A separate
+# dimension->tool mapping is how the drift started.
 
 
 def _cued_search_dimensions(message: str, executed_tools) -> list:
     """The READ dimensions this message explicitly asks about that NO executed tool satisfies,
     as [(dimension, tool_to_run)] in table order. Deterministic and cue-based — the same shape
     as agent_loop._missing_requested_dimension_lines, except this drives a FETCH rather than
-    an apology."""
-    msg = message or ""
-    low = msg.lower()
+    an apology, and both now read the SAME shared table via the SAME matcher."""
     done = set(executed_tools or ())
     out = []
-    for dim, cues, satisfying, tool in _SEARCH_DIMENSION_CUES:
-        cued = any((cue in low) if cue.isascii() else (cue in msg) for cue in cues)
-        if not cued or any(t in done for t in satisfying):
+    for dim, cues, satisfying in _dimensions.DIMENSION_CUES:
+        if not _dimensions.cues_hit(cues, message) or any(t in done for t in satisfying):
             continue
-        out.append((dim, tool))
+        out.append((dim, _dimensions.canonical_tool(dim)))
     return out
 
 

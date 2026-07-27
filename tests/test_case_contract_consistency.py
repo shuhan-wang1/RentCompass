@@ -25,13 +25,25 @@ appear in a trace. A pseudo-route in `expected_tools` is therefore a permanent r
 MISS whatever the agent does; in `forbidden_tools` it is a guard that can never fire.
 Both were legal until now: `schema.json` used to describe `expected_tools` as "real
 registry tools OR documented pseudo-routes", and `evaluation/benchmark/validate.py`
-still checks both fields against `REAL_TOOLS | PSEUDO_ROUTES`. F7 sat on the wrong side
+checked both fields against `REAL_TOOLS | PSEUDO_ROUTES`. F7 sat on the wrong side
 of that for the whole programme (`expected_tools: ["market_info"]`), costing a route
 point in every round ever run.
 
 The registered-tool list below is DERIVED from the live registry. A hand-copied literal
 would be the same defect one level up — which is exactly what validate.py's `REAL_TOOLS`
-is, and why it could not catch F7.
+was, and why it could not catch F7.
+
+UPDATE 2026-07-27: validate.py no longer has that hole. Its `REAL_TOOLS` literal is gone;
+it now calls `create_tool_registry()` the same way `_registered_tool_names()` below does,
+and it rejects a pseudo-route in either trace-matched field outright. This test and that
+validator are pinned to each other by
+tests/test_benchmark_validate_tool_names.py::test_validator_and_sibling_test_agree_on_the_tool_set,
+so the repo keeps ONE definition of "a real tool". The sentence above is left in the past
+tense as the record of why both guards exist.
+
+STILL HAND-COPIED, and NOT this change's to fix: `schema.json`'s `expected_route` carries
+an `enum` of every tool name. That is a third copy of the registry, in a file owned
+elsewhere; it is reported rather than edited here.
 
 DELIBERATELY NOT GUARDED: `expected_route: clarification` together with a non-empty
 `expected_tools`. That pattern was proposed as a second self-contradiction, but it is

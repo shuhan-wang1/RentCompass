@@ -262,6 +262,165 @@ def describe_identity(doc: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+# --------------------------------------------------------------------------- #
+# Grader binding: WHICH EVALUATOR produced a verdict, and how sure are we
+# --------------------------------------------------------------------------- #
+# ``grader_sha256`` — a bare hash of ``evaluation/metrics/graders.py`` — has been stamped
+# into every manifest since the capture branch and asserted on by NOTHING. That is §0's
+# defect class, and it bit for real: in the 2026-07-24 grader repair the same retained
+# evidence scored fc 59/98 under one grader and 74/98 under the next with
+# ``case_contract_sha256`` byte-identical, so the only gate that existed reported
+# everything in order.
+#
+# The bare hash is also the WRONG BOUNDARY, in both directions:
+#
+#   TOO NARROW — ``graders._c_no_false_retrieval_provenance`` delegates its detection cues
+#     AND its usability predicate to ``uk_rent_agent.agent.critic`` through a
+#     function-local import. Measured 2026-07-27: patching ``claims_no_retrieval`` to
+#     ``return False`` flips that constraint FAIL→PASS on byte-identical evidence while
+#     ``graders.py`` stays byte-identical. A graders.py-only hash cannot see it.
+#   TOO WIDE would be worse — hashing the tree ties evaluator identity to every product
+#     commit, and a gate that cries wolf gets turned off.
+#
+# The boundary is therefore the REPO-LOCAL TRANSITIVE IMPORT CLOSURE OF THE GRADING PATH,
+# derived by tracing ``sys.modules`` while grading all 196 retained records of the round of
+# record and again with that one function-local import exercised. Import reachability is
+# mechanically checkable; "I read state.py and judged it inert" is a promise, and this
+# codebase does not accept promises here. ``agent/__init__.py`` pulls in ``state.py``,
+# which is why both are in the set even though ``critic.py`` names only ``contracts``.
+#
+# The list is EXPLICIT rather than computed at stamp time so that widening the verdict
+# surface shows up as a diff line a reviewer sees. ``tests/test_grader_provenance_gate.py``
+# re-derives the closure from the AST and FAILS if this list drifts from it.
+GRADER_SET_FILES: Tuple[str, ...] = (
+    "evaluation/__init__.py",
+    "evaluation/metrics/__init__.py",
+    "evaluation/metrics/graders.py",
+    "src/uk_rent_agent/__init__.py",
+    "src/uk_rent_agent/agent/__init__.py",
+    "src/uk_rent_agent/agent/contracts.py",
+    "src/uk_rent_agent/agent/critic.py",
+    "src/uk_rent_agent/agent/state.py",
+)
+
+# The file whose hash a pre-2026-07-27 manifest recorded as ``grader_sha256``. Keeping the
+# composite over RAW BYTES is what makes that legacy field still worth something: it is
+# directly comparable to this entry, so an old manifest can be PARTIALLY checked instead of
+# waved through.
+GRADER_SET_PRIMARY = "evaluation/metrics/graders.py"
+
+# Raw bytes per file, sorted by relative path, one ``"<relpath> <sha256>\n"`` line each,
+# then sha256 of that text. Deliberately NOT an AST-normalised or bytecode digest:
+#   * a digest a reviewer can reproduce with ``sha256sum`` is a digest that gets checked;
+#   * ``ast.dump`` output shifts between Python minor versions, so a normalised digest
+#     would void every stored round on an interpreter upgrade — the same cry-wolf failure;
+#   * a normaliser that wrongly equates two graders is unbounded damage of exactly the
+#     class this field exists to catch.
+# The price is that a comment-only edit to graders.py reads as a different evaluator. That
+# is the honest direction to fail in, and the per-file map below localises it in one line.
+GRADER_SET_ALGO = "sha256/raw-bytes/sorted-relpath-lines/1"
+
+# Tri-state, following the ``commit_trust`` convention: only the quiet answer is lowercase.
+# ``UNKNOWN`` is a THIRD answer and is never folded into ``match`` — a manifest that cannot
+# prove which evaluator scored it must not read as one that can. This is the same ruling
+# ``_dirty_word`` already makes for the working tree.
+GRADER_MATCH = "match"
+GRADER_MISMATCH = "GRADER-MISMATCH"
+GRADER_UNKNOWN = "UNKNOWN"
+
+
+def grader_set_identity(repo_root: Union[str, Path, None] = None) -> Dict[str, Any]:
+    """Identity of the whole verdict-determining file set of THIS tree.
+
+    A file that is absent hashes as ``None`` and still occupies a line, so deleting a
+    checker module changes the digest instead of silently shrinking the set."""
+    root = Path(repo_root or Path(__file__).resolve().parents[1])
+    files: Dict[str, Optional[str]] = {rel: sha256_of(root / rel) for rel in GRADER_SET_FILES}
+    payload = "".join(f"{rel} {files[rel]}\n" for rel in sorted(files))
+    return {
+        "grader_set_algo": GRADER_SET_ALGO,
+        "grader_set_files": files,
+        "grader_set_sha256": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+    }
+
+
+def compare_grader_identity(recorded: Optional[Dict[str, Any]],
+                            evaluator: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compare a stored manifest's grader identity with the evaluator's. NEVER raises.
+
+    Returns ``grader_identity`` ∈ {``match``, ``GRADER-MISMATCH``, ``UNKNOWN``} plus both
+    digests and a human ``grader_detail``. The caller decides what to do with each state;
+    what it may NOT do is treat ``UNKNOWN`` as ``match``.
+    """
+    rec = recorded if isinstance(recorded, dict) else {}
+    ev = evaluator if isinstance(evaluator, dict) else {}
+    rec_set = rec.get("grader_set_sha256")
+    rec_bare = rec.get("grader_sha256")
+    ev_set = ev.get("grader_set_sha256")
+    ev_files = ev.get("grader_set_files") or {}
+    ev_bare = ev_files.get(GRADER_SET_PRIMARY)
+    out: Dict[str, Any] = {
+        "recorded_grader_set_sha256": rec_set,
+        "recorded_grader_sha256": rec_bare,
+        "evaluator_grader_set_sha256": ev_set,
+        "grader_set_files_differing": [],
+    }
+
+    def _done(state: str, detail: str) -> Dict[str, Any]:
+        out["grader_identity"] = state
+        out["grader_detail"] = detail
+        return out
+
+    if not ev_set:
+        return _done(GRADER_UNKNOWN,
+                     "no evaluator grader identity was supplied to compare against, so "
+                     "which evaluator scored this run is UNKNOWN")
+    if rec_set:
+        if rec_set == ev_set:
+            return _done(GRADER_MATCH,
+                         f"grader_set_sha256 {rec_set[:12]}… matches the evaluator's over "
+                         f"{len(GRADER_SET_FILES)} verdict-determining files")
+        rec_files = rec.get("grader_set_files") or {}
+        if rec_files and ev_files:
+            out["grader_set_files_differing"] = sorted(
+                rel for rel in set(rec_files) | set(ev_files)
+                if rec_files.get(rel) != ev_files.get(rel))
+        where = (" — differs in " + ", ".join(out["grader_set_files_differing"])
+                 if out["grader_set_files_differing"] else "")
+        return _done(GRADER_MISMATCH,
+                     f"grader_set_sha256 {rec_set[:12]}… != the evaluator's {ev_set[:12]}…"
+                     f"{where}: this run's verdicts were produced by a DIFFERENT evaluator")
+    if rec_bare:
+        if ev_bare and rec_bare == ev_bare:
+            others = len(GRADER_SET_FILES) - 1
+            return _done(GRADER_UNKNOWN,
+                         f"legacy manifest: grader_sha256 {rec_bare[:12]}… shows "
+                         f"{GRADER_SET_PRIMARY} is byte-identical, but the other {others} "
+                         f"verdict-determining files were never recorded, so the evaluator "
+                         f"is only PARTIALLY witnessed — not a match")
+        return _done(GRADER_MISMATCH,
+                     f"legacy grader_sha256 {rec_bare[:12]}… != the evaluator's "
+                     f"{GRADER_SET_PRIMARY} {str(ev_bare)[:12]}…: this run's verdicts were "
+                     f"produced by a DIFFERENT grader")
+    return _done(GRADER_UNKNOWN,
+                 "manifest declares NO grader identity (neither grader_set_sha256 nor the "
+                 "legacy grader_sha256), so which evaluator scored it is UNKNOWN — it is "
+                 "NOT thereby a match")
+
+
+def recorded_grader_key(recorded: Optional[Dict[str, Any]]) -> str:
+    """A comparable key for "which evaluator did this run record itself under", used to
+    check that the ARMS OF ONE ROUND agree with each other. Two arms that recorded under
+    different graders cannot have their own ``scored_passed`` columns compared, whatever
+    the re-scoring evaluator is."""
+    rec = recorded if isinstance(recorded, dict) else {}
+    if rec.get("grader_set_sha256"):
+        return f"set:{rec['grader_set_sha256']}"
+    if rec.get("grader_sha256"):
+        return f"legacy-graders.py:{rec['grader_sha256']}"
+    return "undeclared"
+
+
 def _fmt_num(v: Any) -> Any:
     if v is None:
         return ""
@@ -423,7 +582,13 @@ def build_manifest(
         "capture_sha": capture_sha,
         "evaluator_sha": evaluator_sha,
         "capture_is_product": capture_is_product,
+        # WHICH EVALUATOR scored this run. ``grader_sha256`` is kept verbatim for every
+        # reader that already exists; it is graders.py alone and therefore too narrow (see
+        # GRADER_SET_FILES). ``grader_set_sha256`` is the digest the re-score gate keys on,
+        # and ``grader_set_files`` is carried so a mismatch names the file that moved rather
+        # than just failing.
         "grader_sha256": sha256_of(Path(__file__).parent / "metrics" / "graders.py"),
+        **grader_set_identity(),
         "case_contract_sha256": sha256_of(case_file),
         "arch": arch,
         "config": config,

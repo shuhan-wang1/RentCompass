@@ -146,16 +146,19 @@ _OVERLAP_THRESHOLD = 3
 #                                 location asks that must not be swallowed. Spans dimensions
 #                                 the table does not have (stations, gyms, transport cost).
 #   _heuristic_fallback (~:2399)  last-resort routing when every vote failed.
-#   _MULTI_INTENT_CUES (~:3437)   ***THE CLOSEST THING TO A FOURTH COPY.*** Keyed
-#                                 safety/commute/cost/transport/weather/poi/details/web, it
-#                                 answers "does this ONE message pack two distinct asks"
-#                                 (whether to spend a reflect hop), not "which dimension is
-#                                 owed". It has ALSO drifted: commute carries 多久/多远/距离
-#                                 which the dimension table lacks, safety lacks `unsafe` and
-#                                 `police`, and its `poi` key is the table's `nearby`.
-#                                 Reported, deliberately NOT merged — unifying it changes
-#                                 reflect-hop routing for every legacy turn and needs its own
-#                                 measured change. See the return notes for 2026-07-27.
+#   _MULTI_INTENT_CUES            RESOLVED 2026-07-27 — it no longer appears in this scan at
+#                                 all, and its FOUR fingerprints have been pruned from the
+#                                 allowlist below (commute row, poi row, safety row, and the
+#                                 whole-dict group whose `poi` KEY collided with the nearby
+#                                 row). Not because it was merged into DIMENSION_CUES: it
+#                                 answers a different question over a different taxonomy —
+#                                 eight loopable INTENTS, five of which name no dimension.
+#                                 Its three dimension-aligned rows are now DERIVED from
+#                                 core.dimensions via cues_for(), so the router is a guaranteed
+#                                 superset of the fetcher and the cues are not literals here
+#                                 for this scan to find. The reverse direction was refused with
+#                                 a measurement (`park`/`gym` must not become dimension cues).
+#                                 Pinned by tests/test_multi_intent_table_is_derived.py.
 #
 # Fingerprint is (module, dimension, the overlapping cues) so it survives line moves but NOT a
 # widening of one of these groups toward the cue table — which is exactly when a human should
@@ -166,17 +169,26 @@ KNOWN_CUE_OVERLAPS = {
      frozenset({"crime", "safe", "safety", "unsafe", "安全", "治安"})),
     ("core.langgraph_agent", "nearby",
      frozenset({"nearby", "pharmacy", "restaurant", "supermarket", "超市", "附近"})),
-    ("core.langgraph_agent", "safety",
-     frozenset({"crime", "safe", "safety", "安全", "治安", "犯罪"})),
-    ("core.langgraph_agent", "commute",
-     frozenset({"commute", "how far", "how long", "travel time", "通勤"})),
-    ("core.langgraph_agent", "nearby",
-     frozenset({"nearby", "poi", "restaurant", "supermarket", "超市", "附近"})),
     ("core.langgraph_agent", "safety", frozenset({"crime", "safe", "safety", "unsafe"})),
-    ("core.langgraph_agent", "nearby",
-     frozenset({"nearby", "restaurant", "supermarket", "超市", "附近"})),
     ("core.langgraph_agent", "safety", frozenset({"crime", "safe", "安全", "犯罪"})),
 }
+
+
+def test_the_allowlist_has_no_dead_entries():
+    """An allowlist is a liability once it outlives what it excused: the next real overlap gets
+    waved through by a line nobody can trace. Every fingerprint here must still occur. This is
+    what pruned the four _MULTI_INTENT_CUES entries when that table became derived."""
+    live = set()
+    for module in (agent_loop, lga):
+        for _lineno, vals in _string_groups(module):
+            for dim, cues, _tools in dimensions.DIMENSION_CUES:
+                overlap = vals & set(cues)
+                if len(overlap) >= _OVERLAP_THRESHOLD:
+                    live.add((module.__name__, dim, frozenset(overlap)))
+    dead = KNOWN_CUE_OVERLAPS - live
+    assert not dead, (
+        "KNOWN_CUE_OVERLAPS excuses overlaps that no longer exist: "
+        f"{sorted((d, tuple(sorted(f))) for _m, d, f in dead)}. Remove them.")
 
 
 def _string_groups(module):

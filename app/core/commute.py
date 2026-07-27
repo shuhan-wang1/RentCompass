@@ -73,11 +73,8 @@ def in_london(coords: dict | tuple | list | None) -> bool:
     return LONDON_BBOX[0] <= la <= LONDON_BBOX[1] and LONDON_BBOX[2] <= lo <= LONDON_BBOX[3]
 
 
-def coord_commute_minutes(origin_geo, dest_coords: dict | None) -> int | None:
-    """Distance-based transit estimate (minutes) from an origin's exact
-    coordinates to the destination. Mirrors maps_service.estimate_travel_time_simple
-    (1.3x route factor, 20 km/h transit, short wait) but uses exact lat/lon
-    directly, so it never depends on flaky street-address geocoding."""
+def straight_line_km(origin_geo, dest_coords: dict | None) -> float | None:
+    """Haversine straight-line distance in km, or None when either point is unusable."""
     o = parse_geo(origin_geo)
     d = parse_geo(dest_coords)
     if not o or not d:
@@ -87,9 +84,25 @@ def coord_commute_minutes(origin_geo, dest_coords: dict | None) -> int | None:
     dlng = math.radians(d[1] - o[1])
     a = (math.sin(dlat / 2) ** 2
          + math.cos(math.radians(o[0])) * math.cos(math.radians(d[0])) * math.sin(dlng / 2) ** 2)
-    dist_km = R * 2 * math.asin(math.sqrt(a))
-    actual = dist_km * 1.3
-    return int((actual / 20.0) * 60 + min(10, dist_km * 2))
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+def coord_commute_minutes(origin_geo, dest_coords: dict | None) -> int | None:
+    """Distance-based transit estimate (minutes) from an origin's exact coordinates to the
+    destination, using exact lat/lon so it never depends on flaky street-address geocoding.
+
+    Routed through ``commute_basis.best_estimate_minutes`` ON PURPOSE. This figure annotates
+    listings as ``travel_time_minutes`` and drives the ``max_commute_time`` filter, while
+    ``calculate_commute`` quotes ``commute_basis.describe_estimate`` for the same pair. Those
+    two used to be different formulas: a 0.47 km pair filtered as 2 minutes and was quoted as
+    12. One model now feeds both — calibrated inside the fitted domain, raw formula outside it.
+    """
+    km = straight_line_km(origin_geo, dest_coords)
+    if km is None:
+        return None
+    from core.commute_basis import best_estimate_minutes
+
+    return best_estimate_minutes(km, "transit")
 
 
 def commute_minutes(

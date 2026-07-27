@@ -4160,11 +4160,28 @@ def _format_commute_cost(data):
 
     commute = data.get('commute', {})
     if commute:
-        dur = commute.get('duration_minutes', 'N/A')
-        cat = commute.get('duration_category', '')
-        parts += [f"### \u23f1\ufe0f Commute Time",
-                  f"- **Duration:** {dur} minutes ({cat})",
-                  f"- **Daily round trip:** ~{dur * 2 if isinstance(dur, (int, float)) else 'N/A'} minutes\n"]
+        # This card is the ONE deterministic renderer of calculate_commute_cost's payload, so
+        # it has to honour the same basis contract the tool now returns: duration_minutes is
+        # populated only for a real TfL journey plan, and is None when the figure came from the
+        # straight-line estimator. Rendering that None as "None minutes" \u2014 or worse, printing
+        # an estimate under a heading that reads as measured \u2014 is the same defect one layer out.
+        dur = commute.get('duration_minutes')
+        cat = commute.get('duration_category') or ''
+        parts.append("### \u23f1\ufe0f Commute Time")
+        if isinstance(dur, (int, float)):
+            parts += [f"- **Duration:** {dur} minutes" + (f" ({cat})" if cat else ""),
+                      f"- **Daily round trip:** ~{dur * 2} minutes\n"]
+        else:
+            low = commute.get('estimate_low_minutes')
+            high = commute.get('estimate_high_minutes')
+            if low is not None and high is not None:
+                parts += [f"- **Estimated duration:** {low}-{high} minutes "
+                          f"(straight-line estimate, not a journey plan)",
+                          f"- **Daily round trip:** ~{low * 2}-{high * 2} minutes\n"]
+            else:
+                parts += ["- **Duration:** not established \u2014 no journey plan was available "
+                          "for this pair and the straight-line figure is not trustworthy at "
+                          "this distance\n"]
 
     tc = data.get('transport_cost', {})
     if tc and 'monthly_cost' in tc:

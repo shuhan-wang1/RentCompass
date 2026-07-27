@@ -164,16 +164,21 @@ limitation is part of ``CAVEAT_EN`` / ``CAVEAT_ZH`` (and of ``CALIBRATED_CAVEAT_
 ``CALIBRATED_CAVEAT_ZH``) and must be stated with the number. Calibrating the formula does not
 narrow it: the fit is still London-only, and a Manchester pair gets a London-fitted correction.
 
-STILL BROKEN ELSEWHERE, AND NOT FIXED HERE
-------------------------------------------
-``maps_service.calculate_travel_time`` returns a BARE int that silently falls back to the raw
-straight-line formula, and ``tools/calculate_commute_cost.py`` puts that int straight into
-``commute.duration_minutes`` and derives ``duration_category`` / ``is_acceptable`` / a
-monthly-hours figure from it. So for one pair ``calculate_commute`` can now say "estimated 11
-minutes (9-14), straight-line basis" while ``calculate_commute_cost`` says "2 minutes" as a
-fact. That gap predates this change and is unchanged by it; closing it means giving
-``calculate_travel_time`` a basis-aware cached return in ``maps_service`` (already noted at
-``calculate_commute_cost.py`` :293-300), which is outside this change's files. Owner decision.
+CLOSED SINCE (2026-07-27) — recorded because the fix is in other files
+----------------------------------------------------------------------
+Two gaps this module could describe but not reach have been closed in the tool layer:
+
+1. ``maps_service.calculate_travel_time`` returned a BARE int that silently fell back to the
+   raw formula, and ``tools/calculate_commute_cost.py`` put that int into
+   ``commute.duration_minutes``, deriving ``duration_category`` / ``is_acceptable`` / a
+   monthly-hours figure from it — so one 0.47 km pair got "estimated 11 minutes (9-14)" from
+   ``calculate_commute`` and "2 minutes" as a fact from ``calculate_commute_cost``, in the same
+   turn. ``maps_service.calculate_travel_basis`` is now the cached, basis-aware producer both
+   tools read; ``calculate_travel_time`` is a thin bare-int view over it for thresholding only
+   and returns ``best_estimate_minutes``, so even the filter figure comes from this model.
+2. ``calculate_travel_details`` now passes its ``mode`` into ``describe_estimate`` (see the
+   note on ``withdraw_uncalibrated_mode``), so the transit-only calibration can no longer be
+   applied to a cycling or driving request at the producer.
 """
 
 from __future__ import annotations
@@ -544,8 +549,10 @@ def describe_estimate(minutes: float | None, distance_km: float | None = None,
 
     ``minutes`` is the RAW formula output. Where the calibration's domain conditions hold it is
     replaced by the fitted figure; where they do not it is used as-is under the first pass's
-    15-minute floor. ``mode`` defaults to transit because ``maps_service`` does not pass one;
-    see ``withdraw_uncalibrated_mode`` for how the tool layer corrects that.
+    15-minute floor. ``mode`` is threaded in by ``maps_service.calculate_travel_details`` as of
+    2026-07-27, so the transit-only calibration cannot reach a mode it was never fitted on; the
+    default stays ``transit`` for direct callers that genuinely mean transit, and
+    ``withdraw_uncalibrated_mode`` remains as the tool-layer backstop.
     """
     km_known = isinstance(distance_km, (int, float)) and not isinstance(distance_km, bool)
     km_txt = f"{distance_km:.2f} km" if km_known else "the"
@@ -646,13 +653,15 @@ def describe_estimate(minutes: float | None, distance_km: float | None = None,
 def withdraw_uncalibrated_mode(payload: dict | None, mode: str) -> dict | None:
     """Undo a calibrated figure that was produced without knowing the travel mode.
 
-    ``maps_service.calculate_travel_details`` calls ``describe_estimate`` without passing its
-    ``mode``, so a cycling or driving request can be handed the public-transport calibration.
     Up to 2.71 km the raw cycling and transit formulas agree to within
     ``LEGACY_MINUTES_TOLERANCE``, so the guard inside ``_calibration_applies`` cannot separate
-    them from the minutes alone — but the TOOL layer knows the mode, and this is where it says
-    so. The calibrated figure is replaced by the first pass's uncalibrated treatment of the same
-    distance, which for a short cycling trip means the 15-minute floor refuses it again.
+    them from the minutes alone: whoever produced the payload has to say which mode it was.
+    ``maps_service.calculate_travel_details`` now DOES pass its ``mode`` down (2026-07-27), so
+    on that path this function is a no-op. It is kept, and still applied by the tools, because
+    it protects the case the producer cannot: a payload handed in by a caller that built it
+    itself, or a future producer that forgets. The calibrated figure is replaced by the first
+    pass's uncalibrated treatment of the same distance, which for a short cycling trip means
+    the 15-minute floor refuses it again.
 
     Returns ``payload`` unchanged when there is nothing to withdraw. Never raises.
     """

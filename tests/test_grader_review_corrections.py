@@ -11,6 +11,8 @@ read as a preference. Every assertion fails against
      all and D5 became a full pass.
   3. `must_note_missing_data` lost its field gate entirely, so ANY absence phrase about
      ANY subject satisfied it for ANY field.
+  4. `"no properties"` survived in `_MISSING_MARKERS` — the same domain-literal class as
+     the `"no supermarkets"` removed for making D5 and D11 disagree.
 """
 from __future__ import annotations
 
@@ -340,3 +342,35 @@ def test_a_field_with_no_row_is_ungated_not_auto_failed():
 def test_compound_field_names_resolve_to_the_right_row(field, expected_key):
     assert graders._field_semantic_tokens(field) is \
         graders._FIELD_SEMANTIC_TOKENS[expected_key]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 4 — the leftover domain literal
+# ══════════════════════════════════════════════════════════════════════════════
+def test_no_properties_is_no_longer_a_hardcoded_marker():
+    """`"no supermarkets"` was removed from `_MISSING_MARKERS` because hardcoding one
+    domain noun is exactly what made D5 pass and D11 fail. `"no properties"` is the same
+    class and was left behind: it privileges one noun ("properties") over its synonyms
+    ("flats", "homes", "rooms") for no reason a reader could defend."""
+    assert "no properties" not in graders._MISSING_MARKERS
+
+
+def test_the_general_machinery_covers_what_no_properties_covered():
+    """Removal is only safe if the shape rule already carries the phrase. `_NO_QUANTITY_RE`
+    enumerates QUANTITY nouns, not shop types, and `propert(y|ies)` is in it — so the
+    phrase keeps working, and now so do its synonyms."""
+    for text in ("No properties were found within your budget.",
+                 "There are no properties matching that description.",
+                 "No flats matched your criteria.",
+                 "Zero homes came back in that price range.",
+                 "No rooms are listed for that area."):
+        assert graders._asserts_data_absent(text, "listings"), text
+
+
+def test_removing_the_literal_does_not_change_the_verdict_it_used_to_carry():
+    """The both-ways pin: the sentence that used to pass on the literal still passes,
+    and it now passes for a reason that generalises."""
+    answer = ("No properties were found within your budget of £1,500/month within "
+              "35 minutes of Gower Street.")
+    assert _noted("listings", answer, tools=("search_properties",)).passed
+    assert _noted("within_budget_listings", answer, tools=("search_properties",)).passed

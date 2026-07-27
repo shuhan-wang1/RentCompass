@@ -876,12 +876,17 @@ _MISSING_MARKERS = ("no results", "none found", "not available", "couldn't find"
                     "could not find", "no listings", "not listed", "isn't listed",
                     "is not listed", "no data", "unavailable", "wasn't able",
                     "was not able", "couldn't compute", "could not compute",
-                    # NOTE: no POI-specific literal belongs here. "no supermarkets" used
+                    # NOTE: NO domain-noun literal belongs here. "no supermarkets" used
                     # to sit in this list, which is why D5 ("no supermarkets within a
                     # short walk…") passed while D11's structurally identical "no
-                    # pharmacies…" failed. The general absence machinery below now
-                    # carries both.
-                    "unable to", "not found", "no properties",
+                    # pharmacies…" failed. "no properties" was left behind in the same
+                    # list by the same change and is the same class of defect one noun
+                    # over: it privileges "properties" above "flats"/"homes"/"rooms" for
+                    # no reason a reader could defend. Both are gone; `_NO_QUANTITY_RE`
+                    # already enumerates `propert(y|ies)` among the QUANTITY nouns (a
+                    # closed, checkable class — unlike shop types), so the phrase and all
+                    # of its synonyms are carried by the general machinery.
+                    "unable to", "not found",
                     # phrasings the model actually uses to note absent data (validated live)
                     "don't include", "doesn't include", "do not include", "does not include",
                     "didn't include", "did not include", "doesn't cover", "does not cover",

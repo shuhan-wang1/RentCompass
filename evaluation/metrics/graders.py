@@ -554,7 +554,18 @@ def _money_derivations(b: float) -> set:
     Both readings are still expanded, because free text still does not disambiguate
     weekly from monthly — what is no longer expanded is both MULTIPLES for one reading.
 
+    The ANNUAL rent (``b × 12`` / ``b × 52``) is derivable in its own right, not merely
+    as the deposit rule's private intermediate. B9 asks "£475 per week — what is that
+    per calendar month?" and the legacy arm answers by SHOWING ITS WORKING:
 
+        £475 x 52 = £24,700 per year
+        £24,700 / 12 = £2,058.33 per calendar month
+
+    £2,058.33 was derivable and £24,700 was not, so an answer that displayed the
+    sanctioned formula one step at a time was recorded as fabricating a number, while
+    an answer that printed only the result was clean. Penalising shown working is
+    backwards, and the annual figure is the same arithmetic the £50,000 deposit
+    threshold is already computed from.
     """
     wk = b * MONTH_TO_WEEK     # b read as monthly -> weekly
     mo = b * WEEK_TO_MONTH     # b read as weekly  -> monthly
@@ -562,6 +573,8 @@ def _money_derivations(b: float) -> set:
     weeks_if_weekly = _deposit_cap_weeks(b * 52.0)
     vals = {
         b, wk, mo,
+        b * 12.0,                  # b read as monthly -> ANNUAL rent
+        b * 52.0,                  # b read as weekly  -> ANNUAL rent
         b * weeks_if_weekly,       # b read as weekly  -> statutory deposit
         wk * weeks_if_monthly,     # b read as monthly -> statutory deposit
         b + wk * weeks_if_monthly,  # b monthly: first month + deposit (move-in total)

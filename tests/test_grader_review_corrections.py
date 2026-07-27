@@ -26,6 +26,8 @@ read as a preference. Every assertion fails against
   9. Walk times were judged positionally: E3's three identical "140m (2 min walk)"
      bullets got two different verdicts because an unrelated phrase sat in the first
      one's character window.
+ 10. `475 x 52 = £24,700`, the first step of B9's own contract formula, was not
+     derivable — so showing your working was graded as fabricating a number.
 """
 from __future__ import annotations
 
@@ -865,3 +867,64 @@ def test_an_ungrounded_distance_cannot_bootstrap_a_walk_time():
     """The distance must ALREADY be grounded, so a fabricated pair grounds nothing."""
     st = _minutes_status("- Lidl -- 500m (7 min walk)", E3_POI_EVIDENCE)
     assert st == {7.0: "unsupported"}, st
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 10 — showing your working is not fabricating a number
+# ══════════════════════════════════════════════════════════════════════════════
+B9_QUERY = "A studio is advertised at £475 per week. What is that per calendar month?"
+B9_LEGACY_ANSWER = (
+    "For a studio advertised at £475 per week:\n\n"
+    "£475 x 52 = £24,700 per year\n"
+    "£24,700 / 12 = £2,058.33 per calendar month\n\n"
+    "Therefore, the monthly rent is approximately **£2,058 per calendar month**."
+)
+
+
+def test_the_annual_intermediate_of_the_sanctioned_formula_is_derivable():
+    """B9's contract formula is literally `475 * 52 / 12`. The legacy arm answered by
+    printing it one step at a time, and £24,700 — the first step — was the only figure
+    in the answer that was not derivable. An answer that shows its working was recorded
+    as fabricating a number while an answer that printed only the result was clean."""
+    assert 475 * 52 == 24_700
+    d = graders._money_derivations(475.0)
+    assert 24700.0 in d, sorted(d)
+    assert 2058.33 in d, sorted(d)
+    st = _money_status(B9_LEGACY_ANSWER, [B9_QUERY])
+    assert st[24700.0] == "grounded", st
+    assert st[2058.33] == "grounded", st
+
+
+def test_both_annual_readings_are_derivable():
+    """Free text does not say whether a base figure is weekly or monthly, so both
+    annualisations are expanded — the same pair the £50,000 deposit threshold is
+    already computed from."""
+    assert 4500.0 * 12 in graders._money_derivations(4500.0)   # monthly -> £54,000
+    assert 1000.0 * 52 in graders._money_derivations(1000.0)   # weekly  -> £52,000
+
+
+def test_a_no_tool_turn_does_not_have_an_empty_pool():
+    """The premise that a no-tool turn grades against nothing is not true and must not
+    be "fixed": `ctx.user_texts` already seeds the grounded pool with the user's own
+    figures and their derivations, and `reference_calculations` adds the sanctioned
+    results. B9's fc run called no tool at all and its pool is not empty."""
+    ctx = _ctx(B9_LEGACY_ANSWER, [], tools=(), user_texts=[B9_QUERY])
+    pool = graders._build_evidence_pool(ctx)
+    assert pool.money, "user-stated figures must survive a no-tool turn"
+    assert 475.0 in pool.money and 2058.33 in pool.money
+    assert pool.has_money_evidence
+
+
+def test_a_recalled_budget_with_no_fixture_behind_it_stays_unsupported():
+    """The other half of B9, and the reason this is not a blanket amnesty for no-tool
+    turns. The fc arm answers "That is just above your saved budget of £2,057 per
+    month". B9 declares `user_id: ab_user_b9`, `conversation_history: []`,
+    `expected_tools: []` and NO fixture; £2,057 appears nowhere in the corpus and the
+    run called no memory tool. It is an invented recollection, not a recalled figure,
+    and it must keep failing. Checked against the case definition, not against the
+    pool — checking the pool would only have confirmed whatever the pool already said."""
+    answer = ("£475 x 52 / 12 = **£2,058.33 per calendar month**. That is just above "
+              "your saved budget of £2,057 per month.")
+    st = _money_status(answer, [B9_QUERY])
+    assert st[2058.33] == "grounded", st
+    assert st[2057.0] == "unsupported", st

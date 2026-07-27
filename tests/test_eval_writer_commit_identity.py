@@ -535,11 +535,18 @@ def test_the_real_round_of_record_still_reads_when_it_is_present(round_dir):
 # =========================================================================== #
 # SOURCE GUARD — a promise in a docstring is not a guard
 # =========================================================================== #
-# results_package.py IS the probe's home. rescore.py is NOT owned by this change and still
-# runs its own git probe for ``evaluator_sha``; it is exempted HERE, deliberately and
-# visibly, so the exemption is a decision on the record rather than a silent hole.
+# results_package.py IS the probe's home.
+#
+# ``rescore.py`` used to be exempted here — "NOT owned by this change", visibly on the
+# record rather than a silent hole. The exemption is GONE as of 2026-07-27: the
+# grader-provenance work owns ``rescore._evaluator_identity``, and that probe had the exact
+# defect this file's docstring names as "the dangerous one" —
+# ``bool(git status --porcelain stdout.strip())`` reporting ``evaluator_dirty: False`` for a
+# tree git never read. Observed live: ``evaluator_sha: null`` printed beside
+# ``evaluator_dirty: false``. It now delegates to ``resolve_commit_identity`` like every
+# other writer, so the guard below covers it and the allowlist is empty.
 GIT_PROBE_HOME = {"results_package.py"}
-GIT_PROBE_EXEMPT = {"rescore.py"}
+GIT_PROBE_EXEMPT: set = set()
 
 
 def _non_docstring_str_constants(tree):

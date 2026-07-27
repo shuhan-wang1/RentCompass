@@ -116,6 +116,42 @@ services:
       # container as-is; recreate it on a telemetry-capable image before
       # advancing past the `internal` stage (see docs/canary_runbook.md).
       AGENT_ARCH: "legacy"
+      # --- Pool self-identification (rollback provenance) ---------------------
+      # Mirrors app-fc's APP_CANDIDATE_SHA (below) — but with the OPPOSITE
+      # substitution operator, deliberately:
+      #
+      #   app-fc :  "${FC_CANARY_SHA:?…}"   REQUIRED  — no fc pool without a pin
+      #   app    :  "${LEGACY_APP_SHA:-}"   DEFAULTED — never blocks a rollback
+      #
+      # `app` is the ONLY rollback target. A `:?` here would make EVERY
+      # `docker compose` command fail while the variable is missing — including
+      # the one that brings the escape hatch back. That is exactly the
+      # FC_CANARY_IMAGE/FC_CANARY_SHA failure mode, and reproducing it on the
+      # rollback target would break the one path you take in an emergency. So:
+      # `:-` with an EMPTY default, which fails safe.
+      #
+      # UNSET → APP_CANDIDATE_SHA="" in the container, which app/app.py reads as
+      #   (os.getenv("APP_CANDIDATE_SHA") or "").strip() or _startup_git_sha()
+      # so empty is indistinguishable from unset: it falls through to the git
+      # probe, which returns "unknown" inside the image (.dockerignore excludes
+      # .git). i.e. TODAY'S behaviour, byte-for-byte, and no new way to fail.
+      # SET → that sha is stamped on X-Agent-Version by BOTH response paths
+      # (Flask after_request in app/app.py and the Starlette-native /health
+      # route in src/uk_rent_agent/web/asgi.py) and recorded in per-turn
+      # telemetry, so deploy/switch_pool.sh --to legacy stops needing
+      # --allow-unidentified-target.
+      #
+      # Use the FULL 40-char sha the image was built from — deploy/update.sh's
+      # pin gate guarantees that is DEPLOY_PINNED_SHA from the server-local pin
+      # file. A short sha is worse than nothing: switch_pool.sh requires exactly
+      # 40 chars, so a 7-char value still forces --allow-unidentified-target.
+      #
+      # INERT UNTIL THIS CONTAINER IS RECREATED, like the canary pins above. Do
+      # NOT recreate `app` to pick it up — it is the standing escape hatch while
+      # fc_loop holds the public edge. Set LEGACY_APP_SHA in the root .env as
+      # part of the next PLANNED public rebuild; "the public pool can
+      # self-identify" is a cutover precondition, not a hotfix.
+      APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}"
       CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints.sqlite3"
       # Conversation store is SHARED between pools (same file as app-fc): the
       # sticky per-conversation arch assignment and the user-visible message

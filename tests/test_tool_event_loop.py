@@ -74,11 +74,22 @@ def test_calculate_commute_cost_not_blocking(monkeypatch):
     import core.maps_service as ms
     import core.tools.calculate_commute_cost as ccc
 
-    def blocking_time(frm, to, mode="transit"):
-        time.sleep(_BLOCK_S)
-        return 30
+    # REWIRED 2026-07-27, not weakened. This used to stub ``calculate_travel_time`` — a BARE
+    # int — and then assert it came back as ``commute.duration_minutes``, which pinned exactly
+    # the defect that a straight-line guess could occupy the measured-journey field: the 30 here
+    # carried no basis and the tool published it as a fact. The tool now reads the basis-aware
+    # ``calculate_travel_basis``, so the blocking call under test is stubbed there instead. The
+    # thing this test is actually about — that the sync tool does not block the event loop — is
+    # unchanged, and the payload asserted is now a MEASURED journey, which is the only kind that
+    # may fill duration_minutes.
+    def blocking_basis(frm, to, mode="transit"):
+        time.sleep(_BLOCK_S)  # SYNCHRONOUS TfL/geocode call — must run off the loop
+        return {"duration_minutes": 30, "route_legs": [], "route_summary": "r",
+                "source": "TfL Journey Planner", "basis": "tfl_journey_plan",
+                "basis_note": "measured", "caveat": None,
+                "estimated_duration_minutes": None}
 
-    monkeypatch.setattr(ms, "calculate_travel_time", blocking_time)
+    monkeypatch.setattr(ms, "calculate_travel_basis", blocking_basis)
     # mode="walking" -> uses_transit False -> no zone/geocode network beyond the timed call.
     ticks, result = asyncio.run(_heartbeat_run(
         lambda: ccc.calculate_commute_cost_tool.execute(

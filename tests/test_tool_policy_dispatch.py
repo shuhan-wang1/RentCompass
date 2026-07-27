@@ -47,6 +47,22 @@ def _money_state(query):
     )
 
 
+# 2026-07-26: the dispatch tests below start at "agent", not at "guard".
+#
+# B8 and B14 no longer reach the executor from a real turn at all — ``guard_node`` now
+# answers a turn that is nothing but statutory rent arithmetic deterministically, before any
+# LLM call, because supplying the model with the right figures was not enough to stop it
+# shipping the wrong ones (B7 quoted the five-week cap in the same answer that recited the
+# £50,000 rule; see tests/test_deposit_boundary.py). Driving from "guard" would therefore
+# test the guard, not the read policy.
+#
+# The read policy is NOT dead: it still governs every retrieval attempt on a money turn the
+# arithmetic guard declines — B12 ("all-in ... including bills and council tax") most
+# importantly, which is only partly derivable and must reach the model. So its behaviour is
+# still pinned here, entered at the node that owns it.
+_AGENT = "agent"
+
+
 # ─── the predicate ──────────────────────────────────────────────────
 @pytest.mark.parametrize("query,expected", [
     (B8_QUERY, (1600.0, "month")),
@@ -107,7 +123,7 @@ def test_web_search_for_statutory_money_rule_never_dispatches(case_id, query, se
         AIMessage(content="answer"),
     ])
     nodes = agent_loop.build_fc_nodes(provider, agent_llm=chat)
-    state = _run(_drive(nodes, _money_state(query)))
+    state = _run(_drive(nodes, _money_state(query), start=_AGENT))
 
     # Pre-dispatch: the tool never ran. This is the assertion the old code fails.
     assert provider.calls == [], f"{case_id}: web_search executed despite the read policy"
@@ -135,7 +151,7 @@ def test_b14_denial_hands_back_the_six_week_cap_the_web_snippet_omitted():
         AIMessage(content="answer"),
     ])
     nodes = agent_loop.build_fc_nodes(provider, agent_llm=chat)
-    state = _run(_drive(nodes, _money_state(B14_QUERY)))
+    state = _run(_drive(nodes, _money_state(B14_QUERY), start=_AGENT))
 
     msg = next(m for m in state["messages"]
                if isinstance(m, ToolMessage) and m.name == "web_search")
@@ -153,7 +169,7 @@ def test_b8_denial_hands_back_the_move_in_total():
         AIMessage(content="answer"),
     ])
     nodes = agent_loop.build_fc_nodes(provider, agent_llm=chat)
-    state = _run(_drive(nodes, _money_state(B8_QUERY)))
+    state = _run(_drive(nodes, _money_state(B8_QUERY), start=_AGENT))
 
     msg = next(m for m in state["messages"]
                if isinstance(m, ToolMessage) and m.name == "web_search")
@@ -220,7 +236,7 @@ def test_non_retrieval_tools_are_never_gated():
         AIMessage(content="ok"),
     ])
     nodes = agent_loop.build_fc_nodes(provider, agent_llm=chat)
-    _run(_drive(nodes, _money_state(B8_QUERY)))
+    _run(_drive(nodes, _money_state(B8_QUERY), start=_AGENT))
     assert [c[0] for c in provider.calls] == ["calculate_commute_cost"]
 
 

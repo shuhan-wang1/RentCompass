@@ -32,12 +32,11 @@ import csv
 import json
 import shutil
 import statistics
-import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -65,26 +64,80 @@ def _imports():
                 pricing_mod=pricing_mod)
 
 
-def _git_commit() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=str(REPO_ROOT),
-            stderr=subprocess.DEVNULL).decode().strip()
-    except Exception:
-        return "unknown"
+def _commit_identity() -> Dict[str, Any]:
+    """Which commit produced this ablation, and WHO says so.
+
+    Replaces a git-only probe that returned the string ``"unknown"`` when git could not
+    answer (the normal case in the container, whose bind mount has no usable git dir),
+    discarding an operator-pinned PRODUCT_SHA. Returns the full identity record — commit,
+    dirty flag, the SOURCE behind each, ``commit_trust`` and ``identity_warnings``. Never
+    raises."""
+    from evaluation.results_package import resolve_commit_identity
+    return resolve_commit_identity(repo_root=REPO_ROOT)
 
 
-def _reasoner_model_name() -> str:
+# The value written to ``reasoner_model`` / ``chat_model`` when the router cannot be
+# asked. NOT a model name: a report that cannot name its model must say so, and any
+# plausible-looking placeholder here ends up quoted as if it were an observation.
+MODEL_UNRESOLVED = "UNRESOLVED (router unavailable)"
+
+
+def _router_models() -> Dict[str, Optional[str]]:
+    """The router's ``chat_model`` / ``reasoner_model``, or Nones when it cannot be asked.
+
+    The reasoner lookup used to be ``except Exception: return "deepseek-reasoner"``. Two
+    defects in one line, and the same swallow shape as ``app/app.py``'s observer wiring:
+
+    1. ``ModelRouter()`` calls ``reject_retired_model_names`` at construction and RAISES
+       :class:`RetiredModelError` on a retired name. The blanket ``except`` ate that guard,
+       so an ablation run under a stale ``DEEPSEEK_REASONER_MODEL=deepseek-reasoner`` env
+       would label its whole report with the retired name and report it as the model
+       observed. The guard exists precisely because that env caused a day-long silent
+       outage; an eval must not be the one place it is disabled. It now propagates.
+    2. The fallback was ITSELF a retired name, so even an unrelated ImportError produced a
+       confident, wrong, dead model label. There is no honest guess here — the caller gets
+       None and the report says UNRESOLVED.
+
+    Constructing a router makes no network call, so asking is free.
+    """
+    from uk_rent_agent.llm.router import RetiredModelError
     try:
         from uk_rent_agent.llm.router import ModelRouter
-        return getattr(ModelRouter(), "reasoner_model", "deepseek-reasoner")
+        router = ModelRouter()
+        return {"chat_model": getattr(router, "chat_model", None) or None,
+                "reasoner_model": getattr(router, "reasoner_model", None) or None}
+    except RetiredModelError:
+        # The guard's whole job is to be loud. Re-raise so the run dies at the top with an
+        # actionable message rather than emitting a report labelled with a dead model.
+        raise
     except Exception:
-        return "deepseek-reasoner"
+        return {"chat_model": None, "reasoner_model": None}
 
 
-def _is_strong(model: Optional[str], reasoner: str) -> bool:
+def _reasoner_model_name() -> Optional[str]:
+    """The router's reasoner model, or None when the router could not be asked."""
+    return _router_models()["reasoner_model"]
+
+
+def _chat_model_name() -> Optional[str]:
+    """The router's light/chat model, or None when the router could not be asked."""
+    return _router_models()["chat_model"]
+
+
+def _model_label(name: Optional[str]) -> str:
+    return name if name else MODEL_UNRESOLVED
+
+
+def _is_strong(model: Optional[str], reasoner: Optional[str]) -> bool:
+    """Whether a model call used the strong/reasoning model.
+
+    With ``reasoner`` None (name unresolved) the exact-name comparison is impossible, so
+    only the substring heuristic applies — a partial answer, which is why the unresolved
+    state is recorded in the report rather than papered over."""
     m = (model or "").lower()
-    return m == reasoner.lower() or "reasoner" in m
+    if reasoner:
+        return m == reasoner.lower() or "reasoner" in m
+    return "reasoner" in m
 
 
 def _mean(xs):
@@ -215,6 +268,7 @@ async def _drive_config(mods, cfg_name, selected, mode, repeat, state_root, even
 async def _study_model(mods, selected, mode, repeat, out, state_root, events_log,
                        budget, done_ids, max_cost, timestamp) -> dict:
     reasoner = _reasoner_model_name()
+    chat = _chat_model_name()
     percentile = mods["_percentile"]
     per_config: Dict[str, dict] = {}
     for cfg_name in MODEL_STUDY_CONFIGS:
@@ -248,13 +302,23 @@ async def _study_model(mods, selected, mode, repeat, out, state_root, events_log
         "mode": mode,
         "offline_mechanics_only": mode == "offline",
         "configs": MODEL_STUDY_CONFIGS,
-        "reasoner_model": reasoner,
+        # None when the router could not be asked. Recorded as an explicit UNRESOLVED
+        # marker rather than a plausible default: the previous default was itself a
+        # RETIRED name, so a failed lookup produced a confident dead label. chat_model is
+        # recorded too so REPORT.md can name the light-node model from an observation
+        # instead of the retired constant it used to hardcode.
+        "reasoner_model": _model_label(reasoner),
+        "reasoner_model_resolved": reasoner is not None,
+        "chat_model": _model_label(chat),
+        "chat_model_resolved": chat is not None,
         "n_cases": len(selected),
         "repeat": repeat,
         "per_config": per_config,
         "deltas_routed_vs_baseline": deltas,
         "stopped_reason": budget.get("stopped"),
-        "git_commit": _git_commit(),
+        # COMMIT BINDING + PROVENANCE: git_commit, git_dirty, git_commit_source,
+        # git_dirty_source, commit_trust, identity_warnings, self_identifying.
+        **_commit_identity(),
         "timestamp": timestamp,
         "caveat_offline": ("OFFLINE run: model is faked, so token/cost/strong-call numbers "
                            "are identical across configs by construction. Real Phase-4 deltas "
@@ -296,6 +360,7 @@ async def _study_retrieval(mods, selected, mode, repeat, out, state_root, events
                            budget, done_ids, max_cost, timestamp) -> dict:
     percentile = mods["_percentile"]
     reasoner = _reasoner_model_name()
+    chat = _chat_model_name()
     per_config: Dict[str, dict] = {}
     raw_runs_by_cfg: Dict[str, List] = {}
     for cfg_name in RETRIEVAL_STUDY_CONFIGS:
@@ -318,7 +383,13 @@ async def _study_retrieval(mods, selected, mode, repeat, out, state_root, events
         "per_config": per_config,
         "race_anomalies": anomalies,
         "stopped_reason": budget.get("stopped"),
-        "git_commit": _git_commit(),
+        "reasoner_model": _model_label(reasoner),
+        "reasoner_model_resolved": reasoner is not None,
+        "chat_model": _model_label(chat),
+        "chat_model_resolved": chat is not None,
+        # COMMIT BINDING + PROVENANCE: git_commit, git_dirty, git_commit_source,
+        # git_dirty_source, commit_trust, identity_warnings, self_identifying.
+        **_commit_identity(),
         "timestamp": timestamp,
         "caveat_offline": ("OFFLINE run: fake tools return instantly, so serial-vs-parallel "
                            "latency differences are negligible; this run PROVES the scheduling "

@@ -29,6 +29,20 @@ product change-sets are not.
    `case_contract_sha256`, or whose contract digest differs from the evaluator's, is
    REFUSED rather than scored with a defaulted identity. Evidence digests are verified,
    and duplicate `run_id`s are de-duplicated **and reported**.
+   **As of 2026-07-27 the refusal also keys on the GRADER.** `grader_sha256` was listed in
+   item 1 from the start and asserted on by nothing, so a grader change walked through a
+   gate that keyed only on the contract — which is how the same retained evidence came to
+   score fc 59/98 and then 74/98 with the contract digest unchanged for part of the move.
+   The digest is now `grader_set_sha256`, over the whole verdict-determining file set
+   (`results_package.GRADER_SET_FILES`, the import closure of the grading path — `graders.py`
+   alone is too narrow: `no_false_retrieval_provenance` takes its cues from
+   `uk_rent_agent.agent.critic`). Grader identity is a **tri-state**: `match`,
+   `GRADER-MISMATCH` (refused, no opt-out flag — the sanctioned cross-grader measurement
+   lives in `contract_delta.py`, see §3B, not in a loosened `rescore.py`), and `UNKNOWN`
+   for the retained packages that predate the field, which stay re-scorable and are never
+   reported as matching. `rescore.py` additionally asserts that the ARMS OF ONE ROUND
+   recorded under one grader; `fp-results/idp98_r{1,2,3}_{base,cand}` is a real paired round
+   on disk where they did not, under one contract, and nothing said so.
 5. **Shard preflight** — every benchmark shard must load and schema-validate before a
    measurement starts, not just the one being run.
 6. **Output-dir reuse refused by default** — `--allow-reuse-out` is the explicit opt-out.

@@ -22,10 +22,25 @@ This module replaces that with three principled pieces:
    ``£``/``GBP`` may be a prefix or a suffix, thousands separators are dropped, and
    ``pcm``/``pw``/``per month``/``per week`` annotations are read to recover the
    billing period. A reply price is *supported* when it (a) matches an evidence
-   number within ~1 %, or (b) is a standard derivation of an evidence price:
-   weekly↔monthly conversion, an annual / N-month total (× 1‑36), or a deposit of
+   MONEY figure, or (b) is a standard derivation of one: weekly↔monthly conversion,
+   an annual / N-month total (× 1‑36, or × 52 from a weekly rent), or a deposit of
    N weeks' rent (× 1‑6). Only prices carrying a currency/period marker are gated
    in the reply, so plain integers ("12 months", "3 beds") are never flagged.
+
+   The evidence side is KEY-SCOPED (``_evidence_money_mentions``) and the match
+   tolerance is capped in absolute terms (``_MAX_ABS_TOL``). Before 2026-07-26 it was
+   neither: every bare number in the payload seeded the derivation fan-out and the
+   tolerance was purely relative, so on a nearest-station turn the three DISTANCES IN
+   METRES {214, 635, 665} built a 129-value pool in which £9,999, £7,777, £5,050,
+   £4,321, £3,999, £2,345, £2,000 and £1,500 all read as "supported" — the check could
+   be defeated by ordinary, unrelated quantities, and the denser the evidence the
+   easier. See the section comment above ``_MONEY_KEY_SEGMENTS``.
+
+   The counterweight, so the tightening does not gate honest answers: a figure the
+   answer states as a BOUND ("annual rent under £50,000" — the Tenant Fees Act deposit
+   cap, in 5 of 196 retained answers) or as one endpoint of an explicit INTERVAL
+   ("£1,400-£1,500/month") is not a point claim about the retrieved listing and is not
+   gated (``_asserts_price``). A hedge ADVERB is deliberately not an exemption.
 
 2. EVIDENCE SURFACE. The critic node (in ``langgraph_agent``) gathers *everything
    the generator was shown* — ``tool_raw_data``, the observation, the assembled
@@ -87,9 +102,23 @@ _WEEKLY_AFTER = re.compile(
 # A "GBP" suffix on its own still marks the number as money (period unknown).
 _CURRENCY_AFTER = re.compile(r"\A\s*GBP\b", re.IGNORECASE)
 
-# ~1 % relative tolerance, with a small absolute floor to absorb rounding.
+# ~1 % relative tolerance, with a small absolute floor to absorb rounding AND a small
+# absolute CEILING so the tolerance cannot widen with magnitude.
+#
+# The ceiling is the second half of the 2026-07-26 price-pool fix. A bare relative
+# tolerance on a pool that grows multiplicatively makes large figures almost always
+# "supported": from a single base ``b`` the pool holds ``b × 1‑36``, each candidate
+# covering ±1 % of itself, so the covered measure is Σ 0.02·b·n ≈ 13.3·b over a range of
+# 36·b — over a THIRD of every value below the top multiple reads as grounded. Capping
+# the tolerance at £10 drops that to 36 × £20 = £720 of 36·b (0.4 % at b = £2,500) while
+# still absorbing the rounding a real answer does: the widest legitimate drift measured
+# across the 196 retained (answer, evidence) pairs of the 2026-07-25 round is £6.63 —
+# ``sweep-legacy/B3``, which derives a 5-week deposit using 4.35 weeks/month instead of
+# 52/12 and shows its work (£1,724.15 vs the sanctioned £1,730.77). £10 keeps that
+# answer grounded; £5 would flag it. See tests/test_critic_price_pool_scoping.py.
 _REL_TOL = 0.01
 _ABS_TOL = 1.0
+_MAX_ABS_TOL = 10.0
 
 # Integer-multiple range covering annual/N-month totals and deposit multiples.
 _MAX_MONTHS = 36
@@ -135,27 +164,16 @@ def _to_float(token: str) -> Optional[float]:
         return None
 
 
-def _all_numbers(text: str) -> set[float]:
-    """Every numeric token in ``text`` (currency-agnostic); the direct-match pool."""
-    out: set[float] = set()
-    for match in _NUMBER.finditer(text):
-        value = _to_float(match.group())
-        if value is not None:
-            out.add(value)
-    return out
+def _money_mention_spans(text: str) -> list[tuple[float, str, int, int]]:
+    """``(value, unit, start, end)`` for every number in ``text`` that reads as money.
 
-
-def _money_mentions(text: str) -> list[tuple[float, str]]:
-    """Numbers that read as *money* plus their billing period.
-
-    Returns ``(value, unit)`` where ``unit`` is ``"monthly"``, ``"weekly"`` or
-    ``"unknown"``. A number qualifies when it carries a currency symbol (prefix or
-    ``GBP`` suffix) or a rent-period annotation — plain integers are ignored so we
-    never gate "12 months" or "3 bedrooms".
+    Positions are kept so a caller can inspect the figure's own textual neighbourhood
+    (see :func:`_asserts_price`) instead of re-locating it with a looser regex — the
+    "75/100" in a safety score must never stand in for the "£100" in a fare estimate.
     """
-    mentions: list[tuple[float, str]] = []
+    spans: list[tuple[float, str, int, int]] = []
     if not text:
-        return mentions
+        return spans
     for match in _NUMBER.finditer(text):
         value = _to_float(match.group())
         if value is None:
@@ -171,8 +189,122 @@ def _money_mentions(text: str) -> list[tuple[float, str]]:
         if not (has_currency_before or monthly or weekly or has_currency_after):
             continue
         unit = "monthly" if monthly else "weekly" if weekly else "unknown"
-        mentions.append((value, unit))
-    return mentions
+        spans.append((value, unit, match.start(), match.end()))
+    return spans
+
+
+def _money_mentions(text: str) -> list[tuple[float, str]]:
+    """Numbers that read as *money* plus their billing period.
+
+    Returns ``(value, unit)`` where ``unit`` is ``"monthly"``, ``"weekly"`` or
+    ``"unknown"``. A number qualifies when it carries a currency symbol (prefix or
+    ``GBP`` suffix) or a rent-period annotation — plain integers are ignored so we
+    never gate "12 months" or "3 bedrooms".
+    """
+    return [(value, unit) for value, unit, _s, _e in _money_mention_spans(text)]
+
+
+# ── the evidence money pool: KEY-SCOPED, not "every number in the payload" ────
+# THE 2026-07-26 DEFECT. This pool used to be ``every bare numeric token in the
+# serialized evidence``, each seeding the full derivation fan-out below. On a
+# nearest-station turn the evidence carries DISTANCES IN METRES, so the three numbers
+# {214, 635, 665} produced a 129-value pool and these fabricated rents all read as
+# "supported" — none of them anywhere in the data, none of them a rent at all:
+#
+#     £9999 = 665 × 15 = 9975      £4321 = 214 × 20 = 4280
+#     £3999 = 665 ×  6 = 3990      £7777 = 214 × 36 = 7704
+#     £2345 = 214 × 11 = 2354      £5050 = 635 ×  8 = 5080
+#     £1500 = 214 ×  7 = 1498      £2000 = 665 ×  3 = 1995
+#
+# A metre is not money, so it must not seed a rent derivation. The pool is therefore
+# scoped the way ``evaluation.metrics.graders._build_evidence_pool`` already scopes its
+# own money pool (``rent``/``price``/``budget``/``deposit``/``cost``/``fare`` keys) and
+# the way that module key-scopes the commute pool: a BARE number joins only when a
+# segment of its key names money. A currency- or period-MARKED number ("£1500",
+# "2678 pcm", "£400/week") still joins from anywhere, because the marker is itself the
+# unit evidence — that path is unchanged and is what grounds free-text evidence.
+#
+# Segments, not substrings: "current_page" contains "rent" and "capacity" contains "cap",
+# but neither has a money SEGMENT. Split on non-alphanumerics and camelCase humps.
+# The list is empirical — every numeric-leaf key across the 196 retained (answer,
+# evidence) pairs of the 2026-07-25 round was enumerated, and these are the money ones
+# (price, price_raw, monthly_price, monthly_cost, monthly_gbp, weekly_gbp, max_budget,
+# suggested_budget, budget_increase_needed, daily_cap, daily_cap_gbp,
+# daily_off_peak_cap, fare_gbp, fare_pence) — plus the grader's MONEY_FIELDS names. The
+# non-money keys it must keep OUT are equally real: distance_m, distance_miles, radius_m,
+# duration_minutes, commute_minutes, max_travel_time, safety_score, score,
+# similarity_score, total_crimes_6m, most_recent_month_count, bedrooms, rank, count,
+# perfect_count, soft_count, total_found, total_matches, hits, misses, lat, lon,
+# from_zone, to_zone, severity, freshness, importance.
+_MONEY_KEY_SEGMENTS = frozenset({
+    "price", "prices", "priced", "rent", "rents", "rental", "rentals",
+    "deposit", "deposits", "budget", "budgets", "cost", "costs", "costing",
+    "fare", "fares", "fee", "fees", "cap", "caps", "gbp", "pcm", "pw",
+    "money", "amount", "amounts", "payment", "payments", "charge", "charges",
+    "salary", "income", "premium", "pence", "pounds", "sterling",
+})
+_KEY_SPLIT = re.compile(r"[^A-Za-z0-9]+")
+_CAMEL_HUMP = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
+def _key_segments(key: Any) -> list[str]:
+    """Lowercased word segments of a dict key ("maxBudget_pcm" -> max/budget/pcm)."""
+    return [s for s in _KEY_SPLIT.split(_CAMEL_HUMP.sub("_", str(key))).__iter__() if s]
+
+
+def _is_money_key(key: Any) -> bool:
+    """True when a segment of ``key`` names money, so its numbers are rent-like."""
+    return any(seg.lower() in _MONEY_KEY_SEGMENTS for seg in _key_segments(key))
+
+
+def _money_words_in(text: str) -> bool:
+    """True when ``text`` contains a money word as a whole word — the prose analogue of
+    :func:`_is_money_key`, for context blocks rendered as ``"Price: 2,900"`` lines."""
+    return any(word.lower() in _MONEY_KEY_SEGMENTS for word in _KEY_SPLIT.split(text) if word)
+
+
+def _evidence_money_mentions(evidence: Any, key: Any = "") -> list[tuple[float, str]]:
+    """``(value, unit)`` for every number in ``evidence`` that reads as MONEY.
+
+    Walks the structure rather than a flattened dump so each number keeps its key. Three
+    admission routes, and nothing else:
+
+    * a currency/period-marked number in any string leaf — the marker IS the unit
+      evidence, so this is key-independent (``"£1500/month"``, ``"2678 pcm"``);
+    * a bare number (numeric leaf or inside a string) whose key names money —
+      ``{"price_raw": 1500}``, ``{"max_budget": 1200}``, ``{"fare_gbp": 3.2}``;
+    * a bare number on a prose line whose preceding text names money — the assembled
+      context is a rendered string, so ``"Price: 2,900"`` has no dict key to read.
+    """
+    out: list[tuple[float, str]] = []
+    if evidence is None or isinstance(evidence, bool):
+        return out
+    if isinstance(evidence, dict):
+        for child_key, value in evidence.items():
+            out.extend(_evidence_money_mentions(value, child_key))
+        return out
+    if isinstance(evidence, (list, tuple, set)):
+        for item in evidence:
+            out.extend(_evidence_money_mentions(item, key))
+        return out
+    if isinstance(evidence, (int, float)):
+        if _is_money_key(key):
+            out.append((float(evidence), "unknown"))
+        return out
+    if not isinstance(evidence, str):
+        return out
+
+    text = evidence
+    out.extend(_money_mentions(text))
+    money_key = _is_money_key(key)
+    for line in text.splitlines():
+        for match in _NUMBER.finditer(line):
+            if not (money_key or _money_words_in(line[:match.start()][-48:])):
+                continue
+            value = _to_float(match.group())
+            if value is not None:
+                out.append((value, "unknown"))
+    return out
 
 
 def _derivations(value: float, unit: str) -> set[float]:
@@ -180,7 +312,10 @@ def _derivations(value: float, unit: str) -> set[float]:
 
     * integer multiples (annual / N-month totals, and weekly-rent deposit
       multiples, both covered by ``value × 1‑36``),
-    * weekly → monthly conversion,
+    * weekly → monthly conversion, and the annual total of a WEEKLY rent
+      (``value × 52``) — a first-class UK rent figure that ``× 1‑36`` cannot express,
+      so "at £1,000/week the annual rent is £52,000" used to pass only because the old
+      relative tolerance was £520 wide at that magnitude (``sweep/B14``);
     * monthly → weekly conversion and deposits of N weeks derived from it.
     """
     out: set[float] = {value}
@@ -188,6 +323,7 @@ def _derivations(value: float, unit: str) -> set[float]:
         out.add(value * n)
     if unit in ("weekly", "unknown"):
         out.add(value * _WEEKS_PER_YEAR / _MONTHS_PER_YEAR)
+        out.add(value * _WEEKS_PER_YEAR)
     if unit in ("monthly", "unknown"):
         weekly = value * _MONTHS_PER_YEAR / _WEEKS_PER_YEAR
         out.add(weekly)
@@ -197,31 +333,140 @@ def _derivations(value: float, unit: str) -> set[float]:
 
 
 def _close(a: float, b: float) -> bool:
-    return abs(a - b) <= max(_ABS_TOL, _REL_TOL * max(abs(a), abs(b)))
+    return abs(a - b) <= max(_ABS_TOL, min(_REL_TOL * max(abs(a), abs(b)), _MAX_ABS_TOL))
 
 
 def _close_to_any(value: float, pool: set[float]) -> bool:
     return any(_close(value, candidate) for candidate in pool)
 
 
+# ── asserted price vs. hedged estimate / statutory threshold ──────────────────
+# PORTED from ``evaluation.metrics.graders._number_asserts_field_value`` /
+# ``_NONASSERTION_MARKERS``, which the grader already uses to spare labelled estimates
+# and statutory thresholds from ``no_fabricated_number``. The critic had no equivalent,
+# which is why key-scoping the pool above (correctly) stopped grounding figures that no
+# listing ever supplied and that no answer claims a listing supplied:
+#
+#     "the deposit is capped at 5 weeks' rent (annual rent under £50,000)"   [Tenant Fees Act]
+#     "studios there typically start around £1,400-£1,500/month"            [market estimate]
+#     "a holding deposit is often around £250-£500"                         [market estimate]
+#     "a monthly Travelcard is roughly £100-110"                            [market estimate]
+#
+# Across the 196 retained pairs, £50,000 alone appears in 5 answers as the Tenant Fees
+# Act deposit-cap boundary. Caveating those with "double-check the exact prices against
+# the source listing" points the reader at the one thing that was never in doubt, and
+# each one costs a regeneration pass — the A14 class of critic-inflicted damage.
+#
+# Deliberately CONSERVATIVE, exactly as the grader is: the exemption needs a marker in
+# the figure's own neighbourhood, it is evaluated per OCCURRENCE, and a single bare,
+# unqualified occurrence anywhere makes the figure asserted. "The rent is £9,999 pcm"
+# and "Price: £9,999 pcm" are both still gated; only the model volunteering a hedge it
+# then never contradicts is spared. Localisation uses :func:`_money_mention_spans`, not a
+# looser regex, so an unrelated "75/100" cannot decide whether a "£100" was asserted.
+# The exemption covers exactly TWO STRUCTURAL SHAPES — a stated BOUND and an explicit
+# numeric INTERVAL. It deliberately does NOT cover hedge adverbs.
+#
+# Dropping "around £" / "about £" / "roughly £" / "typically £" / "~£" was forced by two
+# real cases, and the vocabulary approach is wrong for both. ``test_fc_critic``'s
+# ``test_fc_artifacts_make_retrieval_expected`` drafts "Zone-2 rents are around £9,999
+# pcm" against evidence that says £1,500 pcm: hedged or not, that is a fabrication that
+# CONTRADICTS the data, and the regeneration pass must fire. The H3 no-evidence 兜底 keys
+# off the same verdict, so "1-bed flats in Islington are about £1,650 pcm" with every
+# retrieval tool failed must stay not-grounded too. An adverb must not be able to launder
+# a point claim — and unlike a bound or an interval, an adverb does not change WHAT the
+# sentence claims, only how confidently. Every hedged figure in the 196 retained pairs
+# that must stay grounded is *also* a bound or an interval, so nothing was lost:
+# "annual rent under £50,000" is a bound; "typically start around £1,400-£1,500/month",
+# "often around £250-£500", "roughly £100-110" and "GBP 1,300 - 1,600" are intervals.
+_NONASSERTION_BEFORE = (
+    # a BOUND rather than a value — this is the Tenant Fees Act deposit-cap shape
+    "under £", "under gbp", "below £", "below gbp", "less than £", "less than gbp",
+    "over £", "over gbp", "above £", "above gbp", "more than £", "more than gbp",
+    "up to £", "up to gbp", "at least £", "at least gbp", "between £", "between gbp",
+    "exceeds £", "exceeds gbp", "exceeding £", "exceeding gbp",
+    "capped at £", "capped at gbp", "or more", "or above", "or higher",
+    # explicit statutory framing of a threshold
+    "statutory", "tenant fees act",
+)
+# Markers that bind rightwards: "£50,000 or more", "£250 or so".
+# NOTE: a bare "range" is deliberately NOT here. It reads as a hedge in "GBP 1,300 - 1,600
+# range" but also in "the rent is £9,999 and the range of amenities is excellent" — and
+# the interval case is already caught structurally by _RANGE_BEFORE/_RANGE_AFTER, so the
+# word buys nothing and costs a hole. Verified by the must-flag probe suite.
+_NONASSERTION_AFTER = ("or so", "or more", "or above", "or higher", "or over")
+_NONASSERTION_WINDOW = 34
+# Emphasis that can sit between a hedge and its figure ("around **£3,500**"). Distinct
+# from _MD_EMPHASIS, which also strips "~" — and "~£3,231" is itself a hedge marker, so
+# stripping the tilde would delete the very signal being looked for.
+_EMPHASIS_ONLY = re.compile(r"[*_`]+")
+# An endpoint of an explicit numeric range is an interval estimate, not a point claim:
+# "£1,730 - £1,750", "£150-£250/month", "£100-110", "GBP 1,300 - 1,600". Structural, so —
+# unlike a loose word window — ordinary prose cannot accidentally satisfy it.
+_RANGE_BEFORE = re.compile(r"\d[\d,.]*\s*(?:-|–|—|to)\s*(?:£|GBP\s*)?\Z", re.IGNORECASE)
+_RANGE_AFTER = re.compile(r"\A\s*(?:-|–|—|to)\s*(?:£|GBP\s*)?\d", re.IGNORECASE)
+
+
+def _asserts_price(text: str, value: float) -> bool:
+    """True when ``text`` states ``value`` as a CONCRETE price rather than a stated bound
+    or one endpoint of an explicit interval.
+
+    Fail-open in three ways, deliberately: a figure that cannot be localised counts as
+    asserted; a figure occurring even ONCE unqualified counts as asserted; and every marker
+    must touch the figure. So "The rent is £9,999 pcm", "Price: £9,999 pcm" and "rents are
+    around £9,999 pcm" are all asserted — a hedge adverb is not an exemption. "annual rent
+    under £50,000" (bound) and "£1,400-£1,500/month" (interval) are not asserted.
+    """
+    body = text or ""
+    occurrences = [(start, end) for mention, _unit, start, end
+                   in _money_mention_spans(body) if abs(mention - value) <= 0.5]
+    if not occurrences:
+        return True
+    for start, end in occurrences:
+        # Markdown emphasis sits between a hedge and its figure ("around **£3,500**"),
+        # so flatten it; each side is matched independently, so losing offsets is fine.
+        before = _EMPHASIS_ONLY.sub("", body[max(0, start - _NONASSERTION_WINDOW):start]).lower()
+        after = _EMPHASIS_ONLY.sub("", body[end:end + _NONASSERTION_WINDOW]).lower()
+        if any(marker in before for marker in _NONASSERTION_BEFORE):
+            continue
+        if any(marker in after for marker in _NONASSERTION_AFTER):
+            continue
+        if _RANGE_BEFORE.search(before) or _RANGE_AFTER.match(after):
+            continue
+        return True  # a bare, unqualified occurrence: this figure IS asserted
+    return False
+
+
 def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
-    """Reply prices that are neither present in nor derivable from the evidence."""
-    evidence_text = _serialize(evidence)
-    evidence_numbers = _all_numbers(evidence_text)
-    evidence_rents = _money_mentions(evidence_text)
+    """Reply prices that are neither present in nor derivable from the evidence.
 
-    # Derive from annotated rents (with their real unit) *and* every bare evidence
-    # number (unit unknown) — the latter catches numeric JSON price fields.
+    The evidence pool is key-scoped (:func:`_evidence_money_mentions`) so an unrelated
+    quantity — a distance in metres, a crime count, a safety score — cannot seed a rent
+    derivation, and the match tolerance is capped in absolute terms so it cannot widen
+    with magnitude. Figures the answer does not assert as concrete prices (labelled
+    estimates, statutory thresholds) are not gated; see :func:`_asserts_price`.
+    """
+    evidence_money = _evidence_money_mentions(evidence)
     supported: set[float] = set()
-    for value, unit in evidence_rents:
+    for value, unit in evidence_money:
         supported |= _derivations(value, unit)
-    for number in evidence_numbers:
-        supported |= _derivations(number, "unknown")
 
+    # FAIL CLOSED when the evidence supplies no money at all. The bound/interval exemption
+    # rests on the figure being context *alongside* retrieved data ("the listing is £4,200
+    # pcm; the statutory cap applies under £50,000"). With an empty money pool there is no
+    # retrieved figure for it to be context for, and this is precisely the H3 hazard: a
+    # numeric answer standing on zero usable retrieval evidence. So every money figure is
+    # gated there, bound or interval or not, which keeps the deterministic no-reliable-data
+    # 兜底 in the critic node reachable — it fires only on a NOT-grounded verdict.
+    exempt_bounds_and_intervals = bool(evidence_money)
+
+    answer = response or ""
     unsupported: list[float] = []
-    for value, _unit in _money_mentions(response or ""):
-        if not _close_to_any(value, supported):
-            unsupported.append(value)
+    for value, _unit in _money_mentions(answer):
+        if _close_to_any(value, supported):
+            continue
+        if exempt_bounds_and_intervals and not _asserts_price(answer, value):
+            continue
+        unsupported.append(value)
     return sorted(set(unsupported))
 
 

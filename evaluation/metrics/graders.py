@@ -86,6 +86,10 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 WEEK_TO_MONTH = 52.0 / 12.0
 MONTH_TO_WEEK = 12.0 / 52.0
 DEFAULT_TOLERANCE = 1.0  # matches the critic's rounding floor
+# Length units. The constraint field is `distance_m`, so METRES are the canonical
+# denomination and every other unit is converted into it before comparison.
+MILE_TO_M = 1609.344
+KM_TO_M = 1000.0
 # Numbers of these types are treated as "monetary" for the money-grounded rate.
 MONEY_FIELDS = {
     "monthly_rent", "weekly_rent", "rent", "deposit", "total_move_in",
@@ -101,6 +105,89 @@ _MINUTES_RE = re.compile(r"\b([0-9]{1,3})\s*(?:-|to|–)?\s*(?:min\b|mins\b|minu
 # zh commute strings in tool payloads (bilingual partial notes etc.): 「31 分钟」.
 _CJK_MINUTES_RE = re.compile(r"([0-9]{1,3})\s*分钟")
 _DISTANCE_M_RE = re.compile(r"\b([0-9]{1,4})\s*m\b(?!in)", re.IGNORECASE)  # metres, not "min"
+# A distance in ANY unit the answers actually use. The constraint is called
+# `distance_m`, but UK prose quotes walking distances in metres, driving distances in
+# miles and cycle routes in kilometres, interchangeably and often in the same answer.
+# Reading only the metre-denominated ones made the checker blind to exactly the
+# fabrication it exists to catch: D5's evidence is "No supermarket found within 300m",
+# and its answer invents "St Ives (about 3-4 miles away)" and "Cambridge (about 10 miles
+# away)" — numbers that are not in evidence in any unit, but which `_DISTANCE_M_RE`
+# cannot see because "miles" is not "m". Longest alternatives first so `miles` is never
+# consumed as a bare `mi`, and `m` last so it cannot pre-empt `mile`/`metre`.
+_DISTANCE_ANY_RE = re.compile(
+    r"(?<![£$€/0-9A-Za-z_.])([0-9][0-9,]*(?:\.[0-9]+)?)\s*"
+    r"(kilometres|kilometers|kilometre|kilometer|metres|meters|metre|meter|"
+    r"miles|mile|km|mi|m)\b(?!in)",
+    re.IGNORECASE)
+_DISTANCE_UNIT_TO_M = {
+    "m": 1.0, "metre": 1.0, "metres": 1.0, "meter": 1.0, "meters": 1.0,
+    "km": KM_TO_M, "kilometre": KM_TO_M, "kilometres": KM_TO_M,
+    "kilometer": KM_TO_M, "kilometers": KM_TO_M,
+    "mi": MILE_TO_M, "mile": MILE_TO_M, "miles": MILE_TO_M,
+}
+
+
+def _quoted_precision_tolerance_m(raw: str, unit_m: float) -> float:
+    """Metres of slack a figure quoted as ``raw`` in a unit worth ``unit_m`` metres
+    inherently carries.
+
+    A distance written "0.8 miles" is not a claim about 1287.4752 metres; it is a claim
+    that the true distance rounds to 0.8 of a mile, i.e. anything in [0.75, 0.85) mi —
+    ±0.05 mi = ±80.5 m. Judging it tighter than its own printed precision would
+    manufacture failures out of the model's ROUNDING rather than out of fabrication,
+    which is the inverse error this whole unit fix must not commit: A4 says "0.8 miles"
+    against an evidence `distance_miles` of 0.82 and is telling the truth.
+
+    So the tolerance is the half-ULP of the quoted figure — half of one unit in its last
+    printed decimal place — converted to metres, floored at the module's existing
+    ``DEFAULT_TOLERANCE``. Consequences, spelled out:
+
+        "300 m"      0 dp, unit 1 m     -> max(1.0, 0.5)      = 1.0 m   (unchanged)
+        "0.34 miles" 2 dp, unit 1609 m  -> max(1.0, 8.05)     = 8.05 m
+        "5.1 km"     1 dp, unit 1000 m  -> max(1.0, 50.0)     = 50.0 m
+        "0.8 miles"  1 dp, unit 1609 m  -> max(1.0, 80.47)    = 80.47 m
+        "10 miles"   0 dp, unit 1609 m  -> max(1.0, 804.67)   = 804.67 m
+
+    The metre row is the point of the floor: whole-metre figures keep EXACTLY today's
+    1.0 m tolerance, so no existing metre-denominated verdict can move. The mile rows
+    are deliberately generous — a coarsely quoted mile figure genuinely does not pin the
+    distance any harder than that, and it costs nothing here, because a fabrication like
+    D5's is not "within a wide tolerance of the evidence", it is absent from the evidence
+    in every unit.
+    """
+    dec = len(raw.partition(".")[2])
+    return max(DEFAULT_TOLERANCE, 0.5 * (10.0 ** -dec) * unit_m)
+
+
+def _distance_matches(text: str):
+    """Yield ``(value_in_unit, unit_in_metres, tolerance_m, match_start)`` for every
+    distance in ``text``,
+    whatever unit it is quoted in. Used on BOTH sides of the comparison — the answer and
+    the evidence — because mining different text on the two sides is what turns a figure
+    quoted verbatim from a tool into a "fabrication" (the C6/E9 ruling, commit 4edf3b4).
+    Concretely: D5's tool message says "within 300m" and the legacy arm's answer repeats
+    it as "(300 metres)"; only symmetric extraction keeps that honest answer honest."""
+    for m in _DISTANCE_ANY_RE.finditer(text or ""):
+        raw = m.group(1).replace(",", "")
+        val = _to_float(raw)
+        if val is None:
+            continue
+        unit_m = _DISTANCE_UNIT_TO_M[m.group(2).lower()]
+        yield val, unit_m, _quoted_precision_tolerance_m(raw, unit_m), m.start()
+
+
+def _distance_key_to_m(key: str, num: float) -> float:
+    """Convert an evidence distance leaf to metres, honouring the UNIT IN ITS KEY.
+
+    `search_properties` returns `distance_miles`, and ``"distance_m" in "distance_miles"``
+    is True — so a 0.82-mile distance was being added to the metre pool as ``round(0.82)``
+    = 1. The pool was not merely missing miles, it was recording them as ~1 metre."""
+    k = (key or "").lower()
+    if "mile" in k or k.endswith("_mi"):
+        return num * MILE_TO_M
+    if "_km" in k or k.endswith("km"):
+        return num * KM_TO_M
+    return num
 _SCORE_RE = re.compile(r"\b([0-9]{1,3})\s*/\s*100\b")
 _POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b", re.IGNORECASE)
 # Boundary classes are ASCII-word only: Python's \w matches CJK, which made numbers
@@ -405,9 +492,13 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
             elif "safety_score" in key or key == "score":
                 scores.add(round(num))
                 has_crime = True
-            elif "distance_m" in key or key == "distance":
+            elif "distance" in key or key == "dist":
+                # Key-unit aware: `distance_m` / `distance_miles` / `distance_km` all
+                # normalise to METRES. The old test was `"distance_m" in key`, which
+                # matches "distance_miles" as a SUBSTRING and then stored the mile
+                # figure as though it were metres (0.82 -> round(0.82) -> 1).
                 has_distance = True
-                distances.add(round(num))
+                distances.add(round(_distance_key_to_m(key, num), 2))
             elif "monthly_rent" in key or "weekly_rent" in key:
                 add_money(num)
         # Commute figures that ride in STRING fields — listing rows carry the search
@@ -441,6 +532,22 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
                         has_commute = True
                         for val in _range_values(s, m.start(), n):
                             commute.add(round(val))
+            # DISTANCES that ride in STRING fields, for the same symmetry reason as the
+            # commute figures above. `search_nearby_pois` states its search radius only
+            # in prose — `message: "No supermarket found within 300m of this address."` —
+            # and the legacy arm's answer quotes it back as "within a short walk (300
+            # metres)". Now that the answer side reads "300 metres" (it could not before,
+            # because `_DISTANCE_M_RE` required a bare "m"), the evidence side must read
+            # "300m" too, or a verbatim quotation of the tool becomes a fabrication.
+            # `route_summary: "Cycle via Regent's Canal towpath (approx 5.1 km)"` (C7) is
+            # the same shape. Key-filtered, like the commute path, so distances mentioned
+            # in free-text listing `description`s never widen the grounded pool.
+            if ("distance" in key or "route" in key or "travel" in key
+                    or key in ("message", "summary", "note")):
+                for val, unit_m, _tol, pos in _distance_matches(s):
+                    has_distance = True
+                    for endpoint in _range_values(s, pos, val):
+                        distances.add(round(endpoint * unit_m, 2))
         for s in _iter_strings(data):
             for pc in _POSTCODE_RE.finditer(s):
                 addresses.append(pc.group(1).upper().replace(" ", ""))
@@ -645,18 +752,21 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
             classify_number(v, "safety_score", pool.safety_scores,
                             pool.raw_scores, tol=0.5, neighborhood_guard=False))
 
-    # POI distances (metres)
-    for m in _DISTANCE_M_RE.finditer(answer):
-        v = _to_float(m.group(1))
-        if v is None:
-            continue
-        key = ("dist", round(v))
-        if key in seen:
-            continue
-        seen.add(key)
-        result.claims.append(
-            classify_number(v, "distance_m", pool.distances,
-                            pool.raw_distances, tol=1.0))
+    # POI distances — normalised to METRES whatever unit they were quoted in, and
+    # judged against the metre pool with the quoted figure's own precision as the
+    # tolerance (see `_quoted_precision_tolerance_m`). `_range_values` is applied for
+    # the same reason it is applied to minutes: the unit follows the SECOND endpoint,
+    # so "about 3-4 miles away" would otherwise yield only the 4.
+    for val, unit_m, tol_m, pos in _distance_matches(answer):
+        for endpoint in _range_values(answer, pos, val):
+            val_m = endpoint * unit_m
+            key = ("dist", round(val_m, 2))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.claims.append(
+                classify_number(val_m, "distance_m", pool.distances,
+                                pool.raw_distances, tol=tol_m))
 
     # addresses / postcodes
     ans_pcs = {pc.group(1).upper().replace(" ", "") for pc in _POSTCODE_RE.finditer(answer)}

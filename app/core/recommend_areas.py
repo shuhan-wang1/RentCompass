@@ -139,11 +139,19 @@ def _dest_key(destination: str, city: str | None) -> str:
     return f"{base}|{c}" if c else base
 
 
+def _norm_exclude_token(value) -> str:
+    """The ONE normalisation an exclude entry and an exclude LOOKUP must both use.
+
+    Split out of ``_norm_excludes`` so the set and the keys probed against it cannot
+    drift: they had, and the lookup silently missed (see ``_validate_one`` step 2)."""
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
 def _norm_excludes(exclude_slugs) -> set[str]:
     """Normalize the exclude list (slugs and/or names) to a lowercase string set."""
     out: set[str] = set()
     for e in exclude_slugs or []:
-        s = re.sub(r"\s+", " ", str(e).strip().lower())
+        s = _norm_exclude_token(e)
         if s:
             out.add(s)
     return out
@@ -276,14 +284,30 @@ def _validate_one(
         if not slug:
             return None
 
-        # 2) Never recommend an excluded slug/name.
-        nlow = name.lower()
-        if slug in excludes or nlow in excludes or (cand_city and f"{nlow}|{cand_city}" in excludes):
+        # 2) Never recommend an excluded slug/name. The probe keys go through the SAME
+        # normalisation as the set (`_norm_exclude_token`) — building the composite key
+        # from a raw `cand_city` meant a classifier tier that returned "London" never
+        # matched the lower-cased entry "bloomsbury|london", so the exclusion failed
+        # OPEN and printed nothing. Pinned by tests/test_area_city_contamination_guard.py.
+        nlow = _norm_exclude_token(name)
+        ccity = _norm_exclude_token(cand_city)
+        if slug in excludes or nlow in excludes or (ccity and f"{nlow}|{ccity}" in excludes):
             print(f"[AREA_RECO] drop '{name}': excluded")
             return None
 
         # 3) Contamination guard: a KNOWN city that differs from the destination's.
-        if cand_city and dest_city and cand_city != dest_city:
+        # Compare CITIES, not their casing. The two sides come from different places and
+        # are not in the same form: `cand_city` is classify_place()'s canonical city and
+        # the curated tables in core.scraping.on_demand store it LOWERCASE
+        # ({"city": "london"}), while `dest_city` is the requested area as the caller sent
+        # it ("London"). Raw `!=` therefore fired on the contamination-FREE case — on
+        # 2026-07-27 it dropped every same-city candidate for a real user
+        # ("drop 'Bloomsbury': wrong city (london != London)"), leaving zero areas.
+        # ONLY the comparison is normalised: `anchor` below geocodes with these values and
+        # the emitted `city` is user-visible, so neither is lower-cased.
+        # Pinned by tests/test_area_city_contamination_guard.py.
+        if (cand_city and dest_city
+                and cand_city.strip().casefold() != dest_city.strip().casefold()):
             print(f"[AREA_RECO] drop '{name}': wrong city ({cand_city} != {dest_city})")
             return None
 

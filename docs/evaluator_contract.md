@@ -18,11 +18,22 @@ second (so the bar is stable), product experiments only after that.
 | **G2, G3** | drop `must_call_tool: recall_memory`; add `allowed_tool_paths` admitting a `recall_memory` call **or an empty trace**; widen `expected_grounding_sources` |
 | **E11** | add `must_complete_requested_dimensions` (commute, nearby, safety) + the matching failure condition |
 
-G2/G3: the harness replays `conversation_history` into long-term memory and injects the
-retrieved block as `memory_context`, so the target fact is present **before the turn
-runs** and the model can answer without a tool call. Requiring the call bound the contract
-to an implementation the pre-injection architecture superseded. `must_recall_value` still
-carries the semantics — the fact must still be right.
+G2/G3: the target fact is present **before the turn runs**, so the model can answer without a
+tool call. Requiring the call bound the contract to an implementation the pre-injection
+architecture superseded. `must_recall_value` still carries the semantics — the fact must still
+be right.
+
+> **The mechanism this paragraph used to assert was wrong, and the correction is worth keeping
+> (2026-07-27).** It read: "the harness replays `conversation_history` into long-term memory and
+> **injects the retrieved block as `memory_context`**." The replay half is true
+> (`run_benchmark.py` → `_seed_memory`). The injection half is false. `_build_query_with_history`
+> does `base = f"{block}\n\n{base}"` — a **query-string prefix** — and `create_initial_state` is
+> called *without* a `memory_context` argument, which is exactly why PR #9 still has something
+> to wire. For the **fc** arm the prefix is not even read: the loop takes
+> `ec["current_message"]`, which the harness sets to the pristine `case["user_query"]`, so fc's
+> pre-turn fact arrives via `extracted_context["history"]` (structured history) instead.
+> **The amendment stands; only its stated reason was wrong.** Cited by symbol deliberately —
+> the line numbers in the original claim had already drifted once.
 
 E11: a truncated or soft-wrapped reply that openly stated the commute/pharmacy/crime
 checks were not done used to PASS, because saying less means fewer numbers to fail a
@@ -130,10 +141,18 @@ from the accident.
 
 ## Deliberately excluded
 
-* **`no_false_retrieval_provenance`** — its grader imports `claims_no_retrieval` from
-  `uk_rent_agent.agent.critic`, which exists **only** on the terminated
-  `hardening/correctness-only` branch. Porting it would drag product code out of a NO-GO
-  branch. Its schema enum entry and the H3 guard-case amendment are held back with it.
+* ~~**`no_false_retrieval_provenance`**~~ — **NO LONGER EXCLUDED as of 2026-07-26.** Ported on
+  `feat/false-retrieval-provenance-port` as the deliberate, named exception HANDOFF §5 called
+  for: `claims_no_retrieval` was taken from `hardening/correctness-only` (`critic.py:557`)
+  **byte-identical and alone**, appended at end of file, with the schema enum entry and the H3
+  guard-case amendment. **It carries no dependency on that branch's fail-closed critic
+  fallback** (the A14 regression) — the predicate's whole closure is `re` plus two literal cue
+  tuples. This is the one exception; the bullet below still stands unchanged.
+  **This makes it the first constraint whose grader imports product code**, so an evaluator
+  verdict now depends on which copy of `uk_rent_agent` resolves on `sys.path`. Both real entry
+  points insert `REPO_ROOT/"src"` first (`run_benchmark.py:60-62`, `rescore.py:33-38`); a bare
+  `python -c` inside the bench image resolves its own pip-installed `/app/src` instead. Pinned
+  by test rather than left to luck.
 * **`extract_tool_trace` skipping `suppressed` artifacts** — evaluator support for
   follow-up-capability suppression, which is NO-GO and not being extended.
 * Every product change on the hardening branch: the critic grounding fallback, the
@@ -144,7 +163,13 @@ from the accident.
 ```bash
 cd /home/shuhan/telemetry-v2-layer-b
 
-# no product code, and no new product import
+# no product code, and no new product import.
+# NOTE: both invariants hold for `eval/evaluator-contract` as taken, and that is what they
+# assert. They are deliberately BROKEN by `feat/false-retrieval-provenance-port` (2026-07-26),
+# which adds `claims_no_retrieval` to src/ and a function-local product import to the grader.
+# That is the whole point of the named exception above — do not "repair" these two commands by
+# widening them to later branches, and do not run them against a tree that contains the port
+# and conclude something is wrong.
 git diff --name-only f053508 eval/evaluator-contract | grep -E '^(app/|src/)'   # prints nothing
 git diff f053508 eval/evaluator-contract -- evaluation/ \
   | grep -E '^\+.*(import|from).*(uk_rent_agent|app\.)'                         # prints nothing

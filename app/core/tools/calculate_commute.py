@@ -24,7 +24,9 @@ def calculate_commute_impl(
     """
     try:
         from core.maps_service import calculate_travel_details
-        from core.commute_basis import BASIS_MEASURED, is_measured
+        from core.commute_basis import (
+            BASIS_MEASURED, is_measured, withdraw_uncalibrated_mode,
+        )
 
         print(f"   🚇 计算通勤:")
         print(f"      从: {from_address[:50]}...")
@@ -39,6 +41,14 @@ def calculate_commute_impl(
                 'success': False,
                 'error': '无法计算通勤时间（地址解析失败）'
             }
+
+        # calculate_travel_details does not pass its `mode` down to describe_estimate, so a
+        # cycling/driving request can come back carrying the public-transport calibration
+        # (up to 2.71 km the raw cycling and transit formulas agree to within a minute, so
+        # nothing downstream of maps_service can tell them apart from the number alone). This
+        # is the layer that KNOWS the mode, so this is where the mismatch is corrected: any
+        # mode the calibration does not cover falls back to the uncalibrated treatment.
+        details = withdraw_uncalibrated_mode(details, mode)
 
         base = {
             'from_address': from_address,
@@ -79,6 +89,10 @@ def calculate_commute_impl(
             'estimate_low_minutes': details.get('estimate_low_minutes'),
             'estimate_high_minutes': details.get('estimate_high_minutes'),
             'straight_line_km': details.get('straight_line_km'),
+            # Which model produced the estimate travels WITH the estimate. A calibrated and an
+            # uncalibrated figure license different sentences and carry different bands; a
+            # reader that cannot tell them apart is back to reading route_source.
+            'estimate_model': details.get('estimate_model'),
             'is_acceptable': None,
             'duration_category': None,
             'caveat': details.get('caveat'),
@@ -94,12 +108,14 @@ def calculate_commute_impl(
                 "a number of minutes, and do not infer one from the distance."
                 + distance_clause)
         else:
+            note = details.get('basis_note')
             base['recommendation'] = (
                 f"There is no journey plan for this pair. If you mention a time at all, give it "
                 f"as an estimated {details.get('estimate_low_minutes')}-"
                 f"{details.get('estimate_high_minutes')} minute range and say it is estimated "
-                f"from straight-line distance, not measured. Never state "
-                f"'{est} minutes' as the commute.")
+                f"from the straight-line distance, not measured. Never state "
+                f"'{est} minutes' as the commute."
+                + (f" Basis to disclose: {note}" if note else ""))
         return base
 
     except Exception as e:
@@ -112,7 +128,7 @@ calculate_commute_tool = Tool(
     name="calculate_commute",
     
     description="""Calculate commute time between two UK addresses (transit / cycling / walking) via the free TfL Journey Planner; returns duration, the route (lines/changes/walking legs) and an acceptability category. Use when the user gives a commute-time requirement or asks "how long to X"; skip if none, or already computed for that listing.
-READ THE BASIS FIELD: `duration_minutes` is populated ONLY when TfL returned a real journey plan (basis=tfl_journey_plan) and is the only figure you may state as a commute time. When TfL has no journey the result instead carries `estimated_duration_minutes` plus `estimate_low_minutes`/`estimate_high_minutes` (basis=straight_line_estimate) — quote that as an estimated RANGE and say it is derived from straight-line distance, or, when it is null, say no commute time is available. Never present an estimate as a measured journey time.
+READ THE BASIS FIELD: `duration_minutes` is populated ONLY when TfL returned a real journey plan (basis=tfl_journey_plan) and is the only figure you may state as a commute time. When TfL has no journey the result instead carries `estimated_duration_minutes` plus `estimate_low_minutes`/`estimate_high_minutes` (basis=straight_line_estimate) — quote that as an estimated RANGE and say it is derived from the straight-line distance, or, when it is null, say no commute time is available. `estimate_model` says which estimator produced it: "calibrated_overhead_plus_power_pace_v1" means the distance went through a model fitted to 14 measured TfL journeys (range 0.84x-1.24x), null means the raw uncorrected formula outside that model's domain (range 0.74x-1.45x). Either way state the range and the basis_note. Never present an estimate as a measured journey time.
 计算两个英国地址间的通勤时间与路线。""",
     
     func=calculate_commute_impl,

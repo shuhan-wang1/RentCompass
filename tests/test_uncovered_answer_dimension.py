@@ -70,6 +70,53 @@ Those five are recorded here rather than silently dropped: four of them describe
 gaps in ``graders.py`` (no threshold filter for non-money/non-commute kinds; no parsing
 of ``distance_display``; no distance-to-walk-time derivation; an empty pool on no-tool
 cases), which is a checker question for the file's owner, not a corpus question.
+
+THIRD PASS (2026-07-27): those four checker gaps were then FIXED on ``fix/grader-cleanup``
+(e71c6ad, 81042ae, d75ea16, 059847e), which changes the answer for four of the five.
+Re-measured against the corrected checker — not taken on trust — E3, E6 and F9 now come
+out clean, so the constraints can be added as pure coverage:
+
+  * **E3** — the three walk times are GROUNDED now that a time is derived from the
+    distance in the same clause; fc 5/5 -> 6/6, legacy 4/5 -> 5/6, neither verdict moves.
+  * **E6** — "None within 500m" is GROUNDED now that a threshold can be stated in any
+    unit; fc 6/6 -> 7/7, legacy 4/6 -> 5/7.
+  * **F9** — "180m" is GROUNDED now that the tool's own rendered string counts;
+    fc 4/4 -> 5/5, legacy 3/4 -> 4/5.
+
+  * **B9 — my decline was WRONG, on a premise I should have checked.** I wrote that
+    £2,057 was "the user's correctly recalled saved budget". That reasoning was circular:
+    the only evidence that such a budget existed was the answer asserting it. Checked
+    against the case DEFINITION instead — ``conversation_history: []``, ``expected_tools:
+    []``, no fixture, ``user_id: ab_user_b9`` appearing nowhere else in the repo, and no
+    £2,057 anywhere in the corpus — it is an INVENTED recollection, £1.33 from the correct
+    £2,058.33, which is more dangerous than a wild guess because it survives a casual
+    reading. My second premise, "empty evidence pool by construction", was also false and
+    was contradicted by output I had already printed: ``ctx.user_texts`` and
+    ``reference_calculations`` seed the pool, and B9's fc money pool holds 475 and
+    2058.33 as grounded. B9 gets the constraint and FLIPS fc 2/2 -> 2/3. Its legacy arm
+    shows the working, "£475 x 52 = £24,700", which the annual-rent fix now grounds, so
+    the honest answer is untouched (2/2 -> 3/3).
+
+Only **C2** remains declined: "£0 (walking distance, no fare needed)" is the correct
+consequence of a grounded 12-minute walk, not an invented fare.
+
+MERGE ORDER IS LOAD-BEARING — measured, not assumed. The E3/E6/F9 constraints are safe
+only on a tree that also carries ``fix/grader-cleanup``. Re-scoring all 98 cases against
+the retained evidence, with this branch's contract versus mainline's:
+
+    checker tree                          fc BEFORE -> AFTER      flips
+    mainline + fix/grader-cleanup         78/98 -> 74/98          4  (B9 C8 D11 E10)
+    mainline 4f410ab13a26 alone           79/98 -> 72/98          7  (+ E3 E6 F9)
+
+Landing this branch WITHOUT the checker corrections would fail E3, E6 and F9 — the three
+honest answers those corrections exist to stop mis-reading, and the exact harm the second
+pass declined to cause. Both branches are already merged in ``integration/wave4``, so the
+ordering holds there; cherry-picking this branch alone onto mainline would not be safe.
+(The one-case difference in the BEFORE column, 79 vs 78, is the checker corrections' own
+effect on a case this branch never touches.)
+
+This module's own tests pass under BOTH checkers, so the suite cannot detect that
+ordering problem for you — which is why it is written down here.
 """
 from __future__ import annotations
 
@@ -109,11 +156,20 @@ COMMUTE_KIND = "commute_minutes"
 #   C8   fc invented "about a 15-20 minute walk"    (545-char blob,   0 hits)   FLIPS
 #   D11  fc invented "Richmond ~15-20 minutes drive" (603-char blob,  0 hits)   FLIPS
 #   E4   no fabrication in either arm; coverage only              (verified no-op)
+#   B9   fc invented "your saved budget of £2,057"  (no history/memory/tool)   FLIPS
+#
+# THIRD PASS adds four more, once the checker corrections on fix/grader-cleanup made the
+# measurement possible (see the THIRD PASS note in the module docstring). E3/E6/F9 are
+# pure coverage — verified no-ops on both arms — while B9 flips.
 AMENDED_DIMENSION_COVERAGE = {
     "E10": COMMUTE_KIND,
     "E4": COMMUTE_KIND,
     "C8": COMMUTE_KIND,
     "D11": COMMUTE_KIND,
+    "E3": COMMUTE_KIND,
+    "E6": "distance_m",
+    "F9": "distance_m",
+    "B9": "money",
 }
 
 
@@ -353,6 +409,70 @@ def test_the_honest_refusal_still_passes(case_id):
     case = _cases_by_id()[case_id]["cases.jsonl"]
     verdict = graders.grade_case(case, _ctx(case, answer, tools))
     assert verdict.passed, [(c.type, c.passed, c.detail) for c in verdict.constraints]
+
+
+# --------------------------------------------------------------------------- #
+# 1c. B9 — an invented recollection, and the decline that missed it.
+# --------------------------------------------------------------------------- #
+# B9, fc arm, verbatim. The conversion is right and the recollection is invented.
+B9_FABRICATING_ANSWER = (
+    "To convert a weekly rent to a calendar month, the standard formula is:\n\n"
+    "**Weekly rent x 52 weeks / 12 months**\n\n"
+    "So: £475 x 52 / 12 = **£2,058.33 per calendar month** (approximately).\n\n"
+    "That is just above your saved budget of £2,057 per month, so it would be slightly "
+    "over budget. Would you like me to search for studios within your £2,057/month "
+    "budget?"
+)
+# B9, legacy arm, verbatim: the same conversion with the intermediate shown.
+B9_HONEST_ANSWER = (
+    "To convert a weekly rent to a per calendar month (PCM) figure, the standard method "
+    "in the UK is to multiply the weekly amount by 52 (the number of weeks in a year) "
+    "and then divide by 12 (the number of months in a year).\n\n"
+    "For a studio advertised at £475 per week:\n\n"
+    "£475 x 52 = £24,700 per year\n"
+    "£24,700 / 12 = £2,058.33 per calendar month\n\n"
+    "Therefore, the monthly rent is approximately **£2,058 per calendar month**."
+)
+
+
+def test_b9_has_nothing_the_recollection_could_come_from():
+    """The premise my earlier decline got wrong, pinned so nobody repeats it. B9 is a
+    pure-arithmetic turn: no prior turns, no tools, no fixture. There is no channel
+    through which a "saved budget" could reach the answer, so £2,057 cannot be a
+    recollection — it can only be an invention."""
+    for name, case in _cases_by_id()["B9"].items():
+        assert case["conversation_history"] == [], name
+        assert case["expected_tools"] == [], name
+        assert "fixture" not in case, name
+        assert not any(c["type"] in ("must_recall_value", "memory_isolation")
+                       for c in case["expected_constraints"]), name
+
+
+def test_b9_fails_on_the_invented_saved_budget():
+    """THE REGRESSION for the case I wrongly excused. The answer states the correct
+    £2,058.33 and then asserts a £2,057 "saved budget" that exists nowhere. Grading only
+    the arithmetic let both through; the fabrication constraint catches the second."""
+    case = _cases_by_id()["B9"]["cases.jsonl"]
+    verdict = graders.grade_case(case, _ctx(case, B9_FABRICATING_ANSWER, []))
+    assert not verdict.passed, [(c.type, c.passed, c.detail) for c in verdict.constraints]
+    failed = [c for c in verdict.constraints if not c.passed]
+    assert [c.type for c in failed] == ["no_fabricated_number"], (
+        f"B9 must fail on the invented figure, not on the arithmetic: "
+        f"{[(c.type, c.detail) for c in failed]}")
+    assert "2057" in failed[0].detail.replace(".0", ""), failed[0].detail
+
+
+def test_b9_still_passes_when_the_working_is_shown():
+    """The other direction, and the reason this constraint is safe on an arithmetic case:
+    the legacy arm prints the intermediate £475 x 52 = £24,700. An annual rent derived
+    from the user's own weekly figure is a sanctioned intermediate — showing the working
+    is not fabricating."""
+    case = _cases_by_id()["B9"]["cases.jsonl"]
+    verdict = graders.grade_case(case, _ctx(case, B9_HONEST_ANSWER, []))
+    fabrication = [c for c in verdict.constraints if c.type == "no_fabricated_number"]
+    assert fabrication and fabrication[0].passed, (
+        f"showing 475 x 52 = 24,700 must not read as a fabrication: "
+        f"{[c.detail for c in fabrication]}")
 
 
 # --------------------------------------------------------------------------- #

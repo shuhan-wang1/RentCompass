@@ -17,12 +17,11 @@ import argparse
 import asyncio
 import csv
 import json
-import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,13 +39,17 @@ def _bootstrap():
     return state_dir, events_log
 
 
-def _git_commit() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=str(REPO_ROOT),
-            stderr=subprocess.DEVNULL).decode().strip()
-    except Exception:
-        return "unknown"
+def _commit_identity() -> Dict[str, Any]:
+    """Which commit produced this fault-injection summary, and WHO says so.
+
+    Replaces a git-only probe that returned the string ``"unknown"`` whenever git could not
+    answer — the normal condition in the container, where a worktree's ``.git`` is a file
+    pointing at an absent host path. ``"unknown"`` discarded a PRODUCT_SHA the operator had
+    already pinned, so the summary could not name itself even when the answer was right
+    there. Returns the full identity record (commit + provenance + trust + warnings);
+    never raises."""
+    from evaluation.results_package import resolve_commit_identity
+    return resolve_commit_identity(repo_root=REPO_ROOT)
 
 
 async def _run_all(out: Path, timestamp: str) -> dict:
@@ -139,7 +142,9 @@ def _aggregate(results: List[ScenarioResult], timestamp: str) -> dict:
         "faults_correctly_surfaced": _ratio(
             sum(1 for r in surfaced_scen if r.fault_surfaced), len(surfaced_scen)),
         "harness_errors": count(lambda r: r.error is not None),
-        "git_commit": _git_commit(),
+        # COMMIT BINDING + PROVENANCE: git_commit, git_dirty, git_commit_source,
+        # git_dirty_source, commit_trust, identity_warnings, self_identifying.
+        **_commit_identity(),
         "timestamp": timestamp,
         "scenarios": [r.to_dict() for r in results],
     }

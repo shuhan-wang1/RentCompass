@@ -805,6 +805,20 @@ lever is not refuted, but it is **not clean either**, and no figure in §3.8 is 
 without a re-measurement on the repaired telemetry. This is the same defect class as §0 and it
 was found *in the notice that withdrew the previous instance*.
 
+**PR #12 was closed as superseded, not merged, and one thing it carried was deliberately left
+unlanded.** Its three durable pieces all landed by other routes: the `state.py` symbol-bind is
+in §3.3 via PR #32, and the `2d48d22` deploy-SHA correction is in §3A here (verified against
+`/etc/rentcompass/deploy.env`, which reads
+`DEPLOY_PINNED_SHA=2d48d225bc9a99eb4c5e982a9e86105158503b4b`). Its stale "Right now" block was
+superseded by #32. What was **not** landed is its `### 3.8 Latency levers — four refuted, one
+surviving` table: four of its six rows are void under §3.11 (they bucket by call count), a
+fifth is the output-length row tainted as described above, and its section number collides with
+the §3.8 that already exists. Landing a fresh table of void figures only creates something new
+to mis-cite. **The ledger is still retrievable** — `git show
+origin/docs/citation-fixes:docs/HANDOFF.md` — and the one row that may survive independently
+(prompt / cached-prefix size, −78/+186 ms over 200 turns) is worth re-measuring on the repaired
+telemetry rather than inheriting.
+
 ---
 
 ## 3A. Operational facts a new session will not otherwise know

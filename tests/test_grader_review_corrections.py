@@ -457,9 +457,10 @@ def test_b7s_shipped_figure_stops_being_supported():
 
 
 def test_no_fabricated_number_now_catches_an_asserted_wrong_cap():
-    """The constraint-level effect, on a plainly ASSERTED figure. (B7's own wording
-    hedges — see `test_b7s_own_wording_is_spared_by_the_pre_existing_hedge_rule` — so the
-    assertion is pinned separately from the grounding.)"""
+    """The constraint-level effect, on a plainly ASSERTED figure. (B7's own wording was
+    spared by a cross-line hedge when this was written; that leak is now closed — see
+    `test_b7s_own_wording_is_no_longer_spared_by_a_cross_line_hedge` — but the assertion
+    stays pinned separately from the grounding, because they are different mechanisms.)"""
     answer = ("For a flat at £4,500 per month the weekly rent is £1,038.46, so the "
               "deposit is £5,192.31.")
     con = {"type": "no_fabricated_number", "field": "deposit"}
@@ -479,24 +480,53 @@ def test_the_statutorily_correct_answer_passes_the_same_constraint():
     assert r.passed, r.detail
 
 
-def test_b7s_own_wording_is_spared_by_the_pre_existing_hedge_rule():
-    """Honest accounting, pinned so it cannot rot silently. B7's answer writes the wrong
-    figure twice, and BOTH occurrences fall inside the 40-character lookahead of
-    "So the deposit would be up to **approximately £5,192**". "up to" / "would be" /
-    "approximately" are `_NONASSERTION_MARKERS`, so `_number_asserts_field_value` reports
-    the figure as hedged and `_field_number_offenders` spares it.
+def test_b7s_own_wording_is_no_longer_spared_by_a_cross_line_hedge():
+    """RESOLVED 2026-07-27 (fix/b-money-category). This test used to assert the OPPOSITE,
+    and the inversion is deliberate — read the record before reverting it.
 
-    That is the 2026-07-23 labelled-exception ruling doing what it was built to do, in a
-    place where the window happens to reach across a sentence boundary. It is NOT part of
-    this item and is not changed here — but it is the reason B7's OWN text still passes
-    `no_fabricated_number` even though its figure is now correctly UNSUPPORTED."""
-    assert not graders._number_asserts_field_value(B7_ANSWER, 5192.31, "money")
+    What it pinned, verbatim from the version it replaces: "That is the 2026-07-23
+    labelled-exception ruling doing what it was built to do, in a place where the window
+    happens to reach across a sentence boundary. It is NOT part of this item and is not
+    changed here." So the sparing was never asserted as the intended rule; it was recorded
+    as a known leak that the deposit-cap item deliberately did not touch, precisely so it
+    could not rot silently. This is that leak being closed, and the record is kept here
+    rather than deleted.
+
+    The leak: `_number_asserts_field_value` used a raw ±55/40-character window, and the
+    40-character LOOKAHEAD from "**£5,192.31**" reached over the blank line into the next
+    paragraph's "So the deposit would be up to **approximately £5,192**", whose "up to" /
+    "would be" / "approximately" are `_NONASSERTION_MARKERS`. A hedge that opens the NEXT
+    paragraph cannot be qualifying THIS line's figure — the identical defect class as
+    item 9 in this module's own header, where E3's three identical walk-time bullets got
+    two different verdicts "because an unrelated phrase sat in the first one's character
+    window". The window now stops at a line break.
+
+    The consequence is that item 6 finally reaches the constraint: B7's OWN answer states
+    the five-week £5,192.31 for a £54,000-a-year rent, and `no_fabricated_number[deposit]`
+    now says so instead of only the grounding metric saying so."""
+    assert graders._number_asserts_field_value(B7_ANSWER, 5192.31, "money"), (
+        "the bolded '= **£5,192.31**' ends its own line and is qualified by nothing on it")
     con = {"type": "no_fabricated_number", "field": "deposit"}
     r = graders.CONSTRAINT_CHECKERS["no_fabricated_number"](
         con, _ctx(B7_ANSWER, [], tools=(), user_texts=[B7_QUERY]))
-    assert r.passed, r.detail
-    # …but the grounding metric, which the hedge rule does not touch, now tells the truth:
+    assert not r.passed, r.detail
+    assert "5192.31" in r.detail, r.detail
+    # …and the grounding metric, which never depended on the hedge rule, still agrees.
     assert _money_status(B7_ANSWER, [B7_QUERY])[5192.31] == "unsupported"
+
+
+def test_the_labelled_exception_ruling_still_holds_within_one_line():
+    """The other direction, and the reason the fix is a line-break bound rather than the
+    removal of the hedge rule. The 2026-07-23 ruling exists so that a figure the answer
+    itself labels as an estimate or a statutory threshold is not read as a fabricated
+    value. Every one of those exclusions is written on ONE line and is untouched."""
+    for text, value in (
+        ("So the deposit would be up to approximately £5,192 in a typical case.", 5192.0),
+        ("That is under £50,000 annual rent, so the five-week cap applies.", 50000.0),
+        ("Deposits here typically range between £1,700 and £1,800.", 1700.0),
+        ("A season ticket is roughly £200 a month on top.", 200.0),
+    ):
+        assert not graders._number_asserts_field_value(text, value, "money"), (value, text)
 
 
 @pytest.mark.parametrize("annual,weeks", [

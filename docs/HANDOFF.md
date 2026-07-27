@@ -71,12 +71,16 @@ need.
 
 ## 0. The defect class this codebase keeps producing
 
-Read this before writing any code here. **Eleven confirmed instances of one shape:** a value is
-computed, stored somewhere a reader could find it, and then never asserted on. Every one
+Read this before writing any code here. **Thirteen confirmed instances of one shape:** a value
+is computed, stored somewhere a reader could find it, and then never asserted on. Every one
 shipped. Every one was found by someone reading the code rather than by a test.
 
 **Instances 8–11 were found on 2026-07-26, after this section already existed and warned about
 exactly this.** Writing the warning did not stop the ninth; the guards did (practice 3).
+**Instances 12–13 were found on 2026-07-27, after the count had already been raised to eleven.**
+Instance 14 is arguably §3.15's last paragraph: the notice that withdrew instance 7 scoped its
+own withdrawal too narrowly, so figures built on the same blind counter kept being quoted. It is
+not tabled below because the fix is a re-measurement, not a guard.
 
 | # | where | the value that was produced | what was never done with it |
 |---|---|---|---|
@@ -91,6 +95,8 @@ exactly this.** Writing the warning did not stop the ninth; the guards did (prac
 | 9 | `app/core/tenancy_reference.py` | the **correct** 5-vs-6-week deposit cap | the answer path never called it. It was reachable only from a tool *denial*, and these turns call no tool — so the module was right and the user got £5,192.31 instead of £6,230.77 |
 | 10 | `app/core/langgraph_agent.py` critic hard-replace | the answer was replaced by a canned template | nothing counted it; the path records `soft_wrapped=False`, so a soft-wrap-denominated metric reported 0.00% while it fired on 3 of 98 cases |
 | 11 | `evaluation/metrics/graders.py` | `must_refuse_fabrication` received a `field` argument | never used it — the checker tested vocabulary instead, failing correct answers *and passing hedged fabrications* |
+| 12 | `app/core/agent_loop.py` | which cued dimensions the turn had **not** served | the only consumer was `_missing_requested_dimension_lines`, reachable *only* from the DEGRADED answer path. On the normal path the loop knew a requested dimension was unserved and neither fetched it nor said so. Fixed by `_dimension_fanout_calls`, which puts the satisfying read into the same batch |
+| 13 | `app/core/langgraph_agent.py` | `_SEARCH_DIMENSION_CUES`, a copy documented as "mirrors `agent_loop._DIMENSION_CUES`" | nothing ever checked that it did. By 2026-07-27 **six cues** had drifted (`safe`; `travel time`/`how long`/`how far`; `药店`/`pharmacy`), all on the legacy side, so the two architectures disagreed about what the user had asked for — the exact failure the comment claimed to prevent. Now one shared `core.dimensions.DIMENSION_CUES`, pinned by `tests/test_dimension_table_is_shared.py` |
 
 **Instance 7's bypass was documented in its own sibling's module docstring** — "calls that
 bypass ModelRouter". It was known and simply never wired.
@@ -630,12 +636,17 @@ down to a smaller model (there isn't one — `chat` and `reasoner` both resolve 
 
 ---
 
-### 3.14 The 2026-07-26 fix round — 15 branches, and two of this document's claims refuted
+### 3.14 The 2026-07-26 fix round — and two of this document's claims refuted
 
-Sixteen branches off mainline `c9e60c2`, integrated and green: **2575 passed, 4 skipped, 0
-xfailed** against a `c9e60c2` baseline of **1965 passed, 3 skipped, 1 xfailed**. The xfail is
-gone because it became a real test. All sixteen merge pairwise clean (53 files, +10273/-403). Nothing was deployed and
-no paid round was run.
+Started as sixteen branches off mainline `c9e60c2`; **finished as 23, all merged** (PRs
+#33–#55, with #48 folded in — see §3.15). Mainline is now `1bf1d4e` and the offline suite is
+**2873 passed, 5 skipped, 0 failed, 0 xfailed**, against a `c9e60c2` baseline of **1965
+passed, 3 skipped, 1 xfailed**. The xfail is gone because it became a real test. Nothing was
+deployed and no paid round was run.
+
+The figures in the rest of this section were written at the 16-branch mark (2575 passed) and
+are left as written; §3.15 records what the last seven branches changed, including a claim
+made **here** that they refuted.
 
 **Read §3.11's lesson first: this round exists because two figures in this file were computed
 from instruments that could not see what they were counting. It happened again, twice.**
@@ -679,22 +690,120 @@ baseline          59            34
 +R5               79            46     PR #7's labelled-exception ruling, ported to money
 ```
 
-32 flips, **all FAIL→PASS, zero PASS→FAIL in either arm**, and `cases.jsonl` is byte-identical
-to the round's recorded `case_contract_sha256`, so every flip is attributable to the grader.
-fc 60.2% → 80.6%; legacy 34.7% → 46.9%; **the fc-vs-legacy gap widens** from 25 to 33 cases.
+~~32 flips, **all FAIL→PASS, zero PASS→FAIL in either arm**~~ — **BOTH HALVES OF THIS ARE
+WRONG; see §3.15.** The count was 32 only because R5 wrongly passed D5: the corrected total is
+**31 flips, and `+R5` reads 78, not 79**. And the one-directionality was an artefact of the
+fixed checkers still being too loose — reviewing them produced **four PASS→FAIL flips** (B9,
+C8, D11, E10). `cases.jsonl` is byte-identical to the round's recorded
+`case_contract_sha256`, so every flip is attributable to the grader; that part stands.
+~~fc 60.2% → 80.6%~~ → **75.51%**; legacy 34.7% → 46.9%; ~~**the gap widens** from 25 to 33~~ →
+**28 cases**.
 
-**All four are one-directional on this corpus, and that is stated rather than hidden.** The
-defence is that each is a defect in a checker's own logic — `must_refuse_fabrication` was
-`any(marker in answer)` and never inspected a number, so it failed correct answers *and passed
-hedged fabrications* — and each fix's added strictness is pinned by a test that **passes on the
-old checker and fails on the new one**. Merging still changes what "pass" means, so §3.5 makes
-it the owner's call, not an implementer's. Note also that `contract_delta.py compare` **refuses
-this measurement**: it gates on `case_contract_sha256`, unchanged here. That refusal was left
-intact — it should probably also key on a grader hash.
+~~**All four are one-directional on this corpus, and that is stated rather than hidden.**~~ The
+one-directionality was stated honestly and was still an artefact — which is the point of
+§3.15. The defence of the *shape* of the fixes is unaffected: each is a defect in a checker's
+own logic — `must_refuse_fabrication` was `any(marker in answer)` and never inspected a number,
+so it failed correct answers *and passed hedged fabrications* — and each fix's added strictness
+is pinned by a test that **passes on the old checker and fails on the new one**. Merging still
+changes what "pass" means, so §3.5 makes it the owner's call, not an implementer's. Note also
+that `contract_delta.py compare` **refuses this measurement**: it gates on
+`case_contract_sha256`, unchanged here. That refusal was left intact — it should probably also
+key on a grader hash.
 
 **Consequence for §3.13 item 3.** The eval-only metrics still have not been re-run on a live
 round, and now they must not be re-quoted from the old grader either. Any future round must
 state which grader produced it.
+
+### 3.15 Reviewing the fixes of §3.14 — the strictness went the other way
+
+The §3.14 round did not end at sixteen branches. Seven more landed (PRs #49–#55), and the last
+five exist **only because the four evaluator fixes of §3.14 were reviewed instead of trusted**.
+Final state: 23 branches, PRs #33–#55, all merged; mainline **`1bf1d4e`**; **2873 passed, 5
+skipped, 0 failed**. `main` is now **234 commits / 327 files** behind mainline and remains
+unusable as a base.
+
+**The corrected table, and the decomposition §3.14 failed to make.** Produced by re-running the
+real graders against the retained `grader_input.jsonl` of both arms — not by reading a report:
+
+| evaluator | contract | fc /98 | legacy /98 |
+|---|---|---|---|
+| `c9e60c2` graders | `8793c0b` | **59** | **34** | 
+| `1bf1d4e` graders | `8793c0b` | **78** | **46** |
+| `1bf1d4e` graders | `1bf1d4e` | **74** | **46** |
+
+Row 1 reproduces the as-recorded `per_case.csv` exactly, 0 changes — which is what makes rows
+2 and 3 trustworthy.
+
+**Two separate movements were being reported as one.** The **grader** change is fc 59→74 (19
+case flips) and legacy 34→46 (12 flips) — it moves *both* arms. The **contract** change is the
+78→74 step alone, fc-only, flipping exactly B9, C8, D11 and E10, all on `no_fabricated_number`,
+with **every legacy counterpart still passing**. §3.14 collapsed these and so reported a
+grader-and-contract total as if it were a grader total. Keeping them apart matters because
+§3.5 treats them differently: a grader fix repairs an instrument, a contract change alters what
+"pass" means. Driving commits: `10a96d5` (C8, D11), `b4e8946` (E10, E4), `7a48bdc`, `81042ae`,
+`059847e`; `graders.py` moved +735/−99.
+
+**The claim §3.14 got wrong was not a number, it was a direction.** §3.14 stated
+one-directionality plainly and defended it. It was still an artefact: the fixed checkers were
+*less* loose but not tight, so nothing could flip the other way yet. Stating a limitation
+honestly does not make it a limitation you have measured.
+
+**E10 is why this matters.** It answers 「步行到帝国理工约15-20分钟」 and 「约10分钟」; word-boundary
+checked, **15/20/10 appear 0 times in its evidence** — only `30` appears, three times, all of it
+the user's own constraint. Its three constraints covered `must_call_tool`,
+`within_budget_listings` and `monthly_rent`; the rent *is* grounded, so E10 scored a **full
+pass**. A genuinely fabricating answer had no constraint that could catch it.
+
+**B9 is a reversal of my own previous conclusion, and the error is the instructive part.** Last
+round I called its £2,057 "the user's correctly recalled saved budget" — treating *the answer's
+own words* as evidence that the budget existed. `conversation_history` is `[]`, there is no
+fixture, `ab_user_b9` appears nowhere else, and `2057` appears nowhere in the corpus. It is
+£1.33 from the correct £2,058.33: worse than a wild guess, because it survives a casual
+reading. Pinned by `test_b9_has_nothing_the_recollection_could_come_from`.
+
+**A merge-order dependency that CI cannot catch.** #55 must land **after** #54. Landing it
+alone fails **E3, E6 and F9** — the three honest answers the #54 corrections exist to protect.
+Its suite passes under *both* checkers, so no automated check can see this. It is recorded in
+the module docstring, not only in the PR body. It merged in the correct order.
+
+**Two process facts worth keeping.**
+
+* **A held PR is not a held change.** #48 was deliberately left in draft pending the owner's
+  §3.5 ruling, but wave-3 worktrees were branched from an integration HEAD that already
+  contained it, so its commits rode in as ancestors and merging #49 auto-closed #48 as MERGED.
+  **`draft` protects the merge button, not the content.** To hold a change, keep it out of the
+  base every later branch is cut from.
+* **`refs/stash` is one global stack shared across every worktree.** Using it to park work
+  during a parallel agent round caused agents to pop each other's entries; one working tree was
+  recovered from a dangling commit. Park with `cp` to a scratch path and `git checkout <base>
+  -- <file>`, never with `git stash`.
+
+**Still open and unresolved: B15.** The checker corrections changed what counts as grounded,
+and B15 now **passes** on fc while asserting both £5,538.46 and £10,338.46. It sits inside the
+`B_money` category, which the round deliberately did not touch. The corrections therefore made
+the `B_money` ruling **more** urgent, not less.
+
+**One §3.14 item was investigated and found already done: fan-out.** Within a tool batch,
+dispatch was *already* genuinely parallel — every read is handed to `asyncio.ensure_future`
+before any of them is awaited, each on its own pool worker and private loop, so N independent
+S-second calls complete in ~S rather than N·S (**`app/core/agent_loop.py` →
+`execute_tools_node`, the `read_tasks` dispatch loop**; lines 2241–2263 at `1bf1d4e`, an as-of
+note only — resolve by symbol, per §3.3. My first draft of this paragraph cited `:1841-1868`,
+which the 23 merges had already invalidated). Pinned by `tests/test_parallel_tool_batch.py`.
+What was missing was **completeness**, not concurrency: a multi-dimension request could satisfy
+some cues and silently drop the rest. That is what #49/#50 close.
+
+**§3.11's withdrawal is narrower than the defect it describes.** §3.11 reassures that "latency
+figures are unaffected — `turn_latency_ms` is measured end to end". That clears the **Y** axis
+only. Every figure whose **X** axis is a call count or an output-token count rides the same
+observation layer, and that includes the one lever §3.8 records as surviving: the
+`14.6 ms/output-token` regression sources its X from `llm_usage.output_tokens`
+(`/home/shuhan/fp-results/scripts/output_length_latency.py:41`). In the 100-record archive the
+two call counters disagree on **9/100** records while **all 100** self-report
+`llm_usage_status='complete'` — the status field cannot see its own blindness. So the surviving
+lever is not refuted, but it is **not clean either**, and no figure in §3.8 is safe to re-quote
+without a re-measurement on the repaired telemetry. This is the same defect class as §0 and it
+was found *in the notice that withdrew the previous instance*.
 
 ---
 

@@ -18,11 +18,22 @@ second (so the bar is stable), product experiments only after that.
 | **G2, G3** | drop `must_call_tool: recall_memory`; add `allowed_tool_paths` admitting a `recall_memory` call **or an empty trace**; widen `expected_grounding_sources` |
 | **E11** | add `must_complete_requested_dimensions` (commute, nearby, safety) + the matching failure condition |
 
-G2/G3: the harness replays `conversation_history` into long-term memory and injects the
-retrieved block as `memory_context`, so the target fact is present **before the turn
-runs** and the model can answer without a tool call. Requiring the call bound the contract
-to an implementation the pre-injection architecture superseded. `must_recall_value` still
-carries the semantics — the fact must still be right.
+G2/G3: the target fact is present **before the turn runs**, so the model can answer without a
+tool call. Requiring the call bound the contract to an implementation the pre-injection
+architecture superseded. `must_recall_value` still carries the semantics — the fact must still
+be right.
+
+> **The mechanism this paragraph used to assert was wrong, and the correction is worth keeping
+> (2026-07-27).** It read: "the harness replays `conversation_history` into long-term memory and
+> **injects the retrieved block as `memory_context`**." The replay half is true
+> (`run_benchmark.py` → `_seed_memory`). The injection half is false. `_build_query_with_history`
+> does `base = f"{block}\n\n{base}"` — a **query-string prefix** — and `create_initial_state` is
+> called *without* a `memory_context` argument, which is exactly why PR #9 still has something
+> to wire. For the **fc** arm the prefix is not even read: the loop takes
+> `ec["current_message"]`, which the harness sets to the pristine `case["user_query"]`, so fc's
+> pre-turn fact arrives via `extracted_context["history"]` (structured history) instead.
+> **The amendment stands; only its stated reason was wrong.** Cited by symbol deliberately —
+> the line numbers in the original claim had already drifted once.
 
 E11: a truncated or soft-wrapped reply that openly stated the commute/pharmacy/crime
 checks were not done used to PASS, because saying less means fewer numbers to fail a

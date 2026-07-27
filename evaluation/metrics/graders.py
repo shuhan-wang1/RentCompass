@@ -1436,7 +1436,27 @@ def _number_asserts_field_value(answer: str, value: float, kind: str) -> bool:
     unrelated quantity (e.g. 'under £50k annual rent', '(< 20 min)'). Localises the
     number and inspects its textual neighbourhood; a bare, unqualified occurrence counts
     as an assertion. Conservative: if the number can't be localised, treat it as
-    asserted so genuine fabrications are never spared."""
+    asserted so genuine fabrications are never spared.
+
+    THE WINDOW STOPS AT A LINE BREAK (2026-07-27). It used to be a raw ±55/40-character
+    slice, which reached onto the PREVIOUS LINE and picked up a marker qualifying a
+    different number entirely. That silently defeated the statutory-cap tightening in
+    ``_money_derivations``, on the very case that docstring names:
+
+        - Weekly rent: £4,500 x 12 / 52 = **£1,038.46 per week**
+        - Maximum deposit (5 weeks): £1,038.46 x 5 = **£5,192.31**
+
+    £5,192.31 is the five-week reading of a rent whose £54,000 annual figure puts it over
+    the six-week line, so ``_money_derivations`` (correctly) does not derive it — and then
+    "per week", trailing the line ABOVE, landed inside £5,192.31's window and classed it a
+    non-assertion, so ``no_fabricated_number[deposit]`` reported nothing. B10 escaped
+    identically (£4,846.15, same two-line shape). A marker on the previous line cannot be
+    qualifying this line's figure, and the module already holds this exact principle in
+    ``_clause_windows`` ("letting it reach across a comma makes a stated measurement look
+    like a bound"). Only the newline is treated as a boundary here, not every clause
+    break: the calibrated same-line exclusions this function exists for — F8's "under £50k
+    annual rent", A5's "£200 season ticket", B3's "around **£1,730 - £1,750**" — sit on one
+    line and are untouched."""
     al = answer or ""
     hits = []
     if kind == "money":
@@ -1468,7 +1488,15 @@ def _number_asserts_field_value(answer: str, value: float, kind: str) -> bool:
     if not hits:
         return True
     for s, e in hits:
-        window = al[max(0, s - 55):e + 40].lower()
+        pre = al[max(0, s - 55):s]
+        nl = pre.rfind("\n")
+        if nl != -1:
+            pre = pre[nl + 1:]
+        post = al[e:e + 40]
+        nl = post.find("\n")
+        if nl != -1:
+            post = post[:nl]
+        window = (pre + al[s:e] + post).lower()
         if not any(mk in window for mk in markers):
             return True
     return False
@@ -1753,6 +1781,215 @@ _DIMENSION_TOOLS = {
     "listings": ("search_properties",),
     "market": ("web_search",),
 }
+
+
+# --------------------------------------------------------------------------- #
+# TWO VALUES FOR ONE QUANTITY — a distinct defect from ungroundedness
+# --------------------------------------------------------------------------- #
+# B15 asks for the total upfront cost on a £4,800 pcm flat. The fc arm of
+# round-8793c0b answered, in one reply:
+#
+#     **Total upfront cost:** £4,800 + £5,538.46 = **£10,338.46**
+#     ...
+#     - **Corrected total upfront:** £4,800 + £6,646.15 = **£11,446.15**
+#
+# and scored 3/3. Both `reference_calc_match`es and `must_mention_value[11446.15]` are
+# satisfied by the SECOND figure, and no constraint in the corpus asks whether the answer
+# also asserted a different value for the same quantity. `must_flag_contradiction` is the
+# opposite test — a keyword check that the answer SURFACES a disagreement between
+# SOURCES — and this answer would satisfy it ("actually", "Corrected"), so the corpus
+# could reward a self-contradiction as if it were honesty.
+#
+# Ungroundedness does not subsume this. Two rival readings of the same statute or formula
+# can BOTH be arithmetically derivable from the same base figure, in which case every
+# individual number is supported and the pair is still incoherent. The user cannot act on
+# "your deposit is either £5,538 or £6,646".
+#
+# THE RULE IS EQUATION-ANCHORED, and that is what keeps it narrow. Only a money figure
+# printed as the RESULT of an explicit `=` counts, and only when the equation's own
+# LEFT-HAND SIDE labels it as the quantity. Consequences, all deliberate:
+#
+#   * a RANGE never fires — "£1,900-£2,600 pcm", "roughly £2,000 to £2,400" contain no
+#     `=`, so no candidate is ever produced (B13's sourced Clapham band is exactly this);
+#   * a BEFORE/AFTER comparison never fires — "updating from £1,400 to £1,800", "the
+#     listing was £1,500 and now shows £1,650" likewise contain no `=`;
+#   * SHOWING THE WORKING never fires — B9's legacy arm prints "£475 x 52 = £24,700 per
+#     year" and "£24,700 / 12 = £2,058.33 per calendar month". Two equations, two
+#     different results, and no failure: the first is labelled "per year", the second
+#     "per calendar month", so they are results for DIFFERENT quantities;
+#   * the ADDENDS of an equation are not results — "£4,800 + £6,646.15 = £11,446.15"
+#     contributes one candidate, not three.
+#
+# The left-hand side is bounded by the previous `=` (as well as by a line break or `;`),
+# so two equations sharing a line are attributed separately: in "the deposit is
+# £1,107.69 x 5 = £5,538.46 and the total is £4,800 + £5,538.46 = £10,338.46" the deposit
+# label reaches only the first result and the total label only the second.
+#
+# THE LABEL IS READ FROM THE HEADING, NOT THE OPERANDS — only the part of the left-hand
+# side BEFORE its first money figure. An addend carries its own name, and reading the whole
+# left-hand side attributed the addend's name to the sum. B3's honest answer says
+#
+#     the total upfront cost would be roughly **£1,500 (rent) + £1,731 (deposit) = ~£3,231**
+#
+# and the "(deposit)" label on the second addend made £3,231 read as a rival DEPOSIT figure
+# beside the £1,731 stated two lines up — a self-contradiction invented entirely by the
+# checker, on an answer that is right. Cutting at the first money figure leaves "the total
+# upfront cost would be roughly " as the label, which is what the equation computes.
+#
+# Label tokens are a POSITIVE table with NO ungated fallback: a field with no row can
+# never produce a candidate, and `no_self_contradictory_value` on it fails loudly with
+# `unknown field` rather than passing silently — the shape of defect that left
+# `no_fabricated_number[safety_score]` a no-op for the whole programme. Kept separate
+# from `_FIELD_SEMANTIC_TOKENS` on purpose: that table answers "does the answer discuss
+# this field AT ALL" (deliberately broad, and reused by `must_note_missing_data`, whose
+# verdicts must not move), whereas this one answers "does this equation's left-hand side
+# name this quantity as what it computes" (deliberately narrow).
+_QUANTITY_LABEL_TOKENS: Dict[str, Tuple[str, ...]] = {
+    "total_move_in": ("total", "upfront", "up front", "up-front", "move-in", "move in",
+                      "all-in", "all in", "altogether", "in total", "grand total",
+                      "总共", "总计", "合计", "一共"),
+    "total_all_in": ("total", "upfront", "up front", "up-front", "all-in", "all in",
+                     "altogether", "in total", "grand total",
+                     "总共", "总计", "合计", "一共"),
+    # "weeks" (plural) is a deposit label in its own right: the statutory cap IS a number
+    # of weeks' rent, and answers head the corrected line with nothing else — B10 writes
+    # "- 6 weeks: £969.23 x 6 = **£5,815.38**" under an earlier "- Maximum deposit
+    # (5 weeks): £969.23 x 5 = **£4,846.15**". Plural on purpose: "Weekly rent:" is a
+    # different quantity and must not be swept in.
+    "deposit": ("deposit", "bond", "weeks'", "weeks:", "weeks x", " weeks ", "押金", "保证金"),
+    "monthly_rent": ("per month", "per calendar month", "a month", "/month", "pcm",
+                     "monthly", "月租", "每月", "每个月"),
+    "weekly_rent": ("per week", "a week", "/week", "weekly", "pw", "周租", "每周"),
+    "average_rent": ("average", "median", "typical", "market rate", "平均"),
+}
+# The equality signs answers actually print. `≈` is deliberately absent: "≈ £2,060" is an
+# approximation of a figure stated elsewhere, not a rival result.
+_EQUALS_SIGNS = ("=", "＝")
+# A result is looked for immediately after the sign. Wide enough for "= **£11,446.15**"
+# and its markdown, narrow enough that the next sentence's figure is not captured.
+_EQUATION_RESULT_WINDOW = 48
+# How far back an equation's left-hand side is read for its label.
+_EQUATION_LABEL_WINDOW = 140
+# Boundaries that end a left-hand side. A bare "." is NOT one: it sits inside every
+# money figure this scan is made of ("£1,107.69").
+_LHS_BOUNDARY = ("\n", ";", "；", "。", "!", "！", "?", "？")
+
+
+def _equation_chains(text: str, signs: List[int]) -> List[List[int]]:
+    """Group consecutive `=` signs into CHAINS. ``A = B = C`` asserts ONE value, not two.
+
+    B14's legacy answer writes "- Five weeks' rent = 5 x £1,000 = **£5,000**". Treating the
+    two signs separately makes £1,000 — an operand of the second equation — a rival
+    "deposit result" beside £5,000, i.e. a self-contradiction manufactured out of an answer
+    that states exactly one deposit. A chain contributes one candidate: the heading of its
+    FIRST sign and the result of its LAST.
+
+    Two signs are chained only when they sit ON ONE LINE with EXACTLY ONE money figure
+    between them and nothing but whitespace or markdown after it — i.e. that figure is
+    simultaneously the first equation's result and the second's left-hand side. All three
+    conditions are load-bearing. Without the line-break test B15's
+
+        - 5 weeks' deposit: £1,107.69 x 5 = **£5,538.46**
+        (blank line)
+        **Total upfront cost:** £4,800 + £5,538.46 = **£10,338.46**
+
+    chains the deposit line to the total line — £5,538.46 happens to be the last money
+    figure before the second sign — and the deposit's own £5,538.46 is replaced by the
+    total £10,338.46. The verdict stayed FAIL either way, so only the reported reason was
+    wrong, which is the kind of error that survives a green run.
+    """
+    if not signs:
+        return []
+    chains: List[List[int]] = []
+    cur = [signs[0]]
+    for prev, nxt in zip(signs, signs[1:]):
+        between = text[prev + 1:nxt]
+        found = list(_MONEY_RE.finditer(between))
+        if (len(found) == 1 and "\n" not in between
+                and re.fullmatch(r"[\s*_`~)\]}]*", between[found[0].end():])):
+            cur.append(nxt)
+        else:
+            chains.append(cur)
+            cur = [nxt]
+    chains.append(cur)
+    return chains
+
+
+def _equation_results_for(answer: str, field: str) -> List[Tuple[float, str]]:
+    """Money figures printed as the RESULT of an `=` whose left-hand side labels them as
+    ``field``. Returns (value, the labelling heading) for each, in order."""
+    tokens = _QUANTITY_LABEL_TOKENS.get((field or "").lower())
+    if not tokens:
+        return []
+    text = answer or ""
+    signs = sorted(m.start() for sign in _EQUALS_SIGNS
+                   for m in re.finditer(re.escape(sign), text))
+    chains = _equation_chains(text, signs)
+    out: List[Tuple[float, str]] = []
+    for pos, chain in enumerate(chains):
+        head, tail_sign = chain[0], chain[-1]
+        # RESULT: the first money figure after the chain's LAST sign, before the next chain.
+        stop = chains[pos + 1][0] if pos + 1 < len(chains) else len(text)
+        tail = text[tail_sign + 1:min(stop, tail_sign + 1 + _EQUATION_RESULT_WINDOW)]
+        m = _MONEY_RE.search(tail)
+        if not m:
+            continue
+        value = _to_float(m.group(1))
+        if value is None:
+            continue
+        # LABEL: the left-hand side of the chain's FIRST sign, bounded by the previous
+        # chain and by a line break, then cut at its first money figure so the operands'
+        # own names are excluded.
+        lo = chains[pos - 1][-1] + 1 if pos else 0
+        lo = max(lo, head - _EQUATION_LABEL_WINDOW)
+        lhs = text[lo:head]
+        cut = 0
+        for br in _LHS_BOUNDARY:
+            j = lhs.rfind(br)
+            if j != -1:
+                cut = max(cut, j + len(br))
+        heading = lhs[cut:]
+        first_money = _MONEY_RE.search(heading)
+        if first_money:
+            heading = heading[:first_money.start()]
+        hl = heading.lower()
+        if not any((t in hl) if t.isascii() else (t in heading) for t in tokens):
+            continue
+        # A hedged illustration is not a rival assertion. B7 offers "Some landlords may
+        # ask for less (e.g. 4 weeks' rent = ~£4,154)" beside its stated deposit; the
+        # SAME non-assertion test `no_fabricated_number` uses excludes it, so the two
+        # checkers cannot disagree about what counts as asserting a money value.
+        if not _number_asserts_field_value(text, value, "money"):
+            continue
+        out.append((round(value, 2), heading.strip()))
+    return out
+
+
+def _c_no_self_contradictory_value(con, ctx) -> ConstraintResult:
+    """FAIL iff the answer states two or more DIFFERENT values for the same quantity.
+
+    See the block comment above for the rule and for why a range, a before/after
+    comparison and a shown intermediate step can never trip it. An unknown ``field``
+    FAILS rather than passing vacuously: a checker that grades nothing is the defect this
+    constraint exists to remove.
+    """
+    field_name = str(con.get("field") or "")
+    tol = float(con.get("tolerance", DEFAULT_TOLERANCE))
+    if (field_name or "").lower() not in _QUANTITY_LABEL_TOKENS:
+        return ConstraintResult(
+            "no_self_contradictory_value", False,
+            f"unknown field={field_name!r}: no row in _QUANTITY_LABEL_TOKENS, so nothing "
+            f"could ever be graded. Known: {sorted(_QUANTITY_LABEL_TOKENS)}")
+    results = _equation_results_for(ctx.final_answer or "", field_name)
+    distinct: List[float] = []
+    for value, _lhs in results:
+        if not any(abs(value - d) <= tol for d in distinct):
+            distinct.append(value)
+    ok = len(distinct) <= 1
+    return ConstraintResult(
+        "no_self_contradictory_value", ok,
+        f"field={field_name} tol={tol} distinct_values={distinct} "
+        f"stated_as={[(v, lhs[-40:]) for v, lhs in results]}")
 
 
 def _c_must_complete_requested_dimensions(con, ctx) -> ConstraintResult:
@@ -2303,6 +2540,7 @@ CONSTRAINT_CHECKERS: Dict[str, Callable[[dict, GradeContext], ConstraintResult]]
     "all_results_satisfy": _c_all_results_satisfy,
     "result_count": _c_result_count,
     "no_fabricated_number": _c_no_fabricated_number,
+    "no_self_contradictory_value": _c_no_self_contradictory_value,
     "must_complete_requested_dimensions": _c_must_complete_requested_dimensions,
     "must_mention_source": _c_must_mention_source,
     "must_mention_value": _c_must_mention_value,
@@ -2349,7 +2587,16 @@ def _field_to_kind(field_name: str) -> Optional[str]:
     """
     f = (field_name or "").lower()
     if f in ("monthly_rent", "weekly_rent", "rent", "deposit", "price",
-             "average_rent", "monthly_commute_cost", "fare", "total_move_in"):
+             "average_rent", "monthly_commute_cost", "fare", "total_move_in",
+             # `total_all_in` is B12's own declared field — "what'll it cost me all-in
+             # per month, including bills and council tax". It is the same money
+             # quantity as `total_move_in` under a different name, and its absence from
+             # this row made B12's DECLARED `must_refuse_fabrication[total_all_in]`
+             # take the non-numeric branch: no number was ever inspected, so the
+             # constraint reduced to "any refusal marker, or any absence sentence".
+             # The case whose entire point is "never fabricate utility costs" could not
+             # fail on a fabricated utility cost.
+             "total_all_in"):
         return "money"
     if f in ("safety_score", "safety", "score", "safety_rating"):
         return "safety_score"

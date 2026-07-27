@@ -62,6 +62,7 @@ needs. The runner implements one checker per `type`.
 | `all_results_satisfy` | `field`, `op`, `value` | every returned listing's `field` satisfies `op value`. |
 | `result_count` | `op`, `value` | the number of returned listings satisfies `op value`. |
 | `no_fabricated_number` | `field` | no numeric value stated for `field` is absent from the tool evidence (grounding). |
+| `no_self_contradictory_value` | `field`, opt `tolerance` | the answer does not state TWO DIFFERENT values for the same quantity. Equation-anchored: only a money figure printed as the result of an explicit `=`, in a clause whose heading names `field`, is a candidate — so a range ("£1,900–£2,600"), a before/after comparison ("from £1,400 to £1,800") and shown working ("£475 x 52 = £24,700 per year") never trip it. Distinct from `no_fabricated_number`: two rival readings of the same statute can both be derivable and still be mutually exclusive (B15 shipped both a 5-week and a 6-week total and passed). NOT for the contradiction cases B6/B11, whose answers must surface two rival SOURCE figures — that is `must_flag_contradiction`. |
 | `must_mention_source` | `value` | the answer cites the given source string (e.g. `data.police.uk`, `TfL`). |
 | `must_mention_value` | `value`, opt `tolerance` | the value (number within tolerance, or substring) appears in the answer. |
 | `must_not_mention_value` | `value` | the value does NOT appear (e.g. a hallucinated crime count, a leaked other-user figure). |

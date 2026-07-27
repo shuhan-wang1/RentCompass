@@ -89,6 +89,7 @@
               "all_results_satisfy",
               "result_count",
               "no_fabricated_number",
+        "no_self_contradictory_value",
               "must_complete_requested_dimensions",
               "must_mention_source",
               "must_mention_value",

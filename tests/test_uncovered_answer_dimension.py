@@ -100,6 +100,79 @@ out clean, so the constraints can be added as pure coverage:
 Only **C2** remains declined: "£0 (walking distance, no fare needed)" is the correct
 consequence of a grounded 12-minute walk, not an invented fare.
 
+FOURTH PASS (2026-07-27): the five cases the third pass handed to the owner — C2, C4, C5,
+C10, H9 — read one by one against the same retained round. Every number each answer
+asserted was listed per arm and checked with explicit digit lookarounds (``(?<![0-9])n
+(?![0-9])``, never ``\\b``: ``\\b`` does not match between a CJK character and a digit, so
+the naive boundary check is blind to 「12分钟」).
+
+The measured outcome is **zero flips on either arm**: fc 74/98 -> 74/98, legacy
+46/98 -> 46/98, scored with ONE evaluator over both retained arms. Every one of the four
+amended cases is therefore **pure coverage**, labelled as such in the same terms E4 was.
+Per case:
+
+  * **C10 — the real find, and NOT a no-op in the structural sense.** Its declared
+    ``no_fabricated_number[fare_gbp]`` graded *nothing at all*: ``_field_to_kind`` has no
+    row for ``fare_gbp``, and ``_field_number_offenders`` returns ``[]`` for a field with
+    no kind, so the constraint passed unconditionally whatever fare the answer stated.
+    This is the identical defect the file itself records for ``safety_score``
+    (see ``_field_to_kind``'s own docstring and
+    tests/test_grader_review_corrections.py::test_safety_score_resolves_to_a_kind_at_all).
+    Verified, not assumed: the retained legacy answer with £2.80 changed to £4.90 PASSES
+    ``[fare_gbp]`` and FAILS ``[fare]``. Fixed by naming the field the rest of the corpus
+    already uses (``fare`` -> ``money``), which needs no checker change, and generalised
+    into a corpus-wide source guard below. ``no_fabricated_number[duration_minutes]`` is
+    added too: 43 and 24 are both grounded, so it is a no-op on this evidence.
+  * **C4 — pure coverage.** fc quotes "About 36 minutes" (grounded in
+    ``commute.duration_minutes``) and "roughly 26.4 hours per month (72 min/day)". 72 is
+    classified ``unsupported``, because the commute key filter in ``_build_evidence_pool``
+    reads ``travel``/``commute``/``duration``/``route``/``time`` string keys and the figure
+    lives under ``summary.total_commuting_cost_per_month`` — "commuting" does not contain
+    "commute". It is spared only because "roughly" is a ``_COMMUTE_THRESHOLD_MARKERS``
+    hedge. So C4 does not fail, and MUST not: "72 min/day" is printed verbatim inside the
+    tool's own summary string, making it the F9 class exactly. Recorded as a KNOWN
+    ADJACENT CHECKER GAP (the distance path already reads ``summary``/``display`` keys;
+    the commute path does not) and pinned by a premise test, so nobody later "fixes" C4 by
+    failing an honest answer.
+  * **C5 — pure coverage.** 21 min and the 2-min Northern-line hop are both grounded
+    (``duration_minutes`` and ``route_legs``). fc fails on ``must_mention_source[TfL]``
+    before and after; legacy states no number at all and keeps its 3/3 -> 4/4.
+    UNCOVERABLE RESIDUE, reported rather than papered over: fc also claims "a **30%**
+    discount on pay-as-you-go fares", which is both absent from the evidence and
+    contradicted by the sibling C4 tool note ("Student Oyster cards do NOT get discounts
+    on Pay As You Go"). No claim kind exists for a percentage, so no existing checker can
+    reach it; inventing one is a checker change, not a corpus one.
+  * **H9 — coverage only, and its flip status is NOT MEASURABLE.** H9 declared
+    ``must_call_tool`` + ``must_not_call_tool`` and nothing else, while its own
+    ``failure_conditions`` already said "Fabricates a fare or route not grounded in the
+    TfL tool" — a named failure with no checker behind it, the purest form of the E10 hole.
+    It is also the only one of the five that is NOT in Base98: it lives solely in
+    ``cases_guard_regression.jsonl``, and a grep of the whole ``.runtime`` tree plus the
+    archived 2026-07-19 guard rounds finds no answer text for it anywhere (those rounds
+    predate ``grader_input.jsonl`` and retained telemetry events only). There is therefore
+    no arm to flip and none is claimed; the constraints are pinned by a CONSTRUCTED
+    regression instead, and it is labelled as constructed.
+  * **C2 — the decline is RE-AFFIRMED, and no constraint is added.** Read again from
+    primary sources, including one fact the third pass did not state: ``calculate_commute_
+    cost`` was CALLED and returned ``success: false``. Even so, ``calculate_commute``
+    returned ``route_summary: "Walk 12 min via Russell Square"`` from TfL, and a walk costs
+    nothing, so "£0 (walking distance, no fare needed)" remains a correct consequence of
+    grounded evidence rather than an invented fare. The dimension that matters IS covered
+    and DOES bite: the legacy arm invents "typically a 10-15 minute walk" over an EMPTY
+    evidence blob and fails ``no_fabricated_number[duration_minutes]`` on 10.0 and 15.0.
+    What stays open is a structural residue — a fabricated PRICE on C2 would still be
+    ungraded — and it cannot be closed here, because every money-kinded field routes
+    through the same offender set and would fire on that £0. Measured, so the size of the
+    obstacle is known rather than guessed: across all 98 cases x both retained arms there
+    is exactly ONE zero-valued money claim in the entire round, C2/fc's. Closing C2 needs
+    ``_field_number_offenders`` to stop reading a stated ZERO as an asserted amount (the
+    money twin of E6's "None within 500m"), and a zero can never be classified
+    ``contradicted`` — ``classify_number``'s neighbourhood guard requires
+    ``0.5*|r| <= |0| <= 2*|r|`` — so that correction would also stop catching "no deposit
+    is required" against a tool-pinned deposit. That trade is a checker decision with no
+    instance in the retained round to measure it on, so it is reported here for the
+    checker's owner instead of being made blind.
+
 MERGE ORDER IS LOAD-BEARING — measured, not assumed. The E3/E6/F9 constraints are safe
 only on a tree that also carries ``fix/grader-cleanup``. Re-scoring all 98 cases against
 the retained evidence, with this branch's contract versus mainline's:
@@ -161,16 +234,40 @@ COMMUTE_KIND = "commute_minutes"
 # THIRD PASS adds four more, once the checker corrections on fix/grader-cleanup made the
 # measurement possible (see the THIRD PASS note in the module docstring). E3/E6/F9 are
 # pure coverage — verified no-ops on both arms — while B9 flips.
+#
+# FOURTH PASS adds the four closable cases of the five the third pass handed on. All four
+# are pure coverage on this evidence (fc 74/98 -> 74/98, legacy 46/98 -> 46/98, zero flips),
+# which is exactly why the rows are needed: coverage is the claim, and this table is what
+# makes the claim testable in every shard. C2 is deliberately NOT here — the module
+# docstring records why, and adding a row for it would oblige a constraint that fires on a
+# £0 walking fare.
+#
+#   C4   36 min grounded; "72 min/day" is the tool's own summary   (verified no-op)
+#   C5   21 min + the 2-min hop both grounded                      (verified no-op)
+#   C10  fare_gbp graded NOTHING -> fare; 43/24 min grounded       (structural fix, no-op)
+#   H9   no numeric constraint at all; NO retained evidence        (coverage, unmeasurable)
+#
+# The value is a TUPLE: C10 and H9 must be able to fail on a fare AND on a journey time,
+# and a single-kind row would let half of each pair go missing.
 AMENDED_DIMENSION_COVERAGE = {
-    "E10": COMMUTE_KIND,
-    "E4": COMMUTE_KIND,
-    "C8": COMMUTE_KIND,
-    "D11": COMMUTE_KIND,
-    "E3": COMMUTE_KIND,
-    "E6": "distance_m",
-    "F9": "distance_m",
-    "B9": "money",
+    "E10": (COMMUTE_KIND,),
+    "E4": (COMMUTE_KIND,),
+    "C8": (COMMUTE_KIND,),
+    "D11": (COMMUTE_KIND,),
+    "E3": (COMMUTE_KIND,),
+    "E6": ("distance_m",),
+    "F9": ("distance_m",),
+    "B9": ("money",),
+    "C4": (COMMUTE_KIND,),
+    "C5": (COMMUTE_KIND,),
+    "C10": (COMMUTE_KIND, "money"),
+    "H9": (COMMUTE_KIND, "money"),
 }
+
+# H9 is the one amended case that is NOT in Base98: it is a hard-gate guard-regression
+# case and lives in exactly one shard. Recorded as a POSITIVE fact — the shard it must be
+# in — rather than as an exemption, so that adding H9 to Base98 makes the test say so.
+SINGLE_SHARD_CASES = {"H9": "cases_guard_regression.jsonl"}
 
 
 def _cases_by_id() -> dict:
@@ -208,13 +305,23 @@ def _fixture_evidence(case: dict) -> list:
 
 
 def _ctx(case: dict, answer: str, tools) -> graders.GradeContext:
+    return _ctx_with(case, answer, tools, _fixture_evidence(case))
+
+
+def _ctx_with(case: dict, answer: str, tools, evidence: list,
+              user_texts=None) -> graders.GradeContext:
+    """Same context, with the evidence supplied explicitly. C4, C5 and H9 declare NO
+    fixture — their retained evidence came from live tool calls — so their turns cannot be
+    reconstructed from the case file the way E10's and C10's can. Their evidence is
+    transcribed verbatim from the retained round instead, and the transcription is itself
+    checked by ``test_the_transcribed_c4_and_c5_evidence_is_the_tool_output_it_claims``."""
     return graders.GradeContext(
         final_answer=answer,
         tools_called=list(tools),
         tool_call_events=[],
-        evidence=_fixture_evidence(case),
+        evidence=evidence,
         route=None,
-        user_texts=[case["user_query"]],
+        user_texts=list(user_texts) if user_texts is not None else [case["user_query"]],
         reference_calculations=case.get("reference_calculations"),
         error=None,
         reconstructed_context=None,
@@ -478,17 +585,25 @@ def test_b9_still_passes_when_the_working_is_shown():
 # --------------------------------------------------------------------------- #
 # 2. The amendment reached every shard.
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("case_id,kind", sorted(AMENDED_DIMENSION_COVERAGE.items()))
-def test_the_amended_dimension_is_covered_in_every_shard_defining_the_case(case_id, kind):
+@pytest.mark.parametrize("case_id", sorted(AMENDED_DIMENSION_COVERAGE))
+def test_the_amended_dimension_is_covered_in_every_shard_defining_the_case(case_id):
     """Same failure mode as G2/G3/E11: amending cases.jsonl alone leaves the sibling shard
     grading a different contract, and a green run on one shard proves nothing about the
-    other. E10/C8/D11 also live in cases_ext_CDE; E4 also lives in cases_base45."""
+    other. E10/C8/D11/C10 also live in cases_ext_CDE; E4/C4/C5 also live in cases_base45;
+    H9 lives only in cases_guard_regression, which is asserted rather than assumed."""
     shards = _cases_by_id()[case_id]
-    assert len(shards) > 1, f"{case_id} should appear in Base98 and a sibling shard"
+    only_shard = SINGLE_SHARD_CASES.get(case_id)
+    if only_shard:
+        assert sorted(shards) == [only_shard], (
+            f"{case_id} is recorded as defined only in {only_shard} but is now in "
+            f"{sorted(shards)} — amend every shard and drop the SINGLE_SHARD_CASES row")
+    else:
+        assert len(shards) > 1, f"{case_id} should appear in Base98 and a sibling shard"
     for name, case in shards.items():
-        assert _covers_kind(case, kind), (
-            f"{case_id} in {name} declares no constraint over a {kind} figure: "
-            f"{[c['type'] for c in case['expected_constraints']]}")
+        for kind in AMENDED_DIMENSION_COVERAGE[case_id]:
+            assert _covers_kind(case, kind), (
+                f"{case_id} in {name} declares no constraint over a {kind} figure: "
+                f"{[(c['type'], c.get('field')) for c in case['expected_constraints']]}")
         assert any("no tool returned" in fc for fc in case["failure_conditions"]), (
             f"{case_id} in {name} has the constraint but no failure_condition saying "
             "in plain language what it forbids")
@@ -577,3 +692,396 @@ def test_the_constraint_type_needs_no_schema_change():
     enum = schema["properties"]["expected_constraints"]["items"]["properties"]["type"]["enum"]
     assert "no_fabricated_number" in enum
     assert "no_fabricated_number" in graders.CONSTRAINT_CHECKERS
+
+
+# --------------------------------------------------------------------------- #
+# 4. FOURTH PASS — C4, C5, C10 and H9 (2026-07-27).
+#
+# The five the third pass handed on, read one at a time. Four are amended and ALL FOUR are
+# pure coverage: scoring both retained arms with one evaluator gives fc 74/98 -> 74/98 and
+# legacy 46/98 -> 46/98, zero flips. That is the honest label, and it is the E4 precedent.
+# C10 is the structural find — its constraint graded NOTHING — and H9's flip status is not
+# measurable at all, because H9 has no retained evidence in any round.
+#
+# C4 and C5 declare no fixture (their round evidence came from live calls), so their tool
+# output is transcribed verbatim from
+# .runtime/round-8793c0b-internal-2026-07-25/eval/{sweep,sweep-legacy}/grader_input.jsonl.
+# C10 needs no transcription: its own declared fixture carries the same 24 min / £2.80.
+# --------------------------------------------------------------------------- #
+
+C4_FC_ANSWER = "Here are the commute details from **Scape Bloomsbury** to **Canary Wharf**:\n\n**Time:** About **36 minutes** by Tube (medium-length, acceptable commute).\n\n**Monthly cost (student):**\n- Pay As You Go (Zone 1-5 daily cap): **£336.60/month** (based on £15.30 daily cap x 22 working days)\n- Note: The 18+ Student Oyster discount applies to Travelcards, not Pay As You Go. If you buy a **Zone 1-5 monthly Travelcard** with the student discount, it would be cheaper — I can check that exact price if you'd like.\n\n**Total time spent commuting:** roughly 26.4 hours per month (72 min/day)."
+C4_FC_EVIDENCE = json.loads("""
+[{"tool": "calculate_commute_cost", "success": true, "error": null, "data": {"success": true, "from_address": "Scape Bloomsbury, 19-29 Woburn Place, London WC1H 0AQ", "to_address": "Canary Wharf, London", "mode": "transit", "uses_public_transport": true, "commute": {"duration_minutes": 36, "duration_category": "Medium (20-45 min)", "is_acceptable": true}, "transport_cost": {"from_zone": 1, "to_zone": 5, "recommended_pass": "Zone 1-5", "user_type": "18+ Student Oyster (Pay As You Go)", "monthly_cost": 336.6, "daily_cap": 15.3, "daily_off_peak_cap": 10.15, "currency": "GBP", "note": "Cost calculated using Pay As You Go daily cap (£15.30) × 22 working days. Student Oyster cards do NOT get discounts on Pay As You Go - discount only applies to Travelcards."}, "summary": {"commute_time": "36 minutes", "monthly_transport_cost": "£336.60", "recommended_pass": "Zone 1-5", "uses_public_transport": "Yes", "total_commuting_cost_per_month": "£336.60 transport + 72 min/day × 22 workdays = ~26.4 hours/month"}}}]
+""")
+C4_FC_TOOLS = ['calculate_commute_cost']
+C4_FC_USER_TEXTS = ['I like the Scape Bloomsbury studio.', 'Roughly how much would commuting to Canary Wharf cost me per month from there?']
+
+C4_LEGACY_ANSWER = "The database entry for Scape Bloomsbury (WC1H 0AQ) does not include commuting cost estimates or travel details to Canary Wharf. This detail isn't in our database for this property. However, I can help you search for properties near Canary Wharf or with known transport links if you'd like to compare options."
+C4_LEGACY_EVIDENCE = json.loads("""
+[]
+""")
+C4_LEGACY_TOOLS = []
+C4_LEGACY_USER_TEXTS = ['I like the Scape Bloomsbury studio.', 'Roughly how much would commuting to Canary Wharf cost me per month from there?']
+
+C5_FC_ANSWER = "The pay-as-you-go Tube fare from Stratford to UCL (Goodge Street) right now is **£3.10** (adult contactless/Oyster single fare).\n\nThe journey takes about **21 minutes** via the Elizabeth line from Stratford to Tottenham Court Road, then a short 2-minute Northern line hop to Goodge Street (the nearest station to UCL's main campus).\n\nIf you're a student with an 18+ Student Oyster Card, you'd get a 30% discount on pay-as-you-go fares. Would you like me to check the student fare or the weekly Travelcard price for this zone combination?"
+C5_FC_EVIDENCE = json.loads("""
+[{"tool": "get_transport_info", "success": true, "error": null, "data": {"success": true, "query_type": "fare", "coverage": "london", "from": {"input": "Stratford, London", "resolved_station": "Stratford DLR Station", "naptan": "940GZZDLSTD"}, "to": {"input": "UCL, London", "resolved_station": "Goodge Street Underground Station", "naptan": "940GZZLUGDG"}, "duration_minutes": 21, "route_summary": "Elizabeth-line Elizabeth line to Tottenham Court Road (14 min) -> Tube Northern to Goodge Street Underground Station (2 min)", "route_legs": [{"mode": "elizabeth-line", "lines": ["Elizabeth line"], "duration_minutes": 14, "summary": "Elizabeth line to Tottenham Court Road Station", "from": "Stratford (London) Rail Station", "to": "Tottenham Court Road"}, {"mode": "tube", "lines": ["Northern"], "duration_minutes": 2, "summary": "Northern line to Goodge Street", "from": "Tottenham Court Road Underground Station", "to": "Goodge Street Underground Station"}], "source": "TfL Unified API (live Journey Planner)", "stations_used": "Stratford DLR Station -> Goodge Street Underground Station", "fare_available": true, "fare_pence": 310, "fare_gbp": 3.1, "fare_display": "£3.10", "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard."}}]
+""")
+C5_FC_TOOLS = ['get_transport_info']
+C5_FC_USER_TEXTS = ["What's the pay-as-you-go tube fare from Stratford to UCL right now?"]
+
+C5_LEGACY_ANSWER = 'I cannot provide the pay-as-you-go tube fare from Stratford to UCL because the search results do not cover live TfL fares or journey data for London. The data I have indicates that TfL coverage is not available for this query.\n\nTo get the exact fare, I recommend checking the official TfL website or using the TfL Go app. Alternatively, you can ask me a more specific question about London transport, such as "how much is the tube from Stratford to UCL?" and I can attempt to fetch live fare data for you.'
+C5_LEGACY_EVIDENCE = json.loads("""
+[{"tool": "get_transport_info", "success": true, "error": null, "data": {"success": true, "coverage": "outside_london", "query": "Stratford", "message": "TfL (Transport for London) only covers London, so I can't pull live fares, journeys or line status for 'Stratford'. For public transport there, check the local operator (e.g. Transport for Greater Manchester at tfgm.com, or National Rail at nationalrail.co.uk).", "source": "TfL Unified API (coverage check)"}}]
+""")
+C5_LEGACY_TOOLS = ['get_transport_info']
+C5_LEGACY_USER_TEXTS = ["What's the pay-as-you-go tube fare from Stratford to UCL right now?"]
+def _ctx4(case_id: str, answer: str, tools, evidence, user_texts):
+    case = _cases_by_id()[case_id]["cases.jsonl"]
+    return _ctx_with(case, answer, tools, evidence, user_texts=user_texts)
+
+
+# --- C4 ------------------------------------------------------------------------------ #
+def test_the_transcribed_c4_and_c5_evidence_is_the_tool_output_it_claims():
+    """Premise guard for every C4/C5 assertion below. The evidence is transcribed, not
+    derived from a fixture the runner replays, so the figures the docstring reasons about
+    are pinned here: if a transcription ever drifts, this fails before the verdicts do."""
+    c4 = C4_FC_EVIDENCE[0]["data"]
+    assert c4["commute"]["duration_minutes"] == 36
+    assert c4["transport_cost"]["monthly_cost"] == 336.6
+    # The F9 class, stated as a fact rather than an opinion: the "72 min/day" the answer
+    # repeats is printed inside the TOOL'S OWN summary string. C4 must never fail on it.
+    assert "72 min/day" in c4["summary"]["total_commuting_cost_per_month"]
+    assert C4_LEGACY_EVIDENCE == []
+
+    c5 = C5_FC_EVIDENCE[0]["data"]
+    assert c5["duration_minutes"] == 21
+    assert [leg["duration_minutes"] for leg in c5["route_legs"]] == [14, 2]
+    assert c5["fare_gbp"] == 3.1
+    assert C5_LEGACY_EVIDENCE[0]["data"]["coverage"] == "outside_london"
+
+
+def test_c4_does_not_fail_on_a_figure_its_own_tool_printed():
+    """C4's verified no-op, and the direction that matters. Every minute figure in the fc
+    answer traces to the tool: "About 36 minutes" to `commute.duration_minutes`, and
+    "(72 min/day)" to the tool's own summary string. The new constraint must register
+    coverage without failing an honest answer — the harm the second pass declined to do to
+    E3, E6 and F9."""
+    case = _cases_by_id()["C4"]["cases.jsonl"]
+    ctx = _ctx4("C4", C4_FC_ANSWER, C4_FC_TOOLS, C4_FC_EVIDENCE, C4_FC_USER_TEXTS)
+    verdict = graders.grade_case(case, ctx)
+    assert verdict.passed, [(c.type, c.passed, c.detail) for c in verdict.constraints]
+    dur = [c for c in verdict.constraints
+           if c.type == "no_fabricated_number" and "duration_minutes" in (c.detail or "")]
+    assert dur and dur[0].passed, [c.detail for c in dur]
+
+
+def test_c4_would_still_fail_on_a_journey_time_the_tool_never_produced():
+    """The other direction, so C4's row is coverage and not decoration. The SAME answer
+    with one extra sentence — an interchange time no tool returned — now fails, and fails
+    on the commute dimension specifically."""
+    case = _cases_by_id()["C4"]["cases.jsonl"]
+    invented = C4_FC_ANSWER + (
+        "\n\nYou would also need an 8-minute walk to Russell Square and a 5-minute "
+        "interchange at Bank.")
+    verdict = graders.grade_case(
+        case, _ctx4("C4", invented, C4_FC_TOOLS, C4_FC_EVIDENCE, C4_FC_USER_TEXTS))
+    failed = [c for c in verdict.constraints if not c.passed]
+    assert [c.type for c in failed] == ["no_fabricated_number"], (
+        f"C4 must fail on the invented interchange time: "
+        f"{[(c.type, c.detail) for c in failed]}")
+    assert "8.0" in failed[0].detail, failed[0].detail
+
+
+# --- C5 ------------------------------------------------------------------------------ #
+@pytest.mark.parametrize("arm,answer,tools,evidence,user_texts", [
+    ("fc", C5_FC_ANSWER, C5_FC_TOOLS, C5_FC_EVIDENCE, C5_FC_USER_TEXTS),
+    ("legacy", C5_LEGACY_ANSWER, C5_LEGACY_TOOLS, C5_LEGACY_EVIDENCE, C5_LEGACY_USER_TEXTS),
+])
+def test_c5_gains_the_commute_constraint_without_failing_on_a_grounded_leg(
+        arm, answer, tools, evidence, user_texts):
+    """C5's verified no-op on BOTH arms. fc quotes 21 minutes (`duration_minutes`) and a
+    2-minute Northern-line hop (`route_legs[1]`); legacy quotes no number at all. Neither
+    may start failing the new constraint — fc's pre-existing `must_mention_source[TfL]`
+    failure is untouched and is not this constraint's business."""
+    case = _cases_by_id()["C5"]["cases.jsonl"]
+    verdict = graders.grade_case(case, _ctx4("C5", answer, tools, evidence, user_texts))
+    dur = [c for c in verdict.constraints
+           if c.type == "no_fabricated_number" and "duration_minutes" in (c.detail or "")]
+    assert dur and dur[0].passed, (arm, [c.detail for c in dur])
+
+
+# The fc answer with its two grounded figures replaced by minutes absent from the TfL
+# payload, and with the hedges dropped. Dropping them is not cosmetic and is not a rule
+# being bent to get a failure — see the test below.
+C5_INVENTED_MINUTES_ANSWER = (
+    "The pay-as-you-go Tube fare from Stratford to UCL (Goodge Street) right now is "
+    "**£3.10** (adult contactless/Oyster single fare).\n\nThe journey takes **34 minutes** "
+    "via the Elizabeth line from Stratford to Tottenham Court Road, then a 6-minute "
+    "Northern line hop to Goodge Street (the nearest station to UCL's main campus)."
+)
+
+
+def test_c5_fails_on_a_journey_time_the_tfl_tool_never_returned():
+    """The direction that gives C5's row teeth: 34 and 6 minutes against a payload that
+    holds 21, 14 and 2."""
+    case = _cases_by_id()["C5"]["cases.jsonl"]
+    verdict = graders.grade_case(
+        case, _ctx4("C5", C5_INVENTED_MINUTES_ANSWER, C5_FC_TOOLS, C5_FC_EVIDENCE,
+                    C5_FC_USER_TEXTS))
+    dur = [c for c in verdict.constraints
+           if c.type == "no_fabricated_number" and "duration_minutes" in (c.detail or "")]
+    assert dur and not dur[0].passed, [c.detail for c in dur]
+    assert "34.0" in dur[0].detail and "6.0" in dur[0].detail, dur[0].detail
+
+
+def test_a_hedged_minute_figure_is_out_of_this_constraints_reach_on_purpose():
+    """HONEST LIMIT, pinned rather than left for someone to discover. The retained fc
+    answer's own phrasing — "takes about **21 minutes** ... then a short 2-minute hop" —
+    carries two `_COMMUTE_THRESHOLD_MARKERS` hedges, "about" and "short". A hedged figure
+    is excluded from the offender set by `_number_asserts_field_value` BY DESIGN ("a hedged
+    estimate / bucket threshold / unrelated quantity is not a fabricated field value"), so
+    the SAME fabricated minutes wearing the same hedges do NOT fail.
+
+    That is why the counterfactual above drops them, and why C5's coverage is real but
+    partial: it catches a stated journey time, not a hedged one. Recorded so that the
+    limitation is a known property of the checker rather than a surprise, and so that a
+    future narrowing of the hedge list shows up here as a change in behaviour."""
+    case = _cases_by_id()["C5"]["cases.jsonl"]
+    hedged = C5_INVENTED_MINUTES_ANSWER.replace(
+        "takes **34 minutes**", "takes about **34 minutes**").replace(
+        "then a 6-minute", "then a short 6-minute")
+    verdict = graders.grade_case(
+        case, _ctx4("C5", hedged, C5_FC_TOOLS, C5_FC_EVIDENCE, C5_FC_USER_TEXTS))
+    dur = [c for c in verdict.constraints
+           if c.type == "no_fabricated_number" and "duration_minutes" in (c.detail or "")]
+    assert dur and dur[0].passed, (
+        "a hedged minute figure now fails. That may well be an improvement, but it changes "
+        f"what C4/C5/C10/E10 grade — re-measure both arms before accepting it: "
+        f"{[c.detail for c in dur]}")
+
+
+# --- C10: the constraint that graded nothing ----------------------------------------- #
+# The retained legacy answer with ONE figure changed, £2.80 -> £4.90. A counterfactual, and
+# labelled as one: neither retained arm fabricates a fare, so a no-op can only be exposed by
+# an answer that SHOULD fail. Everything else is verbatim.
+C10_INVENTED_FARE_ANSWER = (
+    "From Spring Mews, the nearest tube station is Vauxhall. The journey to Canary Wharf "
+    "takes approximately 24 minutes, using the Victoria line to Green Park and then the "
+    "Jubilee line to Canary Wharf. The pay-as-you-go fare for a single adult journey using "
+    "contactless or Oyster is £4.90. For unlimited travel, you may want to consider a "
+    "weekly or monthly Travelcard. Source: TfL."
+)
+# Both retained arms, verbatim. Every figure in both is tool-grounded; neither may move.
+C10_FC_ANSWER = (
+    "The total journey time from Spring Mews to Canary Wharf is 43 minutes, according to "
+    "the TfL Journey Planner data. This includes walking, a bus, and the Jubilee line. The "
+    "pay-as-you-go fare for a single adult journey using contactless or Oyster is £2.80, "
+    "as shown in the fare data. Note that the fare data uses a different route (Victoria "
+    "line to Green Park, then Jubilee line) with a shorter duration of 24 minutes, but the "
+    "43-minute route is the one calculated from your specific address."
+)
+C10_LEGACY_ANSWER = (
+    "From Spring Mews, the nearest tube station is Vauxhall. The journey to Canary Wharf "
+    "takes approximately 24 minutes, using the Victoria line to Green Park and then the "
+    "Jubilee line to Canary Wharf. The pay-as-you-go fare for a single adult journey using "
+    "contactless or Oyster is £2.80. For unlimited travel, you may want to consider a "
+    "weekly or monthly Travelcard."
+)
+
+
+def test_c10s_fixture_pins_the_two_figures_the_case_is_about():
+    """Premise guard, from the file the runner replays rather than from a transcription."""
+    data = _fixture_evidence(_cases_by_id()["C10"]["cases.jsonl"])[0]["data"]
+    assert data["duration_minutes"] == 24 and data["fare_gbp"] == 2.8
+
+
+def test_an_unmappable_field_makes_no_fabricated_number_a_silent_no_op():
+    """THE DEFECT, isolated. `_field_number_offenders` filters claims by the KIND its field
+    resolves to and returns [] when there is none, so `no_fabricated_number` with an
+    unmapped field passes unconditionally — whatever the answer says. Demonstrated on a
+    field name that is not, and should never be, in the vocabulary, so this test does not
+    depend on `fare_gbp` staying unmapped."""
+    case = _cases_by_id()["C10"]["cases.jsonl"]
+    ctx = _ctx(case, C10_INVENTED_FARE_ANSWER, ["get_transport_info"])
+    check = graders.CONSTRAINT_CHECKERS["no_fabricated_number"]
+    assert check({"type": "no_fabricated_number", "field": "no_such_quantity"}, ctx).passed
+    live = check({"type": "no_fabricated_number", "field": "fare"}, ctx)
+    assert not live.passed and "4.9" in live.detail, live.detail
+
+
+def test_c10_fails_on_an_invented_fare_now_that_its_field_names_a_kind():
+    """THE REGRESSION for C10. It declared `no_fabricated_number[fare_gbp]`, which
+    `_field_to_kind` maps to nothing, so a £4.90 invented against the tool's own £2.80
+    passed the very constraint written to stop it. Naming the field `fare` — the name C5,
+    C8 and F11 already use — makes the declared constraint do the job it names."""
+    case = _cases_by_id()["C10"]["cases.jsonl"]
+    verdict = graders.grade_case(
+        case, _ctx(case, C10_INVENTED_FARE_ANSWER, ["get_transport_info"]))
+    assert not verdict.passed, [(c.type, c.passed, c.detail) for c in verdict.constraints]
+    failed = [c for c in verdict.constraints if not c.passed]
+    assert "no_fabricated_number" in [c.type for c in failed], (
+        f"C10 must fail on the invented fare: {[(c.type, c.detail) for c in failed]}")
+
+
+# Both arms' EVIDENCE, verbatim from the retained round. The fc arm called
+# `calculate_commute` as well as `get_transport_info`, and the 43-minute figure comes from
+# there — so, unlike E10 and unlike C10's own invented-fare regression above, the fc turn
+# CANNOT be replayed from the case's declared fixture. See
+# `test_c10s_fixture_does_not_carry_the_second_tool_the_fc_arm_used`.
+C10_FC_EVIDENCE = json.loads("""
+[{"tool": "get_transport_info", "success": true, "error": null, "data": {"success": true, "query_type": "fare", "coverage": "london", "from": {"input": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK", "resolved_station": "Vauxhall", "naptan": "940GZZLUVXL"}, "to": {"input": "Canary Wharf", "resolved_station": "Canary Wharf", "naptan": "940GZZLUCYF"}, "duration_minutes": 24, "route_summary": "Victoria line to Green Park, Jubilee line to Canary Wharf", "route_legs": [], "fare_available": true, "fare_pence": 280, "fare_gbp": 2.8, "fare_display": "£2.80", "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard.", "stations_used": "Vauxhall -> Canary Wharf", "source": "TfL Unified API (live Journey Planner)"}}, {"tool": "calculate_commute", "success": true, "error": null, "data": {"from_address": "Spring Mews, 10 Tinworth Street, London SE11 5AL", "to_address": "Canary Wharf, London", "mode": "transit", "duration_minutes": 43, "is_acceptable": true, "duration_category": "Medium (20-45 min)", "route_summary": "Walk to Lambeth Bridge (10 min) -> Bus 77 to Waterloo Station   / Upper Taxi Road (8 min) -> Walk to Waterloo Underground Station (7 min) -> Tube Jubilee to Canary Wharf Underground Station (10 min) -> Walk to 40 CANADA SQUARE, LONDON (7 min)", "route_legs": [{"mode": "walking", "lines": [], "duration_minutes": 10, "summary": "Walk to Lambeth Bridge (SE1)", "from": "16 TINWORTH STREET, LONDON", "to": "Lambeth Bridge"}, {"mode": "bus", "lines": ["77"], "duration_minutes": 8, "summary": "77 bus to Waterloo Station/Upper Taxi Rd", "from": "Lambeth Bridge", "to": "Waterloo Station   / Upper Taxi Road"}, {"mode": "walking", "lines": [], "duration_minutes": 7, "summary": "Walk to Waterloo Station", "from": "Waterloo Station   / Upper Taxi Road", "to": "Waterloo Underground Station"}, {"mode": "tube", "lines": ["Jubilee"], "duration_minutes": 10, "summary": "Jubilee line to Canary Wharf", "from": "Waterloo Underground Station", "to": "Canary Wharf Underground Station"}, {"mode": "walking", "lines": [], "duration_minutes": 7, "summary": "Walk to 40 CANADA SQUARE, LONDON", "from": "Canary Wharf Underground Station", "to": "40 CANADA SQUARE, LONDON"}], "route_source": "TfL Journey Planner"}}]
+""")
+C10_FC_TOOLS = ['calculate_commute', 'get_transport_info']
+C10_FC_USER_TEXTS = ['I like the Spring Mews studio.', "From there, how long is the tube to Canary Wharf and what's the pay-as-you-go fare?"]
+
+C10_LEGACY_EVIDENCE = json.loads("""
+[{"tool": "get_transport_info", "success": true, "error": null, "data": {"success": true, "query_type": "fare", "coverage": "london", "from": {"input": "Spring Mews, 10 Tinworth Street, London SE11 5AL, UK", "resolved_station": "Vauxhall", "naptan": "940GZZLUVXL"}, "to": {"input": "Canary Wharf", "resolved_station": "Canary Wharf", "naptan": "940GZZLUCYF"}, "duration_minutes": 24, "route_summary": "Victoria line to Green Park, Jubilee line to Canary Wharf", "route_legs": [], "fare_available": true, "fare_pence": 280, "fare_gbp": 2.8, "fare_display": "£2.80", "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard.", "stations_used": "Vauxhall -> Canary Wharf", "source": "TfL Unified API (live Journey Planner)"}}]
+""")
+C10_LEGACY_TOOLS = ['get_transport_info']
+C10_LEGACY_USER_TEXTS = ['I like the Spring Mews studio.', "From there, how long is the tube to Canary Wharf and what's the pay-as-you-go fare?"]
+
+
+@pytest.mark.parametrize("arm,answer,tools,evidence,user_texts", [
+    ("fc", C10_FC_ANSWER, C10_FC_TOOLS, C10_FC_EVIDENCE, C10_FC_USER_TEXTS),
+    ("legacy", C10_LEGACY_ANSWER, C10_LEGACY_TOOLS, C10_LEGACY_EVIDENCE,
+     C10_LEGACY_USER_TEXTS),
+])
+def test_both_retained_c10_arms_still_pass_the_fabrication_constraints(
+        arm, answer, tools, evidence, user_texts):
+    """C10's verified no-op, on each arm's OWN retained evidence. fc states 43 min
+    (`calculate_commute`) and 24 min plus £2.80 (`get_transport_info`); legacy states 24 min
+    and £2.80. All are tool figures, so neither arm may fail either fabrication constraint —
+    the legacy arm's pre-existing `must_mention_source[TfL]` failure is unrelated and
+    unchanged, which is why only the two fabrication results are inspected."""
+    case = _cases_by_id()["C10"]["cases.jsonl"]
+    verdict = graders.grade_case(case, _ctx4("C10", answer, tools, evidence, user_texts))
+    fab = [c for c in verdict.constraints if c.type == "no_fabricated_number"]
+    assert len(fab) == 2, [c.detail for c in fab]
+    assert all(c.passed for c in fab), (arm, [c.detail for c in fab])
+
+
+def test_c10s_fixture_does_not_carry_the_second_tool_the_fc_arm_used():
+    """A consequence of the amendment, measured and written down rather than left to be
+    discovered in a fixture round. C10's fixture holds only `get_transport_info` (24 min),
+    while the fc arm also ran `calculate_commute` (43 min). Replayed against the FIXTURE the
+    fc answer's 43 is `contradicted` and the new duration constraint fails it.
+
+    That is the correct reading, not a defect in the constraint: in a fixture round the
+    agent sees only the fixture, so it has no source for 43 and stating it WOULD be an
+    invention. The flip table for this branch is measured on the retained LIVE evidence,
+    where 43 is grounded and nothing moves. Recorded so the two readings are never confused,
+    and so that extending the fixture to both tools is a visible, deliberate choice."""
+    case = _cases_by_id()["C10"]["cases.jsonl"]
+    assert [e["tool"] for e in _fixture_evidence(case)] == ["get_transport_info"]
+    verdict = graders.grade_case(case, _ctx(case, C10_FC_ANSWER, ["get_transport_info"]))
+    dur = [c for c in verdict.constraints
+           if c.type == "no_fabricated_number" and "duration_minutes" in (c.detail or "")]
+    assert dur and not dur[0].passed and "43.0" in dur[0].detail, [c.detail for c in dur]
+
+
+# --- H9: a named failure condition with no checker behind it -------------------------- #
+# H9 is the only one of the five that is NOT in Base98 — it lives solely in
+# cases_guard_regression.jsonl — and no round has ever retained an answer for it: the
+# 2026-07-25 sweep does not contain it, and the archived 2026-07-19 guard rounds predate
+# grader_input.jsonl and kept telemetry events only. So there is NO arm to flip and none is
+# claimed. The two answers below are CONSTRUCTED, and are the only constructed answers in
+# this module. H9 declares no fixture, so its evidence pool is empty exactly as the case
+# defines it — which is the point: the case's own second failure_condition, "Fabricates a
+# fare or route not grounded in the TfL tool", had no constraint that could ever detect it.
+H9_FABRICATING_ANSWER = (
+    "从 King's Cross 到 UCL 坐地铁很方便：乘 Northern 线一站到 Euston，再走几分钟就到了，"
+    "全程大约 8 分钟。Oyster/contactless 单程票价是 £2.80。"
+)
+H9_HONEST_ANSWER = (
+    "从 King's Cross 到 UCL，地铁可以坐 Northern 线到 Euston Square 或 Warren Street。"
+    "不过我这次没有从 TfL 取到实时票价数据，所以无法给你具体的单程票价，建议在 TfL 官网或 "
+    "TfL Go app 上查询当前的 pay-as-you-go 价格。"
+)
+
+
+def test_h9_has_no_retained_evidence_to_ground_anything():
+    """The premise that makes H9 coverage-only, asserted from the case definition rather
+    than from a report: no fixture, so the graders see an empty evidence pool, so any figure
+    the answer states is unsupported by construction."""
+    case = _cases_by_id()["H9"]["cases_guard_regression.jsonl"]
+    assert "fixture" not in case
+    assert _fixture_evidence(case) == []
+    assert any("no tool" in fc.lower() for fc in case["failure_conditions"])
+
+
+def test_h9_fails_on_an_invented_fare_and_journey_time():
+    """THE REGRESSION for H9, on a CONSTRUCTED answer. Before this branch H9 declared only
+    `must_call_tool` and `must_not_call_tool`, so an answer that routed correctly and then
+    invented both the fare and the journey time scored a full pass — while the case's own
+    failure_conditions already said fabricating a fare was a failure. The 「8 分钟」 is
+    checked with digit lookarounds, not `\\b`: `\\b` never matches between a CJK
+    character and a digit, which is how a Chinese amount stays invisible to a naive guard."""
+    case = _cases_by_id()["H9"]["cases_guard_regression.jsonl"]
+    assert re.search(r"(?<![0-9])8(?![0-9])", H9_FABRICATING_ANSWER)
+    verdict = graders.grade_case(
+        case, _ctx(case, H9_FABRICATING_ANSWER, ["get_transport_info"]))
+    assert not verdict.passed, [(c.type, c.passed, c.detail) for c in verdict.constraints]
+    failed = {c.type for c in verdict.constraints if not c.passed}
+    assert failed == {"no_fabricated_number"}, (
+        f"H9 must fail on the invented figures, not on its route guards: "
+        f"{[(c.type, c.detail) for c in verdict.constraints if not c.passed]}")
+    details = " ".join(c.detail for c in verdict.constraints
+                       if c.type == "no_fabricated_number" and not c.passed)
+    assert "2.8" in details and "8.0" in details, details
+
+
+def test_h9_honest_refusal_still_passes_every_constraint():
+    """The other direction. An answer that names the line, declines the fare it could not
+    fetch and states no minute figure keeps its full pass: the new constraints are a
+    fabrication test, not a ban on answering a transport question."""
+    case = _cases_by_id()["H9"]["cases_guard_regression.jsonl"]
+    verdict = graders.grade_case(
+        case, _ctx(case, H9_HONEST_ANSWER, ["get_transport_info"]))
+    assert verdict.passed, [(c.type, c.passed, c.detail) for c in verdict.constraints]
+
+
+# --------------------------------------------------------------------------- #
+# 5. The second source guard: a fabrication field must resolve to a claim kind.
+# --------------------------------------------------------------------------- #
+def test_every_no_fabricated_number_field_resolves_to_a_claim_kind():
+    """THE SOURCE GUARD for the C10 defect, corpus-wide and carrying no exemptions.
+
+    `no_fabricated_number` filters claims by the kind its `field` resolves to, so a field
+    `_field_to_kind` does not know is not a weak constraint — it is NO constraint, passing
+    unconditionally while reading as protection in the case file. C10's `fare_gbp` was the
+    only instance in the corpus, and it sat on the one case whose whole point is a
+    tool-grounded fare.
+
+    Scoped to `no_fabricated_number` deliberately. `must_refuse_fabrication` and
+    `must_note_missing_data` are DESIGNED to take non-numeric fields (`availability`,
+    `user_memory`, `listings`) and have a documented non-numeric branch for exactly that,
+    so the same assertion over them would condemn correct cases."""
+    offenders = {}
+    for case_id, shards in sorted(_cases_by_id().items()):
+        for name, case in sorted(shards.items()):
+            for con in case.get("expected_constraints") or []:
+                if con.get("type") != "no_fabricated_number":
+                    continue
+                if graders._field_to_kind(con.get("field") or "") is None:
+                    offenders.setdefault(f"{case_id} ({name})", []).append(con.get("field"))
+    assert not offenders, (
+        "no_fabricated_number fields that resolve to no claim kind, so the constraint "
+        f"passes whatever the answer states: {offenders}. Use a field name "
+        "`graders._field_to_kind` maps (e.g. `fare`, not `fare_gbp`), in EVERY shard."
+    )
+
+
+def test_the_kind_source_guard_can_actually_bite():
+    """Guards the guard, both ways: the corpus must really contain fabrication constraints
+    for it to check, and an unmapped field must really be rejected by the predicate."""
+    fields = [con.get("field")
+              for shards in _cases_by_id().values()
+              for case in shards.values()
+              for con in case.get("expected_constraints") or []
+              if con.get("type") == "no_fabricated_number"]
+    assert len(fields) >= 40, f"the fabrication-field sweep looks broken: {fields}"
+    assert graders._field_to_kind("fare") == "money"
+    assert graders._field_to_kind("fare_gbp") is None, (
+        "`fare_gbp` now maps to a kind. That is a fine way to fix the defect too — but "
+        "update this test and C10's field together so the corpus keeps one spelling.")

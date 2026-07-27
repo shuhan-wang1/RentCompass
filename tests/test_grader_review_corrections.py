@@ -18,6 +18,9 @@ read as a preference. Every assertion fails against
      gives £6,230.77 and `no_fabricated_number` saw nothing wrong.
   5. `_field_to_kind` had no row resolving to the `safety_score` claim kind, so
      `no_fabricated_number[safety_score]` was an unconditional pass (HANDOFF §0 #4).
+  7. `_number_asserts_field_value` threshold-filtered only money and minutes, so a
+     DISTANCE could never be a bound — E6's "None within 500m" was graded as an
+     asserted distance.
 """
 from __future__ import annotations
 
@@ -667,3 +670,63 @@ def test_the_formula_line_from_d1_does_not_become_a_fabricated_score():
               "Crimes / 2)")
     assert _scores(answer, [{"tool": "check_safety",
                              "data": {"safety_score": 85}}]) == {85.0: "grounded"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 7 — a THRESHOLD can be stated in any unit, not just money and minutes
+# ══════════════════════════════════════════════════════════════════════════════
+# `_number_asserts_field_value` threshold-filtered `money` and `commute_minutes` and
+# returned True — "asserted" — for every other kind. So a distance could never be a
+# bound. E6's sole distance offender was "Supermarket: None within 500m", a sentence
+# that DECLINES to state a distance, and grading it punished exactly the honest
+# behaviour the case exists to test.
+E6_SENTENCE = ("- **Supermarket:** None within 500m, but larger shops are a short bus "
+               "ride away")
+
+
+def test_a_distance_bound_is_not_an_asserted_distance():
+    """The source guard, on E6's verbatim sentence."""
+    assert not graders._number_asserts_field_value(E6_SENTENCE, 500.0, "distance_m")
+
+
+def test_a_stated_distance_is_still_asserted():
+    """Both directions: hedges that still assert a measurement ("about", "around") are
+    deliberately NOT threshold markers, exactly as in the commute set — otherwise D5's
+    "about 3-4 miles away" would launder itself."""
+    assert graders._number_asserts_field_value(
+        "The Tesco is 140m from the front door.", 140.0, "distance_m")
+    assert graders._number_asserts_field_value(D5_ANSWER_FC, 10 * MILE_TO_M,
+                                               "distance_m")
+
+
+def test_d5_is_not_spared_by_the_generalised_filter():
+    """The regression that matters most: generalising the filter must not undo item 1."""
+    assert not _refuse_distance(D5_ANSWER_FC, D5_EVIDENCE).passed
+
+
+def test_a_safety_score_bar_is_not_an_asserted_score():
+    """Same generalisation for NN/100. The bar has to be a figure the extractor can
+    actually see — a claim only exists if one of the three score shapes matched it —
+    so the case that matters is "above 70/100", not a bare "above 70"."""
+    assert not graders._number_asserts_field_value(
+        "I only considered areas above 70/100 on the safety index.", 70.0,
+        "safety_score")
+    # "out of" is deliberately NOT a threshold marker: "71 out of 100" is the
+    # assertion, not a bound on it.
+    assert graders._number_asserts_field_value(
+        "The area has a safety score of 71 out of 100.", 71.0, "safety_score")
+
+
+def test_an_unlocalisable_number_is_still_treated_as_asserted():
+    """The pre-existing conservative fallback, unchanged by the generalisation: if the
+    kind's extractor cannot find the figure in the text, assume it was asserted so a
+    genuine fabrication is never spared by an extraction gap."""
+    assert graders._number_asserts_field_value(
+        "I filtered to areas scoring above 70 on the safety index.", 70.0,
+        "safety_score")
+
+
+def test_an_invented_score_is_still_flagged_after_the_generalisation():
+    answer = "Hackney: 9 crimes, **92/100** -- rated Very Safe."
+    assert not _fab_score(answer, [{"tool": "check_safety",
+                                    "data": {"safety_score": 34}}]).passed

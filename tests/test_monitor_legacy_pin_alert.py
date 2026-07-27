@@ -31,6 +31,14 @@ NOTE FOR THE DEPLOYER: the repo copy is NOT what production runs. Production run
 copy at /usr/local/bin/rentcompass-monitor.sh installed via a systemd override.conf, because
 the unit's own ExecStart points at a deploy tree pinned to an old commit. These changes take
 effect only after that copy is re-installed.
+
+That note used to be the ONLY record of that fact, which made it a promise rather than a
+guard — and on 2026-07-27 all three copies were measured to be three different builds while
+this docstring sat here being accurate and changing nothing. The assertion now exists:
+tests/test_monitor_install_provenance.py compares the installed copy against the committed
+one (and against what systemd actually resolved), the monitor leads every status line with
+`src=<hash>` so the running build is readable from monitor.log, and
+deploy/monitoring/check_install_drift.sh is the one command that checks the lot.
 """
 from __future__ import annotations
 

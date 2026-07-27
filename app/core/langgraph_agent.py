@@ -3431,18 +3431,44 @@ def _params_digest(tool_name: str, params: dict) -> str:
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
-# Keyword groups per loopable follow-up intent, used ONLY to detect whether the CURRENT
-# message packs two distinct asks (e.g. "is it safe AND how long is the commute"). Kept
-# deliberately small/high-precision: a false negative just means one cheap reflect call.
-_MULTI_INTENT_CUES = {
-    "safety": ["safe", "safety", "crime", "安全", "治安", "犯罪"],
-    "commute": ["commute", "how long", "how far", "travel time", "通勤", "多久", "多远", "距离"],
+# Which loopable INTENT group is the router's view of a user-visible DIMENSION. Three of the
+# eight are; the other five (cost/transport/weather/details/web) name no dimension, which is
+# why this table is a different table and not a fourth copy of core.dimensions.DIMENSION_CUES.
+# The mapped tool is asserted to be the dimension's canonical read — see
+# tests/test_multi_intent_table_is_derived.py.
+_INTENT_GROUP_DIMENSION = {"safety": "safety", "commute": "commute", "poi": "nearby"}
+
+# INTENT-ONLY cues: the vocabulary that belongs to the ROUTER's question ("does this message
+# pack two distinct asks?") and must NOT leak into the dimension vocabulary. `gym`/`park`/`健身`
+# and `多久`/`多远`/`距离` live here rather than in core.dimensions on purpose: cue matching is
+# substring-based, so `park` alone would make "a 1-bed in Finsbury Park" and "does it have
+# parking?" cue the `nearby` DIMENSION — a POI fan-out wave on legacy and a spurious "nearby
+# amenities have not been looked up yet" line on fc, on both arches, for something the user
+# never asked. A cue that over-fires costs a router one reflect hop and costs a fetcher a wave
+# plus an apology; the containment below is therefore one-way. See the dimensions.py note.
+_MULTI_INTENT_EXTRA_CUES = {
+    "safety": [],
+    "commute": ["多久", "多远", "距离"],
     "cost": ["fare", "how much", "cost of", "车费", "多少钱", "费用"],
     "transport": ["tube", "train", "bus", "line status", "delay", "地铁", "公交"],
     "weather": ["weather", "rain", "天气"],
-    "poi": ["supermarket", "gym", "park", "restaurant", "nearby", "附近", "超市", "健身"],
+    "poi": ["gym", "park", "健身"],
     "details": ["policy", "bills", "deposit", "guest policy", "pet", "政策", "押金", "宠物"],
     "web": ["visa", "guarantor", "签证", "担保"],
+}
+
+# Keyword groups per loopable follow-up intent, used ONLY to detect whether the CURRENT
+# message packs two distinct asks (e.g. "is it safe AND how long is the commute"). Kept
+# high-precision: a false negative used to be dismissed as "just one cheap reflect call", but
+# on the one-shot short-circuit path it is a DROPPED ASK — reflect answers immediately and the
+# second question is never fetched. So for the three groups that are a dimension, the cue set is
+# DERIVED as (intent-only extras | the dimension's cues), never copied: the router is
+# guaranteed to recognise everything the post-search fan-out recognises, and can never again
+# know less about what the user asked than the fetcher standing next to it.
+_MULTI_INTENT_CUES = {
+    group: sorted(set(extras) | set(_dimensions.cues_for(_INTENT_GROUP_DIMENSION[group]))
+                  if group in _INTENT_GROUP_DIMENSION else set(extras))
+    for group, extras in _MULTI_INTENT_EXTRA_CUES.items()
 }
 
 # Conjunctions that plausibly join two separate asks in one message.
@@ -3461,7 +3487,10 @@ def _current_message_has_multi_intent(message: str) -> bool:
     if not message:
         return False
     low = message.lower()
-    groups = {g for g, kws in _MULTI_INTENT_CUES.items() if any(kw in low for kw in kws)}
+    # THE shared cue matcher (core.dimensions.cues_hit) — the same ascii/CJK rule the fan-out
+    # and fc's apology lines use, so one cue can never mean two things.
+    groups = {g for g, kws in _MULTI_INTENT_CUES.items()
+              if _dimensions.cues_hit(kws, message)}
     if len(groups) < 2:
         return False
     has_conjunction = any(c in low for c in _MULTI_INTENT_CONJUNCTIONS)
@@ -3486,9 +3515,9 @@ def _plannable_intents_in_message(message: str) -> set:
     """The set of DISTINCT plannable intents a message asks for (by mapped tool name), plus
     'market research' when the message is a price/market research request. Used to gate the
     multi-intent plan trigger: >= 2 means a concurrent plan is worthwhile."""
-    low = (message or "").lower()
     hits = {tool for g, tool in _INTENT_GROUP_TO_TOOL.items()
-            if tool in PLANNABLE_TOOLS and any(kw in low for kw in _MULTI_INTENT_CUES[g])}
+            if tool in PLANNABLE_TOOLS
+            and _dimensions.cues_hit(_MULTI_INTENT_CUES[g], message)}
     if _is_market_research_request(message):
         hits.add("market_research")
     return hits

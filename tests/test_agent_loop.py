@@ -287,6 +287,13 @@ def test_search_properties_never_reflects(lga, monkeypatch):
     cmd = asyncio.run(lga._make_execute_tool_node(_SearchReg())(state))
     assert cmd.goto == "format_output"          # today's terminal, NOT reflect
     assert cmd.goto != "reflect"
+    # SCOPE NOTE (2026-07-26): this holds because "find me a flat in Camden" cues NO extra
+    # dimension. search_properties still never enters the reflect loop, but a listings turn
+    # that ALSO asks about commute / safety / nearby now fans those out through the wave
+    # engine (goto="dispatch_tasks") instead of answering with one tool — see
+    # tests/test_execution_plan.py §6. This case is the PR #29 invariance guard: a turn with
+    # no cued dimension must keep exactly this route and pay for no extra hop.
+    assert "task_plan" not in cmd.update
 
 
 def test_loopable_tool_routes_to_reflect(lga):

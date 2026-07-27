@@ -2881,16 +2881,139 @@ def _note_legacy_write_dispatch(audit_key: str) -> None:
         pass
 
 
+# ═══════════════════════════════════════════════════════════════════
+# POST-SEARCH DIMENSION FAN-OUT (search_properties -> missing read dimensions)
+# ═══════════════════════════════════════════════════════════════════
+# WHY THIS EXISTS. The multi-intent plan trigger (decide_tool, :~1543) deliberately EXCLUDES
+# search_properties, because the plan engine cannot run a listings search (parallel scraping
+# trips the source WAF) and hijacking the turn into a plan would drop the user's listings.
+# The consequence was a silent fan-out hole for the single most common multi-dimension shape:
+# "find me a 1-bed in Islington under £1600 WITH a commute to UCL under 40 min, a supermarket
+# nearby, AND avoid high-crime areas". The base decision is search_properties, so the plan
+# trigger is skipped; search_properties is not in LOOPABLE_TOOLS, so `reflect` never runs
+# either. Legacy therefore executed exactly ONE tool and then apologised for the dimensions it
+# had never fetched. Measured on the retained 2026-07-25 legacy arm (eval/sweep-legacy):
+# E1/E5/E6/E11 all show tool_batches=1, tools_executed=[search_properties], and answers that
+# punt the user to an external source ("For official crime data, please visit ... police.uk")
+# while check_safety / search_nearby_pois sat unused. E3/E9 — whose base decision was NOT
+# search_properties — did fan out (2 and 3 batches), which is what isolates the cause to the
+# search_properties exclusion rather than to the cue detection or the wave engine.
+#
+# DESIGN. Deterministic, zero extra LLM hops (the PR #29 lesson: a mandatory planning hop made
+# fast turns worse). After a search_properties call that actually returned listings, the cued
+# read dimensions that no tool satisfied are turned into tasks and run through the EXISTING
+# concurrent wave engine (dispatch_tasks -> task_worker x N -> gather_wave), anchored on the
+# top listing's real address. It cannot fire on a turn that cued no extra dimension, and it
+# cannot fire when the search returned nothing to anchor on — an unanchored fetch is how a
+# fabricated walk time gets born (C1/C2 in that same round invented walk times against empty
+# evidence). READ dimensions only: `remember` is the sole write tool and is not reachable here.
+_PLAN_ORIGIN_DIMENSIONS = "dimension_followup"
+
+# dimension -> (cue words, tools that ALREADY satisfy it, the tool to run to fetch it).
+# Mirrors agent_loop._DIMENSION_CUES so the two arches recognise the same user-visible
+# dimensions; CJK cues match the raw text, ascii cues the lowercased text.
+_SEARCH_DIMENSION_CUES = (
+    ("safety",
+     ("治安", "安全", "犯罪", "crime", "safety", "safe", "unsafe", "police"),
+     ("check_safety",),
+     "check_safety"),
+    ("commute",
+     ("通勤", "commute", "travel time", "how long", "how far"),
+     ("calculate_commute", "calculate_commute_cost", "check_transport_cost",
+      "get_transport_info"),
+     "calculate_commute"),
+    ("nearby",
+     ("超市", "便利店", "餐厅", "药店", "附近", "周边", "设施",
+      "supermarket", "grocery", "nearby", "amenit", "restaurant", "pharmacy", "poi"),
+     ("search_nearby_pois",),
+     "search_nearby_pois"),
+)
+
+
+def _cued_search_dimensions(message: str, executed_tools) -> list:
+    """The READ dimensions this message explicitly asks about that NO executed tool satisfies,
+    as [(dimension, tool_to_run)] in table order. Deterministic and cue-based — the same shape
+    as agent_loop._missing_requested_dimension_lines, except this drives a FETCH rather than
+    an apology."""
+    msg = message or ""
+    low = msg.lower()
+    done = set(executed_tools or ())
+    out = []
+    for dim, cues, satisfying, tool in _SEARCH_DIMENSION_CUES:
+        cued = any((cue in low) if cue.isascii() else (cue in msg) for cue in cues)
+        if not cued or any(t in done for t in satisfying):
+            continue
+        out.append((dim, tool))
+    return out
+
+
+def _search_anchor_address(raw_data) -> Optional[str]:
+    """The address to anchor dimension fetches on: the TOP recommendation of a search that
+    actually FOUND listings. Returns None for any other shape (need_clarification, an error,
+    a found-but-empty list, a recommendation with no address) — no anchor means no fan-out,
+    so a fetched dimension can never be attached to a listing that does not exist."""
+    if not isinstance(raw_data, dict) or raw_data.get("status") != "found":
+        return None
+    recs = raw_data.get("recommendations")
+    if not isinstance(recs, list) or not recs:
+        return None
+    top = recs[0]
+    if not isinstance(top, dict):
+        return None
+    addr = top.get("address") or top.get("name")
+    addr = str(addr).strip() if addr else ""
+    return addr or None
+
+
+def _build_dimension_followup_plan(*, message, raw_data, executed_tools, extracted_context,
+                                   accumulated, prior_digests=()) -> list:
+    """Deterministically build the post-search dimension wave. Params mirror _build_tool_params
+    exactly, except the origin address is the search ANCHOR rather than
+    _resolve_target_address (this turn's fresh listings are not on extracted_context yet).
+    A dimension whose params cannot be fully resolved is DROPPED, never guessed: commute needs
+    a real destination, so with no resolvable destination there is no commute task."""
+    anchor = _search_anchor_address(raw_data)
+    if not anchor:
+        return []
+    wanted = _cued_search_dimensions(message, executed_tools)
+    if not wanted:
+        return []
+    cm = message or ""
+    seen = set(prior_digests or ())
+    tasks = []
+    for dim, tool in wanted:
+        if tool == "check_safety":
+            params = {"address": anchor, "area": anchor, "user_query": cm}
+        elif tool == "search_nearby_pois":
+            params = {"address": anchor, "user_query": cm, "radius": 1000}
+        elif tool == "calculate_commute":
+            dest = _resolve_destination_address(cm, extracted_context, accumulated)
+            if not dest:
+                continue
+            params = {"from_address": anchor, "to_address": dest}
+        else:  # pragma: no cover - table is closed
+            continue
+        digest = _params_digest(tool, params)
+        if digest in seen:
+            continue
+        seen.add(digest)
+        tasks.append({"id": f"dim_{dim}", "index": len(tasks), "tool": tool,
+                      "params": params, "depends_on": []})
+    return tasks[:MAX_PLAN_TASKS]
+
+
 def _make_execute_tool_node(tool_registry):
     """Create the execute_tool node.
 
     multi_search / a multi-intent plan no longer reach here (they run through the
     dispatch_tasks -> task_worker -> gather_wave wave executor). This node routes via
-    Command(goto=...) to reflect (loopable tool), format_output or generate_response.
+    Command(goto=...) to reflect (loopable tool), format_output or generate_response — or to
+    dispatch_tasks when a successful search_properties still owes the user READ dimensions it
+    never fetched (the post-search dimension fan-out).
     """
 
     async def execute_tool_node(state: AgentState) -> Command[Literal[
-            "format_output", "generate_response", "reflect"]]:
+            "format_output", "generate_response", "reflect", "dispatch_tasks"]]:
         decision = state["tool_decision"]
         tool_name = decision["tool"]
         params = dict(decision.get("params", {}))
@@ -3109,6 +3232,44 @@ def _make_execute_tool_node(tool_registry):
             goto = "reflect"
         else:
             goto = _route_after_execution(tool_name, raw_data)
+
+        # POST-SEARCH DIMENSION FAN-OUT. search_properties is excluded from the multi-intent
+        # plan trigger and from LOOPABLE_TOOLS, so a listings turn that ALSO asked about
+        # commute / safety / nearby used to end here having fetched none of them. Fan the
+        # missing READ dimensions out through the existing concurrent wave engine instead,
+        # anchored on the top listing. Deterministic — no planner LLM call, no reflect hop.
+        # Fires ONLY when the search returned listings AND the message cued a dimension no
+        # tool satisfied, so a greeting, a plain listings search, and every error /
+        # need_clarification path keep byte-for-byte today's route and latency.
+        if tool_name == "search_properties" and not errored:
+            _dim_tasks = _build_dimension_followup_plan(
+                message=extracted_context.get("current_message") or _current_message(
+                    state.get("user_query") or ""),
+                raw_data=raw_data,
+                executed_tools={tool_name},
+                extracted_context=extracted_context,
+                accumulated=accumulated,
+                prior_digests={e.get("params_digest")
+                               for e in (state.get("observations") or [])},
+            )
+            if _dim_tasks:
+                # Seed the loop ledger with the SEARCH observation before the wave, so
+                # gather_wave appends the dimension results to it and the synthesis reasons
+                # over listings + dimensions together (len(observations) > 1 is what switches
+                # _build_generation_prompt / _collect_grounding_evidence to combined evidence).
+                update["observations"] = list(state.get("observations") or []) + [{
+                    "turn": int(state.get("loop_turn", 0)),
+                    "tool": tool_name,
+                    "observation": str(observation or ""),
+                    "params_digest": _params_digest(tool_name, params),
+                }]
+                update["task_plan"] = _dim_tasks
+                update["plan_origin"] = _PLAN_ORIGIN_DIMENSIONS
+                update["plan_notes"] = []
+                logger.info("execute_tool: post-search dimension fan-out -> %s",
+                            [t["tool"] for t in _dim_tasks])
+                return Command(update=update, goto="dispatch_tasks")
+
         return Command(update=update, goto=goto)
 
     return execute_tool_node
@@ -3877,7 +4038,22 @@ def _make_format_output_node():
 
         # Format based on tool type
         if is_loop_synthesis:
-            pass  # keep the generated multi-tool synthesis as the response
+            # Keep the generated multi-tool synthesis as the response text. But a POST-SEARCH
+            # DIMENSION FAN-OUT is a loop synthesis whose FIRST observation was a listings
+            # search, and the listings still have to ride out in tool_data or the frontend
+            # panel never repaints (/api/alex returns a `chat` payload instead of a `search`
+            # one) — i.e. the very "drops the user's listings" failure the plan-trigger
+            # exclusion exists to prevent. Text stays the synthesis; only tool_data is filled.
+            if (state.get("plan_origin") == _PLAN_ORIGIN_DIMENSIONS
+                    and tool_name == "search_properties"
+                    and isinstance(raw_data, dict)
+                    and raw_data.get("status") == "found"
+                    and raw_data.get("recommendations")):
+                tool_data = {
+                    "recommendations": apply_preference_filter(raw_data["recommendations"], prefs),
+                    "search_criteria": raw_data.get("search_criteria", {}),
+                    "area_recommendations": raw_data.get("area_recommendations", []),
+                }
 
         elif tool_name == 'check_safety' and raw_data and isinstance(raw_data, dict) and raw_data.get('safety_score') is not None:
             response, tool_data = _format_safety(raw_data)
@@ -4173,7 +4349,39 @@ def _make_gather_wave_node():
         web_in_plan = any(t.get("tool") == "web_search" for t in plan)
         tainted = state.get("context_tainted", False) or web_in_plan
 
-        if (state.get("plan_origin") or "multi_search") == "plan":
+        origin = state.get("plan_origin") or "multi_search"
+
+        if origin == _PLAN_ORIGIN_DIMENSIONS:
+            # POST-SEARCH DIMENSION WAVE. Two things must survive this reduce or the fan-out
+            # would trade one defect for a worse one:
+            #  1) the LISTINGS payload. tool_raw_data still holds the search_properties result
+            #     here (workers never write it), so it is MERGED under the wave's raw rather
+            #     than replaced — format_output's search_properties branch reads
+            #     status/recommendations off the top level to build the frontend card, and
+            #     overwriting it would drop the user's listings from the panel.
+            #  2) the SEARCH observation, already seeded into `observations` by execute_tool;
+            #     the per-task observations append to it so the synthesis sees both.
+            # Routes to generate_response, NOT reflect: the dimensions were chosen
+            # deterministically, so there is nothing for a reflect LLM hop to decide (PR #29).
+            anchor_raw = state.get("tool_raw_data")
+            merged_raw = dict(anchor_raw) if isinstance(anchor_raw, dict) else {}
+            merged_raw.update(all_raw)
+            loop_turn = int(state.get("loop_turn", 0)) + 1
+            obs_entries = list(state.get("observations") or [])
+            for it in items:
+                obs_entries.append({
+                    "turn": loop_turn, "tool": it.get("tool", "tool"),
+                    "observation": str(it.get("obs") or ""),
+                    "params_digest": _params_digest(it.get("tool", ""), it.get("params") or {}),
+                })
+            return Command(update={
+                "tool_observation": combined,
+                "tool_raw_data": merged_raw or all_raw,
+                "context_tainted": tainted, "observations": obs_entries,
+                "loop_turn": loop_turn,
+            }, goto="generate_response")
+
+        if origin == "plan":
             # The whole plan is ONE loop step: append per-task (and per-note) observations, bump
             # loop_turn once, and hand to reflect (answer-now vs one more SERIAL tool).
             loop_turn = int(state.get("loop_turn", 0)) + 1

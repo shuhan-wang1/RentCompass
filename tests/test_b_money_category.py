@@ -79,16 +79,40 @@ DELIBERATELY NOT CHANGED, and why:
     is exactly what §3.5 forbids. Reported, not edited.
   * **The other unmapped `field` names were not mapped.** `_field_to_kind` gained
     `total_all_in` only, because that is the one inside this category. `bills`, `budget`,
-    `current_fare`, `fare_gbp`, `official_monthly_rent` (money) and `listing_2_commute`,
+    `current_fare`, `official_monthly_rent` (money) and `listing_2_commute`,
     `listing_3_commute` (commute) are named by constraints in OTHER categories and are
     silently ungraded for exactly the same reason B12 was. They are pinned as debt in
     `UNMAPPED_NUMERIC_FIELDS` below so the set cannot grow in silence; mapping them changes
     what "pass" means for cases this branch has not read.
+
   * **B4's `£15,000 - £19,125` was not excused.** The fc answer offers it as a
     purpose-built-student-accommodation upfront figure for a full academic year; it is
     derivable from nothing and is now an offender. B4 already fails the arithmetic on both
     arms, so no verdict turns on it, but if the owner reads that as a hedged illustration
     the fix belongs in `_NONASSERTION_MARKERS`, not in B4's contract.
+
+THIS DEFECT CLASS WAS FOUND THREE TIMES ON THE SAME DAY, independently, which is worth
+recording because it means the `safety_score` family is not rare: B12's
+`must_refuse_fabrication[total_all_in]` here; C10's `no_fabricated_number[fare_gbp]` on PR
+#58, fixed by renaming the field to `fare`, the spelling the rest of the corpus already uses;
+and again on PR #62. The guards are reconciled rather than stacked:
+
+    guard                                              scope
+    #58  test_every_no_fabricated_number_field_…        no_fabricated_number, ZERO
+                                                       exemptions — strictly stronger, and
+                                                       the reason this module does not also
+                                                       assert that half
+    here test_no_absence_constraint_is_a_silent_no_op   must_refuse_fabrication and
+                                                       must_note_missing_data, which have a
+                                                       documented non-numeric branch and so
+                                                       need a classification table
+
+Disjoint by constraint type, so neither is redundant and neither is weakened.
+`test_this_modules_debt_table_never_excuses_a_fabrication_field` enforces the seam from this
+side: a field that only `no_fabricated_number` declares can never be recorded here as debt.
+That is why `fare_gbp` is gone from the table rather than merely pruned — recording it here
+was the wrong home for it, and `test_the_debt_table_has_no_dead_entries` is what made the
+staleness surface the moment the two branches were integrated.
 """
 from __future__ import annotations
 
@@ -112,6 +136,21 @@ FIELD_KINDED_TYPES = ("no_fabricated_number", "must_refuse_fabrication",
                       "must_note_missing_data")
 # ...and the type added here, which fails on two values for one quantity.
 SELF_CONTRADICTION_TYPE = "no_self_contradictory_value"
+
+# The subset of FIELD_KINDED_TYPES that LEGITIMATELY takes a non-numeric field. Both have a
+# documented non-numeric branch — `must_refuse_fabrication` falls back to "does the answer
+# voice this field's absence" when `_field_to_kind` returns None, and `must_note_missing_data`
+# is about absence in the first place — so `availability`, `user_memory` and `listings` are
+# correct field names for them and an unconditional "must resolve to a kind" rule over these
+# two types would condemn correct cases.
+#
+# `no_fabricated_number` is deliberately NOT here: it has no non-numeric branch at all, so an
+# unmapped field is not a weak constraint but NO constraint. That half of the invariant is
+# owned by PR #58's `test_every_no_fabricated_number_field_resolves_to_a_claim_kind`, which is
+# strictly stronger than anything this module should assert — it carries zero exemptions. See
+# `test_this_modules_debt_table_never_excuses_a_fabrication_field` for the boundary between
+# the two guards, enforced from this side.
+NON_NUMERIC_TOLERANT_TYPES = ("must_refuse_fabrication", "must_note_missing_data")
 
 # A POSITIVE table: one row per B_money case and the constraint that must be able to fail
 # it on a money figure. Adding a row OBLIGES a case; it never excuses one. Same vehicle as
@@ -261,8 +300,17 @@ B15_REFUSING_ANSWER = (
     "Act 2019 or contacting a reputable letting agent in London."
 )
 
+# Each tuple is ONE READING of the statute — (deposit, total) — not a contradictory pair.
+# Within a reading £5,538.46 is an ADDEND and £10,338.46 is its SUM, and quoting those two as
+# "the contradiction" is a misreading of the answer that has already been made once. The
+# contradictions run ACROSS the two readings, quantity by quantity:
+#     deposit:        £5,538.46  vs  £6,646.15
+#     total upfront:  £10,338.46 vs  £11,446.15
+# Pinned by test_the_contradiction_is_per_quantity_not_addend_versus_sum.
 B15_FIVE_WEEK_FIGURES = (5538.46, 10338.46)
 B15_SIX_WEEK_FIGURES = (6646.15, 11446.15)
+B15_RIVAL_DEPOSITS = [5538.46, 6646.15]
+B15_RIVAL_TOTALS = [10338.46, 11446.15]
 
 
 def test_b15_has_no_channel_the_five_week_figures_could_come_from():
@@ -286,17 +334,18 @@ def test_b15_has_no_channel_the_five_week_figures_could_come_from():
             f"this regression is pinning the wrong thing: {sorted(pool.money)}")
 
 
-def test_b15_fails_on_the_two_contradictory_totals():
+def test_b15_fails_on_its_two_deposits_and_its_two_totals():
     """THE REGRESSION. On mainline this assertion could not hold for any contract B15
     declared: `reference_calc_match[total_move_in]`, `reference_calc_match[deposit_6_weeks]`
-    and `must_mention_value[11446.15]` are all satisfied by the SECOND figure, so the case
-    scored 3/3 and PASSED while asserting £5,538.46/£10,338.46 as well."""
+    and `must_mention_value[11446.15]` are all satisfied by the SIX-WEEK figures, so the case
+    scored 3/3 and PASSED while also asserting the whole five-week reading — deposit
+    £5,538.46 and total £10,338.46 — as the answer."""
     case = _cases_by_id()["B15"]["cases.jsonl"]
     verdict = graders.grade_case(case, _ctx(case, B15_CONTRADICTING_ANSWER))
 
     assert not verdict.passed, (
-        "an answer that states two mutually exclusive totals must not pass: "
-        f"{[(c.type, c.passed, c.detail) for c in verdict.constraints]}")
+        "an answer that states two mutually exclusive deposits and two mutually exclusive "
+        f"totals must not pass: {[(c.type, c.passed, c.detail) for c in verdict.constraints]}")
     failed = {c.type for c in verdict.constraints if not c.passed}
     assert failed == {"no_fabricated_number", SELF_CONTRADICTION_TYPE}, (
         "B15 must fail on the money dimension specifically, not incidentally on the "
@@ -311,6 +360,24 @@ def test_b15_fails_on_the_two_contradictory_totals():
     joined = " ".join(c.detail for c in contra)
     for figure in B15_FIVE_WEEK_FIGURES + B15_SIX_WEEK_FIGURES:
         assert str(figure) in joined, f"{figure} should be named: {joined}"
+
+
+def test_the_contradiction_is_per_quantity_not_addend_versus_sum():
+    """PRECISION, pinned because the finding has already been mis-stated once as "the answer
+    asserts both £5,538.46 and £10,338.46". Those two are an ADDEND and its SUM inside one
+    (wrong) reading — `£4,800 + £5,538.46 = £10,338.46` — and stating a deposit alongside the
+    total it feeds is not a contradiction at all. The contradictions are per quantity, across
+    the two readings, and the checker must attribute them that way or its detail string would
+    teach the same misreading to the next person."""
+    deposits = [v for v, _ in graders._equation_results_for(
+        B15_CONTRADICTING_ANSWER, "deposit")]
+    totals = [v for v, _ in graders._equation_results_for(
+        B15_CONTRADICTING_ANSWER, "total_move_in")]
+    assert deposits == B15_RIVAL_DEPOSITS, deposits
+    assert totals == B15_RIVAL_TOTALS, totals
+    # the cross terms must NOT be paired: the total is not a rival deposit, and vice versa.
+    assert 10338.46 not in deposits and 11446.15 not in deposits, deposits
+    assert 5538.46 not in totals and 6646.15 not in totals, totals
 
 
 def test_b15_arithmetic_constraints_still_pass_on_that_same_answer():
@@ -564,7 +631,7 @@ def test_a_blank_line_breaks_a_chain():
     deposit line chains to its total line and the deposit's own £5,538.46 is replaced by
     the total. The verdict would stay FAIL for the WRONG stated reason."""
     results = graders._equation_results_for(B15_CONTRADICTING_ANSWER, "deposit")
-    assert [v for v, _ in results] == [5538.46, 6646.15], results
+    assert [v for v, _ in results] == B15_RIVAL_DEPOSITS, results
 
 
 def test_a_hedged_illustration_is_not_a_rival_value():
@@ -754,14 +821,21 @@ def test_every_declared_self_contradiction_field_has_a_label_row():
             assert f in graders._QUANTITY_LABEL_TOKENS, f"{cid} ({shard}): {f}"
 
 
-# Every `field` named anywhere in the corpus by a field-kinded constraint that resolves to
-# NO claim kind, i.e. whose numeric check is a no-op. Split by whether that is correct.
+# Every `field` named by a NON_NUMERIC_TOLERANT_TYPES constraint anywhere in the corpus that
+# resolves to NO claim kind, i.e. whose numeric check is a no-op. Split by whether that is
+# correct.
 #
-# `total_all_in` used to be in the second set. It is B12's own declared field and this
-# branch maps it, which is what makes B12's DECLARED constraint do the job its name
-# promises. The rest are named by cases in OTHER categories and are left as recorded debt:
-# mapping them changes what "pass" means for cases this branch has not read, and the set is
-# pinned exactly so it cannot grow in silence.
+# `total_all_in` used to be in the second set. It is B12's own declared field and this branch
+# maps it, which is what makes B12's DECLARED constraint do the job its name promises.
+#
+# `fare_gbp` was ALSO in the second set and has been REMOVED — see
+# `test_this_modules_debt_table_never_excuses_a_fabrication_field`. It was only ever named by
+# `no_fabricated_number`, which is not in scope here, and PR #58 has since renamed C10's field
+# to `fare`. Keeping it would have been fake debt: a value recorded once and never re-checked,
+# which is the same defect class this module exists to close.
+#
+# The rest are named by cases in OTHER categories and are left as recorded debt: mapping them
+# changes what "pass" means for cases this branch has not read.
 NON_NUMERIC_FIELDS = frozenset({
     "listings", "pois", "studios", "user_memory", "within_budget_listings",
     "availability", "epc_rating", "council_tax_band", "commute_destination",
@@ -770,20 +844,15 @@ UNMAPPED_NUMERIC_FIELDS = frozenset({
     "bills",                 # money — B12's utility costs; the quantity it must not invent
     "budget",                # money
     "current_fare",          # money
-    "fare_gbp",              # money — a `fare` synonym that simply is not in the table
     "official_monthly_rent",  # money
     "listing_2_commute",     # commute_minutes
     "listing_3_commute",     # commute_minutes
 })
 
 
-def test_no_field_kinded_constraint_is_a_silent_no_op():
-    """SOURCE GUARD. `_field_number_offenders` filters claims by KIND, so a `field` that
-    maps to no kind yields an empty offender set and the constraint passes whatever the
-    answer says. That is how B12's `must_refuse_fabrication[total_all_in]` graded nothing,
-    and how `no_fabricated_number[safety_score]` graded nothing before it. Every unmapped
-    field must be accounted for explicitly, as either deliberately non-numeric or recorded
-    debt — a new one fails here instead of quietly grading nothing."""
+def _unmapped_fields_in_scope() -> set:
+    """Field names in the corpus, declared by a type that TOLERATES a non-numeric field,
+    which resolve to no claim kind. Derived from the shards, never hand-listed."""
     unmapped = set()
     for path in sorted(BENCH.glob("*.jsonl")):
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -791,17 +860,101 @@ def test_no_field_kinded_constraint_is_a_silent_no_op():
                 continue
             case = json.loads(line)
             for con in case.get("expected_constraints") or []:
-                if con.get("type") in FIELD_KINDED_TYPES:
+                if con.get("type") in NON_NUMERIC_TOLERANT_TYPES:
                     f = con.get("field") or ""
                     if graders._field_to_kind(f) is None:
                         unmapped.add(f)
+    return unmapped
+
+
+def _fields_by_type() -> dict:
+    """field name -> the set of constraint types that declare it, corpus-wide."""
+    out = defaultdict(set)
+    for path in sorted(BENCH.glob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            case = json.loads(line)
+            for con in case.get("expected_constraints") or []:
+                if con.get("type") in FIELD_KINDED_TYPES:
+                    out[con.get("field") or ""].add(con["type"])
+    return out
+
+
+def test_no_absence_constraint_is_a_silent_no_op():
+    """SOURCE GUARD. `_field_number_offenders` filters claims by KIND, so a `field` that maps
+    to no kind yields an empty offender set and the constraint's numeric half passes whatever
+    the answer says. That is how B12's `must_refuse_fabrication[total_all_in]` graded nothing,
+    and how `no_fabricated_number[safety_score]` graded nothing before it. Every unmapped
+    field must be accounted for explicitly, as either deliberately non-numeric or recorded
+    debt — a new one fails here instead of quietly grading nothing.
+
+    SCOPED to `must_refuse_fabrication` and `must_note_missing_data`. Those two have a
+    documented non-numeric branch, so a "must resolve to a kind" rule with no exemptions
+    would condemn correct cases (`user_memory`, `listings`, `availability`). The
+    `no_fabricated_number` half of the same invariant belongs to PR #58's
+    `test_every_no_fabricated_number_field_resolves_to_a_claim_kind`, which asserts it with
+    ZERO exemptions and is therefore strictly stronger. Two guards, disjoint by constraint
+    type, no overlap — see the boundary test below."""
+    unmapped = _unmapped_fields_in_scope()
     known = NON_NUMERIC_FIELDS | UNMAPPED_NUMERIC_FIELDS
     assert unmapped - known == set(), (
         f"new field(s) whose numeric check is a silent no-op: {sorted(unmapped - known)}. "
         "Map them in graders._field_to_kind, or record them above with a reason.")
+
+
+def test_the_debt_table_has_no_dead_entries():
+    """CURRENCY, the other direction, and the reason the table is a guard rather than a
+    comment. A debt list that keeps a healed entry is a value recorded once and never
+    re-checked — the same defect class as the kindless field it documents. So an entry that
+    has stopped being unmapped, for ANY reason (mapped in `_field_to_kind`, renamed in the
+    corpus, or its case deleted), fails here and must be pruned.
+
+    It has already bitten once: `fare_gbp` was listed as debt on this branch and PR #58
+    renamed C10's field to `fare`, so the entry went dead the moment the two were integrated.
+    Same idiom as `KNOWN_DIVERGENCES` in test_case_contract_consistency.py ("no longer
+    diverge — remove them so the guard keeps its teeth") and PR #60's
+    `test_the_allowlist_has_no_dead_entries`."""
+    unmapped = _unmapped_fields_in_scope()
+    known = NON_NUMERIC_FIELDS | UNMAPPED_NUMERIC_FIELDS
     assert known - unmapped == set(), (
-        f"{sorted(known - unmapped)} no longer appear unmapped — drop them from the table "
-        "so it keeps its teeth.")
-    assert "total_all_in" not in unmapped, (
+        f"{sorted(known - unmapped)} no longer appear unmapped — drop them from "
+        "NON_NUMERIC_FIELDS / UNMAPPED_NUMERIC_FIELDS so the table keeps its teeth.")
+
+
+def test_this_modules_debt_table_never_excuses_a_fabrication_field():
+    """THE BOUNDARY between this guard and PR #58's, enforced from this side.
+
+    `no_fabricated_number` has no non-numeric branch, so an unmapped field there is not weak
+    protection but none at all, and it must never be excusable as "recorded debt". This test
+    fails if either table ever names a field that only `no_fabricated_number` declares —
+    which is exactly what `fare_gbp` was, and why removing it is a narrowing of scope rather
+    than a loss of coverage."""
+    by_type = _fields_by_type()
+    leaked = {}
+    for f in sorted(NON_NUMERIC_FIELDS | UNMAPPED_NUMERIC_FIELDS):
+        types = by_type.get(f, set())
+        if types and not (types & set(NON_NUMERIC_TOLERANT_TYPES)):
+            leaked[f] = sorted(types)
+    assert not leaked, (
+        f"{leaked} are declared ONLY by a type with no non-numeric branch. They may not be "
+        "excused here: map the field, or rename it to one graders._field_to_kind knows "
+        "(PR #58 renamed C10's `fare_gbp` to `fare`).")
+    assert "fare_gbp" not in (NON_NUMERIC_FIELDS | UNMAPPED_NUMERIC_FIELDS), (
+        "fare_gbp is PR #58's to fix, by renaming C10's field to `fare`; recording it here "
+        "as debt is how the same defect gets found three times and closed zero times.")
+
+
+def test_the_no_op_guard_can_actually_bite():
+    """Guards the guard, both directions. The corpus must really contain constraints of the
+    scoped types for the sweep to check, `total_all_in` must really be mapped now, and the
+    tables must not have drifted into naming something the corpus no longer uses at all."""
+    by_type = _fields_by_type()
+    scoped = [f for f, t in by_type.items() if t & set(NON_NUMERIC_TOLERANT_TYPES)]
+    assert len(scoped) >= 20, f"the absence-constraint sweep looks broken: {sorted(scoped)}"
+    assert graders._field_to_kind("total_all_in") == MONEY_KIND, (
         "total_all_in must map to `money`: it is B12's declared field and the numeric "
         "branch of must_refuse_fabrication depends on it")
+    orphans = sorted((NON_NUMERIC_FIELDS | UNMAPPED_NUMERIC_FIELDS) - set(by_type))
+    assert not orphans, f"{orphans} are named by no case at all — stale table rows"
+    assert "total_all_in" not in _unmapped_fields_in_scope()

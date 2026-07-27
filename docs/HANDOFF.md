@@ -71,7 +71,7 @@ need.
 
 ## 0. The defect class this codebase keeps producing
 
-Read this before writing any code here. **Fifteen confirmed instances of one shape:** a value
+Read this before writing any code here. **Sixteen confirmed instances of one shape:** a value
 is computed, stored somewhere a reader could find it, and then never asserted on. Every one
 shipped. Every one was found by someone reading the code rather than by a test.
 
@@ -103,9 +103,16 @@ quoted. It is left untabled because the fix is a re-measurement, not a guard.
 | 13 | `app/core/langgraph_agent.py` | `_SEARCH_DIMENSION_CUES`, a copy documented as "mirrors `agent_loop._DIMENSION_CUES`" | nothing ever checked that it did. By 2026-07-27 **six cues** had drifted (`safe`; `travel time`/`how long`/`how far`; `药店`/`pharmacy`), all on the legacy side, so the two architectures disagreed about what the user had asked for — the exact failure the comment claimed to prevent. Now one shared `core.dimensions.DIMENSION_CUES`, pinned by `tests/test_dimension_table_is_shared.py` |
 | 14 | `evaluation/benchmark/*.jsonl` `failure_conditions` | 308 prose rows saying, per case, what a wrong answer looks like | **55 of them name a failure mode no declared mechanism can fail the case on** (58 of 284 before PRs #58/#61 added coverage; the pinned counts, not anyone's memory, are what noticed the three healed rows) — and `graders.grade_case`'s pass gate ASSERTED the coverage in a comment ("the constraints encode each case's plain-language failure_conditions"), so a reviewer looking for "does the corpus test X?" found X in writing. Now bound row-by-row by `tests/test_failure_condition_enforceability.py`; the 58 are named, counted and owed |
 | 15 | `evaluation/metrics/graders.py` `must_recall_value` | the kept value was LOCATED in the answer | its POLARITY was never asserted on, so G14 — a selective forget — scored a full 3/3 recall on "everything, including Camden, has been removed". Its own failure condition "claims everything or nothing was deleted" had no checker. Now `must_retain_value`, pinned by `tests/test_scoped_deletion_confirmation.py` |
+| 16 | `deploy/monitoring/rentcompass-monitor.service` | an `ExecStart` naming the script that guards production | **it is not what runs.** The tracked unit points at the pinned deploy tree's copy — the *original* monitor, 7387B — while systemd resolves `/usr/local/bin/rentcompass-monitor.sh` (18845B), bridged only by an **untracked, root-owned, 69-byte `override.conf`**. Three copies existed on 2026-07-27 (git `43f05af0`, installed `678073d0`, pinned tree `4a4273cc`) and nothing compared any pair. Following the README's own install step without preserving the drop-in silently reverts production to a monitor that fires a false sev3 every 5 minutes and cannot see the provider-outage class. Now pinned by `tests/test_monitor_install_provenance.py`, a committed `rentcompass-monitor.sha256`, and a `src=<hash>` token in every status line |
 
 **Instance 7's bypass was documented in its own sibling's module docstring** — "calls that
 bypass ModelRouter". It was known and simply never wired.
+
+**Instance 16 is the config form of the class, and it is the one to expect next.** Instances 1–15
+are all values in code. 16 is a *declaration* — a unit file naming a path — that nothing asserted
+matched reality. Anywhere this repo declares where something lives (an `ExecStart`, a pin file, an
+image tag, a `sys.path` insert) the same question applies: what compares the declaration to what
+actually runs?
 
 Three practices exist specifically because of this, and none of them is optional:
 
@@ -784,10 +791,23 @@ the module docstring, not only in the PR body. It merged in the correct order.
   recovered from a dangling commit. Park with `cp` to a scratch path and `git checkout <base>
   -- <file>`, never with `git stash`.
 
-**Still open and unresolved: B15.** The checker corrections changed what counts as grounded,
-and B15 now **passes** on fc while asserting both £5,538.46 and £10,338.46. It sits inside the
-`B_money` category, which the round deliberately did not touch. The corrections therefore made
-the `B_money` ruling **more** urgent, not less.
+**~~Still open and unresolved: B15.~~ RESOLVED 2026-07-27 by PR #61 — and the figures this
+paragraph first gave were wrong.** It said B15 asserts "both £5,538.46 and £10,338.46". Those are
+an **addend and its sum** (`£4,800 + £5,538.46 = £10,338.46`) — arithmetically consistent, and
+precisely the pair a checker must NOT flag. Quoting them as the defect described something that
+is not one. The retained fc answer contradicts itself **per quantity**, in two pairs:
+
+```
+- 5 weeks' deposit:            £1,107.69 x 5 = £5,538.46
+**Total upfront cost:**        £4,800 + £5,538.46 = £10,338.46
+- **Corrected max deposit:**   £1,107.69 x 6 = £6,646.15
+- **Corrected total upfront:** £4,800 + £6,646.15 = £11,446.15
+```
+
+Deposit **£5,538.46 vs £6,646.15** and total **£10,338.46 vs £11,446.15** — one reply,
+`tools_called: []`, scored **3/3 PASS**. The bad reading is now unrepresentable:
+`test_the_contradiction_is_per_quantity_not_addend_versus_sum` asserts both real pairs *and* that
+the cross terms are not paired. The `B_money` ruling it made urgent is §3.16.
 
 **One §3.14 item was investigated and found already done: fan-out.** Within a tool batch,
 dispatch was *already* genuinely parallel — every read is handed to `asyncio.ensure_future`
@@ -824,6 +844,87 @@ to mis-cite. **The ledger is still retrievable** — `git show
 origin/docs/citation-fixes:docs/HANDOFF.md` — and the one row that may survive independently
 (prompt / cached-prefix size, −78/+186 ms over 200 turns) is worth re-measuring on the repaired
 telemetry rather than inheriting.
+
+### 3.16 The 2026-07-27 rulings round — eight owner calls, and a set of green PRs that was not green
+
+The eight rulings §3.15 left open were all taken. Seven PRs (#57–#63) merged in a forced order;
+mainline is **`14dc131`**, offline suite **3158 passed, 10 skipped, 0 failed**.
+
+**The headline is a process finding, not a defect fix: every PR was green alone and three failed
+together.** All seven merged *textually clean*, and the integrated tree failed:
+
+```
+test_b_money_category::test_no_field_kinded_constraint_is_a_silent_no_op            (#61)
+test_failure_condition_enforceability::test_every_failure_condition_row_is_classified (#62)
+test_..._cannot_slip_through_unclassified                                            (#62)
+```
+
+Both guards were behaving correctly — #62's total `ENFORCEMENT` table was refusing a corpus it no
+longer described, and #61's debt list still named `fare_gbp` after #58 fixed it. **The rule that
+follows: any round changing the case contract or the evaluator in more than one PR must be
+integration-tested as a set before any of it merges.** Textual cleanliness is not integration.
+This is the second CI-invisible ordering hazard in two days; the first was #54-before-#55.
+
+**`fare_gbp` was found independently by three agents**, in three places (#58 on C10's
+`no_fabricated_number[fare_gbp]`, #61 on B12's `total_all_in`, #62 while classifying failure
+conditions). `_field_to_kind` has no row for the name and `_field_number_offenders` returns `[]`
+for a kindless field, so the constraint was declared, ran every round, and could never fail.
+
+**The early return is deliberate, and that is the trap.** `graders.py` says so: "A field with NO
+row is UNGATED — a table that silently failed every field it forgot would be the identifier gate
+again, wearing different clothes." The code is right; the *corpus* is where the guard belongs. The
+two guards were then made disjoint **by constraint type**, not by merge order: #58 covers
+`no_fabricated_number` with zero exemptions, #61 covers the two types #58 excludes on purpose,
+because `must_refuse_fabrication` and `must_note_missing_data` are designed to accept non-numeric
+fields and the same assertion over them would condemn correct cases.
+
+**The retained paired A/B is cross-grader.** In the six `idp98_*` dumps `grader_sha256` is
+`c25a027d04e2` on every base arm and `4cf33e055357` on every cand arm, with
+`case_contract_sha256` **identical** (`7f1ead524c42`) throughout. The old `rescore.py` gate keyed
+only on the contract — the one axis that could not move — so it accepted both and exited 0.
+**Any base-vs-cand comparison drawn from those dumps is cross-grader unless re-scored.** The
+`evaluator_contract.md` table survives because its old/new columns compare contracts *within* a
+row; reading *across* rows does not. Same shape as §3.14's collapsed total, one level down.
+
+### Two "we cannot measure this" results, which are the useful kind
+
+* **The commute calibration's blast radius is 0 listings / 0 areas / 0 cases on both arms — and
+  the corpus cannot show otherwise.** Every commute record in both arms is `route_source: tfl` /
+  `osm_cycling`; **none is `estimate`**, so the calibrated publication path is entirely
+  un-exercised by the benchmark. Do not cite the zero as validation; it needs an
+  estimator-domain case. It also moved **area** selection, not just listings —
+  `recommend_areas._validate_candidate` filters on the same figure, which PR #53 did not say.
+* **The cue union adds 0 tool calls and 0 ms as the round recorded them, and `run_benchmark`
+  structurally cannot price a fan-out** — it replays 13/17 `check_safety`, 9/11
+  `search_nearby_pois` and 11/12 `calculate_commute` from fixtures at ~0.5 ms. Live those are
+  410–882 ms, 1627–**13568 ms** and 2429 ms, against fc's 8466 ms cold p50 and a 6000 ms bar.
+  **The 0 ms is not evidence of no cost.** If latency binds, the lever is
+  `FC_DIMENSION_FANOUT_MAX=0` — no vocabulary change, no deploy. The one narrowing candidate is
+  D13, which is `expected_route: clarification` with `check_safety` **forbidden** and gains it
+  from the union.
+
+### Tooling: state that looks isolated and is not
+
+Two, both learned by being bitten during parallel agent rounds:
+
+* **`refs/stash` is ONE global stack across every worktree.** Agents popped each other's entries;
+  one working tree was recovered from a dangling commit.
+* **`cp -r` of a worktree shares its gitdir**, so a `git checkout` inside the copy writes the
+  **original** worktree's index.
+
+Use `git worktree add` for old-behaviour comparisons. Never `git stash`, never `cp -r`.
+
+### Two things deliberately left alone
+
+* **`tests/test_dimension_fanout.py` is load-sensitive by construction**, not sloppy: it uses real
+  `asyncio.sleep` and `time.monotonic()` offsets because, per its own docstring, that is "the only
+  way the sweep's own budget gate can bind". Fixing it means injecting a fake clock — its own
+  change. **Do not widen the budget as a side effect of other work.**
+* **The monitor's steady state is one genuine alert, not zero.** `canary-legacy.jsonl missing`
+  (sev4) fires every 5 minutes because the legacy pool serves no traffic and so writes no
+  telemetry. It is technically the always-on-alert shape that §3.16's monitor work just removed
+  elsewhere, but it is *true*, so it was not silenced. The cost is that the next real alert reads
+  `ALERTS=2` rather than 0→1. Whether to mark it expected is an open owner call.
 
 ---
 

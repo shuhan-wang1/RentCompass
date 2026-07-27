@@ -1,6 +1,20 @@
 """Every ``failure_conditions`` row must name a mechanism that can fail its case — or be
 registered, counted, and owed.
 
+MERGE ORDER IS LOAD-BEARING: this module must land AFTER PR #58
+(``fix/structural-coverage-c2-c4-c5-c10-h9``) and PR #61 (``fix/b-money-category``).
+``ENFORCEMENT`` is TOTAL over the corpus, so it is a function OF the corpus: those two
+branches add 24 ``failure_conditions`` rows across 16 cases, and a table written against
+either side alone is wrong about the other. On this branch alone the corpus is 284 rows
+and ``test_every_failure_condition_row_is_classified`` FAILS by construction; on the
+integrated tree it is 308 and passes. All three merge textually clean, so **CI cannot
+catch this** — which is the same reason PR #55 carries the same notice about PR #54, and it
+is written here as well as in the PR body because a PR body is not on the branch.
+
+That failure is the guard working, not a defect in it: a table that silently accepted a
+corpus it no longer describes would be the exemption list this design exists to avoid.
+Regenerating it is the cost of the totality property, and it is paid deliberately.
+
 THE DEFECT. Each of the 117 benchmark cases carries a ``failure_conditions`` list: prose
 describing what a wrong answer looks like. ``graders.grade_case``'s pass gate used to state,
 in a comment, that "the constraints encode each case's plain-language failure_conditions".
@@ -58,14 +72,30 @@ what it costs. Shrinking the debt trips the same counts from the other side, exa
 ``KNOWN_DIVERGENCES`` does in tests/test_case_contract_consistency.py: healing a class
 without deleting its rows leaves the guard toothless.
 
-WHAT THE NUMBER IS. 58 of 284 rows (20.4%) across all seven shards; 31 of 225 within Base98.
+WHAT THE NUMBER IS. **55 of 308 rows (17.9%)** across all seven shards on the integrated
+tree; 29 of 248 within Base98. It was 58 of 284 against mainline ``81aa7cf`` alone: PR #58
+and PR #61 added 24 rows (all of them enforceable on arrival) and HEALED three —
+``B4[1]`` and ``H9[1]`` gained a money-fabrication constraint, and ``C10[0]``'s checker
+stopped being a no-op — which retired the ``field_kind_unmapped`` class outright. Three of
+the twelve classes below therefore have a shorter history than the guard does, and the
+healing was found by the pinned counts refusing to add up, not by anyone remembering.
+
 A previous round is recorded as having found "roughly 17"; that guard was not shipped and
 could not be recovered from any branch, dangling commit, or PR body, so this is a rebuild
 and the criterion above is mine. The difference is accounted for, not waved at: the classes
 ``entity_value_attribution`` (a superlative or a value attached to the wrong entity — 8 rows)
-and ``uncovered_fabrication`` (the case grades no fabrication of the KIND the row names — 16
+and ``uncovered_fabrication`` (the case grades no fabrication of the KIND the row names — 14
 rows) are the two large families that a coarser reading would score as covered, because the
 case does declare *a* constraint over *a* number.
+
+NOT A SILENT-NO-OP RISK: ``no_self_contradictory_value`` (PR #61) keys on
+``_QUANTITY_LABEL_TOKENS`` and FAILS closed on a field it does not know, so it can never be
+the vacuous pass ``KIND_FILTERED_TYPES`` guards against and is deliberately absent from that
+set. Its corpus-wide siblings — PR #58's field-kind guard in
+tests/test_uncovered_answer_dimension.py and PR #61's ``UNMAPPED_NUMERIC_FIELDS`` in
+tests/test_b_money_category.py — check the CORPUS; ``test_no_row_is_bound_to_a_silent_no_op``
+below checks the BINDINGS. Complementary, not duplicated: a field could be mapped
+corpus-wide and still be the wrong mechanism to bind a given row to.
 
 G14 IS THE ONE ROW THIS BRANCH MOVES OFF THE LIST. Its "Claims everything or nothing was
 deleted" is now bound to ``must_retain_value[Camden]``; see
@@ -143,24 +173,16 @@ ACCEPTED_DEBT = {
              "typed claim ('X is the cheapest') the graders do not currently extract.",
     ),
     "uncovered_fabrication": dict(
-        rows=16,
+        rows=14,
         missing="a fabrication constraint of the KIND the row names — the case declares "
                 "none that can fail on it",
         cost="the same hole test_uncovered_answer_dimension.py closed for commute minutes "
-             "on E10/C8/D11, in other kinds: money (A7, B4, CR1, E8, G4), non-numeric "
-             "memory content (A2, G10, G13), and whole H-shard cases whose contract is "
-             "purely a tool-routing assertion (H1, H2, H4, H5, H7, H9, H10, H14). Each "
-             "added constraint can flip a case, so it must be measured per case against "
-             "the retained arms, not batch-applied.",
-    ),
-    "field_kind_unmapped": dict(
-        rows=1,
-        missing="`_field_to_kind` has no row for the field the case declares, so the "
-                "declared checker grades nothing",
-        cost="C10's `no_fabricated_number[fare_gbp]`. One line in _field_to_kind "
-             "('fare_gbp' -> money) closes it, but it turns a passing constraint into a "
-             "live one and can flip C10, so it belongs in a measured round. This is the "
-             "same defect `safety_score` had (see test_grader_review_corrections.py).",
+             "on E10/C8/D11, in other kinds: money (A7, CR1, E8, G4), non-numeric memory "
+             "content (A2, G10, G13), and H-shard cases whose contract is purely a "
+             "tool-routing assertion (H1, H2, H4, H5, H7, H10, H14). Each added constraint "
+             "can flip a case, so it must be measured per case against the retained arms, "
+             "not batch-applied. B4 and H9 were on this list and are HEALED — by PR #61 "
+             "and PR #58 respectively, each measured on its own branch.",
     ),
     "process_shape": dict(
         rows=4,
@@ -253,35 +275,54 @@ ENFORCEMENT = {
             "must_note_missing_data[studios]",
             "no_fabricated_number[monthly_rent]"),
     # ---- B_money -----------------------------------------------------------
-    "B1": ("reference_calc_match", "forbidden_tools"),
-    "B2": ("reference_calc_match",),
-    "B3": ("reference_calc_match", "DEBT:estimate_labelling"),
-    "B4": ("reference_calc_match", "DEBT:uncovered_fabrication"),
+    # PR #61 gave twelve B-category cases a money-fabrication and/or a
+    # no_self_contradictory_value constraint, and two new rows each. B4[1] ("adds
+    # fabricated admin/holding fees") is HEALED by it: it was DEBT:uncovered_fabrication.
+    "B1": ("reference_calc_match", "forbidden_tools",
+           "no_fabricated_number[monthly_rent]",
+           "no_self_contradictory_value[monthly_rent]"),
+    "B2": ("reference_calc_match", "no_fabricated_number[weekly_rent]",
+           "no_self_contradictory_value[weekly_rent]"),
+    "B3": ("reference_calc_match", "DEBT:estimate_labelling",
+           "no_fabricated_number[deposit]", "no_self_contradictory_value[deposit]"),
+    "B4": ("reference_calc_match", "no_fabricated_number[total_move_in]",
+           "no_fabricated_number[total_move_in]",
+           "no_self_contradictory_value[total_move_in]"),
     "B5": ("must_refuse_fabrication[deposit]", "must_refuse_fabrication[deposit]"),
     "B6": ("must_flag_contradiction", "must_flag_contradiction"),
-    "B7": ("reference_calc_match", "reference_calc_match"),
+    "B7": ("reference_calc_match", "reference_calc_match",
+           "no_fabricated_number[deposit]", "no_self_contradictory_value[deposit]"),
     "B8": ("reference_calc_match", "reference_calc_match",
-           "no_fabricated_number[deposit]"),
+           "no_fabricated_number[deposit]",
+           "no_self_contradictory_value[total_move_in]"),
     "B9": ("reference_calc_match", "forbidden_tools",
-           "no_fabricated_number[monthly_rent]"),
-    "B10": ("reference_calc_match", "reference_calc_match"),
+           "no_fabricated_number[monthly_rent]",
+           "no_self_contradictory_value[monthly_rent]"),
+    "B10": ("reference_calc_match", "reference_calc_match",
+            "no_fabricated_number[deposit]", "no_self_contradictory_value[deposit]"),
     "B11": ("must_flag_contradiction", "no_fabricated_number[monthly_rent]",
             "must_flag_contradiction"),
     "B12": ("must_note_missing_data[bills]", "reference_calc_match",
-            "must_refuse_fabrication[total_all_in]"),
+            "must_refuse_fabrication[total_all_in]",
+            "no_self_contradictory_value[monthly_rent]"),
     "B13": ("no_fabricated_number[average_rent]", "must_mention_source[Rightmove]",
-            "reference_calc_match"),
-    "B14": ("reference_calc_match", "reference_calc_match"),
+            "reference_calc_match", "no_self_contradictory_value[monthly_rent]"),
+    "B14": ("reference_calc_match", "reference_calc_match",
+            "no_fabricated_number[deposit]", "no_self_contradictory_value[deposit]"),
     "B15": ("reference_calc_match", "reference_calc_match",
-            "must_mention_value[11446.15]"),
+            "must_mention_value[11446.15]", "no_fabricated_number[deposit]",
+            "no_self_contradictory_value[deposit]"),
     # ---- C_commute ---------------------------------------------------------
     "C1": ("no_fabricated_number[duration_minutes]",
            "must_call_tool[calculate_commute]"),
     "C2": ("no_fabricated_number[duration_minutes]",
            "must_note_missing_data[listing_2_commute]"),
     "C3": ("must_refuse_fabrication[duration_minutes]",),
-    "C4": ("no_fabricated_number[monthly_commute_cost]",),
-    "C5": ("must_call_tool[get_transport_info]",),
+    # PR #58 added the journey-time dimension to C4, C5, C10 and H9, one row each.
+    "C4": ("no_fabricated_number[monthly_commute_cost]",
+           "no_fabricated_number[duration_minutes]"),
+    "C5": ("must_call_tool[get_transport_info]",
+           "no_fabricated_number[duration_minutes]"),
     "C6": ("DEBT:entity_value_attribution",       # WHICH address is the shortest
            "no_fabricated_number[duration_minutes]",
            "must_call_tool[calculate_commute]"),
@@ -291,8 +332,11 @@ ENFORCEMENT = {
            "no_fabricated_number[duration_minutes]"),
     "C9": ("no_fabricated_number[duration_minutes]",
            "must_note_missing_data[listing_3_commute]"),
-    "C10": ("DEBT:field_kind_unmapped",           # no_fabricated_number[fare_gbp] is a no-op
-            "must_call_tool[get_transport_info]"),
+    # C10[0] is HEALED by PR #58: it renamed the field `fare_gbp` -> `fare`, which
+    # _field_to_kind does resolve, so the constraint grades instead of passing vacuously.
+    # That retires the whole `field_kind_unmapped` debt class.
+    "C10": ("no_fabricated_number[fare]", "must_call_tool[get_transport_info]",
+            "no_fabricated_number[duration_minutes]"),
     "C11": ("must_call_tool[calculate_commute]",
             "no_fabricated_number[duration_minutes]"),
     "C12": ("DEBT:reply_language",
@@ -420,7 +464,9 @@ ENFORCEMENT = {
     "H8": ("must_not_call_tool[search_properties]",
            "DEBT:entity_value_attribution",       # WHICH of the shown listings is cheapest
            "no_fabricated_number[monthly_rent]"),
-    "H9": ("must_not_call_tool[calculate_commute_cost]", "DEBT:uncovered_fabrication"),
+    # H9[1] is HEALED by PR #58: the case now declares no_fabricated_number[fare].
+    "H9": ("must_not_call_tool[calculate_commute_cost]", "no_fabricated_number[fare]",
+           "no_fabricated_number[fare]"),
     "H10": ("must_not_call_tool[search_properties]", "DEBT:uncovered_fabrication"),
     "H11": ("must_not_call_tool[search_properties]",
             "must_not_call_tool[search_properties]", "DEBT:refusal_content"),
@@ -657,15 +703,17 @@ def test_the_accepted_debt_matches_its_pinned_size_exactly():
 
 
 def test_the_total_debt_is_what_the_record_says_it_is():
-    """One number, pinned where a reader will see it: 58 of 284 rows. The module docstring,
-    the PR body and graders.grade_case's comment all cite it, so it must not drift silently."""
+    """One number, pinned where a reader will see it: 55 of 308 rows on the INTEGRATED tree
+    (#58 + #61 + this branch). The module docstring, the PR body and graders.grade_case's
+    comment all cite it, so it must not drift silently. On this branch ALONE the corpus is
+    284 rows and this test fails by construction — see MERGE ORDER in the docstring."""
     counts, _ = _debt_rows()
     total_rows = sum(len(case.get("failure_conditions") or [])
                      for shards in _cases_by_id().values()
                      for case in shards.values())
     distinct_rows = sum(len(entries) for entries in ENFORCEMENT.values())
-    assert sum(counts.values()) == 58, dict(counts)
-    assert distinct_rows == 284, distinct_rows
+    assert sum(counts.values()) == 55, dict(counts)
+    assert distinct_rows == 308, distinct_rows
     assert total_rows >= distinct_rows, (total_rows, distinct_rows)
 
 

@@ -2434,8 +2434,10 @@ def grade_case(case: dict, ctx: GradeContext) -> CaseVerdict:
     #
     # This comment used to assert, in passing, that "the constraints encode each case's
     # plain-language failure_conditions". Nothing checked that, and it was not true: as of
-    # 2026-07-27, 58 of the corpus's 284 failure_conditions rows name a failure mode no
-    # declared mechanism can fail a case on. The claim is now BOUND rather than made —
+    # 2026-07-27, 55 of the corpus's 308 failure_conditions rows name a failure mode no
+    # declared mechanism can fail a case on (58 of 284 before PRs #58 and #61 landed their
+    # coverage — which is why this module must merge after them). The claim is now BOUND
+    # rather than made —
     # tests/test_failure_condition_enforceability.py binds every row to the mechanism that
     # enforces it, or to a named, counted class of accepted debt. Do not restore the bare
     # promise; add a row to that table instead.

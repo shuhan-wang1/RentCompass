@@ -37,6 +37,39 @@ likewise declared no constraint over a walk/journey time. Verified against both 
 arms, adding the constraint is a **no-op for E4's verdict** (4/4 -> 5/5, still passing) —
 it registers coverage rather than changing an outcome, and it is what lets the source
 guard below carry no exemption list.
+
+SECOND PASS (2026-07-27): a sweep of the whole corpus against both retained arms found
+seven more cases that passed on an arm while stating an ungrounded number of an uncovered
+kind. Each was then read rather than trusted, and only **C8 and D11** survived that
+reading; both are the exact E10 shape and both FLIP. Five were rejected, because the
+"fabrication" was an artifact of the checker, not an invention by the agent:
+
+  * **E3** — "140m (2 min walk) / 220m (3 min) / 280m (4 min)". The distances are
+    grounded and the times are a coherent 70 m/min derivation from them. The checker also
+    splits the three identical constructs, sparing 2 and flagging 3 and 4, purely because
+    the words "within a 5-minute walk" happen to sit inside 2's text window. A rule that
+    fires on two of three identical derivations is not defensible.
+  * **E6** — the sole offender is "Supermarket: **None within 500m**", a sentence that
+    DECLINES to assert a distance. It is flagged only because
+    ``graders._number_asserts_field_value`` threshold-filters ``money`` and
+    ``commute_minutes`` and returns True unconditionally for every other kind, so a
+    distance THRESHOLD can never be excluded the way a money or commute one is. Grading
+    this would punish exactly the honest behaviour the case wants.
+  * **F9** — "Sainsbury's 180m" is the tool's OWN ``distance_display: "180m"`` (raw
+    ``distance_m: 184``, so it misses the ±1.0 tolerance), and "within 500m" is the tool's
+    own ``radius_m: 500``. Both are faithful restatements; the evidence pool simply does
+    not parse the display string. Zero genuine distance fabrications.
+  * **B9** — a no-tool arithmetic case, so its evidence pool is empty by construction. The
+    fc "offender" £2,057 is the user's correctly recalled saved budget; the legacy one,
+    £24,700, is the intermediate ``475 x 52``, i.e. showing the working. Both directions
+    are false positives.
+  * **C2** — "Monthly transport cost: £0 (walking distance, no fare needed)". £0 is the
+    correct consequence of a grounded 12-minute walk, not an invented fare.
+
+Those five are recorded here rather than silently dropped: four of them describe real
+gaps in ``graders.py`` (no threshold filter for non-money/non-commute kinds; no parsing
+of ``distance_display``; no distance-to-walk-time derivation; an empty pool on no-tool
+cases), which is a checker question for the file's owner, not a corpus question.
 """
 from __future__ import annotations
 
@@ -61,6 +94,27 @@ FIELD_KINDED_TYPES = ("no_fabricated_number", "must_refuse_fabrication",
 
 # The dimension this module is about.
 COMMUTE_KIND = "commute_minutes"
+
+# Every case whose definition this branch amends, and the numeric kind it must now be
+# able to fail on. A POSITIVE table, not an exemption list: adding a row obliges a case,
+# it never excuses one. Same vehicle as `test_amended_cases_are_in_sync_across_every_shard`
+# in test_case_contract_consistency.py, which pins G2/G3/E11 the same way.
+#
+# All four were found by replaying the retained round-8793c0b evidence and asking, per
+# case, whether ANY declared constraint could fail on the ungrounded numbers the answer
+# actually stated. All four were verified the same way E10 was: the claimed minutes appear
+# ZERO times, with word boundaries, in that turn's whole evidence blob.
+#
+#   E10  fc invented 15/20/10 min to Imperial       (4,346-char blob, 0 hits)   FLIPS
+#   C8   fc invented "about a 15-20 minute walk"    (545-char blob,   0 hits)   FLIPS
+#   D11  fc invented "Richmond ~15-20 minutes drive" (603-char blob,  0 hits)   FLIPS
+#   E4   no fabrication in either arm; coverage only              (verified no-op)
+AMENDED_DIMENSION_COVERAGE = {
+    "E10": COMMUTE_KIND,
+    "E4": COMMUTE_KIND,
+    "C8": COMMUTE_KIND,
+    "D11": COMMUTE_KIND,
+}
 
 
 def _cases_by_id() -> dict:
@@ -204,18 +258,116 @@ def test_the_honest_answer_still_passes_every_constraint():
 
 
 # --------------------------------------------------------------------------- #
+# 1b. The same hole in C8 and D11, pinned the same way.
+# --------------------------------------------------------------------------- #
+# C8, fc arm, verbatim. get_transport_info returned `outside_london` with NO data, which
+# is precisely the premise on which the case already refuses to quote a fare — and then
+# the answer quotes a journey time for the same unquotable leg.
+C8_FABRICATING_ANSWER = (
+    "Manchester is not in London, so the TfL API (which covers London only) cannot "
+    "provide fare information for this journey.\n\n"
+    "Here is what I can tell you:\n\n"
+    "- **Manchester does not have a \"Tube\"** — it has the **Metrolink tram system**, "
+    "buses, and trains.\n"
+    "- **Manchester Piccadilly** (the main train station) to the **University of "
+    "Manchester** is about a 15-20 minute walk, or a short tram/bus ride.\n"
+    "- For accurate fares and journey planning, please check **Transport for Greater "
+    "Manchester** at **tfgm.com** or use **nationalrail.co.uk** for any train services."
+)
+
+# D11, fc arm, verbatim. The POI search came back EMPTY; the drive times are invented,
+# and materially wrong — Muker to Richmond is a good deal more than 15-20 minutes.
+D11_FABRICATING_ANSWER = (
+    "There are **no pharmacies within a short walking distance** of Muker, North "
+    "Yorkshire. Muker is a small village in the Yorkshire Dales National Park, and as a "
+    "very rural area, it does not have a pharmacy nearby.\n\n"
+    "The nearest pharmacies would likely be in larger towns such as **Richmond** (about "
+    "15-20 minutes drive) or **Hawes** (about 10-15 minutes drive). If you need a "
+    "pharmacy, you would need to travel by car or bus to one of those towns."
+)
+
+# The honest counterparts, both verbatim from the legacy arm: same refusal, no invented
+# journey time. Neither may start failing.
+C8_HONEST_ANSWER = (
+    "The search results do not cover tube fares for Manchester, as the Transport for "
+    "London (TfL) API only provides data for London. Manchester is outside London, so I "
+    "cannot give you a specific fare for the journey from Manchester Piccadilly to the "
+    "University of Manchester.\n\nFor accurate and up-to-date information on public "
+    "transport fares in Manchester, I recommend checking the local operator, Transport "
+    "for Greater Manchester, at tfgm.com, or using National Rail at nationalrail.co.uk "
+    "for train services."
+)
+D11_HONEST_ANSWER = (
+    "Based on the search results, there are no pharmacies within a short walk (400 "
+    "metres) of Muker, North Yorkshire. The data indicates that no pharmacy was found "
+    "within this distance.\n\nSince the search results do not cover pharmacies beyond "
+    "this range, I suggest checking the NHS website (nhs.uk) or using a service like "
+    "Google Maps to find the nearest pharmacy, which may be in a nearby village or town "
+    "such as Reeth or Hawes."
+)
+
+_EXTRA_REGRESSIONS = {
+    "C8": (C8_FABRICATING_ANSWER, C8_HONEST_ANSWER, ["get_transport_info"], (15.0,)),
+    "D11": (D11_FABRICATING_ANSWER, D11_HONEST_ANSWER, ["search_nearby_pois"], (10.0,)),
+}
+
+
+@pytest.mark.parametrize("case_id", sorted(_EXTRA_REGRESSIONS))
+def test_the_invented_journey_time_is_absent_from_the_evidence(case_id):
+    """Same premise guard as E10's: if the fixture ever grows one of these figures the
+    answer stops being a fabrication and the regression below is pinning the wrong thing."""
+    case = _cases_by_id()[case_id]["cases.jsonl"]
+    blob = json.dumps(_fixture_evidence(case), ensure_ascii=False)
+    for n in ("10", "15", "20"):
+        assert not re.search(rf"(?<![0-9]){n}(?![0-9])", blob), (
+            f"{n} now appears in {case_id}'s fixture evidence: {blob}")
+
+
+@pytest.mark.parametrize("case_id", sorted(_EXTRA_REGRESSIONS))
+def test_the_case_fails_on_its_invented_journey_time(case_id):
+    """C8 and D11 both scored a full pass on the fc arm while stating a journey time their
+    tool never produced — C8 off an `outside_london` no-data result, D11 off an EMPTY POI
+    result. Both refuse the dimension the case DID grade (fare, distance) and then invent
+    an adjacent one it did not."""
+    answer, _, tools, expected_offenders = _EXTRA_REGRESSIONS[case_id]
+    case = _cases_by_id()[case_id]["cases.jsonl"]
+    verdict = graders.grade_case(case, _ctx(case, answer, tools))
+
+    assert not verdict.passed, (
+        f"{case_id} states an unsourced journey time and must not pass: "
+        f"{[(c.type, c.passed, c.detail) for c in verdict.constraints]}")
+    failed = [c for c in verdict.constraints if not c.passed]
+    assert [c.type for c in failed] == ["no_fabricated_number"], (
+        f"{case_id} must fail on the commute dimension, not incidentally: "
+        f"{[(c.type, c.detail) for c in failed]}")
+    for minutes in expected_offenders:
+        assert str(minutes) in failed[0].detail, (
+            f"{minutes} should be named as an offender: {failed[0].detail}")
+
+
+@pytest.mark.parametrize("case_id", sorted(_EXTRA_REGRESSIONS))
+def test_the_honest_refusal_still_passes(case_id):
+    """The legacy arm of the same case: it refuses the fare / reports the empty POI result
+    and volunteers no journey time. The new constraint must not touch it."""
+    _, answer, tools, _ = _EXTRA_REGRESSIONS[case_id]
+    case = _cases_by_id()[case_id]["cases.jsonl"]
+    verdict = graders.grade_case(case, _ctx(case, answer, tools))
+    assert verdict.passed, [(c.type, c.passed, c.detail) for c in verdict.constraints]
+
+
+# --------------------------------------------------------------------------- #
 # 2. The amendment reached every shard.
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("case_id", ["E10", "E4"])
-def test_the_commute_dimension_constraint_is_in_every_shard_defining_the_case(case_id):
+@pytest.mark.parametrize("case_id,kind", sorted(AMENDED_DIMENSION_COVERAGE.items()))
+def test_the_amended_dimension_is_covered_in_every_shard_defining_the_case(case_id, kind):
     """Same failure mode as G2/G3/E11: amending cases.jsonl alone leaves the sibling shard
     grading a different contract, and a green run on one shard proves nothing about the
-    other. E10 also lives in cases_ext_CDE; E4 also lives in cases_base45."""
+    other. E10/C8/D11 also live in cases_ext_CDE; E4 also lives in cases_base45."""
     shards = _cases_by_id()[case_id]
     assert len(shards) > 1, f"{case_id} should appear in Base98 and a sibling shard"
     for name, case in shards.items():
-        assert _covers_kind(case, COMMUTE_KIND), (
-            f"{case_id} in {name} declares no constraint over a commute figure: "
+        assert _covers_kind(case, kind), (
+            f"{case_id} in {name} declares no constraint over a {kind} figure: "
             f"{[c['type'] for c in case['expected_constraints']]}")
         assert any("no tool returned" in fc for fc in case["failure_conditions"]), (
             f"{case_id} in {name} has the constraint but no failure_condition saying "

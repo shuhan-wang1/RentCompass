@@ -377,8 +377,22 @@ def test_the_station_reaches_the_tool_payload(monkeypatch):
 
 
 def test_the_no_fabrication_rule_covers_station_names():
-    """Backstop. The enumerated field list did not include stations, and the programmatic
-    critic validates money figures only, so nothing anywhere objected to 'Covent Garden'."""
+    """Backstop, and the record of WHY it was needed.
+
+    AT THE TIME THE DEFECT SHIPPED: the enumerated field list did not include stations, and
+    the programmatic critic validated money figures ONLY — so nothing anywhere objected to
+    'Covent Garden'.
+
+    NO LONGER TRUE, and corrected here on 2026-07-27. Station-name grounding landed:
+    ``uk_rent_agent.agent.critic`` now also runs ``station_name_claims`` /
+    ``ungrounded_station_names``, checking a name the answer asserts is a *station* against
+    the same evidence surface the prices are checked against (see §4 of that module's
+    docstring). This test remains the BACKSTOP for the prompt-side half of that fix; the
+    critic-side half is covered by tests/test_critic_price_pool_scoping.py and friends.
+
+    The stale sentence asserted nothing, so nothing failed when it went false — which is
+    precisely why it had to be corrected by hand rather than caught.
+    """
     from core import loop_prompts
 
     rules = loop_prompts.behaviour_rules().lower()

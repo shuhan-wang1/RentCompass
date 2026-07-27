@@ -332,41 +332,91 @@ def calculate_travel_details(origin_address: str, destination_address: str, mode
         'route_summary': 'No route available: TfL returned no journey for this pair.',
         'source': 'estimate',
     }
-    out.update(describe_estimate(est['minutes'], est.get('distance_km')))
+    # ``mode`` is threaded through. The calibration is fitted on TfL's fastest itineraries,
+    # i.e. public transport only (commute_basis.CALIBRATED_MODES), and up to 2.71 km the raw
+    # cycling and transit formulas agree to within LEGACY_MINUTES_TOLERANCE — so from the
+    # minutes alone nothing downstream can tell a cycling request apart from a transit one and
+    # "cycle 0.8 km" would be answered with a transit-calibrated 14 minutes. Until now the only
+    # thing preventing that was commute_basis.withdraw_uncalibrated_mode, applied in
+    # calculate_commute and therefore protecting exactly ONE of this function's callers. The
+    # producer knows the mode; passing it means the calibration can never be applied to a mode
+    # it was not fitted on, whoever calls. withdraw_uncalibrated_mode stays as a second line of
+    # defence for callers that pass their own payloads in.
+    out.update(describe_estimate(est['minutes'], est.get('distance_km'), mode=mode))
+    return out
+
+
+def calculate_travel_basis(origin_address: str, destination_address: str,
+                           mode: str = "transit") -> dict | None:
+    """CACHED, basis-aware travel payload — the single producer both commute tools read.
+
+    Same shape as ``calculate_travel_details`` (it IS ``calculate_travel_details``, memoised),
+    so ``duration_minutes`` is populated only for a real TfL itinerary and a straight-line guess
+    arrives in ``estimated_duration_minutes`` with its range, model, basis and caveat.
+
+    WHY THIS EXISTS. ``calculate_travel_time`` returns a bare int and silently falls back to the
+    raw straight-line formula; ``tools/calculate_commute_cost.py`` put that int into
+    ``commute.duration_minutes`` and derived ``duration_category`` / ``is_acceptable`` / a
+    monthly-hours figure from it. For a 0.47 km pair that meant ``calculate_commute`` answering
+    "estimated 11 minutes (9-14), straight-line basis" while ``calculate_commute_cost`` stated
+    "2 minutes" as fact — two numbers for one pair inside one turn, the wrong one undisclosed.
+    The reason it was not simply switched to ``calculate_travel_details`` was that
+    ``calculate_travel_time`` is the CACHED entry point and the commute path is latency-gated.
+    So the cache moves here instead of the honesty moving out: one cached producer, one number.
+
+    Returns None only when the addresses could not be geocoded, i.e. a real failure.
+    """
+    if not origin_address or not destination_address:
+        return None
+    origin_n = _normalize_address_for_routing(origin_address)
+    dest_n = _normalize_address_for_routing(destination_address)
+    cache_key = create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode)
+    cached_result = get_from_cache(cache_key)
+    if cached_result is not None:
+        print(f"  -> [Cache HIT] Travel basis for: {origin_address} ({mode})")
+        return cached_result
+
+    out = calculate_travel_details(origin_address, destination_address, mode)
+    if out is None:
+        return None
+    set_to_cache(cache_key, out)
     return out
 
 
 def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
-    """Travel time in minutes via TfL Journey Planner (London public transport),
-    falling back to a straight-line estimate when TfL has no route. Free, no Google."""
-    if not origin_address or not destination_address:
-        return None
+    """BARE minutes for internal thresholding only — filters, sorts, fare heuristics.
 
-    origin_normalized = _normalize_address_for_routing(origin_address)
-    destination_normalized = _normalize_address_for_routing(destination_address)
+    A bare int carries no basis, so NOTHING that shows a figure to a user may call this: use
+    ``calculate_travel_basis`` and quote the basis with the number. The docstring is the weaker
+    half of that rule; ``test_no_user_facing_caller_takes_a_bare_minutes_figure`` is the guard.
 
-    cache_key = create_cache_key('calculate_travel_time', origin_normalized, destination_normalized, mode)
-    cached_result = get_from_cache(cache_key)
-    if cached_result is not None:
-        print(f"  -> [Cache HIT] Travel time for: {origin_address} ({mode})")
-        return cached_result
+    It is now a thin view over ``calculate_travel_basis``, which is why the two commute tools
+    can no longer disagree. On the estimate branch it returns ``best_estimate_minutes`` — the
+    CALIBRATED figure inside the fitted domain, the raw formula outside it — the same split
+    ``describe_estimate`` publishes and the same one ``commute.coord_commute_minutes`` already
+    used for listing annotation. Before this change a 0.47 km pair was filtered at 2 minutes by
+    this function and annotated at 11 by ``coord_commute_minutes``, inside one search.
 
-    origin_coords = _get_coordinates(origin_normalized)
-    dest_coords = _get_coordinates(destination_normalized)
-    if not origin_coords or not dest_coords:
+    Unlike the basis payload this never withholds: a filter that drops a listing because the
+    honest answer was "no number" would be a silent, invisible failure, whereas a thresholding
+    figure is never asserted to anyone. Refusal belongs to the path that PUBLISHES the number.
+    """
+    from core.commute_basis import best_estimate_minutes, is_measured
+
+    details = calculate_travel_basis(origin_address, destination_address, mode)
+    if details is None:
         print(f"  [WARN] Could not geocode origin/destination for travel time")
         return None
 
-    minutes = _tfl_travel_time(origin_coords, dest_coords, mode)
-    if minutes is not None:
-        print(f"  [OK] [TfL] {origin_address} -> {destination_normalized}: {minutes} mins ({mode})")
-    else:
-        minutes = estimate_travel_time_simple(origin_normalized, destination_normalized, mode)
-        if minutes is not None:
-            print(f"  [OK] [estimate] {origin_address} -> {destination_normalized}: {minutes} mins (TfL had no route)")
+    measured = details.get('duration_minutes')
+    if measured is not None and is_measured(details.get('source')):
+        print(f"  [OK] [TfL] {origin_address} -> {destination_address}: {measured} mins ({mode})")
+        return int(measured)
 
+    minutes = best_estimate_minutes(details.get('straight_line_km'), mode)
     if minutes is not None:
-        set_to_cache(cache_key, minutes)
+        print(f"  [OK] [estimate] {origin_address} -> {destination_address}: {minutes} mins "
+              f"(TfL had no route; thresholding figure, not a quotable journey time)")
     return minutes
 
 def find_nearby_places(address: str, amenities_of_interest: list[str], radius: int = 1500) -> dict:
@@ -591,12 +641,17 @@ def straight_line_travel_estimate(origin_address: str, destination_address: str,
 
 
 def estimate_travel_time_simple(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
-    """Minutes-only view of ``straight_line_travel_estimate`` for the filtering callers.
+    """RAW, UNCALIBRATED minutes from ``straight_line_travel_estimate``. No in-repo callers.
 
-    Kept because ``calculate_travel_time`` and the search/ranking paths want a bare int for
-    sorting and thresholds. Anything that SHOWS the figure to a user must go through
-    ``straight_line_travel_estimate`` + ``core.commute_basis`` instead, so the basis travels
-    with the number.
+    This is the pre-calibration formula's output — the one that reads 2 minutes for a journey
+    TfL measures at 12. ``calculate_travel_time`` used to return exactly this and no longer
+    does: a bare thresholding figure now comes from ``commute_basis.best_estimate_minutes``,
+    which is calibrated inside the fitted domain. Kept only as the named reference for what the
+    raw formula says (``scripts/sample_commute_calibration.py`` documents it as such).
+
+    DO NOT wire this back into a product path. Nothing that reaches a user may take minutes
+    from here; ``test_no_user_facing_caller_takes_a_bare_minutes_figure`` enforces that in
+    source rather than leaving it as a warning in a docstring.
     """
     est = straight_line_travel_estimate(origin_address, destination_address, mode)
     return None if est is None else est['minutes']

@@ -45,6 +45,11 @@ from collections import Counter
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command, Send
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
+# THE shared dimension vocabulary — one table, both arches (see core/dimensions.py). Aliased
+# because `dimensions` is a common local name in this module. Imports nothing from either
+# arch, so it can never be part of an import cycle.
+from core import dimensions as _dimensions
 from uk_rent_agent.agent.state import AgentState, create_initial_state
 from uk_rent_agent.agent.contracts import ToolInvocation
 from uk_rent_agent.agent.critic import (
@@ -2909,41 +2914,34 @@ def _note_legacy_write_dispatch(audit_key: str) -> None:
 # evidence). READ dimensions only: `remember` is the sole write tool and is not reachable here.
 _PLAN_ORIGIN_DIMENSIONS = "dimension_followup"
 
-# dimension -> (cue words, tools that ALREADY satisfy it, the tool to run to fetch it).
-# Mirrors agent_loop._DIMENSION_CUES so the two arches recognise the same user-visible
-# dimensions; CJK cues match the raw text, ascii cues the lowercased text.
-_SEARCH_DIMENSION_CUES = (
-    ("safety",
-     ("治安", "安全", "犯罪", "crime", "safety", "safe", "unsafe", "police"),
-     ("check_safety",),
-     "check_safety"),
-    ("commute",
-     ("通勤", "commute", "travel time", "how long", "how far"),
-     ("calculate_commute", "calculate_commute_cost", "check_transport_cost",
-      "get_transport_info"),
-     "calculate_commute"),
-    ("nearby",
-     ("超市", "便利店", "餐厅", "药店", "附近", "周边", "设施",
-      "supermarket", "grocery", "nearby", "amenit", "restaurant", "pharmacy", "poi"),
-     ("search_nearby_pois",),
-     "search_nearby_pois"),
-)
+# The cue table is NOT here. It is core.dimensions.DIMENSION_CUES, shared with the fc arch.
+#
+# This module used to carry its own copy, `_SEARCH_DIMENSION_CUES`, documented as "mirrors
+# agent_loop._DIMENSION_CUES". By 2026-07-27 it did not: six cues of drift had accumulated
+# (`safe`; `travel time`/`how long`/`how far`; `药店`/`pharmacy`), all on this side, so the two
+# arches disagreed about what the user had asked for — the exact failure the copy was written
+# to prevent. The merged table takes the union; see the DRIFT RECORD in core/dimensions.py.
+#
+# What stays here is legacy's CONSUMER, which is genuinely its own: it turns an unserved cued
+# dimension into a FETCH through the existing wave engine, where fc turns the same fact into
+# an honest "not done yet" line. Same nouns, different verbs — that separation is deliberate.
+#
+# `tool to run` is not a fourth column any more either: it is dimensions.canonical_tool(dim)
+# (== tools[0]), which is what this table's fourth column always held. A separate
+# dimension->tool mapping is how the drift started.
 
 
 def _cued_search_dimensions(message: str, executed_tools) -> list:
     """The READ dimensions this message explicitly asks about that NO executed tool satisfies,
     as [(dimension, tool_to_run)] in table order. Deterministic and cue-based — the same shape
     as agent_loop._missing_requested_dimension_lines, except this drives a FETCH rather than
-    an apology."""
-    msg = message or ""
-    low = msg.lower()
+    an apology, and both now read the SAME shared table via the SAME matcher."""
     done = set(executed_tools or ())
     out = []
-    for dim, cues, satisfying, tool in _SEARCH_DIMENSION_CUES:
-        cued = any((cue in low) if cue.isascii() else (cue in msg) for cue in cues)
-        if not cued or any(t in done for t in satisfying):
+    for dim, cues, satisfying in _dimensions.DIMENSION_CUES:
+        if not _dimensions.cues_hit(cues, message) or any(t in done for t in satisfying):
             continue
-        out.append((dim, tool))
+        out.append((dim, _dimensions.canonical_tool(dim)))
     return out
 
 
@@ -4160,11 +4158,28 @@ def _format_commute_cost(data):
 
     commute = data.get('commute', {})
     if commute:
-        dur = commute.get('duration_minutes', 'N/A')
-        cat = commute.get('duration_category', '')
-        parts += [f"### \u23f1\ufe0f Commute Time",
-                  f"- **Duration:** {dur} minutes ({cat})",
-                  f"- **Daily round trip:** ~{dur * 2 if isinstance(dur, (int, float)) else 'N/A'} minutes\n"]
+        # This card is the ONE deterministic renderer of calculate_commute_cost's payload, so
+        # it has to honour the same basis contract the tool now returns: duration_minutes is
+        # populated only for a real TfL journey plan, and is None when the figure came from the
+        # straight-line estimator. Rendering that None as "None minutes" \u2014 or worse, printing
+        # an estimate under a heading that reads as measured \u2014 is the same defect one layer out.
+        dur = commute.get('duration_minutes')
+        cat = commute.get('duration_category') or ''
+        parts.append("### \u23f1\ufe0f Commute Time")
+        if isinstance(dur, (int, float)):
+            parts += [f"- **Duration:** {dur} minutes" + (f" ({cat})" if cat else ""),
+                      f"- **Daily round trip:** ~{dur * 2} minutes\n"]
+        else:
+            low = commute.get('estimate_low_minutes')
+            high = commute.get('estimate_high_minutes')
+            if low is not None and high is not None:
+                parts += [f"- **Estimated duration:** {low}-{high} minutes "
+                          f"(straight-line estimate, not a journey plan)",
+                          f"- **Daily round trip:** ~{low * 2}-{high * 2} minutes\n"]
+            else:
+                parts += ["- **Duration:** not established \u2014 no journey plan was available "
+                          "for this pair and the straight-line figure is not trustworthy at "
+                          "this distance\n"]
 
     tc = data.get('transport_cost', {})
     if tc and 'monthly_cost' in tc:

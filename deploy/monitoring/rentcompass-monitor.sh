@@ -18,6 +18,32 @@
 #   * ONLY anomalies are written to stdout, prefixed with a systemd log-level
 #     "<N>" token (3=err, 4=warning), so under the systemd service they land in
 #     the journal at the right priority and OK runs stay silent.
+#   * Every status line STARTS with `src=<first 12 hex of this file's sha256>`.
+#     See PROVENANCE below — that token is what makes install drift visible.
+#
+# PROVENANCE, and the defect it closes. This file exists in more than one place, and
+# on 2026-07-27 all three copies were DIFFERENT:
+#
+#   deploy/monitoring/rentcompass-monitor.sh   in git — nominally the source of truth
+#   /usr/local/bin/rentcompass-monitor.sh      the deliberate stable copy the timer runs
+#   $REPO/deploy/monitoring/…                  the pinned production tree, 6 days behind
+#
+# The split is INTENTIONAL: the unit's own ExecStart names the pinned tree, and an
+# override.conf redirects it to /usr/local/bin precisely so a frozen deploy pin cannot
+# hold the monitor hostage. What was NOT intentional is that nothing compared them, so
+# "which of these three is actually guarding production" had no answer you could read
+# anywhere. A comment saying "keep these in sync" is the thing this project has learned
+# to distrust, so instead:
+#
+#   * this script hashes ITSELF (`sha256sum "$0"`) and puts the result in every status
+#     line, so /var/log/rentcompass/monitor.log records which code produced each line;
+#   * the repo commits the expected hash to rentcompass-monitor.sha256, and a test
+#     (tests/test_monitor_install_provenance.py) keeps that file true of the script;
+#   * deploy/monitoring/check_install_drift.sh compares repo ↔ manifest ↔ installed copy
+#     ↔ the ExecStart systemd has actually resolved, and exits non-zero on any mismatch.
+#
+# Divergence is therefore visible in an artifact the operator already tails, instead of
+# being invisible until a rebuild silently reverts production to an older monitor.
 #
 # All paths/thresholds are env-overridable (see below) for manual dry-runs, e.g.
 #   MON_LOG=/tmp/m.log MON_STATE=/tmp/m.state MON_LOCK=/tmp/m.lock \
@@ -46,6 +72,24 @@ DISK_USE_MAX_PCT="${MON_DISK_USE_MAX_PCT:-90}"
 WAL_MAX_MB="${MON_WAL_MAX_MB:-200}"
 LOG_SCAN_WINDOW="${MON_LOG_SCAN_WINDOW:-6m}"
 
+# --- self-provenance (see PROVENANCE in the header) -------------------------
+# Cheap (one sha256 of a ~22KB file per run), side-effect-free, and it touches neither
+# agent state nor canary telemetry, so it is safe under the constraint that makes the
+# rest of this script safe. It must NEVER be able to fail a run: if $0 is unreadable or
+# sha256sum is missing we report `unknown` and carry on, because a monitor that dies
+# while introspecting itself is strictly worse than one that cannot name its own build.
+SELF_SHA="$(sha256sum "$0" 2>/dev/null | awk '{print substr($1,1,12)}')"
+[ -n "${SELF_SHA:-}" ] || SELF_SHA="unknown"
+
+# Optional DECLARED intent, same idiom as MON_EXPECTED_PUBLIC_ARCH below: if the
+# installer tells us which build it installed, a mismatch is an error. Deliberately
+# INERT when unset, which is today's state — so this cannot add a second alert to a
+# steady state that is meant to sit at exactly one. It is NOT compared against
+# $REPO/deploy/monitoring/, and that omission is the whole point: the pinned production
+# tree is deliberately older than the installed copy, so keying on it would page every
+# five minutes about the intended arrangement. Only an explicit declaration counts.
+EXPECTED_SRC_SHA="${MON_EXPECTED_SRC_SHA:-}"
+
 # --- single-instance guard (flock; prevents overlapping 5-min runs) ---------
 exec 9>"$LOCK" 2>/dev/null || exit 0
 flock -n 9 || exit 0
@@ -53,7 +97,10 @@ flock -n 9 || exit 0
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 ts="$(date -Is)"
 alerts=0
-summary=""
+# src= leads the summary so the running build is the first thing on every status line,
+# including on runs that alert. `tail -1 monitor.log` now answers "what is guarding
+# production right now" without shelling out to compare files.
+summary="src=$SELF_SHA "
 
 emit_alert() { # <priority> <message...>
   local pri="$1"; shift
@@ -68,6 +115,20 @@ if [ -r "$STATE" ]; then
   while read -r k v; do [ -n "${k:-}" ] && PREV["$k"]="$v"; done < "$STATE"
 fi
 declare -A NOW
+
+# 0) INSTALL DRIFT: is the copy running the copy the installer declared? -----
+# Fires only when MON_EXPECTED_SRC_SHA is declared (see above), and then only once per
+# state change, because a wrong build is a standing condition and re-reporting a standing
+# condition every five minutes is how the 2026-07-26 public-arch alert trained everyone
+# to ignore it. sev3: an unexpected monitor build means every OTHER check in this file is
+# of unknown vintage, which is exactly the failure that let a stale copy scream a false
+# alarm 365 times after the fc cutover.
+NOW["src_sha"]="$SELF_SHA"
+if [ -n "$EXPECTED_SRC_SHA" ] && [ "$SELF_SHA" != "unknown" ] \
+   && [ "${EXPECTED_SRC_SHA:0:12}" != "$SELF_SHA" ] \
+   && [ "${PREV[src_sha]:-}" != "$SELF_SHA" ]; then
+  emit_alert 3 "monitor build drift: running src=$SELF_SHA but MON_EXPECTED_SRC_SHA=${EXPECTED_SRC_SHA:0:12} — reinstall from deploy/monitoring (see check_install_drift.sh)"
+fi
 
 # --- probe a /health endpoint: echoes "code arch version" -------------------
 probe() {

@@ -90,6 +90,9 @@ DEFAULT_TOLERANCE = 1.0  # matches the critic's rounding floor
 # denomination and every other unit is converted into it before comparison.
 MILE_TO_M = 1609.344
 KM_TO_M = 1000.0
+# Tenant Fees Act 2019: the tenancy deposit cap steps from five weeks' rent to six when
+# the ANNUAL rent reaches this figure. Inclusive — exactly £50,000 is already six weeks.
+DEPOSIT_CAP_THRESHOLD_ANNUAL_GBP = 50_000.0
 # Numbers of these types are treated as "monetary" for the money-grounded rate.
 MONEY_FIELDS = {
     "monthly_rent", "weekly_rent", "rent", "deposit", "total_move_in",
@@ -429,23 +432,65 @@ def _listings_from_evidence(evidence: List[dict]) -> List[dict]:
     return out
 
 
+def _deposit_cap_weeks(annual_rent: float) -> float:
+    """Weeks of rent a tenancy deposit is capped at, from the ANNUAL rent.
+
+    Tenant Fees Act 2019: five weeks, rising to six when the annual rent is £50,000 or
+    more. The threshold is INCLUSIVE — exactly £50,000 is six weeks.
+
+    Computed here, in the grader, from pure arithmetic. `app/core/tenancy_reference.py`
+    holds the product's implementation of the same statute and is NOT imported: the
+    grader importing product code has been granted exactly once, by name, for
+    ``claims_no_retrieval``, and an evaluator that asks the system under test what the
+    right answer is has stopped being an evaluator.
+    """
+    return 6.0 if annual_rent >= DEPOSIT_CAP_THRESHOLD_ANNUAL_GBP else 5.0
+
+
 def _money_derivations(b: float) -> set:
     """Every sanctioned UK figure derivable from a single base amount ``b``.
 
     ``b`` may be quoted weekly OR monthly (free text rarely disambiguates), so both
     readings are expanded. Covers the exact formulas in ``benchmark/README.md``:
-    weekly↔monthly conversion, the 5-week / 6-week statutory deposit caps, and the
+    weekly↔monthly conversion, the statutory deposit cap, and the
     ``first_month_rent + deposit`` total move-in cost. These are all arithmetically
     valid, so figures matching any of them count as GROUNDED (not fabricated).
+
+    THE DEPOSIT MULTIPLE IS NOT A CHOICE. This set used to contain BOTH ``wk * 5.0`` and
+    ``wk * 6.0``, so whichever cap the model applied was "derivable" and therefore
+    supported. The statute does not offer two answers: it offers one, selected by the
+    annual rent. B7 asks about £4,500 pcm — £54,000 a year, six weeks, £6,230.77 — and
+    shipped the five-week figure £5,192.31, which ``no_fabricated_number[deposit]``
+    called grounded. Listing both multiples made the constraint unable to detect the one
+    error the statute makes possible.
+
+    So the multiple is COMPUTED per reading, from that reading's own annual rent:
+
+        b read as MONTHLY: annual = b × 12,  deposit = (b × 12/52) × weeks(annual)
+        b read as WEEKLY:  annual = b × 52,  deposit = b × weeks(annual)
+
+    Worked, against the two cases that pin it:
+
+        B7  £4,500 pcm -> annual £54,000 >= £50,000 -> 6 weeks
+            weekly = 4500 × 12/52 = £1,038.4615…;  × 6 = £6,230.77   (£5,192.31 is NOT
+            derivable: it is the five-week reading of a rent that is over the line)
+        B4  £1,500 pcm -> annual £18,000 <  £50,000 -> 5 weeks
+            weekly = 1500 × 12/52 =   £346.1538…;  × 5 = £1,730.77   (£2,076.92 is NOT
+            derivable: it is the six-week reading of a rent that is under the line)
+
+    Both readings are still expanded, because free text still does not disambiguate
+    weekly from monthly — what is no longer expanded is both MULTIPLES for one reading.
     """
     wk = b * MONTH_TO_WEEK     # b read as monthly -> weekly
     mo = b * WEEK_TO_MONTH     # b read as weekly  -> monthly
+    weeks_if_monthly = _deposit_cap_weeks(b * 12.0)
+    weeks_if_weekly = _deposit_cap_weeks(b * 52.0)
     vals = {
         b, wk, mo,
-        b * 5.0, b * 6.0,      # b read as weekly -> 5/6-week deposit
-        wk * 5.0, wk * 6.0,    # b read as monthly -> 5/6-week deposit
-        b + wk * 5.0,          # b monthly: first month + 5-week deposit (move-in)
-        mo + b * 5.0,          # b weekly: first month + 5-week deposit (move-in)
+        b * weeks_if_weekly,       # b read as weekly  -> statutory deposit
+        wk * weeks_if_monthly,     # b read as monthly -> statutory deposit
+        b + wk * weeks_if_monthly,  # b monthly: first month + deposit (move-in total)
+        mo + b * weeks_if_weekly,   # b weekly:  first month + deposit (move-in total)
     }
     return {round(v, 2) for v in vals}
 

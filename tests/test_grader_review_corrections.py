@@ -13,6 +13,9 @@ read as a preference. Every assertion fails against
      ANY subject satisfied it for ANY field.
   4. `"no properties"` survived in `_MISSING_MARKERS` — the same domain-literal class as
      the `"no supermarkets"` removed for making D5 and D11 disagree.
+  6. Both the 5-week and the 6-week deposit cap were listed as derivable, so whichever
+     one the model applied was "supported" — B7 shipped £5,192.31 where the statute
+     gives £6,230.77 and `no_fabricated_number` saw nothing wrong.
 """
 from __future__ import annotations
 
@@ -374,3 +377,179 @@ def test_removing_the_literal_does_not_change_the_verdict_it_used_to_carry():
               "35 minutes of Gower Street.")
     assert _noted("listings", answer, tools=("search_properties",)).passed
     assert _noted("within_budget_listings", answer, tools=("search_properties",)).passed
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 6 — only the STATUTORILY CORRECT deposit multiple is derivable
+# ══════════════════════════════════════════════════════════════════════════════
+# Tenant Fees Act 2019: five weeks' rent, rising to six when the ANNUAL rent is £50,000
+# or more (inclusive). Listing both multiples as derivable made whichever one the model
+# applied "supported", which is the whole defect.
+B7_ANSWER = (
+    "In the UK, the standard deposit for a rented property is typically capped at "
+    "**5 weeks' rent** (for properties with an annual rent under £50,000). Let me "
+    "calculate that for you.\n\nFor a flat at **£4,500 per month**:\n\n"
+    "- Monthly rent: £4,500\n"
+    "- Weekly rent: £4,500 x 12 / 52 = **£1,038.46 per week**\n"
+    "- Maximum deposit (5 weeks): £1,038.46 x 5 = **£5,192.31**\n\n"
+    "So the deposit would be up to **approximately £5,192**, which is the legal maximum "
+    "under the Tenant Fees Act 2019."
+)
+B7_QUERY = "For a £4,500 per month flat, how much is the deposit?"
+
+
+def _money_status(answer, user_texts, evidence=None):
+    g = graders.grade_grounding(_ctx(answer, evidence, tools=(),
+                                     user_texts=list(user_texts)))
+    return {c.value: c.status for c in g.claims if c.kind == "money"}
+
+
+def test_the_wrong_cap_is_no_longer_derivable_and_the_right_one_is():
+    """The arithmetic, written out so it can be recomputed by hand.
+
+        B7: £4,500 pcm -> annual 4500 × 12 = £54,000 >= £50,000 -> 6 weeks
+            weekly  = 4500 × 12/52 = 1038.4615384…
+            deposit = 1038.4615384… × 6 = 6230.769230… -> £6,230.77   DERIVABLE
+            the five-week reading   × 5 = 5192.307692… -> £5,192.31   NOT DERIVABLE
+    """
+    assert round(4500 * 12 / 52 * 6, 2) == 6230.77
+    assert round(4500 * 12 / 52 * 5, 2) == 5192.31
+    d = graders._money_derivations(4500.0)
+    assert 6230.77 in d, sorted(d)
+    assert 5192.31 not in d, sorted(d)
+
+
+def test_the_five_week_cap_is_still_right_below_the_line():
+    """The fix must not overshoot into "six weeks always".
+
+        B4: £1,500 pcm -> annual 1500 × 12 = £18,000 < £50,000 -> 5 weeks
+            weekly  = 1500 × 12/52 = 346.1538461…
+            deposit =  346.1538461… × 5 = 1730.769230… -> £1,730.77   DERIVABLE
+            the six-week reading    × 6 = 2076.923076… -> £2,076.92   NOT DERIVABLE
+    """
+    assert round(1500 * 12 / 52 * 5, 2) == 1730.77
+    assert round(1500 * 12 / 52 * 6, 2) == 2076.92
+    d = graders._money_derivations(1500.0)
+    assert 1730.77 in d, sorted(d)
+    assert 2076.92 not in d, sorted(d)
+
+
+def test_b7s_shipped_figure_stops_being_supported():
+    """THE regression pin, on B7's literal answer text from the retained round. £5,192.31
+    was classified `grounded` by mainline 4f410ab — a wrong statutory figure the grader
+    vouched for."""
+    st = _money_status(B7_ANSWER, [B7_QUERY])
+    assert st[5192.31] == "unsupported", st
+    assert st[4500.0] == "grounded", st        # the rent itself is still fine
+    assert st[1038.46] == "grounded", st       # so is the correct weekly conversion
+
+
+def test_no_fabricated_number_now_catches_an_asserted_wrong_cap():
+    """The constraint-level effect, on a plainly ASSERTED figure. (B7's own wording
+    hedges — see `test_b7s_own_wording_is_spared_by_the_pre_existing_hedge_rule` — so the
+    assertion is pinned separately from the grounding.)"""
+    answer = ("For a flat at £4,500 per month the weekly rent is £1,038.46, so the "
+              "deposit is £5,192.31.")
+    con = {"type": "no_fabricated_number", "field": "deposit"}
+    r = graders.CONSTRAINT_CHECKERS["no_fabricated_number"](
+        con, _ctx(answer, [], tools=(), user_texts=[B7_QUERY]))
+    assert not r.passed, r.detail
+    assert "5192.31" in r.detail, r.detail
+
+
+def test_the_statutorily_correct_answer_passes_the_same_constraint():
+    """Both directions. The answer that applies the statute correctly must be clean."""
+    answer = ("For a flat at £4,500 per month the annual rent is £54,000, so the cap is "
+              "six weeks: £1,038.46 x 6 = £6,230.77.")
+    con = {"type": "no_fabricated_number", "field": "deposit"}
+    r = graders.CONSTRAINT_CHECKERS["no_fabricated_number"](
+        con, _ctx(answer, [], tools=(), user_texts=[B7_QUERY]))
+    assert r.passed, r.detail
+
+
+def test_b7s_own_wording_is_spared_by_the_pre_existing_hedge_rule():
+    """Honest accounting, pinned so it cannot rot silently. B7's answer writes the wrong
+    figure twice, and BOTH occurrences fall inside the 40-character lookahead of
+    "So the deposit would be up to **approximately £5,192**". "up to" / "would be" /
+    "approximately" are `_NONASSERTION_MARKERS`, so `_number_asserts_field_value` reports
+    the figure as hedged and `_field_number_offenders` spares it.
+
+    That is the 2026-07-23 labelled-exception ruling doing what it was built to do, in a
+    place where the window happens to reach across a sentence boundary. It is NOT part of
+    this item and is not changed here — but it is the reason B7's OWN text still passes
+    `no_fabricated_number` even though its figure is now correctly UNSUPPORTED."""
+    assert not graders._number_asserts_field_value(B7_ANSWER, 5192.31, "money")
+    con = {"type": "no_fabricated_number", "field": "deposit"}
+    r = graders.CONSTRAINT_CHECKERS["no_fabricated_number"](
+        con, _ctx(B7_ANSWER, [], tools=(), user_texts=[B7_QUERY]))
+    assert r.passed, r.detail
+    # …but the grounding metric, which the hedge rule does not touch, now tells the truth:
+    assert _money_status(B7_ANSWER, [B7_QUERY])[5192.31] == "unsupported"
+
+
+@pytest.mark.parametrize("annual,weeks", [
+    (49_999.99, 5.0),
+    (50_000.00, 6.0),   # inclusive
+    (50_000.01, 6.0),
+    (18_000.00, 5.0),   # B4
+    (54_000.00, 6.0),   # B7
+    (50_400.00, 6.0),   # B10 (£4,200 pcm)
+    (52_000.00, 6.0),   # B14 (£1,000 pw)
+])
+def test_the_threshold_is_inclusive_at_fifty_thousand(annual, weeks):
+    assert graders._deposit_cap_weeks(annual) == weeks
+
+
+@pytest.mark.parametrize("monthly,annual,weeks,right,wrong", [
+    (4500, 54_000, 6, 6230.77, 5192.31),   # B7
+    (4200, 50_400, 6, 5815.38, 4846.15),   # B10 — £400 over the line
+    (1500, 18_000, 5, 1730.77, 2076.92),   # B4  — under the line
+])
+def test_every_monthly_rent_gets_exactly_one_derivable_deposit(monthly, annual, weeks,
+                                                               right, wrong):
+    assert monthly * 12 == annual
+    assert graders._deposit_cap_weeks(annual) == weeks
+    assert round(monthly * 12 / 52 * weeks, 2) == right
+    d = graders._money_derivations(float(monthly))
+    assert right in d
+    assert wrong not in d
+
+
+def test_a_weekly_base_is_capped_on_its_own_annual_rent():
+    """B14: "the rent is £1,000 a week" -> annual £52,000 -> six weeks -> £6,000. The
+    five-week reading £5,000 is the trap and must not be derivable from the WEEKLY
+    reading of 1000."""
+    d = graders._money_derivations(1000.0)
+    assert 1000 * 52 == 52_000 and graders._deposit_cap_weeks(52_000) == 6
+    assert 6000.0 in d
+    assert 5000.0 not in d
+
+
+def test_the_grader_does_not_import_the_products_statute():
+    """A grader that asks the system under test what the right answer is has stopped
+    being an evaluator. The one standing exception is `claims_no_retrieval`, by name."""
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(graders))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module)
+    # AST, not a substring scan: the module's own PROSE names `tenancy_reference` in
+    # order to say it is not imported, and a grep-based guard would fail on the comment
+    # that documents it.
+    #
+    # `uk_rent_agent.agent.critic` is THE one standing exception, granted by name so the
+    # `claims_no_retrieval` cues cannot drift between runtime repair and eval judgement.
+    # It is allowlisted here as a single literal, so a second product import — including
+    # a well-meaning `from app.core.tenancy_reference import deposit_cap` to "avoid
+    # duplicating the statute" — fails this test instead of quietly setting a precedent.
+    ALLOWED = {"uk_rent_agent.agent.critic"}
+    offenders = sorted(m for m in imported
+                       if (m.split(".")[0] in {"app", "src", "uk_rent_agent"}
+                           or "tenancy_reference" in m)
+                       and m not in ALLOWED)
+    assert offenders == [], offenders

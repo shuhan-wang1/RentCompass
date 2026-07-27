@@ -20,6 +20,11 @@ Public API
     build_turn_snapshot(*, turn_id, persistent_state, context_revision=0) -> dict
     snapshot_to_session_patch(snapshot) -> dict
     render_recommended_index(registry, max_items=200) -> str
+    detect_history_conflicts(history, current_message="") -> list[dict]
+    render_history_conflicts(conflicts) -> str
+    conflict_question(conflicts, reply_language="en") -> str
+    history_conflict_decision(history, current_message="",
+                              reply_language="en") -> dict | None
     assemble(*, user_message, history, memory_block="", has_property_context=False,
              rolling_summary=None, token_budget=6000) -> str
     assemble_messages(*, user_message, history, memory_block="", context_block=None,
@@ -33,6 +38,7 @@ Public API
 from __future__ import annotations
 
 import math
+import re
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional
 
@@ -261,6 +267,339 @@ def _truncate_chars_to_cap(text: str, token_cap: float) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Cross-history contradiction detection (benchmark G11)
+# ---------------------------------------------------------------------------
+#
+# Measured on the 8793c0b internal round: history held "My absolute max is £1200 per
+# month." and, two turns later, "My budget is £1200 per week, by the way." The answer
+# silently adopted the later one — "within your £1,200/week budget" — with no detection,
+# no flag and no question. £1200/week is ~£5,200/month: a 4.3x difference, so the answer
+# was searching against a figure the user may never have meant.
+#
+# THE UPDATE-vs-CONTRADICTION RULE. A user is allowed to change their mind, and treating
+# every revision as a conflict would be worse than the bug, so a later statement is read
+# as a legitimate UPDATE (no flag) when EITHER:
+#
+#   (1) it carries an explicit revision marker ("actually", "instead", "make it",
+#       "I meant", 「改成」…) — the user announced the change, so the later value wins; or
+#   (2) it restates the field in the SAME unit with a different value — re-stating a
+#       quantity in its own unit is the normal way to move a number, so the newer value
+#       simply wins ("£1200/month" then "£1500/month" is a revision, not a conflict).
+#
+# Only when neither holds do we look for a MUTUAL INCONSISTENCY — a pair that cannot
+# both be true and that a revision does not explain:
+#
+#   (U) unit_ambiguity      — same field, IDENTICAL value, different period unit. The
+#                             number was not revised at all, only the unit changed, so
+#                             which was meant is genuinely unknown. This is G11.
+#   (M) incompatible_magnitude — same field, different period units whose monthly-
+#                             normalised amounts differ by >= 1.5x. A cross-unit restatement
+#                             that lands near the original ("£1200/month" then "£280/week")
+#                             is a consistent refinement and is NOT flagged.
+#   (A) absolute_violated   — the earlier statement was framed as an ABSOLUTE ceiling
+#                             ("absolute max", "no more than", 「最多」) and the later
+#                             amount exceeds it. An absolute is a claim about all future
+#                             values, so a later value breaking it is inconsistent with
+#                             it rather than a refinement of it — unless the user said
+#                             they were changing it, which is case (1).
+#
+# A field stated once never conflicts; an identical restatement never conflicts.
+
+# Period units and the factor that normalises an amount to "per month" for comparison.
+_PERIOD_CUES = (
+    ("week", ("per week", "a week", "/week", "/wk", "per wk", "pw", "p/w", "weekly")),
+    ("month", ("per month", "a month", "/month", "/mo", "per mo", "pcm", "p/m", "pm",
+               "monthly")),
+    ("year", ("per year", "a year", "/year", "/yr", "per yr", "per annum", "pa",
+              "annually", "yearly")),
+)
+# Chinese puts the period BEFORE the amount (「每月1200镑」), so these are matched by a
+# backward scan. Kept separate from the English cues on purpose: a backward scan with
+# English cues would let "£1200 per month and £800" read "per month" onto the 800.
+_PERIOD_CUES_ZH = (
+    ("week", ("每周", "一周", "每星期", "每個星期")),
+    ("month", ("每月", "一个月", "每個月", "每个月", "月租")),
+    ("year", ("每年", "一年")),
+)
+_MONTHLY_FACTOR = {"week": 52.0 / 12.0, "month": 1.0, "year": 1.0 / 12.0}
+
+# How far a cross-unit restatement may drift from the original before it stops being a
+# plausible refinement. £1200/month vs £280/week is 1.01x (fine); vs £1200/week is 4.33x.
+_MAGNITUDE_RATIO = 1.5
+
+# Fields we can compare. Only quantity fields are listed: the detector needs a value and
+# (for the unit rules) a unit, and a field without them has nothing comparable.
+_QUANTITY_FIELDS = {
+    "budget": ("budget", "budgets", "rent", "spend", "spending", "afford", "max",
+               "maximum", "ceiling", "limit", "price", "pcm",
+               "预算", "租金", "房租", "上限", "最多"),
+}
+
+# The later statement announces its own change → an UPDATE, never a contradiction.
+_REVISION_MARKERS = (
+    "actually", "instead", "make it", "make that", "change it", "change that",
+    "changed my mind", "i meant", "i mean", "correction", "scratch that",
+    "let's say", "lets say", "update that", "revise", "no wait", "rather",
+    "on second thought", "sorry, ", "not ", "now it's", "now its",
+    "其实", "改成", "改为", "更新", "不对", "算了", "重新", "我是说", "应该是",
+)
+
+# The earlier statement frames itself as a hard ceiling.
+_ABSOLUTE_MARKERS = (
+    "absolute max", "absolute maximum", "absolute limit", "hard limit", "hard max",
+    "hard ceiling", "no more than", "not more than", "at most", "cannot exceed",
+    "can't exceed", "cannot go above", "can't go above", "under no circumstances",
+    "strict max", "strict limit", "absolutely no more",
+    "绝对上限", "最高", "最多", "不能超过", "不超过", "上限",
+)
+
+# A £-prefixed amount, or a bare 3+-digit number. The bare alternative uses an explicit
+# lookbehind rather than \b: in 「每月1200镑」 the CJK character before the digit is a word
+# character, so \b never matches there and every Chinese amount was invisible.
+_AMOUNT_RE = re.compile(
+    r"£\s*(\d[\d,]*(?:\.\d+)?)|(?<![\d.,])(\d[\d,]{2,}(?:\.\d+)?)(?!\d)")
+
+# Characters after an amount within which a period cue still belongs to that amount.
+_UNIT_WINDOW = 28
+
+
+def _amount_value(token: str) -> Optional[float]:
+    try:
+        return float(token.replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+_STOPS = (".", "!", "?", ";", "。", "！", "？", "；", ",", "，")
+
+
+def _unit_for_amount(text: str, start: int, end: int) -> Optional[str]:
+    """The period unit qualifying the amount spanning ``[start, end)``, if any.
+
+    English cues are read FORWARD ("£1200 per month"); Chinese cues BACKWARD
+    (「每月1200镑」). Both windows are short and stop at clause punctuation, and the
+    backward window additionally stops at the previous digit, so a unit belonging to a
+    different amount can never be borrowed.
+    """
+    ahead = text[end:end + _UNIT_WINDOW]
+    for stop in _STOPS:
+        cut = ahead.find(stop)
+        if cut != -1:
+            ahead = ahead[:cut]
+    low = ahead.casefold()
+    best: Optional[tuple] = None
+    for unit, cues in _PERIOD_CUES:
+        for cue in cues:
+            at = low.find(cue)
+            if at != -1 and (best is None or at < best[0]):
+                best = (at, unit)
+    if best:
+        return best[1]
+
+    behind = text[max(0, start - _UNIT_WINDOW):start]
+    for stop in _STOPS:
+        cut = behind.rfind(stop)
+        if cut != -1:
+            behind = behind[cut + 1:]
+    for i in range(len(behind) - 1, -1, -1):
+        if behind[i].isdigit():
+            behind = behind[i + 1:]
+            break
+    nearest: Optional[tuple] = None
+    for unit, cues in _PERIOD_CUES_ZH:
+        for cue in cues:
+            at = behind.rfind(cue)
+            if at != -1 and (nearest is None or at > nearest[0]):
+                nearest = (at, unit)
+    return nearest[1] if nearest else None
+
+
+def _field_of(text: str) -> Optional[str]:
+    low = (text or "").casefold()
+    for field, terms in _QUANTITY_FIELDS.items():
+        if any(term in low for term in terms):
+            return field
+    return None
+
+
+def _statements(text: str, turn: int) -> List[Dict[str, Any]]:
+    """Every quantity statement in one message: ``{field, value, unit, monthly,
+    absolute, revision, turn, text}``. Unit ``None`` means the user did not qualify it."""
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    field = _field_of(raw)
+    if not field:
+        return []
+    low = raw.casefold()
+    absolute = any(mk in low for mk in _ABSOLUTE_MARKERS)
+    revision = any(mk in low for mk in _REVISION_MARKERS)
+    out: List[Dict[str, Any]] = []
+    for m in _AMOUNT_RE.finditer(raw):
+        value = _amount_value(m.group(1) or m.group(2))
+        if value is None or value < 100:
+            # Below £100 a bare number is a bedroom count / minutes / a postcode digit,
+            # not a rent. A £-prefixed small amount is still skipped: it cannot be a
+            # monthly budget and comparing it would manufacture conflicts.
+            continue
+        unit = _unit_for_amount(raw, m.start(), m.end())
+        out.append({
+            "field": field, "value": value, "unit": unit,
+            "monthly": value * _MONTHLY_FACTOR[unit] if unit else value,
+            "absolute": absolute, "revision": revision,
+            "turn": turn, "text": raw,
+        })
+    return out
+
+
+def _classify_pair(earlier: Dict[str, Any], later: Dict[str, Any]) -> Optional[str]:
+    """The rule, in one place. Returns a conflict kind, or None when the later statement
+    is a legitimate update (or the two are simply consistent)."""
+    if later["revision"]:
+        return None                                  # (1) the user announced the change
+    if not (earlier["unit"] and later["unit"]):
+        # An UNQUALIFIED amount is not a comparable quantity — we do not know what period
+        # it is per, or even that it is a rent. Comparing it manufactures conflicts out of
+        # deposits and fees ("absolute max £1200 pcm ... the deposit is £1800"), so an
+        # amount the user did not qualify never raises a flag. Conservative on purpose:
+        # over-flagging an update would be worse than the bug.
+        return None
+    if earlier["unit"] != later["unit"]:
+        if earlier["value"] == later["value"]:
+            return "unit_ambiguity"                  # (U) — G11
+        lo, hi = sorted((earlier["monthly"], later["monthly"]))
+        if lo > 0 and hi / lo >= _MAGNITUDE_RATIO:
+            return "incompatible_magnitude"          # (M)
+        return None                                  # consistent cross-unit restatement
+    if earlier["absolute"] and later["monthly"] > earlier["monthly"] * 1.01:
+        return "absolute_violated"                   # (A)
+    # (2) same unit, different value, no absolute framing → a plain revision, not a
+    # conflict. The user is allowed to change their mind; the newer value wins.
+    return None
+
+
+def detect_history_conflicts(history: Optional[List[Dict[str, str]]],
+                             current_message: str = "") -> List[Dict[str, Any]]:
+    """Mutually inconsistent stated facts across the conversation.
+
+    ``history`` is the SessionStore shape ``[{"user": str, "assistant": str}, ...]``;
+    ``current_message`` is appended as the newest user turn. Only USER turns are read —
+    the assistant's own echo of a figure is not the user stating it.
+
+    Deterministic, pure-stdlib, no LLM. Returns at most one conflict per field (the
+    earliest unresolved pair), each ``{field, kind, earlier, later, ratio}``. Empty list
+    when nothing conflicts, which is the overwhelmingly common case.
+
+    See the module section above for the update-vs-contradiction rule.
+    """
+    turns = list(history or [])
+    stmts: List[Dict[str, Any]] = []
+    for i, h in enumerate(turns):
+        if isinstance(h, dict):
+            stmts.extend(_statements(h.get("user") or "", i))
+    if current_message:
+        stmts.extend(_statements(current_message, len(turns)))
+
+    conflicts: List[Dict[str, Any]] = []
+    seen_fields = set()
+    for j, later in enumerate(stmts):
+        for earlier in stmts[:j]:
+            if earlier["field"] != later["field"] or later["field"] in seen_fields:
+                continue
+            if earlier["value"] == later["value"] and earlier["unit"] == later["unit"]:
+                continue                             # identical restatement
+            kind = _classify_pair(earlier, later)
+            if not kind:
+                continue
+            lo, hi = sorted((earlier["monthly"], later["monthly"]))
+            conflicts.append({
+                "field": later["field"], "kind": kind,
+                "earlier": earlier, "later": later,
+                "ratio": round(hi / lo, 2) if lo > 0 else None,
+            })
+            seen_fields.add(later["field"])
+            break
+    return conflicts
+
+
+def _describe(stmt: Dict[str, Any]) -> str:
+    unit = f" per {stmt['unit']}" if stmt["unit"] else " (no period given)"
+    amount = int(stmt["value"]) if float(stmt["value"]).is_integer() else stmt["value"]
+    return f"£{amount}{unit}"
+
+
+def render_history_conflicts(conflicts: Optional[List[Dict[str, Any]]]) -> str:
+    """The context section that makes the agent ASK instead of silently picking one.
+
+    Renders '' when there is no conflict, so the section is absent in the normal case.
+    """
+    if not conflicts:
+        return ""
+    lines = ["=== UNRESOLVED CONTRADICTION IN THIS CONVERSATION "
+             "(you MUST ask, you may NOT choose) ==="]
+    for c in conflicts:
+        e, l = c["earlier"], c["later"]
+        ratio = f" — they differ by ~{c['ratio']}x" if c.get("ratio") else ""
+        lines.append(
+            f"- The user has stated their {c['field']} two ways that cannot both be "
+            f"true, and has NOT said which one replaces the other{ratio}:"
+        )
+        lines.append(f"    1. {_describe(e)}  (they said: \"{e['text']}\")")
+        lines.append(f"    2. {_describe(l)}  (they said: \"{l['text']}\")")
+    lines.append(
+        "ASK the user which one applies before searching, quoting a figure, or filtering "
+        "on it. Do NOT assume the later statement supersedes the earlier one — they did "
+        "not say so. Do NOT average them, and do NOT invent a third figure."
+    )
+    lines.append("=== END UNRESOLVED CONTRADICTION ===")
+    return "\n".join(lines)
+
+
+def conflict_question(conflicts: Optional[List[Dict[str, Any]]],
+                      reply_language: str = "en") -> str:
+    """The bilingual user-facing question that asks WHICH figure applies.
+
+    Separate from :func:`render_history_conflicts` (which addresses the model) because
+    this text is shown to the user verbatim.
+    """
+    if not conflicts:
+        return ""
+    c = conflicts[0]
+    one, two = _describe(c["earlier"]), _describe(c["later"])
+    if str(reply_language).lower().startswith("zh"):
+        return (f"你先前提到的{'预算' if c['field'] == 'budget' else c['field']}有两种说法："
+                f"{one} 和 {two}，两者相差约 {c.get('ratio')} 倍，我不确定该用哪一个。"
+                f"请告诉我哪个才是你的实际预算，我再帮你找房。")
+    return (f"Before I search — I have two different figures for your {c['field']}: "
+            f"{one} and {two}. They differ by about {c.get('ratio')}x, so I don't want to "
+            f"guess which one you meant. Which should I use?")
+
+
+def history_conflict_decision(history: Optional[List[Dict[str, str]]],
+                              current_message: str = "",
+                              reply_language: str = "en") -> Optional[Dict[str, Any]]:
+    """A ready-made routing decision for an unresolved cross-history contradiction.
+
+    Returns the graph's ``clarification`` decision shape, or ``None`` when nothing
+    conflicts. This exists so the router can turn a detected contradiction into a
+    DETERMINISTIC question with a single call — a source guard on the route rather than a
+    prompt instruction the model may ignore. The context section rendered by
+    :func:`render_history_conflicts` remains the belt to this braces.
+    """
+    conflicts = detect_history_conflicts(history, current_message)
+    if not conflicts:
+        return None
+    return {
+        "tool": "clarification",
+        "params": {},
+        "clarification_message": conflict_question(conflicts, reply_language),
+        "reason": (f"Unresolved contradiction in conversation history "
+                   f"({conflicts[0]['field']}: {conflicts[0]['kind']}) — ask, never pick"),
+        "history_conflicts": conflicts,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Context assembly
 # ---------------------------------------------------------------------------
 
@@ -339,12 +678,20 @@ def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
             f"Current user message: {user_message}"
         )
 
+    # G11: an unresolved contradiction is detected over the FULL history (not just the
+    # turns that survive trimming) and is NEVER trimmed — dropping it is exactly how the
+    # answer ends up silently picking one of the two figures.
+    conflict_block = render_history_conflicts(
+        detect_history_conflicts(history, user_message))
+
     def compose(n_turns: int, mem: str, summ: Optional[str]) -> str:
         out = build_history_query(n_turns)
         if summ and include_history:
             out = f"Earlier conversation summary:\n{summ}\n\n{out}"
         if mem:
             out = f"{mem}\n\n{out}"
+        if conflict_block:
+            out = f"{conflict_block}\n\n{out}"
         return out
 
     n_turns = initial_turns
@@ -443,6 +790,15 @@ def assemble_messages(*, user_message: str,
         recommendations_index=ctx.get("recommendations_index"),
         discussed_areas=ctx.get("discussed_areas"),
     )
+    # G11: detected over the FULL history, before any trimming, and pinned to the FRONT
+    # of the context sections so the trim ladder (which cuts whole lines from the end)
+    # cannot silently drop the one section whose absence caused the defect. Empty string
+    # in the normal no-conflict case, so nothing changes for any other turn.
+    conflict_section = render_history_conflicts(
+        detect_history_conflicts(history, user_message))
+    if conflict_section:
+        context_sections = (f"{conflict_section}\n\n{context_sections}"
+                            if context_sections else conflict_section)
 
     def build(n_turns: int, mem: str, sections: str) -> list:
         msgs: list = [SystemMessage(content=system_directive)]

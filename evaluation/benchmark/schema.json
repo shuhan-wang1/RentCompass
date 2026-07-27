@@ -65,12 +65,12 @@
     },
     "expected_tools": {
       "type": "array",
-      "description": "Real registry tools OR documented pseudo-routes the agent SHOULD use. Empty array = a pure no-tool answer is acceptable.",
+      "description": "Real REGISTRY TOOL NAMES the agent SHOULD execute. Scored by graders.route_matches as a SUBSET check against the EXECUTED tool trace, so a graph pseudo-route (market_info, multi_search, clarification, direct_answer, reasoning_property) here is unsatisfiable by construction — it can never appear in a trace, and the case becomes a permanent route miss regardless of behaviour. Put the pseudo-route in expected_route instead (see F7/F11/H3: expected_route market_info + expected_tools web_search). Enforced by tests/test_case_contract_consistency.py against the live tool registry. Empty array = a pure no-tool answer is acceptable.",
       "items": { "type": "string", "minLength": 1 }
     },
     "forbidden_tools": {
       "type": "array",
-      "description": "Tools/routes the agent MUST NOT use for this case.",
+      "description": "Real REGISTRY TOOL NAMES the agent MUST NOT execute for this case. Also matched against the EXECUTED tool trace (graders.forbidden_tool_used), so a pseudo-route here is a VACUOUS guard that can never fire — it silently passes forever. Enforced by tests/test_case_contract_consistency.py against the live tool registry.",
       "items": { "type": "string", "minLength": 1 }
     },
     "expected_constraints": {
@@ -108,7 +108,8 @@
               "reference_calc_match",
               "must_flag_unrealistic_constraint",
               "must_flag_stale_data",
-              "must_supersede_value"
+              "must_supersede_value",
+              "no_false_retrieval_provenance"
             ]
           },
           "field": { "type": "string" },

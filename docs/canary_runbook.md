@@ -148,8 +148,8 @@ fc-turn-count floor. Neither alone is sufficient.
 | `flip` | 100% | 7d (168h) | 2000 |
 
 `canary_report.py --stage <name> --since <stage-start-ISO>` reports `turns_ok`, `hours_ok`,
-and `eligible = turns_ok AND hours_ok`. A stage that is green but not yet eligible is a
-**HOLD** (exit 0), not a pause — keep serving, keep accumulating, re-check later.
+and `eligible = turns_ok AND hours_ok`. `--since` also **filters the records** (see §5), so
+the turn count is this stage's traffic. Not-yet-eligible is a **HOLD** (exit 0), not a pause.
 
 ---
 
@@ -209,7 +209,7 @@ python scripts/canary_report.py --input .runtime/logs/canary-fc_loop.jsonl
 # Windowed to the last 24h, machine-readable copy for CI:
 python scripts/canary_report.py --input .runtime/logs/ --window 24 --json out/canary.json
 
-# Per stage (both minima checked). --since is the stage start.
+# Per stage (both minima checked). --since is the stage start AND bounds the records.
 python scripts/canary_report.py --input .runtime/logs/ --stage internal --since 2026-07-20T09:00:00Z
 python scripts/canary_report.py --input .runtime/logs/ --stage c1 --window 24  --since 2026-07-20T09:00:00Z
 python scripts/canary_report.py --input .runtime/logs/ --stage c2 --window 48  --since 2026-07-21T09:00:00Z
@@ -219,11 +219,39 @@ python scripts/canary_report.py --input .runtime/logs/ --stage flip --window 168
 
 - `--input` is repeatable and accepts a file, a directory (searched recursively for
   `*.jsonl` / `*.log` / `*.ndjson`), or a glob.
-- `--window HOURS` keeps records within HOURS of the latest observed timestamp.
+- `--window HOURS` keeps records within HOURS of the "now" reference.
+- `--since ISO` **also filters**: records older than ISO are excluded from the population,
+  and it supplies the stage elapsed-hours check. `--window` and `--since` are both *lower
+  bounds* on a record's `ts`, so passing both applies the **later** of the two (the
+  intersection — the tighter bound wins).
+- **Read the window off the report, not off your shell history.** Every run prints the
+  cutoff it actually applied on its `record filter :` line, and the `--expect-turns` block
+  repeats the same string; the JSON carries it as `window_cutoff` / `window_filter`.
+
+  > **Changed 2026-07-26.** Previously `--since` was parsed and then used **only** for the
+  > elapsed-hours check — it filtered nothing, only `--window HOURS` did — while the anchor
+  > block nevertheless printed `window = the selected --window / --since range` and so
+  > claimed a bound it had not applied. Consequences for older evidence: any report produced
+  > by the pre-fix tool was computed over **every record in the input**, whatever `--since`
+  > said. That is why the first run of the 2026-07-25 internal round counted a pre-window
+  > warm-up turn and returned INSTRUMENTATION-HOLD.
 - `--now ISO` overrides the "now" reference (default: latest record ts) for deterministic runs.
 - The line parser tolerates both bare-JSON lines and `timestamp level name: {json}` lines;
   when a record has no `ts`, the log-line timestamp prefix is used.
-- Exit code drives CI: **0** proceed/hold-ok, **2** stage-pause, **3** zero-tolerance.
+- Exit codes drive CI. Only **0 / 2 / 3** are gate verdicts:
+
+  | code | meaning |
+  |---|---|
+  | **0** | proceed / hold-ok |
+  | **2** | stage-pause **or** instrumentation-hold |
+  | **3** | zero-tolerance breach (instant rollback) |
+  | **1** | input/runtime error — no `--input`, unparseable `--since`/`--now`, negative `--expect-turns` |
+  | **64** | CLI usage error — unknown flag, or an option missing its argument |
+
+  `--json` takes a **PATH**. A bare `--json` used to abort inside argparse with **exit 2**,
+  which is indistinguishable from STAGE-PAUSE if only `$?` is checked; it now exits **64**,
+  a code no verdict can ever return. If a driver sees 64, the command was mistyped and
+  **nothing was measured** — do not treat it as a gate result.
 
 ### Rotating telemetry before a stage window
 
@@ -253,9 +281,15 @@ docker compose --profile canary up -d app-fc
 
 ```
 python scripts/canary_report.py --input .runtime/logs/canary-fc_loop.jsonl --expect-turns 50
+
+# The pool was warmed with a throwaway turn (cold start costs seconds), so open the
+# window AFTER it — --since excludes it from the count and from the percentiles:
+python scripts/canary_report.py --input .runtime/logs/canary-fc_loop.jsonl \
+    --since <ts-of-the-first-turn-of-record> --expect-turns 50
 ```
 
-Counts only records that are, all at once: inside the window, `agent_arch=fc_loop`,
+Counts only records that are, all at once: inside the **applied** window (the `--window` /
+`--since` cutoff the report prints — see §5), `agent_arch=fc_loop`,
 `endpoint=alex`, one single `candidate_sha`, and v2 contract-valid. legacy turns,
 `search_direct` turns, v1 records from a rotated log and malformed records are each
 reported as ineligible and can never make up the count. Request IDs are reconciled

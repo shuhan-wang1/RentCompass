@@ -142,6 +142,15 @@ def test_single_intent_does_not_plan(lga, monkeypatch):
 def test_search_properties_stays_primary_even_when_multi_intent(lga, monkeypatch):
     # A listings ask joined with a safety ask must NOT be hijacked into a plan (the engine
     # excludes search_properties, which would drop the user's listings).
+    #
+    # SCOPE NOTE (2026-07-26). This assertion is still exactly right and is deliberately left
+    # as-is, but it is NARROWER than it used to read. For a long time it was the only test
+    # covering this shape, and "search_properties stays primary" was taken to mean the turn was
+    # DONE after one tool — which is how legacy came to fetch nothing for the commute / nearby /
+    # safety dimensions of the same message (measured: E1/E5/E6/E11, §6 below). Staying primary
+    # is about the ROUTE at decide_tool; it says nothing about what must happen after the search
+    # returns. The dimensions are now fanned out post-execution instead, so both hold: the
+    # listings search is never pre-empted, AND the other dimensions are actually fetched.
     cmd = _decide(lga, "帮我找房 in Camden and is it safe", _JsonLLM("search_properties"),
                   monkeypatch=monkeypatch)
     assert cmd.goto == "execute_tool"
@@ -520,3 +529,277 @@ def test_hitl_plan_payload_has_task_list_and_reject(lga, monkeypatch):
     resumed = graph.invoke(Command(resume={"action": "cancel"}), config=cfg)
     assert "held off" in resumed["final_response"]
     assert reg.calls == 0                                  # reject -> no tasks executed
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 6. POST-SEARCH DIMENSION FAN-OUT
+#
+# The plan trigger excludes search_properties (§1 above), and search_properties is not in
+# LOOPABLE_TOOLS, so a listings turn that ALSO asked about commute / safety / nearby used to
+# execute exactly ONE tool and then apologise for the dimensions it never fetched.
+#
+# This is measured, not hypothesised. Retained legacy arm of the 2026-07-25 internal round
+# (.runtime/round-8793c0b-internal-2026-07-25/eval/sweep-legacy/per_case.csv):
+#   E1, E5, E6, E11 -> tool_batches=1, tools_executed=[search_properties]
+#   E3, E9  (base decision NOT search_properties) -> 2 and 3 batches, dimensions fetched
+# which isolates the cause to the search_properties exclusion, not to cue detection or the
+# wave engine. The user-visible cost, from that round's E1 final_answer, is pinned below.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Verbatim from the retained legacy E1 answer: legacy told the user to go and find the crime
+# and supermarket data themselves while check_safety / search_nearby_pois sat unused.
+_E1_QUERY = ("Find me a 1-bed in Islington under £1600/month with a commute to UCL under "
+             "40 minutes, a supermarket nearby, and avoid high-crime areas — go ahead and search.")
+_E1_REGRESSION_STRINGS = (
+    "The search results do not provide crime statistics.",
+    "The search results do not include specific supermarket proximity data.",
+)
+
+_FOUND = {"status": "found", "summary": "found 1",
+          "recommendations": [{"name": "Riversdale Road", "address": "Riversdale Road, London, N5",
+                               "price": "£1,795"}],
+          "search_criteria": {"area": "islington"}}
+
+
+class _SearchOnlyReg:
+    """A registry whose only tool result is the search_properties payload under test."""
+
+    def __init__(self, data=None):
+        self.data = _FOUND if data is None else data
+
+    def get(self, _name):
+        return types.SimpleNamespace(version="1", side_effect="none")
+
+    def list_tool_names(self):
+        return ["search_properties", "check_safety", "search_nearby_pois", "calculate_commute"]
+
+    async def execute_tool(self, name, **_kw):
+        from core.tool_system import ToolResult
+        return ToolResult(success=True, tool_name=name, data=self.data)
+
+
+def _exec_search(lga, msg, data=None):
+    from uk_rent_agent.agent.state import create_initial_state
+    state = create_initial_state(msg, extracted_context={"current_message": msg})
+    state["tool_decision"] = {"tool": "search_properties", "params": {"user_query": msg}}
+    return asyncio.run(lga._make_execute_tool_node(_SearchOnlyReg(data))(state))
+
+
+def test_multi_dimension_search_fans_out_missing_dimensions(lga):
+    # THE REGRESSION. On the pre-fix source this turn ends at format_output/generate_response
+    # with no task_plan at all — one tool for a four-dimension ask.
+    cmd = _exec_search(lga, _E1_QUERY)
+    assert cmd.goto == "dispatch_tasks"
+    assert cmd.update["plan_origin"] == lga._PLAN_ORIGIN_DIMENSIONS
+    tools = [t["tool"] for t in cmd.update["task_plan"]]
+    assert set(tools) == {"check_safety", "calculate_commute", "search_nearby_pois"}
+    # Every dimension task is anchored on the REAL top listing, never on a guess.
+    for t in cmd.update["task_plan"]:
+        assert "Riversdale Road, London, N5" in json.dumps(t["params"], ensure_ascii=False)
+    # The commute destination came from the message ("UCL"), resolved deterministically.
+    commute = [t for t in cmd.update["task_plan"] if t["tool"] == "calculate_commute"][0]
+    assert "University College London" in commute["params"]["to_address"]
+    # The search observation is seeded first so the synthesis sees listings + dimensions.
+    assert [e["tool"] for e in cmd.update["observations"]] == ["search_properties"]
+
+
+def test_zh_multi_dimension_search_fans_out(lga):
+    # E5's production query (zh). CJK cues match the raw text, not the lowercased copy.
+    msg = ("帮我找伦敦月租不超过1400镑的单间，通勤到帝国理工不超过35分钟，"
+           "附近要有超市，尽量避开治安差的区域。")
+    cmd = _exec_search(lga, msg)
+    assert cmd.goto == "dispatch_tasks"
+    tools = {t["tool"] for t in cmd.update["task_plan"]}
+    assert {"check_safety", "search_nearby_pois"} <= tools
+    # DOCUMENTED SEPARATE GAP (not this change's to fix): the commute dimension IS cued here
+    # ("通勤"), but _KNOWN_DESTINATIONS is ascii-only — it has 'imperial', not '帝国理工' — so
+    # _resolve_destination_address cannot resolve a Chinese destination and the commute task is
+    # correctly DROPPED rather than guessed. Adding CJK aliases would change calculate_commute /
+    # calculate_commute_cost routing for every zh turn on the single-tool path too, so it needs
+    # its own change. This asserts the drop is deliberate, not silent breakage.
+    assert "calculate_commute" not in tools
+    assert lga._resolve_destination_address(msg, {"current_message": msg}, {}) is None
+    from core import dimensions
+    assert "commute" in dimensions.cued_dimensions(msg)          # the cue itself does fire
+
+
+def test_plain_listings_search_is_untouched(lga):
+    # PR #29 guard: a turn that cued NO extra dimension must not pay for a wave.
+    cmd = _exec_search(lga, "find me a flat in Camden")
+    assert cmd.goto == "format_output"                 # byte-for-byte today's route
+    assert "task_plan" not in cmd.update
+    assert "plan_origin" not in cmd.update
+
+
+def test_single_dimension_fans_out_only_that_dimension(lga):
+    # One cued dimension -> exactly one task; the other two are never fetched.
+    cmd = _exec_search(lga, "find me a flat in Camden with a supermarket nearby")
+    assert cmd.goto == "dispatch_tasks"
+    assert [t["tool"] for t in cmd.update["task_plan"]] == ["search_nearby_pois"]
+
+
+def test_greeting_never_reaches_the_fanout(lga, monkeypatch):
+    # A greeting routes to direct_answer at decide_tool and never executes a tool at all,
+    # so the fan-out is unreachable for it by construction.
+    cmd = _decide(lga, "hello there", _JsonLLM("direct_answer"), monkeypatch=monkeypatch)
+    assert cmd.goto != "build_execution_plan"
+    assert cmd.update["tool_decision"]["tool"] in ("direct_answer", "clarification")
+
+
+def test_empty_search_never_fans_out_a_dimension(lga):
+    # A fetched-but-unanchorable dimension is how a fabricated walk time is born (C1/C2 in
+    # that same round invented walk times against empty evidence). No listing -> no fan-out.
+    for data in ({"status": "found", "recommendations": []},
+                 {"status": "need_clarification", "question": "which area?"},
+                 {"status": "found", "recommendations": [{"name": None, "address": ""}]}):
+        cmd = _exec_search(lga, _E1_QUERY, data=data)
+        assert cmd.goto != "dispatch_tasks", data
+        assert "task_plan" not in cmd.update, data
+
+
+def test_dimension_already_satisfied_is_not_refetched(lga):
+    assert lga._cued_search_dimensions(_E1_QUERY, {"search_properties"}) != []
+    got = lga._cued_search_dimensions(
+        _E1_QUERY, {"search_properties", "check_safety", "search_nearby_pois",
+                    "calculate_commute"})
+    assert got == []                                    # nothing left to fetch
+
+
+def test_commute_dimension_dropped_when_no_destination(lga):
+    # No resolvable destination -> the commute task is DROPPED, not guessed. Safety/nearby,
+    # which need only the anchor, still run.
+    cmd = _exec_search(lga, "find me a flat in Camden, is it safe and how long is the commute")
+    tools = {t["tool"] for t in cmd.update["task_plan"]}
+    assert "calculate_commute" not in tools
+    assert tools == {"check_safety"}
+
+
+def test_only_read_tools_are_ever_fanned_out(lga):
+    # `remember` is the only write tool and drives the taint gate / zero-tolerance records.
+    from core import dimensions
+    fanned = {dimensions.canonical_tool(d) for d in dimensions.DIMENSIONS}
+    assert "remember" not in fanned
+    assert fanned <= set(lga.PLANNABLE_TOOLS)            # read, loopable, non-write
+
+
+def test_gather_wave_dimension_origin_keeps_listings_and_answers(lga):
+    node = lga._make_gather_wave_node()
+    st = {"task_plan": [_t("dim_safety", tool="check_safety")], "run_id": "r1",
+          "plan_origin": lga._PLAN_ORIGIN_DIMENSIONS, "loop_turn": 0, "plan_notes": [],
+          "observations": [{"turn": 0, "tool": "search_properties",
+                            "observation": "SEARCH_OBS", "params_digest": "d0"}],
+          "tool_raw_data": dict(_FOUND),
+          "task_results": [{"id": "dim_safety", "index": 0, "tool": "check_safety",
+                            "params": {"address": "Riversdale Road, London, N5"},
+                            "obs": "SAFETY_OBS", "raw": {"safety_score": 7.1}, "run_id": "r1"}]}
+    cmd = node(st)
+    # Straight to the answer — no reflect LLM hop for a deterministically chosen wave.
+    assert cmd.goto == "generate_response"
+    # The LISTINGS payload survives the reduce (format_output reads status/recommendations
+    # off the top level to build the frontend card).
+    assert cmd.update["tool_raw_data"]["status"] == "found"
+    assert cmd.update["tool_raw_data"]["recommendations"] == _FOUND["recommendations"]
+    assert cmd.update["tool_raw_data"]["check_safety_1"] == {"safety_score": 7.1}
+    # Both evidence sources reach the synthesis (>1 observation switches it to combined).
+    assert [e["tool"] for e in cmd.update["observations"]] == ["search_properties", "check_safety"]
+    assert "SAFETY_OBS" in cmd.update["tool_observation"]
+
+
+def test_format_output_dimension_turn_still_emits_listings(lga):
+    # Without this, observations>1 made format_output return tool_data={} and the frontend
+    # panel never repainted — i.e. it would DROP the user's listings, the exact failure the
+    # plan-trigger exclusion exists to prevent.
+    node = lga._make_format_output_node()
+    out = node({
+        "tool_decision": {"tool": "search_properties"},
+        "tool_raw_data": dict(_FOUND),
+        "final_response": "SYNTHESIS over listings + safety + commute + nearby",
+        "user_preferences": {}, "plan_origin": lga._PLAN_ORIGIN_DIMENSIONS,
+        "observations": [{"tool": "search_properties"}, {"tool": "check_safety"}],
+        "extracted_context": {}, "accumulated_search_criteria": {},
+    })
+    assert out["final_response"].startswith("SYNTHESIS")        # prose is the synthesis
+    assert out["tool_data"]["recommendations"] == _FOUND["recommendations"]
+    assert out["tool_data"]["search_criteria"] == {"area": "islington"}
+    # A NON-dimension loop synthesis keeps the old behaviour (no listings card).
+    out2 = node({
+        "tool_decision": {"tool": "search_properties"}, "tool_raw_data": dict(_FOUND),
+        "final_response": "S", "user_preferences": {}, "plan_origin": "plan",
+        "observations": [{"tool": "a"}, {"tool": "b"}],
+        "extracted_context": {}, "accumulated_search_criteria": {},
+    })
+    assert out2["tool_data"] == {}
+
+
+class _DimensionRegistry:
+    """search_properties returns listings; each dimension tool returns its own marker. Records
+    concurrency by tracking how many calls are in flight at once."""
+
+    def __init__(self):
+        self.calls, self.in_flight, self.max_in_flight, self.order = 0, 0, 0, []
+
+    def list_tool_names(self):
+        return ["search_properties", "check_safety", "search_nearby_pois", "calculate_commute"]
+
+    def get(self, _name):
+        return types.SimpleNamespace(version="1", side_effect="none")
+
+    async def execute_tool(self, name, **_kw):
+        from core.tool_system import ToolResult
+        self.calls += 1
+        self.order.append(name)
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(0.02)          # hold the slot so a serial path cannot overlap
+            if name == "search_properties":
+                return ToolResult(success=True, tool_name=name, data=dict(_FOUND))
+            payload = {"check_safety": {"safety_score": 7.1, "results": "OBS_SAFETY"},
+                       "search_nearby_pois": {"pois": [{"name": "Tesco"}], "results": "OBS_POI"},
+                       "calculate_commute": {"duration": "28 min", "results": "OBS_COMMUTE"}}[name]
+            return ToolResult(success=True, tool_name=name, data=payload)
+        finally:
+            self.in_flight -= 1
+
+
+def test_dimension_fanout_end_to_end_concurrent_and_keeps_listings(lga, monkeypatch):
+    # Whole graph: decide_tool -> execute_tool(search) -> dispatch_tasks -> task_worker x3
+    # -> gather_wave -> generate_response -> critic -> format_output.
+    reg = _DimensionRegistry()
+    graph, gen = _build_graph(lga, monkeypatch, _ScriptedReflect([]), reg,
+                              intent="search_properties")
+    out = _run(lga, graph, _E1_QUERY)
+
+    assert reg.calls == 4                                   # search + 3 dimensions
+    assert reg.order[0] == "search_properties"              # listings first, then the wave
+    # The dimension wave is genuinely CONCURRENT (LangGraph Send fan-out), matching the fc
+    # batch — perf/parallel-tool-batch established fc's batch was already parallel, so this
+    # pins that legacy's is too rather than assuming it.
+    assert reg.max_in_flight == 3
+    # All four evidence sources reached the synthesis prompt. Order is DETERMINISTIC despite
+    # the concurrent dispatch: gather_wave sorts task_results by index, so the wave always
+    # reduces in core.dimensions.DIMENSION_CUES table order (safety, commute, nearby) regardless of
+    # which worker finished first.
+    assert [e["tool"] for e in out["observations"]] == [
+        "search_properties", "check_safety", "calculate_commute", "search_nearby_pois"]
+    prompt = gen.prompts[-1]
+    for marker in ("OBS_SAFETY", "OBS_POI", "OBS_COMMUTE"):
+        assert marker in prompt, marker
+    # The user still gets their listings back in the frontend payload.
+    assert out["tool_data"]["recommendations"] == _FOUND["recommendations"]
+    assert out["final_response"]
+
+
+def test_plain_listings_search_end_to_end_runs_exactly_one_tool(lga, monkeypatch):
+    # PR #29 invariance, end to end: no cued dimension -> one tool, no wave, and the normal
+    # search card (NOT a synthesis) is what the user gets.
+    reg = _DimensionRegistry()
+    graph, gen = _build_graph(lga, monkeypatch, _ScriptedReflect([]), reg,
+                              intent="search_properties")
+    out = _run(lga, graph, "find me a 1-bed in Islington under £1600/month")
+
+    assert reg.calls == 1
+    assert reg.order == ["search_properties"]
+    assert gen.prompts == []                                # no generation LLM call at all
+    assert out["tool_data"]["recommendations"] == _FOUND["recommendations"]
+    assert out["final_response"] == _FOUND["summary"]        # the structured card, unchanged

@@ -28,23 +28,26 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _git_commit() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=str(REPO_ROOT),
-            stderr=subprocess.DEVNULL).decode().strip()
-    except Exception:
-        return "unknown"
+def _commit_identity() -> Dict[str, Any]:
+    """Which commit produced this memory-eval result, and WHO says so.
+
+    Replaces a git-only probe that returned the string ``"unknown"`` when git could not
+    answer (the normal case in the container), throwing away an operator-pinned
+    PRODUCT_SHA. Returns the full identity record — commit, dirty flag, the SOURCE that
+    vouched for each, ``commit_trust`` and ``identity_warnings`` — so the result file
+    states its own evidential weight instead of leaving attribution external. Never
+    raises."""
+    from evaluation.results_package import resolve_commit_identity
+    return resolve_commit_identity(repo_root=REPO_ROOT)
 
 
 def _chromadb_available() -> bool:
@@ -280,7 +283,9 @@ def main(argv=None) -> int:
     result.update({
         "framework": "memory_eval",
         "chromadb_available": _chromadb_available(),
-        "git_commit": _git_commit(),
+        # COMMIT BINDING + PROVENANCE: git_commit, git_dirty, git_commit_source,
+        # git_dirty_source, commit_trust, identity_warnings, self_identifying.
+        **_commit_identity(),
         "timestamp": ts,
     })
     (out / "memory_eval.json").write_text(

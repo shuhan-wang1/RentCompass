@@ -28,6 +28,7 @@ from core import maps_service as ms
 from core.commute_basis import (
     BASIS_MEASURED,
     BASIS_STRAIGHT_LINE,
+    CALIBRATED_MODEL_ID,
     CALIBRATION,
     ESTIMATE_RATIO_HIGH,
     ESTIMATE_RATIO_LOW,
@@ -69,7 +70,14 @@ def test_the_production_payload_is_not_passed_through(monkeypatch):
 
 
 def test_calculate_travel_details_separates_the_two_kinds_of_minutes(monkeypatch):
-    """The producer, not just the tool: a guess goes to its own field with its own basis."""
+    """The producer, not just the tool: a guess goes to its own field with its own basis.
+
+    INVERTED 2026-07-26. This used to assert ``estimated_duration_minutes == 40``, i.e. that the
+    raw formula's figure was passed through untouched — which pinned the uncalibrated estimator
+    as intended output. It is 42 now: 8.00 km is inside the fitted domain, so the figure goes
+    through t(d) = 3.7 + 11.4 x 8^0.58 = 42.0 minutes. The raw 40 must NOT survive as the
+    reported estimate; the structural separation this test is really about is unchanged.
+    """
     monkeypatch.setattr(ms, "_get_coordinates", lambda a: {"lat": 51.5, "lng": -0.1})
     monkeypatch.setattr(ms, "_tfl_journey", lambda o, d, mode="transit": None)
     monkeypatch.setattr(ms, "straight_line_travel_estimate",
@@ -78,7 +86,8 @@ def test_calculate_travel_details_separates_the_two_kinds_of_minutes(monkeypatch
     out = ms.calculate_travel_details("A", "B")
 
     assert out["duration_minutes"] is None
-    assert out["estimated_duration_minutes"] == 40
+    assert out["estimated_duration_minutes"] == 42
+    assert out["estimate_model"] == CALIBRATED_MODEL_ID
     assert out["basis"] == BASIS_STRAIGHT_LINE
     assert out["straight_line_km"] == 8.0
     assert out["estimate_low_minutes"] and out["estimate_high_minutes"]
@@ -169,14 +178,31 @@ def test_the_estimator_really_does_produce_the_flagged_single_digits():
 def test_short_estimates_are_refused_rather_than_rounded():
     """A 2-minute answer to a 12-minute journey is wrong, not imprecise. Same reasoning as
     safety_reference.MIN_PLAUSIBLE_MONTHLY: an implausible output means the method failed
-    here, not that the journey is quick."""
-    for tiny in (2, 5, 6, 8, MIN_TRUSTWORTHY_ESTIMATE_MINUTES - 1):
+    here, not that the journey is quick.
+
+    PARTLY INVERTED 2026-07-26 — and this is the correction that mattered. The loop below used
+    to pin "0.47 km yields NO number" as intended, which quietly made the SHORTNESS the defect.
+    It was not: the defect was the formula. 2 minutes is exactly what the transit formula
+    produces at 0.47 km, so that case is now CALIBRATED to 11 (see
+    test_commute_calibration.py). The rest of the loop still refuses, for a different and
+    narrower reason: 5/6/8/14 minutes are not what the transit formula produces at 0.47 km, so
+    they came from some other estimator and there is nothing measured to correct them with.
+    """
+    assert describe_estimate(2, 0.47)["estimated_duration_minutes"] == 11
+
+    for tiny in (5, 6, 8, MIN_TRUSTWORTHY_ESTIMATE_MINUTES - 1):
         assert estimate_band(tiny) is None, tiny
         described = describe_estimate(tiny, 0.47)
-        assert described["estimated_duration_minutes"] is None
+        assert described["estimated_duration_minutes"] is None, tiny
         assert "duration_minutes" not in described, (
             "the refused case must not reintroduce the measured-journey field")
     assert estimate_band(MIN_TRUSTWORTHY_ESTIMATE_MINUTES) is not None
+
+    # And a distance shorter than anything measured is still refused outright, which is where
+    # #28's rule now lives.
+    below = describe_estimate(1, 0.20)
+    assert below["estimated_duration_minutes"] is None
+    assert "duration_minutes" not in below
 
 
 def test_the_calibration_supports_the_floor_it_is_used_for():
@@ -199,11 +225,21 @@ def test_the_calibration_supports_the_floor_it_is_used_for():
 
 
 def test_every_estimate_carries_its_basis_and_caveat():
+    """INVERTED 2026-07-26: the refused example was ``describe_estimate(2, 0.47)``, which is now
+    the flagship CALIBRATED case. Refusal is demonstrated on a distance shorter than any
+    measured pair instead, which is where refusal now belongs. Both branches — kept and refused,
+    calibrated and uncalibrated — still have to carry a basis and a caveat."""
     kept = describe_estimate(40, 8.0)
     assert kept["basis"] == BASIS_STRAIGHT_LINE
     assert kept["caveat"] and "straight-line" in kept["caveat"].lower()
     assert "not a measured journey time" in kept["basis_note"].lower()
-    refused = describe_estimate(2, 0.47)
+
+    calibrated = describe_estimate(2, 0.47)
+    assert calibrated["basis"] == BASIS_STRAIGHT_LINE
+    assert calibrated["caveat"] and "straight-line" in calibrated["caveat"].lower()
+    assert "not a measured journey time" in calibrated["basis_note"].lower()
+
+    refused = describe_estimate(1, 0.20)     # closer than the 0.47 km shortest sampled pair
     assert refused["caveat"] and refused["basis"] == BASIS_STRAIGHT_LINE
     assert "no number is given" in refused["basis_note"].lower()
 
@@ -341,8 +377,22 @@ def test_the_station_reaches_the_tool_payload(monkeypatch):
 
 
 def test_the_no_fabrication_rule_covers_station_names():
-    """Backstop. The enumerated field list did not include stations, and the programmatic
-    critic validates money figures only, so nothing anywhere objected to 'Covent Garden'."""
+    """Backstop, and the record of WHY it was needed.
+
+    AT THE TIME THE DEFECT SHIPPED: the enumerated field list did not include stations, and
+    the programmatic critic validated money figures ONLY — so nothing anywhere objected to
+    'Covent Garden'.
+
+    NO LONGER TRUE, and corrected here on 2026-07-27. Station-name grounding landed:
+    ``uk_rent_agent.agent.critic`` now also runs ``station_name_claims`` /
+    ``ungrounded_station_names``, checking a name the answer asserts is a *station* against
+    the same evidence surface the prices are checked against (see §4 of that module's
+    docstring). This test remains the BACKSTOP for the prompt-side half of that fix; the
+    critic-side half is covered by tests/test_critic_price_pool_scoping.py and friends.
+
+    The stale sentence asserted nothing, so nothing failed when it went false — which is
+    precisely why it had to be corrected by hand rather than caught.
+    """
     from core import loop_prompts
 
     rules = loop_prompts.behaviour_rules().lower()

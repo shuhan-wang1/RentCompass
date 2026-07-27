@@ -10,8 +10,9 @@ Checks performed:
      (uses `jsonschema` if importable; otherwise a minimal structural fallback,
      see MINIMAL_CHECK note below).
   2. `case_id` values are unique.
-  3. Every `expected_tools` / `forbidden_tools` / `expected_route` entry is a REAL
-     registry tool or a documented pseudo-route (no invented tools).
+  3. Every `expected_tools` / `forbidden_tools` entry is a REAL registry tool, and every
+     `expected_route` is a real registry tool OR a documented pseudo-route. The real-tool
+     list is DERIVED from `create_tool_registry()` — see TOOL NAMES below.
   4. Every referenced `fixture` file exists under fixtures/.
   5. Every `smoke` case is a bool; at least one smoke case per represented rule set.
   6. Prints per-category counts and the smoke count.
@@ -26,28 +27,60 @@ from collections import Counter
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+REPO_ROOT = HERE.parents[1]
 SCHEMA_PATH = HERE / "schema.json"
 CASES_PATH = HERE / "cases.jsonl"
 FIXTURES_DIR = HERE / "fixtures"
 
-# The 14 real registry tools (app/core/tool_system.py create_tool_registry) ...
-REAL_TOOLS = {
-    "search_properties",
-    "calculate_commute",
-    "calculate_commute_cost",
-    "check_safety",
-    "get_weather",
-    "web_search",
-    "search_nearby_pois",
-    "get_property_details",
-    "check_transport_cost",
-    "get_transport_info",
-    "recall_memory",
-    "remember",
-    "ask_user",
-    "compare_or_rank_areas",
-}
-# ... plus the graph-internal pseudo-routes (NOT registry tools).
+# ── TOOL NAMES ──────────────────────────────────────────────────────────────────────────
+# This used to be a hand-copied `REAL_TOOLS` literal, commented "the 14 real registry tools
+# (app/core/tool_system.py create_tool_registry)". A copy of a list is not the list, and this
+# one had a second defect on top: `expected_tools` and `forbidden_tools` were checked against
+# `REAL_TOOLS | PSEUDO_ROUTES`, so a PSEUDO-ROUTE in either field validated clean.
+#
+# That is exactly how F7 shipped with `expected_tools: ["market_info"]`. `market_info` is a
+# graph router decision, never a registry tool, so it can never appear in an executed tool
+# trace — and `graders.route_matches` scores `expected_tools` as a subset of that trace. F7's
+# route could therefore never match, for any run of any architecture, and it cost a route
+# point in every round ever run. The case was fixed; the validator that should have caught it
+# was not. Fixing it is the point of this block.
+#
+# Now derived from `create_tool_registry()` — the SAME registry whose `execute_tool(name, ...)`
+# produces the traces being matched. Registering a new tool widens this automatically;
+# retiring one narrows it. Same approach (and same rationale) as
+# `tests/test_case_contract_consistency.py::_registered_tool_names`, which already derives its
+# list this way; reused rather than reinvented, so there is one definition of "a real tool".
+
+
+def _bootstrap_app_path() -> None:
+    """Put the app packages on sys.path exactly as run_benchmark/rescore do, so the registry
+    imports identically. No graph is built and no tool is ever executed."""
+    for p in (REPO_ROOT / "app", REPO_ROOT / "src", REPO_ROOT):
+        sp = str(p)
+        if sp not in sys.path:
+            sys.path.insert(0, sp)
+
+
+def registered_tool_names() -> frozenset:
+    """The names `registry.execute_tool` accepts, i.e. the only names that can ever show up in
+    a tool trace. A hard failure if the registry cannot be imported: falling back to a literal
+    is the defect this function exists to remove, and a validator that silently degrades to a
+    stale list is worse than one that stops."""
+    _bootstrap_app_path()
+    try:
+        from core.tool_system import create_tool_registry  # type: ignore
+    except Exception as exc:  # pragma: no cover - environment problem, not a data problem
+        raise SystemExit(
+            f"[FATAL] cannot import the tool registry to validate tool names: "
+            f"{type(exc).__name__}: {exc}\n"
+            "        Tool names MUST be derived from create_tool_registry() — a hand-copied "
+            "list is what let F7's `expected_tools: [\"market_info\"]` through."
+        )
+    return frozenset(create_tool_registry().tools)
+
+
+# Graph-internal router decisions (NOT registry tools). Legal in `expected_route`; NEVER legal
+# in a trace-matched tool field. Mirrors tests/test_case_contract_consistency.PSEUDO_ROUTES.
 PSEUDO_ROUTES = {
     "market_info",
     "direct_answer",
@@ -55,7 +88,32 @@ PSEUDO_ROUTES = {
     "reasoning_property",
     "clarification",
 }
-VALID_TARGETS = REAL_TOOLS | PSEUDO_ROUTES
+
+# Fields the graders match against the EXECUTED tool trace, so they may only name real tools.
+TRACE_MATCHED_TOOL_FIELDS = ("expected_tools", "forbidden_tools")
+
+
+def tool_field_problems(cid, case: dict, real_tools) -> list:
+    """Every tool/route naming problem in one case. Split out of main() so it can be tested
+    on its own: main()'s other checks are corpus-WIDE (category coverage, smoke counts) and
+    would drown a single-case fixture in unrelated failures."""
+    out = []
+    for field in TRACE_MATCHED_TOOL_FIELDS:
+        for tool in case.get(field, []) or []:
+            if tool in PSEUDO_ROUTES:
+                # THE F7 defect, stated in the terms that make it a defect.
+                out.append(
+                    f"{cid}: {field} names the pseudo-route '{tool}', which is a graph "
+                    "router decision and can never appear in an executed tool trace — "
+                    "the case is unsatisfiable by construction")
+            elif tool not in real_tools:
+                out.append(f"{cid}: {field} references unknown tool '{tool}' "
+                           "(not in create_tool_registry())")
+    route = case.get("expected_route")
+    if route is not None and route not in (set(real_tools) | PSEUDO_ROUTES):
+        out.append(f"{cid}: expected_route '{route}' is not a real tool/route")
+    return out
+
 
 VALID_CATEGORIES = {
     "A_retrieval", "B_money", "C_commute", "D_crime_poi",
@@ -126,6 +184,7 @@ def main() -> int:
         raise SystemExit(f"[FATAL] cases not found: {CASES_PATH}")
 
     validate_fn, mode = _schema_validator()
+    real_tools = registered_tool_names()
     rows = _load_cases()
 
     seen_ids: set[str] = set()
@@ -145,14 +204,8 @@ def main() -> int:
 
         categories[case.get("category", "?")] += 1
 
-        # tool / route reality checks
-        for field in ("expected_tools", "forbidden_tools"):
-            for tool in case.get(field, []):
-                if tool not in VALID_TARGETS:
-                    problems.append(f"{cid}: {field} references unknown tool/route '{tool}'")
-        route = case.get("expected_route")
-        if route is not None and route not in VALID_TARGETS:
-            problems.append(f"{cid}: expected_route '{route}' is not a real tool/route")
+        # tool / route reality checks (derived from the registry — see TOOL NAMES above)
+        problems.extend(tool_field_problems(cid, case, real_tools))
 
         # category prefix consistency
         if isinstance(cid, str) and not (
@@ -186,6 +239,7 @@ def main() -> int:
 
     # ---- report ----
     print(f"Schema validation mode: {mode}")
+    print(f"Registry tools (from create_tool_registry()): {len(real_tools)}")
     print(f"Total cases: {len(rows)}")
     print("Per-category counts:")
     for cat in sorted(VALID_CATEGORIES):

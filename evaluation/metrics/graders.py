@@ -192,6 +192,19 @@ def _distance_key_to_m(key: str, num: float) -> float:
         return num * KM_TO_M
     return num
 _SCORE_RE = re.compile(r"\b([0-9]{1,3})\s*/\s*100\b")
+# The same score with the denominator SPELLED OUT — "a safety score of 71 out of 100"
+# (E9/E3 on the legacy arm state it this way and never write "71/100").
+_SCORE_OUT_OF_RE = re.compile(r"\b([0-9]{1,3})\s*out\s*of\s*100\b", re.IGNORECASE)
+# …and the score with NO denominator at all, which only CJK answers write: 「安全评分 60」.
+# This one is anchored on the LABEL and separated from it by nothing but whitespace,
+# a colon or a copula. That tightness is the whole point. A bare-integer reading of the
+# neighbourhood would have picked the 0 out of D1's
+#     "Formula: Safety Score = max(0, 100 - Total Crimes ÷ 2)"
+# and scored the model's explanation of the formula as a fabricated safety score. The
+# separator class excludes "=", "(" and every letter, so a formula can never reach it.
+_SCORE_LABELLED_RE = re.compile(
+    r"(?:safety[\s_-]*(?:score|rating)|安全评分|安全分数|治安评分)"
+    r"[\s:：是为约的]{0,6}([0-9]{1,3})\b", re.IGNORECASE)
 _POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b", re.IGNORECASE)
 # Boundary classes are ASCII-word only: Python's \w matches CJK, which made numbers
 # embedded in Chinese prose (「最高1400英镑」) invisible to extraction — 英/高 counted
@@ -784,18 +797,28 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
                 classify_number(val, "commute_minutes", pool.commute_minutes,
                                 pool.raw_commute, tol=1.0))
 
-    # safety scores (NN/100) — check before generic crime counts
-    for m in _SCORE_RE.finditer(answer):
-        v = _to_float(m.group(1))
-        if v is None:
-            continue
-        key = ("score", round(v))
-        if key in seen:
-            continue
-        seen.add(key)
-        result.claims.append(
-            classify_number(v, "safety_score", pool.safety_scores,
-                            pool.raw_scores, tol=0.5, neighborhood_guard=False))
+    # safety scores — check before generic crime counts.
+    #
+    # Three shapes, all of which must carry EITHER an explicit /100 denominator or a
+    # tight safety-score label. That requirement is what keeps this extractor away from
+    # percentages ("51% of crimes were antisocial behaviour" has no denominator and no
+    # label) and away from arithmetic inside an explained formula. HANDOFF §0 instance #4
+    # is a fabricated safety score — "Hackney: 9 crimes, 96/100 Very Safe" against a real
+    # 1,657/month — and while the SCORING formula was fixed and pinned by
+    # tests/test_safety_scoring.py, an invented score in the ANSWER TEXT still needs a
+    # claim here before any constraint can reach it.
+    for regex in (_SCORE_RE, _SCORE_OUT_OF_RE, _SCORE_LABELLED_RE):
+        for m in regex.finditer(answer):
+            v = _to_float(m.group(1))
+            if v is None or not (0.0 <= v <= 100.0):
+                continue
+            key = ("score", round(v))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.claims.append(
+                classify_number(v, "safety_score", pool.safety_scores,
+                                pool.raw_scores, tol=0.5, neighborhood_guard=False))
 
     # POI distances — normalised to METRES whatever unit they were quoted in, and
     # judged against the metre pool with the quoted figure's own precision as the
@@ -2139,10 +2162,21 @@ def _route_matches(route: Any, tool: str) -> bool:
 
 
 def _field_to_kind(field_name: str) -> Optional[str]:
+    """Map a constraint's ``field`` to the CLAIM KIND that grade_grounding emits for it.
+
+    A field that maps to no kind is unreachable by the fabrication checkers: they filter
+    claims by kind, so a kind nothing produces yields an empty offender set and the
+    constraint passes unconditionally. ``safety_score`` was in that state — the answer
+    side has emitted ``safety_score`` claims all along, but no field name resolved to
+    them, so ``no_fabricated_number[safety_score]`` was a silent no-op no matter what a
+    case declared. See ``test_every_field_kind_is_actually_emitted`` for the guard.
+    """
     f = (field_name or "").lower()
     if f in ("monthly_rent", "weekly_rent", "rent", "deposit", "price",
              "average_rent", "monthly_commute_cost", "fare", "total_move_in"):
         return "money"
+    if f in ("safety_score", "safety", "score", "safety_rating"):
+        return "safety_score"
     if f in ("duration_minutes", "commute"):
         return "commute_minutes"
     if f in ("crime_count", "crimes"):

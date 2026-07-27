@@ -16,6 +16,8 @@ read as a preference. Every assertion fails against
   6. Both the 5-week and the 6-week deposit cap were listed as derivable, so whichever
      one the model applied was "supported" — B7 shipped £5,192.31 where the statute
      gives £6,230.77 and `no_fabricated_number` saw nothing wrong.
+  5. `_field_to_kind` had no row resolving to the `safety_score` claim kind, so
+     `no_fabricated_number[safety_score]` was an unconditional pass (HANDOFF §0 #4).
 """
 from __future__ import annotations
 
@@ -553,3 +555,115 @@ def test_the_grader_does_not_import_the_products_statute():
                            or "tenancy_reference" in m)
                        and m not in ALLOWED)
     assert offenders == [], offenders
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 5 (added by the coordinator) — `safety_score` must be a REACHABLE kind
+# ══════════════════════════════════════════════════════════════════════════════
+# HANDOFF §0 instance #4 is a fabricated safety score: `check_safety` scored
+# `100 - n//2` with no denominator and shipped "Hackney: 9 crimes, 96/100 Very Safe"
+# against a real 1,657/month. The FORMULA was fixed and is pinned by
+# tests/test_safety_scoring.py — but an invented score in the ANSWER TEXT was still
+# ungradeable, because `_field_to_kind` had no row that resolved to the `safety_score`
+# claim kind. The checkers filter claims by kind, so an unmapped field yields an empty
+# offender set and the constraint passes whatever the answer says.
+D9_SAFETY_EVIDENCE = [
+    {"tool": "check_safety", "data": {"safety_score": 60, "safety_level": "Safe"}},
+    {"tool": "check_safety", "data": {"safety_score": 50, "safety_level": "Moderate"}},
+]
+D9_SAFETY_ANSWER = (
+    "Here is the safety comparison based on data from **data.police.uk**:\n\n"
+    "**Clapham (SW4) -- Safer**\n- **Safety Score: 60/100** -- rated **Safe**\n\n"
+    "**Northolt New Wharf (UB5) -- Less Safe**\n- **Safety Score: 50/100** -- rated "
+    "**Moderate**"
+)
+
+
+def _scores(answer, evidence):
+    g = graders.grade_grounding(_ctx(answer, evidence, tools=("check_safety",)))
+    return {c.value: c.status for c in g.claims if c.kind == "safety_score"}
+
+
+def _fab_score(answer, evidence):
+    con = {"type": "no_fabricated_number", "field": "safety_score"}
+    return graders.CONSTRAINT_CHECKERS["no_fabricated_number"](
+        con, _ctx(answer, evidence, tools=("check_safety",)))
+
+
+def test_safety_score_resolves_to_a_kind_at_all():
+    """The source guard. Mainline returned None here, which is what made the constraint
+    unreachable."""
+    assert graders._field_to_kind("safety_score") == "safety_score"
+    assert graders._field_to_kind("safety") == "safety_score"
+
+
+def test_every_field_kind_is_actually_emitted():
+    """Stronger guard: every kind `_field_to_kind` can return must be a kind
+    `grade_grounding` actually produces, or the constraint that names it is a no-op.
+
+    KNOWN ADJACENT GAP, deliberately not closed here: `crime_count` is a declared kind
+    with NO answer-side extractor, so `must_refuse_fabrication[crime_count]` (declared by
+    D3, D9 and D13) and `no_fabricated_number[crime_count]` also pass unconditionally.
+    Closing it needs a bare-integer "N crimes" extractor, which is a different and much
+    wider change than the safety-score mapping this commit was asked for. The assertion
+    is written as an exact set so the gap cannot silently grow, and so that adding the
+    crime-count extractor makes this test fail loudly and get updated."""
+    emitted = {"money", "commute_minutes", "safety_score", "distance_m", "location"}
+    reachable = {graders._field_to_kind(f) for f in (
+        "monthly_rent", "weekly_rent", "rent", "deposit", "price", "average_rent",
+        "monthly_commute_cost", "fare", "total_move_in", "duration_minutes", "commute",
+        "crime_count", "crimes", "distance_m", "distance", "safety_score", "safety",
+        "score", "safety_rating")} - {None}
+    assert "safety_score" in reachable & emitted
+    assert reachable - emitted == {"crime_count"}, reachable - emitted
+
+
+def test_a_grounded_safety_score_is_not_flagged():
+    """Direction A. D9 states 60/100 and 50/100 and BOTH are in its evidence."""
+    assert _scores(D9_SAFETY_ANSWER, D9_SAFETY_EVIDENCE) == {60.0: "grounded",
+                                                             50.0: "grounded"}
+    assert _fab_score(D9_SAFETY_ANSWER, D9_SAFETY_EVIDENCE).passed
+
+
+def test_an_invented_safety_score_is_flagged():
+    """Direction B, in the shape of HANDOFF §0 #4."""
+    answer = "Hackney: 9 crimes, **92/100** -- rated Very Safe."
+    r = _fab_score(answer, [{"tool": "check_safety", "data": {"safety_score": 34}}])
+    assert not r.passed, r.detail
+    assert "92.0" in r.detail, r.detail
+
+
+@pytest.mark.parametrize("text,expected", [
+    # the three accepted shapes
+    ("**Safety Score: 60/100** -- rated Safe", {60.0}),
+    ("The area has a safety score of 71 out of 100, classified as Safe.", {71.0}),
+    ("安全评分 60，属于安全区域。", {60.0}),
+    ("Safety Score: 88", {88.0}),
+    # …and the shapes that must NOT be read as a safety score
+    ("Formula: Safety Score = max(0, 100 - Total Crimes / 2)", set()),
+    ("Antisocial behaviour was 51% of the total, burglary 20%.", set()),
+    ("There were 64 total crimes in the past six months.", set()),
+    ("The rent is 1500 per month.", set()),
+])
+def test_the_score_shapes_chosen_and_the_ones_rejected(text, expected):
+    """The shape trap, both sides. An extractor reading bare integers would take the 0
+    out of D1's explanation of the scoring formula; one reading every NN/100 without a
+    range check would collide with arbitrary ratios. What is required is an explicit
+    /100 (or "out of 100") denominator, or a label separated from the number by nothing
+    but whitespace/colon/copula."""
+    got = set()
+    for regex in (graders._SCORE_RE, graders._SCORE_OUT_OF_RE,
+                  graders._SCORE_LABELLED_RE):
+        for m in regex.finditer(text):
+            v = float(m.group(1))
+            if 0.0 <= v <= 100.0:
+                got.add(v)
+    assert got == expected, got
+
+
+def test_the_formula_line_from_d1_does_not_become_a_fabricated_score():
+    """End to end on the real answer line that motivated the tight separator class."""
+    answer = ("**Safety Score:** 85/100\n - Formula: Safety Score = max(0, 100 - Total "
+              "Crimes / 2)")
+    assert _scores(answer, [{"tool": "check_safety",
+                             "data": {"safety_score": 85}}]) == {85.0: "grounded"}

@@ -603,8 +603,18 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
             # `route_summary: "Cycle via Regent's Canal towpath (approx 5.1 km)"` (C7) is
             # the same shape. Key-filtered, like the commute path, so distances mentioned
             # in free-text listing `description`s never widen the grounded pool.
+            # `distance_display` is the tool's OWN rendering of the number beside it
+            # ("180m" for a raw `distance_m: 184`), and it is the string an answer
+            # copies. Reading only the raw leaf made F9's verbatim "Sainsbury's 180m"
+            # miss the ±1.0 m tolerance and read as fabricated. `display` is matched as
+            # a key fragment, not as the single literal `distance_display`, because the
+            # display-vs-raw split is a house convention, not a one-off: the fixtures
+            # also carry `fare_display`, `route_summary`, `summary` and `formatted`.
+            # (`fare_display` is money and reaches the money pool through
+            # `_iter_numbers`; it is harmless here because a bare "£12.50" carries no
+            # length unit and so yields no distance.)
             if ("distance" in key or "route" in key or "travel" in key
-                    or key in ("message", "summary", "note")):
+                    or "display" in key or key in ("message", "summary", "note")):
                 for val, unit_m, _tol, pos, _end in _distance_matches(s):
                     has_distance = True
                     for endpoint in _range_values(s, pos, val):

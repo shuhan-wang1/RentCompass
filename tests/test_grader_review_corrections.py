@@ -21,6 +21,8 @@ read as a preference. Every assertion fails against
   7. `_number_asserts_field_value` threshold-filtered only money and minutes, so a
      DISTANCE could never be a bound — E6's "None within 500m" was graded as an
      asserted distance.
+  8. `distance_display` ("180m" beside a raw `distance_m: 184`) was not parsed, so
+     F9's verbatim quotation of the tool read as a fabrication.
 """
 from __future__ import annotations
 
@@ -730,3 +732,54 @@ def test_an_invented_score_is_still_flagged_after_the_generalisation():
     answer = "Hackney: 9 crimes, **92/100** -- rated Very Safe."
     assert not _fab_score(answer, [{"tool": "check_safety",
                                     "data": {"safety_score": 34}}]).passed
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 8 — the tool's own RENDERED string grounds the number it renders
+# ══════════════════════════════════════════════════════════════════════════════
+# F9 states "Sainsbury's (180m…)", which is the tool's own `distance_display: "180m"`.
+# The raw leaf beside it is `distance_m: 184`, which misses the ±1.0 m tolerance, so a
+# verbatim quotation of the tool read as a fabrication. Verified against the FIXTURE
+# rather than against the pool: poi_found.json / ext_cde_poi_pharmacy.json /
+# ext_cde_e9_combo.json all carry `distance_display`, and the house convention is
+# wider than that one key — `fare_display`, `route_summary`, `summary`, `formatted`.
+F9_POI_EVIDENCE = [
+    {"tool": "search_nearby_pois", "success": True,
+     "data": {"success": True, "address": "Whitechapel, London E1",
+              "pois": {"supermarket": [
+                  {"name": "Sainsbury's Local", "distance_m": 184,
+                   "distance_display": "180m"}]}}},
+]
+
+
+def test_the_rendered_display_grounds_the_number_it_renders():
+    """184 and 180 are both in the pool; the answer may quote either."""
+    claims = _distances("- **Supermarket**: Sainsbury's (180m, open until 23:00)",
+                        F9_POI_EVIDENCE)
+    assert claims == {180.0: "grounded"}, claims
+    assert _distances("The Sainsbury's is 184m away.",
+                      F9_POI_EVIDENCE) == {184.0: "grounded"}
+
+
+def test_the_display_key_is_matched_as_a_fragment_not_a_literal():
+    """The split is a house convention, not a one-off, so the filter keys on `display`
+    rather than on the single literal `distance_display`."""
+    ev = [{"tool": "search_nearby_pois",
+           "data": {"pois": {"gym": [{"walk_display": "450m", "walk_m": 447}]}}}]
+    assert _distances("The gym is 450m away.", ev) == {450.0: "grounded"}
+
+
+def test_a_display_string_does_not_ground_an_arbitrary_distance():
+    """Both directions: the rendered string widens the pool by the value it renders,
+    not by a licence to state anything."""
+    assert _distances("The Sainsbury's is 900m away.",
+                      F9_POI_EVIDENCE) == {900.0: "unsupported"}
+
+
+def test_a_money_display_field_yields_no_distance():
+    """`fare_display: "£12.50"` matches the `display` fragment and must contribute
+    nothing to the distance pool — a bare money figure carries no length unit."""
+    ev = [{"tool": "get_transport_info",
+           "data": {"fare_display": "£12.50 per journey", "fare": 12.5}}]
+    pool = graders._build_evidence_pool(_ctx("", ev, ("get_transport_info",)))
+    assert pool.distances == set(), pool.distances

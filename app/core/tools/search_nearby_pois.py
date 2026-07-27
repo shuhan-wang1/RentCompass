@@ -21,12 +21,89 @@ DEFAULT_RADIUS = 200  # 默认搜索半径 500m
 # synchronous geocode / Overpass / sleep calls below. ALL requested POI types share ONE
 # monotonic deadline derived from this budget so the total wall time stays bounded instead
 # of running one up-to-30s Overpass request per type serially (the observed 43-99s tail).
-# Aligned with the fc_loop TOOL_TIMEOUTS["search_nearby_pois"] entry (25s) minus a safety
-# margin so the tool returns partial results BEFORE the harness force-times-it-out.
-POI_SEARCH_BUDGET_S = float(os.getenv("POI_SEARCH_BUDGET_S", "20"))
+#
+# THE DEADLINE MUST BE STRICTLY SMALLER THAN THE WINDOW THAT KILLS IT.
+# Two clocks race here and only one of them produces a usable result:
+#   * FC_BATCH_TOOL_BUDGET_S (agent_loop._batch_tool_budget_s, default 20s) — the batch
+#     window, which ABANDONS a straggler: the caller gets nothing at all.
+#   * this budget — which stops issuing per-type requests and returns a PARTIAL result with
+#     an honest "types skipped" note.
+# The whole reason the second one exists is to win that race. It used to be hardcoded at
+# exactly 20.0, i.e. a dead tie with the window, so the graceful path it was built for landed
+# roughly half the time and depended on nothing but scheduler luck. It is now DERIVED from the
+# window at call time (see ``poi_search_budget_s``), so raising FC_BATCH_TOOL_BUDGET_S raises
+# this too and the ordering cannot be broken by retuning one knob.
+FC_BATCH_TOOL_BUDGET_DEFAULT_S = 20.0
+
+# The headroom between "stop issuing Overpass requests" and "the batch window abandons us".
+# It is what the tool still has to do AFTER the last per-type request returns, none of which
+# is free: the TfL StopPoint lookup in _resolve_nearest_station (a 12s-timeout HTTP call, only
+# for a station query), the distance sort / dedupe / brand filter over every element, building
+# the summary string, and then the executor-thread -> event-loop hop that carries the payload
+# back — which is queued behind whatever else the batch's other tools are doing on that loop.
+# Two numbers, whichever is larger, because the cost has both a fixed and a scaling part:
+#   * POI_BUDGET_MARGIN_S — an absolute floor. 2.0s is the return path (serialization + the
+#     loop hop under a loaded event loop), sized from the same observation that motivated
+#     making these tools sync in the first place (four concurrent calls serializing to ~52s
+#     against a 20s budget): the hop is not instantaneous when the loop is busy.
+#   * POI_BUDGET_MARGIN_FRACTION — 15% of the window, so a LARGER window (more types queried,
+#     bigger payload, more post-processing) gets proportionally more room instead of the same
+#     flat 2s. At the default 20s window the fraction binds: 20 - 3.0 = 17.0s.
+# POI_BUDGET_MIN_USABLE_FRACTION is the backstop for an absurdly small window (tests use 0.3s):
+# never give the tool less than half the window, and never a non-positive deadline. Because it
+# is a fraction < 1 the derived budget is strictly below the window for ANY positive window.
+POI_BUDGET_MARGIN_S = float(os.getenv("POI_BUDGET_MARGIN_S", "2.0"))
+POI_BUDGET_MARGIN_FRACTION = float(os.getenv("POI_BUDGET_MARGIN_FRACTION", "0.15"))
+POI_BUDGET_MIN_USABLE_FRACTION = 0.5
+
+# Explicit ops/test override, in seconds. ``None`` (the default) means "derive it from the
+# batch window", which is what production wants. An explicit value may only LOWER the derived
+# budget — a stale POI_SEARCH_BUDGET_S left at or above the window would otherwise reinstate
+# exactly the tie this module now exists to avoid.
+_POI_SEARCH_BUDGET_ENV = os.getenv("POI_SEARCH_BUDGET_S")
+POI_SEARCH_BUDGET_S = float(_POI_SEARCH_BUDGET_ENV) if _POI_SEARCH_BUDGET_ENV else None
 # Politeness pacing between consecutive Overpass mirror hits (seconds); runs inside the
 # executor thread, so it never blocks the event loop.
 POI_PACING_S = float(os.getenv("POI_PACING_S", "0.3"))
+# Per-request HTTP ceiling for one Overpass call when nothing else bounds it.
+POI_OVERPASS_TIMEOUT_S = 30
+
+
+def _batch_window_s() -> float:
+    """The fc-loop batch window this tool has to finish inside, in seconds.
+
+    Read from the loop's OWN accessor (``agent_loop._batch_tool_budget_s``) rather than from a
+    second copy of the env parsing, so ops retuning FC_BATCH_TOOL_BUDGET_S moves both clocks
+    together. Imported function-locally: ``core.agent_loop`` pulls in ``core.langgraph_agent``,
+    which imports the tool modules, so a module-level import here would be a cycle. Falls back
+    to the same env var, then to the same default, if that import is ever unavailable.
+    """
+    try:
+        from core.agent_loop import _batch_tool_budget_s
+        return float(_batch_tool_budget_s())
+    except Exception:
+        try:
+            return float(os.getenv("FC_BATCH_TOOL_BUDGET_S", FC_BATCH_TOOL_BUDGET_DEFAULT_S))
+        except (TypeError, ValueError):
+            return FC_BATCH_TOOL_BUDGET_DEFAULT_S
+
+
+def poi_search_budget_s() -> float:
+    """This tool's own deadline — always STRICTLY below the window that would abandon it.
+
+    Derived at call time from ``_batch_window_s()`` so the invariant survives a retune of
+    FC_BATCH_TOOL_BUDGET_S. ``test_the_tool_deadline_is_strictly_inside_the_window_that_kills_it``
+    pins the ordering across a sweep of window sizes, so this cannot regress to a tie.
+    """
+    window = _batch_window_s()
+    if window <= 0:
+        return 0.0
+    margin = max(POI_BUDGET_MARGIN_S, window * POI_BUDGET_MARGIN_FRACTION)
+    derived = max(window - margin, window * POI_BUDGET_MIN_USABLE_FRACTION)
+    if POI_SEARCH_BUDGET_S is not None:
+        # An override may only tighten the deadline, never push it back onto the window.
+        return min(float(POI_SEARCH_BUDGET_S), derived)
+    return derived
 
 # 🆕 大品牌超市/便利店白名单（不区分大小写匹配）
 # 包含各种店型：Express, Local, Metro, Extra, Superstore 等
@@ -211,14 +288,23 @@ def geocode_address(address: str) -> Optional[tuple]:
     return None
 
 
-def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_RADIUS, origin_lat: float = None, origin_lon: float = None) -> List[Dict]:
+def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_RADIUS,
+                   origin_lat: float = None, origin_lon: float = None,
+                   timeout: Optional[float] = None) -> List[Dict]:
     """从 OpenStreetMap 查询 POI
-    
+
     Args:
         lat, lon: 搜索中心坐标
         poi_type: POI 类型
         radius: 搜索半径（米）
         origin_lat, origin_lon: 原点坐标（用于计算距离，如果不提供则使用搜索中心）
+        timeout: per-request HTTP ceiling in seconds. The shared deadline is checked BEFORE a
+            request is issued, so without this the LAST request issued could still run its full
+            30s past the deadline and hand the batch window the win anyway. Passing the
+            remaining budget keeps one request from outliving the budget that authorised it.
+            NOTE the residual: ``overpass_request`` rotates mirrors and retries
+            (``max_rounds=2``), so the worst case is still a multiple of this — bounding that
+            needs a deadline parameter inside ``overpass_request`` itself.
     """
     if poi_type not in POI_TYPES:
         return []
@@ -242,8 +328,9 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     
     # 通过共享的 Overpass 客户端查询：始终带描述性 User-Agent（否则参考服务器返回 406），
     # 并在多个公共镜像之间轮换 + 指数退避重试。全部镜像失败才抛出 OverpassError。
+    req_timeout = POI_OVERPASS_TIMEOUT_S if timeout is None else max(1, int(timeout))
     try:
-        data = overpass_request(query, timeout=30)
+        data = overpass_request(query, timeout=min(POI_OVERPASS_TIMEOUT_S, req_timeout))
     except OverpassError as e:
         # API 失败（如缺 User-Agent 导致的 406、超时、限流）不能伪装成"附近没有" —— 抛出让上层报错
         print(f"❌ OSM 查询失败 ({poi_type}): {e}")
@@ -435,12 +522,17 @@ def _resolve_nearest_station(address: str, lat: float, lon: float) -> dict:
     }
 
 
-def _skipped_note(skipped: List[str]) -> str:
+def _skipped_note(skipped: List[str], budget_s: float) -> str:
     """Honest partial-result note. This tool has no reply_language param, so the note is
-    neutral English plus a short zh hint (mirrors how other tool notes stay bilingual)."""
+    neutral English plus a short zh hint (mirrors how other tool notes stay bilingual).
+
+    ``budget_s`` is passed in rather than read from the module: the budget is derived per call
+    from the batch window now, so a note that quoted a module constant could name a different
+    number from the deadline that actually fired.
+    """
     names = [POI_TYPES[t]["name"] for t in skipped if t in POI_TYPES] or list(skipped)
     joined = ", ".join(names)
-    return (f"Note: the {POI_SEARCH_BUDGET_S:.0f}s search budget was reached, so these were "
+    return (f"Note: the {budget_s:.0f}s search budget was reached, so these were "
             f"not checked: {joined}. Returning partial results. "
             f"（部分结果：已达搜索时间上限，未查询：{joined}。）")
 
@@ -458,8 +550,9 @@ def search_nearby_pois_impl(
     Overpass HTTP requests and pacing sleeps; registering it as sync means Tool.execute runs
     it in an executor thread so the asyncio event loop stays responsive and the fc-loop's
     per-tool asyncio.wait_for can actually fire. All requested POI types share ONE
-    time.monotonic() deadline (POI_SEARCH_BUDGET_S): once the deadline passes, the remaining
-    types are returned as skipped with an honest note rather than silently overrunning.
+    time.monotonic() deadline (``poi_search_budget_s()``, derived to sit strictly inside the
+    fc-loop batch window): once the deadline passes, the remaining types are returned as
+    skipped with an honest note rather than silently overrunning.
 
     Args:
         address: 要搜索的地址
@@ -467,7 +560,8 @@ def search_nearby_pois_impl(
         radius: 搜索半径（米），默认 500m
         user_query: 用户原始查询（可选，用于智能推断 POI 类型）
     """
-    deadline = time.monotonic() + POI_SEARCH_BUDGET_S
+    budget_s = poi_search_budget_s()
+    deadline = time.monotonic() + budget_s
     try:
         # 🆕 如果有 user_query，根据用户查询智能推断 POI 类型
         if user_query and poi_type == "all":
@@ -529,12 +623,16 @@ def search_nearby_pois_impl(
         # 截止后不再发起任何 per-type 请求，把剩余类型如实标为 skipped。
         skipped: List[str] = []
         for idx, ptype in enumerate(types_to_query):
-            if time.monotonic() >= deadline:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 # No per-type request may be issued after the deadline.
                 skipped = list(types_to_query[idx:])
                 print(f"  ⏱️ [OSM POI] 预算已用尽，跳过剩余类型: {skipped}")
                 break
-            pois = query_osm_pois(lat, lon, ptype, radius, origin_lat=lat, origin_lon=lon)
+            # Clamp THIS request to what is left, so the last one issued cannot outlive the
+            # deadline that let it start and hand the batch window the win.
+            pois = query_osm_pois(lat, lon, ptype, radius, origin_lat=lat, origin_lon=lon,
+                                  timeout=remaining)
             if pois:
                 results[ptype] = pois[:5]  # 每种类型最多 5 个
                 print(f"  ✅ 找到 {len(pois)} 个 {POI_TYPES[ptype]['name']}")
@@ -542,7 +640,7 @@ def search_nearby_pois_impl(
             if idx < len(types_to_query) - 1 and time.monotonic() < deadline:
                 time.sleep(POI_PACING_S)
 
-        note = _skipped_note(skipped) if skipped else None
+        note = _skipped_note(skipped, budget_s) if skipped else None
 
         # A station name is the one POI the model has repeatedly supplied from memory
         # (observed: the same WC1H property reported as "Covent Garden" in one turn and

@@ -28,11 +28,10 @@ import csv
 import json
 import os
 import platform
-import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -40,13 +39,29 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # --------------------------------------------------------------------------- #
 # tiny IO / formatting helpers
 # --------------------------------------------------------------------------- #
-def _git_commit() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"], cwd=str(REPO_ROOT),
-            stderr=subprocess.DEVNULL).decode().strip()
-    except Exception:
-        return "unknown"
+_IDENTITY_CACHE: Dict[str, Any] = {}
+
+
+def _commit_identity(refresh: bool = False) -> Dict[str, Any]:
+    """Which commit generated this report, and WHO says so.
+
+    Replaces a git-only probe that returned the string ``"unknown"`` when git could not
+    answer — the normal case inside the container — even with PRODUCT_SHA pinned. Cached
+    per process so REPORT.md and CV_METRICS.md, written from one invocation, cannot name
+    different commits. ``refresh=True`` is for tests."""
+    if refresh or "record" not in _IDENTITY_CACHE:
+        from evaluation.results_package import resolve_commit_identity
+        _IDENTITY_CACHE["record"] = resolve_commit_identity(repo_root=REPO_ROOT)
+    return _IDENTITY_CACHE["record"]
+
+
+def _head_label() -> str:
+    """``‘commit’ (trust, source)`` for the report's own HEAD — never a bare SHA. A SHA
+    printed alone reads as verified; most of these are asserted or absent."""
+    ident = _commit_identity()
+    commit = ident["git_commit"]
+    shown = f"`{commit}`" if commit else "`unavailable`"
+    return f"{shown} (trust `{ident['commit_trust']}`, source `{ident['git_commit_source']}`)"
 
 
 def _rel(p: Path) -> str:
@@ -86,6 +101,45 @@ def _find_summaries(results: Path) -> List[dict]:
         if d:
             out.append({"path": p, "dir": p.parent.name, "data": d})
     return out
+
+
+def _labelled_result_docs(summaries: List[dict], *extras) -> List[Tuple[str, dict]]:
+    """``(filename, doc)`` for every result artifact this report aggregated. ``extras`` is
+    ``(name, doc)`` pairs; a doc that did not load is skipped."""
+    docs: List[Tuple[str, dict]] = [(f"{s['dir']}/summary.json", s["data"])
+                                    for s in summaries]
+    docs.extend((name, doc) for name, doc in extras if doc)
+    return docs
+
+
+def _group_by_identity(docs: List[Tuple[str, dict]]) -> List[dict]:
+    """Group result files by ``(commit, source, trust)`` — deliberately NOT by the raw
+    ``git_commit`` string.
+
+    This section used to de-duplicate on ``d.get("git_commit")`` alone, which was harmless
+    only while every package recorded null. Now that commits are real, that key would merge
+    a commit git READ OFF THE TREE with the same SHA an operator merely ASSERTED via
+    PRODUCT_SHA, and print one row as though the whole round were verified. The two carry
+    different evidential weight, so they stay separate rows and the reader sees the
+    disagreement.
+
+    Reading goes through :func:`results_package.describe_identity`, which handles every
+    package written before provenance existed (reported as ``unrecorded``, never silently
+    upgraded to a claim the file did not make) and never raises."""
+    from evaluation.results_package import describe_identity
+    groups: Dict[Tuple, dict] = {}
+    for label, doc in docs:
+        ident = describe_identity(doc)
+        key = (ident["git_commit"], ident["git_commit_source"], ident["commit_trust"])
+        groups.setdefault(key, {"identity": ident, "files": []})["files"].append(label)
+    return [groups[k] for k in
+            sorted(groups, key=lambda k: tuple("" if x is None else str(x) for x in k))]
+
+
+def _dirty_word(dirty) -> str:
+    """'clean'/'DIRTY'/'unknown' — ``unknown`` is a THIRD answer, never folded into
+    'clean'. A tree nobody looked at is not a tree that was found clean."""
+    return {True: "DIRTY", False: "clean"}.get(dirty, "unknown")
 
 
 def _disp(ratio) -> str:
@@ -381,16 +435,37 @@ def build_report_md(results: Path, timestamp: str) -> str:
           f"{', '.join('`' + str(t) + '`' for t in produced)}")
     a("")
 
-    # (2) git commit
+    # (2) git commit — commit AND provenance (2026-07-27). See _group_by_identity.
     a("## 2. Git commit\n")
-    a(f"- Report generated at HEAD: **`{_git_commit()}`**")
-    res_commits = sorted({d.get("git_commit") for d in
-                          [s["data"] for s in summaries] + [ablation_model, ablation_retr,
-                                                            fault, memory]
-                          if d and d.get("git_commit")})
-    if res_commits:
-        a(f"- Commit recorded in the result files: "
-          f"{', '.join('`' + str(c) + '`' for c in res_commits)}")
+    a(f"- Report generated at HEAD: **{_head_label()}**")
+    for w in _commit_identity()["identity_warnings"]:
+        a(f"  - **WARNING**: {w}")
+    groups = _group_by_identity(_labelled_result_docs(
+        summaries,
+        ("ablation_model.json", ablation_model),
+        ("ablation_retrieval.json", ablation_retr),
+        ("fault_summary.json", fault),
+        ("memory_eval.json", memory)))
+    if groups:
+        a("- Commit recorded in the result files, grouped by commit **and provenance**. "
+          "A SHA git read off the tree and the same SHA an operator asserted via "
+          "`PRODUCT_SHA` are not the same evidence, so they are never merged into one "
+          "row — and a file that recorded no commit gets its own row rather than "
+          "vanishing:")
+        for g in groups:
+            ident = g["identity"]
+            commit = (f"`{ident['git_commit']}`" if ident["git_commit"]
+                      else "_(no commit recorded)_")
+            a(f"  - {commit} — trust `{ident['commit_trust']}`, source "
+              f"`{ident['git_commit_source']}`, tree {_dirty_word(ident['git_dirty'])} "
+              f"— recorded in: {', '.join('`' + f + '`' for f in sorted(g['files']))}")
+            for w in ident["identity_warnings"]:
+                a(f"    - **WARNING**: {w}")
+        if len(groups) > 1:
+            a("  - **These result files do not share one identity.** More than one row "
+              "above means the artifacts aggregated here were not all produced by one "
+              "verified commit; they are not a single attributable measurement and must "
+              "not be cited as one.")
     a("")
 
     # (3) environment
@@ -409,8 +484,16 @@ def build_report_md(results: Path, timestamp: str) -> str:
 
     # (4) models + pricing/version note
     a("## 4. Models + versions\n")
-    reasoner = (ablation_model or {}).get("reasoner_model", "deepseek-reasoner")
-    a("- Router maps light nodes to `deepseek-chat` and strong/thinking nodes to "
+    # No default model names here, and no hardcoded ones. This line used to read
+    # "light nodes to `deepseek-chat` ... strong/thinking nodes to `deepseek-reasoner`" —
+    # the first hardcoded, the second a `.get` default. BOTH were RETIRED by the provider
+    # on 2026-07-24, so a report generated without an ablation file stated two dead models
+    # as the ones in use. Both now come from the ablation file's observation of the live
+    # router, and a missing value says missing.
+    _unrecorded = "not recorded (no ablation result file names it)"
+    reasoner = (ablation_model or {}).get("reasoner_model") or _unrecorded
+    chat = (ablation_model or {}).get("chat_model") or _unrecorded
+    a(f"- Router maps light nodes to `{chat}` and strong/thinking nodes to "
       f"`{reasoner}`.")
     a("- **Pricing / version note (important):** per `model_pricing.yaml`, `deepseek-chat` "
       "and `deepseek-reasoner` are the non-thinking / thinking modes of the SAME underlying "
@@ -824,7 +907,7 @@ def build_cv_md(results: Path, timestamp: str) -> str:
     L: List[str] = []
     a = L.append
     a("# CV_METRICS — RentCompass Evaluation\n")
-    a(f"_Generated {timestamp}, HEAD `{_git_commit()}`. Every number is copied verbatim from "
+    a(f"_Generated {timestamp}, HEAD {_head_label()}. Every number is copied verbatim from "
       "a result file; nothing is estimated. Each rate carries its denominator._\n")
 
     # =================== 可安全使用 =================== #

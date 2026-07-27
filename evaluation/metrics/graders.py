@@ -86,6 +86,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 WEEK_TO_MONTH = 52.0 / 12.0
 MONTH_TO_WEEK = 12.0 / 52.0
 DEFAULT_TOLERANCE = 1.0  # matches the critic's rounding floor
+# Length units. The constraint field is `distance_m`, so METRES are the canonical
+# denomination and every other unit is converted into it before comparison.
+MILE_TO_M = 1609.344
+KM_TO_M = 1000.0
+# Tenant Fees Act 2019: the tenancy deposit cap steps from five weeks' rent to six when
+# the ANNUAL rent reaches this figure. Inclusive — exactly £50,000 is already six weeks.
+DEPOSIT_CAP_THRESHOLD_ANNUAL_GBP = 50_000.0
 # Numbers of these types are treated as "monetary" for the money-grounded rate.
 MONEY_FIELDS = {
     "monthly_rent", "weekly_rent", "rent", "deposit", "total_move_in",
@@ -101,7 +108,104 @@ _MINUTES_RE = re.compile(r"\b([0-9]{1,3})\s*(?:-|to|–)?\s*(?:min\b|mins\b|minu
 # zh commute strings in tool payloads (bilingual partial notes etc.): 「31 分钟」.
 _CJK_MINUTES_RE = re.compile(r"([0-9]{1,3})\s*分钟")
 _DISTANCE_M_RE = re.compile(r"\b([0-9]{1,4})\s*m\b(?!in)", re.IGNORECASE)  # metres, not "min"
+# A distance in ANY unit the answers actually use. The constraint is called
+# `distance_m`, but UK prose quotes walking distances in metres, driving distances in
+# miles and cycle routes in kilometres, interchangeably and often in the same answer.
+# Reading only the metre-denominated ones made the checker blind to exactly the
+# fabrication it exists to catch: D5's evidence is "No supermarket found within 300m",
+# and its answer invents "St Ives (about 3-4 miles away)" and "Cambridge (about 10 miles
+# away)" — numbers that are not in evidence in any unit, but which `_DISTANCE_M_RE`
+# cannot see because "miles" is not "m". Longest alternatives first so `miles` is never
+# consumed as a bare `mi`, and `m` last so it cannot pre-empt `mile`/`metre`.
+_DISTANCE_ANY_RE = re.compile(
+    r"(?<![£$€/0-9A-Za-z_.])([0-9][0-9,]*(?:\.[0-9]+)?)\s*"
+    r"(kilometres|kilometers|kilometre|kilometer|metres|meters|metre|meter|"
+    r"miles|mile|km|mi|m)\b(?!in)",
+    re.IGNORECASE)
+_DISTANCE_UNIT_TO_M = {
+    "m": 1.0, "metre": 1.0, "metres": 1.0, "meter": 1.0, "meters": 1.0,
+    "km": KM_TO_M, "kilometre": KM_TO_M, "kilometres": KM_TO_M,
+    "kilometer": KM_TO_M, "kilometers": KM_TO_M,
+    "mi": MILE_TO_M, "mile": MILE_TO_M, "miles": MILE_TO_M,
+}
+
+
+def _quoted_precision_tolerance_m(raw: str, unit_m: float) -> float:
+    """Metres of slack a figure quoted as ``raw`` in a unit worth ``unit_m`` metres
+    inherently carries.
+
+    A distance written "0.8 miles" is not a claim about 1287.4752 metres; it is a claim
+    that the true distance rounds to 0.8 of a mile, i.e. anything in [0.75, 0.85) mi —
+    ±0.05 mi = ±80.5 m. Judging it tighter than its own printed precision would
+    manufacture failures out of the model's ROUNDING rather than out of fabrication,
+    which is the inverse error this whole unit fix must not commit: A4 says "0.8 miles"
+    against an evidence `distance_miles` of 0.82 and is telling the truth.
+
+    So the tolerance is the half-ULP of the quoted figure — half of one unit in its last
+    printed decimal place — converted to metres, floored at the module's existing
+    ``DEFAULT_TOLERANCE``. Consequences, spelled out:
+
+        "300 m"      0 dp, unit 1 m     -> max(1.0, 0.5)      = 1.0 m   (unchanged)
+        "0.34 miles" 2 dp, unit 1609 m  -> max(1.0, 8.05)     = 8.05 m
+        "5.1 km"     1 dp, unit 1000 m  -> max(1.0, 50.0)     = 50.0 m
+        "0.8 miles"  1 dp, unit 1609 m  -> max(1.0, 80.47)    = 80.47 m
+        "10 miles"   0 dp, unit 1609 m  -> max(1.0, 804.67)   = 804.67 m
+
+    The metre row is the point of the floor: whole-metre figures keep EXACTLY today's
+    1.0 m tolerance, so no existing metre-denominated verdict can move. The mile rows
+    are deliberately generous — a coarsely quoted mile figure genuinely does not pin the
+    distance any harder than that, and it costs nothing here, because a fabrication like
+    D5's is not "within a wide tolerance of the evidence", it is absent from the evidence
+    in every unit.
+    """
+    dec = len(raw.partition(".")[2])
+    return max(DEFAULT_TOLERANCE, 0.5 * (10.0 ** -dec) * unit_m)
+
+
+def _distance_matches(text: str):
+    """Yield ``(value_in_unit, unit_in_metres, tolerance_m, start, end)`` for every
+    distance in ``text``,
+    whatever unit it is quoted in. Used on BOTH sides of the comparison — the answer and
+    the evidence — because mining different text on the two sides is what turns a figure
+    quoted verbatim from a tool into a "fabrication" (the C6/E9 ruling, commit 4edf3b4).
+    Concretely: D5's tool message says "within 300m" and the legacy arm's answer repeats
+    it as "(300 metres)"; only symmetric extraction keeps that honest answer honest."""
+    for m in _DISTANCE_ANY_RE.finditer(text or ""):
+        raw = m.group(1).replace(",", "")
+        val = _to_float(raw)
+        if val is None:
+            continue
+        unit_m = _DISTANCE_UNIT_TO_M[m.group(2).lower()]
+        yield (val, unit_m, _quoted_precision_tolerance_m(raw, unit_m),
+               m.start(), m.end())
+
+
+def _distance_key_to_m(key: str, num: float) -> float:
+    """Convert an evidence distance leaf to metres, honouring the UNIT IN ITS KEY.
+
+    `search_properties` returns `distance_miles`, and ``"distance_m" in "distance_miles"``
+    is True — so a 0.82-mile distance was being added to the metre pool as ``round(0.82)``
+    = 1. The pool was not merely missing miles, it was recording them as ~1 metre."""
+    k = (key or "").lower()
+    if "mile" in k or k.endswith("_mi"):
+        return num * MILE_TO_M
+    if "_km" in k or k.endswith("km"):
+        return num * KM_TO_M
+    return num
 _SCORE_RE = re.compile(r"\b([0-9]{1,3})\s*/\s*100\b")
+# The same score with the denominator SPELLED OUT — "a safety score of 71 out of 100"
+# (E9/E3 on the legacy arm state it this way and never write "71/100").
+_SCORE_OUT_OF_RE = re.compile(r"\b([0-9]{1,3})\s*out\s*of\s*100\b", re.IGNORECASE)
+# …and the score with NO denominator at all, which only CJK answers write: 「安全评分 60」.
+# This one is anchored on the LABEL and separated from it by nothing but whitespace,
+# a colon or a copula. That tightness is the whole point. A bare-integer reading of the
+# neighbourhood would have picked the 0 out of D1's
+#     "Formula: Safety Score = max(0, 100 - Total Crimes ÷ 2)"
+# and scored the model's explanation of the formula as a fabricated safety score. The
+# separator class excludes "=", "(" and every letter, so a formula can never reach it.
+_SCORE_LABELLED_RE = re.compile(
+    r"(?:safety[\s_-]*(?:score|rating)|安全评分|安全分数|治安评分)"
+    r"[\s:：是为约的]{0,6}([0-9]{1,3})\b", re.IGNORECASE)
 _POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}[0-9][A-Z0-9]?\s*[0-9][A-Z]{2})\b", re.IGNORECASE)
 # Boundary classes are ASCII-word only: Python's \w matches CJK, which made numbers
 # embedded in Chinese prose (「最高1400英镑」) invisible to extraction — 英/高 counted
@@ -342,23 +446,139 @@ def _listings_from_evidence(evidence: List[dict]) -> List[dict]:
     return out
 
 
+# Walking pace band, metres per minute. 80 m/min (≈4.8 km/h) is the usual planning
+# figure; the band spans a slow walk to a brisk one.
+WALK_PACE_MIN_M_PER_MIN = 50.0
+WALK_PACE_MAX_M_PER_MIN = 110.0
+# …and only for distances that are plausibly walked at all.
+WALK_DERIVATION_MAX_M = 1000.0
+
+
+def _is_walk_time_for_adjacent_distance(answer: str, start: int, end: int,
+                                        minutes: float, grounded_distances: set) -> bool:
+    """Is this minutes figure the walk time of a distance printed BESIDE it, which the
+    evidence already grounds?
+
+    E3 answers a POI search with three bullets of identical construction:
+
+        - Tesco Express      -- 140m (2 min walk)
+        - Sainsbury's Local  -- 220m (3 min walk)
+        - Waitrose           -- 280m (4 min walk)
+
+    All three distances are in the fixture and all three minute figures are the same
+    ~70 m/min derivation. The checker nonetheless SPARED the 2 and flagged the 3 and
+    the 4 — not for any property of the claims, but because "within a 5-minute walk"
+    earlier in the paragraph fell inside the ±55/+40 character window of the FIRST
+    bullet and not the other two. A rule that reaches opposite verdicts on two of three
+    identical constructs because of where an unrelated sentence sits is not a rule.
+
+    The replacement binds the minutes to the distance it is the walk time OF, inside the
+    same clause. That is not the accidental-window problem wearing a hat: the window
+    that caused it belonged to a DIFFERENT sentence and leaked; this one is the
+    construct itself, "<distance> (<time> walk)", and it evaluates identically for
+    every bullet that has the shape and for none that does not.
+
+    It stays a real constraint in three ways. The distance must already be GROUNDED, so
+    an invented distance cannot bootstrap an invented time. The implied pace must be a
+    human walking pace, so "a 15 minute walk" to a 140 m shop (≈9 m/min) is still
+    unsupported. And the distance must be short enough to walk at all, so a 5.1 km
+    cycle route beside "19 min" (≈268 m/min) is not laundered into a walk.
+
+    F9 is the case that fixes the boundary: "Elizabeth line gets you to Liverpool Street
+    in ~3 min, Canary Wharf in ~6 min" are TRANSIT times with no distance in their
+    clause, and they stay unsupported even though the same answer's POI results happen
+    to contain distances that would derive those numbers.
+    """
+    if minutes <= 0:
+        return False
+    pre, post = _clause_windows(answer, start, end, width=60)
+    clause = pre + answer[start:end] + post
+    for val, unit_m, tol_m, _s, _e in _distance_matches(clause):
+        metres = val * unit_m
+        if not (0.0 < metres <= WALK_DERIVATION_MAX_M):
+            continue
+        if not _near(metres, grounded_distances, max(tol_m, DEFAULT_TOLERANCE)):
+            continue
+        pace = metres / minutes
+        if WALK_PACE_MIN_M_PER_MIN <= pace <= WALK_PACE_MAX_M_PER_MIN:
+            return True
+    return False
+
+
+def _deposit_cap_weeks(annual_rent: float) -> float:
+    """Weeks of rent a tenancy deposit is capped at, from the ANNUAL rent.
+
+    Tenant Fees Act 2019: five weeks, rising to six when the annual rent is £50,000 or
+    more. The threshold is INCLUSIVE — exactly £50,000 is six weeks.
+
+    Computed here, in the grader, from pure arithmetic. `app/core/tenancy_reference.py`
+    holds the product's implementation of the same statute and is NOT imported: the
+    grader importing product code has been granted exactly once, by name, for
+    ``claims_no_retrieval``, and an evaluator that asks the system under test what the
+    right answer is has stopped being an evaluator.
+    """
+    return 6.0 if annual_rent >= DEPOSIT_CAP_THRESHOLD_ANNUAL_GBP else 5.0
+
+
 def _money_derivations(b: float) -> set:
     """Every sanctioned UK figure derivable from a single base amount ``b``.
 
     ``b`` may be quoted weekly OR monthly (free text rarely disambiguates), so both
     readings are expanded. Covers the exact formulas in ``benchmark/README.md``:
-    weekly↔monthly conversion, the 5-week / 6-week statutory deposit caps, and the
+    weekly↔monthly conversion, the statutory deposit cap, and the
     ``first_month_rent + deposit`` total move-in cost. These are all arithmetically
     valid, so figures matching any of them count as GROUNDED (not fabricated).
+
+    THE DEPOSIT MULTIPLE IS NOT A CHOICE. This set used to contain BOTH ``wk * 5.0`` and
+    ``wk * 6.0``, so whichever cap the model applied was "derivable" and therefore
+    supported. The statute does not offer two answers: it offers one, selected by the
+    annual rent. B7 asks about £4,500 pcm — £54,000 a year, six weeks, £6,230.77 — and
+    shipped the five-week figure £5,192.31, which ``no_fabricated_number[deposit]``
+    called grounded. Listing both multiples made the constraint unable to detect the one
+    error the statute makes possible.
+
+    So the multiple is COMPUTED per reading, from that reading's own annual rent:
+
+        b read as MONTHLY: annual = b × 12,  deposit = (b × 12/52) × weeks(annual)
+        b read as WEEKLY:  annual = b × 52,  deposit = b × weeks(annual)
+
+    Worked, against the two cases that pin it:
+
+        B7  £4,500 pcm -> annual £54,000 >= £50,000 -> 6 weeks
+            weekly = 4500 × 12/52 = £1,038.4615…;  × 6 = £6,230.77   (£5,192.31 is NOT
+            derivable: it is the five-week reading of a rent that is over the line)
+        B4  £1,500 pcm -> annual £18,000 <  £50,000 -> 5 weeks
+            weekly = 1500 × 12/52 =   £346.1538…;  × 5 = £1,730.77   (£2,076.92 is NOT
+            derivable: it is the six-week reading of a rent that is under the line)
+
+    Both readings are still expanded, because free text still does not disambiguate
+    weekly from monthly — what is no longer expanded is both MULTIPLES for one reading.
+
+    The ANNUAL rent (``b × 12`` / ``b × 52``) is derivable in its own right, not merely
+    as the deposit rule's private intermediate. B9 asks "£475 per week — what is that
+    per calendar month?" and the legacy arm answers by SHOWING ITS WORKING:
+
+        £475 x 52 = £24,700 per year
+        £24,700 / 12 = £2,058.33 per calendar month
+
+    £2,058.33 was derivable and £24,700 was not, so an answer that displayed the
+    sanctioned formula one step at a time was recorded as fabricating a number, while
+    an answer that printed only the result was clean. Penalising shown working is
+    backwards, and the annual figure is the same arithmetic the £50,000 deposit
+    threshold is already computed from.
     """
     wk = b * MONTH_TO_WEEK     # b read as monthly -> weekly
     mo = b * WEEK_TO_MONTH     # b read as weekly  -> monthly
+    weeks_if_monthly = _deposit_cap_weeks(b * 12.0)
+    weeks_if_weekly = _deposit_cap_weeks(b * 52.0)
     vals = {
         b, wk, mo,
-        b * 5.0, b * 6.0,      # b read as weekly -> 5/6-week deposit
-        wk * 5.0, wk * 6.0,    # b read as monthly -> 5/6-week deposit
-        b + wk * 5.0,          # b monthly: first month + 5-week deposit (move-in)
-        mo + b * 5.0,          # b weekly: first month + 5-week deposit (move-in)
+        b * 12.0,                  # b read as monthly -> ANNUAL rent
+        b * 52.0,                  # b read as weekly  -> ANNUAL rent
+        b * weeks_if_weekly,       # b read as weekly  -> statutory deposit
+        wk * weeks_if_monthly,     # b read as monthly -> statutory deposit
+        b + wk * weeks_if_monthly,  # b monthly: first month + deposit (move-in total)
+        mo + b * weeks_if_weekly,   # b weekly:  first month + deposit (move-in total)
     }
     return {round(v, 2) for v in vals}
 
@@ -405,9 +625,13 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
             elif "safety_score" in key or key == "score":
                 scores.add(round(num))
                 has_crime = True
-            elif "distance_m" in key or key == "distance":
+            elif "distance" in key or key == "dist":
+                # Key-unit aware: `distance_m` / `distance_miles` / `distance_km` all
+                # normalise to METRES. The old test was `"distance_m" in key`, which
+                # matches "distance_miles" as a SUBSTRING and then stored the mile
+                # figure as though it were metres (0.82 -> round(0.82) -> 1).
                 has_distance = True
-                distances.add(round(num))
+                distances.add(round(_distance_key_to_m(key, num), 2))
             elif "monthly_rent" in key or "weekly_rent" in key:
                 add_money(num)
         # Commute figures that ride in STRING fields — listing rows carry the search
@@ -441,6 +665,32 @@ def _build_evidence_pool(ctx: GradeContext) -> _EvidencePool:
                         has_commute = True
                         for val in _range_values(s, m.start(), n):
                             commute.add(round(val))
+            # DISTANCES that ride in STRING fields, for the same symmetry reason as the
+            # commute figures above. `search_nearby_pois` states its search radius only
+            # in prose — `message: "No supermarket found within 300m of this address."` —
+            # and the legacy arm's answer quotes it back as "within a short walk (300
+            # metres)". Now that the answer side reads "300 metres" (it could not before,
+            # because `_DISTANCE_M_RE` required a bare "m"), the evidence side must read
+            # "300m" too, or a verbatim quotation of the tool becomes a fabrication.
+            # `route_summary: "Cycle via Regent's Canal towpath (approx 5.1 km)"` (C7) is
+            # the same shape. Key-filtered, like the commute path, so distances mentioned
+            # in free-text listing `description`s never widen the grounded pool.
+            # `distance_display` is the tool's OWN rendering of the number beside it
+            # ("180m" for a raw `distance_m: 184`), and it is the string an answer
+            # copies. Reading only the raw leaf made F9's verbatim "Sainsbury's 180m"
+            # miss the ±1.0 m tolerance and read as fabricated. `display` is matched as
+            # a key fragment, not as the single literal `distance_display`, because the
+            # display-vs-raw split is a house convention, not a one-off: the fixtures
+            # also carry `fare_display`, `route_summary`, `summary` and `formatted`.
+            # (`fare_display` is money and reaches the money pool through
+            # `_iter_numbers`; it is harmless here because a bare "£12.50" carries no
+            # length unit and so yields no distance.)
+            if ("distance" in key or "route" in key or "travel" in key
+                    or "display" in key or key in ("message", "summary", "note")):
+                for val, unit_m, _tol, pos, _end in _distance_matches(s):
+                    has_distance = True
+                    for endpoint in _range_values(s, pos, val):
+                        distances.add(round(endpoint * unit_m, 2))
         for s in _iter_strings(data):
             for pc in _POSTCODE_RE.finditer(s):
                 addresses.append(pc.group(1).upper().replace(" ", ""))
@@ -601,9 +851,14 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
             if key in seen:
                 continue
             seen.add(key)
-            result.claims.append(
-                classify_number(val, "commute_minutes", pool.commute_minutes,
-                                pool.raw_commute, tol=1.0))
+            c = classify_number(val, "commute_minutes", pool.commute_minutes,
+                                pool.raw_commute, tol=1.0)
+            if c.status == "unsupported" and _is_walk_time_for_adjacent_distance(
+                    answer, m.start(), m.end(), val, pool.distances):
+                c = ClaimCheck(kind="commute_minutes", value=val, status="grounded",
+                               detail="walk time derived from an adjacent grounded "
+                                      "distance")
+            result.claims.append(c)
 
     # commute minutes, CJK. Previously NOT extracted at all: `_CJK_MINUTES_RE` built the
     # evidence pool from tool data but never read the ANSWER, so a zh reply produced zero
@@ -632,31 +887,44 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
                 classify_number(val, "commute_minutes", pool.commute_minutes,
                                 pool.raw_commute, tol=1.0))
 
-    # safety scores (NN/100) — check before generic crime counts
-    for m in _SCORE_RE.finditer(answer):
-        v = _to_float(m.group(1))
-        if v is None:
-            continue
-        key = ("score", round(v))
-        if key in seen:
-            continue
-        seen.add(key)
-        result.claims.append(
-            classify_number(v, "safety_score", pool.safety_scores,
-                            pool.raw_scores, tol=0.5, neighborhood_guard=False))
+    # safety scores — check before generic crime counts.
+    #
+    # Three shapes, all of which must carry EITHER an explicit /100 denominator or a
+    # tight safety-score label. That requirement is what keeps this extractor away from
+    # percentages ("51% of crimes were antisocial behaviour" has no denominator and no
+    # label) and away from arithmetic inside an explained formula. HANDOFF §0 instance #4
+    # is a fabricated safety score — "Hackney: 9 crimes, 96/100 Very Safe" against a real
+    # 1,657/month — and while the SCORING formula was fixed and pinned by
+    # tests/test_safety_scoring.py, an invented score in the ANSWER TEXT still needs a
+    # claim here before any constraint can reach it.
+    for regex in (_SCORE_RE, _SCORE_OUT_OF_RE, _SCORE_LABELLED_RE):
+        for m in regex.finditer(answer):
+            v = _to_float(m.group(1))
+            if v is None or not (0.0 <= v <= 100.0):
+                continue
+            key = ("score", round(v))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.claims.append(
+                classify_number(v, "safety_score", pool.safety_scores,
+                                pool.raw_scores, tol=0.5, neighborhood_guard=False))
 
-    # POI distances (metres)
-    for m in _DISTANCE_M_RE.finditer(answer):
-        v = _to_float(m.group(1))
-        if v is None:
-            continue
-        key = ("dist", round(v))
-        if key in seen:
-            continue
-        seen.add(key)
-        result.claims.append(
-            classify_number(v, "distance_m", pool.distances,
-                            pool.raw_distances, tol=1.0))
+    # POI distances — normalised to METRES whatever unit they were quoted in, and
+    # judged against the metre pool with the quoted figure's own precision as the
+    # tolerance (see `_quoted_precision_tolerance_m`). `_range_values` is applied for
+    # the same reason it is applied to minutes: the unit follows the SECOND endpoint,
+    # so "about 3-4 miles away" would otherwise yield only the 4.
+    for val, unit_m, tol_m, pos, _end in _distance_matches(answer):
+        for endpoint in _range_values(answer, pos, val):
+            val_m = endpoint * unit_m
+            key = ("dist", round(val_m, 2))
+            if key in seen:
+                continue
+            seen.add(key)
+            result.claims.append(
+                classify_number(val_m, "distance_m", pool.distances,
+                                pool.raw_distances, tol=tol_m))
 
     # addresses / postcodes
     ans_pcs = {pc.group(1).upper().replace(" ", "") for pc in _POSTCODE_RE.finditer(answer)}
@@ -766,12 +1034,17 @@ _MISSING_MARKERS = ("no results", "none found", "not available", "couldn't find"
                     "could not find", "no listings", "not listed", "isn't listed",
                     "is not listed", "no data", "unavailable", "wasn't able",
                     "was not able", "couldn't compute", "could not compute",
-                    # NOTE: no POI-specific literal belongs here. "no supermarkets" used
+                    # NOTE: NO domain-noun literal belongs here. "no supermarkets" used
                     # to sit in this list, which is why D5 ("no supermarkets within a
                     # short walk…") passed while D11's structurally identical "no
-                    # pharmacies…" failed. The general absence machinery below now
-                    # carries both.
-                    "unable to", "not found", "no properties",
+                    # pharmacies…" failed. "no properties" was left behind in the same
+                    # list by the same change and is the same class of defect one noun
+                    # over: it privileges "properties" above "flats"/"homes"/"rooms" for
+                    # no reason a reader could defend. Both are gone; `_NO_QUANTITY_RE`
+                    # already enumerates `propert(y|ies)` among the QUANTITY nouns (a
+                    # closed, checkable class — unlike shop types), so the phrase and all
+                    # of its synonyms are carried by the general machinery.
+                    "unable to", "not found",
                     # phrasings the model actually uses to note absent data (validated live)
                     "don't include", "doesn't include", "do not include", "does not include",
                     "didn't include", "did not include", "doesn't cover", "does not cover",
@@ -1134,6 +1407,28 @@ _COMMUTE_THRESHOLD_MARKERS = (
 )
 
 
+# A DISTANCE figure that bounds a search rather than measuring one. "None within 500m"
+# is E6's answer DECLINING to state a distance — the honest behaviour the case tests
+# for — and it was being graded as an asserted distance because the threshold filter
+# below existed only for money and minutes and returned "asserted" for every other
+# kind. Hedges that still assert a measurement ("about", "around") are deliberately
+# absent, exactly as in the commute set.
+_DISTANCE_THRESHOLD_MARKERS = (
+    "<", ">", "≤", "≥", "within", "under", "less than", "no more than", "at most",
+    "up to", "radius", "none within", "nothing within", "no ", "beyond", "further than",
+    "farther than", "outside", "at least", "more than", "over ",
+    "以内", "范围内", "半径", "以外",
+)
+# The same idea for an NN/100 safety score used as a BAR rather than a reading
+# ("anything above 70 is fine"). "out of" is deliberately NOT here: "71 out of 100" is
+# the assertion itself, not a bound on it.
+_SCORE_THRESHOLD_MARKERS = (
+    "<", ">", "≤", "≥", "above", "below", "at least", "at most", "minimum", "maximum",
+    "threshold", "or higher", "or above", "or better", "or worse", "scale of",
+    "anything over", "anything above", "target", "以上", "以下",
+)
+
+
 def _number_asserts_field_value(answer: str, value: float, kind: str) -> bool:
     """True when the number ``value`` in ``answer`` is stated as a CONCRETE value for
     its quantity (e.g. 'the deposit is £2000', 'the commute is 45 minutes'); False when
@@ -1143,17 +1438,33 @@ def _number_asserts_field_value(answer: str, value: float, kind: str) -> bool:
     as an assertion. Conservative: if the number can't be localised, treat it as
     asserted so genuine fabrications are never spared."""
     al = answer or ""
+    hits = []
     if kind == "money":
-        regex, markers = _MONEY_RE, _NONASSERTION_MARKERS
+        markers = _NONASSERTION_MARKERS
+        regexes = (_MONEY_RE,)
     elif kind == "commute_minutes":
-        regex, markers = _MINUTES_RE, _COMMUTE_THRESHOLD_MARKERS
+        markers = _COMMUTE_THRESHOLD_MARKERS
+        regexes = (_MINUTES_RE,)
+    elif kind == "safety_score":
+        markers = _SCORE_THRESHOLD_MARKERS
+        regexes = (_SCORE_RE, _SCORE_OUT_OF_RE, _SCORE_LABELLED_RE)
+    elif kind == "distance_m":
+        # Distances need their own localisation because the CLAIM is in metres while
+        # the TEXT may be in miles or km: matching on the printed digits would never
+        # find "0.8 miles" for a 1287.48 m claim. The quoted figure's own precision
+        # tolerance is reused so the match is as wide as the claim itself.
+        markers = _DISTANCE_THRESHOLD_MARKERS
+        regexes = ()
+        for val, unit_m, tol_m, start, end in _distance_matches(al):
+            if abs(val * unit_m - value) <= max(tol_m, 0.5):
+                hits.append((start, end))
     else:
         return True
-    hits = []
-    for m in regex.finditer(al):
-        v = _to_float(m.group(1))
-        if v is not None and abs(v - value) <= (0.5 if kind == "money" else 0.5):
-            hits.append((m.start(), m.end()))
+    for regex in regexes:
+        for m in regex.finditer(al):
+            v = _to_float(m.group(1))
+            if v is not None and abs(v - value) <= 0.5:
+                hits.append((m.start(), m.end()))
     if not hits:
         return True
     for s, e in hits:
@@ -1182,7 +1493,7 @@ def _field_number_offenders(ctx, field_name: str):
             continue
         if c.status not in ("unsupported", "contradicted"):
             continue
-        if c.kind in ("money", "commute_minutes") and isinstance(c.value, (int, float)) \
+        if isinstance(c.value, (int, float)) and not isinstance(c.value, bool) \
                 and not _number_asserts_field_value(answer, float(c.value), c.kind):
             # A hedged estimate / bucket threshold / unrelated quantity is not a
             # fabricated field value — "under £50k annual rent", "(< 20 min)". Applies
@@ -1191,6 +1502,83 @@ def _field_number_offenders(ctx, field_name: str):
             continue
         offenders.append(c)
     return offenders
+
+
+# --------------------------------------------------------------------------- #
+# The SEMANTIC field vocabulary — the middle ground between "the internal identifier
+# must appear in prose" and "no field check at all".
+#
+# The identifier gate was removed for a good reason: ``field`` holds ``user_memory``,
+# ``pois``, ``listing_2_commute``, and no human answer will ever contain those strings,
+# so G6 and D11 were false failures. But removing it wholesale left the constraint
+# satisfiable by an absence statement about ANYTHING. Verified live against mainline:
+#
+#     constraint: must_note_missing_data[crime_count]
+#     answer:     "Viewing slots are not available at weekends."
+#       marker_hit=True ('not available'), offenders(crime_count)=[]  ->  PASSES
+#
+# Silence about the required field plus any unrelated disclaimer is not noting missing
+# data. So coverage is derived from the words a HUMAN uses for the field, never from the
+# identifier. Keys are matched exactly first, then by longest containing substring, so
+# ``listing_2_commute``/``commute_destination`` resolve to ``commute`` and
+# ``within_budget_listings`` to ``listings`` without needing their own rows.
+#
+# A field with NO row is UNGATED — a table that silently failed every field it forgot
+# would be the identifier gate again, wearing different clothes.
+_FIELD_SEMANTIC_TOKENS: Dict[str, Tuple[str, ...]] = {
+    "crime": ("crime", "safety", "safe", "police", "offence", "offense", "burglar",
+              "antisocial", "anti-social", "data.police", "治安", "犯罪", "安全"),
+    "pois": ("supermarket", "pharmac", "chemist", "shop", "store", "grocer", "amenit",
+             "point of interest", "points of interest", "poi", "convenience",
+             "restaurant", "cafe", "gym", "park", "school", "nursery", "launderette",
+             "dentist", "超市", "药店", "商店", "便利店"),
+    "user_memory": ("saved", "save", "remember", "memor", "know about you",
+                    "knowledge of you", "on file", "stored", "profile", "preference",
+                    "previous conversation", "previous message", "prior conversation",
+                    "prior context", "past conversation", "first chat",
+                    "first interaction", "told me", "you mentioned", "about you",
+                    "记得", "保存", "记忆", "之前"),
+    "bills": ("bill", "utilit", "council tax", "gas", "electric", "water", "energy",
+              "included", "inclusive", "水电", "账单", "包含"),
+    "budget": ("budget", "price range", "spend", "afford", "how much", "预算"),
+    "commute": ("commute", "journey", "travel", "transport", "station", "destination",
+                "tube", "bus", "train", "walk", "cycle", "distance", "minute", "min to",
+                "getting to", "通勤", "路程", "交通"),
+    "deposit": ("deposit", "bond", "押金"),
+    "fare": ("fare", "ticket", "travelcard", "oyster", "transport cost", "travel cost",
+             "cost of travel", "车费", "票价"),
+    "listings": ("listing", "propert", "flat", "apartment", "home", "place", "result",
+                 "room", "accommodation", "option", "match", "house", "房源", "房子"),
+    "studio": ("studio", "listing", "propert", "flat", "result", "room", "option",
+               "单间", "开间"),
+    "availab": ("availab", "viewing", "vacan", "move-in", "move in", "when it",
+                "occupanc", "空房", "看房"),
+    "epc": ("epc", "energy", "efficiency", "rating", "certificate", "能效"),
+}
+
+
+def _field_semantic_tokens(field: str) -> Optional[Tuple[str, ...]]:
+    """Tokens a human would use for ``field``, or None when the field is not in the
+    table (in which case the caller must NOT gate on it)."""
+    f = (field or "").lower()
+    if not f:
+        return None
+    if f in _FIELD_SEMANTIC_TOKENS:
+        return _FIELD_SEMANTIC_TOKENS[f]
+    hits = [k for k in _FIELD_SEMANTIC_TOKENS if k in f]
+    if not hits:
+        return None
+    return _FIELD_SEMANTIC_TOKENS[max(hits, key=len)]
+
+
+def _answer_references_field(answer: str, field: str) -> bool:
+    """Does the answer talk about ``field`` AT ALL, in human words? Ungated (True) for a
+    field with no semantic row — see ``_FIELD_SEMANTIC_TOKENS``."""
+    tokens = _field_semantic_tokens(field)
+    if tokens is None:
+        return True
+    al = (answer or "").lower()
+    return any(t in al for t in tokens)
 
 
 def _asserts_data_absent(answer: str, field: str) -> bool:
@@ -1213,9 +1601,14 @@ def _asserts_data_absent(answer: str, field: str) -> bool:
     ``not _field_number_offenders(...)`` guard: an answer that claims absence while
     stating an invented figure for the field still fails.
 
-    ``field`` is kept in the signature — deliberately unused — so every call site still
-    reads as "does this answer assert THIS field's data absent", and so a future
-    field-aware synonym table has somewhere to go.
+    ``field`` is kept in the signature — deliberately unused HERE — so every call site
+    still reads as "does this answer assert THIS field's data absent". The field-aware
+    synonym table this docstring reserved a hook for now exists as
+    ``_FIELD_SEMANTIC_TOKENS`` / ``_answer_references_field``, and is applied by
+    ``_c_must_note_missing_data`` to the DISJUNCTION of this signal and the lexical
+    ``_MISSING_MARKERS`` one. It is deliberately not applied inside this function: the
+    hole the review found was in the lexical branch, and gating only the structural
+    branch would leave it open.
     """
     al = (answer or "").lower()
     return (bool(_ABSENCE_VERB_RE.search(al)) or bool(_NO_QUANTITY_RE.search(al))
@@ -1525,15 +1918,25 @@ def _c_must_note_missing_data(con, ctx) -> ConstraintResult:
     claims a figure is unavailable and then supplies it has not noted missing data; it
     has contradicted itself. Making the guard cover both branches is what makes the
     documented safety property actually true, not a new obligation.
+
+    ``_answer_references_field`` is the THIRD term, and it is what stops "state an
+    absence about anything" from satisfying "note THIS field's absence". It is applied
+    to the disjunction, not to one branch, because the hole was in the lexical branch:
+    "Viewing slots are not available at weekends." is a ``_MISSING_MARKERS`` hit and was
+    passing ``must_note_missing_data[crime_count]``. It is a SEMANTIC test — crime /
+    safety / police, not the identifier ``crime_count`` — so it does not reintroduce the
+    unsatisfiable gate that G6 and D11 were failing.
     """
     field = con.get("field") or ""
     al = (ctx.final_answer or "").lower()
     marker_hit = any(mk in al for mk in _MISSING_MARKERS)
     structural = _asserts_data_absent(ctx.final_answer or "", field)
+    references = _answer_references_field(ctx.final_answer or "", field)
     offenders = _field_number_offenders(ctx, field)
-    ok = (marker_hit or structural) and not offenders
+    ok = (marker_hit or structural) and references and not offenders
     return ConstraintResult("must_note_missing_data", ok,
                             f"field={field} marker={marker_hit} structural={structural} "
+                            f"references={references} "
                             f"offending={[(o.kind, o.value, o.status) for o in offenders]}",
                             heuristic=True)
 
@@ -1887,10 +2290,21 @@ def _route_matches(route: Any, tool: str) -> bool:
 
 
 def _field_to_kind(field_name: str) -> Optional[str]:
+    """Map a constraint's ``field`` to the CLAIM KIND that grade_grounding emits for it.
+
+    A field that maps to no kind is unreachable by the fabrication checkers: they filter
+    claims by kind, so a kind nothing produces yields an empty offender set and the
+    constraint passes unconditionally. ``safety_score`` was in that state — the answer
+    side has emitted ``safety_score`` claims all along, but no field name resolved to
+    them, so ``no_fabricated_number[safety_score]`` was a silent no-op no matter what a
+    case declared. See ``test_every_field_kind_is_actually_emitted`` for the guard.
+    """
     f = (field_name or "").lower()
     if f in ("monthly_rent", "weekly_rent", "rent", "deposit", "price",
              "average_rent", "monthly_commute_cost", "fare", "total_move_in"):
         return "money"
+    if f in ("safety_score", "safety", "score", "safety_rating"):
+        return "safety_score"
     if f in ("duration_minutes", "commute"):
         return "commute_minutes"
     if f in ("crime_count", "crimes"):

@@ -446,6 +446,65 @@ def _listings_from_evidence(evidence: List[dict]) -> List[dict]:
     return out
 
 
+# Walking pace band, metres per minute. 80 m/min (≈4.8 km/h) is the usual planning
+# figure; the band spans a slow walk to a brisk one.
+WALK_PACE_MIN_M_PER_MIN = 50.0
+WALK_PACE_MAX_M_PER_MIN = 110.0
+# …and only for distances that are plausibly walked at all.
+WALK_DERIVATION_MAX_M = 1000.0
+
+
+def _is_walk_time_for_adjacent_distance(answer: str, start: int, end: int,
+                                        minutes: float, grounded_distances: set) -> bool:
+    """Is this minutes figure the walk time of a distance printed BESIDE it, which the
+    evidence already grounds?
+
+    E3 answers a POI search with three bullets of identical construction:
+
+        - Tesco Express      -- 140m (2 min walk)
+        - Sainsbury's Local  -- 220m (3 min walk)
+        - Waitrose           -- 280m (4 min walk)
+
+    All three distances are in the fixture and all three minute figures are the same
+    ~70 m/min derivation. The checker nonetheless SPARED the 2 and flagged the 3 and
+    the 4 — not for any property of the claims, but because "within a 5-minute walk"
+    earlier in the paragraph fell inside the ±55/+40 character window of the FIRST
+    bullet and not the other two. A rule that reaches opposite verdicts on two of three
+    identical constructs because of where an unrelated sentence sits is not a rule.
+
+    The replacement binds the minutes to the distance it is the walk time OF, inside the
+    same clause. That is not the accidental-window problem wearing a hat: the window
+    that caused it belonged to a DIFFERENT sentence and leaked; this one is the
+    construct itself, "<distance> (<time> walk)", and it evaluates identically for
+    every bullet that has the shape and for none that does not.
+
+    It stays a real constraint in three ways. The distance must already be GROUNDED, so
+    an invented distance cannot bootstrap an invented time. The implied pace must be a
+    human walking pace, so "a 15 minute walk" to a 140 m shop (≈9 m/min) is still
+    unsupported. And the distance must be short enough to walk at all, so a 5.1 km
+    cycle route beside "19 min" (≈268 m/min) is not laundered into a walk.
+
+    F9 is the case that fixes the boundary: "Elizabeth line gets you to Liverpool Street
+    in ~3 min, Canary Wharf in ~6 min" are TRANSIT times with no distance in their
+    clause, and they stay unsupported even though the same answer's POI results happen
+    to contain distances that would derive those numbers.
+    """
+    if minutes <= 0:
+        return False
+    pre, post = _clause_windows(answer, start, end, width=60)
+    clause = pre + answer[start:end] + post
+    for val, unit_m, tol_m, _s, _e in _distance_matches(clause):
+        metres = val * unit_m
+        if not (0.0 < metres <= WALK_DERIVATION_MAX_M):
+            continue
+        if not _near(metres, grounded_distances, max(tol_m, DEFAULT_TOLERANCE)):
+            continue
+        pace = metres / minutes
+        if WALK_PACE_MIN_M_PER_MIN <= pace <= WALK_PACE_MAX_M_PER_MIN:
+            return True
+    return False
+
+
 def _deposit_cap_weeks(annual_rent: float) -> float:
     """Weeks of rent a tenancy deposit is capped at, from the ANNUAL rent.
 
@@ -779,9 +838,14 @@ def grade_grounding(ctx: GradeContext) -> GroundingResult:
             if key in seen:
                 continue
             seen.add(key)
-            result.claims.append(
-                classify_number(val, "commute_minutes", pool.commute_minutes,
-                                pool.raw_commute, tol=1.0))
+            c = classify_number(val, "commute_minutes", pool.commute_minutes,
+                                pool.raw_commute, tol=1.0)
+            if c.status == "unsupported" and _is_walk_time_for_adjacent_distance(
+                    answer, m.start(), m.end(), val, pool.distances):
+                c = ClaimCheck(kind="commute_minutes", value=val, status="grounded",
+                               detail="walk time derived from an adjacent grounded "
+                                      "distance")
+            result.claims.append(c)
 
     # commute minutes, CJK. Previously NOT extracted at all: `_CJK_MINUTES_RE` built the
     # evidence pool from tool data but never read the ANSWER, so a zh reply produced zero

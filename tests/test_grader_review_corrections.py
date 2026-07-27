@@ -23,6 +23,9 @@ read as a preference. Every assertion fails against
      asserted distance.
   8. `distance_display` ("180m" beside a raw `distance_m: 184`) was not parsed, so
      F9's verbatim quotation of the tool read as a fabrication.
+  9. Walk times were judged positionally: E3's three identical "140m (2 min walk)"
+     bullets got two different verdicts because an unrelated phrase sat in the first
+     one's character window.
 """
 from __future__ import annotations
 
@@ -783,3 +786,82 @@ def test_a_money_display_field_yields_no_distance():
            "data": {"fare_display": "£12.50 per journey", "fare": 12.5}}]
     pool = graders._build_evidence_pool(_ctx("", ev, ("get_transport_info",)))
     assert pool.distances == set(), pool.distances
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 9 — a walk time derived from the distance printed BESIDE it
+# ══════════════════════════════════════════════════════════════════════════════
+E3_POI_EVIDENCE = [
+    {"tool": "search_nearby_pois", "success": True,
+     "data": {"success": True, "address": "Scape Bloomsbury, WC1H 0AQ", "radius_m": 300,
+              "summary": "Found 3 places within 300m:\nTesco Express - 140m [Tesco]\n"
+                         "Sainsbury's Local - 220m [Sainsbury's]\nWaitrose - 280m",
+              "pois": {"supermarket": [
+                  {"name": "Tesco Express", "distance_m": 140,
+                   "distance_display": "140m", "brand": "Tesco"},
+                  {"name": "Sainsbury's Local", "distance_m": 220,
+                   "distance_display": "220m", "brand": "Sainsbury's"},
+                  {"name": "Waitrose", "distance_m": 280,
+                   "distance_display": "280m"}]}}},
+]
+E3_ANSWER = (
+    "**Nearby supermarkets** -- There are three supermarkets within a 5-minute walk:\n"
+    "- **Tesco Express** -- 140m (2 min walk)\n"
+    "- **Sainsbury's Local** -- 220m (3 min walk)\n"
+    "- **Waitrose** -- 280m (4 min walk)"
+)
+
+
+def _minutes_status(answer, evidence, tools=("search_nearby_pois",)):
+    g = graders.grade_grounding(_ctx(answer, evidence, tools))
+    return {c.value: c.status for c in g.claims if c.kind == "commute_minutes"}
+
+
+def test_three_identical_constructs_get_the_same_verdict():
+    """THE pin. Mainline spared the 2 and flagged the 3 and the 4 — not for any property
+    of the claims, but because "within a 5-minute walk" fell inside the first bullet's
+    ±55/+40 character window and not the other two."""
+    st = _minutes_status(E3_ANSWER, E3_POI_EVIDENCE)
+    assert set(st.values()) == {"grounded"}, st
+    assert set(st) == {2.0, 3.0, 4.0}, st
+
+
+def test_e3s_walk_times_are_not_fabrications():
+    con = {"type": "no_fabricated_number", "field": "duration_minutes"}
+    r = graders.CONSTRAINT_CHECKERS["no_fabricated_number"](
+        con, _ctx(E3_ANSWER, E3_POI_EVIDENCE, ("search_nearby_pois",)))
+    assert r.passed, r.detail
+
+
+def test_the_derivation_is_bound_to_the_adjacent_distance_not_to_the_pool():
+    """F9 is the boundary case. "Elizabeth line gets you to Liverpool Street in ~3 min,
+    Canary Wharf in ~6 min" are TRANSIT times with no distance in their clause. The same
+    answer's POI results DO contain distances that would derive those numbers if the
+    derivation were pool-wide, so a pool-wide rule would launder them."""
+    answer = ("- Elizabeth line gets you to Liverpool Street in ~3 min, Canary Wharf "
+              "in ~6 min, Bond Street in ~10 min")
+    ev = [{"tool": "search_nearby_pois",
+           "data": {"pois": {"supermarket": [{"distance_m": 293}, {"distance_m": 500}]}}}]
+    st = _minutes_status(answer, ev)
+    assert st == {3.0: "unsupported", 6.0: "unsupported", 10.0: "unsupported"}, st
+
+
+@pytest.mark.parametrize("text,minutes,expected", [
+    ("- Tesco -- 140m (2 min walk)", 2.0, True),     # 70 m/min
+    ("- Tesco -- 140m (15 min walk)", 15.0, False),  # 9 m/min is not walking
+    ("- Tesco -- 140m (1 min walk)", 1.0, False),    # 140 m/min is not walking either
+    ("The cycle route is 5.1 km (19 min).", 19.0, False),  # 268 m/min, and over the cap
+])
+def test_the_pace_band_is_a_real_constraint(text, minutes, expected):
+    """An invented time beside a real distance is still invented."""
+    import re as _re
+    m = _re.search(r"\b(\d+)\s*min", text)
+    grounded = {140.0, 5100.0}
+    assert graders._is_walk_time_for_adjacent_distance(
+        text, m.start(), m.end(), minutes, grounded) is expected
+
+
+def test_an_ungrounded_distance_cannot_bootstrap_a_walk_time():
+    """The distance must ALREADY be grounded, so a fabricated pair grounds nothing."""
+    st = _minutes_status("- Lidl -- 500m (7 min walk)", E3_POI_EVIDENCE)
+    assert st == {7.0: "unsupported"}, st

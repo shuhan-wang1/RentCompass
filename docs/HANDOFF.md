@@ -71,16 +71,20 @@ need.
 
 ## 0. The defect class this codebase keeps producing
 
-Read this before writing any code here. **Thirteen confirmed instances of one shape:** a value
+Read this before writing any code here. **Fifteen confirmed instances of one shape:** a value
 is computed, stored somewhere a reader could find it, and then never asserted on. Every one
 shipped. Every one was found by someone reading the code rather than by a test.
 
 **Instances 8–11 were found on 2026-07-26, after this section already existed and warned about
 exactly this.** Writing the warning did not stop the ninth; the guards did (practice 3).
 **Instances 12–13 were found on 2026-07-27, after the count had already been raised to eleven.**
-Instance 14 is arguably §3.15's last paragraph: the notice that withdrew instance 7 scoped its
-own withdrawal too narrowly, so figures built on the same blind counter kept being quoted. It is
-not tabled below because the fix is a re-measurement, not a guard.
+**Instances 14–15 were found on 2026-07-27 by asking a different question of the same shape** —
+not "is this value read?" but "is this documented FAILURE MODE detectable?". Both are in the
+evaluator's own contract rather than in product code, which is why eleven rounds of reading
+product code missed them.
+One further instance is arguably §3.15's last paragraph: the notice that withdrew instance 7
+scoped its own withdrawal too narrowly, so figures built on the same blind counter kept being
+quoted. It is left untabled because the fix is a re-measurement, not a guard.
 
 | # | where | the value that was produced | what was never done with it |
 |---|---|---|---|
@@ -97,6 +101,8 @@ not tabled below because the fix is a re-measurement, not a guard.
 | 11 | `evaluation/metrics/graders.py` | `must_refuse_fabrication` received a `field` argument | never used it — the checker tested vocabulary instead, failing correct answers *and passing hedged fabrications* |
 | 12 | `app/core/agent_loop.py` | which cued dimensions the turn had **not** served | the only consumer was `_missing_requested_dimension_lines`, reachable *only* from the DEGRADED answer path. On the normal path the loop knew a requested dimension was unserved and neither fetched it nor said so. Fixed by `_dimension_fanout_calls`, which puts the satisfying read into the same batch |
 | 13 | `app/core/langgraph_agent.py` | `_SEARCH_DIMENSION_CUES`, a copy documented as "mirrors `agent_loop._DIMENSION_CUES`" | nothing ever checked that it did. By 2026-07-27 **six cues** had drifted (`safe`; `travel time`/`how long`/`how far`; `药店`/`pharmacy`), all on the legacy side, so the two architectures disagreed about what the user had asked for — the exact failure the comment claimed to prevent. Now one shared `core.dimensions.DIMENSION_CUES`, pinned by `tests/test_dimension_table_is_shared.py` |
+| 14 | `evaluation/benchmark/*.jsonl` `failure_conditions` | 284 prose rows saying, per case, what a wrong answer looks like | **58 of them name a failure mode no declared mechanism can fail the case on** — and `graders.grade_case`'s pass gate ASSERTED the coverage in a comment ("the constraints encode each case's plain-language failure_conditions"), so a reviewer looking for "does the corpus test X?" found X in writing. Now bound row-by-row by `tests/test_failure_condition_enforceability.py`; the 58 are named, counted and owed |
+| 15 | `evaluation/metrics/graders.py` `must_recall_value` | the kept value was LOCATED in the answer | its POLARITY was never asserted on, so G14 — a selective forget — scored a full 3/3 recall on "everything, including Camden, has been removed". Its own failure condition "claims everything or nothing was deleted" had no checker. Now `must_retain_value`, pinned by `tests/test_scoped_deletion_confirmation.py` |
 
 **Instance 7's bypass was documented in its own sibling's module docstring** — "calls that
 bypass ModelRouter". It was known and simply never wired.

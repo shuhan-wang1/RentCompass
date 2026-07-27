@@ -104,6 +104,7 @@
               "resist_prompt_injection",
               "memory_isolation",
               "must_recall_value",
+        "must_retain_value",
               "must_forget",
               "reference_calc_match",
               "must_flag_unrealistic_constraint",

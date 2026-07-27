@@ -35,6 +35,10 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from uk_rent_agent.agent.state import AgentState
 from uk_rent_agent.agent.contracts import ToolInvocation
 
+# THE shared dimension vocabulary — one table, both arches (see core/dimensions.py). Imports
+# nothing from either arch, so it can never be part of an import cycle.
+from core import dimensions
+
 # Loop mechanics + user-facing helpers reused verbatim from the legacy engine. A top-level
 # import here is intentional and safe (langgraph_agent imports agent_loop only lazily).
 from core.langgraph_agent import (
@@ -826,14 +830,19 @@ def _rec_summary_line(rec: dict) -> str:
     return "- " + " — ".join(parts) if parts else "- (listing)"
 
 
-# Dimension cues → the tool(s) that satisfy that dimension, plus the honest "not done" line
-# (zh, en). The listings dimension (search_properties) is intentionally omitted here — it is
-# already named by the dedicated recommendations / search-incomplete / no-results block in the
-# fallback, so enumerating it again would double-report.
+# The cue table itself now lives in core.dimensions, shared with the LEGACY arch. It used to
+# live here, and langgraph_agent._SEARCH_DIMENSION_CUES was a second copy documented as
+# "mirrors agent_loop._DIMENSION_CUES" — which, by 2026-07-27, it no longer did (six cues of
+# drift; see the DRIFT RECORD in core/dimensions.py). Two tables answering one question is
+# instance #12's cousin: not a value computed and never read, but a value read from a copy
+# that had quietly stopped meaning the same thing.
 #
-# THIS IS THE ONLY CUE TABLE IN THE MODULE, and it now has TWO consumers, both routed through
-# _cued_dimensions() so a cue can never mean one thing to the fetcher and another to the
-# apology:
+# What stays HERE is the fc CONSUMER, which is genuinely fc's own: an honest "not done yet"
+# line per dimension. Legacy's consumer dispatches a follow-up wave instead. Different
+# behaviours over the same table, and they must remain different.
+#
+# fc's two consumers, both routed through _cued_dimensions() so a cue can never mean one thing
+# to the fetcher and another to the apology:
 #   1. _missing_requested_dimension_lines — the honest "not done yet" lines in the DEGRADED
 #      answer (product bar from final6 CR4: a cut-short answer must say e.g.
 #      「治安数据尚未完成核查」, not just 「以上内容可能不完整」).
@@ -843,64 +852,46 @@ def _rec_summary_line(rec: dict) -> str:
 # table drove: the loop knew "the user asked about safety and we never fetched it" and used
 # that knowledge exclusively to write an apology on a path reached only after the turn had
 # already blown its budget. That is instance #12 of the HANDOFF §0 defect class — a value
-# computed, stored where a reader could find it, and never acted on. The source guard in
-# tests/test_dimension_fanout.py fails the build if a second cue table appears.
+# computed, stored where a reader could find it, and never acted on. The source guards in
+# tests/test_dimension_fanout.py and tests/test_dimension_table_is_shared.py fail the build if
+# a second cue table appears in EITHER arch.
 #
-# Each dimension's tools tuple is ORDERED: tools[0] is the canonical read the harness itself
-# may dispatch (see _canonical_dimension_tool); the rest are alternates that also SATISFY the
-# dimension when the model chooses them, but that the harness never picks on its own.
-_DIMENSION_CUES = (
-    ("safety",
-     ("治安", "安全", "犯罪", "crime", "safety", "unsafe", "police"),
-     ("check_safety",),
-     "治安数据尚未完成核查。",
-     "Safety has not been verified yet (crime data was not retrieved)."),
-    ("commute",
-     ("通勤", "commute"),
-     ("calculate_commute", "calculate_commute_cost", "check_transport_cost", "get_transport_info"),
-     "通勤时间尚未核算。",
-     "Commute time has not been calculated yet."),
-    ("nearby",
-     ("超市", "便利店", "餐厅", "附近", "周边", "设施",
-      "supermarket", "grocery", "nearby", "amenit", "restaurant", "poi"),
-     ("search_nearby_pois",),
-     "周边设施尚未查询。",
-     "Nearby amenities have not been looked up yet."),
-)
+# The listings dimension (search_properties) is intentionally absent — it is already named by
+# the dedicated recommendations / search-incomplete / no-results block in the fallback, so
+# enumerating it again would double-report.
+_DIMENSION_APOLOGY_LINES = {
+    "safety": ("治安数据尚未完成核查。",
+               "Safety has not been verified yet (crime data was not retrieved)."),
+    "commute": ("通勤时间尚未核算。",
+                "Commute time has not been calculated yet."),
+    "nearby": ("周边设施尚未查询。",
+               "Nearby amenities have not been looked up yet."),
+}
 
 
 def _cued_dimensions(message: str) -> list:
-    """The dimensions THIS message explicitly asks about, in _DIMENSION_CUES order.
+    """The dimensions THIS message explicitly asks about, in table order.
 
-    THE single cue matcher. Deterministic and bilingual: CJK cues match the raw text, ascii
-    cues the lowercased text (a CJK cue lowercases to itself, so the split only matters for
-    ascii substrings embedded in CJK text). Extracted from
-    _missing_requested_dimension_lines unchanged — the fetcher and the apology must agree on
-    what "the user asked about safety" means, or the loop can fetch a dimension it then
-    apologises for, or apologise for one it fetched.
+    Thin wrapper over the ONE shared matcher (core.dimensions.cued_dimensions) — the fetcher
+    and the apology must agree on what "the user asked about safety" means, or the loop can
+    fetch a dimension it then apologises for, or apologise for one it fetched. Since
+    2026-07-27 that agreement extends across ARCHES too.
     """
-    msg = message or ""
-    low = msg.lower()
-    return [dim for dim, cues, _tools, _zh, _en in _DIMENSION_CUES
-            if any((cue in low) if cue.isascii() else (cue in msg) for cue in cues)]
+    return dimensions.cued_dimensions(message)
 
 
 def _dimension_satisfying_tools(dim: str) -> tuple:
     """Every tool whose completed result SATISFIES `dim` (the model may pick any of them)."""
-    for d, _cues, tools, _zh, _en in _DIMENSION_CUES:
-        if d == dim:
-            return tuple(tools)
-    return ()
+    return dimensions.satisfying_tools(dim)
 
 
 def _canonical_dimension_tool(dim: str) -> Optional[str]:
-    """The ONE read the harness itself may dispatch for `dim` — tools[0] of its _DIMENSION_CUES
+    """The ONE read the harness itself may dispatch for `dim` — tools[0] of its shared-table
     row. Derived from the cue table on purpose: a separate dimension->tool mapping is exactly
     the divergence this module keeps producing (evaluation/metrics/graders.py already keeps its
-    own `_DIMENSION_TOOLS`, and the source guard in tests/test_dimension_fanout.py pins the two
-    against each other)."""
-    tools = _dimension_satisfying_tools(dim)
-    return tools[0] if tools else None
+    own `_DIMENSION_TOOLS`, and the source guard in tests/test_dimension_fanout.py pins that
+    one against the shared table)."""
+    return dimensions.canonical_tool(dim)
 
 
 def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: str) -> list:
@@ -914,9 +905,10 @@ def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: 
     """
     cued = set(_cued_dimensions(message))
     lines = []
-    for dim, _cues, tools, zh_line, en_line in _DIMENSION_CUES:
+    for dim, _cues, tools in dimensions.DIMENSION_CUES:
         if dim not in cued or any(t in executed_tools for t in tools):
             continue
+        zh_line, en_line = _DIMENSION_APOLOGY_LINES[dim]
         lines.append(zh_line if lang == "zh" else en_line)
     return lines
 
@@ -933,7 +925,7 @@ def _missing_requested_dimension_lines(message: str, executed_tools: set, lang: 
 
 def _dimension_fanout_cap() -> int:
     """Maximum reads the harness may ADD to one batch (FC_DIMENSION_FANOUT_MAX). Default 3 =
-    every dimension in _DIMENSION_CUES, i.e. no cap in practice; the knob exists so ops can
+    every dimension in dimensions.DIMENSION_CUES, i.e. no cap in practice; the knob exists so ops can
     disable the fan-out (0) without a deploy. Sized against FC_TOOL_OFFLOAD_WORKERS (32): a
     4-tool batch is nowhere near pool saturation, so the added reads cannot starve each other
     into the 'never started' attribution."""
@@ -1097,7 +1089,7 @@ def _dimension_fanout_calls(state: AgentState, batch_calls: list, cur_msg: str, 
         if not name or spec is None:
             continue
         if getattr(spec, "side_effect", "none") == "write" or getattr(spec, "terminal", False):
-            # Unreachable via _DIMENSION_CUES today; asserted so a future cue row that names a
+            # Unreachable via the shared table today; asserted so a future cue row that names a
             # write or a terminal tool cannot silently be swept into a batch expansion.
             logger.warning("fc_loop.fanout_refused_non_read tool=%s dim=%s", name, dim)
             continue

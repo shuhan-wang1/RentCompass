@@ -619,8 +619,8 @@ def test_zh_multi_dimension_search_fans_out(lga):
     # its own change. This asserts the drop is deliberate, not silent breakage.
     assert "calculate_commute" not in tools
     assert lga._resolve_destination_address(msg, {"current_message": msg}, {}) is None
-    assert "commute" in dict(
-        (d, t) for d, _c, _s, t in lga._SEARCH_DIMENSION_CUES)   # the cue itself does fire
+    from core import dimensions
+    assert "commute" in dimensions.cued_dimensions(msg)          # the cue itself does fire
 
 
 def test_plain_listings_search_is_untouched(lga):
@@ -676,7 +676,8 @@ def test_commute_dimension_dropped_when_no_destination(lga):
 
 def test_only_read_tools_are_ever_fanned_out(lga):
     # `remember` is the only write tool and drives the taint gate / zero-tolerance records.
-    fanned = {tool for _dim, _cues, _sat, tool in lga._SEARCH_DIMENSION_CUES}
+    from core import dimensions
+    fanned = {dimensions.canonical_tool(d) for d in dimensions.DIMENSIONS}
     assert "remember" not in fanned
     assert fanned <= set(lga.PLANNABLE_TOOLS)            # read, loopable, non-write
 
@@ -777,7 +778,7 @@ def test_dimension_fanout_end_to_end_concurrent_and_keeps_listings(lga, monkeypa
     assert reg.max_in_flight == 3
     # All four evidence sources reached the synthesis prompt. Order is DETERMINISTIC despite
     # the concurrent dispatch: gather_wave sorts task_results by index, so the wave always
-    # reduces in _SEARCH_DIMENSION_CUES table order (safety, commute, nearby) regardless of
+    # reduces in core.dimensions.DIMENSION_CUES table order (safety, commute, nearby) regardless of
     # which worker finished first.
     assert [e["tool"] for e in out["observations"]] == [
         "search_properties", "check_safety", "calculate_commute", "search_nearby_pois"]

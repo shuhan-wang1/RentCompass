@@ -1303,6 +1303,83 @@ def _field_number_offenders(ctx, field_name: str):
     return offenders
 
 
+# --------------------------------------------------------------------------- #
+# The SEMANTIC field vocabulary — the middle ground between "the internal identifier
+# must appear in prose" and "no field check at all".
+#
+# The identifier gate was removed for a good reason: ``field`` holds ``user_memory``,
+# ``pois``, ``listing_2_commute``, and no human answer will ever contain those strings,
+# so G6 and D11 were false failures. But removing it wholesale left the constraint
+# satisfiable by an absence statement about ANYTHING. Verified live against mainline:
+#
+#     constraint: must_note_missing_data[crime_count]
+#     answer:     "Viewing slots are not available at weekends."
+#       marker_hit=True ('not available'), offenders(crime_count)=[]  ->  PASSES
+#
+# Silence about the required field plus any unrelated disclaimer is not noting missing
+# data. So coverage is derived from the words a HUMAN uses for the field, never from the
+# identifier. Keys are matched exactly first, then by longest containing substring, so
+# ``listing_2_commute``/``commute_destination`` resolve to ``commute`` and
+# ``within_budget_listings`` to ``listings`` without needing their own rows.
+#
+# A field with NO row is UNGATED — a table that silently failed every field it forgot
+# would be the identifier gate again, wearing different clothes.
+_FIELD_SEMANTIC_TOKENS: Dict[str, Tuple[str, ...]] = {
+    "crime": ("crime", "safety", "safe", "police", "offence", "offense", "burglar",
+              "antisocial", "anti-social", "data.police", "治安", "犯罪", "安全"),
+    "pois": ("supermarket", "pharmac", "chemist", "shop", "store", "grocer", "amenit",
+             "point of interest", "points of interest", "poi", "convenience",
+             "restaurant", "cafe", "gym", "park", "school", "nursery", "launderette",
+             "dentist", "超市", "药店", "商店", "便利店"),
+    "user_memory": ("saved", "save", "remember", "memor", "know about you",
+                    "knowledge of you", "on file", "stored", "profile", "preference",
+                    "previous conversation", "previous message", "prior conversation",
+                    "prior context", "past conversation", "first chat",
+                    "first interaction", "told me", "you mentioned", "about you",
+                    "记得", "保存", "记忆", "之前"),
+    "bills": ("bill", "utilit", "council tax", "gas", "electric", "water", "energy",
+              "included", "inclusive", "水电", "账单", "包含"),
+    "budget": ("budget", "price range", "spend", "afford", "how much", "预算"),
+    "commute": ("commute", "journey", "travel", "transport", "station", "destination",
+                "tube", "bus", "train", "walk", "cycle", "distance", "minute", "min to",
+                "getting to", "通勤", "路程", "交通"),
+    "deposit": ("deposit", "bond", "押金"),
+    "fare": ("fare", "ticket", "travelcard", "oyster", "transport cost", "travel cost",
+             "cost of travel", "车费", "票价"),
+    "listings": ("listing", "propert", "flat", "apartment", "home", "place", "result",
+                 "room", "accommodation", "option", "match", "house", "房源", "房子"),
+    "studio": ("studio", "listing", "propert", "flat", "result", "room", "option",
+               "单间", "开间"),
+    "availab": ("availab", "viewing", "vacan", "move-in", "move in", "when it",
+                "occupanc", "空房", "看房"),
+    "epc": ("epc", "energy", "efficiency", "rating", "certificate", "能效"),
+}
+
+
+def _field_semantic_tokens(field: str) -> Optional[Tuple[str, ...]]:
+    """Tokens a human would use for ``field``, or None when the field is not in the
+    table (in which case the caller must NOT gate on it)."""
+    f = (field or "").lower()
+    if not f:
+        return None
+    if f in _FIELD_SEMANTIC_TOKENS:
+        return _FIELD_SEMANTIC_TOKENS[f]
+    hits = [k for k in _FIELD_SEMANTIC_TOKENS if k in f]
+    if not hits:
+        return None
+    return _FIELD_SEMANTIC_TOKENS[max(hits, key=len)]
+
+
+def _answer_references_field(answer: str, field: str) -> bool:
+    """Does the answer talk about ``field`` AT ALL, in human words? Ungated (True) for a
+    field with no semantic row — see ``_FIELD_SEMANTIC_TOKENS``."""
+    tokens = _field_semantic_tokens(field)
+    if tokens is None:
+        return True
+    al = (answer or "").lower()
+    return any(t in al for t in tokens)
+
+
 def _asserts_data_absent(answer: str, field: str) -> bool:
     """Structural 'no concrete value for this field is available' signal, complementing
     the literal ``_MISSING_MARKERS`` list: does the answer voice an absence in natural
@@ -1323,9 +1400,14 @@ def _asserts_data_absent(answer: str, field: str) -> bool:
     ``not _field_number_offenders(...)`` guard: an answer that claims absence while
     stating an invented figure for the field still fails.
 
-    ``field`` is kept in the signature — deliberately unused — so every call site still
-    reads as "does this answer assert THIS field's data absent", and so a future
-    field-aware synonym table has somewhere to go.
+    ``field`` is kept in the signature — deliberately unused HERE — so every call site
+    still reads as "does this answer assert THIS field's data absent". The field-aware
+    synonym table this docstring reserved a hook for now exists as
+    ``_FIELD_SEMANTIC_TOKENS`` / ``_answer_references_field``, and is applied by
+    ``_c_must_note_missing_data`` to the DISJUNCTION of this signal and the lexical
+    ``_MISSING_MARKERS`` one. It is deliberately not applied inside this function: the
+    hole the review found was in the lexical branch, and gating only the structural
+    branch would leave it open.
     """
     al = (answer or "").lower()
     return (bool(_ABSENCE_VERB_RE.search(al)) or bool(_NO_QUANTITY_RE.search(al))
@@ -1635,15 +1717,25 @@ def _c_must_note_missing_data(con, ctx) -> ConstraintResult:
     claims a figure is unavailable and then supplies it has not noted missing data; it
     has contradicted itself. Making the guard cover both branches is what makes the
     documented safety property actually true, not a new obligation.
+
+    ``_answer_references_field`` is the THIRD term, and it is what stops "state an
+    absence about anything" from satisfying "note THIS field's absence". It is applied
+    to the disjunction, not to one branch, because the hole was in the lexical branch:
+    "Viewing slots are not available at weekends." is a ``_MISSING_MARKERS`` hit and was
+    passing ``must_note_missing_data[crime_count]``. It is a SEMANTIC test — crime /
+    safety / police, not the identifier ``crime_count`` — so it does not reintroduce the
+    unsatisfiable gate that G6 and D11 were failing.
     """
     field = con.get("field") or ""
     al = (ctx.final_answer or "").lower()
     marker_hit = any(mk in al for mk in _MISSING_MARKERS)
     structural = _asserts_data_absent(ctx.final_answer or "", field)
+    references = _answer_references_field(ctx.final_answer or "", field)
     offenders = _field_number_offenders(ctx, field)
-    ok = (marker_hit or structural) and not offenders
+    ok = (marker_hit or structural) and references and not offenders
     return ConstraintResult("must_note_missing_data", ok,
                             f"field={field} marker={marker_hit} structural={structural} "
+                            f"references={references} "
                             f"offending={[(o.kind, o.value, o.status) for o in offenders]}",
                             heuristic=True)
 

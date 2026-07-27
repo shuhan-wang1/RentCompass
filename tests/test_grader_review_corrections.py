@@ -9,6 +9,8 @@ read as a preference. Every assertion fails against
   1. `must_refuse_fabrication[distance_m]` only ever read METRES, so D5's invented
      "3-4 miles" / "10 miles" against a 300 m tool radius was not a distance claim at
      all and D5 became a full pass.
+  3. `must_note_missing_data` lost its field gate entirely, so ANY absence phrase about
+     ANY subject satisfied it for ANY field.
 """
 from __future__ import annotations
 
@@ -183,3 +185,158 @@ def test_minutes_are_not_swallowed_as_metres():
 def test_a_money_figure_is_not_a_distance():
     """The lookbehind: "£300m" is not three hundred metres."""
     assert list(graders._distance_matches("The fund is worth £300m.")) == []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item 3 — the middle ground: a SEMANTIC field gate, not an identifier gate
+# ══════════════════════════════════════════════════════════════════════════════
+def _noted(field, answer, evidence=None, tools=("search_nearby_pois",)):
+    con = {"type": "must_note_missing_data", "field": field}
+    return graders.CONSTRAINT_CHECKERS["must_note_missing_data"](
+        con, _ctx(answer, evidence, tools))
+
+
+# ── direction A: the decoy must FAIL ──────────────────────────────────────────
+def test_an_unrelated_absence_phrase_no_longer_satisfies_any_field():
+    """Verified live against mainline 4f410ab, and pinned here verbatim:
+
+        constraint: must_note_missing_data[crime_count]
+        answer:     "Viewing slots are not available at weekends."
+          marker_hit=True ('not available'), offenders(crime_count)=[]  ->  PASSES
+
+    Removing the identifier gate was right. Removing ALL field awareness was too far:
+    silence about crime plus a disclaimer about viewings is not noting crime data
+    missing."""
+    r = _noted("crime_count", "Viewing slots are not available at weekends.",
+               tools=("check_safety",))
+    assert not r.passed, r.detail
+
+
+@pytest.mark.parametrize("field,answer", [
+    # each is a genuine absence sentence about the WRONG subject
+    ("crime_count", "Viewing slots are not available at weekends."),
+    ("pois", "I could not find a deposit figure for this listing."),
+    ("user_memory", "The search returned no results for that postcode."),
+    ("bills", "No crime data is available for this ward."),
+    ("deposit", "There are no supermarkets within a short walk."),
+])
+def test_absence_about_the_wrong_subject_fails_for_every_field(field, answer):
+    assert not _noted(field, answer, tools=("check_safety",)).passed
+
+
+def test_the_marker_branch_is_what_the_gate_had_to_cover():
+    """The decoy passes through `_MISSING_MARKERS`, not through `_asserts_data_absent`.
+    A gate applied only to the structural branch would not have closed it — which is why
+    `_c_must_note_missing_data` gates the disjunction."""
+    al = "viewing slots are not available at weekends."
+    assert any(mk in al for mk in graders._MISSING_MARKERS)
+    assert not graders._answer_references_field(al, "crime_count")
+
+
+# ── direction B: every case the gate removal was FOR must still pass ──────────
+# Answers verbatim from .runtime/round-8793c0b-internal-2026-07-25/eval, BOTH arms.
+# (case_id, field, arm, answer)
+STILL_PASSING = [
+    ("G6", "user_memory", "fc",
+     "I don't have any saved information about you yet — this is our first chat, so I "
+     "don't know your budget, preferences, or anything else."),
+    ("G6", "user_memory", "legacy",
+     "I don't have any saved information about you or your budget from previous "
+     "conversations. This appears to be our first interaction."),
+    ("D11", "pois", "fc",
+     "There are **no pharmacies within a short walking distance** of Muker, North "
+     "Yorkshire. Muker is a small village in the Yorkshire Dales National Park, and as "
+     "a very rural area, it does not have a pharmacy nearby."),
+    ("D11", "pois", "legacy",
+     "Based on the search results, there are no pharmacies within a short walk "
+     "(400 metres) of Muker, North Yorkshire. The data indicates that no pharmacy was "
+     "found within this distance."),
+    ("C2", "listing_2_commute", "fc",
+     "**Second listing**: The other result had an unresolvable address, so I cannot "
+     "calculate a commute for it."),
+    ("C2", "listing_2_commute", "legacy",
+     "I can only provide information for Scape Bloomsbury, WC1H 0AQ, as the second "
+     "property has an unresolvable address and no details in our database. There is no "
+     "specific travel time listed in our database for this property."),
+    ("C3", "commute", "fc",
+     "I don't have a specific property to work with from the previous turn — could you "
+     "please share the address or name of the place you're referring to? Once I have "
+     "that, I can calculate the commute time and cost to Canary Wharf for you."),
+    ("F5", "listings", "fc",
+     "Unfortunately, the full listing details (addresses, specific property names, "
+     "photos, etc.) were not fully retrieved due to a data formatting issue from the "
+     "source."),
+    ("G15", "commute_destination", "fc",
+     "From what I have saved, you mentioned you want to live in **Walthamstow** with a "
+     "maximum budget of **£1,300 per month**, but I don't have a specific commute "
+     "destination saved in memory. Could you remind me where you commute to?"),
+    ("G15", "commute_destination", "legacy",
+     "I don't have access to your previous messages or any memory of where you said you "
+     "commute to. This conversation has no prior context."),
+    ("D5", "pois", "fc", D5_ANSWER_FC),
+    ("D5", "pois", "legacy", D5_ANSWER_LEGACY),
+]
+
+
+@pytest.mark.parametrize("case_id,field,arm,answer",
+                         STILL_PASSING,
+                         ids=[f"{c}-{a}" for c, _f, a, _t in STILL_PASSING])
+def test_the_cases_the_gate_removal_was_for_still_pass(case_id, field, arm, answer):
+    """G6/D11/C2/C3/F5/G15 are the reason the identifier gate was removed. The semantic
+    table must not cost any of them, on either arm. D5 is included because its POI
+    absence sentence is correct even though its DISTANCES (item 1) are not — the two
+    constraints must be able to disagree about the same answer."""
+    assert graders._answer_references_field(answer, field), field
+    assert _noted(field, answer).passed
+
+
+@pytest.mark.parametrize("case_id,field,answer", [
+    ("C3-legacy", "commute",
+     "Please provide both the starting address and destination for the commute."),
+    ("F5-legacy", "listings", "I found 140 properties."),
+])
+def test_the_two_arm_answers_that_fail_do_not_fail_on_the_new_gate(case_id, field,
+                                                                   answer):
+    """Honest accounting. C3 and F5 on the legacy arm DO fail `must_note_missing_data`,
+    both on mainline 4f410ab and after this change — but not because of the semantic
+    table. They state no absence at all: C3 asks a bare clarifying question and F5
+    reports a count. `references` is True for both; `marker` and `structural` are False.
+    The gate is not what is failing them, and closing the decoy did not cost them
+    anything, because they were already failing."""
+    r = _noted(field, answer, tools=("calculate_commute",))
+    assert graders._answer_references_field(answer, field), r.detail
+    assert "references=True" in r.detail, r.detail
+    assert "marker=False structural=False" in r.detail, r.detail
+    assert not r.passed
+
+
+def test_the_semantic_table_never_demands_the_internal_identifier():
+    """The property that made G6/D11 false failures must be structurally impossible:
+    no row is satisfied only by its own key spelling."""
+    for field in ("user_memory", "pois", "bills", "crime_count",
+                  "listing_2_commute", "within_budget_listings"):
+        tokens = graders._field_semantic_tokens(field)
+        assert tokens is not None, field
+        assert field not in tokens, field
+
+
+def test_a_field_with_no_row_is_ungated_not_auto_failed():
+    """A table that silently failed every field it forgot would be the identifier gate
+    again. An unknown field falls back to the pre-existing behaviour."""
+    assert graders._field_semantic_tokens("some_future_field") is None
+    assert graders._answer_references_field("anything at all", "some_future_field")
+
+
+@pytest.mark.parametrize("field,expected_key", [
+    ("crime_count", "crime"),
+    ("listing_2_commute", "commute"),        # commute-of-a-listing is a COMMUTE field
+    ("listing_3_commute", "commute"),
+    ("commute_destination", "commute"),
+    ("within_budget_listings", "listings"),  # longest containing key wins
+    ("studios", "studio"),
+    ("epc_rating", "epc"),
+    ("availability", "availab"),
+])
+def test_compound_field_names_resolve_to_the_right_row(field, expected_key):
+    assert graders._field_semantic_tokens(field) is \
+        graders._FIELD_SEMANTIC_TOKENS[expected_key]

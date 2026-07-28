@@ -547,7 +547,7 @@ def test_soft_wrap_forces_answer_now(monkeypatch):
     cmd = asyncio.run(nodes["agent"](state))
 
     # FIX 3: a wrapped turn skips the (LLM/expensive) critic entirely and renders directly.
-    assert cmd.goto == "format_output_fc"
+    assert cmd.goto == "critic"   # wrapped turn is graded, not bypassed (2026-07-27)
     assert cmd.update["final_response"] == "Here is what I found so far."
     # tools disabled for the wrap call
     assert chat.tool_choice == "none"
@@ -966,7 +966,7 @@ def test_skipped_batch_leads_to_exactly_one_wrap_no_loop(monkeypatch):
     # 2) the next agent entry wraps ONCE and terminates (never dispatches the planned batch).
     chat._reply = AIMessage(content="Best-effort answer from what I have.")
     cmd2 = asyncio.run(nodes["agent"](st))
-    assert cmd2.goto == "format_output_fc"
+    assert cmd2.goto == "critic"   # wrapped turn is graded, not bypassed (2026-07-27)
     assert len(events) == 1          # exactly one wrap
     assert provider.calls == []      # the planned batch was never dispatched
 
@@ -998,7 +998,7 @@ def test_wrap_call_timeout_falls_back_to_deterministic(monkeypatch):
 
     # did not await the 5s call to completion — bounded to ~the 2s wrap window
     assert wall < 4.0, f"wrap call was awaited past its bound ({wall:.2f}s)"
-    assert cmd.goto == "format_output_fc"
+    assert cmd.goto == "critic"   # wrapped turn is graded, not bypassed (2026-07-27)
     resp = cmd.update["final_response"]
     # The fallback used to print the internal tool identifiers ("names the tool that ran"),
     # and this assertion pinned that as intended behaviour. It reached a real user on
@@ -1026,9 +1026,21 @@ def test_wrap_deterministic_fallback_never_claims_no_listings(monkeypatch):
 
 
 # ─── FIX 3: wrapped-turn critic fast-path (<0.5s, bypass critic) ────
-def test_wrapped_turn_bypasses_critic_fast(monkeypatch):
-    """A wrapped turn with a fast LLM renders in well under 0.5s and routes to format_output_fc
-    (NOT the critic) — the wrapped-turn critic tail is deterministic and cheap."""
+def test_wrapped_turn_reaches_the_critic_fast(monkeypatch):
+    """A wrapped turn routes to `critic` and still returns in well under 0.5s.
+
+    RENAMED AND INVERTED 2026-07-27. This test previously asserted `goto ==
+    "format_output_fc"` with the comment "# critic bypassed", pinning the bypass as the
+    intended contract. It was not: bypassing the node skipped the DETERMINISTIC grounding
+    grade along with the expensive regeneration, so the turns with the least evidence and
+    no time to gather more were the only ones exempt from the fabricated-price and
+    ungrounded-station checks. In production on 2026-07-27 the wrapped turn of a real
+    session shipped invented tube lines and journey times with no caveat.
+
+    What the test still guards is the part that was always right — the wrapped tail must
+    be CHEAP. `critic` continues to `format_output_fc` over a static edge, and with
+    regeneration disabled the added work is pure Python, so the <0.5s bound is unchanged
+    and is what proves no LLM round-trip crept back in."""
     monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")
     monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
     chat = WrapChat(AIMessage(content="Here is my best-effort answer."))
@@ -1041,8 +1053,9 @@ def test_wrapped_turn_bypasses_critic_fast(monkeypatch):
     cmd = asyncio.run(nodes["agent"](state))
     wall = time.monotonic() - t0
 
-    assert cmd.goto == "format_output_fc"      # critic bypassed
-    assert wall < 0.5                          # wrapped-turn tail is fast
+    assert cmd.goto == "critic"                # graded, not bypassed
+    assert cmd.update.get("soft_wrapped") is True   # ...and it is what disables regeneration
+    assert wall < 0.5                          # wrapped-turn tail is still fast
 
 
 def test_wrap_toolcall_markup_leak_falls_back(monkeypatch):
@@ -1227,7 +1240,7 @@ def test_wrap_past_hard_end_starts_no_call(monkeypatch):
 
     # THE assertion: no LLM call was ever started past the ceiling.
     assert chat.seen_messages is None
-    assert cmd.goto == "format_output_fc"
+    assert cmd.goto == "critic"   # wrapped turn is graded, not bypassed (2026-07-27)
     assert cmd.update["final_response"] == agent_loop._deterministic_wrap_answer(state)
     # ...and it is attributed distinctly from an LLM that was tried and timed out, so a
     # budget-overrun defect can never hide inside an LLM-slowness statistic.
@@ -1397,7 +1410,7 @@ def test_blocking_batch_near_wrap_returns_and_wraps_promptly(monkeypatch):
 
     # the next agent entry (elapsed ~25 > wrap edge 23) wraps promptly, no re-dispatch
     cmd2 = asyncio.run(nodes["agent"](st))
-    assert cmd2.goto == "format_output_fc"
+    assert cmd2.goto == "critic"   # wrapped turn is graded, not bypassed (2026-07-27)
 
 
 # ═══════════════════════════════════════════════════════════════════

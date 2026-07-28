@@ -868,7 +868,7 @@ async def enforce_grounding(
     response: str,
     evidence: Any,
     *,
-    regenerate: Callable[[str], Awaitable[str]],
+    regenerate: Optional[Callable[[str], Awaitable[str]]],
     retrieval_expected: bool = True,
     tool_errored: bool = False,
     on_verdict: Optional[Callable[..., None]] = None,
@@ -879,6 +879,13 @@ async def enforce_grounding(
     closes over the original generation prompt in the caller). The user-facing text
     is never hard-replaced with a canned fallback: a persistently-failing answer is
     delivered with a single appended caveat instead.
+
+    ``regenerate=None`` means "grade, but there is no budget to rewrite": the grading
+    pass still runs and a failing answer still gets its caveat — only the LLM repair is
+    skipped. Everything above the ``await`` here is pure Python and costs microseconds,
+    so the caller that cannot afford a rewrite can still afford the CHECK. That
+    distinction matters because the turns with no budget left are the turns with the
+    least evidence, i.e. the ones most likely to have invented something.
     """
 
     def _emit(verdict: CriticVerdict, stage: str) -> None:
@@ -891,6 +898,15 @@ async def enforce_grounding(
     _emit(verdict, "initial")
     if verdict.grounded:
         return GroundingOutcome(response=response, verdict=verdict, attempts=1, regenerated=False)
+
+    if regenerate is None:
+        # No rewrite budget. The answer failed the check, so it still gets the caveat that
+        # matches what failed — silently shipping an ungrounded answer is the one outcome
+        # that is never acceptable. attempts=1: the grading ran once, nothing was rewritten.
+        return GroundingOutcome(
+            response=append_caveat(response, _caveat_for(verdict)),
+            verdict=verdict, attempts=1, regenerated=False
+        )
 
     correction = build_correction_instruction(
         unsupported_reply_prices(response, evidence),

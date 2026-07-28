@@ -661,6 +661,22 @@ def is_destination(kind) -> bool:
     return kind in {"university", "workplace"}
 
 
+def is_city_level_area(name) -> bool:
+    """True when `name` denotes a WHOLE CITY rather than a neighbourhood.
+
+    The public read of `_MAJOR_CITIES` (the same set `_wrong_city` gates on), for callers
+    that must not treat "London" and "Camden" as the same granularity — a proximity test
+    calibrated for a neighbourhood is simply the wrong test for a city. Accepts a name, a
+    slug, or a classify_place() result dict."""
+    if isinstance(name, dict):
+        name = name.get("city") or name.get("slug") or name.get("name")
+    key = re.sub(r"[-_]+", " ", str(name or "").strip().lower())
+    if key in _MAJOR_CITIES:
+        return True
+    # Slug form ("newcastle-upon-tyne", "stoke-on-trent") maps back through CITY_SLUGS.
+    return str(name or "").strip().lower() in set(CITY_SLUGS.values())
+
+
 def _dest_result(kind: str, slug: str, city: str | None,
                  address: str | None, source: str) -> dict:
     """Assemble a DESTINATION result, guaranteeing a non-empty geocodable address."""

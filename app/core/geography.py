@@ -83,23 +83,41 @@ def haversine_miles(origin: object, destination: object) -> float | None:
     return 2 * EARTH_RADIUS_MILES * math.asin(min(1.0, math.sqrt(a)))
 
 
+def _coerce_radius(value: object, fallback: float = 2.0) -> float:
+    """A usable positive, finite radius in miles, or `fallback`."""
+    try:
+        radius = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return fallback
+    if not math.isfinite(radius) or radius <= 0:
+        return fallback
+    return radius
+
+
 def filter_properties_by_radius(
     properties: Iterable[dict],
     area_centres: Mapping[str, object],
     radius_miles: float,
+    area_radii: Mapping[str, object] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Keep only listings whose coordinates prove they are within the radius.
 
     Each listing is matched to the centroid for its _search_area tag. Missing or
     invalid listing/area coordinates fail closed: an unverifiable listing must
     never be represented to the user as being near the requested place.
+
+    ``area_radii`` overrides ``radius_miles`` PER AREA. It exists because one radius
+    cannot serve both granularities: the 2-mile default is right for "Camden" and
+    meaningless for "London", where it rejected listings that were in the requested city
+    (observed in production 2026-07-27 — ``Verified 0/2 listings within 2 miles``, and the
+    user got nothing). A city's real containment test is ``on_demand._wrong_city`` at
+    scrape time; the disc stays as a coarse fail-closed backstop, just at city scale.
     """
-    try:
-        radius = float(radius_miles)
-    except (TypeError, ValueError):
-        radius = 2.0
-    if not math.isfinite(radius) or radius <= 0:
-        radius = 2.0
+    radius = _coerce_radius(radius_miles)
+    radii = {
+        _normalise_area(area): _coerce_radius(value, radius)
+        for area, value in (area_radii or {}).items()
+    }
 
     centres = {
         _normalise_area(area): parse_coordinates(coords)
@@ -112,6 +130,7 @@ def filter_properties_by_radius(
         row = dict(original)
         area_key = _normalise_area(row.get("_search_area"))
         centre = centres.get(area_key)
+        area_radius = radii.get(area_key, radius)
         listing_geo = row.get("geo_location") or row.get("Geo_Location")
         distance = haversine_miles(centre, listing_geo)
 
@@ -121,7 +140,7 @@ def filter_properties_by_radius(
         elif distance is None:
             row["_geo_rejection"] = "listing_unresolved"
             rejected.append(row)
-        elif distance > radius:
+        elif distance > area_radius:
             row["_geo_rejection"] = "outside_radius"
             row["distance_miles"] = round(distance, 2)
             rejected.append(row)

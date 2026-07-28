@@ -4,6 +4,7 @@ Tool: Search Nearby POIs (使用 OpenStreetMap)
 """
 
 import os
+import threading
 import time
 import math
 from typing import Optional, List, Dict
@@ -132,6 +133,51 @@ MAJOR_CONVENIENCE_BRANDS = [
 ]
 
 
+# ─── Coordinates we already own ──────────────────────────────────────
+# UK bounding box — the same validity window amenity_map_generator.parse_geo_location
+# applies. A coordinate outside it is a parse accident (swapped lat/lon, a stray "0, 0"),
+# not a UK listing, and must not become a POI search centre.
+_UK_LAT_RANGE = (50.0, 59.0)
+_UK_LON_RANGE = (-8.0, 2.0)
+
+
+def coords_in_uk(lat, lon) -> bool:
+    """True when (lat, lon) are numbers inside the UK box."""
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return False
+    return (_UK_LAT_RANGE[0] <= lat <= _UK_LAT_RANGE[1]
+            and _UK_LON_RANGE[0] <= lon <= _UK_LON_RANGE[1])
+
+
+def parse_geo_location(value) -> Optional[tuple]:
+    """A listing's ``geo_location`` -> (lat, lon), or None.
+
+    Accepts the two shapes the scrapers produce: the ``"lat, lon"`` string
+    (scraping/normalize.py) and the ``{"lat":…, "lng"/"lon":…}`` dict. Deliberately a
+    plain function here rather than a reuse of AmenityMapGenerator.parse_geo_location:
+    that module imports folium at import time, and this one sits on the POI hot path."""
+    if not value:
+        return None
+    try:
+        if isinstance(value, str):
+            parts = value.strip().split(',')
+            if len(parts) == 2 and coords_in_uk(parts[0].strip(), parts[1].strip()):
+                return (float(parts[0].strip()), float(parts[1].strip()))
+        elif isinstance(value, dict):
+            lat = value.get('lat', value.get('latitude'))
+            lon = value.get('lng', value.get('lon', value.get('longitude')))
+            if coords_in_uk(lat, lon):
+                return (float(lat), float(lon))
+        elif isinstance(value, (list, tuple)) and len(value) == 2:
+            if coords_in_uk(value[0], value[1]):
+                return (float(value[0]), float(value[1]))
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
 def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     使用 Haversine 公式计算两点之间的距离（米）
@@ -238,49 +284,171 @@ POI_TYPES = {
 }
 
 
-def geocode_address(address: str) -> Optional[tuple]:
-    """将地址转换为经纬度，带有多级回退策略"""
+# ─── Geocode memo ────────────────────────────────────────────────────
+# One turn used to geocode the SAME address string 5+ times: the model issues one POI call
+# per type, and every call started the ladder from scratch. Nominatim is a remote, paced,
+# rate-limited service, so those repeats were the bulk of a 25s per-call budget — the
+# supermarket/convenience queries were then cut off and the answer said "no supermarkets
+# found" about a street that has three. Failures are cached too (a shorter TTL): re-walking
+# a ladder that just failed costs the same seconds and fails again.
+GEOCODE_CACHE_TTL_S = float(os.getenv("GEOCODE_CACHE_TTL_S", "21600"))       # 6h
+GEOCODE_NEGATIVE_TTL_S = float(os.getenv("GEOCODE_NEGATIVE_TTL_S", "600"))   # 10min
+_geocode_cache: Dict[str, tuple] = {}   # key -> (expires_at, coords|None)
+_geocode_cache_lock = threading.Lock()
+
+
+def _geocode_cache_key(address: str) -> str:
+    return " ".join(str(address or "").split()).strip().lower()
+
+
+def geocode_cache_clear() -> None:
+    """Drop every memoised geocode (tests; ops)."""
+    with _geocode_cache_lock:
+        _geocode_cache.clear()
+
+
+def _geocode_cached(key: str):
+    """(hit, coords) — ``hit`` False when absent or expired."""
+    with _geocode_cache_lock:
+        entry = _geocode_cache.get(key)
+        if entry is None:
+            return False, None
+        expires_at, coords = entry
+        if time.monotonic() >= expires_at:
+            _geocode_cache.pop(key, None)
+            return False, None
+        return True, coords
+
+
+def _geocode_store(key: str, coords: Optional[tuple]) -> None:
+    ttl = GEOCODE_CACHE_TTL_S if coords else GEOCODE_NEGATIVE_TTL_S
+    with _geocode_cache_lock:
+        _geocode_cache[key] = (time.monotonic() + ttl, coords)
+
+
+def address_variants(address: str) -> List[str]:
+    """The geocode ladder for one address string, most specific first, deduped.
+
+    The listing strings this receives are OnTheMarket DISPLAY names, not postal addresses:
+    ``"Rugby House 6 Great Ormond Street, Islington WC1N"`` has the house number inside the
+    building name, one comma, and a borough that contradicts its own postcode. The previous
+    ladder produced exactly ONE variant for it — the drop-the-building-name step required
+    more than two comma parts, and the postcode step required a FULL postcode while this
+    string carries only the outward code — so a single failed lookup was the whole attempt
+    and the tool returned "could not find coordinates".
+
+    Steps: the string as given; without its leading building-name part; from the first house
+    number onward; the street words alone; a full postcode; the outward code + London.
+    """
+    import re
+
+    raw = " ".join(str(address or "").split()).strip()
+    if not raw:
+        return []
+    variants = [raw]
+    parts = [p.strip() for p in raw.split(',') if p.strip()]
+
+    # Drop the leading building-name part. >= 2 parts, not > 2: a one-comma display name is
+    # the common shape and was precisely the one this step used to skip.
+    if len(parts) >= 2:
+        variants.append(', '.join(parts[1:]))
+        if len(parts) > 3:
+            variants.append(f"{parts[1]}, {parts[-2]}, {parts[-1]}")
+
+    # The first part often reads "<building name> <number> <street>". Nominatim resolves
+    # "6 Great Ormond Street, London" and "Great Ormond Street, London" but not the whole
+    # blob, so offer both, keeping any trailing parts (postcode) for context.
+    if parts:
+        head, tail = parts[0], parts[1:]
+        num = re.search(r'\b(\d+[A-Za-z]?(?:\s*-\s*\d+[A-Za-z]?)?)\s+(\S.*)$', head)
+        if num:
+            from_number = f"{num.group(1)} {num.group(2)}".strip()
+            street_only = num.group(2).strip()
+            for candidate in (from_number, street_only):
+                variants.append(', '.join([candidate, *tail]) if tail else candidate)
+                if 'london' not in raw.lower():
+                    variants.append(f"{candidate}, London, UK")
+
+    # Postcodes last: a full one is a precise fallback, an outward code is a district centre
+    # (worse, but far better than nothing — and the model is told what it measured from).
+    full_pc = re.search(r'\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b', raw, re.IGNORECASE)
+    if full_pc:
+        variants.append(f"{full_pc.group().strip()}, London, UK")
+        variants.append(full_pc.group().strip())
+    else:
+        outward = re.search(r'\b([A-Z]{1,2}\d{1,2}[A-Z]?)\b(?!\s*\d[A-Z]{2})', raw)
+        if outward:
+            variants.append(f"{outward.group(1)}, London, UK")
+
+    seen, ordered = set(), []
+    for v in variants:
+        v = " ".join(v.split()).strip(' ,')
+        low = v.lower()
+        if v and low not in seen and not _is_too_generic(v):
+            seen.add(low)
+            ordered.append(v)
+    return ordered
+
+
+# Words that place nothing on their own. Dropping the first comma part of
+# "Caledonian Road, London" leaves "London", and geocoding that SUCCEEDS — with the centre
+# of the city. A variant that silently relocates the search by ten kilometres is worse than
+# one more failure, so the ladder never asks for one.
+_GENERIC_PLACE_WORDS = {"london", "uk", "u.k.", "england", "greater", "gb", "united",
+                        "kingdom", "city", "centre", "center"}
+
+
+def _is_too_generic(variant: str) -> bool:
+    """True when ``variant`` carries no locating token (no street word, number or postcode)."""
+    import re
+
+    if re.fullmatch(r'[A-Z]{1,2}\d{1,2}[A-Z]?(\s*\d[A-Z]{2})?', variant.strip(),
+                    re.IGNORECASE):
+        return False        # a postcode (outward or full) locates something
+    words = [w for w in re.split(r'[\s,]+', variant.lower()) if w]
+    return not [w for w in words if w not in _GENERIC_PLACE_WORDS]
+
+
+def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[tuple]:
+    """将地址转换为经纬度，带有多级回退策略 + 进程内缓存。
+
+    ``deadline`` is a ``time.monotonic()`` instant: no further variant is attempted once it
+    passes, so the ladder cannot outlive the POI budget that authorised it (each attempt is
+    a remote call plus pacing — five of them used to be able to eat a whole 25s window)."""
+    key = _geocode_cache_key(address)
+    if key:
+        hit, coords = _geocode_cached(key)
+        if hit:
+            if coords:
+                print(f"⚡ [Geocode] 缓存命中: {coords[0]:.6f}, {coords[1]:.6f}")
+            else:
+                print(f"⚡ [Geocode] 缓存命中: 已知失败，跳过 ({address[:40]})")
+            return coords
     try:
         geolocator = Nominatim(user_agent="uk_rent_recommender_v1", timeout=10)
-        
-        # 尝试不同的地址格式
-        address_variants = [
-            address,  # 原始地址
-        ]
-        
-        # 🆕 如果地址包含建筑名，尝试去掉建筑名只保留街道地址
-        # 例如 "Tufnell House, 144 Huddleston Road, London N7 0EG, UK" 
-        # → "144 Huddleston Road, London N7 0EG, UK"
-        parts = address.split(',')
-        if len(parts) > 2:
-            # 去掉第一部分（通常是建筑名）
-            simplified = ', '.join(parts[1:]).strip()
-            address_variants.append(simplified)
-            
-            # 只保留街道和邮编
-            if len(parts) > 3:
-                street_postcode = f"{parts[1].strip()}, {parts[-2].strip()}, {parts[-1].strip()}"
-                address_variants.append(street_postcode)
-        
-        # 提取邮编作为最后手段 (UK postcode format: XX## #XX or similar)
-        import re
-        postcode_match = re.search(r'[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}', address, re.IGNORECASE)
-        if postcode_match:
-            postcode = postcode_match.group()
-            address_variants.append(f"{postcode}, London, UK")
-            address_variants.append(postcode)
-        
-        # 依次尝试每个变体
-        for variant in address_variants:
+        variants = address_variants(address)
+        attempted = 0
+
+        for variant in variants:
+            if deadline is not None and time.monotonic() >= deadline:
+                print(f"⏱️ [Geocode] 预算已用尽，剩余变体未尝试 ({len(variants) - attempted})")
+                # Not a cacheable verdict: the ladder was cut short, not exhausted.
+                return None
+            attempted += 1
             print(f"🔍 [Geocode] 尝试: {variant[:60]}...")
             location = geolocator.geocode(variant)
             if location:
                 print(f"✅ [Geocode] 成功! {location.latitude:.6f}, {location.longitude:.6f}")
-                return (location.latitude, location.longitude)
+                coords = (location.latitude, location.longitude)
+                if key:
+                    _geocode_store(key, coords)
+                return coords
             time.sleep(0.5)  # 避免请求过快
-        
-        print(f"❌ [Geocode] 所有变体都失败了")
-        
+
+        print(f"❌ [Geocode] 所有变体都失败了 ({attempted} 个)")
+        if key:
+            _geocode_store(key, None)
+
     except GeocoderTimedOut:
         print(f"⏱️ 地理编码超时: {address}")
     except Exception as e:
@@ -537,11 +705,30 @@ def _skipped_note(skipped: List[str], budget_s: float) -> str:
             f"（部分结果：已达搜索时间上限，未查询：{joined}。）")
 
 
+def _requested_types(poi_type: str) -> List[str]:
+    """Parse ``poi_type`` as a comma/space separated LIST of known types, in order, deduped.
+
+    One call per type was the other half of the budget burn: five calls meant five geocodes
+    and five deadlines where one call can cover every type under a single geocode. Returns
+    [] when nothing in the string is a known type, so the caller keeps its fuzzy matching."""
+    if not poi_type:
+        return []
+    tokens = [t.strip().lower() for t in str(poi_type).replace('|', ',').split(',')]
+    out: List[str] = []
+    for token in tokens:
+        for word in ([token] if token in POI_TYPES else token.split()):
+            if word in POI_TYPES and word not in out:
+                out.append(word)
+    return out
+
+
 def search_nearby_pois_impl(
     address: str,
     poi_type: str = "all",
     radius: int = 300,
-    user_query: str = ""
+    user_query: str = "",
+    latitude: float = None,
+    longitude: float = None
 ) -> dict:
     """
     使用 OpenStreetMap 搜索地址周边的 POI
@@ -556,9 +743,11 @@ def search_nearby_pois_impl(
 
     Args:
         address: 要搜索的地址
-        poi_type: POI 类型 (restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, all)
+        poi_type: POI 类型，可传多个（逗号分隔）(restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, all)
         radius: 搜索半径（米），默认 500m
         user_query: 用户原始查询（可选，用于智能推断 POI 类型）
+        latitude, longitude: 该地址的已知坐标（可选）。传了就跳过地理编码 —— 房源缓存里
+            本来就有 geo_location，用它比拿展示名去 Nominatim 反推更准也更快。
     """
     budget_s = poi_search_budget_s()
     deadline = time.monotonic() + budget_s
@@ -573,8 +762,20 @@ def search_nearby_pois_impl(
 
         print(f"🗺️ [OSM POI] 搜索: {poi_type} near {address[:50]}...")
 
-        # 地理编码
-        coords = geocode_address(address)
+        # Coordinates the caller already owns beat anything geocoding can recover from a
+        # display name. The listing cache carries geo_location per listing; a listing string
+        # like "Caledonian Road, London" otherwise geocodes to the middle of a 2 km road,
+        # centring the radius on a point the tenant does not live at (and, for
+        # "Rugby House 6 Great Ormond Street, Islington WC1N", on nothing at all).
+        exact_coords = False
+        if coords_in_uk(latitude, longitude):
+            coords = (float(latitude), float(longitude))
+            exact_coords = True
+            print(f"📍 [OSM POI] 使用调用方提供的坐标，跳过地理编码: "
+                  f"{coords[0]:.6f}, {coords[1]:.6f}")
+        else:
+            # 地理编码（受同一个 deadline 约束，不能超出授权它的预算）
+            coords = geocode_address(address, deadline=deadline)
         if not coords:
             return {
                 "success": False,
@@ -592,17 +793,31 @@ def search_nearby_pois_impl(
         # (string classifier) so it costs the POI hot path nothing.
         from core.place_reference import query_reference
         ref = query_reference(address)
+        if exact_coords:
+            # The caller passed the listing's OWN coordinates, so the hedging a geocoded
+            # string earns does not apply — say so, or the model repeats "this is an area
+            # centre, not the property" about a point that IS the property.
+            ref = dict(ref)
+            ref["precision"] = "listing_coordinates"
+            ref["is_specific_address"] = True
+            ref["measured_from"] = (
+                f"the listing's own coordinates for {address!r} ({lat:.5f}, {lon:.5f}), "
+                f"supplied with the request rather than geocoded. Distances are "
+                f"straight-line (as the crow flies), not walking distance.")
 
         results = {}
 
         # 确定要查询的 POI 类型
         # 🆕 优先使用从 user_query 推断的类型
+        requested = _requested_types(poi_type) if poi_type != "all" else []
         if inferred_types:
             types_to_query = inferred_types
         elif poi_type == "all":
             types_to_query = ["restaurant", "supermarket", "convenience", "cafe"]
-        elif poi_type in POI_TYPES:
-            types_to_query = [poi_type]
+        elif requested:
+            # One call, N types, ONE geocode and ONE deadline — the whole point of accepting
+            # a list instead of making the model fan out a call per type.
+            types_to_query = requested
         else:
             # 尝试智能匹配
             poi_type_lower = poi_type.lower()
@@ -735,7 +950,7 @@ DISTANCES HAVE A REFERENCE POINT: the result's `reference_point.measured_from` s
             },
             'poi_type': {
                 'type': 'string',
-                'description': 'Type of POI: restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, or "all"',
+                'description': 'Type(s) of POI, COMMA-SEPARATED for several at once (e.g. "supermarket,convenience,tube_station"). One call covering every type you need is much faster than one call per type. Known types: restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, or "all"',
                 'default': 'all'
             },
             'radius': {
@@ -747,6 +962,14 @@ DISTANCES HAVE A REFERENCE POINT: the result's `reference_point.measured_from` s
                 'type': 'string',
                 'description': 'Original user query for smart POI type inference',
                 'default': ''
+            },
+            'latitude': {
+                'type': 'number',
+                'description': "The listing's own latitude, if you have it (get_property_details returns geo_location). Passing it skips geocoding, so the radius is centred on the property itself instead of a street or district centre."
+            },
+            'longitude': {
+                'type': 'number',
+                'description': "The listing's own longitude (see latitude)."
             }
         },
         'required': ['address']

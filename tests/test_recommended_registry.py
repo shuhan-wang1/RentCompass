@@ -109,8 +109,12 @@ def test_merge_from_empty_assigns_sequential_indexes():
     reg = _merge_recommended_registry(None, [_rec("A", "https://otm/1"), _rec("B", "https://otm/2")])
     assert [e["index"] for e in reg] == [1, 2]
     assert reg[0]["address"] == "A" and reg[0]["url"] == "https://otm/1"
-    # only the lightweight keys are stored (no description / big fields)
-    assert set(reg[0]) == {"index", "address", "price", "area", "travel_time", "url", "available_from"}
+    # only the lightweight keys are stored (no description / big fields). geo_location is a
+    # "lat, lon" string and is the one coordinate-sized exception: it is what lets a POI or
+    # map lookup for a listing shown many turns ago be centred on THAT listing instead of on
+    # a geocode of its display name. It is never rendered into the prompt.
+    assert set(reg[0]) == {"index", "address", "price", "area", "travel_time", "url",
+                           "available_from", "geo_location"}
 
 
 def test_merge_dedups_by_url_and_keeps_first_seen_index():

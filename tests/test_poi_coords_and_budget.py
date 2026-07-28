@@ -1,0 +1,305 @@
+# -*- coding: utf-8 -*-
+"""POI lookups for a LISTING: use the coordinates we already have, and stop spending the
+tool budget re-deriving them.
+
+The defect this pins, from one production turn that compared two focused listings and
+reported "no supermarkets or convenience stores nearby" for both:
+
+  * ``search_nearby_pois`` only ever took an ``address`` string, and the strings it gets are
+    OnTheMarket DISPLAY names. "Rugby House 6 Great Ormond Street, Islington WC1N" geocoded
+    to NOTHING (one comma, so the drop-the-building-name step was skipped; outward-only
+    postcode, so the postcode step was skipped — the whole ladder was one failed lookup),
+    and "Caledonian Road, London" geocoded to the middle of a 2 km road. Both listings had
+    ``geo_location`` in the cache the entire time.
+  * The model issued one call per POI type per listing — 12 calls, 15 geocodes of 5 distinct
+    strings, and 9 of them killed by the 25s per-call cap. The two that survived returned
+    restaurants and a tube station, which is exactly what the answer contained.
+
+Network is never touched: the geocoder is monkeypatched and the agent_loop helpers are
+AST-extracted (pure), so this holds wherever langgraph is absent.
+"""
+import ast
+import os
+import sys
+from pathlib import Path
+
+import pytest
+
+_APP = str(Path(__file__).resolve().parents[1] / "app")
+if _APP in sys.path:
+    sys.path.remove(_APP)
+sys.path.insert(0, _APP)
+for _mod in [m for m in list(sys.modules) if m == "core" or m.startswith("core.")]:
+    if "tests" in (getattr(sys.modules[_mod], "__file__", "") or "").replace("\\", "/").split("/"):
+        del sys.modules[_mod]
+
+from core.tools import search_nearby_pois as poi  # noqa: E402
+
+_LOOP_PATH = os.path.join(str(Path(__file__).resolve().parents[1]), "app", "core",
+                          "agent_loop.py")
+
+
+def _load_loop_symbols(wanted):
+    with open(_LOOP_PATH, "r", encoding="utf-8") as fh:
+        tree = ast.parse(fh.read(), filename=_LOOP_PATH)
+    picked = [n for n in tree.body
+              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in wanted]
+    ns = {"AgentState": dict}
+    exec(compile(ast.Module(body=picked, type_ignores=[]), _LOOP_PATH, "exec"), ns)
+    missing = wanted - ns.keys()
+    assert not missing, f"failed to extract {missing} from agent_loop.py"
+    return ns
+
+
+_LOOP = _load_loop_symbols({"_inject_poi_coords", "_listing_coords_for", "_known_listings",
+                            "_canonical_poi_args", "_poi_types_of", "_sorted_poi_types",
+                            "_focus_records", "_ref_matches_focus", "_norm_ref"})
+_inject_poi_coords = _LOOP["_inject_poi_coords"]
+_canonical_poi_args = _LOOP["_canonical_poi_args"]
+
+_RUGBY = {"address": "Rugby House 6 Great Ormond Street, Islington WC1N",
+          "price": "£1500/month", "url": "https://otm/19116284/",
+          "geo_location": "51.522441, -0.118633"}
+_CALEDONIAN = {"address": "Caledonian Road, London", "price": "£1700/month",
+               "url": "https://otm/16980291/", "geo_location": "51.539, -0.117"}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 1) The geocode ladder — the address that produced exactly one failed attempt
+# ══════════════════════════════════════════════════════════════════════════
+def test_display_name_now_yields_street_and_postcode_variants():
+    variants = poi.address_variants(_RUGBY["address"])
+    assert variants[0] == _RUGBY["address"]                     # as given, first
+    lowered = [v.lower() for v in variants]
+    # The two that a live Nominatim actually resolves (the model reached them only by
+    # rewriting the string itself, one 25s call at a time).
+    assert any(v.startswith("6 great ormond street") for v in lowered)
+    assert any(v.startswith("great ormond street") for v in lowered)
+    assert any(v.startswith("wc1n") for v in lowered)           # outward-only postcode
+
+
+def test_ladder_never_offers_a_variant_that_relocates_the_search():
+    # Dropping the first part of "Caledonian Road, London" leaves "London", which geocodes
+    # SUCCESSFULLY to the centre of the city. A silent 10 km relocation is worse than a miss.
+    assert poi.address_variants("Caledonian Road, London") == ["Caledonian Road, London"]
+    assert poi.address_variants("London") == []
+    assert poi.address_variants("London, UK") == []
+
+
+def test_ladder_keeps_the_building_name_case_it_already_handled():
+    variants = poi.address_variants("Tufnell House, 144 Huddleston Road, London N7 0EG, UK")
+    assert "144 Huddleston Road, London N7 0EG, UK" in variants
+    assert "N7 0EG" in variants
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 2) Geocode memo — the same string is not re-derived per call
+# ══════════════════════════════════════════════════════════════════════════
+class _CountingGeocoder:
+    """Stands in for Nominatim; counts network attempts."""
+
+    def __init__(self, answers):
+        self.answers = answers
+        self.calls = []
+
+    def geocode(self, query):
+        self.calls.append(query)
+        hit = self.answers.get(query)
+        if hit is None:
+            return None
+        return type("Loc", (), {"latitude": hit[0], "longitude": hit[1]})()
+
+
+@pytest.fixture(autouse=True)
+def _clear_geocode_cache():
+    poi.geocode_cache_clear()
+    yield
+    poi.geocode_cache_clear()
+
+
+def _patch_geocoder(monkeypatch, answers):
+    g = _CountingGeocoder(answers)
+    monkeypatch.setattr(poi, "Nominatim", lambda **kw: g)
+    monkeypatch.setattr(poi.time, "sleep", lambda *_a, **_k: None)
+    return g
+
+
+def test_repeated_geocode_of_the_same_address_hits_the_cache(monkeypatch):
+    g = _patch_geocoder(monkeypatch, {"Great Ormond Street, London WC1N": (51.5224, -0.1186)})
+    first = poi.geocode_address("Great Ormond Street, London WC1N")
+    assert first == (51.5224, -0.1186)
+    before = len(g.calls)
+    for _ in range(4):
+        assert poi.geocode_address("great ormond street,  LONDON WC1N") == first
+    assert len(g.calls) == before, "a cached address must not touch the geocoder again"
+
+
+def test_failures_are_cached_too(monkeypatch):
+    g = _patch_geocoder(monkeypatch, {})
+    assert poi.geocode_address("Nowhere Street, ZZ99") is None
+    attempts = len(g.calls)
+    assert attempts >= 1
+    assert poi.geocode_address("Nowhere Street, ZZ99") is None
+    assert len(g.calls) == attempts, "a known-failing ladder must not be re-walked"
+
+
+def test_geocode_stops_at_the_deadline(monkeypatch):
+    g = _patch_geocoder(monkeypatch, {})           # every variant misses
+    assert poi.geocode_address(_RUGBY["address"], deadline=poi.time.monotonic() - 1) is None
+    assert g.calls == [], "no variant may be attempted after the deadline"
+    # A cut-short ladder is not a verdict: it must not poison the cache.
+    g2 = _patch_geocoder(monkeypatch, {_RUGBY["address"]: (51.5224, -0.1186)})
+    assert poi.geocode_address(_RUGBY["address"]) == (51.5224, -0.1186)
+    assert g2.calls, "the truncated attempt must not have been cached as a failure"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 3) Coordinates we already own — parsing, injection, and skipping geocoding
+# ══════════════════════════════════════════════════════════════════════════
+def test_parse_geo_location_accepts_both_scraper_shapes_and_rejects_junk():
+    assert poi.parse_geo_location("51.522441, -0.118633") == (51.522441, -0.118633)
+    assert poi.parse_geo_location({"lat": 51.5, "lng": -0.12}) == (51.5, -0.12)
+    assert poi.parse_geo_location("0, 0") is None            # outside the UK box
+    assert poi.parse_geo_location("") is None
+    assert poi.parse_geo_location("not, coords") is None
+
+
+def test_supplied_coordinates_skip_geocoding_entirely(monkeypatch):
+    g = _patch_geocoder(monkeypatch, {})     # any geocode attempt would return None -> error
+    monkeypatch.setattr(poi, "query_osm_pois", lambda *a, **k: [])
+    out = poi.search_nearby_pois_impl(address=_RUGBY["address"], poi_type="supermarket",
+                                      latitude=51.522441, longitude=-0.118633)
+    assert out["success"] is True, "the address that cannot be geocoded must still work"
+    assert g.calls == []
+    ref = out["reference_point"]
+    assert ref["is_specific_address"] is True
+    assert "supplied with the request" in ref["measured_from"]
+
+
+def test_junk_coordinates_fall_back_to_geocoding(monkeypatch):
+    g = _patch_geocoder(monkeypatch, {"Great Ormond Street, London WC1N": (51.5224, -0.1186)})
+    monkeypatch.setattr(poi, "query_osm_pois", lambda *a, **k: [])
+    out = poi.search_nearby_pois_impl(address="Great Ormond Street, London WC1N",
+                                      poi_type="supermarket", latitude=0, longitude=0)
+    assert out["success"] is True
+    assert g.calls, "coordinates outside the UK box are not usable; geocoding must run"
+
+
+def test_injection_fills_coords_from_the_focused_listing():
+    state = {"extracted_context": {"focus_stack": [_CALEDONIAN, _RUGBY]}}
+    args = _inject_poi_coords({"address": _RUGBY["address"], "poi_type": "supermarket"}, state)
+    assert (args["latitude"], args["longitude"]) == (51.522441, -0.118633)
+
+
+def test_injection_reads_last_results_and_the_registry():
+    for key, rec in (("last_results", _RUGBY), ("recommended_registry", _RUGBY)):
+        args = _inject_poi_coords({"address": _RUGBY["address"]},
+                                  {"extracted_context": {key: [rec]}})
+        assert (args["latitude"], args["longitude"]) == (51.522441, -0.118633), key
+
+
+def test_injection_never_borrows_another_listings_coordinates():
+    state = {"extracted_context": {"focus_stack": [_RUGBY]}}
+    # A different building on the same street is NOT the focused listing.
+    args = _inject_poi_coords({"address": "Rugby House 9 Great Ormond Street, WC1N"}, state)
+    assert "latitude" not in args
+    # An area question is not a listing question either.
+    assert "latitude" not in _inject_poi_coords({"address": "Hackney"}, state)
+
+
+def test_injection_never_overrides_model_supplied_coordinates():
+    state = {"extracted_context": {"focus_stack": [_RUGBY]}}
+    args = _inject_poi_coords({"address": _RUGBY["address"], "latitude": 51.5,
+                               "longitude": -0.1}, state)
+    assert (args["latitude"], args["longitude"]) == (51.5, -0.1)
+
+
+def test_injection_is_a_noop_without_coordinates_in_context():
+    args = _inject_poi_coords({"address": _RUGBY["address"]},
+                              {"extracted_context": {"focus_stack": [
+                                  {k: v for k, v in _RUGBY.items() if k != "geo_location"}]}})
+    assert "latitude" not in args
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 4) One call per address instead of one per type
+# ══════════════════════════════════════════════════════════════════════════
+def test_multi_type_poi_type_is_parsed_as_a_list():
+    assert poi._requested_types("supermarket,convenience,tube_station") == [
+        "supermarket", "convenience", "tube_station"]
+    assert poi._requested_types("restaurant, cafe") == ["restaurant", "cafe"]
+    assert poi._requested_types("supermarket") == ["supermarket"]
+    # unknown / "all" keep the tool's own inference and fuzzy matching
+    assert poi._requested_types("all") == []
+    assert poi._requested_types("grocery store") == []
+
+
+def test_one_geocode_and_one_deadline_cover_every_requested_type(monkeypatch):
+    queried = []
+    monkeypatch.setattr(poi, "query_osm_pois",
+                        lambda lat, lon, ptype, *a, **k: queried.append(ptype) or [])
+    monkeypatch.setattr(poi, "_resolve_nearest_station", lambda *a, **k: None)
+    g = _patch_geocoder(monkeypatch, {})
+    out = poi.search_nearby_pois_impl(address=_RUGBY["address"],
+                                      poi_type="supermarket,convenience,restaurant",
+                                      latitude=51.522441, longitude=-0.118633)
+    assert out["success"] is True
+    assert queried == ["supermarket", "convenience", "restaurant"]
+    assert g.calls == []
+
+
+def test_per_type_fanout_collapses_to_one_call_per_address():
+    batch = [
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "supermarket", "radius": 500}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "convenience", "radius": 300}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "tube_station"}},
+        {"name": "search_nearby_pois", "args": {"address": _CALEDONIAN["address"],
+                                                "poi_type": "supermarket"}},
+        {"name": "get_property_details", "args": {"property_url": "https://otm/1/"}},
+    ]
+    canon = _canonical_poi_args(batch)
+    key = " ".join(_RUGBY["address"].split()).lower()
+    merged = canon[key]
+    assert merged["poi_type"] == "supermarket,convenience,tube_station"  # POI_TYPES order
+    assert merged["radius"] == 500              # widest wins
+    # Caledonian Road had a single type in this batch: nothing to merge, left as issued.
+    assert " ".join(_CALEDONIAN["address"].split()).lower() not in canon
+
+
+def test_merged_calls_share_one_digest_so_duplicates_are_not_paid_for_twice():
+    # This is the mechanism: identical args -> identical digest -> the existing no-progress
+    # guard answers calls 2..N from the first result.
+    batch = [
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": t}}
+        for t in ("supermarket", "convenience", "cafe")
+    ]
+    canon = _canonical_poi_args(batch)
+    key = " ".join(_RUGBY["address"].split()).lower()
+    assert len({repr(sorted(canon[key].items())) for _ in batch}) == 1
+    assert canon[key]["poi_type"] == "supermarket,convenience,cafe"
+
+
+def test_an_all_call_plus_explicit_types_names_every_type():
+    batch = [
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "all",
+                                                "user_query": "附近有超市吗"}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "tube_station"}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "pharmacy"}},
+    ]
+    merged = _canonical_poi_args(batch)[" ".join(_RUGBY["address"].split()).lower()]
+    assert merged["poi_type"] == "pharmacy,tube_station"  # POI_TYPES order
+    assert merged["user_query"] == "附近有超市吗"
+
+
+def test_a_single_poi_call_is_left_untouched():
+    batch = [{"name": "search_nearby_pois",
+              "args": {"address": _RUGBY["address"], "poi_type": "all",
+                       "user_query": "附近有什么"}}]
+    assert _canonical_poi_args(batch) == {}

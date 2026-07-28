@@ -365,7 +365,7 @@ def test_the_station_reaches_the_tool_payload(monkeypatch):
     """Data-layer supply only counts if it survives to what the model reads."""
     import core.tools.search_nearby_pois as sp
 
-    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5245, -0.1272))
+    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5245, -0.1272))
     monkeypatch.setattr(sp, "query_osm_pois", lambda *a, **k: [])
     _fake_stoppoints(monkeypatch, _WC1H_STOPS)
 
@@ -434,7 +434,7 @@ def test_the_tesco_110m_answer_names_its_reference_point(monkeypatch):
     a sibling field is exactly what route_source was."""
     import core.tools.search_nearby_pois as sp
 
-    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5450, -0.0553))
+    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5450, -0.0553))
     monkeypatch.setattr(sp, "query_osm_pois", lambda *a, **k: [
         {"name": "Tesco", "icon": "T", "distance_m": 110, "distance_display": "110m"}])
 
@@ -449,7 +449,7 @@ def test_the_tesco_110m_answer_names_its_reference_point(monkeypatch):
 def test_an_empty_poi_result_also_names_the_reference_point(monkeypatch):
     import core.tools.search_nearby_pois as sp
 
-    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5450, -0.0553))
+    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5450, -0.0553))
     monkeypatch.setattr(sp, "query_osm_pois", lambda *a, **k: [])
 
     res = sp.search_nearby_pois_impl(address="Hackney", poi_type="supermarket")

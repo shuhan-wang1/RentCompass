@@ -292,7 +292,7 @@ def test_poi_internal_deadline_partial(monkeypatch):
     monkeypatch.setattr(sp.time, "monotonic", lambda: clock["t"])
     monkeypatch.setattr(sp.time, "sleep", lambda s: clock.__setitem__("t", clock["t"] + s))
     monkeypatch.setattr(sp, "POI_SEARCH_BUDGET_S", 5.0)
-    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5, -0.1))
+    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5, -0.1))
 
     calls = []
 
@@ -318,7 +318,7 @@ def test_poi_internal_deadline_partial(monkeypatch):
 def test_poi_no_deadline_when_fast(monkeypatch):
     """Well within budget -> no partial flag, all types queried."""
     import core.tools.search_nearby_pois as sp
-    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5, -0.1))
+    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5, -0.1))
     monkeypatch.setattr(sp, "POI_PACING_S", 0.0)
     calls = []
 
@@ -341,7 +341,7 @@ def test_event_loop_not_blocked_by_poi(monkeypatch):
     ticking while a 0.4s blocking query is in flight. If the impl blocked the loop (the
     original async-def-with-sync-calls bug), the heartbeat could not advance."""
     import core.tools.search_nearby_pois as sp
-    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5, -0.1))
+    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5, -0.1))
 
     def blocking_query(*a, **k):
         time.sleep(0.4)  # REAL blocking call; must run in a thread, not on the loop

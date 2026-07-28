@@ -1426,6 +1426,12 @@ def _resolve_focus_listing(property_info, last_results, csv_properties,
         ctx['property_type'] = session_hit.get('property_type')
         ctx['area'] = session_hit.get('area')
         ctx['budget_status'] = session_hit.get('budget_status') or ''
+        # The listing's own coordinates. Carried so a "what's nearby" question can centre its
+        # radius on the property instead of geocoding its display name — which for
+        # "Rugby House 6 Great Ormond Street, Islington WC1N" resolved to nothing, and for
+        # "Caledonian Road, London" to the middle of a 2 km road.
+        if session_hit.get('geo_location'):
+            ctx['geo_location'] = session_hit.get('geo_location')
         return ctx, 'session'
 
     # ②.5 累计推荐注册表命中（历史所有轮次的推荐，不只最近一轮）。URL 优先、地址次之精确匹配；
@@ -1591,6 +1597,11 @@ def _merge_recommended_registry(existing, recommendations, max_items=_REGISTRY_M
             'travel_time': rec.get('travel_time'),
             'url': rec.get('url') or '',
             'available_from': rec.get('available_from'),
+            # A "lat, lon" string — the one big-field exception to summaries-only, because it
+            # is what lets a POI/map lookup for a listing shown many turns ago be centred on
+            # that listing instead of on a geocode of its display name. Never rendered into
+            # the prompt (render_recommended_index ignores it).
+            'geo_location': rec.get('geo_location') or '',
         }
         registry.append(entry)
         seen[key] = entry
@@ -1623,6 +1634,9 @@ def _build_focus_stack_records(focus_items, last_results, csv_properties,
             'property_type': ctx.get('property_type'),
             'area': ctx.get('area'),
             'budget_status': ctx.get('budget_status'),
+            # Coordinates ride along so a POI question about the focused listing is centred
+            # on the listing, not on a geocode of its display name.
+            'geo_location': ctx.get('geo_location'),
         })
     return records
 

@@ -41,7 +41,7 @@ def _poi_module(monkeypatch):
     monkeypatch.setattr(sp.time, "monotonic", lambda: clock["t"])
     monkeypatch.setattr(sp.time, "sleep", lambda s: clock.__setitem__("t", clock["t"] + s))
     monkeypatch.setattr(sp, "POI_PACING_S", 0.0)
-    monkeypatch.setattr(sp, "geocode_address", lambda addr: (51.5, -0.1))
+    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5, -0.1))
     return sp, clock
 
 

@@ -333,6 +333,148 @@ def _inject_focus_url(params: dict, state: AgentState) -> dict:
     return p
 
 
+def _known_listings(ec: dict) -> list:
+    """Every listing record this turn holds in memory, focus first — the places a
+    ``geo_location`` can be read from without touching sqlite (this runs on the dispatch
+    path, so no blocking I/O). Focus first because a POI question during a focus is about
+    the focused listing."""
+    out = []
+    for rec in _focus_records(ec):
+        if isinstance(rec, dict):
+            out.append(rec)
+    for key in ("last_results_full", "last_results", "recommended_registry"):
+        for rec in (ec.get(key) or []):
+            if isinstance(rec, dict):
+                out.append(rec)
+    return out
+
+
+def _listing_coords_for(address: str, ec: dict):
+    """(lat, lon) for ``address`` when some in-context listing IS that address, else None.
+
+    Matched with _ref_matches_focus, so a street name that merely appears inside a
+    listing's address does not silently borrow that listing's coordinates."""
+    if not str(address or "").strip():
+        return None
+    try:
+        from core.tools.search_nearby_pois import parse_geo_location  # lazy: geopy
+    except Exception:
+        return None
+    for rec in _known_listings(ec):
+        coords = parse_geo_location(rec.get("geo_location"))
+        if coords and _ref_matches_focus(address, rec):
+            return coords
+    return None
+
+
+def _inject_poi_coords(params: dict, state: AgentState) -> dict:
+    """search_nearby_pois executor re-injection: attach the listing's OWN coordinates.
+
+    The tool otherwise geocodes whatever string it was given, and the strings it gets are
+    OnTheMarket display names. Observed on one turn: "Rugby House 6 Great Ormond Street,
+    Islington WC1N" geocoded to nothing at all (so the POI answer was "no supermarkets
+    found" for a street that has three), and "Caledonian Road, London" geocoded to the
+    middle of a 2 km road, centring a 500 m radius on a point the tenant does not live at.
+    The listing cache has held geo_location for both all along.
+
+    Never overrides coordinates the model supplied, and only fires when an in-context
+    listing IS the requested address."""
+    p = dict(params or {})
+    try:
+        from core.tools.search_nearby_pois import coords_in_uk  # lazy: geopy
+    except Exception:
+        return p
+    if coords_in_uk(p.get("latitude"), p.get("longitude")):
+        return p
+    coords = _listing_coords_for(p.get("address"), state.get("extracted_context") or {})
+    if coords:
+        p["latitude"], p["longitude"] = coords[0], coords[1]
+    return p
+
+
+def _canonical_poi_args(batch: list) -> dict:
+    """Collapse a batch's per-type POI fan-out into ONE call per address.
+
+    Returns {normalised address -> canonical args}. The model tends to emit one
+    search_nearby_pois call per POI type per listing (observed: 12 calls in one turn, each
+    re-geocoding, 9 of them killed by the 25s per-call cap — which is why that answer
+    carried restaurants and a tube station and nothing else). The tool already queries many
+    types under ONE geocode and ONE deadline, so the calls are merged here: same address,
+    union of types (comma-separated), widest radius. Every merged call gets the SAME digest,
+    so the existing no-progress guard runs the first and answers the rest with its result
+    instead of paying for them again."""
+    groups: dict = {}
+    for tc in batch:
+        if (tc.get("name") or "") != "search_nearby_pois":
+            continue
+        args = tc.get("args") or {}
+        address = str(args.get("address") or "").strip()
+        if not address:
+            continue
+        key = " ".join(address.split()).lower()
+        slot = groups.setdefault(key, {"args": dict(args), "types": [], "all": False,
+                                       "radius": None, "queries": []})
+        requested = _poi_types_of(args.get("poi_type"))
+        if requested is None:
+            slot["all"] = True          # an "all"/fuzzy call: keep the tool's own behaviour
+        else:
+            for t in requested:
+                if t not in slot["types"]:
+                    slot["types"].append(t)
+        try:
+            r = int(args.get("radius")) if args.get("radius") is not None else None
+        except (TypeError, ValueError):
+            r = None
+        if r and (slot["radius"] is None or r > slot["radius"]):
+            slot["radius"] = r
+        if args.get("user_query"):
+            slot["queries"].append(str(args["user_query"]))
+
+    canon = {}
+    for key, slot in groups.items():
+        if len(slot["types"]) < 2 and not (slot["all"] and slot["types"]):
+            continue                    # nothing to merge: leave the call exactly as issued
+        args = dict(slot["args"])
+        if slot["all"]:
+            # "all" (infer from the query) plus explicit types: the explicit list is the
+            # superset the model actually asked about, so name every type and drop the
+            # inference — an inferred list cannot be widened after the fact.
+            args["poi_type"] = ",".join(_sorted_poi_types(slot["types"]))
+        else:
+            args["poi_type"] = ",".join(_sorted_poi_types(slot["types"]))
+        if slot["radius"]:
+            args["radius"] = slot["radius"]
+        if slot["queries"]:
+            args["user_query"] = slot["queries"][0]
+        canon[key] = args
+    return canon
+
+
+def _poi_types_of(poi_type):
+    """The known POI types named in ``poi_type``, or None for "all"/unrecognised (which the
+    tool resolves with its own inference / fuzzy matching and must keep doing)."""
+    if poi_type is None or str(poi_type).strip().lower() in ("", "all"):
+        return None
+    try:
+        from core.tools.search_nearby_pois import _requested_types  # lazy: geopy
+        types = _requested_types(str(poi_type))
+    except Exception:
+        return None
+    return types or None
+
+
+def _sorted_poi_types(types: list) -> list:
+    """A stable order for the merged type list, taken from the TOOL's own POI_TYPES
+    declaration order rather than restated here: one vocabulary, one place (the same reason
+    the dimension cues live only in core.dimensions). Falls back to alphabetical."""
+    try:
+        from core.tools.search_nearby_pois import POI_TYPES  # lazy: geopy
+        order = list(POI_TYPES)
+    except Exception:
+        order = []
+    return sorted(types, key=lambda t: (order.index(t) if t in order else len(order), t))
+
+
 def _build_messages(state: AgentState) -> list:
     """First-entry message construction. Prefers Agent C's assemble_messages (contract C);
     falls back to a minimal system+context+user triple so the loop runs before that lands."""
@@ -2072,6 +2214,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         cur_msg = ec.get("current_message") or _current_message(state.get("user_query") or "")
 
         plan = []  # (tool_call, digest, mode, params) ; mode in {run, skip_dup, deny}
+        # Pre-pass over the WHOLE batch: a per-type POI fan-out becomes one call per address
+        # (see _canonical_poi_args). Computed before the loop because merging needs every
+        # sibling call's types; applied inside it so the merged calls share one digest and
+        # the no-progress guard answers the duplicates from the first result.
+        poi_canon = _canonical_poi_args(batch)
         for tc in batch:
             name = tc.get("name")
             args = dict(tc.get("args") or {})
@@ -2090,6 +2237,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 args = _inject_search_params(args, state)
             elif name == "get_property_details":
                 args = _inject_focus_url(args, state)
+            elif name == "search_nearby_pois":
+                merged = poi_canon.get(" ".join(str(args.get("address") or "").split()).lower())
+                if merged is not None:
+                    args = dict(merged)
+                args = _inject_poi_coords(args, state)
             elif name in ("recall_memory", "remember"):
                 # PRIVACY (mirror legacy execute_tool_node): namespace from state, and
                 # fail closed on a missing user_id rather than falling into the shared

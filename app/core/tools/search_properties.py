@@ -187,8 +187,49 @@ def _extract_budget(text: str):
             amount = val
     if amount is None:
         return None, None
-    period = 'week' if re.search(r'\b(?:pw|/\s*w(?:k|eek)?|per\s+week|a\s+week)\b', t) else 'month'
-    return amount, period
+    return amount, _budget_period_near(t, m.start(1), m.end(1))
+
+
+# A rent PERIOD marker, in either language this product is used in. The amount patterns
+# above have been bilingual for a long time (以内/以下/左右/块/镑/元/英镑, 预算/月租/租金/
+# 房租); this test was English-only, and a missing marker defaults to monthly — so
+# "预算每周£350" was read as £350/MONTH, the weekly->monthly conversion downstream never
+# fired, and a real user's London search ran at a £100-402/month band and returned nothing.
+#
+# The `/wk` branch deliberately has no leading \b: there is no word boundary between a
+# space and a slash, so the old `\b(?:...|/\s*w(?:k|eek)?|...)` could never match "350 /wk"
+# either. Same line, same defect, both languages.
+_WEEKLY_MARKER = re.compile(
+    r'\bpw\b|\bper\s+week\b|\ba\s+week\b|/\s*w(?:k|eek)?\b'
+    r'|每\s*[个個]?\s*(?:周|週|星期)|[周週]\s*租|按\s*[周週]|/\s*[周週]'
+)
+_MONTHLY_MARKER = re.compile(
+    r'\bpcm\b|\bpm\b|\bper\s+month\b|\ba\s+month\b|/\s*month\b'
+    r'|每\s*[个個]?\s*月|月\s*租|按\s*月|/\s*月'
+)
+
+
+def _budget_period_near(text: str, lo: int, hi: int) -> str:
+    """'week' or 'month' for the amount at ``text[lo:hi]`` — whichever marker is NEARER.
+
+    Nearest-wins rather than the old "a weekly marker anywhere makes it weekly", because
+    both markers legitimately co-occur: "预算每月1500，我每周去两次健身房" states a MONTHLY
+    rent and a weekly gym habit, and reading it as weekly would inflate £1500 to £6495.
+    Distance is measured to the nearest edge of the amount, so a trailing unit ("350镑/周")
+    and a leading one ("每周350镑") are treated alike. No marker at all still means monthly.
+    """
+    def _nearest(pattern) -> float:
+        best = float('inf')
+        for mk in pattern.finditer(text):
+            if mk.end() <= lo:
+                best = min(best, lo - mk.end())      # marker before the amount
+            elif mk.start() >= hi:
+                best = min(best, mk.start() - hi)    # marker after the amount
+            else:
+                return 0.0                           # overlapping the amount itself
+        return best
+
+    return 'week' if _nearest(_WEEKLY_MARKER) < _nearest(_MONTHLY_MARKER) else 'month'
 
 
 def _extract_commute_minutes(text: str):
@@ -1989,12 +2030,34 @@ async def search_properties_impl(
             if not math.isfinite(_geo_radius) or _geo_radius <= 0:
                 _geo_radius = 2.0
 
+            # One radius cannot serve both granularities. The 2-mile disc is right for a
+            # neighbourhood ("Camden") and is the WRONG TEST for a whole city: on
+            # 2026-07-27 a real "London" search logged
+            #   [GEO] Verified 0/2 listings within 2 miles of requested area(s)
+            # and the user got nothing — both listings were in London, just not within two
+            # miles of the single point the geocoder returns for "London". A city's real
+            # containment test is on_demand._wrong_city, applied at scrape time by
+            # _clean(); this disc stays only as a coarse fail-closed backstop, so for a
+            # city-level area it is widened to city scale instead of being switched off
+            # (a None centre fails CLOSED here, which would reject everything).
+            from core.geography import _coerce_radius
+            from core.scraping.on_demand import is_city_level_area
+
+            _city_radius = _coerce_radius(
+                os.getenv("SEARCH_CITY_RADIUS_MILES", "20.0"), 20.0)
+            _area_radii = {_a: _city_radius for _a in search_areas
+                           if is_city_level_area(_a) and _city_radius > _geo_radius}
+            if _area_radii:
+                print(f"   [GEO] city-level areas use a {_city_radius:g}-mile radius, not "
+                      f"{_geo_radius:g}: {sorted(_area_radii)}")
+
             _before_geo = len(live_rows)
             # Haversine over every fetched listing is pure CPU that scales with the
             # candidate pool (hundreds of rows across multi-area) — offload so it never
             # stalls the loop/batch-budget timer. Deterministic: same in/out as inline.
             live_rows, geo_rejected = await asyncio.to_thread(
-                filter_properties_by_radius, live_rows, area_centres, _geo_radius
+                filter_properties_by_radius, live_rows, area_centres, _geo_radius,
+                _area_radii,
             )
             listing_meta['count'] = len(live_rows)
             listing_meta['location_filtered_count'] = len(geo_rejected)

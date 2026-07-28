@@ -3922,10 +3922,17 @@ def _make_critic_node():
             except Exception:
                 pass
 
+        # A soft-wrapped turn is already past its budget, so it gets NO corrective
+        # regeneration (that is an LLM round-trip). It does still get GRADED: everything
+        # before the regeneration in enforce_grounding is pure Python. Previously the fc
+        # wrap path skipped this node entirely, which exempted exactly the turns most
+        # likely to have invented something — least evidence, no time to gather more —
+        # from the fabricated-price and ungrounded-station checks.
+        _regen = None if state.get("soft_wrapped") else _regenerate
         outcome = await enforce_grounding(
             response,
             evidence,
-            regenerate=_regenerate,
+            regenerate=_regen,
             retrieval_expected=retrieval_expected,
             tool_errored=tool_errored,
             on_verdict=_on_verdict,

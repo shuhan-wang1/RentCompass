@@ -95,6 +95,29 @@ CANONICAL_MAX_PRICE = 5000
 CANONICAL_SCRAPE_LIMIT = int(os.getenv("SEARCH_CANONICAL_SCRAPE_LIMIT", "40"))
 
 # --------------------------------------------------------------------------
+# Band rescue (see _band_rescue)
+# --------------------------------------------------------------------------
+# The canonical harvest is a CAPPED top-slice of the area page — CANONICAL_SCRAPE_LIMIT
+# rows out of however many the area really holds — and OnTheMarket does not order that
+# page by price. For a large area an entire price segment can therefore be missing from
+# the canonical pool, which makes "the band filter came back empty" a claim the pool is
+# not entitled to make. Observed 2026-07-28: slug 'london' scraped at £100-5000 yields
+# ~30 rows whose CHEAPEST is £1,800, so a £1,742 cap filtered to ZERO and the user was
+# told there were no London listings in budget — while the SAME slug scraped at
+# max-price=1742 returns 30 listings from £1,250 up.
+#
+# So: when a narrower-than-canonical band filters to (near) nothing, re-scrape the slug
+# with the CALLER'S band and let OnTheMarket do the selection, before reporting empty.
+# The harvest is cached band-scoped so the repeat — including a genuinely empty one — is
+# warm. Only the would-otherwise-be-empty path ever pays for the extra scrape.
+BAND_KEY_VERSION = "band1"
+# Rescue when the canonical band-filter yields FEWER than this many rows. 1 = only a
+# hard zero (the answer that is actively wrong). Raise to also rescue thin results.
+BAND_RESCUE_MIN_ROWS = int(os.getenv("SEARCH_BAND_RESCUE_MIN_ROWS", "1"))
+# One page's worth: the rescue is a targeted top-up, not a second broad harvest.
+BAND_RESCUE_SCRAPE_LIMIT = int(os.getenv("SEARCH_BAND_RESCUE_SCRAPE_LIMIT", "30"))
+
+# --------------------------------------------------------------------------
 # Location -> OnTheMarket slug resolution
 # --------------------------------------------------------------------------
 # Major UK cities: OnTheMarket's plain area slug works for these (verified for
@@ -1223,6 +1246,29 @@ def _query_key(slug: str) -> str:
     return f"otm|{slug}|{CANONICAL_KEY_VERSION}"
 
 
+def _band_key(slug: str, min_beds, max_beds, min_price, max_price) -> str:
+    """Band-scoped cache key for a rescue harvest (see :func:`_band_rescue`).
+
+    Carries its own version marker, so it collides with neither the canonical key nor
+    the pre-canonical param-keyed scheme (``otm|slug|bN-M|pLO-HI``, unversioned)."""
+    return (f"otm|{slug}|b{int(min_beds)}-{int(max_beds)}"
+            f"|p{int(min_price)}-{int(max_price)}|{BAND_KEY_VERSION}")
+
+
+def _is_fresh_entry(entry) -> bool:
+    """True when a cache entry exists and is within TTL."""
+    return bool(entry) and ((time.time() - entry[1]) / 3600.0 < TTL_HOURS)
+
+
+def _band_narrower_than_canonical(min_beds, max_beds, min_price, max_price) -> bool:
+    """True when the requested band asks for something the canonical sweep did not
+    cover on its own terms, so a band-targeted scrape can surface rows the canonical
+    pool provably cannot. A band equal to (or wider than) the canonical sweep would
+    only re-fetch the same top-slice, so it is never rescued."""
+    return (int(min_price) > CANONICAL_MIN_PRICE or int(max_price) < CANONICAL_MAX_PRICE
+            or int(min_beds) > CANONICAL_MIN_BEDS or int(max_beds) < CANONICAL_MAX_BEDS)
+
+
 # Bedroom count parsed from Room_Type_Category ("2 bed Flat" -> 2, "Studio" -> 0).
 # Mirrors the search layer's own parsing (search_properties._degraded_rank).
 _ROW_BEDS_RE = re.compile(r"(\d+)\s*bed", re.I)
@@ -1324,6 +1370,44 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
         return None, False
 
 
+def _band_rescue(slug, city, min_beds, max_beds, min_price, max_price, limit, budget_s):
+    """Second-chance harvest for a band that filtered to nothing off the CAPPED
+    canonical pool (see the "Band rescue" note at the top of this module).
+
+    Scrapes the slug with the CALLER'S band so OnTheMarket itself performs the
+    price/bed selection, instead of asking a 40-row unsorted top-slice a question it
+    cannot answer. The harvest — INCLUDING an empty one — is cached band-scoped, so a
+    genuinely empty band costs exactly one scrape per TTL rather than one per request.
+
+    Returns ``(rows, source)`` where ``source`` is ``'hit'`` (warm band entry) or
+    ``'scraped'``; ``(None, None)`` when a rescue does not apply, the scrape failed or
+    timed out, or the band really is empty. On ``(None, None)`` the caller keeps
+    whatever the canonical pool said — a rescue never downgrades an existing answer."""
+    if not _band_narrower_than_canonical(min_beds, max_beds, min_price, max_price):
+        return None, None       # canonical already covers this band on its own terms
+
+    key = _band_key(slug, min_beds, max_beds, min_price, max_price)
+    cached = _cache().get(key)
+    if _is_fresh_entry(cached):
+        rows = _filter_band(cached[0], min_beds, max_beds, min_price, max_price, limit)
+        return (rows, "hit") if rows else (None, None)
+
+    print(f"  [on_demand] canonical pool has nothing in band for '{slug}' "
+          f"(beds {min_beds}-{max_beds}, £{min_price}-{max_price}); re-scraping AT the band")
+    scraped, _timed_out = _scrape_live(slug, min_beds, max_beds, min_price, max_price,
+                                       BAND_RESCUE_SCRAPE_LIMIT, budget_s)
+    if scraped is None:
+        return None, None       # timeout / network error -> keep the canonical answer
+    rows = _clean(scraped, city)
+    try:
+        _cache().set(key, rows)
+    except (OSError, sqlite3.Error) as exc:
+        _fallback_cache(exc).set(key, rows)
+    rows = _filter_band(rows, min_beds, max_beds, min_price, max_price, limit)
+    print(f"  [on_demand] band rescue for '{slug}': {len(rows)} row(s)")
+    return (rows, "scraped") if rows else (None, None)
+
+
 def _clean(rows: list[dict], requested_city: str | None) -> list[dict]:
     """Drop placeholder/advert rows (no address/url/price) and wrong-city rows."""
     out = []
@@ -1379,6 +1463,10 @@ def get_listings(
         # True only when a live scrape was started and hit its wall-clock budget: lets the
         # caller mark the area INCOMPLETE (deadline reached) rather than complete-empty.
         "timed_out": False,
+        # True when these rows came from a band-targeted rescue rather than the canonical
+        # pool (see _band_rescue). `source` keeps the canonical hit/scraped vocabulary so
+        # existing consumers are unaffected.
+        "band_rescue": False,
     }
     if not slug:
         meta["message"] = "No search location was provided."
@@ -1391,17 +1479,36 @@ def get_listings(
     cached = _cache().get(key)
     budget_s = SCRAPE_BUDGET_S if budget_s is None else budget_s
 
-    def _is_fresh(entry) -> bool:
-        return bool(entry) and ((time.time() - entry[1]) / 3600.0 < TTL_HOURS)
+    _is_fresh = _is_fresh_entry
+
+    def _rescue_if_thin(filtered, canonical_source):
+        """Band-rescue hook shared by the warm-hit and fresh-scrape paths.
+
+        Returns the result dict to serve, or None to keep the canonical answer. An
+        empty band-filter off the canonical pool is NOT evidence the band is empty:
+        the pool is a capped, price-unsorted top-slice (see _band_rescue). `cache_only`
+        callers are never rescued — that path must not scrape."""
+        if cache_only or len(filtered) >= BAND_RESCUE_MIN_ROWS:
+            return None
+        rescued, rescue_source = _band_rescue(
+            slug, city, min_bedrooms, max_bedrooms, min_price, max_price, limit, budget_s)
+        if not rescued:
+            return None
+        meta.update(source=rescue_source or canonical_source, count=len(rescued),
+                    band_rescue=True, elapsed_s=round(time.time() - t0, 2))
+        return {"rows": rescued, "meta": meta}
 
     # 1) Fresh canonical hit -> filter the broad row-set DOWN to the requested band.
-    #    An EMPTY filtered result from a FRESH canonical entry is a genuine
-    #    complete-empty for this band (the area was scraped, nothing matched) — NOT a
-    #    miss — so we serve it as a hit and never re-scrape. Covers cache_only too.
+    #    An empty filtered result is served as a complete-empty hit ONLY after a band
+    #    rescue has confirmed it (the canonical pool is capped, so on its own it cannot
+    #    prove a band is empty). cache_only callers skip the rescue and never scrape.
     if _is_fresh(cached) and not force_refresh:
         rows, _fetched = cached
         filtered = _filter_band(rows, min_bedrooms, max_bedrooms,
                                 min_price, max_price, limit)
+        rescued = _rescue_if_thin(filtered, "hit")
+        if rescued is not None:
+            return rescued
         meta.update(source="hit", count=len(filtered),
                     elapsed_s=round(time.time() - t0, 2))
         return {"rows": filtered, "meta": meta}
@@ -1436,8 +1543,11 @@ def get_listings(
                 _fallback_cache(exc).set(key, canonical_rows)
             filtered = _filter_band(canonical_rows, min_bedrooms, max_bedrooms,
                                     min_price, max_price, limit)
-            # filtered may be empty: a genuine complete-empty for THIS band off a
-            # freshly-scraped, now-cached canonical set (source stays "scraped").
+            # filtered may be empty — but only a band rescue can establish that the band
+            # is REALLY empty rather than absent from the canonical top-slice.
+            rescued = _rescue_if_thin(filtered, "scraped")
+            if rescued is not None:
+                return rescued
             meta.update(source="scraped", count=len(filtered),
                         elapsed_s=round(time.time() - t0, 2))
             return {"rows": filtered, "meta": meta}

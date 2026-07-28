@@ -1,4 +1,5 @@
 import ast
+import re
 from pathlib import Path
 
 
@@ -7,12 +8,13 @@ APP_PATH = Path(__file__).resolve().parents[1] / 'app' / 'app.py'
 
 def _helpers():
     tree = ast.parse(APP_PATH.read_text(encoding='utf-8'), filename=str(APP_PATH))
-    wanted = {'_resolve_focus_listing', '_build_viewed_properties_context'}
+    wanted = {'_resolve_focus_listing', '_build_viewed_properties_context',
+              '_listing_url_key', '_listing_price_key', '_match_listing_by_address'}
     module = ast.Module(
         body=[node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name in wanted],
         type_ignores=[],
     )
-    namespace = {}
+    namespace = {'re': re}
     exec(compile(module, str(APP_PATH), 'exec'), namespace)
     return namespace['_build_viewed_properties_context']
 

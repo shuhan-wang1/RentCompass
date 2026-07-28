@@ -1322,6 +1322,47 @@ def _resolve_reply_language(user_message, ui_language) -> str:
     return "en" if _normalize_ui_language(ui_language) == "en" else "zh"
 
 
+def _listing_url_key(url):
+    """规范化房源 URL（小写/去首尾空白/去尾斜杠）—— 房源的唯一身份。"""
+    return str(url or '').strip().lower().rstrip('/')
+
+
+def _listing_price_key(price):
+    """价格里的数字（"£850/month" / 850 → "850"）。仅用于区分同名的两套房源；无数字返回 ''。"""
+    return re.sub(r'\D', '', '' if price is None else str(price))
+
+
+def _match_listing_by_address(rows, addr_key, url_key, price_key,
+                              fields=('address', 'url', 'price')):
+    """在 rows 里按地址找出"确实可能就是该载荷所指的那一套"。返回 ``(命中行|None, 是否歧义)``。
+
+    OnTheMarket 上的房源名（地址）不是身份标识：同一条街名下经常挂着完全不同的两套房
+    （实例：details/17896573 与 details/17896574 都叫 "Marriott Road, London"）。所以这里
+    绝不返回"地址相同的第一条"：
+      ① 载荷带 URL 时，URL 不同（且非空）的行就是另一套房，按地址也不认；
+      ② 若仍有多条身份不同的行同名，用载荷价格再收窄；
+      ③ 收窄后仍有歧义 → 返回 (None, True)（宁可解析不出来，也不能拿另一套房的数据回答）。
+
+    ``fields`` 给出 (地址键, URL 键, 价格键)，因为会话/注册表用小写键、demo CSV 用首字母大写键。"""
+    addr_f, url_f, price_f = fields
+    if not addr_key:
+        return None, False
+    cands = [r for r in (rows or [])
+             if isinstance(r, dict)
+             and str(r.get(addr_f) or '').lower().strip() == addr_key]
+    if url_key:
+        cands = [r for r in cands if _listing_url_key(r.get(url_f)) in ('', url_key)]
+    if len(cands) > 1 and price_key:
+        priced = [r for r in cands if _listing_price_key(r.get(price_f)) == price_key]
+        if priced:
+            cands = priced
+    if not cands:
+        return None, False
+    if len({_listing_url_key(r.get(url_f)) for r in cands}) > 1:
+        return None, True   # 同名但身份不同 —— 不猜
+    return cands[0], False
+
+
 def _resolve_focus_listing(property_info, last_results, csv_properties,
                            registry=None, cache_lookup=None):
     """解析前端每张卡片 "Ask AI" 载荷 {property:{address,price,travel_time,url}} 对应的
@@ -1353,21 +1394,22 @@ def _resolve_focus_listing(property_info, last_results, csv_properties,
         'property_travel_time': property_info.get('travel_time'),
     }
     addr_key = property_address.lower().strip()
-    url_key = payload_url.lower().strip()
-    url_key_norm = url_key.rstrip('/')
+    url_key_norm = _listing_url_key(payload_url)
+    price_key = _listing_price_key(property_info.get('price'))
+    # 同名不同套时，②/②.5/③ 三档都不猜（_match_listing_by_address 返回 None）；本标记让调用方
+    # 拿到 'ambiguous' 而不是 'scalar'，区分"没找到"与"同名的有好几套"。
+    ambiguous = False
 
-    # ① URL 精确匹配 → ② 地址精确匹配（都对照完整 last_results 快照）
+    # ① URL 精确匹配 → ② 地址匹配（都对照完整 last_results 快照）。URL 是身份，地址不是。
     session_hit = None
-    if url_key:
+    if url_key_norm:
         for rec in (last_results or []):
-            if isinstance(rec, dict) and str(rec.get('url') or '').lower().strip() == url_key:
+            if isinstance(rec, dict) and _listing_url_key(rec.get('url')) == url_key_norm:
                 session_hit = rec
                 break
     if session_hit is None and addr_key:
-        for rec in (last_results or []):
-            if isinstance(rec, dict) and str(rec.get('address') or '').lower().strip() == addr_key:
-                session_hit = rec
-                break
+        session_hit, ambiguous = _match_listing_by_address(
+            last_results, addr_key, url_key_norm, price_key)
 
     if session_hit is not None:
         # 用真实完整记录填充 extracted_context（agent 文件按同名键读取）。
@@ -1393,14 +1435,13 @@ def _resolve_focus_listing(property_info, last_results, csv_properties,
     if registry:
         if url_key_norm:
             for e in registry:
-                if isinstance(e, dict) and str(e.get('url') or '').lower().strip().rstrip('/') == url_key_norm:
+                if isinstance(e, dict) and _listing_url_key(e.get('url')) == url_key_norm:
                     reg_hit = e
                     break
         if reg_hit is None and addr_key:
-            for e in registry:
-                if isinstance(e, dict) and str(e.get('address') or '').lower().strip() == addr_key:
-                    reg_hit = e
-                    break
+            reg_hit, _reg_ambiguous = _match_listing_by_address(
+                registry, addr_key, url_key_norm, price_key)
+            ambiguous = ambiguous or _reg_ambiguous
     if reg_hit is not None:
         ctx['property_address'] = reg_hit.get('address') or property_address
         if reg_hit.get('price') is not None:
@@ -1440,21 +1481,26 @@ def _resolve_focus_listing(property_info, last_results, csv_properties,
             return ctx, 'registry+cache'
         return ctx, 'registry'
 
-    # ③ demo CSV 精确地址匹配（仅 ==；子串/模糊分支已删除）。
+    # ③ demo CSV 精确地址匹配（仅 ==；子串/模糊分支已删除）。同名不同套同样不猜。
     if addr_key:
-        for prop in (csv_properties or []):
-            if str(prop.get('Address') or '').lower().strip() == addr_key:
-                ctx['room_type'] = prop.get('Room_Type_Category', '')
-                ctx['amenities'] = prop.get('Detailed_Amenities', '')
-                ctx['guest_policy'] = prop.get('Guest_Policy', '')
-                ctx['payment_rules'] = prop.get('Payment_Rules', '')
-                ctx['excluded_features'] = prop.get('Excluded_Features', '')
-                ctx['description'] = prop.get('Description', '')
-                ctx['enhanced_description'] = prop.get('Enhanced_Description', '')
-                ctx['property_url'] = prop.get('URL', '')
-                return ctx, 'csv'
+        csv_hit, _csv_ambiguous = _match_listing_by_address(
+            csv_properties, addr_key, url_key_norm, price_key,
+            fields=('Address', 'URL', 'Price'))
+        ambiguous = ambiguous or _csv_ambiguous
+        if csv_hit is not None:
+            ctx['room_type'] = csv_hit.get('Room_Type_Category', '')
+            ctx['amenities'] = csv_hit.get('Detailed_Amenities', '')
+            ctx['guest_policy'] = csv_hit.get('Guest_Policy', '')
+            ctx['payment_rules'] = csv_hit.get('Payment_Rules', '')
+            ctx['excluded_features'] = csv_hit.get('Excluded_Features', '')
+            ctx['description'] = csv_hit.get('Description', '')
+            ctx['enhanced_description'] = csv_hit.get('Enhanced_Description', '')
+            ctx['property_url'] = csv_hit.get('URL', '')
+            return ctx, 'csv'
 
-    return ctx, 'scalar'
+    # 'ambiguous' ≠ 'scalar'：同名的房源有好几套、身份无法判定，绝不绑定其中任意一套。
+    # ctx 形状与 scalar 完全一致（只有载荷标量），差别只在来源标记。
+    return ctx, ('ambiguous' if ambiguous else 'scalar')
 
 
 def _build_viewed_properties_context(properties, last_results, csv_properties, max_items=10):
@@ -1468,7 +1514,10 @@ def _build_viewed_properties_context(properties, last_results, csv_properties, m
         resolved, _source = _resolve_focus_listing(item, last_results, csv_properties)
         address = str(resolved.get('property_address') or '').strip()
         url = str(resolved.get('property_url') or item.get('url') or '').strip()
-        key = ('url', url.lower()) if url else ('address', address.lower())
+        price = str(resolved.get('property_price') or '').strip()
+        # 无 url 时地址单独不足以标识一套房（同名≠同一套），带上价格再去重。
+        key = (('url', _listing_url_key(url)) if url
+               else ('address', address.lower(), _listing_price_key(price)))
         if not address or key in seen:
             continue
         seen.add(key)
@@ -1496,25 +1545,29 @@ def _build_viewed_properties_context(properties, last_results, csv_properties, m
 _REGISTRY_MAX_ENTRIES = 200
 
 
-def _registry_entry_key(url, address):
-    """去重键：优先规范化后的 url（小写/去首尾空白/去尾斜杠），无 url 用规范化地址；都空 → None。"""
+def _registry_entry_key(url, address, price=None):
+    """去重键：优先规范化后的 url（小写/去首尾空白/去尾斜杠）；都空 → None。
+
+    无 url 时退回 (地址, 价格)：房源名不是身份标识 —— OnTheMarket 上同名的两条挂牌经常是
+    两套不同的房子（details/17896573 与 17896574 都叫 "Marriott Road, London"），只按地址
+    去重会把它们合成一条，用户就再也点不到其中一套。价格是这里唯一还拿得到的判别位。"""
     u = str(url or '').strip().lower().rstrip('/')
     if u:
         return ('url', u)
     a = str(address or '').strip().lower()
-    return ('address', a) if a else None
+    return ('address', a, _listing_price_key(price)) if a else None
 
 
 def _merge_recommended_registry(existing, recommendations, max_items=_REGISTRY_MAX_ENTRIES):
     """把本轮 recommendations merge 进累计注册表（纯函数，返回新列表，不改动入参）。
 
-    去重：按 _registry_entry_key（url 优先、地址次之）；已存在的条目原样保留（首见 index 稳定）；
+    去重：按 _registry_entry_key（url 优先，无 url 时按 地址+价格）；已存在的条目原样保留（首见 index 稳定）；
     新条目 index = 现有最大 index + 1（单调递增，不复用/不冲突）。达到 max_items 后不再追加新条目。"""
     registry = [dict(e) for e in (existing or []) if isinstance(e, dict)]
     seen = {}
     max_index = 0
     for e in registry:
-        key = _registry_entry_key(e.get('url'), e.get('address'))
+        key = _registry_entry_key(e.get('url'), e.get('address'), e.get('price'))
         if key is not None:
             seen[key] = e
         try:
@@ -1524,7 +1577,7 @@ def _merge_recommended_registry(existing, recommendations, max_items=_REGISTRY_M
     for rec in (recommendations or []):
         if not isinstance(rec, dict):
             continue
-        key = _registry_entry_key(rec.get('url'), rec.get('address'))
+        key = _registry_entry_key(rec.get('url'), rec.get('address'), rec.get('price'))
         if key is None or key in seen:
             continue
         if len(registry) >= max_items:

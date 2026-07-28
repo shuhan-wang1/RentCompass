@@ -73,7 +73,8 @@ def _load_app_symbols(wanted_defs, wanted_assigns=()):
 
 _APP = _load_app_symbols(
     {"_has_cjk", "_normalize_ui_language", "_resolve_reply_language",
-     "_resolve_focus_listing", "_compose_search_line"},
+     "_resolve_focus_listing", "_compose_search_line",
+     "_listing_url_key", "_listing_price_key", "_match_listing_by_address"},
     {"_CJK_RE"},
 )
 _has_cjk = _APP["_has_cjk"]

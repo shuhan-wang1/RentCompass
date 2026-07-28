@@ -691,10 +691,12 @@ def _wrap_critic_reserve_s() -> float:
     (FC_WRAP_CRITIC_RESERVE_S), so the bounded wrap-up LLM call always leaves room to render
     the final answer before the hard turn ceiling.
 
-    Lowered 1.0 -> 0.5, and the name is now a misnomer kept for env-var compatibility: a
-    wrapped turn routes straight to format_output_fc and **deliberately never runs the
-    critic** (see the FIX 3 comment in _wrap_up). The full second was reserving head-room
-    for work that does not happen; format_output_fc is pure Python and measured <0.5s.
+    Lowered 1.0 -> 0.5 when a wrapped turn skipped the critic node outright. As of
+    2026-07-27 the name is accurate again: a wrapped turn DOES route through `critic`, and
+    runs its deterministic grading + caveat — it only skips the corrective REGENERATION
+    (see the FIX 3 comment in _wrap_up). 0.5s still holds, because what was added back is
+    pure Python (regex + arithmetic over one answer) alongside format_output_fc's <0.5s;
+    the LLM round-trip, which is what the full second was ever for, remains skipped.
     """
     try:
         return float(os.getenv("FC_WRAP_CRITIC_RESERVE_S", "0.5"))
@@ -1624,10 +1626,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             "fc_loop.turn_soft_wrap elapsed_s=%.2f soft_wrap_s=%.2f llm_calls=%d "
             "tool_batches=%d wrapped_by=%s wrap_timeout_s=%.2f", elapsed, _turn_soft_wrap_s(),
             loop_turn, tool_batches, wrapped_by, wrap_timeout)
-        # FIX 3: skip the (LLM/expensive) critic on a wrapped turn — a 3s critic at t~=40 is
-        # pointless when the turn is already out of budget. Route straight to format_output_fc,
-        # whose work is pure-Python (<0.5s). The wrap directive text is model-facing only and
-        # never persisted into the returned messages channel.
+        # FIX 3, amended 2026-07-27: the EXPENSIVE half of the critic — the corrective
+        # regeneration — is still skipped on a wrapped turn; a 3s LLM round-trip at t~=40 is
+        # pointless when the turn is already out of budget. But skipping the whole node was
+        # throwing the cheap half away with it. Grading (`evaluate_grounding`,
+        # `unsupported_reply_prices`, `ungrounded_station_names`) is pure Python and costs
+        # microseconds, and a wrapped turn is BY DEFINITION the one with the least evidence
+        # and no time to gather more — the likeliest to have invented a figure or a station.
+        # Production, 2026-07-27: the wrapped turn of a real session asserted tube lines and
+        # journey times for four areas with no TfL call behind any of them, and shipped with
+        # no caveat, while the UNwrapped turn in the same session was caveated correctly.
+        # So route to `critic` (whose static edge continues to format_output_fc) with
+        # regeneration disabled via the `soft_wrapped` flag set below.
         return Command(update={
             "messages": messages + [wrap_msg], "loop_turn": loop_turn,
             "final_response": text,
@@ -1636,8 +1646,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             "soft_wrapped": True,
             # ...and HOW it was closed, so a production record can separate "the model still
             # wrote the answer" from "the user got boilerplate". soft_wrapped alone cannot.
+            # It is ALSO what tells critic_node to grade without regenerating.
             "wrapped_by": wrapped_by,
-        }, goto="format_output_fc")
+        }, goto="critic")
 
     def _fanout_into_batch(state, resp, batch_calls, cur_msg, loop_turn) -> list:
         """Append the harness-added dimension reads to `resp`'s tool_calls IN PLACE, so the

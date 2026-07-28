@@ -435,19 +435,44 @@ def _canonical_poi_args(batch: list) -> dict:
         if len(slot["types"]) < 2 and not (slot["all"] and slot["types"]):
             continue                    # nothing to merge: leave the call exactly as issued
         args = dict(slot["args"])
-        if slot["all"]:
-            # "all" (infer from the query) plus explicit types: the explicit list is the
-            # superset the model actually asked about, so name every type and drop the
-            # inference — an inferred list cannot be widened after the fact.
-            args["poi_type"] = ",".join(_sorted_poi_types(slot["types"]))
-        else:
-            args["poi_type"] = ",".join(_sorted_poi_types(slot["types"]))
+        # Merging is not free: the tool issues one Overpass request per type inside ONE
+        # deadline, so a union of everything the batch happened to ask for defeats the point.
+        # Observed after the first version of this merge shipped: eight types in one call, the
+        # internal budget exhausted after three, "预算已用尽，跳过剩余类型: pharmacy, gym,
+        # park, bus_stop, tube_station" — and the whole call then killed by the per-call cap,
+        # discarding the supermarkets it HAD found. So the union is capped, and what the user
+        # actually asked about goes first.
+        types = _prioritised_poi_types(slot["types"], slot["queries"])
+        args["poi_type"] = ",".join(types[:_POI_MERGE_MAX_TYPES])
         if slot["radius"]:
             args["radius"] = slot["radius"]
         if slot["queries"]:
             args["user_query"] = slot["queries"][0]
         canon[key] = args
     return canon
+
+
+# How many types one merged call may carry. Four is the breadth the tool's own "all" uses, and
+# it fits the derived POI budget with room for a slow mirror.
+_POI_MERGE_MAX_TYPES = int(os.getenv("POI_MERGE_MAX_TYPES", "4"))
+
+
+def _prioritised_poi_types(types: list, queries: list) -> list:
+    """Merged types, with the ones the USER's own words point at first.
+
+    The inference table is the tool's (``_infer_poi_types_from_query``), so "超市、便利店"
+    puts supermarket and convenience ahead of the gym the model added on its own initiative —
+    which is what must survive if the budget only covers part of the list."""
+    inferred = []
+    for q in queries:
+        try:
+            from core.tools.search_nearby_pois import _infer_poi_types_from_query  # lazy
+            inferred.extend(_infer_poi_types_from_query(q) or [])
+        except Exception:
+            break
+    front = [t for t in inferred if t in types]
+    rest = [t for t in _sorted_poi_types(types) if t not in front]
+    return front + rest
 
 
 def _poi_types_of(poi_type):

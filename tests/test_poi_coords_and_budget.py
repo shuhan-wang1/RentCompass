@@ -44,8 +44,10 @@ def _load_loop_symbols(wanted):
         tree = ast.parse(fh.read(), filename=_LOOP_PATH)
     picked = [n for n in tree.body
               if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in wanted]
-    ns = {"AgentState": dict}
-    exec(compile(ast.Module(body=picked, type_ignores=[]), _LOOP_PATH, "exec"), ns)
+    consts = [n for n in tree.body if isinstance(n, ast.Assign) and any(
+        isinstance(t, ast.Name) and t.id.startswith("_POI_") for t in n.targets)]
+    ns = {"AgentState": dict, "os": os}
+    exec(compile(ast.Module(body=consts + picked, type_ignores=[]), _LOOP_PATH, "exec"), ns)
     missing = wanted - ns.keys()
     assert not missing, f"failed to extract {missing} from agent_loop.py"
     return ns
@@ -53,7 +55,8 @@ def _load_loop_symbols(wanted):
 
 _LOOP = _load_loop_symbols({"_inject_poi_coords", "_listing_coords_for", "_known_listings",
                             "_canonical_poi_args", "_poi_types_of", "_sorted_poi_types",
-                            "_focus_records", "_ref_matches_focus", "_norm_ref"})
+                            "_prioritised_poi_types", "_focus_records", "_ref_matches_focus",
+                            "_norm_ref"})
 _inject_poi_coords = _LOOP["_inject_poi_coords"]
 _canonical_poi_args = _LOOP["_canonical_poi_args"]
 
@@ -102,7 +105,7 @@ class _CountingGeocoder:
         self.answers = answers
         self.calls = []
 
-    def geocode(self, query):
+    def geocode(self, query, **_kw):
         self.calls.append(query)
         hit = self.answers.get(query)
         if hit is None:
@@ -303,3 +306,126 @@ def test_a_single_poi_call_is_left_untouched():
               "args": {"address": _RUGBY["address"], "poi_type": "all",
                        "user_query": "附近有什么"}}]
     assert _canonical_poi_args(batch) == {}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5) Round two — what the first fix left behind, measured in production
+#
+# With coordinates injected and the calls merged, the turn still answered "查询周边设施时
+# 超时了". The logs said why:
+#   * the merged call carried EIGHT types; the internal budget covered three, printed
+#     "预算已用尽，跳过剩余类型: pharmacy, gym, park, bus_stop, tube_station", and the
+#     per-call cap then killed the call — discarding the 1 and 2 supermarkets it HAD found.
+#   * a bare "Stratford" geocoded to 52.192780, -1.706340 — Stratford-upon-Avon, 150 km from
+#     the listing — and burned a whole 25s slot describing Warwickshire.
+# ══════════════════════════════════════════════════════════════════════════
+def test_bare_london_area_is_asked_for_as_london_first():
+    variants = poi.address_variants("Stratford")
+    assert variants[0] == "Stratford, London, UK", variants
+    assert "Stratford" in variants          # the bare form is still tried, just not first
+
+
+def test_london_bias_applies_only_to_the_curated_london_half():
+    # Manchester is a city in its own right: it must never be asked for as a London area.
+    assert poi.address_variants("Manchester") == ["Manchester"]
+    assert not any("London" in v for v in poi.address_variants("Manchester"))
+    # A full address is not an area name; the ladder is unchanged for it.
+    assert poi.address_variants("Caledonian Road, London")[0] == "Caledonian Road, London"
+
+
+def test_known_london_areas_come_from_the_one_area_table():
+    from core.tools.search_properties import LONDON_AREAS, _KNOWN_AREAS
+    assert LONDON_AREAS["stratford"] == "Stratford"
+    assert "manchester" not in LONDON_AREAS
+    # LONDON_AREAS is the London half of the same table, not a second copy of it.
+    assert set(LONDON_AREAS) <= set(_KNOWN_AREAS)
+
+
+def test_geocode_asks_for_gb_only(monkeypatch):
+    seen = {}
+
+    class _G:
+        def geocode(self, query, **kw):
+            seen.update(kw)
+            return type("Loc", (), {"latitude": 51.5, "longitude": -0.1})()
+
+    monkeypatch.setattr(poi, "Nominatim", lambda **kw: _G())
+    monkeypatch.setattr(poi.time, "sleep", lambda *_a, **_k: None)
+    assert poi.geocode_address("Somewhere Road, N7") == (51.5, -0.1)
+    assert seen.get("country_codes") == "gb"
+
+
+def test_merged_type_union_is_capped():
+    many = ["supermarket", "convenience", "cafe", "pharmacy", "gym", "park", "bus_stop",
+            "tube_station"]
+    batch = [{"name": "search_nearby_pois",
+              "args": {"address": _RUGBY["address"], "poi_type": t}} for t in many]
+    merged = _canonical_poi_args(batch)[" ".join(_RUGBY["address"].split()).lower()]
+    types = merged["poi_type"].split(",")
+    assert len(types) == 4, merged["poi_type"]
+    assert all(t in many for t in types)
+
+
+def test_the_users_own_words_decide_which_types_survive_the_cap():
+    # "超市、便利店" -> supermarket + convenience must be in the surviving four even though
+    # the model also asked for a gym, a park and a bank on its own initiative.
+    batch = [
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "gym"}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "park"}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "bank"}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "convenience"}},
+        {"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                "poi_type": "supermarket",
+                                                "user_query": "周边有什么超市，便利店"}},
+    ]
+    merged = _canonical_poi_args(batch)[" ".join(_RUGBY["address"].split()).lower()]
+    types = merged["poi_type"].split(",")
+    assert types[:2] == ["supermarket", "convenience"], types
+    assert len(types) == 4
+
+
+# ── the per-type result cache: work already paid for is not re-fetched ────────
+def _overpass_elements(name="Tesco Express", shop="convenience"):
+    return {"elements": [{"type": "node", "id": 1, "lat": 51.5225, "lon": -0.1187,
+                          "tags": {"name": name, "shop": shop}}]}
+
+
+def test_a_found_type_is_served_from_cache_on_the_next_call(monkeypatch):
+    calls = []
+
+    def fake_overpass(query, **kw):
+        calls.append(query)
+        return _overpass_elements()
+
+    monkeypatch.setattr(poi, "overpass_request", fake_overpass)
+    # A distinctive centre so this test cannot collide with a neighbour's cache cell.
+    lat, lon = 51.987654, -0.123456
+    first = poi.query_osm_pois(lat, lon, "convenience", radius=500)
+    assert first and len(calls) == 1
+    again = poi.query_osm_pois(lat, lon, "convenience", radius=500)
+    assert [p["name"] for p in again] == [p["name"] for p in first]
+    assert len(calls) == 1, "a cached type must not hit Overpass again"
+    # A DIFFERENT type at the same centre is a different cell and must still be fetched.
+    monkeypatch.setattr(poi, "overpass_request",
+                        lambda q, **kw: calls.append(q) or _overpass_elements("Tesco", "supermarket"))
+    poi.query_osm_pois(lat, lon, "supermarket", radius=500)
+    assert len(calls) == 2
+
+
+def test_an_overpass_failure_is_never_cached(monkeypatch):
+    def boom(query, **kw):
+        raise poi.OverpassError("all mirrors down")
+
+    monkeypatch.setattr(poi, "overpass_request", boom)
+    lat, lon = 51.876543, -0.234567
+    with pytest.raises(RuntimeError):
+        poi.query_osm_pois(lat, lon, "supermarket", radius=500)
+    hits = []
+    monkeypatch.setattr(poi, "overpass_request",
+                        lambda q, **kw: hits.append(q) or _overpass_elements("Tesco", "supermarket"))
+    assert poi.query_osm_pois(lat, lon, "supermarket", radius=500)
+    assert len(hits) == 1, "the failed call must not have poisoned the cell"

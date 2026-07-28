@@ -10,6 +10,7 @@ import math
 from typing import Optional, List, Dict
 from core.tool_system import Tool
 from core.maps_service import overpass_request, OverpassError
+from core.cache_service import get_from_cache, set_to_cache, create_cache_key
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 
@@ -66,6 +67,11 @@ POI_SEARCH_BUDGET_S = float(_POI_SEARCH_BUDGET_ENV) if _POI_SEARCH_BUDGET_ENV el
 # Politeness pacing between consecutive Overpass mirror hits (seconds); runs inside the
 # executor thread, so it never blocks the event loop.
 POI_PACING_S = float(os.getenv("POI_PACING_S", "0.3"))
+# Per-type Overpass result TTLs. A found set is stable for days; an EMPTY set gets minutes,
+# because "nothing of this type nearby" and "a busy mirror answered 200 with nothing" are
+# indistinguishable from inside one selector.
+POI_RESULT_TTL_S = float(os.getenv("POI_RESULT_TTL_S", "259200"))        # 3 days
+POI_EMPTY_RESULT_TTL_S = float(os.getenv("POI_EMPTY_RESULT_TTL_S", "900"))  # 15 min
 # Per-request HTTP ceiling for one Overpass call when nothing else bounds it.
 POI_OVERPASS_TIMEOUT_S = 30
 
@@ -326,6 +332,22 @@ def _geocode_store(key: str, coords: Optional[tuple]) -> None:
         _geocode_cache[key] = (time.monotonic() + ttl, coords)
 
 
+def _london_area_name(text: str) -> Optional[str]:
+    """The canonical spelling when ``text`` is one of the curated LONDON area names, else
+    None. Reads search_properties.LONDON_AREAS — one area table, one place. Lazy import: that
+    module pulls heavier dependencies and this one sits on the POI hot path."""
+    import re
+
+    key = re.sub(r"[’']", "", " ".join(str(text or "").split()).lower())
+    if not key:
+        return None
+    try:
+        from core.tools.search_properties import LONDON_AREAS
+    except Exception:
+        return None
+    return LONDON_AREAS.get(key)
+
+
 def address_variants(address: str) -> List[str]:
     """The geocode ladder for one address string, most specific first, deduped.
 
@@ -345,7 +367,16 @@ def address_variants(address: str) -> List[str]:
     raw = " ".join(str(address or "").split()).strip()
     if not raw:
         return []
-    variants = [raw]
+    variants = []
+    # A bare London area name goes to Nominatim as "<area>, London, UK" FIRST. "Stratford"
+    # alone resolved to Stratford-upon-Avon (52.19, -1.71 — Warwickshire), and the POI answer
+    # that followed described a town 150 km from the listing. Only names in the curated London
+    # half of the area table get this: "Manchester" must stay Manchester.
+    if ',' not in raw:
+        canon = _london_area_name(raw)
+        if canon:
+            variants.append(f"{canon}, London, UK")
+    variants.append(raw)
     parts = [p.strip() for p in raw.split(',') if p.strip()]
 
     # Drop the leading building-name part. >= 2 parts, not > 2: a one-comma display name is
@@ -436,7 +467,10 @@ def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[
                 return None
             attempted += 1
             print(f"🔍 [Geocode] 尝试: {variant[:60]}...")
-            location = geolocator.geocode(variant)
+            # country_codes: every listing in this product is in the UK, so a same-name place
+            # abroad is never the answer. (It does NOT settle London vs Stratford-upon-Avon —
+            # both are GB; address_variants handles that by asking for London first.)
+            location = geolocator.geocode(variant, country_codes="gb")
             if location:
                 print(f"✅ [Geocode] 成功! {location.latitude:.6f}, {location.longitude:.6f}")
                 coords = (location.latitude, location.longitude)
@@ -494,6 +528,24 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     out center body;
     """
     
+    # Per-type result cache, keyed by the rounded centre + radius (the map generator caches
+    # its own batched query the same way). Two things make this load-bearing rather than a
+    # nicety: (1) when the harness kills the call at its per-call cap, the types that DID
+    # complete are already paid for — the retry gets them for free instead of the whole turn
+    # ending in "查询周边设施时超时了" with results that had been fetched and discarded;
+    # (2) the model re-asks the same address with a narrower type list in a later batch, which
+    # the in-batch merge cannot see.
+    cache_key = create_cache_key("poi_type_v1", round(lat, 4), round(lon, 4),
+                                 poi_type, int(radius))
+    cached = get_from_cache(cache_key)
+    if isinstance(cached, dict) and cached.get("pois") is not None:
+        age = time.time() - float(cached.get("fetched_at") or 0)
+        ttl = POI_RESULT_TTL_S if cached["pois"] else POI_EMPTY_RESULT_TTL_S
+        if age < ttl:
+            print(f"  ⚡ [OSM POI] 缓存命中 {poi_type} @ {round(lat, 4)},{round(lon, 4)} "
+                  f"({len(cached['pois'])} 个)")
+            return list(cached["pois"])
+
     # 通过共享的 Overpass 客户端查询：始终带描述性 User-Agent（否则参考服务器返回 406），
     # 并在多个公共镜像之间轮换 + 指数退避重试。全部镜像失败才抛出 OverpassError。
     req_timeout = POI_OVERPASS_TIMEOUT_S if timeout is None else max(1, int(timeout))
@@ -554,6 +606,15 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
         if name_key not in seen_names:
             seen_names.add(name_key)
             unique_pois.append(poi)
+
+    # Cached only on a real answer from Overpass. An empty list is cached too (no gym within
+    # 500 m is a legitimate answer) but at a much shorter TTL, because an empty 200 from a busy
+    # mirror looks identical here — the same reason the amenity map refuses to trust an
+    # all-zero cached cell.
+    try:
+        set_to_cache(cache_key, {"fetched_at": time.time(), "pois": unique_pois})
+    except Exception as e:
+        print(f"  [OSM POI] 结果缓存写入失败（忽略）: {e}")
 
     return unique_pois
 

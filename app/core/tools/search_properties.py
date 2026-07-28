@@ -530,7 +530,7 @@ _ZH_AREA_MAP = {
 # words (Bath, Reading, Angel, Bow, Kew…) so a bare "bath"/"reading" in a rental
 # chat is never mistaken for an area switch (a false switch is worse than a miss).
 # Chinese users still reach Bath/Reading via the unambiguous zh map above.
-_KNOWN_AREA_NAMES = [
+_MAJOR_UK_CITY_NAMES = [
     # major UK cities
     "London", "Manchester", "Birmingham", "Leeds", "Liverpool", "Sheffield",
     "Bristol", "Glasgow", "Edinburgh", "Cardiff", "Newcastle", "Nottingham",
@@ -542,6 +542,14 @@ _KNOWN_AREA_NAMES = [
     "Chester", "Canterbury", "Lancaster", "Durham", "Guildford", "Watford",
     "Slough", "Salford", "Wigan", "Bolton", "Blackpool", "Huddersfield",
     "Doncaster", "Peterborough",
+]
+
+# Named separately from the cities above, and NOT a second copy of them: several of these
+# share a name with a town elsewhere in the UK, and a bare mention means the London one in
+# this product. "Stratford" geocoded to Stratford-upon-Avon, 150 km away, and a POI search
+# then answered about Warwickshire — so anything geocoding a bare area name needs to know
+# which half of the table it came from (see LONDON_AREAS).
+_LONDON_AREA_NAMES = [
     # well-known London boroughs / areas
     "Camden", "Islington", "Hackney", "Shoreditch", "Hoxton", "Dalston",
     "Brixton", "Clapham", "Peckham", "Greenwich", "Ealing", "Wimbledon",
@@ -559,8 +567,12 @@ _KNOWN_AREA_NAMES = [
     "Blackheath", "Forest Hill", "Shepherd's Bush", "Earl's Court",
     "King's Cross",
 ]
+
+_KNOWN_AREA_NAMES = _MAJOR_UK_CITY_NAMES + _LONDON_AREA_NAMES
 # key (lowercased, apostrophes removed) -> canonical spelling.
 _KNOWN_AREAS = {re.sub(r"[’']", "", n.lower()): n for n in _KNOWN_AREA_NAMES}
+# Same normalisation, London half only — the set a geocoder should read "London" into.
+LONDON_AREAS = {re.sub(r"[’']", "", n.lower()): n for n in _LONDON_AREA_NAMES}
 
 # Switch / location cues that precede a place name in a conversational area change.
 # The captured span is VALIDATED against _KNOWN_AREAS, so even a weak cue can never

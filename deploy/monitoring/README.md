@@ -5,6 +5,11 @@ Two pieces of ops hardening for the frozen production deploy:
 1. **Deploy pin gate** — `deploy/update.sh` refuses to build unless `HEAD` is
    *exactly* the commit named in an untracked, server-local file. Production
    deploys the exact pin and nothing else (no "deploy a later commit" escape).
+   The script then deploys **whichever pool the public nginx upstream is actually
+   serving** (it reads the `server 127.0.0.1:PORT;` line), and refuses to report
+   success unless that pool answers `/health` with the pinned arch *and* the full
+   40-char sha. `--status` prints the pin and both pools without changing anything;
+   `--both` also levels the standby (rollback) pool.
 2. **Health monitor** — a systemd timer runs `rentcompass-monitor.sh` every 5
    minutes. Read-only probes, and it never calls `/api/*`, so it cannot pollute
    agent state or the canary telemetry the eval gate reads. It *does* make one
@@ -24,7 +29,14 @@ printf 'DEPLOY_PINNED_SHA=%s\n' "<PINNED_SHA>" | sudo tee /etc/rentcompass/deplo
 sudo chmod 0644 /etc/rentcompass/deploy.env
 ```
 
-**Re-pin procedure** (only when intentionally shipping a new frozen release):
+**`bash deploy/release.sh` performs the whole re-pin procedure for you** against
+the tip of the remote mainline — fetch, CI check, confirm, checkout, re-pin (the
+one sudo prompt), then hand off to `update.sh`. It does **not** weaken the gate:
+`update.sh` still enforces `HEAD == DEPLOY_PINNED_SHA`. On 2026-07-28 a merged fix
+sat unshipped for hours because the manual steps below were skipped, which is why
+they are now scripted. `--dry-run` prints the plan and changes nothing.
+
+**Re-pin procedure, by hand** (what `release.sh` automates; still correct):
 edit `DEPLOY_PINNED_SHA` in this file **and** `git checkout <sha>` to the same
 commit, then run `bash deploy/update.sh`. The tree must be committed-clean.
 

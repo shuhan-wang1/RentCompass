@@ -76,6 +76,12 @@ either arch can rebuild a conversation from the shared transcript on rollback.
 
 ### Image build (immutable fc image)
 
+> `bash deploy/update.sh` now performs this whole section automatically for the pool the
+> public upstream is serving — worktree checkout at the pin, immutable tag, `.env` pins,
+> bring-up, and an arch+sha verification of what is actually answering. The manual
+> procedure below remains the reference for building a candidate that is *not* the
+> current deploy pin.
+
 The fc pool has **no `build:`** in compose — it runs a fixed, pre-built image, so the working
 tree can never silently become what canary traffic executes. Build the image out of band from
 the current candidate tag and reference it by an immutable tag:

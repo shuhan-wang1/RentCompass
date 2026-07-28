@@ -771,9 +771,15 @@ def assemble_messages(*, user_message: str,
          killing the legacy string-wrapper pattern is the point of this rewrite).
 
     ``context_block`` keys (all optional): ``accumulated_criteria`` (dict),
-    ``focused_property`` (dict — focus-stack top record), ``last_results`` (list of
-    listing dicts), ``recommendations_index`` (list — cumulative registry entries),
-    ``discussed_areas`` (list[str] — curated area names for zh-deictic anchoring, H6).
+    ``focused_property`` (dict — focus-stack top record), ``focus_stack`` (list of those
+    records, oldest -> newest; its top supplies ``focused_property`` when that key is
+    absent), ``last_results`` (list of listing dicts), ``recommendations_index`` (list —
+    cumulative registry entries), ``discussed_areas`` (list[str] — curated area names for
+    zh-deictic anchoring, H6).
+
+    Every listing record uses the LISTING key names (``address`` / ``price`` /
+    ``travel_time`` / ``url`` / ``description`` …) — the shape ``_format_single_result``
+    reads. A record keyed ``property_address`` renders as "(no details captured)".
 
     Token budget: the :func:`assemble` trimming ladder ported to message granularity —
     (1) drop oldest history turns down to a floor of 2; (2) cap ``memory_block`` at 25%
@@ -795,6 +801,7 @@ def assemble_messages(*, user_message: str,
     context_sections = loop_prompts.build_context_sections(
         accumulated_criteria=ctx.get("accumulated_criteria"),
         focused_property=ctx.get("focused_property"),
+        focus_stack=ctx.get("focus_stack"),
         last_results=ctx.get("last_results"),
         recommendations_index=ctx.get("recommendations_index"),
         discussed_areas=ctx.get("discussed_areas"),

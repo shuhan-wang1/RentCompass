@@ -26,11 +26,12 @@ Public API
 ----------
     build_system_directive(reply_language="en") -> str
     behaviour_rules() -> str
-    build_context_sections(*, accumulated_criteria, focused_property,
+    build_context_sections(*, accumulated_criteria, focused_property, focus_stack,
                            last_results, recommendations_index, discussed_areas) -> str
     compose_context_message(context_sections, memory_block="") -> str
     render_accumulated_criteria(criteria) -> str
     render_focused_property(record) -> str
+    render_focus_stack(stack) -> str
     render_last_results(results) -> str
     render_recommendations_index(index) -> str
     extract_discussed_areas(history, last_results=None) -> list[str]
@@ -283,6 +284,57 @@ def render_focused_property(record: Optional[Dict[str, Any]]) -> str:
     ])
 
 
+# Assertable marker for the earlier-focuses section (short + load-bearing).
+FOCUS_STACK_MARKER = "EARLIER FOCUSES"
+
+# The deixis rule the legacy path states alongside its focus stack (build_context_info):
+# a bare singular near reference means the CURRENT focus. Stated here so the fc loop
+# resolves 「这个房源」 the same way — and, critically, so it does NOT re-ask which listing
+# is meant: the frontend already told us, by URL. Asking again is the defect this rule
+# closes (a same-name building made get_property_details return `ambiguous`, and the loop
+# asked the user to disambiguate a listing it had been handed).
+FOCUS_DEIXIS_RULE = (
+    "A singular near reference (this one / this listing / 这个房源 / 这套) means the listing "
+    "under FOCUSED PROPERTY: the user selected it in the UI, so it is ALREADY identified. "
+    "Pass its Listing URL to get_property_details (never its name — several listings can "
+    "share a name) and never ask the user which listing they mean."
+)
+
+# Stated with the earlier-focuses section only (it is meaningless without one).
+PREVIOUS_FOCUS_RULE = (
+    "'the previous focus / 上一个聚焦的' means the LAST line above; "
+    "fetch it by its URL."
+)
+
+
+def render_focus_stack(stack: Optional[List[Dict[str, Any]]]) -> str:
+    """Render the focus stack's EARLIER entries (everything below the top) plus the
+    deixis rule. The top entry is rendered by :func:`render_focused_property`, so this
+    section only exists to make 'the previous focus / 上一个聚焦的' resolvable — it
+    returns '' for an absent stack and for a single-item one (nothing below the top).
+
+    One summary line per earlier focus (address | price | commute | URL): identity, not
+    a full evidence surface — details of an earlier focus are fetched by URL."""
+    if not isinstance(stack, list):
+        return ""
+    earlier = [r for r in stack[:-1] if isinstance(r, dict) and r]
+    if not earlier:
+        return ""
+    lines = [f"=== {FOCUS_STACK_MARKER} (the user focused these before, oldest -> newest) ==="]
+    for i, rec in enumerate(earlier, 1):
+        seg = [f"{i}. {rec.get('address') or rec.get('name') or 'Listing'}"]
+        if rec.get('price') not in (None, '', 'N/A'):
+            seg.append(f"price {rec['price']}")
+        if rec.get('travel_time') not in (None, '', 'N/A'):
+            seg.append(f"commute {rec['travel_time']}")
+        if rec.get('url'):
+            seg.append(str(rec['url']))
+        lines.append(" | ".join(seg))
+    lines.append(PREVIOUS_FOCUS_RULE)
+    lines.append(f"=== END {FOCUS_STACK_MARKER} ===")
+    return "\n".join(lines)
+
+
 def render_last_results(results: Optional[List[Dict[str, Any]]]) -> str:
     """Render the last search results as a numbered digest (address + price + commute
     per line). Reuses the existing comparison formatter."""
@@ -398,17 +450,38 @@ def render_discussed_areas(areas: Optional[List[str]]) -> str:
 
 def build_context_sections(*, accumulated_criteria: Optional[Dict[str, Any]] = None,
                            focused_property: Optional[Dict[str, Any]] = None,
+                           focus_stack: Optional[List[Dict[str, Any]]] = None,
                            last_results: Optional[List[Dict[str, Any]]] = None,
                            recommendations_index: Optional[List[Dict[str, Any]]] = None,
                            discussed_areas: Optional[List[str]] = None
                            ) -> str:
     """Concatenate the non-memory context sections in the §2.7 order, omitting every
     empty section. Returns '' when all sections are empty. ``discussed_areas`` (the
-    zh-deictic anchor, H6) rides right after the accumulated criteria."""
+    zh-deictic anchor, H6) rides right after the accumulated criteria.
+
+    ``focus_stack`` (oldest -> newest, last = current focus) defaults ``focused_property``
+    to its top entry, so a caller that has the stack cannot forget to also pass the top —
+    forgetting it is exactly how the fc loop lost the focused listing. The deixis rule is
+    emitted with the focused-property section: without it the model treats an identified
+    focus as an open question and asks the user which listing they mean."""
+    focused = focused_property
+    if not focused and isinstance(focus_stack, list):
+        tops = [r for r in focus_stack if isinstance(r, dict) and r]
+        focused = tops[-1] if tops else None
+    # A record with neither address nor url identifies nothing: render_focused_property
+    # would emit a FOCUSED PROPERTY block reading "(no details captured)", which asserts a
+    # focus exists while naming none — worse than no block, and precisely what a
+    # wrong-keyed record used to produce here. Drop the section instead.
+    if isinstance(focused, dict) and not (focused.get("address") or focused.get("url")):
+        focused = None
+    focused_section = render_focused_property(focused)
+    if focused_section:
+        focused_section = f"{focused_section}\n{FOCUS_DEIXIS_RULE}"
     sections = [
         render_accumulated_criteria(accumulated_criteria),
         render_discussed_areas(discussed_areas),
-        render_focused_property(focused_property),
+        focused_section,
+        render_focus_stack(focus_stack),
         render_last_results(last_results),
         render_recommendations_index(recommendations_index),
     ]

@@ -223,3 +223,77 @@ def test_untrimmed_when_within_budget():
         user_message="thanks", history=history, token_budget=6000)
     # All 3 turns retained (nothing trimmed).
     assert len([m for m in msgs if isinstance(m, AIMessage)]) == 3
+
+
+# ---------------------------------------------------------------------------
+# Focus stack -> prompt (the fc-loop focus defect)
+#
+# A focused listing arrives as a resolved record WITH its url. The context block must
+# surface that url and must state the deixis rule, or the model name-matches instead —
+# and a same-name building (four "Apt 105, Castello Court" listings) then makes
+# get_property_details return `ambiguous`, so the loop asks the user which listing they
+# mean even though the UI already identified it by url.
+# ---------------------------------------------------------------------------
+
+_TOP = {"address": "Apt 105, Castello Court, 309-311 Harrow Road, London W9",
+        "price": "£1,399 pcm", "travel_time": "31 min",
+        "url": "https://otm/16162549/"}
+_EARLIER = {"address": "Burnley Road, London NW10", "price": "£1,300 pcm",
+            "travel_time": "41 min", "url": "https://otm/11111111/"}
+
+
+def _ctx(context_block):
+    msgs = assemble_messages(user_message="tell me about this one", history=[],
+                             context_block=context_block)
+    system_msgs = [m for m in msgs if isinstance(m, SystemMessage)]
+    return system_msgs[1].content if len(system_msgs) > 1 else ""
+
+
+def test_focus_stack_top_becomes_the_focused_property_with_its_url():
+    ctx = _ctx({"focus_stack": [_EARLIER, _TOP]})
+    assert "FOCUSED PROPERTY" in ctx
+    assert _TOP["address"] in ctx
+    assert _TOP["url"] in ctx, "the focused listing's url must reach the prompt"
+
+
+def test_focused_property_carries_the_deixis_rule():
+    ctx = _ctx({"focus_stack": [_TOP]})
+    assert loop_prompts.FOCUS_DEIXIS_RULE in ctx
+
+
+def test_earlier_focuses_rendered_below_the_current_one():
+    ctx = _ctx({"focus_stack": [_EARLIER, _TOP]})
+    assert loop_prompts.FOCUS_STACK_MARKER in ctx
+    assert _EARLIER["url"] in ctx
+    assert loop_prompts.PREVIOUS_FOCUS_RULE in ctx
+    # The current focus is the one under FOCUSED PROPERTY, not under EARLIER FOCUSES.
+    assert ctx.index(_TOP["url"]) < ctx.index(_EARLIER["url"])
+
+
+def test_single_focus_has_no_earlier_focuses_section():
+    ctx = _ctx({"focus_stack": [_TOP]})
+    assert loop_prompts.FOCUS_STACK_MARKER not in ctx
+
+
+def test_explicit_focused_property_wins_over_the_stack_top():
+    # focus_stack only DEFAULTS focused_property; an explicit record still owns the block.
+    # (The stack's own top is not re-rendered as an earlier focus — EARLIER FOCUSES is
+    # always "everything below the top".)
+    ctx = _ctx({"focused_property": _EARLIER, "focus_stack": [_TOP]})
+    assert _EARLIER["address"] in ctx
+    assert loop_prompts.FOCUS_STACK_MARKER not in ctx
+
+
+def test_identityless_focus_record_renders_no_focus_block():
+    # The old fc wiring passed {"property_address": ...} — wrong key names, so the block
+    # claimed a focus while naming none. An identity-free record gets NO block at all.
+    ctx = _ctx({"focused_property": {"property_address": "Apt 105, Castello Court"}})
+    assert "FOCUSED PROPERTY" not in ctx
+    assert "no details captured" not in ctx
+
+
+def test_recommendations_index_renders_urls_for_every_shown_listing():
+    registry = [{"index": 1, **_TOP}, {"index": 2, **_EARLIER}]
+    ctx = _ctx({"recommendations_index": registry})
+    assert "RECOMMENDED LISTINGS INDEX" in ctx
+    assert _TOP["url"] in ctx and _EARLIER["url"] in ctx

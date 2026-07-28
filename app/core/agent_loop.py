@@ -234,6 +234,105 @@ def _behaviour_directive(reply_language: str) -> str:
     )
 
 
+def _focus_records(ec: dict) -> list:
+    """The focus stack (oldest -> newest, last = current focus) in LISTING key shape,
+    read from ``extracted_context`` as app.py writes it.
+
+    Why this exists: app.py resolves the frontend's focus payload into
+    ``extracted_context['focus_stack']`` (real records, WITH the listing URL) and also
+    flattens the top into the ``property_*`` scalars. This loop used to read neither —
+    it read a ``focused_property`` key nothing ever writes, and fell back to
+    ``{"property_address": ...}``, a shape ``_format_single_result`` does not read. The
+    focus block therefore rendered "Property: (no details captured)" with NO url, so a
+    focused listing was invisible: the model could only name-match, and a same-name
+    building (four "Apt 105, Castello Court" listings) made get_property_details return
+    `ambiguous`, which sent the loop back to the user to disambiguate a listing the UI
+    had already identified — every turn, forever.
+
+    Prefers the resolved stack; falls back to the ``property_*`` scalars mapped onto the
+    LISTING key names (older frontends send only ``context.property``). Pure."""
+    stack = ec.get("focus_stack")
+    if isinstance(stack, list):
+        records = [r for r in stack if isinstance(r, dict) and r]
+        if records:
+            return records
+    # Fallback: the flattened top-of-stack scalars. Key names must be the listing ones.
+    scalar = {
+        "address": ec.get("property_address"),
+        "price": ec.get("property_price"),
+        "travel_time": ec.get("property_travel_time"),
+        "url": ec.get("property_url"),
+        "description": ec.get("description"),
+        "available_from": ec.get("available_from"),
+        "availability_status": ec.get("availability_status"),
+        "bedrooms": ec.get("bedrooms"),
+        "property_type": ec.get("property_type"),
+        "area": ec.get("area"),
+        "budget_status": ec.get("budget_status"),
+    }
+    scalar = {k: v for k, v in scalar.items() if v not in (None, "", "N/A")}
+    return [scalar] if scalar.get("address") else []
+
+
+def _norm_ref(text) -> str:
+    """Lowercased, whitespace-collapsed, punctuation-trimmed reference text."""
+    import re as _re
+    return _re.sub(r"\s+", " ", str(text or "").strip().strip(",.;:").lower()).strip()
+
+
+def _ref_matches_focus(ref: str, focus: dict) -> bool:
+    """True when ``ref`` (a name or address the model passed) refers to the FOCUSED
+    listing rather than some other one.
+
+    A name is NOT an identity (two Castello Court flats are two properties), so this is
+    deliberately narrow: ``ref`` must be the focused record's whole address, its ``name``,
+    one of its comma-separated address segments, or a leading run of them. "Apt 107" or
+    "Apt 107, Castello Court" therefore does NOT match a focus on "Apt 105, Castello
+    Court, …" — a reference to a different unit is left to the tool's own resolution."""
+    ref = _norm_ref(ref)
+    if not ref:
+        return True                      # names no listing — nothing to contradict
+    addr = _norm_ref(focus.get("address"))
+    if not addr:
+        return False
+    if ref in (addr, _norm_ref(focus.get("name"))):
+        return True
+    segments = [s.strip() for s in addr.split(",") if s.strip()]
+    if ref in segments:
+        return True
+    # a leading run of segments ("apt 105, castello court" of "apt 105, castello court, …")
+    return any(ref == ", ".join(segments[:i]) for i in range(2, len(segments) + 1))
+
+
+def _inject_focus_url(params: dict, state: AgentState) -> dict:
+    """get_property_details executor re-injection: supply the FOCUSED listing's URL when
+    the model referenced that listing (or named none) and passed no URL of its own.
+
+    The frontend identified the listing by URL when the user focused the card, so a
+    name-only lookup is a pure downgrade: for a building whose units share a name it
+    cannot succeed — the tool correctly answers `ambiguous` rather than guess, the loop
+    asks the user which listing they mean, the user's answer changes no context, and the
+    next turn repeats it. The context block now carries the URL and tells the model to
+    pass it (loop_prompts.FOCUS_DEIXIS_RULE); this is the deterministic backstop for when
+    it does not. Never OVERRIDES a URL the model supplied, and never fires for a reference
+    that names a different listing (see _ref_matches_focus)."""
+    p = dict(params or {})
+    if str(p.get("property_url") or "").strip():
+        return p
+    records = _focus_records(state.get("extracted_context") or {})
+    if not records:
+        return p
+    focus = records[-1]
+    url = str(focus.get("url") or "").strip()
+    if not url:
+        return p
+    if not all(_ref_matches_focus(p.get(k), focus)
+               for k in ("property_name", "property_address")):
+        return p
+    p["property_url"] = url
+    return p
+
+
 def _build_messages(state: AgentState) -> list:
     """First-entry message construction. Prefers Agent C's assemble_messages (contract C);
     falls back to a minimal system+context+user triple so the loop runs before that lands."""
@@ -252,12 +351,20 @@ def _build_messages(state: AgentState) -> list:
     except Exception:
         discussed_areas = []
 
+    focus_records = _focus_records(ec)
     context_block = {
         "accumulated_criteria": state.get("accumulated_search_criteria") or {},
         "focused_property": ec.get("focused_property") or (
-            {"property_address": ec.get("property_address")} if ec.get("property_address") else None),
+            focus_records[-1] if focus_records else None),
+        "focus_stack": focus_records,
         "last_results": ec.get("last_results") or [],
-        "recommendations_index": ec.get("recommendations_index") or [],
+        # app.py writes the cumulative registry under 'recommended_registry' (the list) and
+        # its pre-rendered block under 'recommended_index'; 'recommendations_index' is this
+        # module's own parameter name and nothing sets it. Reading only that key dropped the
+        # whole listings index — the one surface that carries every shown listing's URL plus
+        # the "identify a listing by URL, not by name" instruction.
+        "recommendations_index": (ec.get("recommendations_index")
+                                  or ec.get("recommended_registry") or []),
         "discussed_areas": discussed_areas,
     }
     try:
@@ -280,8 +387,14 @@ def _build_messages(state: AgentState) -> list:
             ctx_lines.append("Accumulated criteria: "
                              + json.dumps(acc, ensure_ascii=False, default=str))
         if context_block["focused_property"]:
+            # Carries the listing URL (see _focus_records), so the deixis rule rides along:
+            # even on this degraded path a focused listing must never be re-asked about.
             ctx_lines.append("Focused property: "
                              + json.dumps(context_block["focused_property"], ensure_ascii=False, default=str))
+            ctx_lines.append(
+                "'this one / 这个房源 / 这套' means that focused property — it is already "
+                "identified; pass its url to get_property_details and never ask the user "
+                "which listing they mean.")
         if context_block["last_results"]:
             ctx_lines.append(f"Last results: {len(context_block['last_results'])} listings in context.")
         if context_block.get("discussed_areas"):
@@ -1975,6 +2088,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     args = decode_json_string_args(args, getattr(_spec0, "input_schema", None))
             if name == "search_properties":
                 args = _inject_search_params(args, state)
+            elif name == "get_property_details":
+                args = _inject_focus_url(args, state)
             elif name in ("recall_memory", "remember"):
                 # PRIVACY (mirror legacy execute_tool_node): namespace from state, and
                 # fail closed on a missing user_id rather than falling into the shared

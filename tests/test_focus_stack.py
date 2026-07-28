@@ -203,3 +203,172 @@ def test_no_focus_stack_target_address_unchanged(lga):
     # The English deictic branch still maps to last_results[0], unchanged.
     ctx_en = {"last_results": _last_results(), "current_message": "is this one safe"}
     assert lga._resolve_target_address("is this one safe", ctx_en) == "Maple Court, 12 Oak Rd, Manchester"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# fc_loop (core/agent_loop.py) — the focus stack must reach the PROMPT
+#
+# The stack was resolved correctly (tests above) and then dropped on the floor by the
+# fc loop, which is the pool the public edge serves: _build_messages read a
+# `focused_property` key nothing writes and fell back to {"property_address": ...} — a
+# shape _format_single_result does not read. The focus block rendered
+# "Property: (no details captured)" with NO url, so a focused listing was invisible to
+# the model: it could only name-match, a same-name building made get_property_details
+# return `ambiguous`, and the loop asked the user to disambiguate the listing the UI had
+# already handed it — on every turn.
+#
+# _focus_records is extracted from source (AST) so this contract holds even where
+# langgraph is not installed: an importorskip here is what let the defect ship.
+# ══════════════════════════════════════════════════════════════════════════
+_LOOP_PATH = os.path.join(_ROOT, "app", "core", "agent_loop.py")
+
+
+def _load_loop_symbols(wanted_defs):
+    with open(_LOOP_PATH, "r", encoding="utf-8") as fh:
+        src = fh.read()
+    tree = ast.parse(src, filename=_LOOP_PATH)
+    picked = [n for n in tree.body
+              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+              and n.name in wanted_defs]
+    module = ast.Module(body=picked, type_ignores=[])
+    # agent_loop has no `from __future__ import annotations`, so signature annotations are
+    # evaluated at def time — AgentState is a TypedDict there; a dict stands in fine.
+    ns = {"AgentState": dict}
+    exec(compile(module, _LOOP_PATH, "exec"), ns)  # noqa: S102 - trusted local source
+    missing = wanted_defs - ns.keys()
+    assert not missing, f"failed to extract {missing} from agent_loop.py"
+    return ns
+
+
+_focus_records = _load_loop_symbols({"_focus_records"})["_focus_records"]
+
+# The listing key names _format_single_result reads. A record keyed property_address
+# renders as "(no details captured)" — that WAS the bug, so the shape is pinned here.
+_LISTING_KEYS = {"address", "price", "travel_time", "url"}
+
+
+def test_focus_records_reads_the_resolved_stack():
+    ec = {"focus_stack": _build_focus_stack_records(
+        [{"url": "https://otm/manc-2/"}, {"url": "https://otm/manc-1/"}],
+        _sess_records(), [])}
+    recs = _focus_records(ec)
+    assert [r["url"] for r in recs] == ["https://otm/manc-2/", "https://otm/manc-1/"]
+    # the TOP is the current focus and carries the URL — the identity the tool needs
+    assert recs[-1]["address"] == "12 Oxford Rd, Manchester M1 5AN"
+    assert recs[-1]["url"] == "https://otm/manc-1/"
+
+
+def test_focus_records_top_uses_listing_key_names_not_property_prefixed():
+    ec = {"focus_stack": _build_focus_stack_records(
+        [{"url": "https://otm/manc-1/"}], _sess_records(), [])}
+    top = _focus_records(ec)[-1]
+    assert _LISTING_KEYS <= set(top), f"top-of-stack record must use listing keys, got {sorted(top)}"
+    assert "property_address" not in top
+
+
+def test_focus_records_scalar_fallback_keeps_the_url():
+    # Old frontend / no resolved stack: only the flattened property_* scalars are present.
+    # They must be MAPPED onto the listing key names, url included.
+    ec = {"property_address": "12 Oxford Rd, Manchester M1 5AN",
+          "property_price": "£1200/month", "property_travel_time": "18 min",
+          "property_url": "https://otm/manc-1/", "description": "Bright 1-bed."}
+    recs = _focus_records(ec)
+    assert len(recs) == 1
+    assert recs[0]["address"] == "12 Oxford Rd, Manchester M1 5AN"
+    assert recs[0]["url"] == "https://otm/manc-1/"
+    assert recs[0]["description"] == "Bright 1-bed."
+    assert not any(k.startswith("property_") for k in recs[0])
+
+
+def test_focus_records_empty_without_any_focus():
+    assert _focus_records({}) == []
+    assert _focus_records({"focus_stack": []}) == []
+    assert _focus_records({"focus_stack": ["nope", None]}) == []
+    # price without an address identifies nothing — no phantom focus record
+    assert _focus_records({"property_price": "£1200/month"}) == []
+
+
+def test_build_messages_context_block_reads_the_keys_app_py_writes():
+    """Source-level contract: the context_block in _build_messages must read the keys app.py
+    actually writes into extracted_context. It used to read 'focused_property' (never
+    written) and 'recommendations_index' (never written — app.py writes the registry under
+    'recommended_registry'), so both the focus AND the listings index were dropped."""
+    with open(_LOOP_PATH, "r", encoding="utf-8") as fh:
+        src = fh.read()
+    tree = ast.parse(src, filename=_LOOP_PATH)
+    fn = next(n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name == "_build_messages")
+    assign = next(n for n in ast.walk(fn)
+                  if isinstance(n, ast.Assign)
+                  and any(isinstance(t, ast.Name) and t.id == "context_block" for t in n.targets))
+    block_src = ast.dump(assign)
+    keys = [k.value for k in assign.value.keys if isinstance(k, ast.Constant)]
+    assert "focus_stack" in keys, "context_block must carry the focus stack to the prompt"
+    assert "_focus_records" in block_src or "focus_records" in block_src, \
+        "the focused property must come from _focus_records, not a raw ec key"
+    assert "recommended_registry" in block_src, \
+        "the recommendations index must read app.py's 'recommended_registry'"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# fc_loop executor backstop — a name-only get_property_details call on the focused
+# listing is completed with that listing's URL. Without it, a focus on a building whose
+# units share a name (four "Apt 105, Castello Court" listings) can only ever resolve to
+# the tool's `ambiguous` refusal, which asks the user to identify a listing the UI had
+# already identified by URL — and the answer cannot change any of that, so it repeats.
+# ══════════════════════════════════════════════════════════════════════════
+_LOOP = _load_loop_symbols({"_focus_records", "_inject_focus_url", "_ref_matches_focus",
+                            "_norm_ref"})
+_inject_focus_url = _LOOP["_inject_focus_url"]
+
+_FOCUS_TOP = {"name": "Apt 105", "price": "£1,399 pcm",
+              "address": "Apt 105, Castello Court, 309-311 Harrow Road, London W9",
+              "url": "https://otm/16162549/"}
+
+
+def _state(**ec):
+    return {"extracted_context": {"focus_stack": [_FOCUS_TOP], **ec}}
+
+
+def test_focus_url_injected_when_the_model_passed_no_identity():
+    args = _inject_focus_url({"question": "is it a studio?"}, _state())
+    assert args["property_url"] == "https://otm/16162549/"
+
+
+def test_focus_url_injected_for_a_name_reference_to_the_focused_listing():
+    for ref in ({"property_name": "Apt 105"},
+                {"property_name": "Castello Court"},
+                {"property_name": "Apt 105, Castello Court"},
+                {"property_address": "Apt 105, Castello Court, 309-311 Harrow Road, London W9"},
+                {"property_address": "309-311 Harrow Road"}):
+        args = _inject_focus_url(dict(ref), _state())
+        assert args["property_url"] == "https://otm/16162549/", ref
+
+
+def test_focus_url_not_injected_for_a_different_unit_in_the_same_building():
+    # The same-name hazard cuts both ways: a reference to ANOTHER unit must keep the
+    # tool's own resolution (and its ambiguity refusal), never the focused listing's URL.
+    for ref in ({"property_name": "Apt 107"},
+                {"property_address": "Apt 107, Castello Court, 309-311 Harrow Road, London W9"},
+                {"property_name": "Apt 105", "property_address": "Burnley Road, London NW10"}):
+        args = _inject_focus_url(dict(ref), _state())
+        assert "property_url" not in args, ref
+
+
+def test_focus_url_never_overrides_a_url_the_model_supplied():
+    args = _inject_focus_url({"property_url": "https://otm/other/"}, _state())
+    assert args["property_url"] == "https://otm/other/"
+
+
+def test_no_focus_no_injection():
+    assert "property_url" not in _inject_focus_url({"property_name": "Apt 105"},
+                                                   {"extracted_context": {}})
+    # a focus record without a URL cannot supply one
+    assert "property_url" not in _inject_focus_url(
+        {}, {"extracted_context": {"focus_stack": [{"address": "Apt 105, Castello Court"}]}})
+
+
+def test_injection_reads_the_scalar_focus_fallback_too():
+    st = {"extracted_context": {"property_address": _FOCUS_TOP["address"],
+                                "property_url": _FOCUS_TOP["url"]}}
+    assert _inject_focus_url({}, st)["property_url"] == _FOCUS_TOP["url"]

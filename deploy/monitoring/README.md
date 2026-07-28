@@ -5,6 +5,11 @@ Two pieces of ops hardening for the frozen production deploy:
 1. **Deploy pin gate** — `deploy/update.sh` refuses to build unless `HEAD` is
    *exactly* the commit named in an untracked, server-local file. Production
    deploys the exact pin and nothing else (no "deploy a later commit" escape).
+   The script then deploys **whichever pool the public nginx upstream is actually
+   serving** (it reads the `server 127.0.0.1:PORT;` line), and refuses to report
+   success unless that pool answers `/health` with the pinned arch *and* the full
+   40-char sha. `--status` prints the pin and both pools without changing anything;
+   `--both` also levels the standby (rollback) pool.
 2. **Health monitor** — a systemd timer runs `rentcompass-monitor.sh` every 5
    minutes. Read-only probes, and it never calls `/api/*`, so it cannot pollute
    agent state or the canary telemetry the eval gate reads. It *does* make one

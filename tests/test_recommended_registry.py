@@ -57,7 +57,8 @@ def _load_app_symbols(wanted_defs, wanted_assigns=()):
 
 
 _APP = _load_app_symbols(
-    {"_registry_entry_key", "_merge_recommended_registry", "_resolve_focus_listing"},
+    {"_registry_entry_key", "_merge_recommended_registry", "_resolve_focus_listing",
+     "_listing_url_key", "_listing_price_key", "_match_listing_by_address"},
     {"_REGISTRY_MAX_ENTRIES"},
 )
 _registry_entry_key = _APP["_registry_entry_key"]
@@ -78,9 +79,29 @@ def _rec(addr, url, price="£1000", area="Manchester", tt="20 min", avail=None):
 # ── _registry_entry_key ───────────────────────────────────────────────────────
 def test_entry_key_prefers_url_normalized():
     assert _registry_entry_key(" HTTPS://OTM/1/ ", "addr") == ("url", "https://otm/1")
-    assert _registry_entry_key("", "  12 Oak Rd ") == ("address", "12 oak rd")
+    assert _registry_entry_key("", "  12 Oak Rd ", "£950") == ("address", "12 oak rd", "950")
+    assert _registry_entry_key("", "  12 Oak Rd ") == ("address", "12 oak rd", "")
     assert _registry_entry_key("", "") is None
     assert _registry_entry_key(None, None) is None
+
+
+def test_entry_key_url_beats_a_shared_display_name():
+    """Two OnTheMarket listings can carry the SAME display name and still be different
+    flats (details/17896573 and details/17896574 are both "Marriott Road, London").
+    URL is the identity, so the two must never collapse onto one key."""
+    a = _registry_entry_key("https://www.onthemarket.com/details/17896573/",
+                            "Marriott Road, London", "£850/month")
+    b = _registry_entry_key("https://www.onthemarket.com/details/17896574/",
+                            "Marriott Road, London", "£800/month")
+    assert a != b
+
+
+def test_entry_key_urlless_same_name_split_by_price():
+    """Without URLs the display name alone is still not an identity — price separates
+    them, so a same-name/different-price pair stays two entries."""
+    a = _registry_entry_key("", "Marriott Road, London", "£850/month")
+    b = _registry_entry_key("", "Marriott Road, London", "£800/month")
+    assert a != b
 
 
 # ── merge / dedup / stable index / cap ────────────────────────────────────────
@@ -218,6 +239,17 @@ def test_render_index_empty_is_blank():
     assert render_recommended_index(None) == ""
 
 
+def test_render_index_states_that_the_name_is_not_the_identity():
+    """Two lines can share an address and still be different flats, so the block has to
+    say so — otherwise the agent reads the name as an identifier and answers about
+    whichever of the pair it happens to see first."""
+    reg = _merge_recommended_registry(None, _MARRIOTT)
+    block = render_recommended_index(reg)
+    assert "[1] Marriott Road, London" in block and "[2] Marriott Road, London" in block
+    assert "NOT by its name" in block
+    assert "ask which [N]" in block
+
+
 # ── snapshot persistence (restart / fork gate) ────────────────────────────────
 def test_registry_survives_snapshot_round_trip():
     reg = _merge_recommended_registry(None, [_rec("A", "https://otm/1"), _rec("B", "https://otm/2")])
@@ -230,3 +262,79 @@ def test_registry_survives_snapshot_round_trip():
     # deep-copied, so mutating the snapshot cannot corrupt the source state
     snap["recommended_registry"].append({"index": 99})
     assert len(state["extracted_context"]["recommended_registry"]) == 2
+
+
+# ── same OnTheMarket display name, DIFFERENT flats ───────────────────────────
+# Reported 2026-07-28: a Stratford search returned two listings both titled
+# "Marriott Road, London" — https://www.onthemarket.com/details/17896574/ and
+# .../17896573/ — which are not the same property. The listing NAME is not an
+# identity; only the URL is. Nothing may collapse the pair onto one entry, and
+# nothing may silently bind a by-name reference to whichever of them comes first.
+_MARRIOTT = [
+    {"address": "Marriott Road, London", "price": "£800/month",
+     "url": "https://www.onthemarket.com/details/17896574/", "area": "Stratford",
+     "travel_time": "31 min to UCL", "description": "The £800 one."},
+    {"address": "Marriott Road, London", "price": "£850/month",
+     "url": "https://www.onthemarket.com/details/17896573/", "area": "Stratford",
+     "travel_time": "31 min to UCL", "description": "The £850 one."},
+]
+
+
+def test_same_name_listings_stay_two_registry_entries():
+    reg = _merge_recommended_registry(None, _MARRIOTT)
+    assert len(reg) == 2
+    assert [e["index"] for e in reg] == [1, 2]
+    assert {e["url"] for e in reg} == {m["url"] for m in _MARRIOTT}
+
+
+def test_ask_ai_on_the_second_same_name_card_resolves_to_that_card():
+    """Clicking the £850 card must answer about the £850 flat, not its same-named
+    neighbour that happens to sit first in the results."""
+    payload = {"address": "Marriott Road, London", "price": "£850/month",
+               "url": "https://www.onthemarket.com/details/17896573/"}
+    ctx, source = _resolve_focus_listing(payload, _MARRIOTT, [])
+    assert source == "session"
+    assert ctx["property_price"] == "£850/month"
+    assert ctx["description"] == "The £850 one."
+
+
+def test_by_name_reference_to_a_shared_name_is_ambiguous_not_a_guess():
+    """A name-only reference ("the Marriott Road one") matches two different flats.
+    Binding it to the first would answer about a property the user did not ask about,
+    so it resolves to nothing and is reported as ambiguous."""
+    payload = {"address": "Marriott Road, London", "url": ""}
+    ctx, source = _resolve_focus_listing(payload, _MARRIOTT, [])
+    assert source == "ambiguous"
+    assert set(ctx) == {"property_address", "property_price", "property_travel_time"}
+    assert "description" not in ctx
+
+
+def test_shared_name_plus_price_is_enough_to_disambiguate():
+    """The frontend payload carries the card's price even when its URL is missing, and
+    that is enough to pick the right one of two same-named flats."""
+    payload = {"address": "Marriott Road, London", "price": "£800/month", "url": ""}
+    ctx, source = _resolve_focus_listing(payload, _MARRIOTT, [])
+    assert source == "session"
+    assert ctx["description"] == "The £800 one."
+
+
+def test_payload_url_never_matches_a_row_with_a_different_url():
+    """A payload whose listing has dropped out of last_results must NOT fall back onto
+    a same-named row that carries a different URL — that row is a different flat.
+
+    'scalar', not 'ambiguous': the payload URL positively EXCLUDES both rows, so this is
+    an honest not-found rather than a choice we declined to make."""
+    payload = {"address": "Marriott Road, London",
+               "url": "https://www.onthemarket.com/details/99999999/"}
+    ctx, source = _resolve_focus_listing(payload, _MARRIOTT, [])
+    assert source == "scalar"
+    assert "description" not in ctx
+
+
+def test_registry_by_name_lookup_is_also_ambiguous():
+    """Same rule on the accumulated registry path (listings from EARLIER turns)."""
+    reg = _merge_recommended_registry(None, _MARRIOTT)
+    payload = {"address": "Marriott Road, London", "url": ""}
+    ctx, source = _resolve_focus_listing(payload, [], [], registry=reg, cache_lookup=None)
+    assert source == "ambiguous"
+    assert ctx.get("area") is None

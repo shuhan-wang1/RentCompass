@@ -180,6 +180,15 @@ def render_recommended_index(registry: Optional[List[Dict[str, Any]]],
         "Each line is a SUMMARY. For a listing's full details (description, amenities, "
         "bills, guest/payment policy) call the get_property_details tool with that "
         "listing's exact URL below. Never invent details that are not shown here.",
+        # A listing's NAME is not its identity: the source site routinely publishes two
+        # different flats under one street name (observed: two distinct "Marriott Road,
+        # London" listings at £800 and £850). Identify by [N] / URL, and when a user's
+        # reference fits more than one line, ask which — never answer about whichever
+        # came first.
+        "A listing is identified by its [N] and its URL, NOT by its name: two lines may "
+        "share an address and still be different properties. If the user's reference "
+        "fits more than one line, ask which [N] they mean (quote the distinguishing "
+        "price/commute) instead of picking one.",
     ]
     for e in registry[:max_items]:
         if not isinstance(e, dict):

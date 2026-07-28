@@ -45,7 +45,8 @@ def _load_app_symbols(wanted_defs):
     return ns
 
 
-_APP = _load_app_symbols({"_resolve_focus_listing", "_build_focus_stack_records"})
+_APP = _load_app_symbols({"_resolve_focus_listing", "_build_focus_stack_records",
+                          "_listing_url_key", "_listing_price_key", "_match_listing_by_address"})
 _resolve_focus_listing = _APP["_resolve_focus_listing"]
 _build_focus_stack_records = _APP["_build_focus_stack_records"]
 

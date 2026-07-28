@@ -97,21 +97,118 @@ def test_same_slug_two_bands_scrapes_once(fresh_cache, monkeypatch):
 
 
 # --------------------------------------------------------------------------
-# 2) Fresh canonical + empty band-filter = complete-empty HIT, no re-scrape
+# 2) Fresh canonical + empty band-filter -> ONE band rescue, then complete-empty
 # --------------------------------------------------------------------------
-def test_fresh_canonical_empty_band_is_complete_empty_hit(fresh_cache, monkeypatch):
+def test_fresh_canonical_empty_band_rescues_once_then_complete_empty(fresh_cache,
+                                                                     monkeypatch):
+    """The canonical pool is a CAPPED top-slice, so an empty band-filter is not on its
+    own evidence the band is empty (see _band_rescue). It gets ONE band-targeted
+    re-scrape; when that also finds nothing, the empty is served — and the negative is
+    cached, so a repeat of the same band does not scrape again."""
     calls = _counting_scrape(monkeypatch)
 
     # Populate the canonical entry with a matching band.
     first = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
     assert first["meta"]["source"] == "scraped" and first["rows"]
 
-    # A band no row can satisfy (5-bed): fresh canonical entry exists, so this is a
-    # genuine complete-empty HIT — NOT a miss — and must NOT trigger another scrape.
+    # A band no row can satisfy (5-bed): the canonical pool never asked for 5-beds, so
+    # the rescue scrapes AT the band before the empty is believed.
     empty = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
-    assert empty["meta"]["source"] == "hit"
     assert empty["rows"] == [] and empty["meta"]["count"] == 0
-    assert calls["n"] == 1  # no re-scrape on an empty band
+    assert empty["meta"]["source"] == "hit" and empty["meta"]["band_rescue"] is False
+    assert calls["n"] == 2                       # 1 canonical + 1 rescue
+    assert calls["params"][1]["min_bedrooms"] == 5   # rescue used the CALLER's band
+    assert calls["params"][1]["max_price"] == 1200
+
+    # Repeat: the empty rescue harvest is cached band-scoped, so no third scrape.
+    again = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
+    assert again["rows"] == [] and again["meta"]["source"] == "hit"
+    assert calls["n"] == 2
+
+
+# --------------------------------------------------------------------------
+# 2b) Band rescue: rows the CAPPED canonical pool could not show
+# --------------------------------------------------------------------------
+def test_band_rescue_returns_rows_missing_from_canonical_pool(fresh_cache, monkeypatch):
+    """The production defect (2026-07-28): slug 'london' scraped at the canonical
+    £100-5000 returned a top-slice whose cheapest row was £1,800, so a £1,742 cap
+    band-filtered to ZERO and the user was told there was nothing in budget — while the
+    same slug scraped AT £1,742 returns listings from £1,250 up."""
+    calls = {"n": 0, "params": []}
+
+    expensive = [
+        {"Address": "Monarch Square, London, SW11",
+         "URL": "https://www.onthemarket.com/details/900/", "Price": "£3,700 pcm",
+         "Room_Type_Category": "2 bed Flat"},
+        {"Address": "Albert Road, St. Mary Cray BR5",
+         "URL": "https://www.onthemarket.com/details/901/", "Price": "£1,800 pcm",
+         "Room_Type_Category": "1 bed Flat"},
+    ]
+    in_budget = [
+        {"Address": "Burnley Road, London NW10",
+         "URL": "https://www.onthemarket.com/details/902/", "Price": "£1,300 pcm",
+         "Room_Type_Category": "1 bed Flat"},
+        {"Address": "Clapham High Street, Clapham SW4",
+         "URL": "https://www.onthemarket.com/details/903/", "Price": "£1,250 pcm",
+         "Room_Type_Category": "Studio"},
+    ]
+
+    def fake_scrape(slug, radius, min_price, max_price, limit, min_bedrooms, max_bedrooms):
+        calls["n"] += 1
+        calls["params"].append(dict(min_price=min_price, max_price=max_price))
+        # The real site returns a price-unsorted top-slice for the wide sweep, and the
+        # actual budget stock only when the price cap is pushed down to the site.
+        return list(expensive) if max_price >= on_demand.CANONICAL_MAX_PRICE else list(in_budget)
+
+    monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
+
+    res = on_demand.get_listings("London", 0, 2, 100, 1742)
+    assert [r["URL"] for r in res["rows"]] == [
+        "https://www.onthemarket.com/details/902/",
+        "https://www.onthemarket.com/details/903/",
+    ]
+    assert res["meta"]["band_rescue"] is True
+    assert res["meta"]["count"] == 2
+    assert calls["n"] == 2 and calls["params"][1]["max_price"] == 1742
+
+    # Warm: the band harvest is cached, so the repeat costs no scrape at all.
+    warm = on_demand.get_listings("London", 0, 2, 100, 1742)
+    assert len(warm["rows"]) == 2 and warm["meta"]["band_rescue"] is True
+    assert calls["n"] == 2
+
+
+def test_band_equal_to_canonical_is_never_rescued(fresh_cache, monkeypatch):
+    """A band as wide as the canonical sweep would only re-fetch the same top-slice,
+    so an empty there is a real empty and must not buy a second scrape."""
+    calls = _counting_scrape(monkeypatch, rows_factory=list)
+    res = on_demand.get_listings("Manchester", on_demand.CANONICAL_MIN_BEDS,
+                                 on_demand.CANONICAL_MAX_BEDS,
+                                 on_demand.CANONICAL_MIN_PRICE,
+                                 on_demand.CANONICAL_MAX_PRICE)
+    assert res["rows"] == [] and res["meta"]["band_rescue"] is False
+    assert calls["n"] == 1
+
+
+def test_band_rescue_failure_keeps_the_canonical_answer(fresh_cache, monkeypatch):
+    """A rescue that times out or errors must never downgrade what the canonical pool
+    already said — the caller still gets its (empty) complete answer, not an exception."""
+    calls = {"n": 0}
+
+    def fake_scrape(slug, radius, min_price, max_price, limit, min_bedrooms, max_bedrooms):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _canon_rows()
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
+
+    warm = on_demand.get_listings("Manchester", 1, 1, 500, 1200)   # canonical scrape
+    assert warm["rows"] and calls["n"] == 1
+
+    res = on_demand.get_listings("Manchester", 5, 5, 500, 1200)    # rescue raises
+    assert res["rows"] == [] and res["meta"]["source"] == "hit"
+    assert res["meta"]["band_rescue"] is False
+    assert calls["n"] == 2
 
 
 # --------------------------------------------------------------------------

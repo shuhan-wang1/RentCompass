@@ -1989,12 +1989,34 @@ async def search_properties_impl(
             if not math.isfinite(_geo_radius) or _geo_radius <= 0:
                 _geo_radius = 2.0
 
+            # One radius cannot serve both granularities. The 2-mile disc is right for a
+            # neighbourhood ("Camden") and is the WRONG TEST for a whole city: on
+            # 2026-07-27 a real "London" search logged
+            #   [GEO] Verified 0/2 listings within 2 miles of requested area(s)
+            # and the user got nothing — both listings were in London, just not within two
+            # miles of the single point the geocoder returns for "London". A city's real
+            # containment test is on_demand._wrong_city, applied at scrape time by
+            # _clean(); this disc stays only as a coarse fail-closed backstop, so for a
+            # city-level area it is widened to city scale instead of being switched off
+            # (a None centre fails CLOSED here, which would reject everything).
+            from core.geography import _coerce_radius
+            from core.scraping.on_demand import is_city_level_area
+
+            _city_radius = _coerce_radius(
+                os.getenv("SEARCH_CITY_RADIUS_MILES", "20.0"), 20.0)
+            _area_radii = {_a: _city_radius for _a in search_areas
+                           if is_city_level_area(_a) and _city_radius > _geo_radius}
+            if _area_radii:
+                print(f"   [GEO] city-level areas use a {_city_radius:g}-mile radius, not "
+                      f"{_geo_radius:g}: {sorted(_area_radii)}")
+
             _before_geo = len(live_rows)
             # Haversine over every fetched listing is pure CPU that scales with the
             # candidate pool (hundreds of rows across multi-area) — offload so it never
             # stalls the loop/batch-budget timer. Deterministic: same in/out as inline.
             live_rows, geo_rejected = await asyncio.to_thread(
-                filter_properties_by_radius, live_rows, area_centres, _geo_radius
+                filter_properties_by_radius, live_rows, area_centres, _geo_radius,
+                _area_radii,
             )
             listing_meta['count'] = len(live_rows)
             listing_meta['location_filtered_count'] = len(geo_rejected)

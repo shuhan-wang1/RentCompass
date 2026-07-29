@@ -22,8 +22,9 @@ evaluation/
 ├── AUDIT.md                  architecture + file:line seams (Phase-1)
 ├── README.md                 <- this file
 ├── model_pricing.yaml        DeepSeek per-token rates (chat & reasoner: SAME rate)
-├── benchmark/                45 cases, 10 smoke, fixtures, schema, constraint vocab
-│   ├── cases.jsonl           the benchmark (7 categories, 20 constraint types)
+├── benchmark/                98 cases, 10 smoke, fixtures, schema, constraint vocab
+│   ├── cases.jsonl           the benchmark (7 categories; 24 constraint types used,
+│   │                         29 checkers implemented in metrics/graders.py)
 │   ├── fixtures/             recorded tool outputs for deterministic replay
 │   ├── schema.json           case schema
 │   └── README.md             constraint vocabulary + UK money formulas
@@ -164,7 +165,7 @@ will otherwise mangle the Chinese in the reports).
 |---|---|---|
 | **DeepSeek key** | valid | `--live` runs work; live cost is metered (whole live suite cost < $0.02) |
 | **chromadb** | installed (1.1.0) | memory store eval RAN — see `memory_eval.json` (`status: ok`) |
-| **SearXNG** | **not reachable** | live `web_search` returns empty → web-dependent B/F cases can't ground web claims (a real, disclosed limitation, `REPORT.md` §6 + §12) |
+| **SearXNG** | **operational** | live `web_search` returns real results, so web-dependent B/F cases ARE grounded (they cite Zoopla / Rightmove / SpareRoom). Residual caveat is NONDETERMINISM, not unavailability: live web/scrape results vary across runs (`REPORT.md` §6 + §12) |
 
 `memory_eval` note: the LLM extraction / importance / consolidation calls are STUBBED,
 so `extraction_precision` and the update/stale/contradiction checks are store-plumbing
@@ -176,14 +177,17 @@ retrieval checks are real deterministic store behaviour.
 ## What is CV-usable vs NOT
 
 - **Well-supported (`results/CV_METRICS.md` → 可安全使用):** model-routing A/B engineering
-  deltas at n=45 (strong-call −55.8%, cost −32.3%, e2e −38.6%, grounding maintained
-  63↔64/78); live grounding fidelity (grounded 64/76, money 45/53, contradicted 0);
-  retrieval-stage parallelization latency (−67.5% mean / −62.1% p95, 1/36 benign race
-  anomaly); fault-tolerance mechanics (surfaced 15/15, idempotency 3/3, 0 dup writes);
-  real memory store isolation/forget/restart checks; framework scope.
-- **Not a headline (`→ 不建议使用`):** raw end-to-end pass_rate 20/45 (dragged by real
-  agent findings + heuristic checkers + SearXNG-down); stubbed memory-extraction numbers;
-  any n<15 single-run rate; LLM-judge agreement (not run this round).
+  deltas at n=98 (strong-model calls 165/170 → 78/172 = −52.7%, tokens −6.2%, output
+  tokens −28.6%, cost −24.3%, mean e2e −38.4%, grounding held 160/207 ↔ 160/207);
+  live grounding fidelity (grounded 152/204, money 121/152, contradicted 1);
+  retrieval-stage parallelization latency (−57.1% mean / −42.0% p95, 0/48 race
+  anomalies); fault-tolerance mechanics (surfaced 15/15, idempotency 3/3, 0 dup writes,
+  fallback 2/2, post-fault completion 13/15); real memory store
+  isolation/forget/restart checks; framework scope.
+- **Not a headline (`→ 不建议使用`):** raw end-to-end pass_rate 34/98 (dragged by real
+  agent findings + heuristic checkers + live web nondeterminism); stubbed
+  memory-extraction numbers; any n<15 single-run rate; LLM-judge agreement (not run
+  this round).
 
 See `results/CV_METRICS.md` for per-claim 中文/English wording, raw num/den, definition,
 result-file path, safe flag, and the required caveat.
@@ -202,18 +206,18 @@ export PYTHONIOENCODING=utf-8 PYTHONUTF8=1
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 CR="conda run --no-capture-output -n uk_rent python"
 
-# 1. Main benchmark — LIVE, routed_models, all 45 cases  -> results/live_routed_45/
-$CR -m evaluation.run_benchmark --live --config routed_models --max-cost-usd 5 \
-    --out evaluation/results/live_routed_45 --timestamp "$TS"
+# 1. Main benchmark — LIVE, routed_models, all 98 cases  -> results/live_routed_98/
+$CR -m evaluation.run_benchmark --live --config routed_models --max-cost-usd 8 \
+    --out evaluation/results/live_routed_98 --timestamp "$TS"
 
-# 2. Model-routing A/B (baseline_all_strong vs routed_models) — LIVE, all 45 cases
+# 2. Model-routing A/B (baseline_all_strong vs routed_models) — LIVE, all 98 cases
 #    -> results/ablation_model.{json,csv}
-$CR -m evaluation.run_ablation --study model --live --limit 45 --max-cost-usd 5 \
+$CR -m evaluation.run_ablation --study model --live --limit 98 --max-cost-usd 5 \
     --out evaluation/results --timestamp "$TS"
 
-# 3. Retrieval A/B (serial vs parallel) — LIVE, first 12 cases x 3 repeats
+# 3. Retrieval A/B (serial vs parallel) — LIVE, first 16 cases x 3 repeats (48 runs each)
 #    -> results/ablation_retrieval.{json,csv}
-$CR -m evaluation.run_ablation --study retrieval --live --limit 12 --repeat 3 \
+$CR -m evaluation.run_ablation --study retrieval --live --limit 16 --repeat 3 \
     --max-cost-usd 5 --out evaluation/results --timestamp "$TS"
 
 # 4. Fault injection — real tool/graph/idempotency/guardrail code, mocked model
@@ -230,10 +234,12 @@ $CR -m evaluation.report --results evaluation/results \
 
 Notes:
 - `run_ablation` defaults to the smoke subset unless a selector is given, so the
-  `--limit 45` / `--limit 12` flags above are what pin the case counts.
+  `--limit 98` / `--limit 16` flags above are what pin the case counts.
 - The optional LLM judge is off by default; add `--judge` to step 1 (LIVE only) to also
   emit judge-vs-grader agreement. It was **not** run for the current results.
-- To (optionally) unblock `web_search` quality, start a SearXNG instance before step 1;
-  otherwise `web_search` returns empty and the web-dependent cases stay depressed.
+- Start a SearXNG instance before step 1 (`docker compose up -d searxng` is enough).
+  It WAS operational for the current results, so the web-dependent cases are graded and
+  grounded; without it `web_search` returns empty and those cases go depressed, which
+  makes the run non-comparable with the numbers above.
 - On Windows PowerShell, set `$TS = (Get-Date -AsUTC -Format s) + 'Z'` and call
   `conda run --no-capture-output -n uk_rent python ...` directly.

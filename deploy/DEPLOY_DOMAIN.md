@@ -1,12 +1,34 @@
 # Deploying to rentcompass.co.uk
 
-Puts the containerized agent (running on `127.0.0.1:5001`) behind nginx on this
-VPS, reachable at `https://rentcompass.co.uk`.
+Puts the containerized agent behind nginx on this VPS.
+
+> ## What was actually built (read this before following the steps)
+>
+> This file is the original bring-up runbook. Two things ended up different from
+> the plan below, and the live box reflects the differences, not the plan:
+>
+> 1. **TLS is on `:8443`, not `:443`.** Step 3 ("free port 443") was never
+>    completed — `443` is still held by another service on this box. The
+>    resolution taken instead was to serve the site on **8443**
+>    (`deploy/setup_tls_8443.sh`, `deploy/nginx/rentcompass.co.uk.ssl.conf`), with
+>    `:80` answering ACME challenges and 301-redirecting everything else to
+>    `https://$host:8443`. The public URL is **`https://rentcompass.co.uk:8443`**.
+> 2. **The upstream fronts two pools, not one container.** `upstream
+>    rentcompass_app` carries a single `server 127.0.0.1:PORT;` line that selects
+>    the legacy pool (`:5001`) or the fc pool (`:5002`). Change it only with
+>    `deploy/switch_pool.sh`, never by hand — see `docs/canary_runbook.md`.
+>
+> Steps 1, 2 and 4–6 below are still accurate as written.
 
 ```
 Internet ─▶ rentcompass.co.uk (DNS A → 158.220.88.118)
-         ─▶ nginx :80/:443  ─proxy─▶  127.0.0.1:5001  (uk-rent-app container)
-                                          └─▶ searxng:8080, valkey (compose net)
+         ─▶ nginx :80  ── 301 ──▶  nginx :8443 (TLS)
+                                      │
+                                      ▼
+                            upstream rentcompass_app
+                            ├─ 127.0.0.1:5001  uk-rent-app     (legacy pool)
+                            └─ 127.0.0.1:5002  uk-rent-app-fc  (fc pool)
+                                      └─▶ searxng:8080, valkey (compose net)
 ```
 
 **Server public IP:** `158.220.88.118`
@@ -44,7 +66,15 @@ dig +short www.rentcompass.co.uk
   sudo ufw status
   ```
 
-## Step 3 — Resolve the port 443 conflict  ⚠️ REQUIRED before HTTPS
+## Step 3 — Resolve the port 443 conflict  ~~⚠️ REQUIRED before HTTPS~~
+
+> **NOT DONE, and no longer required.** `443` is still held by the other service;
+> the site runs on `8443` instead (see the box at the top). Keep this section as
+> the record of the conflict — do **not** treat it as an outstanding task, and do
+> not stop the service on `443` expecting the site to move there. Moving to `443`
+> would now be a deliberate change: free the port, re-issue the vhost on 443, and
+> update `SWITCH_VERIFY_URL` in `deploy/switch_pool.sh` plus the health probes in
+> `deploy/monitoring/rentcompass-monitor.sh`, which both target 8443 today.
 
 Something is already listening on `:443` (it answers `Server: AkamaiGHost`).
 nginx cannot bind 443 until that is gone. Identify it:
@@ -99,14 +129,30 @@ cd /home/shuhan/uk_rent_recommendation
 docker compose up -d app
 ```
 
-## Step 7 — Enable HTTPS (after Step 3 frees 443)
+## Step 7 — Enable HTTPS  (what was actually done: TLS on 8443)
+
+`certbot --nginx` wants to own port 443, which is unavailable here. The site was
+issued a certificate and put on **8443** instead:
+
+```bash
+sudo bash deploy/setup_tls_8443.sh     # idempotent; webroot HTTP-01, never binds 443
+sudo nginx -t && sudo systemctl reload nginx
+curl -sk -D- -o /dev/null https://rentcompass.co.uk:8443/health
+```
+
+The vhost lives in `deploy/nginx/rentcompass.co.uk.ssl.conf`; certificates renew
+through certbot's own timer. Check renewal with `sudo certbot renew --dry-run`.
+
+<details>
+<summary>Original plan (only valid once 443 is free)</summary>
+
 ```bash
 sudo certbot --nginx -d rentcompass.co.uk -d www.rentcompass.co.uk \
      --redirect --agree-tos -m a980026243@gmail.com --no-eff-email
 sudo nginx -t && sudo systemctl reload nginx
 ```
 certbot injects the 443 server block + auto-renewal timer and redirects 80→443.
-Check renewal: `sudo certbot renew --dry-run`.
+</details>
 
 ## Step 8 — Turn on secure cookies + allow the domain (after TLS is live)
 
@@ -121,11 +167,18 @@ from being sent over plain http.)
 
 ## Step 9 — Verify
 ```bash
-curl -I https://rentcompass.co.uk/health           # 200, over TLS
-curl -sk https://rentcompass.co.uk/api/auth/me      # {"authenticated":false}
+curl -sk -D- -o /dev/null https://rentcompass.co.uk:8443/health   # 200 + x-agent-* headers
+curl -sk https://rentcompass.co.uk:8443/api/auth/me               # {"authenticated":false}
+curl -sI http://rentcompass.co.uk/                                # 301 → https://…:8443/
 ```
-Open `https://rentcompass.co.uk`, run a chat, confirm the answer **streams** in
-(proves SSE passes through nginx), and register/login an account.
+The `x-agent-arch` / `x-agent-version` headers on `/health` tell you which pool
+and which commit answered — that, not this document, is the source of truth for
+what is live.
+
+Then open `https://rentcompass.co.uk:8443`, run a chat, and register/login an
+account. Answers arrive as one JSON response; there is no SSE on the live path
+(`src/uk_rent_agent/web/streaming.py` exists but no route is wired to it), so
+nothing here depends on streaming passing through nginx.
 
 ---
 

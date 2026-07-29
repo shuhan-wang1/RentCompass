@@ -219,7 +219,7 @@ failure reported by `case_id` rather than averaged away.
 `cases.jsonl` marks exactly 10 diverse cases with `"smoke": true`, spanning easy→hard and
 covering every category A–G. The smoke subset is the cheap sanity pass run **first**,
 before any paid full run; if a smoke case regresses, abort before spending on the full
-45-case run. Selection is purely the `smoke` flag — the runner filters
+98-case run. Selection is purely the `smoke` flag — the runner filters
 `case["smoke"] is True` for the smoke pass and runs all rows for the full pass.
 
 Smoke cases: `A1, B1, B3, C1, D1, D4, E1, F1, F8, G1`.

@@ -68,6 +68,17 @@ def _make_post(recorder, script):
     return fake_post
 
 
+@pytest.fixture(autouse=True)
+def _clean_mirror_state():
+    """overpass_request now remembers which mirrors just failed and which one last worked
+    (rate-limit damage control — see maps_service). That memo is process-global, so without
+    this reset one test's penalties would reorder or shorten the next test's mirror walk, and
+    the call-count assertions below would depend on execution order."""
+    maps_service.overpass_mirror_state_reset()
+    yield
+    maps_service.overpass_mirror_state_reset()
+
+
 def test_ua_sent_on_every_overpass_request(monkeypatch):
     calls = []
     monkeypatch.setattr(maps_service.requests, "post",

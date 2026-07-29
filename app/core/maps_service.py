@@ -12,6 +12,7 @@ import pandas as pd
 from collections import Counter
 import asyncio
 import math
+from typing import Optional
 from .cache_service import get_from_cache, set_to_cache, create_cache_key
 
 # Optional free TfL app key (register at api-portal.tfl.gov.uk) to raise rate limits;
@@ -44,8 +45,103 @@ class OverpassError(RuntimeError):
     """
 
 
+class OverpassEmpty(OverpassError):
+    """``expect_nonempty=True`` and every mirror we could reach answered a CLEAN empty 200
+    (HTTP 200, no remark, no elements).
+
+    A subclass, so existing ``except OverpassError`` handlers degrade exactly as before. It
+    exists so a caller that can distinguish the two cases does not have to pay for a second
+    walk of the mirror pool to find out which it was: ``.payload`` carries the empty response.
+    "Nothing of this type is nearby" and "every mirror is rate-limiting us" are different
+    answers, and the first one is legitimate — no gym within 300 m is a fact.
+    """
+
+    def __init__(self, message: str, payload: dict):
+        super().__init__(message)
+        self.payload = payload
+
+
+# ─── Mirror health + request pacing ──────────────────────────────────────────
+# Measured 2026-07-29, from the production host: overpass-api.de, lz4 and z all refused the
+# connection within ~1s (DNS resolved fine), kumi.systems read-timed-out at 30s, and osm.ch
+# answered HTTP 200 with elements=0 even for cafés within 1 km of Leicester Square. The public
+# mirrors had started rate-limiting this IP after a day of POI traffic.
+#
+# Two costs made that outage far worse than it had to be. Every query re-walked the whole
+# mirror pool from the top, so each POI type paid the same connection refusals and the same
+# 30s read timeout again — one turn spent 82s and completed nothing. And nothing paced the
+# requests, so the traffic that earned the rate-limit kept flowing at full speed.
+#
+# So: remember which mirrors just failed and skip them for a cooldown, put the last mirror
+# that actually worked first, and never issue two Overpass requests closer together than
+# OVERPASS_MIN_INTERVAL_S. Process-local and best-effort — it reduces load, it is not a quota.
+OVERPASS_MIRROR_COOLDOWN_S = float(os.getenv("OVERPASS_MIRROR_COOLDOWN_S", "300"))
+OVERPASS_MIN_INTERVAL_S = float(os.getenv("OVERPASS_MIN_INTERVAL_S", "1.0"))
+
+import threading as _threading  # noqa: E402  (kept next to the state it guards)
+
+_mirror_lock = _threading.Lock()
+_mirror_penalty: dict = {}        # url -> monotonic instant it may be tried again
+_mirror_preferred: list = []      # most-recently-successful first
+_pace_lock = _threading.Lock()
+_last_request_at = [0.0]          # list so the closure can rebind the value
+
+
+def overpass_mirror_state_reset() -> None:
+    """Forget every penalty and preference (tests; ops)."""
+    with _mirror_lock:
+        _mirror_penalty.clear()
+        _mirror_preferred.clear()
+    with _pace_lock:
+        _last_request_at[0] = 0.0
+
+
+def _mirrors_to_try() -> list:
+    """Mirrors in the order worth trying: last-good first, then untried, then those whose
+    cooldown has expired. A mirror still inside its cooldown is skipped entirely — unless
+    that would leave nothing to try, in which case the whole (penalised) pool is returned,
+    because refusing to ask at all is worse than asking a mirror that failed five minutes
+    ago."""
+    now = time.monotonic()
+    with _mirror_lock:
+        penalty = dict(_mirror_penalty)
+        preferred = [u for u in _mirror_preferred if u in OVERPASS_MIRRORS]
+    ordered = preferred + [u for u in OVERPASS_MIRRORS if u not in preferred]
+    live = [u for u in ordered if penalty.get(u, 0.0) <= now]
+    return live or ordered
+
+
+def _penalise_mirror(url: str, reason: str) -> None:
+    with _mirror_lock:
+        _mirror_penalty[url] = time.monotonic() + OVERPASS_MIRROR_COOLDOWN_S
+        if url in _mirror_preferred:
+            _mirror_preferred.remove(url)
+    print(f"  [Overpass] mirror sidelined {OVERPASS_MIRROR_COOLDOWN_S:.0f}s: "
+          f"{url.split('/')[2]} ({reason[:60]})")
+
+
+def _reward_mirror(url: str) -> None:
+    with _mirror_lock:
+        _mirror_penalty.pop(url, None)
+        if url in _mirror_preferred:
+            _mirror_preferred.remove(url)
+        _mirror_preferred.insert(0, url)
+
+
+def _pace_request() -> None:
+    """Block until at least OVERPASS_MIN_INTERVAL_S has passed since the last request."""
+    if OVERPASS_MIN_INTERVAL_S <= 0:
+        return
+    with _pace_lock:
+        wait = _last_request_at[0] + OVERPASS_MIN_INTERVAL_S - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_request_at[0] = time.monotonic()
+
+
 def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
-                     expect_nonempty: bool = False) -> dict:
+                     expect_nonempty: bool = False,
+                     deadline: Optional[float] = None) -> dict:
     """POST an Overpass QL query and return the parsed JSON.
 
     Sends the descriptive ``_OSM_HEADERS`` User-Agent on every request (the
@@ -62,23 +158,54 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
     multi-selector query near a populated address zero is implausible, so the
     caller passes ``expect_nonempty=True`` and we treat the empty body as an
     outage of THAT mirror and rotate to the next one -- finding a healthy mirror
-    that still has the data, instead of caching a silently-empty result.
+    that still has the data, instead of caching a silently-empty result. If every
+    reachable mirror answers a clean empty 200, ``OverpassEmpty`` is raised with
+    that payload attached, so the caller can tell "genuinely nothing there" from
+    "the pool is down" WITHOUT walking the pool a second time.
+
+    ``deadline`` is a ``time.monotonic()`` instant. No further mirror is tried and no
+    backoff is slept once it passes; the walk raises instead. Without it, one query could
+    outlive the budget that authorised it by minutes: five mirrors x two rounds, with a
+    30s read timeout on any of them, is the shape that turned a rate-limited pool into an
+    85-second tool call.
     """
     last_err = None
+    clean_empty = None            # first clean empty 200 seen, if expect_nonempty
+
+    def _expired() -> bool:
+        return deadline is not None and time.monotonic() >= deadline
+
     for round_idx in range(max_rounds):
-        for url in OVERPASS_MIRRORS:
+        if _expired():
+            break
+        for url in _mirrors_to_try():
+            if _expired():
+                last_err = f"{last_err or 'no mirror answered'} (deadline reached)"
+                break
             try:
+                _pace_request()
+                # Each ATTEMPT is clamped to what is left, not just the walk. A 30s read
+                # timeout on two slow mirrors otherwise overshoots the deadline by minutes
+                # even though no request was ISSUED late — measured at 29s against a 17s
+                # budget before this clamp.
+                attempt_timeout = timeout
+                if deadline is not None:
+                    attempt_timeout = max(1.0, min(float(timeout),
+                                                   deadline - time.monotonic()))
                 resp = requests.post(
-                    url, data={"data": query}, headers=_OSM_HEADERS, timeout=timeout
+                    url, data={"data": query}, headers=_OSM_HEADERS,
+                    timeout=attempt_timeout
                 )
                 if resp.status_code != 200:
                     last_err = f"{url} -> HTTP {resp.status_code}"
+                    _penalise_mirror(url, f"HTTP {resp.status_code}")
                     continue
                 try:
                     payload = resp.json()
                 except ValueError as e:
                     # 200 with an HTML/text error body (Overpass sometimes does this)
                     last_err = f"{url} -> invalid JSON body: {e}"
+                    _penalise_mirror(url, "invalid JSON body")
                     continue
                 # HTTP 200 does NOT guarantee a usable result. When a mirror
                 # runtime-times-out, runs out of memory, or rate-limits us
@@ -91,20 +218,29 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
                 remark = payload.get("remark") if isinstance(payload, dict) else None
                 if remark:
                     last_err = f"{url} -> Overpass remark: {str(remark).strip()[:200]}"
+                    _penalise_mirror(url, "remark")
                     continue
                 # Empty-but-no-remark 200: only a failure when the caller expected
                 # results (see docstring). Rotate to give a healthy mirror a chance.
                 if expect_nonempty and not (payload.get("elements")
                                             if isinstance(payload, dict) else None):
                     last_err = f"{url} -> HTTP 200 but empty elements (expected results)"
+                    if clean_empty is None:
+                        clean_empty = payload
+                    _penalise_mirror(url, "empty 200 where results were expected")
                     continue
+                _reward_mirror(url)
                 return payload
             except requests.exceptions.RequestException as e:
                 last_err = f"{url} -> {e}"
+                _penalise_mirror(url, type(e).__name__)
                 continue
         # Exponential backoff before retrying the whole mirror pool.
-        if round_idx < max_rounds - 1:
+        if round_idx < max_rounds - 1 and not _expired():
             time.sleep(1.0 * (2 ** round_idx))
+    if clean_empty is not None:
+        raise OverpassEmpty(
+            f"Every reachable Overpass mirror answered an empty 200: {last_err}", clean_empty)
     raise OverpassError(f"All Overpass mirrors failed: {last_err}")
 
 # Map common landmarks to specific addresses that Google Maps API can route to

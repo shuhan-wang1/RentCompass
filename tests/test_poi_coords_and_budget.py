@@ -362,7 +362,7 @@ def test_merged_type_union_is_capped():
               "args": {"address": _RUGBY["address"], "poi_type": t}} for t in many]
     merged = _canonical_poi_args(batch)[" ".join(_RUGBY["address"].split()).lower()]
     types = merged["poi_type"].split(",")
-    assert len(types) == 4, merged["poi_type"]
+    assert len(types) == _LOOP["_POI_MERGE_MAX_TYPES"], merged["poi_type"]
     assert all(t in many for t in types)
 
 
@@ -385,7 +385,7 @@ def test_the_users_own_words_decide_which_types_survive_the_cap():
     merged = _canonical_poi_args(batch)[" ".join(_RUGBY["address"].split()).lower()]
     types = merged["poi_type"].split(",")
     assert types[:2] == ["supermarket", "convenience"], types
-    assert len(types) == 4
+    assert len(types) == _LOOP["_POI_MERGE_MAX_TYPES"]
 
 
 # ── the per-type result cache: work already paid for is not re-fetched ────────
@@ -429,3 +429,216 @@ def test_an_overpass_failure_is_never_cached(monkeypatch):
                         lambda q, **kw: hits.append(q) or _overpass_elements("Tesco", "supermarket"))
     assert poi.query_osm_pois(lat, lon, "supermarket", radius=500)
     assert len(hits) == 1, "the failed call must not have poisoned the cell"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 6) Round three — shrink the retrieval footprint, and never read a rate-limited
+#    mirror's empty body as "none nearby".
+#
+# Measured from the production host on 2026-07-29, after a day of POI traffic:
+#   overpass-api.de / lz4 / z  -> ConnectionError within ~1s (DNS resolved fine)
+#   overpass.kumi.systems      -> ReadTimeout at 30s
+#   overpass.osm.ch            -> HTTP 200 in 0.15s with elements=0, even for cafés
+#                                 within 1 km of Leicester Square
+# Every query re-walked that pool from the top, so one turn spent 82s and completed nothing.
+# ══════════════════════════════════════════════════════════════════════════
+from core import maps_service  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_mirror_state():
+    maps_service.overpass_mirror_state_reset()
+    yield
+    maps_service.overpass_mirror_state_reset()
+
+
+class _Resp:
+    def __init__(self, status=200, payload=None, exc=None):
+        self.status_code = status
+        self._payload = payload if payload is not None else {"elements": []}
+        self.exc = exc
+        self.content = b"{}"
+
+    def json(self):
+        return self._payload
+
+
+def _patch_post(monkeypatch, behaviour):
+    """behaviour: {host -> _Resp | Exception}. Records the hosts hit, in order."""
+    hits = []
+
+    def fake_post(url, **kw):
+        host = url.split('/')[2]
+        hits.append(host)
+        outcome = behaviour.get(host, _Resp(payload={"elements": [
+            {"type": "node", "id": 1, "lat": 51.5225, "lon": -0.1187,
+             "tags": {"name": "Sainsbury's Local", "shop": "convenience"}}]}))
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(maps_service.requests, "post", fake_post)
+    monkeypatch.setattr(maps_service.time, "sleep", lambda *_a, **_k: None)
+    return hits
+
+
+def test_a_failed_mirror_is_skipped_on_the_next_request(monkeypatch):
+    import requests as _rq
+    dead = _rq.exceptions.ConnectionError("refused")
+    hits = _patch_post(monkeypatch, {"overpass-api.de": dead})
+    maps_service.overpass_request("q")           # walks past the dead one, succeeds on #2
+    assert hits[0] == "overpass-api.de" and len(hits) == 2
+    hits.clear()
+    maps_service.overpass_request("q")           # the dead one is in cooldown now
+    assert "overpass-api.de" not in hits, hits
+
+
+def test_the_last_working_mirror_is_tried_first(monkeypatch):
+    import requests as _rq
+    hits = _patch_post(monkeypatch, {
+        "overpass-api.de": _rq.exceptions.ConnectionError("refused"),
+        "overpass.kumi.systems": _rq.exceptions.ReadTimeout("30s"),
+    })
+    maps_service.overpass_request("q")
+    good = hits[-1]
+    hits.clear()
+    maps_service.overpass_request("q")
+    assert hits[0] == good, hits
+
+
+def test_every_mirror_penalised_still_asks_rather_than_giving_up(monkeypatch):
+    import requests as _rq
+    behaviour = {url.split('/')[2]: _rq.exceptions.ConnectionError("refused")
+                 for url in maps_service.OVERPASS_MIRRORS}
+    _patch_post(monkeypatch, behaviour)
+    with pytest.raises(maps_service.OverpassError):
+        maps_service.overpass_request("q")
+    # All five are now in cooldown; the pool must not become empty.
+    assert len(maps_service._mirrors_to_try()) == len(maps_service.OVERPASS_MIRRORS)
+
+
+def test_requests_are_paced(monkeypatch):
+    slept = []
+    monkeypatch.setattr(maps_service.time, "sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(maps_service, "OVERPASS_MIN_INTERVAL_S", 1.0)
+    _patch_post(monkeypatch, {})
+    monkeypatch.setattr(maps_service.time, "sleep", lambda s: slept.append(s))
+    maps_service.overpass_request("q")
+    maps_service.overpass_request("q")          # immediately after -> must wait
+    assert any(s > 0 for s in slept), slept
+
+
+def test_an_empty_200_is_not_reported_as_none_nearby(monkeypatch):
+    """The osm.ch case: a rate-limited mirror answers 200/elements=0. The tool must ask
+    another mirror rather than telling the user there are no supermarkets."""
+    empty, full = _Resp(payload={"elements": []}), _Resp(payload={
+        "elements": [{"type": "node", "id": 7, "lat": 51.5225, "lon": -0.1187,
+                      "tags": {"name": "Sainsbury's Local", "shop": "convenience"}}]})
+    hits = _patch_post(monkeypatch, {"overpass-api.de": empty,
+                                     "overpass.kumi.systems": full})
+    pois = poi.query_osm_pois(51.111111, -0.111111, "convenience", radius=300)
+    assert [p["name"] for p in pois] == ["Sainsbury's Local"], pois
+    assert hits[0] == "overpass-api.de" and len(hits) >= 2
+
+
+def test_a_confirmed_empty_cell_is_still_reported_as_empty(monkeypatch):
+    # No gym within 300 m is a real answer. When every mirror says empty, say empty.
+    _patch_post(monkeypatch, {url.split('/')[2]: _Resp(payload={"elements": []})
+                              for url in maps_service.OVERPASS_MIRRORS})
+    assert poi.query_osm_pois(51.222222, -0.222222, "gym", radius=300) == []
+
+
+def test_an_unconfirmed_empty_is_not_cached(monkeypatch):
+    behaviour = {url.split('/')[2]: _Resp(payload={"elements": []})
+                 for url in maps_service.OVERPASS_MIRRORS}
+    hits = _patch_post(monkeypatch, behaviour)
+    lat, lon = 51.333333, -0.333333
+    assert poi.query_osm_pois(lat, lon, "gym", radius=300) == []
+    before = len(hits)
+    # A second call must go back to the network: one bad minute must not answer for 15.
+    poi.query_osm_pois(lat, lon, "gym", radius=300)
+    assert len(hits) > before
+
+
+# ── one radius, smaller, with a ceiling ──────────────────────────────────────
+def test_one_radius_default_everywhere():
+    import inspect
+    assert poi.DEFAULT_RADIUS == 300
+    sig = inspect.signature(poi.search_nearby_pois_impl)
+    assert sig.parameters["radius"].default == poi.DEFAULT_RADIUS
+    assert (poi.search_nearby_pois_tool.parameters["properties"]["radius"]["default"]
+            == poi.DEFAULT_RADIUS)
+    assert inspect.signature(poi.query_osm_pois).parameters["radius"].default == poi.DEFAULT_RADIUS
+
+
+def test_radius_is_clamped():
+    assert poi.clamp_radius(None) == poi.DEFAULT_RADIUS
+    assert poi.clamp_radius("nonsense") == poi.DEFAULT_RADIUS
+    assert poi.clamp_radius(0) == poi.DEFAULT_RADIUS
+    assert poi.clamp_radius(150) == 150
+    assert poi.clamp_radius(5000) == poi.MAX_RADIUS
+
+
+def test_the_impl_applies_the_ceiling(monkeypatch):
+    seen = []
+    monkeypatch.setattr(poi, "query_osm_pois",
+                        lambda lat, lon, ptype, radius, **k: seen.append(radius) or [])
+    poi.search_nearby_pois_impl(address="x", poi_type="supermarket", radius=5000,
+                                latitude=51.5224, longitude=-0.1186)
+    assert seen == [poi.MAX_RADIUS]
+
+
+def test_merged_union_now_capped_at_three():
+    batch = [{"name": "search_nearby_pois", "args": {"address": _RUGBY["address"],
+                                                     "poi_type": t}}
+             for t in ("supermarket", "convenience", "cafe", "pharmacy", "gym")]
+    merged = _canonical_poi_args(batch)[" ".join(_RUGBY["address"].split()).lower()]
+    assert len(merged["poi_type"].split(",")) == 3, merged["poi_type"]
+
+
+# ── the walk itself must respect the deadline ─────────────────────────────────
+def test_the_mirror_walk_stops_at_the_deadline(monkeypatch):
+    """Measured before this: a rate-limited pool turned one POI call into 85s, because the
+    deadline was only checked BETWEEN types while a single type could walk five mirrors twice
+    with a 30s read timeout on each."""
+    import requests as _rq
+    hits = _patch_post(monkeypatch, {url.split('/')[2]: _rq.exceptions.ConnectionError("x")
+                                     for url in maps_service.OVERPASS_MIRRORS})
+    with pytest.raises(maps_service.OverpassError):
+        maps_service.overpass_request("q", deadline=maps_service.time.monotonic() - 1)
+    assert hits == [], "no mirror may be tried after the deadline"
+
+
+def test_each_attempt_is_clamped_to_the_remaining_time(monkeypatch):
+    seen = []
+
+    def fake_post(url, **kw):
+        seen.append(kw.get("timeout"))
+        raise __import__("requests").exceptions.ConnectionError("x")
+
+    monkeypatch.setattr(maps_service.requests, "post", fake_post)
+    monkeypatch.setattr(maps_service.time, "sleep", lambda *_a, **_k: None)
+    with pytest.raises(maps_service.OverpassError):
+        maps_service.overpass_request("q", timeout=30,
+                                      deadline=maps_service.time.monotonic() + 5)
+    assert seen, "expected at least one attempt"
+    assert all(t <= 5.0 for t in seen), seen      # never the full 30s
+
+
+def test_all_mirrors_empty_raises_overpass_empty_with_the_payload(monkeypatch):
+    _patch_post(monkeypatch, {url.split('/')[2]: _Resp(payload={"elements": []})
+                              for url in maps_service.OVERPASS_MIRRORS})
+    with pytest.raises(maps_service.OverpassEmpty) as ei:
+        maps_service.overpass_request("q", expect_nonempty=True)
+    assert ei.value.payload == {"elements": []}
+    # A subclass, so every existing `except OverpassError` handler still degrades honestly.
+    assert isinstance(ei.value, maps_service.OverpassError)
+
+
+def test_one_walk_not_two_when_every_mirror_is_empty(monkeypatch):
+    hits = _patch_post(monkeypatch, {url.split('/')[2]: _Resp(payload={"elements": []})
+                                     for url in maps_service.OVERPASS_MIRRORS})
+    assert poi.query_osm_pois(51.444444, -0.444444, "gym", radius=300) == []
+    # 5 mirrors x 2 rounds, ONCE. The first version of this confirmation logic asked a second
+    # time to find out whether the emptiness was real, doubling an outage's cost.
+    assert len(hits) <= len(maps_service.OVERPASS_MIRRORS) * 2, hits

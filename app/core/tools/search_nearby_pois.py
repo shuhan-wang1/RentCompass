@@ -9,12 +9,32 @@ import time
 import math
 from typing import Optional, List, Dict
 from core.tool_system import Tool
-from core.maps_service import overpass_request, OverpassError
+from core.maps_service import overpass_request, OverpassError, OverpassEmpty
 from core.cache_service import get_from_cache, set_to_cache, create_cache_key
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut
 
-DEFAULT_RADIUS = 200  # 默认搜索半径 500m
+# ONE search radius, in one place. There used to be three disagreeing defaults — this
+# constant at 200 under a comment claiming 500, the impl signature at 300, and the tool
+# schema at 500 (so the model's calls ran at 500 and nothing in the code said so).
+#
+# 300 m is deliberately tighter than the old 500: it is about a four-minute walk, which is
+# what "有超市吗" actually means, and a smaller circle returns fewer elements per request.
+# The ceiling stops the model asking for a 2 km circle, which would be both slow and a
+# misleading answer to "nearby".
+DEFAULT_RADIUS = int(os.getenv("POI_DEFAULT_RADIUS_M", "300"))
+MAX_RADIUS = int(os.getenv("POI_MAX_RADIUS_M", "800"))
+
+
+def clamp_radius(radius) -> int:
+    """A usable metre radius: the default when missing/unparseable, capped at MAX_RADIUS."""
+    try:
+        r = int(float(radius))
+    except (TypeError, ValueError):
+        return DEFAULT_RADIUS
+    if r <= 0:
+        return DEFAULT_RADIUS
+    return min(r, MAX_RADIUS)
 
 # ─── Internal total-time budget (event-loop safe) ───────────────────
 # This tool is registered as a PLAIN SYNC function, so Tool.execute offloads it to an
@@ -492,7 +512,8 @@ def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[
 
 def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_RADIUS,
                    origin_lat: float = None, origin_lon: float = None,
-                   timeout: Optional[float] = None) -> List[Dict]:
+                   timeout: Optional[float] = None,
+                   deadline: Optional[float] = None) -> List[Dict]:
     """从 OpenStreetMap 查询 POI
 
     Args:
@@ -548,9 +569,30 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
 
     # 通过共享的 Overpass 客户端查询：始终带描述性 User-Agent（否则参考服务器返回 406），
     # 并在多个公共镜像之间轮换 + 指数退避重试。全部镜像失败才抛出 OverpassError。
+    #
+    # expect_nonempty=True: an empty HTTP 200 must not be read as "none nearby". A
+    # rate-limited mirror answers exactly that — measured on osm.ch, which returned
+    # elements=0 for cafés within 1 km of Leicester Square — and with the old default this
+    # tool reported "附近没有超市" as fact about a street with three of them. So an empty body
+    # sidelines that mirror and the next one is asked instead.
+    #
+    # A genuinely empty cell (no gym within 300 m) is real, though, and must stay reportable:
+    # when EVERY mirror says empty, one confirming request settles it. Zero is only ever
+    # stated after a mirror we have no reason to distrust says zero.
     req_timeout = POI_OVERPASS_TIMEOUT_S if timeout is None else max(1, int(timeout))
+    eff_timeout = min(POI_OVERPASS_TIMEOUT_S, req_timeout)
+    unconfirmed_empty = False
     try:
-        data = overpass_request(query, timeout=min(POI_OVERPASS_TIMEOUT_S, req_timeout))
+        data = overpass_request(query, timeout=eff_timeout, expect_nonempty=True,
+                               deadline=deadline)
+    except OverpassEmpty as e:
+        # Every reachable mirror answered a clean empty 200. Report zero — no gym within
+        # 300 m is a real answer — but do not cache it: under a rate-limit an empty body is
+        # what a mirror hands back instead of a 429.
+        data = e.payload
+        unconfirmed_empty = True
+        print(f"  ⚠️ [OSM POI] {poi_type}: 所有可达镜像都返回空结果 —— "
+              f"按'确实没有'处理，但不写入缓存")
     except OverpassError as e:
         # API 失败（如缺 User-Agent 导致的 406、超时、限流）不能伪装成"附近没有" —— 抛出让上层报错
         print(f"❌ OSM 查询失败 ({poi_type}): {e}")
@@ -608,13 +650,15 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
             unique_pois.append(poi)
 
     # Cached only on a real answer from Overpass. An empty list is cached too (no gym within
-    # 500 m is a legitimate answer) but at a much shorter TTL, because an empty 200 from a busy
+    # 300 m is a legitimate answer) but at a much shorter TTL, because an empty 200 from a busy
     # mirror looks identical here — the same reason the amenity map refuses to trust an
-    # all-zero cached cell.
-    try:
-        set_to_cache(cache_key, {"fetched_at": time.time(), "pois": unique_pois})
-    except Exception as e:
-        print(f"  [OSM POI] 结果缓存写入失败（忽略）: {e}")
+    # all-zero cached cell. An empty result that NO mirror could confirm is not cached at all:
+    # storing it would let one bad minute answer for the whole TTL.
+    if not (unconfirmed_empty and not unique_pois):
+        try:
+            set_to_cache(cache_key, {"fetched_at": time.time(), "pois": unique_pois})
+        except Exception as e:
+            print(f"  [OSM POI] 结果缓存写入失败（忽略）: {e}")
 
     return unique_pois
 
@@ -786,7 +830,7 @@ def _requested_types(poi_type: str) -> List[str]:
 def search_nearby_pois_impl(
     address: str,
     poi_type: str = "all",
-    radius: int = 300,
+    radius: int = DEFAULT_RADIUS,
     user_query: str = "",
     latitude: float = None,
     longitude: float = None
@@ -805,13 +849,15 @@ def search_nearby_pois_impl(
     Args:
         address: 要搜索的地址
         poi_type: POI 类型，可传多个（逗号分隔）(restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, all)
-        radius: 搜索半径（米），默认 500m
+        radius: 搜索半径（米）。默认 DEFAULT_RADIUS（300m，约四分钟步行），上限 MAX_RADIUS。
         user_query: 用户原始查询（可选，用于智能推断 POI 类型）
         latitude, longitude: 该地址的已知坐标（可选）。传了就跳过地理编码 —— 房源缓存里
             本来就有 geo_location，用它比拿展示名去 Nominatim 反推更准也更快。
     """
     budget_s = poi_search_budget_s()
     deadline = time.monotonic() + budget_s
+    # One place decides the radius: a caller (or the model) asking for 2 km gets the ceiling.
+    radius = clamp_radius(radius)
     try:
         # 🆕 如果有 user_query，根据用户查询智能推断 POI 类型
         if user_query and poi_type == "all":
@@ -908,7 +954,7 @@ def search_nearby_pois_impl(
             # Clamp THIS request to what is left, so the last one issued cannot outlive the
             # deadline that let it start and hand the batch window the win.
             pois = query_osm_pois(lat, lon, ptype, radius, origin_lat=lat, origin_lon=lon,
-                                  timeout=remaining)
+                                  timeout=remaining, deadline=deadline)
             if pois:
                 results[ptype] = pois[:5]  # 每种类型最多 5 个
                 print(f"  ✅ 找到 {len(pois)} 个 {POI_TYPES[ptype]['name']}")
@@ -1016,8 +1062,8 @@ DISTANCES HAVE A REFERENCE POINT: the result's `reference_point.measured_from` s
             },
             'radius': {
                 'type': 'integer',
-                'description': 'Search radius in meters',
-                'default': 500
+                'description': f'Search radius in meters (default {DEFAULT_RADIUS}, max {MAX_RADIUS}). Keep it tight: "nearby" means walking distance, and a wider circle is slower for no better answer.',
+                'default': DEFAULT_RADIUS
             },
             'user_query': {
                 'type': 'string',

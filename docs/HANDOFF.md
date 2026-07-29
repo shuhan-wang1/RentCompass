@@ -23,7 +23,7 @@ that spans all branches.** Last updated 2026-07-26.
 >   recomputed and corrected it, which cost them work.
 > * **The live pool runs that same SHA.** `uk-rent-agent:canary-fc-loop-c9e60c2`, deployed
 >   2026-07-26. Confirm with the header, never with this document:
->   `curl -sk -D- https://rentcompass.co.uk:8443/health | grep x-agent-`
+>   `curl -sk -D- https://rentcompass.co.uk/health | grep x-agent-`
 > * **The health monitor IS now running** — `systemctl list-timers rentcompass-monitor.timer`.
 >   It was listed as the top open risk in §3.10 and no longer is. It runs
 >   `/usr/local/bin/rentcompass-monitor.sh`, a deliberate stable copy, NOT the git worktree —

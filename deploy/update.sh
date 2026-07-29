@@ -370,4 +370,4 @@ if [ "$BOTH" -eq 0 ] && [ -n "$LIVE_POOL" ]; then
   fi
 fi
 
-say "Done. Live at https://rentcompass.co.uk:8443 (pool '$LIVE_POOL', commit $PIN_SHORT)"
+say "Done. Live at https://rentcompass.co.uk (pool '$LIVE_POOL', commit $PIN_SHORT)"

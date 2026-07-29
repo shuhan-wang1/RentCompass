@@ -63,7 +63,7 @@ LOG_FILE="${MON_LOG:-/var/log/rentcompass/monitor.log}"
 STATE="${MON_STATE:-/run/rentcompass-monitor.state}"
 LOCK="${MON_LOCK:-/run/rentcompass-monitor.lock}"
 
-PUBLIC_URL="${MON_PUBLIC_URL:-https://rentcompass.co.uk:8443/health}"
+PUBLIC_URL="${MON_PUBLIC_URL:-https://rentcompass.co.uk/health}"
 LEGACY_URL="${MON_LEGACY_URL:-http://127.0.0.1:5001/health}"
 FC_URL="${MON_FC_URL:-http://127.0.0.1:5002/health}"
 

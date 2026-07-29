@@ -1,18 +1,24 @@
 # MCP integration (UK rent tools)
 
 Every tool registered in `create_tool_registry()` is exposed over the
-**Model Context Protocol** by `mcp_server.py`, and the LangGraph agent consumes
-them through that server over **stdio**. That is currently 12 tools: the 10 domain
-tools (`search_properties`, `check_safety`, `calculate_commute`,
-`calculate_commute_cost`, `check_transport_cost`, `get_transport_info`, `search_nearby_pois`,
-`get_property_details`, `web_search`, `get_weather`) **plus** the two
-memory-as-tools (`recall_memory`, `remember`).
+**Model Context Protocol** by `mcp_server.py`, and the agent consumes them
+through that server over **stdio**. That is currently **14 tools**:
+
+| Group | Tools |
+|---|---|
+| Search / listings | `search_properties`, `get_property_details`, `compare_or_rank_areas` |
+| Transport | `calculate_commute`, `calculate_commute_cost`, `check_transport_cost`, `get_transport_info` |
+| Area context | `check_safety`, `search_nearby_pois`, `get_weather`, `web_search` |
+| Memory-as-tools | `recall_memory`, `remember` |
+| Interaction | `ask_user` (terminal — ends the turn with one clarifying question) |
 
 ## Architecture
 
 ```
-LangGraph agent (execute_tool node)
-      │  await tool_registry.execute_tool(name, **params)
+agent tool dispatch
+  fc_loop : execute_tools node   (app/core/agent_loop.py)
+  legacy  : execute_tool  node   (app/core/langgraph_agent.py)
+      │  await tool_provider.execute_tool(name, **params)
       ▼
 core/mcp_client.py  MCPToolClient ── duck-types ToolRegistry.execute_tool
       │  stdio (persistent background event-loop thread)   ── fallback ─▶ in-process ToolRegistry
@@ -24,10 +30,13 @@ core/tools/*  (the tool implementations)
 ```
 
 `MCPToolClient` exposes exactly the one method the agent uses on the registry
-(`execute_tool`), so **`core/langgraph_agent.py` is unchanged**. The agent just
-receives the MCP client instead of the registry. If the MCP server is unavailable
-or a call fails, the client transparently **falls back** to the in-process
-`ToolRegistry`.
+(`execute_tool`), so **neither graph changes**. The agent just receives the MCP
+client instead of the registry. If the MCP server is unavailable or a call fails,
+the client transparently **falls back** to the in-process `ToolRegistry`.
+
+The fc loop additionally asks the provider for `list_specs()` to bind tools to
+the model; a provider without that method is wrapped in an adapter that derives
+the specs from the registry's `Tool` objects, so both paths stay single-sourced.
 
 ## Running (web app)
 
@@ -36,7 +45,7 @@ then starts an `MCPToolClient` (which spawns `python mcp_server.py` over stdio) 
 hands it to the agent. To force the old in-process path instead, set:
 
 ```bash
-USE_MCP_TOOLS=0 python app.py
+USE_MCP_TOOLS=0 python app/app.py
 ```
 
 ## Running the MCP server standalone
@@ -82,4 +91,9 @@ structured `data` the agent's `format_output` node expects.
 
 ## Dependencies
 
-Adds `mcp` (the Python MCP SDK) to `requirements.txt`.
+The Python MCP SDK is a runtime dependency in `pyproject.toml`, pinned **`mcp<2`**.
+
+mcp 2.0.0 (2026-07-28) removed the low-level `Server` decorator API this server is
+built on — `@server.list_tools()` raises `AttributeError` at import — so the major
+is bounded until that migration is done deliberately. An unbounded major is what
+turned CI red with no code change.

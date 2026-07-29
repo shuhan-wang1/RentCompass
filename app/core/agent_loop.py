@@ -452,9 +452,11 @@ def _canonical_poi_args(batch: list) -> dict:
     return canon
 
 
-# How many types one merged call may carry. Four is the breadth the tool's own "all" uses, and
-# it fits the derived POI budget with room for a slow mirror.
-_POI_MERGE_MAX_TYPES = int(os.getenv("POI_MERGE_MAX_TYPES", "4"))
+# How many types one merged call may carry. Each type is its own Overpass round-trip inside
+# one deadline, and the public mirrors rate-limited this host after a day of POI traffic — so
+# this is a request-volume knob, not only a latency one. Three covers "supermarket, convenience
+# + one more" (what these questions actually ask) and leaves the budget room for a slow mirror.
+_POI_MERGE_MAX_TYPES = int(os.getenv("POI_MERGE_MAX_TYPES", "3"))
 
 
 def _prioritised_poi_types(types: list, queries: list) -> list:

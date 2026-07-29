@@ -3,7 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Alex - Intelligent Property Search</title>
+    <title>RentCompass</title>
+    <meta name="theme-color" content="#dc2626">
+    <!-- Favicon: the RentCompass mark — house (Rent) + two-tone compass needle
+         (Compass) + sparkle (AI). Inlined as a data URI so no static route is
+         needed (app.py serves this file via Flask(template_folder='.') and has
+         no static dir). PNG is the fallback for browsers without SVG icons. -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22rc%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23f0453f%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23b3181c%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228.5%22%20fill%3D%22url%28%23rc%29%22%2F%3E%3Cpath%20d%3D%22M13.7%206.6%2024.9%2015.4V25.3a1.4%201.4%200%200%201-1.4%201.4H4.3a1.4%201.4%200%200%201-1.4-1.4V15.4Z%22%20fill%3D%22%23fff%22%2F%3E%3Cpath%20d%3D%22M18.40%2014.64L16.20%2021.93L11.60%2018.07Z%22%20fill%3D%22%23a3151a%22%2F%3E%3Cpath%20d%3D%22M9.40%2025.36L16.20%2021.93L11.60%2018.07Z%22%20fill%3D%22%23f0453f%22%2F%3E%3Ccircle%20cx%3D%2213.9%22%20cy%3D%2220.0%22%20r%3D%221.05%22%20fill%3D%22%23fff%22%2F%3E%3Cpath%20d%3D%22M26.2%203.8C26.2%206.46%2027.34%207.6%2030%207.6C27.34%207.6%2026.2%208.74%2026.2%2011.4C26.2%208.74%2025.06%207.6%2022.4%207.6C25.06%207.6%2026.2%206.46%2026.2%203.8Z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="alternate icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAEfklEQVRYhb2XXWwUVRTHfzO725Z2l5a0LJSWakspaUJsQJJqC7QglAhi8YEGUEkqoi+SaPAj4UlNY4hCjCEWFSKIoSEEPxDjq8bIhxG0LBBiYqAQaa0FE+mHtDOdvw+7W2a73dmWpJyH2cy5e87v3HvPOfeOwSjpqa0NKcNolqNGQaVQWMKHhBASSLFf9zuj9ULCltQpdE7S55W/nj9ugOPmGQnw+iUbZOgDSWE34B7hSWPgnLaHaa6KRH5PCuDvZUt2gFokGZMBd9n8I7GmKhI5MxJAbOZtkwrHQE509SXn5rA1vGjh5cvXzJ7a2lBs2Sd15pnl5TG4kCjA7/8UwFSG0TxZex63MUMhgtXVMX2c4Sw/O39+gylHjROFB8rLwfSNb8+BGS9to+DpZ/AXFCSM4TibzVipjRsealxH0YFDFLbuxZefnxJuTMkmWFND6Ucfk9/URGDmTCq++JL89esJzCqK2yw2uupq7PHUOYEA+a++RujJdSNla/f00PnG6wxEzo9tA5jZOZTs2kVOVRV/vPgCfe3n3QHbvu0PzH4rHdzMyyP83m5y6pcnNC0zJ4epT6xFlsXAb+1JcEk4Q4P0nT2HY1vc+ubE6NUyfdtLit/0ggfmVlD4YSuZcytGN81oIzFNcqqryZhdQu/JkziW5cr2qB+7rxcNWQx2dSVulYTpBc9esZJZn+zHP7NwTLhbclevpuzgZ2QUFyfA4/76IpEkuBDmmHAg7/mthN9uwcjKSguPS9a8eZQfbiNYU5s0Gce2k+ASmKPhxpQphHe+S96WrWAY6amjxJebS1lrK4WvvIwMM7lCRuWb6Yb7i4op3H+A7KV1E4I6QxZ3bt26qzAMZjy3hTl79mBOnZoSLribA4YwSOGBgwRKS8cPtmyuHD3GicV1WLd7k8Zz6+qo2LcvJVwS/rjCyMzCDIbGDe746msu7H6f3qsd5M6rIFT64Jj/DYTDKeES+N2KdCLH4fq339H+zk56r1wd0Rc3rPS28zhH/CPw9Hz6Dx/i+uEj9HVcS9AXNazwDsDroHIr0ol+/IGqYCZNl9p57GgbAJnTpjF90cNpAkhxUCVUQZoAnK5OnGsdYFn4bItp4emYPpOihhUYPp93ACng0RxwHaleYp05FXX23wC9mzeCxMqnVmOtedzb0AMezQFXjXqJffqU2yO+sjnkbdhIYGn9OAIYG06sDG1Jfi+8+vuxL14AwFc2h8xNzxJYUjfuTpkKLjHsj97bKfFaAfuXn/GVlEwYPBLA2HCEuv2CnyRtcu4MguOAaSY58M1/iODeZfd0Ngz396eCI3HJj5xDkrHJvv0vN1paCD76SCxsd2tITFK5HnIpdXc0+nQcOtuOpIIDOm4AXFxQ9b1Evfsmk/Y27NFePfbcPfZXxuDAXBPAktGMdPM+woW0bVlPT58JsKC9vcMRa6OfTfcBjrFj1Y3rxwBGMi76rWbUSJyazGVHalr1Z8fOODcprQXGucrKRkxzs6SFkooUb1gThw8LdUtcAh3X0J2Dq7q7+928/wGaE+h3C2EObQAAAABJRU5ErkJggg==">
     <!-- 引入专业英文字体 Plus Jakarta Sans 和中文字体备选 -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -101,16 +108,22 @@
             text-decoration: none;
         }
 
-        .brand-logo-bg {
-            width: 32px;
-            height: 32px;
-            background: var(--primary-light);
-            border-radius: var(--radius-md);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--primary-color);
+        /* The mark carries its own gradient chip, so the wrapper only sizes it —
+           no --primary-light plate behind it (that would double up the corners). */
+        .brand-mark {
+            width: 30px;
+            height: 30px;
+            display: block;
+            flex-shrink: 0;
+            border-radius: 8px; /* matches the mark's own rx, keeps the shadow tight */
+            box-shadow: 0 1px 3px rgba(179, 24, 28, 0.28);
         }
+
+        .brand-name {
+            letter-spacing: -0.015em;
+        }
+
+        .brand-name .brand-name-accent { color: var(--primary-color); }
 
         .lang-switch {
             display: flex;
@@ -1200,11 +1213,28 @@
             <button class="menu-toggle" id="menuToggle" aria-label="Menu" title="Menu">
                 <svg class="icon" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
-            <a href="#" class="brand" onclick="return false;">
-                <div class="brand-logo-bg">
-                    <svg class="icon" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l8-4 8 4v14M8 21v-2a4 4 0 0 1 4-4v0a4 4 0 0 1 4 4v2"/></svg>
-                </div>
-                <span data-i18n="brand">Alex</span>
+            <a href="#" class="brand" onclick="return false;" aria-label="RentCompass">
+                <!-- RentCompass mark: house = Rent, two-tone needle + pivot = Compass,
+                     sparkle = AI. Identical geometry to the favicon in <head>.
+                     NOT .icon — that class forces fill:none/stroke:currentColor. -->
+                <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+                    <defs>
+                        <linearGradient id="rcBrandGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="#f0453f"/>
+                            <stop offset="1" stop-color="#b3181c"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="32" height="32" rx="8.5" fill="url(#rcBrandGrad)"/>
+                    <path d="M13.7 6.6 24.9 15.4V25.3a1.4 1.4 0 0 1-1.4 1.4H4.3a1.4 1.4 0 0 1-1.4-1.4V15.4Z" fill="#fff"/>
+                    <path d="M18.40 14.64L16.20 21.93L11.60 18.07Z" fill="#a3151a"/>
+                    <path d="M9.40 25.36L16.20 21.93L11.60 18.07Z" fill="#f0453f"/>
+                    <circle cx="13.9" cy="20" r="1.05" fill="#fff"/>
+                    <path d="M26.2 3.8C26.2 6.46 27.34 7.6 30 7.6C27.34 7.6 26.2 8.74 26.2 11.4C26.2 8.74 25.06 7.6 22.4 7.6C25.06 7.6 26.2 6.46 26.2 3.8Z" fill="#fff"/>
+                </svg>
+                <!-- Deliberately NOT data-i18n: "RentCompass" is the product name and
+                     is identical in both locales. The `brand` key stays bound to the
+                     assistant persona ("Alex") used on chat message senders. -->
+                <span class="brand-name">Rent<span class="brand-name-accent">Compass</span></span>
             </a>
         </div>
 

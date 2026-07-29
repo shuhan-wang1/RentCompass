@@ -16,7 +16,11 @@ dependencies = [
   "waitress",
   "chromadb", "sentence-transformers", "faiss-cpu", "geopy", "folium", "ddgs",
   "langgraph>=1.2,<2", "langgraph-checkpoint-sqlite", "langchain", "langchain-core", "langchain-ollama",
-  "langchain-openai", "openai", "mcp",
+  # mcp 2.0.0 (2026-07-28) drops the low-level Server decorator API that
+  # app/mcp_server.py is built on: `@server.list_tools()` raises AttributeError
+  # at import. Bounded like langgraph above until that migration is done
+  # deliberately — an unbounded major is what turned CI red with no code change.
+  "langchain-openai", "openai", "mcp<2",
   "pydantic>=2.7", "starlette", "uvicorn[standard]",
 ]
 

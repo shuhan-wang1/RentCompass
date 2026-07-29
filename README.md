@@ -1,16 +1,53 @@
-# RentCompass — UK Student Rental Agent
+<div align="center">
 
-A conversational agent that helps students find UK rentals: it searches live
-listings, plans commutes against the real TfL network, checks area crime data,
-finds nearby amenities, compares neighbourhoods, and remembers what a user told
-it across conversations.
+<img src="docs/assets/rentcompass-logo.svg" alt="RentCompass" width="104" height="104">
 
-The production conversational path is a **native function-calling agent loop**
-built on LangGraph: one bound-tools model call per super-step, a batched tool
-executor, and a bounded per-turn time budget with deterministic degradation. It
-runs behind a **two-pool canary** with per-conversation sticky assignment,
-per-turn telemetry, and a deploy gate that refuses to ship anything but a
-pinned commit.
+# RentCompass
+
+### Find somewhere to live in the UK by talking to it.
+
+A rental agent that searches real listings, plans commutes on the live TfL
+network, checks crime data, compares neighbourhoods — and shows you the evidence
+behind every number it gives you.
+
+### [**→ rentcompass.co.uk:8443**](https://rentcompass.co.uk:8443)
+
+*No signup — open it and start typing, in English or 中文.*
+
+[![CI](https://github.com/shuhan-wang1/RentCompass/actions/workflows/ci.yml/badge.svg)](https://github.com/shuhan-wang1/RentCompass/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10--3.12-3776AB?logo=python&logoColor=white)
+![LangGraph](https://img.shields.io/badge/agent-LangGraph%20function--calling%20loop-7b4bb3)
+![Deploy](https://img.shields.io/badge/deploy-two--pool%20canary-2f8f4e)
+
+</div>
+
+---
+
+## Ask it things like
+
+> **"Find me a 1-bed under £1800 near Stratford, commute to UCL under 35 minutes."**
+> → searches live listings, routes each one on TfL, ranks by price/commute/fit
+>
+> **"Which of these areas is safest, and what's the rent difference?"**
+> → police.uk crime data plus rent statistics computed from cached listings —
+> and an explicit *no data* when an area has none, never a plausible guess
+>
+> **"How much is a single Tube fare from Stratford to Bank in the morning peak?"**
+> → the official TfL fare, not a number the model remembers
+>
+> **"Drop anything over £2000 and sort the rest by distance to the tube."**
+> → filters the listings already on your screen, deterministically, without
+> re-running the search
+>
+> **"我下个月要搬到伦敦，预算 1500 镑，帮我找找。"**
+> → replies in the language you asked in
+
+**Under the hood:** the conversational path is a native **function-calling agent
+loop** on LangGraph — one bound-tools model call per super-step, a batched tool
+executor, and a bounded per-turn time budget that degrades deterministically
+instead of hanging. It ships behind a **two-pool canary** with per-conversation
+sticky assignment, per-turn telemetry, and a deploy gate that refuses to release
+anything but a pinned commit.
 
 The codebase is two cooperating trees. `src/uk_rent_agent/` is the installable
 package owning the ASGI entry point and shared infrastructure (state, contracts,
@@ -989,3 +1026,16 @@ The structured form path (`/api/search_direct`) sits outside both graphs.
 ## License
 
 Educational and research use.
+
+---
+
+<div align="center">
+
+<img src="docs/assets/rentcompass-logo.svg" alt="" width="44" height="44">
+
+**RentCompass** · [rentcompass.co.uk:8443](https://rentcompass.co.uk:8443)
+
+*Built as a study in shipping an agent responsibly: real data, stated evidence,
+bounded turns, and a rollout you can undo.*
+
+</div>

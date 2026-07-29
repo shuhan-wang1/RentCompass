@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="RentCompass">
+  <title>RentCompass</title>
+  <!-- The RentCompass mark: house (Rent) + two-tone compass needle (Compass) +
+       sparkle (AI). Geometry is IDENTICAL to the inline favicon and .brand-mark
+       in app/unified-ui.html — if one changes, change both. -->
+  <defs>
+    <linearGradient id="rcBrandGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0453f"/>
+      <stop offset="1" stop-color="#b3181c"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8.5" fill="url(#rcBrandGrad)"/>
+  <path d="M13.7 6.6 24.9 15.4V25.3a1.4 1.4 0 0 1-1.4 1.4H4.3a1.4 1.4 0 0 1-1.4-1.4V15.4Z" fill="#fff"/>
+  <path d="M18.40 14.64L16.20 21.93L11.60 18.07Z" fill="#a3151a"/>
+  <path d="M9.40 25.36L16.20 21.93L11.60 18.07Z" fill="#f0453f"/>
+  <circle cx="13.9" cy="20" r="1.05" fill="#fff"/>
+  <path d="M26.2 3.8C26.2 6.46 27.34 7.6 30 7.6C27.34 7.6 26.2 8.74 26.2 11.4C26.2 8.74 25.06 7.6 22.4 7.6C25.06 7.6 26.2 6.46 26.2 3.8Z" fill="#fff"/>
+</svg>

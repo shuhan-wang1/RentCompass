@@ -2923,8 +2923,10 @@ def generate_property_map():
         print(f"[MAP GEN] Generating amenity map for: {data['address']}")
         print(f"{'='*60}\n")
 
-        # Initialize map generator
-        generator = PropertyAmenityMapGenerator(radius_km=1.5)
+        # Initialize map generator. 0.2 km is the class default and matches
+        # search_nearby_pois.DEFAULT_RADIUS, so the map and the chat answer describe the
+        # same circle; passed explicitly to keep that agreement visible at the call site.
+        generator = PropertyAmenityMapGenerator(radius_km=0.2)
 
         # Prepare property data
         property_data = {

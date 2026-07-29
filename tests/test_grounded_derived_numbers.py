@@ -366,7 +366,7 @@ def test_the_station_reaches_the_tool_payload(monkeypatch):
     import core.tools.search_nearby_pois as sp
 
     monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5245, -0.1272))
-    monkeypatch.setattr(sp, "query_osm_pois", lambda *a, **k: [])
+    monkeypatch.setattr(sp, "query_osm_pois_batch", lambda *a, **k: {})
     _fake_stoppoints(monkeypatch, _WC1H_STOPS)
 
     res = sp.search_nearby_pois_impl(address="Tavistock Court, WC1H", poi_type="tube_station")
@@ -435,8 +435,9 @@ def test_the_tesco_110m_answer_names_its_reference_point(monkeypatch):
     import core.tools.search_nearby_pois as sp
 
     monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5450, -0.0553))
-    monkeypatch.setattr(sp, "query_osm_pois", lambda *a, **k: [
-        {"name": "Tesco", "icon": "T", "distance_m": 110, "distance_display": "110m"}])
+    monkeypatch.setattr(sp, "query_osm_pois_batch", lambda lat, lon, ptypes, *a, **k: {
+        p: [{"name": "Tesco", "icon": "T", "distance_m": 110, "distance_display": "110m"}]
+        for p in ptypes})
 
     res = sp.search_nearby_pois_impl(address="Hackney", poi_type="supermarket")
 
@@ -450,7 +451,7 @@ def test_an_empty_poi_result_also_names_the_reference_point(monkeypatch):
     import core.tools.search_nearby_pois as sp
 
     monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5450, -0.0553))
-    monkeypatch.setattr(sp, "query_osm_pois", lambda *a, **k: [])
+    monkeypatch.setattr(sp, "query_osm_pois_batch", lambda *a, **k: {})
 
     res = sp.search_nearby_pois_impl(address="Hackney", poi_type="supermarket")
     assert "centre of the area" in res["message"].lower()

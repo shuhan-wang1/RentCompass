@@ -40,33 +40,31 @@ def _poi_module(monkeypatch):
     clock = {"t": 1000.0}
     monkeypatch.setattr(sp.time, "monotonic", lambda: clock["t"])
     monkeypatch.setattr(sp.time, "sleep", lambda s: clock.__setitem__("t", clock["t"] + s))
-    monkeypatch.setattr(sp, "POI_PACING_S", 0.0)
     monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5, -0.1))
     return sp, clock
 
 
-def _measured_deadline_s(monkeypatch, step: float = 0.25, n_types: int = 1200) -> float:
-    """The deadline the tool ACTUALLY enforces, measured by watching when it stops issuing.
+def _measured_deadline_s(monkeypatch) -> float:
+    """The deadline the tool ACTUALLY enforces, read off the fetch it authorises.
 
-    Behavioural on purpose: it reads the same number on the old code and the new one, so the
-    assertions below fail with a wrong VALUE rather than with a missing symbol.
+    Behavioural on purpose: this is the instant handed to the Overpass fetch, which is what
+    stops it issuing — so the assertions below fail with a wrong VALUE rather than with a
+    missing symbol. (It used to be inferred from WHEN a per-type loop stopped issuing; the
+    fetch is batched now, so the deadline is read directly instead of bracketed.)
     """
     sp, clock = _poi_module(monkeypatch)
-    monkeypatch.setattr(sp, "_infer_poi_types_from_query", lambda q: ["restaurant"] * n_types)
 
-    issued = []
+    seen = {}
 
-    def fake_query(lat, lon, ptype, *a, **k):
-        issued.append(clock["t"] - 1000.0)
-        clock["t"] += step
-        return []
+    def fake_batch(lat, lon, ptypes, *a, **k):
+        seen["deadline"] = k.get("deadline")
+        return {}
 
-    monkeypatch.setattr(sp, "query_osm_pois", fake_query)
+    monkeypatch.setattr(sp, "query_osm_pois_batch", fake_batch)
     sp.search_nearby_pois_impl(address="x", poi_type="all", user_query="whatever")
-    assert issued, "the tool issued no request at all — the probe is broken, not the budget"
-    # Issuing stops at the first instant >= the deadline, so the deadline is in
-    # (last_issue, last_issue + step]. Report the upper end; every assertion is >= step-safe.
-    return issued[-1] + step
+    assert seen.get("deadline") is not None, (
+        "the tool issued no deadline-bearing request — the probe is broken, not the budget")
+    return seen["deadline"] - 1000.0
 
 
 @pytest.mark.parametrize("window", [5.0, 20.0, 30.0, 60.0])
@@ -139,11 +137,16 @@ def test_the_partial_note_quotes_the_deadline_that_actually_fired(monkeypatch):
     monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "10")        # -> 8.0s budget
     sp, clock = _poi_module(monkeypatch)
 
-    def fake_query(lat, lon, ptype, *a, **k):
-        clock["t"] += 3.0
-        return [{"name": f"{ptype} A", "icon": "X", "distance_display": "10m"}]
+    # Geocoding eats the whole budget, so the fetch is never authorised and every type is
+    # skipped. (The batched fetch is one request, so this — not a half-finished per-type
+    # loop — is what a partial return looks like now.)
+    def slow_geocode(addr, **_kw):
+        clock["t"] += 9.0
+        return (51.5, -0.1)
 
-    monkeypatch.setattr(sp, "query_osm_pois", fake_query)
+    monkeypatch.setattr(sp, "geocode_address", slow_geocode)
+    monkeypatch.setattr(sp, "query_osm_pois_batch",
+                        lambda *a, **k: pytest.fail("issued a request past the deadline"))
     res = sp.search_nearby_pois_impl(address="x", poi_type="all")
 
     assert res["partial"] is True
@@ -151,7 +154,7 @@ def test_the_partial_note_quotes_the_deadline_that_actually_fired(monkeypatch):
 
 
 def test_an_overpass_request_cannot_outlive_the_deadline_that_authorised_it(monkeypatch):
-    """The deadline is checked BEFORE a request is issued, so without a clamp the LAST request
+    """The deadline is checked BEFORE a request is issued, so without a clamp the request
     could still burn its full 30s past the deadline and hand the batch window the win anyway.
 
     FAILS BEFORE: query_osm_pois took no timeout and always asked for 30s.
@@ -161,19 +164,84 @@ def test_an_overpass_request_cannot_outlive_the_deadline_that_authorised_it(monk
 
     seen = []
 
-    def fake_query(lat, lon, ptype, *a, **k):
+    def fake_batch(lat, lon, ptypes, *a, **k):
         seen.append(k.get("timeout"))
         clock["t"] += 3.0
-        return []
+        return {}
 
-    monkeypatch.setattr(sp, "query_osm_pois", fake_query)
+    monkeypatch.setattr(sp, "query_osm_pois_batch", fake_batch)
     sp.search_nearby_pois_impl(address="x", poi_type="all")
 
-    assert seen, "no request was issued"
-    assert all(t is not None for t in seen), seen
-    # 8.0s budget, 3s per query: the requests start with 8.0s, 5.0s and 2.0s left.
-    assert seen == pytest.approx([8.0, 5.0, 2.0])
-    assert all(t <= 8.0 for t in seen)
+    # One batched request, clamped to the whole remaining budget rather than a fixed 30s.
+    assert seen == pytest.approx([8.0])
+
+
+def test_every_requested_type_costs_exactly_one_overpass_round_trip(monkeypatch):
+    """THE regression this module was rewritten for.
+
+    FAILS BEFORE: the tool issued one Overpass request PER TYPE, serially, inside a single
+    25s per-call cap. Four types x (five-mirror rotation + pacing) never fit, so production
+    turns spent the whole budget and returned nothing — while the amenity map, asking the
+    same mirrors for ten categories in ONE union, answered the same area in 6.1s.
+    """
+    sp, _clock = _poi_module(monkeypatch)
+
+    calls = []
+
+    def fake_batch(lat, lon, ptypes, *a, **k):
+        calls.append(list(ptypes))
+        return {p: [{"name": f"{p} A", "icon": "X", "distance_display": "10m"}]
+                for p in ptypes}
+
+    monkeypatch.setattr(sp, "query_osm_pois_batch", fake_batch)
+    # Belt and braces: the single-type path must not be reachable from the tool at all.
+    monkeypatch.setattr(sp, "query_osm_pois",
+                        lambda *a, **k: pytest.fail("fell back to a per-type request"))
+
+    res = sp.search_nearby_pois_impl(address="x", poi_type="all")
+
+    assert calls == [["restaurant", "supermarket", "convenience", "cafe"]]
+    assert set(res["pois"]) == {"restaurant", "supermarket", "convenience", "cafe"}
+
+
+def test_the_batched_query_is_one_union_over_the_distinct_selectors(monkeypatch):
+    """The union that makes the round-trip saving real, and the overlap that would undo it.
+
+    ``chinese_restaurant`` is a strict subset of ``restaurant``: emitting both selectors would
+    ask for the same elements twice. One clause per DISTINCT base selector, and the cuisine
+    split happens locally.
+    """
+    import core.tools.search_nearby_pois as sp
+
+    q = sp._build_batch_query(51.5, -0.1, ["restaurant", "chinese_restaurant",
+                                           "supermarket", "cafe"], 200)
+
+    assert q.count("nwr") == 3, q
+    assert q.count('["amenity"="restaurant"]') == 1, q
+    assert '["shop"="supermarket"]' in q and '["amenity"="cafe"]' in q
+    assert "(around:200,51.5,-0.1)" in q
+    # The cuisine narrowing must NOT reach the wire — it is what splits the response locally.
+    assert "cuisine" not in q, q
+
+
+def test_a_batched_response_is_split_back_apart_by_cuisine(monkeypatch):
+    """Asking for the wider set is only sound if the local predicate reproduces the selector
+    the narrow type would have sent. A chinese restaurant counts as both; an italian one is
+    a plain restaurant only."""
+    import core.tools.search_nearby_pois as sp
+
+    chinese = {"tags": {"amenity": "restaurant", "cuisine": "Chinese;noodle",
+                        "name": "Gold Mine"}}
+    italian = {"tags": {"amenity": "restaurant", "cuisine": "italian", "name": "Ciao"}}
+
+    assert sp._element_matches(chinese, sp.POI_TYPES["restaurant"])
+    assert sp._element_matches(chinese, sp.POI_TYPES["chinese_restaurant"])
+    assert sp._element_matches(italian, sp.POI_TYPES["restaurant"])
+    assert not sp._element_matches(italian, sp.POI_TYPES["chinese_restaurant"])
+    # A restaurant with no cuisine tag at all is not silently claimed by the narrow type.
+    assert not sp._element_matches(
+        {"tags": {"amenity": "restaurant", "name": "Anon"}},
+        sp.POI_TYPES["chinese_restaurant"])
 
 
 # =========================================================================== #

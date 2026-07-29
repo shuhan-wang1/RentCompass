@@ -32,12 +32,18 @@ class PropertyAmenityMapGenerator:
     using OpenStreetMap data.
     """
     
-    def __init__(self, radius_km: float = 1.5):
+    def __init__(self, radius_km: float = 0.2):
         """
         Initialize the map generator.
-        
+
         Args:
-            radius_km: Radius in kilometers to search for amenities (default: 1.5)
+            radius_km: Radius in kilometers to search for amenities (default: 0.2)
+
+        0.2 km matches search_nearby_pois.DEFAULT_RADIUS, so the map and the chat answer
+        describe the same circle — a 1.5 km map next to a 200 m tool answer had the two
+        disagreeing about what "附近" means. It is also far cheaper to ask for: element count
+        grows with the square of the radius, and the public Overpass mirrors are what times
+        out under load.
         """
         self.radius_km = radius_km
         self.radius_m = radius_km * 1000  # Convert to meters
@@ -120,6 +126,14 @@ class PropertyAmenityMapGenerator:
             }
         }
         
+    def _radius_label(self) -> str:
+        """The search radius as a human unit. Sub-kilometre radii read as metres — the
+        default is 0.2 km, and "0.2km search radius" on the circle tooltip is worse than
+        "200m"."""
+        if self.radius_m < 1000:
+            return f"{int(round(self.radius_m))}m"
+        return f"{self.radius_km:g}km"
+
     def parse_geo_location(self, geo_location_str: str) -> Optional[Tuple[float, float]]:
         """
         Parse geo_location string into (lat, lon) tuple.
@@ -387,7 +401,7 @@ class PropertyAmenityMapGenerator:
         # Create base map centered on the property
         m = folium.Map(
             location=[lat, lon],
-            zoom_start=15,
+            zoom_start=17,
             tiles='OpenStreetMap'
         )
         
@@ -420,7 +434,7 @@ class PropertyAmenityMapGenerator:
             fill=False,
             opacity=0.3,
             weight=2,
-            tooltip=f'{self.radius_km}km search radius'
+            tooltip=f'{self._radius_label()} search radius'
         ).add_to(m)
 
         if amenities_unavailable:
@@ -565,7 +579,7 @@ class PropertyAmenityMapGenerator:
         # Create base map
         m = folium.Map(
             location=[lat, lon],
-            zoom_start=15,
+            zoom_start=17,
             tiles='OpenStreetMap'
         )
         
@@ -597,7 +611,7 @@ class PropertyAmenityMapGenerator:
             fill=False,
             opacity=0.3,
             weight=2,
-            tooltip=f'{self.radius_km}km search radius'
+            tooltip=f'{self._radius_label()} search radius'
         ).add_to(m)
 
         # Honest degradation: if the POI provider errored, tell the user plainly

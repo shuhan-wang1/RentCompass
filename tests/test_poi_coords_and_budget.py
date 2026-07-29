@@ -169,7 +169,7 @@ def test_parse_geo_location_accepts_both_scraper_shapes_and_rejects_junk():
 
 def test_supplied_coordinates_skip_geocoding_entirely(monkeypatch):
     g = _patch_geocoder(monkeypatch, {})     # any geocode attempt would return None -> error
-    monkeypatch.setattr(poi, "query_osm_pois", lambda *a, **k: [])
+    monkeypatch.setattr(poi, "query_osm_pois_batch", lambda *a, **k: {})
     out = poi.search_nearby_pois_impl(address=_RUGBY["address"], poi_type="supermarket",
                                       latitude=51.522441, longitude=-0.118633)
     assert out["success"] is True, "the address that cannot be geocoded must still work"
@@ -181,7 +181,7 @@ def test_supplied_coordinates_skip_geocoding_entirely(monkeypatch):
 
 def test_junk_coordinates_fall_back_to_geocoding(monkeypatch):
     g = _patch_geocoder(monkeypatch, {"Great Ormond Street, London WC1N": (51.5224, -0.1186)})
-    monkeypatch.setattr(poi, "query_osm_pois", lambda *a, **k: [])
+    monkeypatch.setattr(poi, "query_osm_pois_batch", lambda *a, **k: {})
     out = poi.search_nearby_pois_impl(address="Great Ormond Street, London WC1N",
                                       poi_type="supermarket", latitude=0, longitude=0)
     assert out["success"] is True
@@ -239,8 +239,8 @@ def test_multi_type_poi_type_is_parsed_as_a_list():
 
 def test_one_geocode_and_one_deadline_cover_every_requested_type(monkeypatch):
     queried = []
-    monkeypatch.setattr(poi, "query_osm_pois",
-                        lambda lat, lon, ptype, *a, **k: queried.append(ptype) or [])
+    monkeypatch.setattr(poi, "query_osm_pois_batch",
+                        lambda lat, lon, ptypes, *a, **k: queried.extend(ptypes) or {})
     monkeypatch.setattr(poi, "_resolve_nearest_station", lambda *a, **k: None)
     g = _patch_geocoder(monkeypatch, {})
     out = poi.search_nearby_pois_impl(address=_RUGBY["address"],
@@ -506,6 +506,85 @@ def test_the_last_working_mirror_is_tried_first(monkeypatch):
     assert hits[0] == good, hits
 
 
+def test_a_timeout_our_own_clamp_caused_does_not_sideline_the_mirror(monkeypatch):
+    """The clamp keeps a request inside its budget; it must not also empty the pool.
+
+    FAILS BEFORE: every ReadTimeout sidelined its mirror for 300s, including one the clamp
+    itself caused by hanging up early. In production a single POI call walked all five
+    mirrors with attempt timeouts squeezed to 7.96s against a 30s ceiling, sidelined every
+    one of them, and the next call opened against a fully penalised pool.
+    """
+    import time as _time
+
+    import requests as _rq
+    first, second = [u.split('/')[2] for u in maps_service.OVERPASS_MIRRORS[:2]]
+
+    # Call 1: the reference server is cut short by OUR clamp, the next mirror answers.
+    _patch_post(monkeypatch, {first: _rq.exceptions.ReadTimeout("clamped")})
+    maps_service.overpass_request("q", timeout=30, deadline=_time.monotonic() + 5.0)
+
+    # Call 2: the mirror that answered is now genuinely down, so the walk has to fall back.
+    # The clamped one must still be in the pool to catch it.
+    hits = _patch_post(monkeypatch, {second: _rq.exceptions.ConnectionError("refused")})
+    maps_service.overpass_request("q")
+    assert first in hits, (
+        f"{first} was sidelined for a timeout our own clamp caused, so the walk skipped "
+        f"a mirror we have no evidence against: {hits}")
+
+
+def test_a_timeout_that_got_its_full_window_still_sidelines_the_mirror(monkeypatch):
+    """The other side of it: an UNCLAMPED timeout is real evidence and must still count,
+    or the cooldown stops protecting anything."""
+    import requests as _rq
+    first, second = [u.split('/')[2] for u in maps_service.OVERPASS_MIRRORS[:2]]
+
+    _patch_post(monkeypatch, {first: _rq.exceptions.ReadTimeout("full 30s")})
+    maps_service.overpass_request("q", timeout=30)          # no deadline -> no clamp
+
+    hits = _patch_post(monkeypatch, {second: _rq.exceptions.ConnectionError("refused")})
+    maps_service.overpass_request("q")
+    assert first not in hits, f"a genuinely slow mirror was not sidelined: {hits}"
+
+
+def test_an_empty_200_does_not_earn_the_full_outage_cooldown(monkeypatch):
+    """An empty 200 is ambiguous, and at a 200 m radius it is usually the TRUTH.
+
+    Measured 2026-07-29 on Cannon Road WD18: overpass-api.de answered 0 elements at 200 m and
+    38 at 1000 m — the 200 m empty was correct — while overpass.osm.ch answered 0 at every
+    radius including the one where three mirrors saw 38. Rotation tells those apart; the
+    sideline does not. So an empty 200 gets a short cooldown, not the 300s outage cooldown
+    that a refused connection earns.
+
+    FAILS BEFORE: both cost 300s, so a walk over a genuinely empty cell emptied the pool and
+    the NEXT call opened against five sidelined mirrors.
+    """
+    empty = _Resp(payload={"elements": []})
+    behaviour = {url.split('/')[2]: empty for url in maps_service.OVERPASS_MIRRORS}
+    _patch_post(monkeypatch, behaviour)
+
+    with pytest.raises(maps_service.OverpassEmpty):
+        maps_service.overpass_request("q", expect_nonempty=True)
+
+    # Every mirror answered empty, so every mirror is in cooldown — but a SHORT one.
+    now = maps_service.time.monotonic()
+    for url in maps_service.OVERPASS_MIRRORS:
+        left = maps_service._mirror_penalty[url] - now
+        assert left <= maps_service.OVERPASS_EMPTY_COOLDOWN_S + 1.0, (
+            f"{url} was sidelined for {left:.0f}s over an empty 200 that may well be true")
+        assert left < maps_service.OVERPASS_MIRROR_COOLDOWN_S
+
+
+def test_a_refused_connection_still_earns_the_full_outage_cooldown(monkeypatch):
+    """The control: a mirror that cannot be reached is unambiguous, and keeps the long one."""
+    import requests as _rq
+    first = maps_service.OVERPASS_MIRRORS[0]
+    _patch_post(monkeypatch, {first.split('/')[2]: _rq.exceptions.ConnectionError("refused")})
+    maps_service.overpass_request("q")
+
+    left = maps_service._mirror_penalty[first] - maps_service.time.monotonic()
+    assert left > maps_service.OVERPASS_EMPTY_COOLDOWN_S + 1.0, left
+
+
 def test_every_mirror_penalised_still_asks_rather_than_giving_up(monkeypatch):
     import requests as _rq
     behaviour = {url.split('/')[2]: _rq.exceptions.ConnectionError("refused")
@@ -563,7 +642,7 @@ def test_an_unconfirmed_empty_is_not_cached(monkeypatch):
 # ── one radius, smaller, with a ceiling ──────────────────────────────────────
 def test_one_radius_default_everywhere():
     import inspect
-    assert poi.DEFAULT_RADIUS == 300
+    assert poi.DEFAULT_RADIUS == 200
     sig = inspect.signature(poi.search_nearby_pois_impl)
     assert sig.parameters["radius"].default == poi.DEFAULT_RADIUS
     assert (poi.search_nearby_pois_tool.parameters["properties"]["radius"]["default"]
@@ -581,8 +660,8 @@ def test_radius_is_clamped():
 
 def test_the_impl_applies_the_ceiling(monkeypatch):
     seen = []
-    monkeypatch.setattr(poi, "query_osm_pois",
-                        lambda lat, lon, ptype, radius, **k: seen.append(radius) or [])
+    monkeypatch.setattr(poi, "query_osm_pois_batch",
+                        lambda lat, lon, ptypes, radius, **k: seen.append(radius) or {})
     poi.search_nearby_pois_impl(address="x", poi_type="supermarket", radius=5000,
                                 latitude=51.5224, longitude=-0.1186)
     assert seen == [poi.MAX_RADIUS]

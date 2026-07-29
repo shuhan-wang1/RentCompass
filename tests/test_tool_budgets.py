@@ -292,25 +292,23 @@ def test_poi_internal_deadline_partial(monkeypatch):
     monkeypatch.setattr(sp.time, "monotonic", lambda: clock["t"])
     monkeypatch.setattr(sp.time, "sleep", lambda s: clock.__setitem__("t", clock["t"] + s))
     monkeypatch.setattr(sp, "POI_SEARCH_BUDGET_S", 5.0)
-    monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5, -0.1))
 
-    calls = []
+    # Geocoding overruns the 5s budget on its own, so no request may be issued at all. The
+    # fetch is a single batched round-trip now, so this is what a partial return looks like:
+    # all-or-nothing, and the tool has to say so rather than report an empty neighbourhood.
+    def slow_geocode(addr, **_kw):
+        clock["t"] += 6.0
+        return (51.5, -0.1)
 
-    def fake_query(lat, lon, ptype, *a, **k):
-        calls.append(ptype)
-        clock["t"] += 3.0  # each Overpass query costs 3s of the shared budget
-        return [{"name": f"{ptype} A", "icon": "X", "distance_display": "10m"}]
+    monkeypatch.setattr(sp, "geocode_address", slow_geocode)
+    monkeypatch.setattr(sp, "query_osm_pois_batch",
+                        lambda *a, **k: pytest.fail("issued a request past the deadline"))
 
-    monkeypatch.setattr(sp, "query_osm_pois", fake_query)
-
-    # poi_type="all" -> [restaurant, supermarket, convenience, cafe]; budget 5s:
-    # restaurant @1000 -> 1003, pace -> 1003.3, supermarket @1003.3 -> 1006.3,
-    # convenience @1006.3 >= deadline(1005) -> skip convenience + cafe.
+    # poi_type="all" -> [restaurant, supermarket, convenience, cafe]
     res = sp.search_nearby_pois_impl(address="x", poi_type="all")
 
-    assert calls == ["restaurant", "supermarket"]  # nothing issued past the deadline
     assert res["partial"] is True
-    assert set(res["skipped_types"]) == {"convenience", "cafe"}
+    assert set(res["skipped_types"]) == {"restaurant", "supermarket", "convenience", "cafe"}
     assert "budget" in res["note"].lower()
     assert "convenience" in res["note"].lower() or "Convenience Store" in res["note"]
 
@@ -319,16 +317,16 @@ def test_poi_no_deadline_when_fast(monkeypatch):
     """Well within budget -> no partial flag, all types queried."""
     import core.tools.search_nearby_pois as sp
     monkeypatch.setattr(sp, "geocode_address", lambda addr, **_kw: (51.5, -0.1))
-    monkeypatch.setattr(sp, "POI_PACING_S", 0.0)
     calls = []
 
-    def fake_query(lat, lon, ptype, *a, **k):
-        calls.append(ptype)
-        return [{"name": f"{ptype} A", "icon": "X", "distance_display": "10m"}]
+    def fake_batch(lat, lon, ptypes, *a, **k):
+        calls.append(list(ptypes))
+        return {p: [{"name": f"{p} A", "icon": "X", "distance_display": "10m"}]
+                for p in ptypes}
 
-    monkeypatch.setattr(sp, "query_osm_pois", fake_query)
+    monkeypatch.setattr(sp, "query_osm_pois_batch", fake_batch)
     res = sp.search_nearby_pois_impl(address="x", poi_type="restaurant")
-    assert calls == ["restaurant"]
+    assert calls == [["restaurant"]]
     assert res.get("partial") is not True
     assert "skipped_types" not in res
 
@@ -345,9 +343,9 @@ def test_event_loop_not_blocked_by_poi(monkeypatch):
 
     def blocking_query(*a, **k):
         time.sleep(0.4)  # REAL blocking call; must run in a thread, not on the loop
-        return []
+        return {}
 
-    monkeypatch.setattr(sp, "query_osm_pois", blocking_query)
+    monkeypatch.setattr(sp, "query_osm_pois_batch", blocking_query)
 
     async def run():
         ticks = {"n": 0}

@@ -4,6 +4,7 @@ Tool: Search Nearby POIs (使用 OpenStreetMap)
 """
 
 import os
+import re
 import threading
 import time
 import math
@@ -18,12 +19,17 @@ from geopy.exc import GeocoderTimedOut
 # constant at 200 under a comment claiming 500, the impl signature at 300, and the tool
 # schema at 500 (so the model's calls ran at 500 and nothing in the code said so).
 #
-# 300 m is deliberately tighter than the old 500: it is about a four-minute walk, which is
-# what "有超市吗" actually means, and a smaller circle returns fewer elements per request.
-# The ceiling stops the model asking for a 2 km circle, which would be both slow and a
-# misleading answer to "nearby".
-DEFAULT_RADIUS = int(os.getenv("POI_DEFAULT_RADIUS_M", "300"))
-MAX_RADIUS = int(os.getenv("POI_MAX_RADIUS_M", "800"))
+# 200 m is about a two-and-a-half-minute walk — the honest reading of "楼下有超市吗" — and it
+# is also the cheapest thing we can ask Overpass for: element count grows with the square of
+# the radius, so 200 m returns roughly a fifth of what 500 m did. The public mirrors are the
+# binding constraint (504s and read timeouts under load), so a tighter circle is both the
+# better answer and the faster one.
+#
+# The ceiling is 200 too: "nearby" is not negotiable upward by the model, and a wider circle
+# is exactly what used to blow the call budget. Both are env-overridable — set
+# POI_MAX_RADIUS_M to let explicit wider requests through again.
+DEFAULT_RADIUS = int(os.getenv("POI_DEFAULT_RADIUS_M", "200"))
+MAX_RADIUS = int(os.getenv("POI_MAX_RADIUS_M", "200"))
 
 
 def clamp_radius(radius) -> int:
@@ -84,9 +90,9 @@ POI_BUDGET_MIN_USABLE_FRACTION = 0.5
 # exactly the tie this module now exists to avoid.
 _POI_SEARCH_BUDGET_ENV = os.getenv("POI_SEARCH_BUDGET_S")
 POI_SEARCH_BUDGET_S = float(_POI_SEARCH_BUDGET_ENV) if _POI_SEARCH_BUDGET_ENV else None
-# Politeness pacing between consecutive Overpass mirror hits (seconds); runs inside the
-# executor thread, so it never blocks the event loop.
-POI_PACING_S = float(os.getenv("POI_PACING_S", "0.3"))
+# (Politeness pacing between mirror hits used to live here, for the per-type loop. The
+# batched fetch issues one request, and maps_service._pace_request already paces the mirror
+# walk inside it, so there is nothing left for this module to sleep between.)
 # Per-type Overpass result TTLs. A found set is stable for days; an EMPTY set gets minutes,
 # because "nothing of this type nearby" and "a busy mirror answered 200 with nothing" are
 # indistinguishable from inside one selector.
@@ -246,68 +252,107 @@ def _is_major_brand(name: str, brand: str, poi_type: str) -> bool:
 
 
 # POI 类型映射
+#
+# Each type is defined STRUCTURALLY (``tags`` + optional ``cuisine`` regex) and its Overpass
+# selector string is derived from that below. The batched fetch has to do two things with one
+# definition — put a selector into the union query, and decide locally which returned element
+# belongs to which type — and a hand-written selector string next to a hand-written predicate
+# is precisely the pair that drifts. ``query`` stays available and byte-identical to what it
+# was, so the single-type path and its tests are unaffected.
 POI_TYPES = {
     "restaurant": {
-        "query": '["amenity"="restaurant"]',
+        "tags": {"amenity": "restaurant"},
         "icon": "🍽️",
         "name": "Restaurant"
     },
     "chinese_restaurant": {
-        "query": '["amenity"="restaurant"]["cuisine"~"chinese|asian",i]',
+        "tags": {"amenity": "restaurant"},
+        "cuisine": "chinese|asian",
         "icon": "🥢",
         "name": "Chinese Restaurant"
     },
     "supermarket": {
-        "query": '["shop"="supermarket"]',
+        "tags": {"shop": "supermarket"},
         "icon": "🛒",
         "name": "Supermarket"
     },
     "convenience": {
-        "query": '["shop"="convenience"]',
+        "tags": {"shop": "convenience"},
         "icon": "🏪",
         "name": "Convenience Store"
     },
     "cafe": {
-        "query": '["amenity"="cafe"]',
+        "tags": {"amenity": "cafe"},
         "icon": "☕",
         "name": "Cafe"
     },
     "pharmacy": {
-        "query": '["amenity"="pharmacy"]',
+        "tags": {"amenity": "pharmacy"},
         "icon": "💊",
         "name": "Pharmacy"
     },
     "gym": {
-        "query": '["leisure"="fitness_centre"]',
+        "tags": {"leisure": "fitness_centre"},
         "icon": "🏋️",
         "name": "Gym"
     },
     "park": {
-        "query": '["leisure"="park"]',
+        "tags": {"leisure": "park"},
         "icon": "🌳",
         "name": "Park"
     },
     "bus_stop": {
-        "query": '["highway"="bus_stop"]',
+        "tags": {"highway": "bus_stop"},
         "icon": "🚌",
         "name": "Bus Stop"
     },
     "tube_station": {
-        "query": '["station"="subway"]',
+        "tags": {"station": "subway"},
         "icon": "🚇",
         "name": "Tube Station"
     },
     "bank": {
-        "query": '["amenity"="bank"]',
+        "tags": {"amenity": "bank"},
         "icon": "🏦",
         "name": "Bank"
     },
     "atm": {
-        "query": '["amenity"="atm"]',
+        "tags": {"amenity": "atm"},
         "icon": "💳",
         "name": "ATM"
     }
 }
+
+
+def _base_selector(spec: Dict) -> str:
+    """The plain tag filter for a type, WITHOUT its cuisine narrowing.
+
+    This is what goes into the batched union: ``chinese_restaurant`` is a strict subset of
+    ``restaurant``, so asking for the wider set once (and splitting locally by cuisine) keeps
+    one clause where two would otherwise return overlapping elements.
+    """
+    return ''.join(f'["{k}"="{v}"]' for k, v in spec["tags"].items())
+
+
+for _spec in POI_TYPES.values():
+    _spec["query"] = _base_selector(_spec) + (
+        f'["cuisine"~"{_spec["cuisine"]}",i]' if _spec.get("cuisine") else "")
+del _spec
+
+
+def _element_matches(element: Dict, spec: Dict) -> bool:
+    """Does this returned element belong to the type ``spec`` describes?
+
+    The local equivalent of the type's Overpass selector — the batched query asks for a union
+    and this is what splits the response back apart. Kept in step with the wire format by
+    reading the same ``tags``/``cuisine`` fields the selector is derived from.
+    """
+    tags = element.get("tags") or {}
+    if not all(tags.get(k) == v for k, v in spec["tags"].items()):
+        return False
+    if spec.get("cuisine"):
+        return bool(re.search(spec["cuisine"], tags.get("cuisine") or "", re.I))
+    return True
 
 
 # ─── Geocode memo ────────────────────────────────────────────────────
@@ -556,8 +601,7 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     # ending in "查询周边设施时超时了" with results that had been fetched and discarded;
     # (2) the model re-asks the same address with a narrower type list in a later batch, which
     # the in-batch merge cannot see.
-    cache_key = create_cache_key("poi_type_v1", round(lat, 4), round(lon, 4),
-                                 poi_type, int(radius))
+    cache_key = _poi_type_cache_key(lat, lon, poi_type, radius)
     cached = get_from_cache(cache_key)
     if isinstance(cached, dict) and cached.get("pois") is not None:
         age = time.time() - float(cached.get("fetched_at") or 0)
@@ -598,8 +642,23 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
         print(f"❌ OSM 查询失败 ({poi_type}): {e}")
         raise RuntimeError(f"Overpass API request failed for {poi_type}: {e}") from e
 
+    unique_pois = _elements_to_pois(data.get("elements", []), poi_type,
+                                    origin_lat, origin_lon)
+
+    _cache_type_result(cache_key, unique_pois, unconfirmed_empty)
+    return unique_pois
+
+
+def _elements_to_pois(elements: List[Dict], poi_type: str,
+                      origin_lat: float, origin_lon: float) -> List[Dict]:
+    """Overpass elements -> this type's POI dicts: named only, brand-filtered for
+    supermarket/convenience, distance-sorted, deduped by name.
+
+    Shared by the single-type and the batched fetch so the two cannot disagree about what a
+    POI looks like. Callers pass elements ALREADY narrowed to ``poi_type``.
+    """
     pois = []
-    for element in data.get("elements", []):
+    for element in elements:
         tags = element.get("tags", {})
         name = tags.get("name", "Unnamed")
         brand = tags.get("brand", "")
@@ -649,18 +708,124 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
             seen_names.add(name_key)
             unique_pois.append(poi)
 
-    # Cached only on a real answer from Overpass. An empty list is cached too (no gym within
-    # 300 m is a legitimate answer) but at a much shorter TTL, because an empty 200 from a busy
-    # mirror looks identical here — the same reason the amenity map refuses to trust an
-    # all-zero cached cell. An empty result that NO mirror could confirm is not cached at all:
-    # storing it would let one bad minute answer for the whole TTL.
-    if not (unconfirmed_empty and not unique_pois):
-        try:
-            set_to_cache(cache_key, {"fetched_at": time.time(), "pois": unique_pois})
-        except Exception as e:
-            print(f"  [OSM POI] 结果缓存写入失败（忽略）: {e}")
-
     return unique_pois
+
+
+def _cache_type_result(cache_key: str, pois: List[Dict], unconfirmed_empty: bool) -> None:
+    """Cached only on a real answer from Overpass. An empty list is cached too (no gym within
+    200 m is a legitimate answer) but at a much shorter TTL, because an empty 200 from a busy
+    mirror looks identical here — the same reason the amenity map refuses to trust an
+    all-zero cached cell. An empty result that NO mirror could confirm is not cached at all:
+    storing it would let one bad minute answer for the whole TTL."""
+    if unconfirmed_empty and not pois:
+        return
+    try:
+        set_to_cache(cache_key, {"fetched_at": time.time(), "pois": pois})
+    except Exception as e:
+        print(f"  [OSM POI] 结果缓存写入失败（忽略）: {e}")
+
+
+def _poi_type_cache_key(lat: float, lon: float, poi_type: str, radius: int) -> str:
+    """The per-type result cache key. One definition, because the batched fetch reads and
+    writes exactly the cells the single-type path does."""
+    return create_cache_key("poi_type_v1", round(lat, 4), round(lon, 4),
+                            poi_type, int(radius))
+
+
+def _build_batch_query(lat: float, lon: float, poi_types: List[str], radius: int) -> str:
+    """ONE Overpass union covering every requested type.
+
+    Deduped on the BASE selector, so asking for restaurant + chinese_restaurant emits one
+    ``amenity=restaurant`` clause rather than two overlapping ones. ``nwr`` + ``out center``
+    matches what the amenity map has been running successfully against these same mirrors.
+    """
+    seen = set()
+    parts = []
+    for ptype in poi_types:
+        selector = _base_selector(POI_TYPES[ptype])
+        if selector in seen:
+            continue
+        seen.add(selector)
+        parts.append(f"  nwr{selector}(around:{radius},{lat},{lon});")
+    return ("[out:json][timeout:25];\n"
+            "(\n" + "\n".join(parts) + "\n);\n"
+            "out center;")
+
+
+def query_osm_pois_batch(lat: float, lon: float, poi_types: List[str],
+                         radius: int = DEFAULT_RADIUS,
+                         origin_lat: Optional[float] = None,
+                         origin_lon: Optional[float] = None,
+                         timeout: Optional[float] = None,
+                         deadline: Optional[float] = None) -> Dict[str, List[Dict]]:
+    """Every requested POI type in ONE Overpass round-trip.
+
+    Replaces a per-type serial loop that could not fit its own budget: four types x (mirror
+    rotation + pacing) inside a 25s per-call cap expired with NOTHING fetched, while the
+    amenity map — one batched union over ten categories — answered the same area in 6.1s
+    against the same mirrors, minutes after the loop had sidelined all five of them. Worse,
+    each attempt the loop issued had its read timeout clamped down to the shrinking remainder
+    (measured at 7.96s against a 30s ceiling), so a healthy-but-ordinary mirror read as a
+    ReadTimeout and got sidelined for 300s — poisoning the pool for the next call too.
+
+    Returns ``{poi_type: [poi, ...]}`` for every requested type. A type with no matching
+    element in a SUCCESSFUL response is a genuine zero and maps to ``[]``.
+    """
+    if origin_lat is None:
+        origin_lat = lat
+    if origin_lon is None:
+        origin_lon = lon
+
+    # Per-type cells are read first and only the misses go on the wire: the model re-asks the
+    # same address with a narrower type list in a later batch, and a turn that was cut off
+    # should not re-pay for the types that already completed.
+    results: Dict[str, List[Dict]] = {}
+    missing: List[str] = []
+    for ptype in poi_types:
+        cached = get_from_cache(_poi_type_cache_key(lat, lon, ptype, radius))
+        if isinstance(cached, dict) and cached.get("pois") is not None:
+            age = time.time() - float(cached.get("fetched_at") or 0)
+            ttl = POI_RESULT_TTL_S if cached["pois"] else POI_EMPTY_RESULT_TTL_S
+            if age < ttl:
+                print(f"  ⚡ [OSM POI] 缓存命中 {ptype} @ {round(lat, 4)},{round(lon, 4)} "
+                      f"({len(cached['pois'])} 个)")
+                results[ptype] = list(cached["pois"])
+                continue
+        missing.append(ptype)
+
+    if not missing:
+        return results
+
+    query = _build_batch_query(lat, lon, missing, radius)
+    req_timeout = POI_OVERPASS_TIMEOUT_S if timeout is None else max(1, int(timeout))
+    eff_timeout = min(POI_OVERPASS_TIMEOUT_S, req_timeout)
+
+    # expect_nonempty: a union spanning several distinct selectors around a real UK address
+    # returning zero is a busy mirror, not reality — the same call the amenity map makes.
+    unconfirmed_empty = False
+    try:
+        data = overpass_request(query, timeout=eff_timeout, expect_nonempty=True,
+                                deadline=deadline)
+    except OverpassEmpty as e:
+        data = e.payload
+        unconfirmed_empty = True
+        print(f"  ⚠️ [OSM POI] {','.join(missing)}: 所有可达镜像都返回空结果 —— "
+              f"按'确实没有'处理，但不写入缓存")
+    except OverpassError as e:
+        # API 失败（如缺 User-Agent 导致的 406、超时、限流）不能伪装成"附近没有" —— 抛出让上层报错
+        print(f"❌ OSM 查询失败 ({','.join(missing)}): {e}")
+        raise RuntimeError(f"Overpass API request failed for {','.join(missing)}: {e}") from e
+
+    elements = data.get("elements", [])
+    for ptype in missing:
+        spec = POI_TYPES[ptype]
+        matched = [el for el in elements if _element_matches(el, spec)]
+        pois = _elements_to_pois(matched, ptype, origin_lat, origin_lon)
+        results[ptype] = pois
+        _cache_type_result(_poi_type_cache_key(lat, lon, ptype, radius),
+                           pois, unconfirmed_empty)
+
+    return results
 
 
 def _format_distance(distance_m: float) -> str:
@@ -941,26 +1106,27 @@ def search_nearby_pois_impl(
 
         print(f"🔍 [OSM POI] 将查询类型: {types_to_query}")
 
-        # 查询每种类型（传递原点坐标用于距离计算）。共享一个 monotonic 截止时间：
-        # 截止后不再发起任何 per-type 请求，把剩余类型如实标为 skipped。
+        # 一次批量查询所有类型（传递原点坐标用于距离计算）。仍然共享同一个 monotonic
+        # 截止时间：预算已经耗尽时不发起请求，把类型如实标为 skipped。
         skipped: List[str] = []
-        for idx, ptype in enumerate(types_to_query):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                # No per-type request may be issued after the deadline.
-                skipped = list(types_to_query[idx:])
-                print(f"  ⏱️ [OSM POI] 预算已用尽，跳过剩余类型: {skipped}")
-                break
-            # Clamp THIS request to what is left, so the last one issued cannot outlive the
-            # deadline that let it start and hand the batch window the win.
-            pois = query_osm_pois(lat, lon, ptype, radius, origin_lat=lat, origin_lon=lon,
-                                  timeout=remaining, deadline=deadline)
-            if pois:
-                results[ptype] = pois[:5]  # 每种类型最多 5 个
-                print(f"  ✅ 找到 {len(pois)} 个 {POI_TYPES[ptype]['name']}")
-            # 只有还有下一个类型且仍在预算内时才 pace，避免无谓地把时间推过截止点。
-            if idx < len(types_to_query) - 1 and time.monotonic() < deadline:
-                time.sleep(POI_PACING_S)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            # No request may be issued after the deadline.
+            skipped = list(types_to_query)
+            print(f"  ⏱️ [OSM POI] 预算已用尽，跳过全部类型: {skipped}")
+        else:
+            # ONE round-trip for every type. The per-type loop this replaces spent its whole
+            # budget rotating mirrors and finished nothing — see query_osm_pois_batch. The
+            # request is still clamped to what is left, so it cannot outlive the deadline
+            # that let it start and hand the batch window the win.
+            fetched = query_osm_pois_batch(lat, lon, types_to_query, radius,
+                                           origin_lat=lat, origin_lon=lon,
+                                           timeout=remaining, deadline=deadline)
+            for ptype in types_to_query:
+                pois = fetched.get(ptype) or []
+                if pois:
+                    results[ptype] = pois[:5]  # 每种类型最多 5 个
+                    print(f"  ✅ 找到 {len(pois)} 个 {POI_TYPES[ptype]['name']}")
 
         note = _skipped_note(skipped, budget_s) if skipped else None
 

@@ -78,6 +78,42 @@ class OverpassEmpty(OverpassError):
 OVERPASS_MIRROR_COOLDOWN_S = float(os.getenv("OVERPASS_MIRROR_COOLDOWN_S", "300"))
 OVERPASS_MIN_INTERVAL_S = float(os.getenv("OVERPASS_MIN_INTERVAL_S", "1.0"))
 
+# ─── One slow mirror may not eat the whole walk ──────────────────────────────
+# Measured 2026-07-29 against the SAME 200 m query, twice round the pool:
+#
+#   overpass-api.de        HTTP 504     after 7.6s / 8.0s   (first in the pool)
+#   overpass.kumi.systems  ReadTimeout  past 30s   / 30s    (second in the pool)
+#   overpass.osm.ch        HTTP 200 in 0.2s but elements=0  (an empty-200 liar)
+#   lz4.overpass-api.de    HTTP 200 in 2.3s, 11 elements
+#   z.overpass-api.de      HTTP 200 in 1.3-3.7s, 11 elements
+#
+# The two mirrors tried FIRST are the two that never answer, and under a deadline the walk
+# handed each of them everything that was left — so a 25s POI budget was gone before it ever
+# reached the two that answer the same query in seconds. Giving each attempt a fair SHARE of
+# the remaining time instead of all of it is what lets the walk get past a dead head of pool,
+# and it stays correct whichever mirror is the sick one tomorrow.
+#
+# A timeout is only evidence about a mirror if the attempt got a reasonable window. Below
+# this, WE hung up early (deadline pressure), and sidelining it for 300s on that basis is
+# what emptied the pool in production.
+OVERPASS_ATTEMPT_FLOOR_S = float(os.getenv("OVERPASS_ATTEMPT_FLOOR_S", "6.0"))
+
+# An empty 200 is AMBIGUOUS, and the search radius decides which way it usually leans.
+# Measured 2026-07-29, Cannon Road WD18 (a real listing address from the logs), same query at
+# three radii:
+#
+#   200 m  -> overpass-api.de: 0 elements   |  500 m -> lz4 + z: 6 (Aldi, Lidl, Tesco Extra)
+#   1000 m -> overpass-api.de, lz4, z: 38   |  overpass.osm.ch: 0 at EVERY radius
+#
+# So overpass-api.de's empty at 200 m was the TRUTH, and osm.ch's empty at 1000 m — where
+# three other mirrors saw 38 — was a lie. Identical response shape, opposite meanings, and
+# nothing in the body separates them. Rotating to another mirror is what tells them apart;
+# a 300 s outage cooldown does not, it just sidelines whichever mirror told the truth. That
+# barely showed at a 1.5 km radius, where empty really was almost always broken. At 200 m,
+# "nothing within a two-minute walk" is an ordinary answer, and the long cooldown was
+# emptying the pool on correct responses.
+OVERPASS_EMPTY_COOLDOWN_S = float(os.getenv("OVERPASS_EMPTY_COOLDOWN_S", "30"))
+
 import threading as _threading  # noqa: E402  (kept next to the state it guards)
 
 _mirror_lock = _threading.Lock()
@@ -111,12 +147,13 @@ def _mirrors_to_try() -> list:
     return live or ordered
 
 
-def _penalise_mirror(url: str, reason: str) -> None:
+def _penalise_mirror(url: str, reason: str, cooldown: Optional[float] = None) -> None:
+    cooldown = OVERPASS_MIRROR_COOLDOWN_S if cooldown is None else cooldown
     with _mirror_lock:
-        _mirror_penalty[url] = time.monotonic() + OVERPASS_MIRROR_COOLDOWN_S
+        _mirror_penalty[url] = time.monotonic() + cooldown
         if url in _mirror_preferred:
             _mirror_preferred.remove(url)
-    print(f"  [Overpass] mirror sidelined {OVERPASS_MIRROR_COOLDOWN_S:.0f}s: "
+    print(f"  [Overpass] mirror sidelined {cooldown:.0f}s: "
           f"{url.split('/')[2]} ({reason[:60]})")
 
 
@@ -178,20 +215,28 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
     for round_idx in range(max_rounds):
         if _expired():
             break
-        for url in _mirrors_to_try():
+        walk = _mirrors_to_try()
+        for mirror_idx, url in enumerate(walk):
             if _expired():
                 last_err = f"{last_err or 'no mirror answered'} (deadline reached)"
                 break
+            attempt_timeout = float(timeout)
             try:
                 _pace_request()
-                # Each ATTEMPT is clamped to what is left, not just the walk. A 30s read
-                # timeout on two slow mirrors otherwise overshoots the deadline by minutes
-                # even though no request was ISSUED late — measured at 29s against a 17s
-                # budget before this clamp.
-                attempt_timeout = timeout
+                # Each ATTEMPT is clamped to a fair SHARE of what is left, not to all of it.
+                # Clamping to the whole remainder still bounds the walk (a 30s read timeout
+                # on two slow mirrors otherwise overshoots the deadline by minutes — measured
+                # at 29s against a 17s budget), but it lets the FIRST mirror spend everything
+                # and leaves nothing for the one that would have answered. See the pool
+                # measurements by OVERPASS_ATTEMPT_FLOOR_S.
                 if deadline is not None:
-                    attempt_timeout = max(1.0, min(float(timeout),
-                                                   deadline - time.monotonic()))
+                    remaining = deadline - time.monotonic()
+                    share = remaining / max(1, len(walk) - mirror_idx)
+                    attempt_timeout = min(float(timeout),
+                                          max(OVERPASS_ATTEMPT_FLOOR_S, share))
+                    # Never overshoot the deadline itself, even if the floor is bigger than
+                    # what is left — the caller's budget outranks the floor.
+                    attempt_timeout = max(1.0, min(attempt_timeout, remaining))
                 resp = requests.post(
                     url, data={"data": query}, headers=_OSM_HEADERS,
                     timeout=attempt_timeout
@@ -227,13 +272,26 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
                     last_err = f"{url} -> HTTP 200 but empty elements (expected results)"
                     if clean_empty is None:
                         clean_empty = payload
-                    _penalise_mirror(url, "empty 200 where results were expected")
+                    # Short cooldown on purpose: the rotation below is what distinguishes a
+                    # lying mirror from a genuinely empty cell, not the sideline. See
+                    # OVERPASS_EMPTY_COOLDOWN_S.
+                    _penalise_mirror(url, "empty 200 where results were expected",
+                                     cooldown=OVERPASS_EMPTY_COOLDOWN_S)
                     continue
                 _reward_mirror(url)
                 return payload
             except requests.exceptions.RequestException as e:
                 last_err = f"{url} -> {e}"
-                _penalise_mirror(url, type(e).__name__)
+                # A timeout on an attempt we cut short is not evidence about the mirror: we
+                # hung up early because the deadline was near, not because it was slow.
+                # Sidelining it for 300s on that basis is what emptied the pool — one
+                # production call sidelined all five mirrors in turn (measured: a read
+                # timeout at 7.96s against a 30s ceiling) and the next call then opened
+                # against a fully penalised pool. A timeout only counts once the attempt had
+                # a window a healthy mirror could actually have answered in.
+                if not (isinstance(e, requests.exceptions.Timeout)
+                        and attempt_timeout < min(float(timeout), OVERPASS_ATTEMPT_FLOOR_S)):
+                    _penalise_mirror(url, type(e).__name__)
                 continue
         # Exponential backoff before retrying the whole mirror pool.
         if round_idx < max_rounds - 1 and not _expired():

@@ -8,8 +8,10 @@ REPO=/home/shuhan/uk_rent_recommendation
 CONF=rentcompass.co.uk.conf
 SRC="$REPO/deploy/nginx/$CONF"
 
-echo "===== [1/5] Who is listening on :443 (must be freed before HTTPS) ====="
-ss -ltnp | grep ':443' || echo "  (:443 is now FREE — good for TLS)"
+# nginx should own :443 since the port swap (Xray moved to 8443) — see
+# deploy/migrate_ports_443.sh. Anything else here means TLS will not come up.
+echo "===== [1/5] Who is listening on :443 (expect nginx, or nothing yet) ====="
+ss -ltnp | grep ':443' || echo "  (:443 is FREE — good for TLS)"
 
 echo "===== [2/5] Installing vhost ====="
 [ -f "$SRC" ] || { echo "ERROR: $SRC not found"; exit 1; }

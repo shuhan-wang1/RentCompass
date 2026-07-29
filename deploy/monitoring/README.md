@@ -115,7 +115,7 @@ bash deploy/monitoring/check_install_drift.sh --write-manifest   # then commit
 | Area | Check | Alert priority |
 |------|-------|----------------|
 | Monitor build | running `src=` matches `MON_EXPECTED_SRC_SHA`, when declared | err (3) |
-| Public `:8443/health` | HTTP 200 **and** `x-agent-arch` == `MON_EXPECTED_PUBLIC_ARCH` (default `fc_loop`) | err (3) |
+| Public `:443/health` | HTTP 200 **and** `x-agent-arch` == `MON_EXPECTED_PUBLIC_ARCH` (default `fc_loop`) | err (3) |
 | Local `:5001/health` | 200 + `x-agent-arch: legacy` (+ version) | err (3) |
 | Local `:5002/health` | 200 + `x-agent-arch: fc_loop` (internal) | warning (4) |
 | Pool identity | fc vs `FC_CANARY_SHA`, legacy vs `LEGACY_APP_SHA`, edge vs expected pool | err (3) / warn (4) |

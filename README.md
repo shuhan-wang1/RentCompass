@@ -10,7 +10,7 @@ A rental agent that searches real listings, plans commutes on the live TfL
 network, checks crime data, compares neighbourhoods — and shows you the evidence
 behind every number it gives you.
 
-### [**→ rentcompass.co.uk:8443**](https://rentcompass.co.uk:8443)
+### [**→ rentcompass.co.uk**](https://rentcompass.co.uk)
 
 *No signup — open it and start typing, in English or 中文.*
 
@@ -116,16 +116,22 @@ the web layer loads at runtime.
 
 ## 2. Live service — and how to tell what is running
 
-The public deployment is **`https://rentcompass.co.uk:8443`**, served by host
-nginx in front of one of two application pools. TLS is on `8443` rather than
-`443` because another service on the box holds `443`; port `80` answers ACME
-challenges and 301-redirects everything else to `:8443`.
+The public deployment is **`https://rentcompass.co.uk`** — TLS on the default port
+`443`, served by host nginx in front of one of two application pools. Port `80`
+answers ACME challenges and 301-redirects everything else to HTTPS.
+
+The site ran on `:8443` until 2026-07-29 because Xray held `443`.
+`deploy/migrate_ports_443.sh` swapped the two, so **`:8443` is Xray now** and no
+longer serves the site — an old `:8443` link returns a `www.apple.com` certificate,
+which is Xray's REALITY masquerade relaying an unauthenticated handshake, not a
+misissued cert. Nothing in the application binds or builds a port: the frontend
+calls relative paths, so only the deploy layer names `443`.
 
 **Never trust a document (including this one) for what is deployed — ask the
 service.** Every response, including `/health`, carries its own provenance:
 
 ```bash
-curl -sk -D- -o /dev/null https://rentcompass.co.uk:8443/health | grep -i x-agent-
+curl -sk -D- -o /dev/null https://rentcompass.co.uk/health | grep -i x-agent-
 # x-agent-arch:    fc_loop          <- which architecture answered
 # x-agent-version: <40-char sha>    <- the exact commit the image was built from
 ```
@@ -146,7 +152,7 @@ pool stays warm as the rollback target ([Appendix A](#appendix-a--the-legacy-arc
                     Browser (app/unified-ui.html)
                               │  https
                               ▼
-                   nginx (host, TLS, one upstream)
+              nginx :443 (host, TLS, one upstream)
                               │
          ┌────────────────────┴────────────────────┐
          ▼                                         ▼
@@ -831,8 +837,8 @@ bash deploy/monitoring/check_install_drift.sh
 sudo install -m 0755 deploy/monitoring/rentcompass-monitor.sh /usr/local/bin/rentcompass-monitor.sh
 ```
 
-TLS and nginx provisioning: `deploy/setup_nginx_http.sh`, `deploy/setup_tls_8443.sh`,
-`deploy/DEPLOY_DOMAIN.md`.
+TLS and nginx provisioning: `deploy/setup_nginx_http.sh`, `deploy/setup_tls.sh`,
+`deploy/migrate_ports_443.sh`, `deploy/DEPLOY_DOMAIN.md`.
 
 ---
 
@@ -1033,7 +1039,7 @@ Educational and research use.
 
 <img src="docs/assets/rentcompass-logo.svg" alt="" width="44" height="44">
 
-**RentCompass** · [rentcompass.co.uk:8443](https://rentcompass.co.uk:8443)
+**RentCompass** · [rentcompass.co.uk](https://rentcompass.co.uk)
 
 *Built as a study in shipping an agent responsibly: real data, stated evidence,
 bounded turns, and a rollout you can undo.*

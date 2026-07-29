@@ -27,7 +27,7 @@ set -uo pipefail
 CONF="${SWITCH_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
 TEST_CMD="${SWITCH_TEST_CMD:-sudo nginx -t}"
 RELOAD_CMD="${SWITCH_RELOAD_CMD:-sudo systemctl reload nginx}"
-VERIFY_URL="${SWITCH_VERIFY_URL:-https://127.0.0.1:8443/health}"
+VERIFY_URL="${SWITCH_VERIFY_URL:-https://127.0.0.1/health}"
 CURL_OPTS="${SWITCH_CURL_OPTS:--sk}"
 WRITE_CMD="${SWITCH_WRITE_CMD:-sudo tee}"          # reads new conf on stdin, writes to $1
 HEALTH_FMT="${SWITCH_POOL_HEALTH_FMT:-http://127.0.0.1:%s/health}"

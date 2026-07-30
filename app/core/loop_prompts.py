@@ -128,12 +128,13 @@ MEMORY_CONFIRM_RULE = (
     "precise text you would store and ask the user to confirm — do not paraphrase it."
 )
 
-# Latency + routing-quality rules (fc-loop A/B): long-term memory is ALREADY injected
-# into the context block, so a recall_memory first hop is a wasted LLM round-trip.
+# Long-term memory is injected into the FC context when available. The rule must not
+# claim that a missing block is evidence that no memory exists: recall_memory is the
+# recovery path for an empty block or a fact absent from it.
 MEMORY_IN_CONTEXT_RULE = (
-    "MEMORY ALREADY PROVIDED: What we remember about the user is already provided in your "
-    "context (the WHAT I REMEMBER block). " + NO_RECALL_MARKER + " unless the user asks about a "
-    "specific remembered fact that is ABSENT from the provided context."
+    "MEMORY CONTEXT: Use the WHAT I REMEMBER block when it is present. "
+    + NO_RECALL_MARKER + " merely to repeat a fact it contains. If the block is empty "
+    "or the needed remembered fact is absent, call recall_memory."
 )
 
 # Loop-churn guard: parallelise independent calls, cap repeat web_search, answer from context.

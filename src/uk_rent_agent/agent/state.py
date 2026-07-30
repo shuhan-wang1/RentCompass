@@ -101,6 +101,7 @@ def create_initial_state(
     user_id: str = "default",
     session_id: str = "default",
     request_id: str | None = None,
+    memory_context: str = "",
 ) -> AgentState:
     return AgentState(
         user_query=user_query,
@@ -127,7 +128,10 @@ def create_initial_state(
         context_tainted=False,
         critic_attempts=0,
         verdict={},
-        memory_context="",
+        # Long-term memory is retrieved at the HTTP boundary, where user and branch
+        # identity are available. Keep it as its own channel: the FC message builder
+        # consumes this value directly, while `user_query` remains the user's text.
+        memory_context=memory_context,
         plan=[],
         loop_turn=0,
         observations=[],

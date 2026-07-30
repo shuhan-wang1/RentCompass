@@ -124,12 +124,16 @@ def check_safety_impl(
         print(f"   ❌ 安全检查失败: {e}")
         return {
             'address': location,
-            'safety_score': 50,
+            # An API exception contains no crime observation. A neutral-looking
+            # number (formerly 50) is still a fabricated measurement and may be
+            # presented downstream as real evidence.
+            'safety_score': None,
             'safety_level': 'Unknown',
             'crime_data': {},
             'error': str(e),
             'scoring_explanation': f"Error occurred: {e}",
-            'safety_analysis': "Unable to perform safety analysis due to an error."
+            'safety_analysis': "Unable to perform safety analysis due to an error.",
+            'retryable': True,
         }
 
 

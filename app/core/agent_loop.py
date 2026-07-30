@@ -227,9 +227,8 @@ def _behaviour_directive(reply_language: str) -> str:
         "steps once you see the results), answer directly, or call ask_user to ask a single "
         "clarifying question. Fill tool parameters from the context block; never invent "
         "listings, addresses, or prices. If a tool reports missing info, correct the call or "
-        "ask_user — do not loop the same call. What we remember about the user is already in "
-        "the context block; do NOT call recall_memory unless the user asks about a remembered "
-        "fact absent from that block. Do not use emoji.\n"
+        "ask_user — do not loop the same call. Use the memory block when it is present; "
+        "if it is empty or the needed remembered fact is absent, call recall_memory. Do not use emoji.\n"
         "=== END BEHAVIOUR ==="
     )
 

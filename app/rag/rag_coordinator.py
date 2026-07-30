@@ -78,28 +78,16 @@ class RAGCoordinator:
 
             score = prop.get('similarity_score', 0) * 0.4  # Semantic weight
 
-            # Rule-based boosting from criteria
-            if 'max_travel_time' in criteria and prop.get('travel_time_minutes', 999) <= criteria['max_travel_time']:
-                score += 0.3
-
             if 'max_budget' in criteria and prop_price <= max_budget:
                 score += 0.2  # within budget
             else:
                 score += 0.05  # slightly over budget: small boost only
 
-            # Safety concerns boost from soft preferences (per-property crime signal)
-            soft_prefs = criteria.get('soft_preferences', '')
-            crime_trend = prop.get('crime_data_summary', {}).get('crime_trend')
-
-            if soft_prefs:
-                if isinstance(soft_prefs, list):
-                    soft_prefs_str = ' '.join(str(p) for p in soft_prefs).lower()
-                else:
-                    soft_prefs_str = str(soft_prefs).lower()
-
-                if 'safe' in soft_prefs_str:
-                    if crime_trend == 'decreasing':
-                        score += 0.1
+            # Retrieval happens before commute annotation and before any police
+            # lookup, so neither signal exists here. They used to look like ranking
+            # terms but were permanently no-ops in production. Verified commute is
+            # ranked later by core.ranking; safety remains a separately sourced
+            # check_safety dimension rather than pretending a listing has crime data.
 
             prop['final_score'] = score
 

@@ -700,6 +700,45 @@ def is_city_level_area(name) -> bool:
     return str(name or "").strip().lower() in set(CITY_SLUGS.values())
 
 
+# Cities whose OnTheMarket area page is far too large for CANONICAL_SCRAPE_LIMIT to be a
+# REPRESENTATIVE sample of it. Only these need the destination-expansion treatment; every
+# other city slug we scrape holds a whole-city page that comfortably fits the cap, so its
+# top-slice genuinely is the city and expanding it would only make the search slower.
+#
+# Membership is a claim about POOL SIZE vs the scrape cap, not about city size in general —
+# recheck it if CANONICAL_SCRAPE_LIMIT changes or a city's listing volume grows.
+UNSEARCHABLE_CITY_SLUGS = {"london"}
+
+
+def is_unsearchable_city_area(name) -> bool:
+    """True when `name` is a city too big to harvest as ONE area (see #78).
+
+    The canonical harvest takes a capped top-slice of the area page and OnTheMarket does
+    not order that page geographically, so for a city this size the sample scatters across
+    the whole metro. A commute filter then removes nearly all of it and the caller reports
+    an empty city — while the same query against a neighbourhood slug returns a full page.
+    Callers use this to decide to search NEAR THE COMMUTE DESTINATION instead.
+
+    Accepts a name, a slug, or a classify_place() result dict, and resolves through the
+    same curated tables as the scraper, so "Central London" and "伦敦" land here too.
+    """
+    if isinstance(name, dict):
+        # slug/name BEFORE city — the opposite of is_city_level_area, and deliberately so.
+        # The question here is whether the area the user ASKED FOR is too big to harvest,
+        # not which city it sits in. classify_place("Camden") carries city="london"; reading
+        # city first would expand every London neighbourhood as if it were the whole city.
+        name = name.get("slug") or name.get("name") or name.get("city")
+    raw = str(name or "").strip()
+    if not raw:
+        return False
+    if raw.lower() in UNSEARCHABLE_CITY_SLUGS:
+        return True
+    # Network-free for everything except an uncurated CJK name, which resolve_location
+    # settles through the memoized OSM tier.
+    slug, _city = resolve_location(raw)
+    return (slug or "").strip().lower() in UNSEARCHABLE_CITY_SLUGS
+
+
 def _dest_result(kind: str, slug: str, city: str | None,
                  address: str | None, source: str) -> dict:
     """Assemble a DESTINATION result, guaranteeing a non-empty geocodable address."""

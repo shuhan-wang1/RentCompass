@@ -15,7 +15,7 @@ import logging
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 from uk_rent_agent.tools.idempotency import IdempotencyStore
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def _model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel]:
             annotation,
             Field(default=default, description=definition.get("description")),
         )
-    return create_model(f"{''.join(part.title() for part in name.split('_'))}Input", **fields)
+    return create_model(f"{''.join(part.title() for part in name.split('_'))}Input", __config__=ConfigDict(extra="forbid"), **fields)
 
 
 # JSON-schema constraint keywords the pydantic round-trip drops (it only captures
@@ -304,6 +304,21 @@ class Tool:
                 logger.info("Tool %s succeeded (%.0fms)", self.name, execution_time)
                 
                 logical_success = not isinstance(result, dict) or result.get('success', True) is not False
+                # Many network-backed tools translate an exception into the public
+                # {"success": false, "error": ...} envelope instead of raising.
+                # Until this branch existed, their max_retries/retry_safe metadata was
+                # inert: only thrown exceptions reached the retry loop. Read-only
+                # tools may safely retry an explicit (or legacy-default) failure; a
+                # tool can opt out with retryable=false for a final domain result
+                # such as "no listings" or "need clarification".
+                if (not logical_success and attempt < attempts - 1
+                        and self.retry_on_error and self.retry_safe
+                        and result.get("retryable", True)):
+                    wait_time = 2 ** attempt
+                    logger.info("Retrying %s after retryable logical failure in %ss",
+                                self.name, wait_time)
+                    await asyncio.sleep(wait_time)
+                    continue
                 if logical_success and self.output_model is not None:
                     result = self.output_model.model_validate(result).model_dump()
                 if logical_success and claimed:

@@ -2063,12 +2063,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     except Exception as _e:
         print(f"[Memory] retrieve skipped: {_e}")
 
-    # 装配最终查询：历史分支选择 / 记忆前缀 / 滚动摘要插入 / token 预算裁剪都由 assemble 负责，
-    # 无裁剪时与旧的手拼字符串逐字节一致。滚动摘要取自本会话 extracted_context（后台线程写入）。
+    # Assemble the legacy query as before. fc_loop has a dedicated state channel for
+    # long-term memory; putting the same block into user_query would show it twice in
+    # its message array and makes the raw user turn ambiguous to downstream tools.
+    _is_fc_loop = os.getenv("AGENT_ARCH", "legacy") == "fc_loop"
     query_with_history = assemble_context(
         user_message=user_message,
         history=history_snapshot,
-        memory_block=_mem_block,
+        memory_block="" if _is_fc_loop else _mem_block,
         has_property_context=has_property_context,
         rolling_summary=(persistent_snapshot.get('extracted_context') or {}).get('rolling_summary'),
     )
@@ -2097,6 +2099,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         user_id=user_id,
         session_id=conversation_id,
         request_id=request_id,
+        memory_context=_mem_block if _is_fc_loop else "",
     )
 
     # ── Phase 2: the slow LLM call — NO turn lock held here ──────

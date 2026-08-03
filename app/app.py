@@ -1718,6 +1718,51 @@ def _build_results_context(recommendations):
     return prev_results_context, structured_results
 
 
+# A reply has to name at least this many DISTINCT cached listings before we treat it as a
+# listing enumeration. 1 would fire on "tell me more about Woburn Place" — a single-listing
+# follow-up, where repainting the panel would clobber a newer result set the user is
+# looking at. 2+ is the shape of "here are the properties I found".
+_NARRATED_LISTING_MIN_HITS = 2
+# Below this length a name is too generic to match on ("Bow", "Kew"), so a stray word in
+# prose would count as a hit.
+_NARRATED_LISTING_MIN_NAME_LEN = 4
+
+
+def _narrates_cached_listings(response_text, last_results,
+                              min_hits=_NARRATED_LISTING_MIN_HITS):
+    """True when `response_text` enumerates listings that are already in `last_results`.
+
+    ISSUE #78. A turn that calls NO tool still has the previous turn's listings in its
+    context (we put them there — see _build_results_context), so the model can answer
+    "show me those flats again" by re-narrating them. tool_data is then empty, the payload
+    carries no recommendations, and the frontend's paint branch never runs: the user reads
+    five properties in the chat while the right-hand panel shows whatever was there before
+    (in the reported case, an empty form-search result). Detecting the narration lets the
+    caller re-attach the set the model is actually talking about.
+
+    Matching is on the leading address segment ("Woburn Place, London WC1H" -> "Woburn
+    Place"), the same key _build_results_context feeds the model, counted over DISTINCT
+    names so a set holding one address twice can't reach the threshold on its own.
+    """
+    if not response_text or not last_results:
+        return False
+    haystack = str(response_text).lower()
+    seen = set()
+    for rec in last_results:
+        if not isinstance(rec, dict):
+            continue
+        name = str(rec.get('address') or '').split(',')[0].strip()
+        if len(name) < _NARRATED_LISTING_MIN_NAME_LEN:
+            continue
+        key = name.lower()
+        if key in seen or key not in haystack:
+            continue
+        seen.add(key)
+        if len(seen) >= min_hits:
+            return True
+    return False
+
+
 def _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
     """Build + persist the post-turn context snapshot AFTER _write_back_turn ran.
 
@@ -2151,6 +2196,27 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                        AGENT_ARCH)
 
     print(f"[LangGraph] Response Type: {response_type}")
+
+    # ── ISSUE #78: a re-narration must repaint the panel it is narrating ──
+    # No tool ran this turn, so tool_data is empty — but the model still enumerated
+    # listings, because the previous turn's results live in its context. Shipping that
+    # reply with no recommendations is what left the chat listing five flats next to an
+    # empty results panel. Re-attach the cached set so text and panel agree again.
+    #
+    # The FULL cached set is re-attached, not just the named subset: a search turn already
+    # paints all N while the reply details only the top few (that is what the working turn
+    # in the report did), so the panel must not shrink just because no tool ran. Placed
+    # ahead of _write_back_turn and the conversation-store write so the persisted message
+    # carries them too — otherwise a page reload would reproduce the empty panel.
+    if not recommendations:
+        try:
+            _cached = _get_session(user_id, conversation_id).last_results
+            if _narrates_cached_listings(response_text, _cached):
+                recommendations = _cached
+                response_type = 'search'
+                print(f"[state] 🔁 无工具调用但复述了 {len(_cached)} 条历史房源 → 回填面板")
+        except Exception as _e:  # never turn a good turn into an error over a repaint
+            print(f"[state] listing re-attach skipped: {_e}")
 
     # ── Phase 3: build the results context + atomic write-back of L2 state ──
     # Extracted into _write_back_turn so the deterministic /api/search_direct endpoint

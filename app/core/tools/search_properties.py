@@ -1806,6 +1806,61 @@ async def search_properties_impl(
                     limit=int(os.getenv("AREA_RECO_LIMIT", "4")),
                 ))
 
+        RANK_HEADROOM_S = float(os.getenv("SEARCH_RANK_HEADROOM_S", "1.5"))
+        PER_AREA_EST_S = float(os.getenv("SEARCH_PER_AREA_SCRAPE_EST_S", "6.0"))
+        from core.scraping.on_demand import SCRAPE_BUDGET_S as _SCRAPE_BUDGET_S
+        from core.scraping.on_demand import (
+            is_unsearchable_city_area as _is_unsearchable_city_area,
+        )
+
+        # 🆕 ISSUE #78: 裸城市 "London" + 通勤目标 → 改搜目的地附近的真实居住区。
+        # ----------------------------------------------------------------
+        # OnTheMarket 的 /to-rent/property/london/ 页面是存在的，抓取也确实有结果——但
+        # canonical 抓取只取该页 CANONICAL_SCRAPE_LIMIT 行的顶部切片，而那一页并不按地理
+        # 排序，于是这几十行散落在 Feltham / Hayes / Barking / Harrow。任何"到某校 ≤N 分钟"
+        # 的过滤都会把它们几乎全部滤掉，用户被告知"伦敦没有房源"，而同样条件换成一个真实
+        # 居住区 slug 却能返回满满一页。这是 _band_rescue 已经处理过的"价格段被切掉"的
+        # 通勤版孪生问题。
+        #
+        # 用户写"London，≤20 分钟到 UCL"，真实意图就是"UCL 附近能住的地方"。所以当区域是
+        # 一个大到无法整体抓取的城市、且本轮有通勤目标时，改用推荐器解出的目的地邻近区域来搜。
+        # 仅限伦敦：Manchester / Edinburgh 这类城市页本身就装得下整城，展开只会把一次能用的
+        # 搜索换成一次更慢的搜索。推荐器没有及时给出结果时静默退回原样，最坏情况就是今天的行为。
+        _city_expanded_to = []
+        if _reco_task is not None and len(search_areas) == 1 and \
+                _is_unsearchable_city_area(search_areas[0]):
+            _expand_cap = min(
+                float(os.getenv("SEARCH_CITY_EXPAND_TIMEOUT_S", "20")),
+                max(0.0, _time_left() - RANK_HEADROOM_S - PER_AREA_EST_S),
+            )
+            # asyncio.wait (NOT wait_for): on timeout it leaves the task pending instead of
+            # cancelling it, so the area-recommendation collector further down can still
+            # await the same task. A cancelled task would raise CancelledError there —
+            # a BaseException, which its `except Exception` would NOT catch.
+            if _expand_cap > 0:
+                _done, _ = await asyncio.wait({_reco_task}, timeout=_expand_cap)
+                if _reco_task in _done:
+                    try:
+                        _city_expanded_to = _reco_task.result() or []
+                    except Exception as _e:
+                        print(f"   ⚠️ 城市展开失败（退回裸城市搜索）: {_e}")
+                        _city_expanded_to = []
+            if _city_expanded_to:
+                _expanded = []
+                for _item in _city_expanded_to:
+                    _name = (_item.get('slug') or _item.get('name') or '').strip()
+                    if _name and _name.lower() not in {x.lower() for x in _expanded}:
+                        _expanded.append(_name)
+                if _expanded:
+                    print(f"   🗺️ 裸城市 '{search_areas[0]}' + 通勤目标『{commute_target}』"
+                          f" → 改搜邻近居住区 {_expanded[:MAX_SEARCH_AREAS]}")
+                    search_areas = _expanded[:MAX_SEARCH_AREAS]
+                    # _criteria() closes over BOTH names and is what the frontend writes
+                    # back into the search form, so the primary area has to move too —
+                    # otherwise the form keeps saying "London" while every result came
+                    # from Bloomsbury, which is the same lie in a different pane.
+                    search_area = search_areas[0]
+
         # 🆕 多区域 DEADLINE-AWARE 抓取；每行打上来源区域标签（_search_area），合并后统一排序/
         # 标注/过滤。绝不因单个冷缓存区域的慢抓取而让整个工具被 batch 预算 ABANDON（H2）：
         #   Phase 1（近乎免费）：仅查缓存（cache_only）——已缓存的区域总是被服务；
@@ -1814,9 +1869,6 @@ async def search_properties_impl(
         #                    使一个慢区域吃不掉整个窗口；来不及抓的区域标记为 incomplete（≠ empty）。
         print(f"\n🌐 [SEARCH] 抓取实时房源: areas={search_areas}, beds={min_beds}-{max_beds}, "
               f"£{scrape_min}-{scrape_max}/month")
-        RANK_HEADROOM_S = float(os.getenv("SEARCH_RANK_HEADROOM_S", "1.5"))
-        PER_AREA_EST_S = float(os.getenv("SEARCH_PER_AREA_SCRAPE_EST_S", "6.0"))
-        from core.scraping.on_demand import SCRAPE_BUDGET_S as _SCRAPE_BUDGET_S
 
         def _tag(_a, res):
             for _r in res.get('rows', []):

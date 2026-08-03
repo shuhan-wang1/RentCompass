@@ -4082,9 +4082,14 @@ def _make_format_output_node():
                     and tool_name == "search_properties"
                     and isinstance(raw_data, dict)
                     and raw_data.get("status") == "found"
-                    and raw_data.get("recommendations")):
+                    and (raw_data.get("recommendations")
+                         or raw_data.get("over_budget_alternatives"))):
+                _recs = apply_preference_filter(raw_data.get("recommendations") or [], prefs)
+                if not _recs:  # ISSUE #78 — over-budget-only still repaints the panel
+                    _recs = apply_preference_filter(
+                        raw_data.get("over_budget_alternatives") or [], prefs)
                 tool_data = {
-                    "recommendations": apply_preference_filter(raw_data["recommendations"], prefs),
+                    "recommendations": _recs,
                     "search_criteria": raw_data.get("search_criteria", {}),
                     "area_recommendations": raw_data.get("area_recommendations", []),
                 }
@@ -4112,8 +4117,17 @@ def _make_format_output_node():
                 # ('missing_area') from the soft recommended-criteria gate ('soft_criteria').
                 if raw_data.get('clarification_kind') is not None:
                     tool_data['clarification_kind'] = raw_data.get('clarification_kind')
-            elif raw_data.get('status') == 'found' and raw_data.get('recommendations'):
-                recs = apply_preference_filter(raw_data['recommendations'], prefs)
+            elif (raw_data.get('status') == 'found'
+                    and (raw_data.get('recommendations')
+                         or raw_data.get('over_budget_alternatives'))):
+                recs = apply_preference_filter(raw_data.get('recommendations') or [], prefs)
+                if not recs:
+                    # ISSUE #78 (same defect as format_output_fc_node): nothing inside
+                    # budget but near-misses exist. Ship them instead of an empty panel —
+                    # they carry match_type='soft_violation' + budget_status, so the
+                    # frontend renders them as amber over-budget cards.
+                    recs = apply_preference_filter(
+                        raw_data.get('over_budget_alternatives') or [], prefs)
                 # The summary is now fully localized (zh/en) and already includes the
                 # right-panel hint, so it's used verbatim (no English-only suffix bolted on).
                 response = raw_data.get('summary') or f"I found {len(recs)} properties."

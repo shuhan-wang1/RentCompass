@@ -2843,7 +2843,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             raw = a.get("raw_data")
             if not isinstance(raw, dict):
                 continue
-            if raw.get("status") == "found" and raw.get("recommendations") and search_found is None:
+            # ISSUE #78: an over-budget-ONLY result is still a result. The tool reports
+            # `status: found, recommendations: [], over_budget_alternatives: [...]` when
+            # nothing lands inside budget but near-misses exist; requiring a non-empty
+            # `recommendations` here dropped the whole artifact, so tool_data stayed empty
+            # and the panel got nothing — while the model, which sees the alternatives in
+            # the tool message, described them in the reply.
+            if (raw.get("status") == "found" and search_found is None
+                    and (raw.get("recommendations") or raw.get("over_budget_alternatives"))):
                 search_found = raw
             if raw.get("status") == "need_clarification" and search_clarify is None:
                 search_clarify = raw
@@ -2851,7 +2858,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 break
 
         if search_found is not None:
-            recs = apply_preference_filter(search_found["recommendations"], prefs)
+            recs = apply_preference_filter(search_found.get("recommendations") or [], prefs)
+            if not recs:
+                # Nothing in budget: ship the near-misses as the panel content rather than
+                # an empty panel. Each row already carries match_type='soft_violation' and
+                # a budget_status string, which the frontend renders as an amber
+                # over-budget card — so they can never read as in-budget matches. Scoped to
+                # the empty case on purpose: when real matches exist the alternatives stay
+                # out of the panel, exactly as before.
+                recs = apply_preference_filter(
+                    search_found.get("over_budget_alternatives") or [], prefs)
             tool_data = {
                 "recommendations": recs,
                 "search_criteria": search_found.get("search_criteria", {}),

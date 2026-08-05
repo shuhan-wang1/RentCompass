@@ -1,0 +1,38 @@
+{
+  "benchmark_schema_version": "rentcompass/benchmark/v5",
+  "cases_sha256": "196bf65309a26162eafa6661de8d1e269968a0319925fcf0c7e345e26c040584",
+  "closed_fixture_guard_commit": "95f80f0",
+  "evaluator_commit_before_freeze": "8968a75866f8c3d37a9d7088fd78514a41e8e936",
+  "execution_mode": "one monitored process in a detached clean worktree; raw output external to repository; no resume or concurrent runner.",
+  "fixture_boundary": "Fixtured cases deny every unrecorded tool deterministically; no live-tool fallback is permitted.",
+  "formal_case_authoring_commit": "8968a75866f8c3d37a9d7088fd78514a41e8e936",
+  "formal_model_requests_before_freeze": 0,
+  "historical_exclusions": {
+    "base98": "development/tuning corpus",
+    "v2": "historical only and pre-product-freeze",
+    "v3": "operationally invalid: overlapping execution processes",
+    "v4": "operationally invalid: unbound live tools in fixtured cases"
+  },
+  "manifest_sha256": "80e735a66e9ee331b66fefca9accc434a7b5d7846fc4884b1c8293fd356bdd9b",
+  "preflight_gate_passed": true,
+  "preflight_report_sha256": "8ecc288843e6b092ac304f75e4a4f3558ee973ad5e18917b4d7f882b9a8b2da7",
+  "preregistration_commit": "315c9db",
+  "product_sha": "1c4e42bd82c9cc6be9230365b5d288c6739816fe",
+  "run_command": [
+    "python -m evaluation.run_benchmark",
+    "--live",
+    "--arch",
+    "fc_loop",
+    "--config",
+    "routed_models",
+    "--cases",
+    "evaluation/benchmark/holdout_v5/cases_holdout_v5.jsonl",
+    "--case-schema",
+    "evaluation/benchmark/schema_v5.json",
+    "--fixtures-dir",
+    "evaluation/benchmark/holdout_v5/fixtures",
+    "--out",
+    "/tmp/rentcompass-holdout-v5-live-output"
+  ],
+  "status": "frozen_before_formal_run"
+}

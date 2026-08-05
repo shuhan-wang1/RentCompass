@@ -115,3 +115,9 @@ def test_v3_exact_interval_does_not_collapse_at_a_boundary():
     ci = m.exact_ci(33, 33)
     assert 0.89 < ci["lo"] < 0.90
     assert ci["hi"] == 1.0
+
+
+def test_v3_exact_interval_has_ordered_nonboundary_bounds():
+    ci = m.exact_ci(50, 60)
+    assert 0.71 < ci["lo"] < 0.72
+    assert 0.91 < ci["hi"] < 0.93

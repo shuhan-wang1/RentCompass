@@ -322,20 +322,37 @@ def _beta_quantile(a: int, b: int, p: float) -> float:
 def exact_ci(successes: int, n: int) -> dict | None:
     if n <= 0:
         return None
-    # Equivalent to Beta quantiles, implemented as binomial inversion.
+    if not 0 <= successes <= n:
+        raise ValueError("successes must be between 0 and n")
+
+    # Clopper--Pearson equals inversion of binomial tails.  The lower tail
+    # probability increases with p; the upper CDF decreases with p, so their
+    # bisections intentionally move in opposite directions.
     def cdf(k: int, p: float) -> float:
         return sum(math.comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(k + 1))
-    def solve(fn):
+
+    def solve_increasing(fn):
         lo, hi = 0.0, 1.0
         for _ in range(120):
             mid = (lo + hi) / 2
-            if fn(mid) > 0:
+            if fn(mid) > .025:
                 hi = mid
             else:
                 lo = mid
         return (lo + hi) / 2
-    lo = 0.0 if successes == 0 else solve(lambda p: (1 - cdf(successes - 1, p)) - .025)
-    hi = 1.0 if successes == n else solve(lambda p: cdf(successes, p) - .025)
+
+    def solve_decreasing(fn):
+        lo, hi = 0.0, 1.0
+        for _ in range(120):
+            mid = (lo + hi) / 2
+            if fn(mid) > .025:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2
+
+    lo = 0.0 if successes == 0 else solve_increasing(lambda p: 1 - cdf(successes - 1, p))
+    hi = 1.0 if successes == n else solve_decreasing(lambda p: cdf(successes, p))
     return {"successes": successes, "n": n, "rate": successes / n, "lo": lo, "hi": hi,
             "method": "Clopper-Pearson exact binomial 95%"}
 

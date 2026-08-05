@@ -32,6 +32,8 @@ _MONEY = re.compile(r"(?:GBP\s*|£\s*)([0-9][0-9,]*(?:\.[0-9]+)?)", re.I)
 _MINUTES = re.compile(r"\b([0-9]+(?:\.[0-9]+)?)\s*(?:minutes?|mins?)\b", re.I)
 _NO_RESULT = ("no match", "no results", "no listings", "none found", "couldn't find",
               "could not find", "没有", "无匹配", "查不到", "无法找到")
+_QUESTION_WORDS = ("which", "what", "where", "how much", "how many", "please provide",
+                   "tell me", "哪", "什么", "哪里", "多少", "请提供")
 
 
 def listing_id(row: Mapping[str, Any]) -> str | None:
@@ -226,6 +228,34 @@ def _numeric_control(case: Mapping[str, Any], run: Mapping[str, Any], records, e
                                                 "unsupported_minutes": bad_minutes}
 
 
+def _clarification_completion(oracle: Mapping[str, Any], run: Mapping[str, Any],
+                              answer: str) -> bool:
+    """Score the user-facing clarification, independently of an internal tool call.
+
+    ``ask_user`` is an implementation-side effect, not the user-visible completion
+    itself.  A legacy response may therefore be ``response_type=answer`` while still
+    correctly asking one focused question.  New cases opt into this explicitly with
+    ``accept_text_question``; the older frozen cases retain their original contract.
+    """
+    markers = [str(x).casefold() for x in (oracle.get("markers_any") or [])]
+    if markers and not any(marker in answer for marker in markers):
+        return False
+    response_type = str(run.get("response_type") or "").casefold()
+    if response_type in {"clarification", "question"}:
+        return True
+    if response_type != "answer" or not oracle.get("accept_text_question"):
+        return False
+    # A text-only clarification must not claim that a search ran or expose a result card.
+    if _successful_event(run, "search_properties"):
+        return False
+    payload = run.get("tool_data")
+    if isinstance(payload, dict) and any(payload.get(k) for k in
+                                         ("recommendations", "eligible_recommendations")):
+        return False
+    return ("?" in answer or "？" in answer or
+            any(word in answer for word in _QUESTION_WORDS))
+
+
 def _task_completion(case: Mapping[str, Any], run: Mapping[str, Any], truth_set: dict,
                      output: set[str], parse_errors: List[str], required_tool: bool) -> bool:
     oracle = case.get("completion_oracle") or {}
@@ -246,9 +276,7 @@ def _task_completion(case: Mapping[str, Any], run: Mapping[str, Any], truth_set:
         markers = [str(x).casefold() for x in (oracle.get("ack_markers_any") or ["saved", "记住"])]
         return required_tool and any(marker in answer for marker in markers)
     if kind == "clarification":
-        markers = [str(x).casefold() for x in (oracle.get("markers_any") or [])]
-        return (str(run.get("response_type") or "") in {"clarification", "question"} and
-                (not markers or any(marker in answer for marker in markers)))
+        return _clarification_completion(oracle, run, answer)
     return False
 
 

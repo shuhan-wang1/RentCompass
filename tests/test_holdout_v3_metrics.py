@@ -111,6 +111,37 @@ def test_v3_no_result_has_a_frozen_completion_branch_and_missing_run_fails():
     assert any("missing run" in e for e in absent["errors"])
 
 
+def test_clarification_contract_accepts_explicit_text_question_without_ask_user():
+    case = _case(kind="clarification", metrics=["task_completion"], contract={})
+    case["completion_oracle"] = {
+        "kind": "clarification", "markers_any": ["area"],
+        "accept_text_question": True,
+    }
+    case["user_query"] = "I have not chosen an area or budget yet."
+    run = {
+        "final_answer": "Which area should I search first?",
+        "response_type": "answer", "tool_data": {}, "tool_call_events": [],
+    }
+    row = m.grade_case(case, run, [])
+    assert row["outcomes"]["task_completion"]["pass"] is True
+
+
+def test_clarification_contract_rejects_text_question_after_search():
+    case = _case(kind="clarification", metrics=["task_completion"], contract={})
+    case["completion_oracle"] = {
+        "kind": "clarification", "markers_any": ["area"],
+        "accept_text_question": True,
+    }
+    run = {
+        "final_answer": "Which area should I search first?",
+        "response_type": "answer", "tool_data": {},
+        "tool_call_events": [{"tool": "search_properties", "success": True,
+                               "timeout": False}],
+    }
+    row = m.grade_case(case, run, [])
+    assert row["outcomes"]["task_completion"]["pass"] is False
+
+
 def test_v3_exact_interval_does_not_collapse_at_a_boundary():
     ci = m.exact_ci(33, 33)
     assert 0.89 < ci["lo"] < 0.90

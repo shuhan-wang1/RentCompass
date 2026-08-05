@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9583 Lantern Quay, Dewberry Vale, London V8 3AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho5-034-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£5,888/month",
+            "price_raw": 5888,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-034-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-034-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9584 Lantern Quay, Dewberry Vale, London V8 3AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho5-034-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£5,956/month",
+            "price_raw": 5956,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-034-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-034-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9585 Lantern Quay, Dewberry Vale, London V8 3AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 2,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho5-034-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£26,225/month",
+            "price_raw": 26225,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-034-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-034-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9586 Lantern Quay, Dewberry Vale, London V8 3AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho5-034-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£29,125/month",
+            "price_raw": 29125,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-034-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-034-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9587 Lantern Quay, Linden Cross, London V8 3AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho5-034-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£32,025/month",
+            "price_raw": 32025,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-034-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-034-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9578 Lantern Quay, Dewberry Vale, London V8 3AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho5-034-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£34,925/month",
+            "price_raw": 34925,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-034-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-034-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9579 Lantern Quay, Dewberry Vale, London V8 3AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho5-034-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£37,825/month",
+            "price_raw": 37825,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-034-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-034-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Dewberry Vale",
+          "bedrooms": 1,
+          "max_budget": 5925,
+          "move_in_date": "2026-09-23",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Dewberry Vale.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

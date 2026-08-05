@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9209 Beacon Quay, Linden Cross, London V4 5AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho5-012-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£5,250/month",
+            "price_raw": 5250,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-012-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9210 Beacon Quay, Linden Cross, London V4 5AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho5-012-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£5,318/month",
+            "price_raw": 5318,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-012-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9211 Beacon Quay, Linden Cross, London V4 5AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 2,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho5-012-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£25,587/month",
+            "price_raw": 25587,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-012-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9212 Beacon Quay, Linden Cross, London V4 5AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho5-012-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£28,487/month",
+            "price_raw": 28487,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-012-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9213 Beacon Quay, Tansy Gardens, London V4 5AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho5-012-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£31,387/month",
+            "price_raw": 31387,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-012-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9204 Beacon Quay, Linden Cross, London V4 5AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-11-04",
+            "available_from_normalized": "2026-11-04",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho5-012-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£34,287/month",
+            "price_raw": 34287,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-012-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9205 Beacon Quay, Linden Cross, London V4 5AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho5-012-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£37,187/month",
+            "price_raw": 37187,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-012-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Linden Cross",
+          "bedrooms": 1,
+          "commute_destination": "Moorgate",
+          "max_budget": 5287,
+          "max_commute_time": 37,
+          "move_in_date": "2026-10-07",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Linden Cross.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-a",
+        "duration_minutes": 35,
+        "from_address": "9209 Beacon Quay, Linden Cross, London V4 5AB",
+        "origin_eval_listing_id": "ho5-012-a",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-b",
+        "duration_minutes": 46,
+        "from_address": "9210 Beacon Quay, Linden Cross, London V4 5AB",
+        "origin_eval_listing_id": "ho5-012-b",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-c",
+        "duration_minutes": 46,
+        "from_address": "9211 Beacon Quay, Linden Cross, London V4 5AB",
+        "origin_eval_listing_id": "ho5-012-c",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-d",
+        "duration_minutes": 46,
+        "from_address": "9212 Beacon Quay, Linden Cross, London V4 5AB",
+        "origin_eval_listing_id": "ho5-012-d",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-e",
+        "duration_minutes": 46,
+        "from_address": "9213 Beacon Quay, Tansy Gardens, London V4 5AB",
+        "origin_eval_listing_id": "ho5-012-e",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-f",
+        "duration_minutes": 46,
+        "from_address": "9204 Beacon Quay, Linden Cross, London V4 5AB",
+        "origin_eval_listing_id": "ho5-012-f",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-012-g",
+        "duration_minutes": 46,
+        "from_address": "9205 Beacon Quay, Linden Cross, London V4 5AB",
+        "origin_eval_listing_id": "ho5-012-g",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

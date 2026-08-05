@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9872 Estuary Quay, Umber Hill, London V7 4AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho5-051-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£6,381/month",
+            "price_raw": 6381,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-051-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-051-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9873 Estuary Quay, Umber Hill, London V7 4AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho5-051-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£6,449/month",
+            "price_raw": 6449,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-051-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-051-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9874 Estuary Quay, Umber Hill, London V7 4AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 2,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho5-051-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£26,718/month",
+            "price_raw": 26718,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-051-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-051-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9875 Estuary Quay, Umber Hill, London V7 4AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho5-051-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£29,618/month",
+            "price_raw": 29618,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-051-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-051-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9876 Estuary Quay, Cloverlea, London V7 4AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho5-051-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£32,518/month",
+            "price_raw": 32518,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-051-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-051-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9867 Estuary Quay, Umber Hill, London V7 4AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-12-11",
+            "available_from_normalized": "2026-12-11",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho5-051-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£35,418/month",
+            "price_raw": 35418,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-051-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-051-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9868 Estuary Quay, Umber Hill, London V7 4AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho5-051-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£38,318/month",
+            "price_raw": 38318,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-051-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-051-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Umber Hill",
+          "bedrooms": 1,
+          "max_budget": 6418,
+          "move_in_date": "2026-11-13",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Umber Hill.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

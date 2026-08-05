@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9685 Fountain Quay, Jet Hollow, London V5 1AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-10-11",
+            "available_from_normalized": "2026-10-11",
+            "bedrooms": 1,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho5-040-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£6,062/month",
+            "price_raw": 6062,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-040-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-040-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9686 Fountain Quay, Jet Hollow, London V5 1AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-10-11",
+            "available_from_normalized": "2026-10-11",
+            "bedrooms": 1,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho5-040-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£6,130/month",
+            "price_raw": 6130,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-040-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-040-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9687 Fountain Quay, Jet Hollow, London V5 1AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-10-11",
+            "available_from_normalized": "2026-10-11",
+            "bedrooms": 2,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho5-040-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£26,399/month",
+            "price_raw": 26399,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-040-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-040-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9688 Fountain Quay, Jet Hollow, London V5 1AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-10-11",
+            "available_from_normalized": "2026-10-11",
+            "bedrooms": 1,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho5-040-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£29,299/month",
+            "price_raw": 29299,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-040-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-040-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9689 Fountain Quay, Redwood Bay, London V5 1AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-11",
+            "available_from_normalized": "2026-10-11",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho5-040-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£32,199/month",
+            "price_raw": 32199,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-040-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-040-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9680 Fountain Quay, Jet Hollow, London V5 1AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-11-08",
+            "available_from_normalized": "2026-11-08",
+            "bedrooms": 1,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho5-040-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£35,099/month",
+            "price_raw": 35099,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-040-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-040-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9681 Fountain Quay, Jet Hollow, London V5 1AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-10-11",
+            "available_from_normalized": "2026-10-11",
+            "bedrooms": 1,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho5-040-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£37,999/month",
+            "price_raw": 37999,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-040-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-040-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Jet Hollow",
+          "bedrooms": 1,
+          "max_budget": 6099,
+          "move_in_date": "2026-10-11",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Jet Hollow.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9345 Juniper Quay, Tansy Gardens, London V3 5AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho5-020-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£5,482/month",
+            "price_raw": 5482,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-020-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9346 Juniper Quay, Tansy Gardens, London V3 5AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho5-020-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£5,550/month",
+            "price_raw": 5550,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-020-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9347 Juniper Quay, Tansy Gardens, London V3 5AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 2,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho5-020-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£25,819/month",
+            "price_raw": 25819,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-020-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9348 Juniper Quay, Tansy Gardens, London V3 5AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho5-020-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£28,719/month",
+            "price_raw": 28719,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-020-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9349 Juniper Quay, Bramble Point, London V3 5AB",
+            "area_normalized": "Bramble Point",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Bramble Point",
+            "city": "London",
+            "eval_listing_id": "ho5-020-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£31,619/month",
+            "price_raw": 31619,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-020-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9340 Juniper Quay, Tansy Gardens, London V3 5AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-11-28",
+            "available_from_normalized": "2026-11-28",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho5-020-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£34,519/month",
+            "price_raw": 34519,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-020-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9341 Juniper Quay, Tansy Gardens, London V3 5AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho5-020-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£37,419/month",
+            "price_raw": 37419,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-020-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Tansy Gardens",
+          "bedrooms": 1,
+          "commute_destination": "Euston",
+          "max_budget": 5519,
+          "max_commute_time": 29,
+          "move_in_date": "2026-10-31",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Tansy Gardens.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-a",
+        "duration_minutes": 27,
+        "from_address": "9345 Juniper Quay, Tansy Gardens, London V3 5AB",
+        "origin_eval_listing_id": "ho5-020-a",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-b",
+        "duration_minutes": 38,
+        "from_address": "9346 Juniper Quay, Tansy Gardens, London V3 5AB",
+        "origin_eval_listing_id": "ho5-020-b",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-c",
+        "duration_minutes": 38,
+        "from_address": "9347 Juniper Quay, Tansy Gardens, London V3 5AB",
+        "origin_eval_listing_id": "ho5-020-c",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-d",
+        "duration_minutes": 38,
+        "from_address": "9348 Juniper Quay, Tansy Gardens, London V3 5AB",
+        "origin_eval_listing_id": "ho5-020-d",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-e",
+        "duration_minutes": 38,
+        "from_address": "9349 Juniper Quay, Bramble Point, London V3 5AB",
+        "origin_eval_listing_id": "ho5-020-e",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-f",
+        "duration_minutes": 38,
+        "from_address": "9340 Juniper Quay, Tansy Gardens, London V3 5AB",
+        "origin_eval_listing_id": "ho5-020-f",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-020-g",
+        "duration_minutes": 38,
+        "from_address": "9341 Juniper Quay, Tansy Gardens, London V3 5AB",
+        "origin_eval_listing_id": "ho5-020-g",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

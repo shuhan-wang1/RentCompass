@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9974 Kite Quay, Amber Brook, London V4 2AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho5-057-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£6,555/month",
+            "price_raw": 6555,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-057-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-057-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9975 Kite Quay, Amber Brook, London V4 2AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho5-057-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£6,623/month",
+            "price_raw": 6623,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-057-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-057-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9976 Kite Quay, Amber Brook, London V4 2AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 2,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho5-057-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£26,892/month",
+            "price_raw": 26892,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-057-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-057-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9977 Kite Quay, Amber Brook, London V4 2AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho5-057-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£29,792/month",
+            "price_raw": 29792,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-057-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-057-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9978 Kite Quay, Evergreen Park, London V4 2AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho5-057-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£32,692/month",
+            "price_raw": 32692,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-057-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-057-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9969 Kite Quay, Amber Brook, London V4 2AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho5-057-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£35,592/month",
+            "price_raw": 35592,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-057-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-057-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9970 Kite Quay, Amber Brook, London V4 2AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho5-057-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£38,492/month",
+            "price_raw": 38492,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-057-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-057-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Amber Brook",
+          "bedrooms": 1,
+          "max_budget": 6592,
+          "move_in_date": "2026-09-12",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Amber Brook.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

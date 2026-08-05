@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9294 Gossamer Quay, Quill End, London V9 2AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-017-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£5,395/month",
+            "price_raw": 5395,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-017-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9295 Gossamer Quay, Quill End, London V9 2AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-017-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£5,463/month",
+            "price_raw": 5463,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-017-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9296 Gossamer Quay, Quill End, London V9 2AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 2,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-017-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£25,732/month",
+            "price_raw": 25732,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-017-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9297 Gossamer Quay, Quill End, London V9 2AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-017-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£28,632/month",
+            "price_raw": 28632,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-017-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9298 Gossamer Quay, Yewtree Row, London V9 2AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-017-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£31,532/month",
+            "price_raw": 31532,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-017-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9289 Gossamer Quay, Quill End, London V9 2AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-11-19",
+            "available_from_normalized": "2026-11-19",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-017-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£34,432/month",
+            "price_raw": 34432,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-017-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9290 Gossamer Quay, Quill End, London V9 2AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-017-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£37,332/month",
+            "price_raw": 37332,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-017-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Quill End",
+          "bedrooms": 1,
+          "commute_destination": "Paddington",
+          "max_budget": 5432,
+          "max_commute_time": 26,
+          "move_in_date": "2026-10-22",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Quill End.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-a",
+        "duration_minutes": 24,
+        "from_address": "9294 Gossamer Quay, Quill End, London V9 2AB",
+        "origin_eval_listing_id": "ho5-017-a",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-b",
+        "duration_minutes": 35,
+        "from_address": "9295 Gossamer Quay, Quill End, London V9 2AB",
+        "origin_eval_listing_id": "ho5-017-b",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-c",
+        "duration_minutes": 35,
+        "from_address": "9296 Gossamer Quay, Quill End, London V9 2AB",
+        "origin_eval_listing_id": "ho5-017-c",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-d",
+        "duration_minutes": 35,
+        "from_address": "9297 Gossamer Quay, Quill End, London V9 2AB",
+        "origin_eval_listing_id": "ho5-017-d",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-e",
+        "duration_minutes": 35,
+        "from_address": "9298 Gossamer Quay, Yewtree Row, London V9 2AB",
+        "origin_eval_listing_id": "ho5-017-e",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-f",
+        "duration_minutes": 35,
+        "from_address": "9289 Gossamer Quay, Quill End, London V9 2AB",
+        "origin_eval_listing_id": "ho5-017-f",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-017-g",
+        "duration_minutes": 35,
+        "from_address": "9290 Gossamer Quay, Quill End, London V9 2AB",
+        "origin_eval_listing_id": "ho5-017-g",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "data": {
+    "clarification_kind": "missing_area",
+    "missing_fields": [
+      "area"
+    ],
+    "question": "Which area should I search first?"
+  },
+  "success": true,
+  "tool_name": "ask_user"
+}

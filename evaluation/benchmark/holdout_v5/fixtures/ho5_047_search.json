@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9804 Acorn Quay, Quill End, London V3 8AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-047-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£6,265/month",
+            "price_raw": 6265,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-047-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-047-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9805 Acorn Quay, Quill End, London V3 8AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-047-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£6,333/month",
+            "price_raw": 6333,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-047-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-047-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9806 Acorn Quay, Quill End, London V3 8AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 2,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-047-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£26,602/month",
+            "price_raw": 26602,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-047-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-047-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9807 Acorn Quay, Quill End, London V3 8AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-047-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£29,502/month",
+            "price_raw": 29502,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-047-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-047-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9808 Acorn Quay, Yewtree Row, London V3 8AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-047-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£32,402/month",
+            "price_raw": 32402,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-047-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-047-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9799 Acorn Quay, Quill End, London V3 8AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-11-29",
+            "available_from_normalized": "2026-11-29",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-047-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£35,302/month",
+            "price_raw": 35302,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-047-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-047-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9800 Acorn Quay, Quill End, London V3 8AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-047-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£38,202/month",
+            "price_raw": 38202,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-047-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-047-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Quill End",
+          "bedrooms": 1,
+          "max_budget": 6302,
+          "move_in_date": "2026-11-01",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Quill End.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

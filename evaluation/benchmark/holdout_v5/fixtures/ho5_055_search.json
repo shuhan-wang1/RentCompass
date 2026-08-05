@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9940 Island Quay, Yewtree Row, London V2 8AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-055-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£6,497/month",
+            "price_raw": 6497,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-055-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-055-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9941 Island Quay, Yewtree Row, London V2 8AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-055-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£6,565/month",
+            "price_raw": 6565,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-055-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-055-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9942 Island Quay, Yewtree Row, London V2 8AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 2,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-055-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£26,834/month",
+            "price_raw": 26834,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-055-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-055-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9943 Island Quay, Yewtree Row, London V2 8AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-055-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£29,734/month",
+            "price_raw": 29734,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-055-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-055-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9944 Island Quay, Coral Wharf, London V2 8AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho5-055-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£32,634/month",
+            "price_raw": 32634,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-055-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-055-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9935 Island Quay, Yewtree Row, London V2 8AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-055-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£35,534/month",
+            "price_raw": 35534,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-055-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-055-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9936 Island Quay, Yewtree Row, London V2 8AB",
+            "area_normalized": "Yewtree Row",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yewtree Row",
+            "city": "London",
+            "eval_listing_id": "ho5-055-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£38,434/month",
+            "price_raw": 38434,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-055-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-055-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Yewtree Row",
+          "bedrooms": 1,
+          "max_budget": 6534,
+          "move_in_date": "2026-09-06",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Yewtree Row.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

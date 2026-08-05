@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9260 Estuary Quay, Olive Terrace, London V7 8AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-10-16",
+            "available_from_normalized": "2026-10-16",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho5-015-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 8",
+            "price": "£5,337/month",
+            "price_raw": 5337,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-015-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9261 Estuary Quay, Olive Terrace, London V7 8AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-10-16",
+            "available_from_normalized": "2026-10-16",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho5-015-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 8",
+            "price": "£5,405/month",
+            "price_raw": 5405,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-015-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9262 Estuary Quay, Olive Terrace, London V7 8AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-10-16",
+            "available_from_normalized": "2026-10-16",
+            "bedrooms": 2,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho5-015-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 8",
+            "price": "£25,674/month",
+            "price_raw": 25674,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-015-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9263 Estuary Quay, Olive Terrace, London V7 8AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-10-16",
+            "available_from_normalized": "2026-10-16",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho5-015-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 8",
+            "price": "£28,574/month",
+            "price_raw": 28574,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-015-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9264 Estuary Quay, Wildrose Ford, London V7 8AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-16",
+            "available_from_normalized": "2026-10-16",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho5-015-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 8",
+            "price": "£31,474/month",
+            "price_raw": 31474,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-015-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9255 Estuary Quay, Olive Terrace, London V7 8AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho5-015-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 8",
+            "price": "£34,374/month",
+            "price_raw": 34374,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-015-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9256 Estuary Quay, Olive Terrace, London V7 8AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-10-16",
+            "available_from_normalized": "2026-10-16",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho5-015-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 8",
+            "price": "£37,274/month",
+            "price_raw": 37274,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-015-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Olive Terrace",
+          "bedrooms": 1,
+          "commute_destination": "Victoria",
+          "max_budget": 5374,
+          "max_commute_time": 40,
+          "move_in_date": "2026-10-16",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Olive Terrace.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-a",
+        "duration_minutes": 38,
+        "from_address": "9260 Estuary Quay, Olive Terrace, London V7 8AB",
+        "origin_eval_listing_id": "ho5-015-a",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-b",
+        "duration_minutes": 49,
+        "from_address": "9261 Estuary Quay, Olive Terrace, London V7 8AB",
+        "origin_eval_listing_id": "ho5-015-b",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-c",
+        "duration_minutes": 49,
+        "from_address": "9262 Estuary Quay, Olive Terrace, London V7 8AB",
+        "origin_eval_listing_id": "ho5-015-c",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-d",
+        "duration_minutes": 49,
+        "from_address": "9263 Estuary Quay, Olive Terrace, London V7 8AB",
+        "origin_eval_listing_id": "ho5-015-d",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-e",
+        "duration_minutes": 49,
+        "from_address": "9264 Estuary Quay, Wildrose Ford, London V7 8AB",
+        "origin_eval_listing_id": "ho5-015-e",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-f",
+        "duration_minutes": 49,
+        "from_address": "9255 Estuary Quay, Olive Terrace, London V7 8AB",
+        "origin_eval_listing_id": "ho5-015-f",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-015-g",
+        "duration_minutes": 49,
+        "from_address": "9256 Estuary Quay, Olive Terrace, London V7 8AB",
+        "origin_eval_listing_id": "ho5-015-g",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

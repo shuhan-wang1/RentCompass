@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9090 Gossamer Quay, Evergreen Park, London V6 6AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho5-005-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£5,047/month",
+            "price_raw": 5047,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-005-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9091 Gossamer Quay, Evergreen Park, London V6 6AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho5-005-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£5,115/month",
+            "price_raw": 5115,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-005-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9092 Gossamer Quay, Evergreen Park, London V6 6AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 2,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho5-005-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£25,384/month",
+            "price_raw": 25384,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-005-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9093 Gossamer Quay, Evergreen Park, London V6 6AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho5-005-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£28,284/month",
+            "price_raw": 28284,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-005-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9094 Gossamer Quay, Marigold Yard, London V6 6AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho5-005-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£31,184/month",
+            "price_raw": 31184,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-005-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9085 Gossamer Quay, Evergreen Park, London V6 6AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho5-005-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£34,084/month",
+            "price_raw": 34084,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-005-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9086 Gossamer Quay, Evergreen Park, London V6 6AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho5-005-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£36,984/month",
+            "price_raw": 36984,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-005-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Evergreen Park",
+          "bedrooms": 1,
+          "commute_destination": "Victoria",
+          "max_budget": 5084,
+          "max_commute_time": 30,
+          "move_in_date": "2026-09-16",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Evergreen Park.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-a",
+        "duration_minutes": 28,
+        "from_address": "9090 Gossamer Quay, Evergreen Park, London V6 6AB",
+        "origin_eval_listing_id": "ho5-005-a",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-b",
+        "duration_minutes": 39,
+        "from_address": "9091 Gossamer Quay, Evergreen Park, London V6 6AB",
+        "origin_eval_listing_id": "ho5-005-b",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-c",
+        "duration_minutes": 39,
+        "from_address": "9092 Gossamer Quay, Evergreen Park, London V6 6AB",
+        "origin_eval_listing_id": "ho5-005-c",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-d",
+        "duration_minutes": 39,
+        "from_address": "9093 Gossamer Quay, Evergreen Park, London V6 6AB",
+        "origin_eval_listing_id": "ho5-005-d",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-e",
+        "duration_minutes": 39,
+        "from_address": "9094 Gossamer Quay, Marigold Yard, London V6 6AB",
+        "origin_eval_listing_id": "ho5-005-e",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-f",
+        "duration_minutes": 39,
+        "from_address": "9085 Gossamer Quay, Evergreen Park, London V6 6AB",
+        "origin_eval_listing_id": "ho5-005-f",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-005-g",
+        "duration_minutes": 39,
+        "from_address": "9086 Gossamer Quay, Evergreen Park, London V6 6AB",
+        "origin_eval_listing_id": "ho5-005-g",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

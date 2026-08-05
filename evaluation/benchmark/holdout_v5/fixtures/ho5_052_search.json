@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9889 Fountain Quay, Verona Lock, London V8 5AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho5-052-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£6,410/month",
+            "price_raw": 6410,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-052-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-052-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9890 Fountain Quay, Verona Lock, London V8 5AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho5-052-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£6,478/month",
+            "price_raw": 6478,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-052-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-052-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9891 Fountain Quay, Verona Lock, London V8 5AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 2,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho5-052-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£26,747/month",
+            "price_raw": 26747,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-052-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-052-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9892 Fountain Quay, Verona Lock, London V8 5AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho5-052-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£29,647/month",
+            "price_raw": 29647,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-052-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-052-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9893 Fountain Quay, Dawn Common, London V8 5AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho5-052-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£32,547/month",
+            "price_raw": 32547,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-052-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-052-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9884 Fountain Quay, Verona Lock, London V8 5AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-12-14",
+            "available_from_normalized": "2026-12-14",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho5-052-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£35,447/month",
+            "price_raw": 35447,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-052-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-052-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9885 Fountain Quay, Verona Lock, London V8 5AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho5-052-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£38,347/month",
+            "price_raw": 38347,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-052-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-052-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Verona Lock",
+          "bedrooms": 1,
+          "max_budget": 6447,
+          "move_in_date": "2026-11-16",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Verona Lock.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

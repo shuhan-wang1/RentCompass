@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9107 Hearth Quay, Frostmere, London V7 7AB",
+            "area_normalized": "Frostmere",
+            "available_from": "2026-09-19",
+            "available_from_normalized": "2026-09-19",
+            "bedrooms": 1,
+            "borough": "Frostmere",
+            "city": "London",
+            "eval_listing_id": "ho5-006-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£5,076/month",
+            "price_raw": 5076,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-006-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9108 Hearth Quay, Frostmere, London V7 7AB",
+            "area_normalized": "Frostmere",
+            "available_from": "2026-09-19",
+            "available_from_normalized": "2026-09-19",
+            "bedrooms": 1,
+            "borough": "Frostmere",
+            "city": "London",
+            "eval_listing_id": "ho5-006-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£5,144/month",
+            "price_raw": 5144,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-006-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9109 Hearth Quay, Frostmere, London V7 7AB",
+            "area_normalized": "Frostmere",
+            "available_from": "2026-09-19",
+            "available_from_normalized": "2026-09-19",
+            "bedrooms": 2,
+            "borough": "Frostmere",
+            "city": "London",
+            "eval_listing_id": "ho5-006-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£25,413/month",
+            "price_raw": 25413,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-006-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9110 Hearth Quay, Frostmere, London V7 7AB",
+            "area_normalized": "Frostmere",
+            "available_from": "2026-09-19",
+            "available_from_normalized": "2026-09-19",
+            "bedrooms": 1,
+            "borough": "Frostmere",
+            "city": "London",
+            "eval_listing_id": "ho5-006-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£28,313/month",
+            "price_raw": 28313,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-006-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9111 Hearth Quay, Northstar Heath, London V7 7AB",
+            "area_normalized": "Northstar Heath",
+            "available_from": "2026-09-19",
+            "available_from_normalized": "2026-09-19",
+            "bedrooms": 1,
+            "borough": "Northstar Heath",
+            "city": "London",
+            "eval_listing_id": "ho5-006-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£31,213/month",
+            "price_raw": 31213,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-006-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9102 Hearth Quay, Frostmere, London V7 7AB",
+            "area_normalized": "Frostmere",
+            "available_from": "2026-10-17",
+            "available_from_normalized": "2026-10-17",
+            "bedrooms": 1,
+            "borough": "Frostmere",
+            "city": "London",
+            "eval_listing_id": "ho5-006-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£34,113/month",
+            "price_raw": 34113,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-006-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9103 Hearth Quay, Frostmere, London V7 7AB",
+            "area_normalized": "Frostmere",
+            "available_from": "2026-09-19",
+            "available_from_normalized": "2026-09-19",
+            "bedrooms": 1,
+            "borough": "Frostmere",
+            "city": "London",
+            "eval_listing_id": "ho5-006-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£37,013/month",
+            "price_raw": 37013,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-006-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Frostmere",
+          "bedrooms": 1,
+          "commute_destination": "London Bridge",
+          "max_budget": 5113,
+          "max_commute_time": 31,
+          "move_in_date": "2026-09-19",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Frostmere.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-a",
+        "duration_minutes": 29,
+        "from_address": "9107 Hearth Quay, Frostmere, London V7 7AB",
+        "origin_eval_listing_id": "ho5-006-a",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-b",
+        "duration_minutes": 40,
+        "from_address": "9108 Hearth Quay, Frostmere, London V7 7AB",
+        "origin_eval_listing_id": "ho5-006-b",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-c",
+        "duration_minutes": 40,
+        "from_address": "9109 Hearth Quay, Frostmere, London V7 7AB",
+        "origin_eval_listing_id": "ho5-006-c",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-d",
+        "duration_minutes": 40,
+        "from_address": "9110 Hearth Quay, Frostmere, London V7 7AB",
+        "origin_eval_listing_id": "ho5-006-d",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-e",
+        "duration_minutes": 40,
+        "from_address": "9111 Hearth Quay, Northstar Heath, London V7 7AB",
+        "origin_eval_listing_id": "ho5-006-e",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-f",
+        "duration_minutes": 40,
+        "from_address": "9102 Hearth Quay, Frostmere, London V7 7AB",
+        "origin_eval_listing_id": "ho5-006-f",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-006-g",
+        "duration_minutes": 40,
+        "from_address": "9103 Hearth Quay, Frostmere, London V7 7AB",
+        "origin_eval_listing_id": "ho5-006-g",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

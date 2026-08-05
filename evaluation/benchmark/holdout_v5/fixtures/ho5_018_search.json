@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9311 Hearth Quay, Redwood Bay, London V1 3AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho5-018-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£5,424/month",
+            "price_raw": 5424,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-018-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9312 Hearth Quay, Redwood Bay, London V1 3AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho5-018-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£5,492/month",
+            "price_raw": 5492,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-018-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9313 Hearth Quay, Redwood Bay, London V1 3AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 2,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho5-018-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£25,761/month",
+            "price_raw": 25761,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-018-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9314 Hearth Quay, Redwood Bay, London V1 3AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho5-018-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£28,661/month",
+            "price_raw": 28661,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-018-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9315 Hearth Quay, Zenith Place, London V1 3AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho5-018-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£31,561/month",
+            "price_raw": 31561,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-018-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9306 Hearth Quay, Redwood Bay, London V1 3AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-11-22",
+            "available_from_normalized": "2026-11-22",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho5-018-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£34,461/month",
+            "price_raw": 34461,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-018-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9307 Hearth Quay, Redwood Bay, London V1 3AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho5-018-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£37,361/month",
+            "price_raw": 37361,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-018-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Redwood Bay",
+          "bedrooms": 1,
+          "commute_destination": "Canary Wharf",
+          "max_budget": 5461,
+          "max_commute_time": 27,
+          "move_in_date": "2026-10-25",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Redwood Bay.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-a",
+        "duration_minutes": 25,
+        "from_address": "9311 Hearth Quay, Redwood Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho5-018-a",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-b",
+        "duration_minutes": 36,
+        "from_address": "9312 Hearth Quay, Redwood Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho5-018-b",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-c",
+        "duration_minutes": 36,
+        "from_address": "9313 Hearth Quay, Redwood Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho5-018-c",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-d",
+        "duration_minutes": 36,
+        "from_address": "9314 Hearth Quay, Redwood Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho5-018-d",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-e",
+        "duration_minutes": 36,
+        "from_address": "9315 Hearth Quay, Zenith Place, London V1 3AB",
+        "origin_eval_listing_id": "ho5-018-e",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-f",
+        "duration_minutes": 36,
+        "from_address": "9306 Hearth Quay, Redwood Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho5-018-f",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-018-g",
+        "duration_minutes": 36,
+        "from_address": "9307 Hearth Quay, Redwood Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho5-018-g",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

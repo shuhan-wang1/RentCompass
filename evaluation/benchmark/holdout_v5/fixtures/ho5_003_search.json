@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9056 Estuary Quay, Coral Wharf, London V4 4AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho5-003-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£4,989/month",
+            "price_raw": 4989,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-003-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9057 Estuary Quay, Coral Wharf, London V4 4AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho5-003-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£5,057/month",
+            "price_raw": 5057,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-003-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9058 Estuary Quay, Coral Wharf, London V4 4AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 2,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho5-003-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£25,326/month",
+            "price_raw": 25326,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-003-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9059 Estuary Quay, Coral Wharf, London V4 4AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho5-003-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£28,226/month",
+            "price_raw": 28226,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-003-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9060 Estuary Quay, Kingfisher Fields, London V4 4AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho5-003-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£31,126/month",
+            "price_raw": 31126,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-003-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9051 Estuary Quay, Coral Wharf, London V4 4AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-10-08",
+            "available_from_normalized": "2026-10-08",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho5-003-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£34,026/month",
+            "price_raw": 34026,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-003-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9052 Estuary Quay, Coral Wharf, London V4 4AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho5-003-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£36,926/month",
+            "price_raw": 36926,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-003-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Coral Wharf",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 5026,
+          "max_commute_time": 28,
+          "move_in_date": "2026-09-10",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Coral Wharf.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-a",
+        "duration_minutes": 26,
+        "from_address": "9056 Estuary Quay, Coral Wharf, London V4 4AB",
+        "origin_eval_listing_id": "ho5-003-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-b",
+        "duration_minutes": 37,
+        "from_address": "9057 Estuary Quay, Coral Wharf, London V4 4AB",
+        "origin_eval_listing_id": "ho5-003-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-c",
+        "duration_minutes": 37,
+        "from_address": "9058 Estuary Quay, Coral Wharf, London V4 4AB",
+        "origin_eval_listing_id": "ho5-003-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-d",
+        "duration_minutes": 37,
+        "from_address": "9059 Estuary Quay, Coral Wharf, London V4 4AB",
+        "origin_eval_listing_id": "ho5-003-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-e",
+        "duration_minutes": 37,
+        "from_address": "9060 Estuary Quay, Kingfisher Fields, London V4 4AB",
+        "origin_eval_listing_id": "ho5-003-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-f",
+        "duration_minutes": 37,
+        "from_address": "9051 Estuary Quay, Coral Wharf, London V4 4AB",
+        "origin_eval_listing_id": "ho5-003-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-003-g",
+        "duration_minutes": 37,
+        "from_address": "9052 Estuary Quay, Coral Wharf, London V4 4AB",
+        "origin_eval_listing_id": "ho5-003-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

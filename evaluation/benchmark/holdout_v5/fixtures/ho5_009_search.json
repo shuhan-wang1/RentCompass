@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9158 Kite Quay, Ivory Green, London V1 2AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-09-28",
+            "available_from_normalized": "2026-09-28",
+            "bedrooms": 1,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho5-009-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 2",
+            "price": "£5,163/month",
+            "price_raw": 5163,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-009-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9159 Kite Quay, Ivory Green, London V1 2AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-09-28",
+            "available_from_normalized": "2026-09-28",
+            "bedrooms": 1,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho5-009-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 2",
+            "price": "£5,231/month",
+            "price_raw": 5231,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-009-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9160 Kite Quay, Ivory Green, London V1 2AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-09-28",
+            "available_from_normalized": "2026-09-28",
+            "bedrooms": 2,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho5-009-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 2",
+            "price": "£25,500/month",
+            "price_raw": 25500,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-009-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9161 Kite Quay, Ivory Green, London V1 2AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-09-28",
+            "available_from_normalized": "2026-09-28",
+            "bedrooms": 1,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho5-009-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 2",
+            "price": "£28,400/month",
+            "price_raw": 28400,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-009-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9162 Kite Quay, Quill End, London V1 2AB",
+            "area_normalized": "Quill End",
+            "available_from": "2026-09-28",
+            "available_from_normalized": "2026-09-28",
+            "bedrooms": 1,
+            "borough": "Quill End",
+            "city": "London",
+            "eval_listing_id": "ho5-009-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 2",
+            "price": "£31,300/month",
+            "price_raw": 31300,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-009-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9153 Kite Quay, Ivory Green, London V1 2AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho5-009-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 2",
+            "price": "£34,200/month",
+            "price_raw": 34200,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-009-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9154 Kite Quay, Ivory Green, London V1 2AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-09-28",
+            "available_from_normalized": "2026-09-28",
+            "bedrooms": 1,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho5-009-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 2",
+            "price": "£37,100/month",
+            "price_raw": 37100,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-009-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Ivory Green",
+          "bedrooms": 1,
+          "commute_destination": "Farringdon",
+          "max_budget": 5200,
+          "max_commute_time": 34,
+          "move_in_date": "2026-09-28",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Ivory Green.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-a",
+        "duration_minutes": 32,
+        "from_address": "9158 Kite Quay, Ivory Green, London V1 2AB",
+        "origin_eval_listing_id": "ho5-009-a",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-b",
+        "duration_minutes": 43,
+        "from_address": "9159 Kite Quay, Ivory Green, London V1 2AB",
+        "origin_eval_listing_id": "ho5-009-b",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-c",
+        "duration_minutes": 43,
+        "from_address": "9160 Kite Quay, Ivory Green, London V1 2AB",
+        "origin_eval_listing_id": "ho5-009-c",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-d",
+        "duration_minutes": 43,
+        "from_address": "9161 Kite Quay, Ivory Green, London V1 2AB",
+        "origin_eval_listing_id": "ho5-009-d",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-e",
+        "duration_minutes": 43,
+        "from_address": "9162 Kite Quay, Quill End, London V1 2AB",
+        "origin_eval_listing_id": "ho5-009-e",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-f",
+        "duration_minutes": 43,
+        "from_address": "9153 Kite Quay, Ivory Green, London V1 2AB",
+        "origin_eval_listing_id": "ho5-009-f",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-009-g",
+        "duration_minutes": 43,
+        "from_address": "9154 Kite Quay, Ivory Green, London V1 2AB",
+        "origin_eval_listing_id": "ho5-009-g",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

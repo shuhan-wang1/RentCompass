@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9515 Hearth Quay, Dawn Common, London V4 7AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho5-030-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£5,772/month",
+            "price_raw": 5772,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-030-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9516 Hearth Quay, Dawn Common, London V4 7AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho5-030-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£5,840/month",
+            "price_raw": 5840,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-030-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9517 Hearth Quay, Dawn Common, London V4 7AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 2,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho5-030-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£26,109/month",
+            "price_raw": 26109,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-030-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9518 Hearth Quay, Dawn Common, London V4 7AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho5-030-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£29,009/month",
+            "price_raw": 29009,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-030-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9519 Hearth Quay, Heather Quay, London V4 7AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho5-030-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£31,909/month",
+            "price_raw": 31909,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-030-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9510 Hearth Quay, Dawn Common, London V4 7AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-10-09",
+            "available_from_normalized": "2026-10-09",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho5-030-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£34,809/month",
+            "price_raw": 34809,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-030-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9511 Hearth Quay, Dawn Common, London V4 7AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho5-030-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£37,709/month",
+            "price_raw": 37709,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-030-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Dawn Common",
+          "bedrooms": 1,
+          "commute_destination": "Euston",
+          "max_budget": 5809,
+          "max_commute_time": 39,
+          "move_in_date": "2026-09-11",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Dawn Common.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-a",
+        "duration_minutes": 37,
+        "from_address": "9515 Hearth Quay, Dawn Common, London V4 7AB",
+        "origin_eval_listing_id": "ho5-030-a",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-b",
+        "duration_minutes": 48,
+        "from_address": "9516 Hearth Quay, Dawn Common, London V4 7AB",
+        "origin_eval_listing_id": "ho5-030-b",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-c",
+        "duration_minutes": 48,
+        "from_address": "9517 Hearth Quay, Dawn Common, London V4 7AB",
+        "origin_eval_listing_id": "ho5-030-c",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-d",
+        "duration_minutes": 48,
+        "from_address": "9518 Hearth Quay, Dawn Common, London V4 7AB",
+        "origin_eval_listing_id": "ho5-030-d",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-e",
+        "duration_minutes": 48,
+        "from_address": "9519 Hearth Quay, Heather Quay, London V4 7AB",
+        "origin_eval_listing_id": "ho5-030-e",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-f",
+        "duration_minutes": 48,
+        "from_address": "9510 Hearth Quay, Dawn Common, London V4 7AB",
+        "origin_eval_listing_id": "ho5-030-f",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v5/ho5-030-g",
+        "duration_minutes": 48,
+        "from_address": "9511 Hearth Quay, Dawn Common, London V4 7AB",
+        "origin_eval_listing_id": "ho5-030-g",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

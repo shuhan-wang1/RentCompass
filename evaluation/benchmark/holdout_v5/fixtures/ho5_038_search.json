@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9651 Dovetail Quay, Heather Quay, London V3 7AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-10-05",
+            "available_from_normalized": "2026-10-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho5-038-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£6,004/month",
+            "price_raw": 6004,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-038-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-038-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9652 Dovetail Quay, Heather Quay, London V3 7AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-10-05",
+            "available_from_normalized": "2026-10-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho5-038-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£6,072/month",
+            "price_raw": 6072,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-038-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-038-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9653 Dovetail Quay, Heather Quay, London V3 7AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-10-05",
+            "available_from_normalized": "2026-10-05",
+            "bedrooms": 2,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho5-038-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£26,341/month",
+            "price_raw": 26341,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-038-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-038-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9654 Dovetail Quay, Heather Quay, London V3 7AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-10-05",
+            "available_from_normalized": "2026-10-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho5-038-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£29,241/month",
+            "price_raw": 29241,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-038-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-038-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9655 Dovetail Quay, Poppywick, London V3 7AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-10-05",
+            "available_from_normalized": "2026-10-05",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho5-038-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£32,141/month",
+            "price_raw": 32141,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-038-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-038-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9646 Dovetail Quay, Heather Quay, London V3 7AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-11-02",
+            "available_from_normalized": "2026-11-02",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho5-038-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£35,041/month",
+            "price_raw": 35041,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-038-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-038-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9647 Dovetail Quay, Heather Quay, London V3 7AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-10-05",
+            "available_from_normalized": "2026-10-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho5-038-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£37,941/month",
+            "price_raw": 37941,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-038-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-038-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Heather Quay",
+          "bedrooms": 1,
+          "max_budget": 6041,
+          "move_in_date": "2026-10-05",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Heather Quay.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

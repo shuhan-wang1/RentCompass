@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "9787 Lantern Quay, Poppywick, London V2 7AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho5-046-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£6,236/month",
+            "price_raw": 6236,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-046-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-046-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9788 Lantern Quay, Poppywick, London V2 7AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho5-046-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£6,304/month",
+            "price_raw": 6304,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-046-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-046-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9789 Lantern Quay, Poppywick, London V2 7AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 2,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho5-046-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£26,573/month",
+            "price_raw": 26573,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-046-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-046-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9790 Lantern Quay, Poppywick, London V2 7AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho5-046-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£29,473/month",
+            "price_raw": 29473,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-046-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-046-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9791 Lantern Quay, Xenia Court, London V2 7AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho5-046-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£32,373/month",
+            "price_raw": 32373,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-046-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-046-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9782 Lantern Quay, Poppywick, London V2 7AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-11-26",
+            "available_from_normalized": "2026-11-26",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho5-046-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£35,273/month",
+            "price_raw": 35273,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-046-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-046-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "9783 Lantern Quay, Poppywick, London V2 7AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho5-046-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£38,173/month",
+            "price_raw": 38173,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho5-046-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v5/ho5-046-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Poppywick",
+          "bedrooms": 1,
+          "max_budget": 6273,
+          "move_in_date": "2026-10-29",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Poppywick.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

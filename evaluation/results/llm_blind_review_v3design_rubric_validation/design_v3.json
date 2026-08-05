@@ -1,0 +1,21 @@
+{
+  "design": "third_design_rubric_validation",
+  "purpose_of_this_round": "engineering validation that the repaired rubric + evidence packet give a stable reading; NOT a quality re-evaluation, NOT a generalization assessment",
+  "held_out_requirement_met": false,
+  "must_not_merge_with": "evaluation/results/llm_blind_review/ (first design)",
+  "sample": "identical 50 items, same draw, seed 20260804 — NOT re-drawn",
+  "task_class_counts": {
+    "retrieval": 32,
+    "clarify": 4,
+    "calculation": 7,
+    "memory": 7
+  },
+  "evidence_truncated_items": [
+    "A4",
+    "B13",
+    "E5"
+  ],
+  "items_with_memory_evidence": 4,
+  "items_with_reference_calculations": 9,
+  "items_with_history": 17
+}

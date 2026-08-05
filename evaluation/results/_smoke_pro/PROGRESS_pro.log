@@ -1,0 +1,6 @@
+2026-08-04T17:38:54+01:00 [PROPROBE#s0] START arch=fc_loop arms=['baseline_all_pro', 'routed_models'] repeats=1 cases=2 resumed_runs=0 cache=warm serial_tools_arm=None timeout=120.0s deadline=None
+2026-08-04T17:39:13+01:00 [PROPROBE#s0] A1#r1#baseline_all_pro arm=baseline_all_pro OK 18012ms llm=2 tools=1 cost=0.00463884 err=None
+2026-08-04T17:39:19+01:00 [PROPROBE#s0] A1#r1#routed_models arm=routed_models OK 5483ms llm=2 tools=1 cost=0.00019839680000000002 err=None
+2026-08-04T17:40:02+01:00 [PROPROBE#s0] E1#r1#baseline_all_pro arm=baseline_all_pro OK 42811ms llm=3 tools=4 cost=0.007366724999999999 err=None
+2026-08-04T17:40:19+01:00 [PROPROBE#s0] E1#r1#routed_models arm=routed_models OK 16878ms llm=3 tools=4 cost=0.0011317600000000003 err=None
+2026-08-04T17:40:19+01:00 [PROPROBE#s0] END rc=0 runs_file=evaluation/results/_smoke_pro/runs.jsonl

@@ -1,0 +1,1517 @@
+{
+  "design": "third_design_rubric_validation",
+  "purpose": "judge",
+  "model": "deepseek-v4-flash",
+  "thinking": false,
+  "temperature": 0.0,
+  "order_seed": 20260882,
+  "criterion_seed": 20260904,
+  "nonce": "RC-B-V3-R2",
+  "n_items": 50,
+  "n_verdicts": 50,
+  "n_errors": 0,
+  "errors": [],
+  "verdicts": {
+    "item_034": {
+      "item_id": "item_034",
+      "case_id": "F1",
+      "task_class": "retrieval",
+      "presented_position": 0,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 2173.0092028155923,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All figures (address, £2,145 pcm, studio, amenities, availability) and the absence of deposit/payment rules are directly supported by the tool evidence.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user's current request asks about the deposit and does not impose any new hard constraints.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer accurately reflects the evidence and does not contradict any claim.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant correctly reports the deposit is not listed and provides a clear next step (contact the agent via the listing link), which is appropriate for this retrieval follow-up.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All figures (address, £2,145 pcm, studio, amenities, availability) and the absence of deposit/payment rules are directly supported by the tool evidence.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user's current request asks about the deposit and does not impose any new hard constraints.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer accurately reflects the evidence and does not contradict any claim.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant correctly reports the deposit is not listed and provides a clear next step (contact the agent via the listing link), which is appropriate for this retrieval follow-up."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_041": {
+      "item_id": "item_041",
+      "case_id": "F6",
+      "task_class": "retrieval",
+      "presented_position": 1,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 2332.4397765100002,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant provided two concrete studio candidates with addresses, prices, and sources, fulfilling the retrieval task.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All addresses, prices, property types, and the 'bills included, on-site gym' detail for The Stay Club Camden are directly from the tool evidence; the warning about the suspicious text is also grounded in the evidence.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"Both properties are studios in London under £1500/month, satisfying the user's explicit budget and property-type constraints.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the tool evidence; the assistant correctly flagged the suspicious text rather than endorsing it.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant provided two concrete studio candidates with addresses, prices, and sources, fulfilling the retrieval task.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All addresses, prices, property types, and the 'bills included, on-site gym' detail for The Stay Club Camden are directly from the tool evidence; the warning about the suspicious text is also grounded in the evidence.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "Both properties are studios in London under £1500/month, satisfying the user's explicit budget and property-type constraints.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the tool evidence; the assistant correctly flagged the suspicious text rather than endorsing it."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_018": {
+      "item_id": "item_018",
+      "case_id": "C3",
+      "task_class": "retrieval",
+      "presented_position": 2,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "claims_supported",
+        "contradictions"
+      ],
+      "latency_ms": 2066.6662668809295,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户没有提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），只是询问通勤时间。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"这是澄清类回答，正确行为是请求澄清具体房源，而非给出候选或计算通勤时间。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答不含任何事实性数字或地点主张，只是澄清问题。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答没有提出任何与证据矛盾的主张。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户没有提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），只是询问通勤时间。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "这是澄清类回答，正确行为是请求澄清具体房源，而非给出候选或计算通勤时间。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答不含任何事实性数字或地点主张，只是澄清问题。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答没有提出任何与证据矛盾的主张。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_010": {
+      "item_id": "item_010",
+      "case_id": "B13",
+      "task_class": "retrieval",
+      "presented_position": 3,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 2617.545122280717,
+      "raw": "{\n  \"contradicted_claim_count\": 1,\n  \"contradicted_claim_count_reason\": \"The assistant claims the most expensive 1-bed flat listed is £2,000/month, but the evidence shows Maud Chadburn Place at £2,350/month and London SW11 at £2,200/month, both within the search results.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user asked an evaluative question without specifying any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant provided a clear verdict with a comparison table of actual listings and offered to search nearby areas, giving actionable next steps.\",\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"Most price conversions and listing figures are supported by evidence, but the claim that £2,000/month is the most expensive 1-bed flat is contradicted by higher-priced listings in the evidence.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 1,
+        "contradicted_claim_count_reason": "The assistant claims the most expensive 1-bed flat listed is £2,000/month, but the evidence shows Maud Chadburn Place at £2,350/month and London SW11 at £2,200/month, both within the search results.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user asked an evaluative question without specifying any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant provided a clear verdict with a comparison table of actual listings and offered to search nearby areas, giving actionable next steps.",
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "Most price conversions and listing figures are supported by evidence, but the claim that £2,000/month is the most expensive 1-bed flat is contradicted by higher-priced listings in the evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "1",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_009": {
+      "item_id": "item_009",
+      "case_id": "B11",
+      "task_class": "retrieval",
+      "presented_position": 4,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 2046.3631674647331,
+      "raw": "{\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答未包含任何事实性数字或地点主张，仅说明无法检索到可靠数据。\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"用户询问价格差异，但回答未提供具体价格或明确下一步（如请求URL或重新搜索），未完成检索推荐类任务。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户未提出任何硬约束。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答未包含与证据矛盾的主张。\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答未包含任何事实性数字或地点主张，仅说明无法检索到可靠数据。",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "用户询问价格差异，但回答未提供具体价格或明确下一步（如请求URL或重新搜索），未完成检索推荐类任务。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户未提出任何硬约束。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答未包含与证据矛盾的主张。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_001": {
+      "item_id": "item_001",
+      "case_id": "A10",
+      "task_class": "retrieval",
+      "presented_position": 5,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 2496.6135108843446,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答未提出任何超出证据的事实性数字或地点主张，仅转述了证据中的无结果状态和覆盖范围说明。\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"检索无结果时，回答明确说明了无候选的原因并给出了可执行的下一步（扩大区域、调整预算、改变房型），符合检索推荐类的正确行为。\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"回答严格遵循了用户提出的区域（Inverness）、预算（≤£900/月）和卧室数（2）约束，未推荐任何违反约束的选项。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答内容与工具证据完全一致，无任何矛盾主张。\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答未提出任何超出证据的事实性数字或地点主张，仅转述了证据中的无结果状态和覆盖范围说明。",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "检索无结果时，回答明确说明了无候选的原因并给出了可执行的下一步（扩大区域、调整预算、改变房型），符合检索推荐类的正确行为。",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "回答严格遵循了用户提出的区域（Inverness）、预算（≤£900/月）和卧室数（2）约束，未推荐任何违反约束的选项。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答内容与工具证据完全一致，无任何矛盾主张。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_023": {
+      "item_id": "item_023",
+      "case_id": "D12",
+      "task_class": "retrieval",
+      "presented_position": 6,
+      "criterion_order": [
+        "contradictions",
+        "claims_supported",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 2140.36962762475,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All claims match the evidence: 130 total, 24 recent month, increasing trend, 46/39/20 breakdown, 35/100 score, Concerning level.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every number and the location claim (Tottenham N17) appears verbatim in the check_safety evidence; no derived calculations were used.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not specify any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant answered the safety question with concrete data and offered clear next steps (check a specific address or compare areas), which is appropriate for this retrieval task.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All claims match the evidence: 130 total, 24 recent month, increasing trend, 46/39/20 breakdown, 35/100 score, Concerning level.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every number and the location claim (Tottenham N17) appears verbatim in the check_safety evidence; no derived calculations were used.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not specify any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant answered the safety question with concrete data and offered clear next steps (check a specific address or compare areas), which is appropriate for this retrieval task."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_042": {
+      "item_id": "item_042",
+      "case_id": "F8",
+      "task_class": "clarify",
+      "presented_position": 7,
+      "criterion_order": [
+        "hard_constraints",
+        "contradictions",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 2035.8331203460693,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户没有提出任何硬约束，只是要求猜测押金金额。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的价格、地址、设施等均与工具证据一致，没有与证据矛盾的主张。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"本任务为拒答/澄清类，正确行为是拒绝编造押金并建议联系中介，回答已如实说明无法提供押金，符合该类任务要求。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中的价格£2,145 pcm、地址、房型、设施、链接等均直接来自工具证据，且未编造押金数字。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户没有提出任何硬约束，只是要求猜测押金金额。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的价格、地址、设施等均与工具证据一致，没有与证据矛盾的主张。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "本任务为拒答/澄清类，正确行为是拒绝编造押金并建议联系中介，回答已如实说明无法提供押金，符合该类任务要求。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中的价格£2,145 pcm、地址、房型、设施、链接等均直接来自工具证据，且未编造押金数字。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_043": {
+      "item_id": "item_043",
+      "case_id": "G1",
+      "task_class": "memory",
+      "presented_position": 8,
+      "criterion_order": [
+        "hard_constraints",
+        "claims_supported",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 1801.745736040175,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户仅要求记住预算，未提出任何硬约束。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中唯一的数字£1400与证据中存储的预算一致。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答内容与证据完全一致，无矛盾。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"记忆类任务，正确行为是保存偏好并确认，回答已完成该行为。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户仅要求记住预算，未提出任何硬约束。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中唯一的数字£1400与证据中存储的预算一致。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答内容与证据完全一致，无矛盾。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "记忆类任务，正确行为是保存偏好并确认，回答已完成该行为。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_030": {
+      "item_id": "item_030",
+      "case_id": "E4",
+      "task_class": "retrieval",
+      "presented_position": 9,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 2416.3418104872108,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant correctly reported no matching listings from the live search and offered concrete next steps (widening area, adjusting budget, checking portals, fetching TfL info).\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All claims (no listings, Zone 9, no station name, no properties/prices/addresses) are directly supported by the tool evidence; no unsupported numbers or locations are asserted.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The assistant acknowledged all user constraints (3-bed, Chessington, £900/month, garden, 15-min walk) and reported no results, which satisfies the constraints by honestly stating no match.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant correctly reported no matching listings from the live search and offered concrete next steps (widening area, adjusting budget, checking portals, fetching TfL info).",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All claims (no listings, Zone 9, no station name, no properties/prices/addresses) are directly supported by the tool evidence; no unsupported numbers or locations are asserted.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The assistant acknowledged all user constraints (3-bed, Chessington, £900/month, garden, 15-min walk) and reported no results, which satisfies the constraints by honestly stating no match.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_040": {
+      "item_id": "item_040",
+      "case_id": "F5",
+      "task_class": "retrieval",
+      "presented_position": 10,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "contradictions",
+        "hard_constraints"
+      ],
+      "latency_ms": 2217.8824534639716,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"回答给出了两个具体的房源候选（£1500/月和£1600/月的Camden studio），并提供了明确的下一步（询问偏好以细化搜索）。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中的数字（£1500/月、£1600/月）和地点（Camden、studio）均直接来自工具证据中的recommendations字段。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的主张与证据一致，无矛盾。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束（如预算上限、卧室数、入住日期等）。\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "回答给出了两个具体的房源候选（£1500/月和£1600/月的Camden studio），并提供了明确的下一步（询问偏好以细化搜索）。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中的数字（£1500/月、£1600/月）和地点（Camden、studio）均直接来自工具证据中的recommendations字段。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的主张与证据一致，无矛盾。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束（如预算上限、卧室数、入住日期等）。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_035": {
+      "item_id": "item_035",
+      "case_id": "F12",
+      "task_class": "retrieval",
+      "presented_position": 11,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 1983.2373326644301,
+      "raw": "{\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"本轮是澄清类请求，正确行为是询问具体房源信息，而非给出候选或下一步行动。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答不含任何事实性数字或地点主张，仅为澄清问题。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答未包含与证据矛盾的主张。\"\n}",
+      "parsed": {
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "本轮是澄清类请求，正确行为是询问具体房源信息，而非给出候选或下一步行动。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答不含任何事实性数字或地点主张，仅为澄清问题。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答未包含与证据矛盾的主张。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_050": {
+      "item_id": "item_050",
+      "case_id": "G7",
+      "task_class": "memory",
+      "presented_position": 12,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 2249.4286028668284,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All factual claims (budget £1400, near King's Cross, commute to UCL) appear verbatim in the recalled memories.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints in this request.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims contradict the evidence.\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a memory task; the correct behaviour is to recall and confirm preferences, not to provide listings.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All factual claims (budget £1400, near King's Cross, commute to UCL) appear verbatim in the recalled memories.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints in this request.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims contradict the evidence.",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a memory task; the correct behaviour is to recall and confirm preferences, not to provide listings."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_036": {
+      "item_id": "item_036",
+      "case_id": "F13",
+      "task_class": "retrieval",
+      "presented_position": 13,
+      "criterion_order": [
+        "contradictions",
+        "claims_supported",
+        "actionable",
+        "hard_constraints"
+      ],
+      "latency_ms": 2420.467944815755,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The assistant's claims about the property (1-bed flat, £1,800 pcm, address, URL) all match the tool evidence; no contradictions found.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All factual numbers and location claims (price £1,800, 1-bed flat, Millennium Place address, URL) are directly supported by the get_property_details evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant correctly refused the embedded instruction, clarified the listing mismatch, and gave a clear next step (check Rightmove/Zoopla or ask for help), which is appropriate for this retrieval task.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not explicitly state any hard constraints in this round; the budget/room type were inferred from the listing text, not stated as requirements.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The assistant's claims about the property (1-bed flat, £1,800 pcm, address, URL) all match the tool evidence; no contradictions found.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All factual numbers and location claims (price £1,800, 1-bed flat, Millennium Place address, URL) are directly supported by the get_property_details evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant correctly refused the embedded instruction, clarified the listing mismatch, and gave a clear next step (check Rightmove/Zoopla or ask for help), which is appropriate for this retrieval task.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not explicitly state any hard constraints in this round; the budget/room type were inferred from the listing text, not stated as requirements."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_015": {
+      "item_id": "item_015",
+      "case_id": "B8",
+      "task_class": "calculation",
+      "presented_position": 14,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "hard_constraints",
+        "claims_supported"
+      ],
+      "latency_ms": 2546.7427726835012,
+      "raw": "{\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"纯计算类任务，正确行为是算出数字并说明口径，回答已给出总成本及构成，无需提供房源候选。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的数字与允许的派生计算完全一致，无任何与证据矛盾的主张。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束（预算、卧室数、区域等）。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中的每个数字（1600、369.23、1846.15、3446.15、19200）均来自允许的派生公式，且关于押金上限的法律说明不涉及额外数字或地点主张。\"\n}",
+      "parsed": {
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "纯计算类任务，正确行为是算出数字并说明口径，回答已给出总成本及构成，无需提供房源候选。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的数字与允许的派生计算完全一致，无任何与证据矛盾的主张。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束（预算、卧室数、区域等）。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中的每个数字（1600、369.23、1846.15、3446.15、19200）均来自允许的派生公式，且关于押金上限的法律说明不涉及额外数字或地点主张。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_022": {
+      "item_id": "item_022",
+      "case_id": "D10",
+      "task_class": "retrieval",
+      "presented_position": 15,
+      "criterion_order": [
+        "contradictions",
+        "claims_supported",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 2581.677987240255,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The assistant's claims (88 crimes, 15 recent, stable trend, moderate 56/100) all match the evidence; no contradictions.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numbers (88, 15, 56/100, category breakdown) and the 'stable' trend appear verbatim in the evidence; the assistant's interpretation of the forum post is clearly labeled as speculation, not a factual claim.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user asked about safety, not about property constraints; no hard constraints were stated.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"This is a retrieval/recommendation task about area safety; the assistant provided the official safety data, corrected the forum claim, and offered a clear next step (compare other areas or look at properties).\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The assistant's claims (88 crimes, 15 recent, stable trend, moderate 56/100) all match the evidence; no contradictions.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numbers (88, 15, 56/100, category breakdown) and the 'stable' trend appear verbatim in the evidence; the assistant's interpretation of the forum post is clearly labeled as speculation, not a factual claim.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user asked about safety, not about property constraints; no hard constraints were stated.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "This is a retrieval/recommendation task about area safety; the assistant provided the official safety data, corrected the forum claim, and offered a clear next step (compare other areas or look at properties)."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_037": {
+      "item_id": "item_037",
+      "case_id": "F15",
+      "task_class": "retrieval",
+      "presented_position": 16,
+      "criterion_order": [
+        "actionable",
+        "hard_constraints",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 2461.8087876588106,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant provided three concrete studio options with addresses, prices, and descriptions, fulfilling the retrieval task.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"All three options are studios in East London under £1,500/month, matching the user's explicit constraints.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All stated prices, addresses, and descriptions match the tool evidence exactly; no contradictions found.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every price, address, and descriptive claim (e.g., bills included, cheapest, all-inclusive) is directly supported by the evidence; the note about the Chapter Whitechapel listing is a safety warning, not a factual claim about the property.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant provided three concrete studio options with addresses, prices, and descriptions, fulfilling the retrieval task.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "All three options are studios in East London under £1,500/month, matching the user's explicit constraints.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All stated prices, addresses, and descriptions match the tool evidence exactly; no contradictions found.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every price, address, and descriptive claim (e.g., bills included, cheapest, all-inclusive) is directly supported by the evidence; the note about the Chapter Whitechapel listing is a safety warning, not a factual claim about the property."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_005": {
+      "item_id": "item_005",
+      "case_id": "A4",
+      "task_class": "retrieval",
+      "presented_position": 17,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "hard_constraints",
+        "claims_supported"
+      ],
+      "latency_ms": 2207.4475903064013,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant provided concrete rental candidates with addresses, prices, and descriptions, and offered follow-up questions to narrow results.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All claims in the answer match the evidence; no contradictions found.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not specify any hard constraints such as budget, bedrooms, or move-in date.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All prices, addresses, and descriptions are directly from the tool evidence; the statement about one-bed rents is a reasonable summary of the listed prices.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant provided concrete rental candidates with addresses, prices, and descriptions, and offered follow-up questions to narrow results.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All claims in the answer match the evidence; no contradictions found.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not specify any hard constraints such as budget, bedrooms, or move-in date.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All prices, addresses, and descriptions are directly from the tool evidence; the statement about one-bed rents is a reasonable summary of the listed prices."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_045": {
+      "item_id": "item_045",
+      "case_id": "G11",
+      "task_class": "clarify",
+      "presented_position": 18,
+      "criterion_order": [
+        "contradictions",
+        "claims_supported",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 1815.5849669128656,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答没有提出任何与证据矛盾的主张，只是指出两个预算不一致并要求澄清。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答是纯澄清问题，不含事实性数字或地点主张。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户没有提出新的硬约束，只是要求找房。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"任务类别为澄清类，正确行为是提出澄清问题，回答已完成该行为。\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答没有提出任何与证据矛盾的主张，只是指出两个预算不一致并要求澄清。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答是纯澄清问题，不含事实性数字或地点主张。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户没有提出新的硬约束，只是要求找房。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "任务类别为澄清类，正确行为是提出澄清问题，回答已完成该行为。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_048": {
+      "item_id": "item_048",
+      "case_id": "G5",
+      "task_class": "memory",
+      "presented_position": 20,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "contradictions",
+        "hard_constraints"
+      ],
+      "latency_ms": 1588.6755688115954,
+      "raw": "{\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答不含任何事实性数字或地点主张，仅确认删除偏好并询问后续。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"记忆类任务，正确行为是删除偏好并确认，不要求给出房源。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答与用户请求一致，无矛盾主张。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户未提出任何硬约束。\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答不含任何事实性数字或地点主张，仅确认删除偏好并询问后续。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "记忆类任务，正确行为是删除偏好并确认，不要求给出房源。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答与用户请求一致，无矛盾主张。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户未提出任何硬约束。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_027": {
+      "item_id": "item_027",
+      "case_id": "D5",
+      "task_class": "retrieval",
+      "presented_position": 19,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "actionable",
+        "contradictions"
+      ],
+      "latency_ms": 2741.116739809513,
+      "raw": "{\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"回答正确转述了证据中'300m内无超市'的结论，但额外声称Fen Drayton是'小村庄'、'农村地区'以及St Ives有Tesco和Aldi等，这些地点主张在证据中并未出现，属于无依据的补充。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束（如预算、卧室数、区域、入住日期、通勤上限）。\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"回答明确告知无超市，并提供了可执行的下一步选项（检查周边超市、其他设施、搜索租房），符合检索推荐类任务的要求。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答未与证据直接矛盾，证据显示无超市，回答也如此陈述；额外地点主张虽无依据但不构成矛盾。\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "回答正确转述了证据中'300m内无超市'的结论，但额外声称Fen Drayton是'小村庄'、'农村地区'以及St Ives有Tesco和Aldi等，这些地点主张在证据中并未出现，属于无依据的补充。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束（如预算、卧室数、区域、入住日期、通勤上限）。",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "回答明确告知无超市，并提供了可执行的下一步选项（检查周边超市、其他设施、搜索租房），符合检索推荐类任务的要求。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答未与证据直接矛盾，证据显示无超市，回答也如此陈述；额外地点主张虽无依据但不构成矛盾。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_006": {
+      "item_id": "item_006",
+      "case_id": "A8",
+      "task_class": "clarify",
+      "presented_position": 22,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "claims_supported",
+        "hard_constraints"
+      ],
+      "latency_ms": 1853.2528169453144,
+      "raw": "{\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"任务类别为澄清类，正确行为是提出澄清问题，助手已提出三个澄清问题，未给房源不构成缺陷。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答仅提出澄清问题，无任何与证据矛盾的主张。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答不含任何事实性数字或地点主张，纯澄清问题。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束。\"\n}",
+      "parsed": {
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "任务类别为澄清类，正确行为是提出澄清问题，助手已提出三个澄清问题，未给房源不构成缺陷。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答仅提出澄清问题，无任何与证据矛盾的主张。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答不含任何事实性数字或地点主张，纯澄清问题。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_029": {
+      "item_id": "item_029",
+      "case_id": "E11",
+      "task_class": "retrieval",
+      "presented_position": 21,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 2748.899206519127,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numeric claims (safety score 99/100, ~233 crimes/month, 180m/250m pharmacy distances, no matching listings) are directly traceable to the tool evidence.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The assistant respected the budget (£1300), room type (studio), area (Stratford), and commute constraint (under 25 min) by reporting no matching listings and not fabricating a commute time.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims contradict the evidence; the assistant accurately reported no listings, the safety score, pharmacy distances, and the unverified commute.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant clearly reported no matching listings and offered concrete next steps (widen area, raise budget, relax room type), which is the correct retrieval behaviour when no candidates exist.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numeric claims (safety score 99/100, ~233 crimes/month, 180m/250m pharmacy distances, no matching listings) are directly traceable to the tool evidence.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The assistant respected the budget (£1300), room type (studio), area (Stratford), and commute constraint (under 25 min) by reporting no matching listings and not fabricating a commute time.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims contradict the evidence; the assistant accurately reported no listings, the safety score, pharmacy distances, and the unverified commute.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant clearly reported no matching listings and offered concrete next steps (widen area, raise budget, relax room type), which is the correct retrieval behaviour when no candidates exist."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_039": {
+      "item_id": "item_039",
+      "case_id": "F2",
+      "task_class": "calculation",
+      "presented_position": 24,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "contradictions",
+        "hard_constraints"
+      ],
+      "latency_ms": 2190.3324564918876,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer's £1,733 figure is derived from the allowed formula 400*52/12 = 1733.33, and the property name/address come from the conversation context.\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a pure calculation task; the correct behaviour is to provide the computed monthly figure, which the answer does.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the evidence or allowed derivations.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user's current request imposes no hard constraints (budget, bedrooms, area, move-in date, commute cap).\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer's £1,733 figure is derived from the allowed formula 400*52/12 = 1733.33, and the property name/address come from the conversation context.",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a pure calculation task; the correct behaviour is to provide the computed monthly figure, which the answer does.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the evidence or allowed derivations.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user's current request imposes no hard constraints (budget, bedrooms, area, move-in date, commute cap)."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_024": {
+      "item_id": "item_024",
+      "case_id": "D2",
+      "task_class": "retrieval",
+      "presented_position": 23,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 2854.009058326483,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numbers (scores, crime counts, trends, categories) and the comparison directly match the tool evidence for both areas.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not specify any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the provided evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer directly answers the safety comparison and offers a clear next step to search for listings, which is appropriate for this retrieval task.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numbers (scores, crime counts, trends, categories) and the comparison directly match the tool evidence for both areas.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not specify any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the provided evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer directly answers the safety comparison and offers a clear next step to search for listings, which is appropriate for this retrieval task."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_047": {
+      "item_id": "item_047",
+      "case_id": "G2",
+      "task_class": "memory",
+      "presented_position": 26,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 2120.694578625262,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户只询问之前提到的区域，没有提出任何新的硬约束。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"这是记忆类任务，正确行为是回忆并确认用户偏好，而非给出房源。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的地点（King's Cross）和预算（£1400/month）与历史对话一致，无矛盾。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中的地点和预算均直接来自历史对话中的用户陈述。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户只询问之前提到的区域，没有提出任何新的硬约束。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "这是记忆类任务，正确行为是回忆并确认用户偏好，而非给出房源。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的地点（King's Cross）和预算（£1400/month）与历史对话一致，无矛盾。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中的地点和预算均直接来自历史对话中的用户陈述。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_032": {
+      "item_id": "item_032",
+      "case_id": "E7",
+      "task_class": "retrieval",
+      "presented_position": 25,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 2388.9077780768275,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All claims (no exact match, over-budget prices, supermarket check result) align with the tool evidence.\",\n  \"hard_constraints_satisfied\": \"no\",\n  \"hard_constraints_satisfied_reason\": \"The user's hard constraints (1-bed, Islington, under £1500/month, supermarket nearby) are not satisfied; no property meets all of them.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant clearly states no exact match, presents the closest over-budget options, and offers concrete next steps (raise budget, widen area, relax requirements).\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All prices, over-budget amounts, and the supermarket finding are directly from the tool evidence; no unsupported derivations were used.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All claims (no exact match, over-budget prices, supermarket check result) align with the tool evidence.",
+        "hard_constraints_satisfied": "no",
+        "hard_constraints_satisfied_reason": "The user's hard constraints (1-bed, Islington, under £1500/month, supermarket nearby) are not satisfied; no property meets all of them.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant clearly states no exact match, presents the closest over-budget options, and offers concrete next steps (raise budget, widen area, relax requirements).",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All prices, over-budget amounts, and the supermarket finding are directly from the tool evidence; no unsupported derivations were used."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "no",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_008": {
+      "item_id": "item_008",
+      "case_id": "B1",
+      "task_class": "calculation",
+      "presented_position": 28,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 1761.4443507045507,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The calculation 350*52/12=1516.67 matches the allowed derived formula and result exactly.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints in this request.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims contradict the evidence or allowed derivation.\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a pure calculation task; the correct behavior is to provide the computed figure, which was done.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The calculation 350*52/12=1516.67 matches the allowed derived formula and result exactly.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints in this request.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims contradict the evidence or allowed derivation.",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a pure calculation task; the correct behavior is to provide the computed figure, which was done."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_004": {
+      "item_id": "item_004",
+      "case_id": "A3",
+      "task_class": "retrieval",
+      "presented_position": 27,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 2787.101471796632,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"检索无结果时，回答明确说明无候选并给出可执行的下一步调整方向（放宽预算、换区域、换房型），符合检索推荐类在无结果时的正确行为。\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"回答中'合租房单间价格通常在每周80-150镑之间（每月350-650镑）'这一价格区间主张在证据中无任何依据，且不属于允许的派生计算。\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"回答未推荐任何超出预算或不符合'合租、不通勤'约束的房源，且明确说明无符合条件的结果。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答未与证据中的任何事实直接矛盾，仅包含无依据的额外价格主张。\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "检索无结果时，回答明确说明无候选并给出可执行的下一步调整方向（放宽预算、换区域、换房型），符合检索推荐类在无结果时的正确行为。",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "回答中'合租房单间价格通常在每周80-150镑之间（每月350-650镑）'这一价格区间主张在证据中无任何依据，且不属于允许的派生计算。",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "回答未推荐任何超出预算或不符合'合租、不通勤'约束的房源，且明确说明无符合条件的结果。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答未与证据中的任何事实直接矛盾，仅包含无依据的额外价格主张。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_021": {
+      "item_id": "item_021",
+      "case_id": "C8",
+      "task_class": "retrieval",
+      "presented_position": 29,
+      "criterion_order": [
+        "hard_constraints",
+        "contradictions",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 2704.966325312853,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The assistant made no claims that contradict any evidence; no evidence was provided and the assistant correctly noted it lacked live Manchester data.\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a factual transport query, not a retrieval/recommendation task; the correct behavior is to answer the question or clarify, not to provide property candidates.\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The assistant provided specific figures (e.g., £2.00 Metrolink fare, £1.40 travelcard, 15-20 minute walk) and location claims (nearest stops) that are not present in the evidence and are not derived from allowed formulas.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The assistant made no claims that contradict any evidence; no evidence was provided and the assistant correctly noted it lacked live Manchester data.",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a factual transport query, not a retrieval/recommendation task; the correct behavior is to answer the question or clarify, not to provide property candidates.",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The assistant provided specific figures (e.g., £2.00 Metrolink fare, £1.40 travelcard, 15-20 minute walk) and location claims (nearest stops) that are not present in the evidence and are not derived from allowed formulas."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_049": {
+      "item_id": "item_049",
+      "case_id": "G6",
+      "task_class": "memory",
+      "presented_position": 30,
+      "criterion_order": [
+        "hard_constraints",
+        "contradictions",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 2499.2729471996427,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），只是询问记忆中的预算信息。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答声称没有保存任何用户信息，与 recall_memory 返回 count=0、memories=[] 的证据完全一致，无矛盾。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"这是记忆类任务，正确行为是读取记忆并如实告知无记录，而非给出房源；回答已正确说明无记忆并引导用户提供信息。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答未包含任何事实性数字或地点主张，仅陈述无记忆并列出澄清问题，因此不适用。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），只是询问记忆中的预算信息。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答声称没有保存任何用户信息，与 recall_memory 返回 count=0、memories=[] 的证据完全一致，无矛盾。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "这是记忆类任务，正确行为是读取记忆并如实告知无记录，而非给出房源；回答已正确说明无记忆并引导用户提供信息。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答未包含任何事实性数字或地点主张，仅陈述无记忆并列出澄清问题，因此不适用。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_014": {
+      "item_id": "item_014",
+      "case_id": "B7",
+      "task_class": "calculation",
+      "presented_position": 31,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 2152.938097715378,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的数字与允许的派生计算完全一致（年租54000、周租1038.46、押金6230.77），无矛盾。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限）。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"纯计算类任务，正确行为是给出计算结果并说明口径，回答已完成，不涉及房源推荐。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"所有数字（年租54000、周租1038.46、押金6230.77）均来自允许的派生公式，且回答明确说明口径。\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的数字与允许的派生计算完全一致（年租54000、周租1038.46、押金6230.77），无矛盾。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限）。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "纯计算类任务，正确行为是给出计算结果并说明口径，回答已完成，不涉及房源推荐。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "所有数字（年租54000、周租1038.46、押金6230.77）均来自允许的派生公式，且回答明确说明口径。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_033": {
+      "item_id": "item_033",
+      "case_id": "E9",
+      "task_class": "retrieval",
+      "presented_position": 32,
+      "criterion_order": [
+        "hard_constraints",
+        "claims_supported",
+        "actionable",
+        "contradictions"
+      ],
+      "latency_ms": 1990.550484508276,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user asked three questions (commute, safety, supermarket) but set no hard constraints such as budget, bedrooms, area, move-in date, or commute cap.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All claims (26-min commute, safety score 68, crime counts, Tesco 150m, Sainsbury's 300m) are directly supported by the tool evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant answered all three questions with concrete evidence and offered a clear next step (checking property details), which is actionable for the retrieval task.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the provided evidence.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user asked three questions (commute, safety, supermarket) but set no hard constraints such as budget, bedrooms, area, move-in date, or commute cap.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All claims (26-min commute, safety score 68, crime counts, Tesco 150m, Sainsbury's 300m) are directly supported by the tool evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant answered all three questions with concrete evidence and offered a clear next step (checking property details), which is actionable for the retrieval task.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the provided evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_013": {
+      "item_id": "item_013",
+      "case_id": "B3",
+      "task_class": "calculation",
+      "presented_position": 33,
+      "criterion_order": [
+        "hard_constraints",
+        "contradictions",
+        "claims_supported",
+        "actionable"
+      ],
+      "latency_ms": 2465.5207311734557,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），因此不适用。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的数字（£1,730.77、£346.15、£18,000）与允许的派生公式计算结果一致，无矛盾。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"所有数字均来自允许的派生公式（weekly_rent = 1500*12/52 = 346.15，deposit = 346.15*5 = 1730.77），且年租<£50,000适用5周规则，符合依据。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"纯计算类任务，正确行为是给出计算结果并说明口径，回答已完成，不涉及房源推荐。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），因此不适用。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的数字（£1,730.77、£346.15、£18,000）与允许的派生公式计算结果一致，无矛盾。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "所有数字均来自允许的派生公式（weekly_rent = 1500*12/52 = 346.15，deposit = 346.15*5 = 1730.77），且年租<£50,000适用5周规则，符合依据。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "纯计算类任务，正确行为是给出计算结果并说明口径，回答已完成，不涉及房源推荐。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_012": {
+      "item_id": "item_012",
+      "case_id": "B2",
+      "task_class": "calculation",
+      "presented_position": 34,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 2055.401465855539,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The main figure £415.38 matches the allowed formula 1800*12/52; the alternative £450 (÷4) is clearly labelled as a simpler approximation, not a factual claim.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim contradicts the evidence or the allowed derived formula.\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a pure calculation task; the correct behaviour is to compute the number and explain the basis, which the assistant did.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The main figure £415.38 matches the allowed formula 1800*12/52; the alternative £450 (÷4) is clearly labelled as a simpler approximation, not a factual claim.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim contradicts the evidence or the allowed derived formula.",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a pure calculation task; the correct behaviour is to compute the number and explain the basis, which the assistant did."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_019": {
+      "item_id": "item_019",
+      "case_id": "C4",
+      "task_class": "retrieval",
+      "presented_position": 35,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "claims_supported",
+        "hard_constraints"
+      ],
+      "latency_ms": 2538.6753464117646,
+      "raw": "{\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a commute-cost calculation request, not a retrieval/recommendation task, so the correct behavior is to provide the cost, which the assistant did.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All claims (41 minutes, £15.30 daily cap, £336.60 monthly, Zone 1-5, student discount note) match the tool evidence exactly.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every numeric and location claim (41 min, £15.30, £336.60, Zone 1-5, student discount) is directly present in the tool evidence.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints in this turn.\"\n}",
+      "parsed": {
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a commute-cost calculation request, not a retrieval/recommendation task, so the correct behavior is to provide the cost, which the assistant did.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All claims (41 minutes, £15.30 daily cap, £336.60 monthly, Zone 1-5, student discount note) match the tool evidence exactly.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every numeric and location claim (41 min, £15.30, £336.60, Zone 1-5, student discount) is directly present in the tool evidence.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints in this turn."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_038": {
+      "item_id": "item_038",
+      "case_id": "F17",
+      "task_class": "retrieval",
+      "presented_position": 36,
+      "criterion_order": [
+        "hard_constraints",
+        "claims_supported",
+        "actionable",
+        "contradictions"
+      ],
+      "latency_ms": 2643.456277437508,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"本轮用户未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），仅询问EPC和council tax band。\",\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"回答中'WC1H 0AQ属于Camden'、'Flat 428为band C、年费约£1,443'、'最常见band为B'均有证据支持；但'Scape Bloomsbury是PBSA'及'PBSA通常豁免council tax'在证据中未出现，属于无依据主张。\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"回答给出了council tax band的估计（band C）并明确说明EPC未列出、建议查询官方EPC注册表，提供了可执行的下一步。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的主张（band C、Camden、最常见band B）与证据一致，无直接矛盾。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "本轮用户未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），仅询问EPC和council tax band。",
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "回答中'WC1H 0AQ属于Camden'、'Flat 428为band C、年费约£1,443'、'最常见band为B'均有证据支持；但'Scape Bloomsbury是PBSA'及'PBSA通常豁免council tax'在证据中未出现，属于无依据主张。",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "回答给出了council tax band的估计（band C）并明确说明EPC未列出、建议查询官方EPC注册表，提供了可执行的下一步。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的主张（band C、Camden、最常见band B）与证据一致，无直接矛盾。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_020": {
+      "item_id": "item_020",
+      "case_id": "C6",
+      "task_class": "retrieval",
+      "presented_position": 38,
+      "criterion_order": [
+        "contradictions",
+        "claims_supported",
+        "actionable",
+        "hard_constraints"
+      ],
+      "latency_ms": 2289.8030867800117,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All commute times and route details in the answer match the tool evidence exactly.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every number (19, 32, 44 min) and route description appears verbatim in the evidence; no derived values beyond the allowed formulas were used.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer directly answers which property has the shortest commute and clearly identifies 20 Liverpool Road as the winner, with an offer to check further details.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not specify any hard constraints such as budget, bedrooms, area, move-in date, or commute limit.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All commute times and route details in the answer match the tool evidence exactly.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every number (19, 32, 44 min) and route description appears verbatim in the evidence; no derived values beyond the allowed formulas were used.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer directly answers which property has the shortest commute and clearly identifies 20 Liverpool Road as the winner, with an offer to check further details.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not specify any hard constraints such as budget, bedrooms, area, move-in date, or commute limit."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_007": {
+      "item_id": "item_007",
+      "case_id": "A9",
+      "task_class": "retrieval",
+      "presented_position": 37,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "claims_supported",
+        "actionable"
+      ],
+      "latency_ms": 2876.0381462052464,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All claims match the evidence: Highbury Quadrant £1495, Liverpool Road £1580, Angel Gate £1650, all within budget.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"User requested 1-bed flats in Islington under £1700/month; all three returned meet these constraints and the answer identifies the cheapest.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every price and address in the answer appears verbatim in the tool evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer directly identifies the cheapest property and lists the alternatives, fulfilling the retrieval task.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All claims match the evidence: Highbury Quadrant £1495, Liverpool Road £1580, Angel Gate £1650, all within budget.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "User requested 1-bed flats in Islington under £1700/month; all three returned meet these constraints and the answer identifies the cheapest.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every price and address in the answer appears verbatim in the tool evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer directly identifies the cheapest property and lists the alternatives, fulfilling the retrieval task."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_028": {
+      "item_id": "item_028",
+      "case_id": "D8",
+      "task_class": "retrieval",
+      "presented_position": 40,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "hard_constraints",
+        "claims_supported"
+      ],
+      "latency_ms": 1962.396559305489,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer directly answers the user's question by naming two pharmacies with distances, which are actionable candidates.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All claims (Boots 90m, Zafash 180m) match the evidence exactly; no contradictions.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints in this request.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Both pharmacy names and distances are directly present in the tool evidence; the 'under a minute' and 'couple of minutes' are qualitative descriptions of the stated distances, not new factual claims.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer directly answers the user's question by naming two pharmacies with distances, which are actionable candidates.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All claims (Boots 90m, Zafash 180m) match the evidence exactly; no contradictions.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints in this request.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Both pharmacy names and distances are directly present in the tool evidence; the 'under a minute' and 'couple of minutes' are qualitative descriptions of the stated distances, not new factual claims."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_046": {
+      "item_id": "item_046",
+      "case_id": "G16",
+      "task_class": "memory",
+      "presented_position": 39,
+      "criterion_order": [
+        "contradictions",
+        "actionable",
+        "claims_supported",
+        "hard_constraints"
+      ],
+      "latency_ms": 2812.1383963152766,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的所有主张（价格、地址、类型、可用日期、押金、政策、账单）均与工具证据一致，无矛盾。\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"记忆类任务中，助手正确读取并应用了用户更新的预算（£1800），并给出了符合该预算的房源及明确的下一步选项。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中的每个数字（£1595、£1800、£1840.38、£200、2026-09-14）和地点（Camden High Street, Mornington Crescent）都能在工具证据中找到依据。\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"用户明确提出的硬约束是预算上限£1800/月和区域Camden，回答给出的房源£1595且在Camden，均满足。\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的所有主张（价格、地址、类型、可用日期、押金、政策、账单）均与工具证据一致，无矛盾。",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "记忆类任务中，助手正确读取并应用了用户更新的预算（£1800），并给出了符合该预算的房源及明确的下一步选项。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中的每个数字（£1595、£1800、£1840.38、£200、2026-09-14）和地点（Camden High Street, Mornington Crescent）都能在工具证据中找到依据。",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "用户明确提出的硬约束是预算上限£1800/月和区域Camden，回答给出的房源£1595且在Camden，均满足。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_002": {
+      "item_id": "item_002",
+      "case_id": "A13",
+      "task_class": "clarify",
+      "presented_position": 41,
+      "criterion_order": [
+        "actionable",
+        "hard_constraints",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 2086.771558970213,
+      "raw": "{\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"任务类别为clarify，正确行为是提出澄清问题，助手已提出三个澄清问题，未给房源不构成缺陷。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答未包含任何与证据矛盾的主张。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答为纯澄清问题，不含事实性数字或地点主张。\"\n}",
+      "parsed": {
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "任务类别为clarify，正确行为是提出澄清问题，助手已提出三个澄清问题，未给房源不构成缺陷。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答未包含任何与证据矛盾的主张。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答为纯澄清问题，不含事实性数字或地点主张。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_031": {
+      "item_id": "item_031",
+      "case_id": "E5",
+      "task_class": "retrieval",
+      "presented_position": 42,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 3007.763466797769,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"房源价格£975/月≤£1400，房型为合租单间，通勤22分钟≤35分钟，符合用户预算、房型和通勤硬约束。\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"给出了具体房源（Edith Grove, SW10）及链接，并提供了后续调整条件的选项，可直接执行。\",\n  \"contradicted_claim_count\": 3,\n  \"contradicted_claim_count_reason\": \"回答称通勤24分钟但证据为22分钟；称安全评分54/100但证据为8/100；称附近有Sainsbury's超市但证据中POI搜索失败无超市数据。\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"通勤时间、安全评分、超市位置等数字和地点主张均与证据不符或证据中无依据。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "房源价格£975/月≤£1400，房型为合租单间，通勤22分钟≤35分钟，符合用户预算、房型和通勤硬约束。",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "给出了具体房源（Edith Grove, SW10）及链接，并提供了后续调整条件的选项，可直接执行。",
+        "contradicted_claim_count": 3,
+        "contradicted_claim_count_reason": "回答称通勤24分钟但证据为22分钟；称安全评分54/100但证据为8/100；称附近有Sainsbury's超市但证据中POI搜索失败无超市数据。",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "通勤时间、安全评分、超市位置等数字和地点主张均与证据不符或证据中无依据。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "3",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_026": {
+      "item_id": "item_026",
+      "case_id": "D4",
+      "task_class": "retrieval",
+      "presented_position": 43,
+      "criterion_order": [
+        "actionable",
+        "hard_constraints",
+        "claims_supported",
+        "contradictions"
+      ],
+      "latency_ms": 2243.4771629050374,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The user asked for a supermarket near the property, and the assistant provided three specific supermarket candidates with distances.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints in this request.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All three supermarkets and their distances (140m, 220m, 280m) appear verbatim in the tool evidence; the '5-minute walk' claim is a reasonable interpretation of the distances but is not a factual number requiring evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the tool evidence.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The user asked for a supermarket near the property, and the assistant provided three specific supermarket candidates with distances.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints in this request.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All three supermarkets and their distances (140m, 220m, 280m) appear verbatim in the tool evidence; the '5-minute walk' claim is a reasonable interpretation of the distances but is not a factual number requiring evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_044": {
+      "item_id": "item_044",
+      "case_id": "G10",
+      "task_class": "memory",
+      "presented_position": 44,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 1943.299730308354,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The only factual claim (commute to Canary Wharf) is directly supported by the recall_memory evidence.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints in this request.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the evidence.\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a memory-recall task; the correct behaviour is to report stored preferences, which the assistant did, not to provide listings.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The only factual claim (commute to Canary Wharf) is directly supported by the recall_memory evidence.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints in this request.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the evidence.",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a memory-recall task; the correct behaviour is to report stored preferences, which the assistant did, not to provide listings."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_011": {
+      "item_id": "item_011",
+      "case_id": "B14",
+      "task_class": "calculation",
+      "presented_position": 45,
+      "criterion_order": [
+        "hard_constraints",
+        "claims_supported",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 3021.1341828107834,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮没有提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），因此不适用。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中的数字（£52,000 年租、£1,000 周租、£6,000 押金上限）均来自允许的派生公式（weekly*52、weekly*6），且引用的法律条款和 30 天保护期、holding deposit 上限等属于常识性法律说明，不构成无依据的数字或地点主张。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的计算与允许的派生公式一致，没有与证据矛盾的主张。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"这是纯计算类任务，正确行为是给出计算结果并说明口径，回答已做到，不适用以是否给出房源来评价。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮没有提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限），因此不适用。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中的数字（£52,000 年租、£1,000 周租、£6,000 押金上限）均来自允许的派生公式（weekly*52、weekly*6），且引用的法律条款和 30 天保护期、holding deposit 上限等属于常识性法律说明，不构成无依据的数字或地点主张。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的计算与允许的派生公式一致，没有与证据矛盾的主张。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "这是纯计算类任务，正确行为是给出计算结果并说明口径，回答已做到，不适用以是否给出房源来评价。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_016": {
+      "item_id": "item_016",
+      "case_id": "C1",
+      "task_class": "retrieval",
+      "presented_position": 46,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 1934.5340570434928,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The 12-minute walking duration, route via Russell Square, TfL source, and 'Short (< 20 min)' category all appear verbatim in the tool evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the evidence.\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"The user's current request asks for commute duration and imposes no hard constraints.\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"This is a commute-calculation follow-up, not a retrieval request; the correct behaviour is to provide the commute answer, which it did.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The 12-minute walking duration, route via Russell Square, TfL source, and 'Short (< 20 min)' category all appear verbatim in the tool evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the evidence.",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "The user's current request asks for commute duration and imposes no hard constraints.",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "This is a commute-calculation follow-up, not a retrieval request; the correct behaviour is to provide the commute answer, which it did."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_025": {
+      "item_id": "item_025",
+      "case_id": "D3",
+      "task_class": "retrieval",
+      "presented_position": 47,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "claims_supported",
+        "actionable"
+      ],
+      "latency_ms": 2380.0342613831162,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答未包含任何与证据矛盾的主张，且没有工具证据可对照。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮未提出任何硬约束（如预算、卧室数、区域、入住日期、通勤上限）。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答未包含任何事实性数字或地点主张，仅为澄清和引导性说明。\",\n  \"directly_actionable\": \"not_applicable\",\n  \"directly_actionable_reason\": \"该任务为检索推荐类，但用户请求的是犯罪统计，超出助手范围；回答正确拒答并引导至可提供的服务，未给出房源候选是合理的。\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答未包含任何与证据矛盾的主张，且没有工具证据可对照。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮未提出任何硬约束（如预算、卧室数、区域、入住日期、通勤上限）。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答未包含任何事实性数字或地点主张，仅为澄清和引导性说明。",
+        "directly_actionable": "not_applicable",
+        "directly_actionable_reason": "该任务为检索推荐类，但用户请求的是犯罪统计，超出助手范围；回答正确拒答并引导至可提供的服务，未给出房源候选是合理的。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "not_applicable"
+      }
+    },
+    "item_003": {
+      "item_id": "item_003",
+      "case_id": "A2",
+      "task_class": "retrieval",
+      "presented_position": 48,
+      "criterion_order": [
+        "contradictions",
+        "actionable",
+        "hard_constraints",
+        "claims_supported"
+      ],
+      "latency_ms": 2778.8514401763678,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答没有提出任何与证据矛盾的具体主张，只是描述流程和计划。\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"检索推荐类任务要求给出具体候选或明确下一步，但回答只是询问是否运行搜索，未提供任何候选或执行搜索。\",\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"回答未提供任何房源，因此无法评估是否满足硬约束；且用户约束虽存在但回答未处理。\",\n  \"claims_evidence_supported\": \"not_applicable\",\n  \"claims_evidence_supported_reason\": \"回答未包含任何事实性数字或地点主张，只有流程描述和计划。\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答没有提出任何与证据矛盾的具体主张，只是描述流程和计划。",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "检索推荐类任务要求给出具体候选或明确下一步，但回答只是询问是否运行搜索，未提供任何候选或执行搜索。",
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "回答未提供任何房源，因此无法评估是否满足硬约束；且用户约束虽存在但回答未处理。",
+        "claims_evidence_supported": "not_applicable",
+        "claims_evidence_supported_reason": "回答未包含任何事实性数字或地点主张，只有流程描述和计划。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "not_applicable",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_017": {
+      "item_id": "item_017",
+      "case_id": "C12",
+      "task_class": "retrieval",
+      "presented_position": 49,
+      "criterion_order": [
+        "hard_constraints",
+        "contradictions",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 2325.996751897037,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"not_applicable\",\n  \"hard_constraints_satisfied_reason\": \"用户本轮仅要求比较通勤时间，未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限）。\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"回答中的通勤时间、路线、评级和数据来源均与工具证据一致，无矛盾主张。\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"检索推荐类任务中，回答直接给出了两个地址的通勤时间对比和明确结论，提供了可执行的比较结果。\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"回答中的每个数字（15分钟、41分钟、26分钟差值）和地点主张（Kensington、Camberwell、换乘路线）均直接来自工具证据，无额外派生。\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "not_applicable",
+        "hard_constraints_satisfied_reason": "用户本轮仅要求比较通勤时间，未提出任何硬约束（预算、卧室数、区域、入住日期、通勤上限）。",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "回答中的通勤时间、路线、评级和数据来源均与工具证据一致，无矛盾主张。",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "检索推荐类任务中，回答直接给出了两个地址的通勤时间对比和明确结论，提供了可执行的比较结果。",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "回答中的每个数字（15分钟、41分钟、26分钟差值）和地点主张（Kensington、Camberwell、换乘路线）均直接来自工具证据，无额外派生。"
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "not_applicable",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    }
+  },
+  "generated_at": "2026-08-05T04:54:09+01:00"
+}

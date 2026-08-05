@@ -1,0 +1,909 @@
+{
+  "design": "third_design_rubric_validation",
+  "held_out_requirement_met": false,
+  "reminder": "口径验证，不是质量重评/泛化评估；本文件中的任何比例都禁止进入 CV 与 fact-ledger；不得与第一次设计的分布/κ 合并",
+  "same_model_two_rounds_self_consistency": {
+    "comparison": "v3 round1 vs round2 (SAME model deepseek-v4-flash) — SELF-CONSISTENCY, not inter-rater reliability",
+    "overall": {
+      "hard_constraints_satisfied": {
+        "n": 50,
+        "observed_agreement": 0.96,
+        "expected_agreement": 0.6976,
+        "kappa": 0.8677248677248676,
+        "distribution_a": {
+          "not_applicable": 42,
+          "yes": 7,
+          "no": 1
+        },
+        "distribution_b": {
+          "not_applicable": 40,
+          "yes": 9,
+          "no": 1
+        }
+      },
+      "claims_evidence_supported": {
+        "n": 50,
+        "observed_agreement": 0.88,
+        "expected_agreement": 0.48760000000000003,
+        "kappa": 0.765807962529274,
+        "distribution_a": {
+          "no": 3,
+          "yes": 32,
+          "not_applicable": 11,
+          "partial": 4
+        },
+        "distribution_b": {
+          "no": 3,
+          "yes": 34,
+          "not_applicable": 10,
+          "partial": 3
+        }
+      },
+      "contradicted_claim_count": {
+        "n": 50,
+        "observed_agreement": 0.98,
+        "expected_agreement": 0.9411999999999999,
+        "kappa": 0.6598639455782315,
+        "distribution_a": {
+          "0": 49,
+          "3": 1
+        },
+        "distribution_b": {
+          "0": 48,
+          "3": 1,
+          "1": 1
+        }
+      },
+      "directly_actionable": {
+        "n": 50,
+        "observed_agreement": 0.86,
+        "expected_agreement": 0.4404,
+        "kappa": 0.7498213009292352,
+        "distribution_a": {
+          "not_applicable": 17,
+          "yes": 28,
+          "no": 5
+        },
+        "distribution_b": {
+          "not_applicable": 23,
+          "yes": 25,
+          "no": 2
+        }
+      }
+    },
+    "per_task_class": {
+      "hard_constraints_satisfied": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.9375,
+          "expected_agreement": 0.609375,
+          "kappa": 0.84,
+          "distribution_a": {
+            "not_applicable": 25,
+            "yes": 6,
+            "no": 1
+          },
+          "distribution_b": {
+            "not_applicable": 23,
+            "yes": 8,
+            "no": 1
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "not_applicable": 7
+          },
+          "distribution_b": {
+            "not_applicable": 7
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 0.7551020408163265,
+          "kappa": 1.0,
+          "distribution_a": {
+            "not_applicable": 6,
+            "yes": 1
+          },
+          "distribution_b": {
+            "not_applicable": 6,
+            "yes": 1
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "not_applicable": 4
+          },
+          "distribution_b": {
+            "not_applicable": 4
+          }
+        }
+      },
+      "claims_evidence_supported": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.875,
+          "expected_agreement": 0.470703125,
+          "kappa": 0.7638376383763837,
+          "distribution_a": {
+            "no": 3,
+            "yes": 21,
+            "not_applicable": 4,
+            "partial": 4
+          },
+          "distribution_b": {
+            "no": 3,
+            "yes": 21,
+            "not_applicable": 5,
+            "partial": 3
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "yes": 7
+          },
+          "distribution_b": {
+            "yes": 7
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 0.7142857142857143,
+          "expected_agreement": 0.4693877551020408,
+          "kappa": 0.4615384615384616,
+          "distribution_a": {
+            "not_applicable": 4,
+            "yes": 3
+          },
+          "distribution_b": {
+            "yes": 5,
+            "not_applicable": 2
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 1.0,
+          "expected_agreement": 0.625,
+          "kappa": 1.0,
+          "distribution_a": {
+            "not_applicable": 3,
+            "yes": 1
+          },
+          "distribution_b": {
+            "not_applicable": 3,
+            "yes": 1
+          }
+        }
+      },
+      "contradicted_claim_count": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.96875,
+          "expected_agreement": 0.9091796875,
+          "kappa": 0.6559139784946236,
+          "distribution_a": {
+            "0": 31,
+            "3": 1
+          },
+          "distribution_b": {
+            "0": 30,
+            "3": 1,
+            "1": 1
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "0": 7
+          },
+          "distribution_b": {
+            "0": 7
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "0": 7
+          },
+          "distribution_b": {
+            "0": 7
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "0": 4
+          },
+          "distribution_b": {
+            "0": 4
+          }
+        }
+      },
+      "directly_actionable": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.875,
+          "expected_agreement": 0.58984375,
+          "kappa": 0.6952380952380952,
+          "distribution_a": {
+            "not_applicable": 3,
+            "yes": 24,
+            "no": 5
+          },
+          "distribution_b": {
+            "not_applicable": 6,
+            "yes": 24,
+            "no": 2
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "not_applicable": 7
+          },
+          "distribution_b": {
+            "not_applicable": 7
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 0.7142857142857143,
+          "expected_agreement": 0.5510204081632653,
+          "kappa": 0.36363636363636376,
+          "distribution_a": {
+            "yes": 3,
+            "not_applicable": 4
+          },
+          "distribution_b": {
+            "not_applicable": 6,
+            "yes": 1
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 0.75,
+          "expected_agreement": 0.75,
+          "kappa": 0.0,
+          "distribution_a": {
+            "not_applicable": 3,
+            "yes": 1
+          },
+          "distribution_b": {
+            "not_applicable": 4
+          }
+        }
+      }
+    }
+  },
+  "cross_model_round1_vs_round3": {
+    "comparison": "v3 round1 (deepseek-v4-flash) vs round3 (deepseek-v4-pro) — cross-model, same vendor",
+    "overall": {
+      "hard_constraints_satisfied": {
+        "n": 50,
+        "observed_agreement": 0.92,
+        "expected_agreement": 0.6976,
+        "kappa": 0.7354497354497356,
+        "distribution_a": {
+          "not_applicable": 42,
+          "yes": 7,
+          "no": 1
+        },
+        "distribution_b": {
+          "not_applicable": 40,
+          "yes": 9,
+          "no": 1
+        }
+      },
+      "claims_evidence_supported": {
+        "n": 50,
+        "observed_agreement": 0.64,
+        "expected_agreement": 0.3716,
+        "kappa": 0.4271164863144494,
+        "distribution_a": {
+          "no": 3,
+          "yes": 32,
+          "not_applicable": 11,
+          "partial": 4
+        },
+        "distribution_b": {
+          "no": 2,
+          "yes": 24,
+          "not_applicable": 9,
+          "cannot_assess": 1,
+          "partial": 14
+        }
+      },
+      "contradicted_claim_count": {
+        "n": 50,
+        "observed_agreement": 0.94,
+        "expected_agreement": 0.9211999999999999,
+        "kappa": 0.2385786802030459,
+        "distribution_a": {
+          "0": 49,
+          "3": 1
+        },
+        "distribution_b": {
+          "0": 47,
+          "cannot_assess": 1,
+          "2": 1,
+          "1": 1
+        }
+      },
+      "directly_actionable": {
+        "n": 50,
+        "observed_agreement": 0.76,
+        "expected_agreement": 0.4716,
+        "kappa": 0.5457986373959122,
+        "distribution_a": {
+          "not_applicable": 17,
+          "yes": 28,
+          "no": 5
+        },
+        "distribution_b": {
+          "not_applicable": 18,
+          "yes": 31,
+          "no": 1
+        }
+      }
+    },
+    "per_task_class": {
+      "hard_constraints_satisfied": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.90625,
+          "expected_agreement": 0.6279296875,
+          "kappa": 0.7480314960629921,
+          "distribution_a": {
+            "not_applicable": 25,
+            "yes": 6,
+            "no": 1
+          },
+          "distribution_b": {
+            "not_applicable": 24,
+            "yes": 7,
+            "no": 1
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "not_applicable": 7
+          },
+          "distribution_b": {
+            "not_applicable": 7
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 0.8571428571428571,
+          "expected_agreement": 0.653061224489796,
+          "kappa": 0.5882352941176469,
+          "distribution_a": {
+            "not_applicable": 6,
+            "yes": 1
+          },
+          "distribution_b": {
+            "not_applicable": 5,
+            "yes": 2
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "not_applicable": 4
+          },
+          "distribution_b": {
+            "not_applicable": 4
+          }
+        }
+      },
+      "claims_evidence_supported": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.625,
+          "expected_agreement": 0.3349609375,
+          "kappa": 0.43612334801762115,
+          "distribution_a": {
+            "no": 3,
+            "yes": 21,
+            "not_applicable": 4,
+            "partial": 4
+          },
+          "distribution_b": {
+            "no": 2,
+            "yes": 13,
+            "cannot_assess": 1,
+            "partial": 11,
+            "not_applicable": 5
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 0.5714285714285714,
+          "expected_agreement": 0.5714285714285714,
+          "kappa": 0.0,
+          "distribution_a": {
+            "yes": 7
+          },
+          "distribution_b": {
+            "yes": 4,
+            "partial": 3
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 0.7142857142857143,
+          "expected_agreement": 0.4693877551020408,
+          "kappa": 0.4615384615384616,
+          "distribution_a": {
+            "not_applicable": 4,
+            "yes": 3
+          },
+          "distribution_b": {
+            "yes": 5,
+            "not_applicable": 2
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 0.75,
+          "expected_agreement": 0.5,
+          "kappa": 0.5,
+          "distribution_a": {
+            "not_applicable": 3,
+            "yes": 1
+          },
+          "distribution_b": {
+            "not_applicable": 2,
+            "yes": 2
+          }
+        }
+      },
+      "contradicted_claim_count": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.90625,
+          "expected_agreement": 0.8779296875,
+          "kappa": 0.232,
+          "distribution_a": {
+            "0": 31,
+            "3": 1
+          },
+          "distribution_b": {
+            "0": 29,
+            "cannot_assess": 1,
+            "2": 1,
+            "1": 1
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "0": 7
+          },
+          "distribution_b": {
+            "0": 7
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "0": 7
+          },
+          "distribution_b": {
+            "0": 7
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 1.0,
+          "expected_agreement": 1.0,
+          "kappa": null,
+          "distribution_a": {
+            "0": 4
+          },
+          "distribution_b": {
+            "0": 4
+          }
+        }
+      },
+      "directly_actionable": {
+        "retrieval": {
+          "n": 32,
+          "observed_agreement": 0.84375,
+          "expected_agreement": 0.62890625,
+          "kappa": 0.5789473684210527,
+          "distribution_a": {
+            "not_applicable": 3,
+            "yes": 24,
+            "no": 5
+          },
+          "distribution_b": {
+            "not_applicable": 5,
+            "yes": 26,
+            "no": 1
+          }
+        },
+        "calculation": {
+          "n": 7,
+          "observed_agreement": 0.8571428571428571,
+          "expected_agreement": 0.8571428571428571,
+          "kappa": 0.0,
+          "distribution_a": {
+            "not_applicable": 7
+          },
+          "distribution_b": {
+            "yes": 1,
+            "not_applicable": 6
+          }
+        },
+        "memory": {
+          "n": 7,
+          "observed_agreement": 0.42857142857142855,
+          "expected_agreement": 0.510204081632653,
+          "kappa": -0.1666666666666665,
+          "distribution_a": {
+            "yes": 3,
+            "not_applicable": 4
+          },
+          "distribution_b": {
+            "not_applicable": 4,
+            "yes": 3
+          }
+        },
+        "clarify": {
+          "n": 4,
+          "observed_agreement": 0.5,
+          "expected_agreement": 0.625,
+          "kappa": -0.3333333333333333,
+          "distribution_a": {
+            "not_applicable": 3,
+            "yes": 1
+          },
+          "distribution_b": {
+            "not_applicable": 3,
+            "yes": 1
+          }
+        }
+      }
+    }
+  },
+  "distributions": {
+    "round1": {
+      "overall": {
+        "hard_constraints_satisfied": {
+          "not_applicable": 42,
+          "yes": 7,
+          "no": 1
+        },
+        "claims_evidence_supported": {
+          "no": 3,
+          "yes": 32,
+          "not_applicable": 11,
+          "partial": 4
+        },
+        "contradicted_claim_count": {
+          "0": 49,
+          "3": 1
+        },
+        "directly_actionable": {
+          "not_applicable": 17,
+          "yes": 28,
+          "no": 5
+        }
+      },
+      "per_task_class": {
+        "retrieval": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 25,
+            "yes": 6,
+            "no": 1
+          },
+          "claims_evidence_supported": {
+            "no": 3,
+            "yes": 21,
+            "not_applicable": 4,
+            "partial": 4
+          },
+          "contradicted_claim_count": {
+            "0": 31,
+            "3": 1
+          },
+          "directly_actionable": {
+            "not_applicable": 3,
+            "yes": 24,
+            "no": 5
+          }
+        },
+        "calculation": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 7
+          },
+          "claims_evidence_supported": {
+            "yes": 7
+          },
+          "contradicted_claim_count": {
+            "0": 7
+          },
+          "directly_actionable": {
+            "not_applicable": 7
+          }
+        },
+        "memory": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 6,
+            "yes": 1
+          },
+          "claims_evidence_supported": {
+            "not_applicable": 4,
+            "yes": 3
+          },
+          "contradicted_claim_count": {
+            "0": 7
+          },
+          "directly_actionable": {
+            "yes": 3,
+            "not_applicable": 4
+          }
+        },
+        "clarify": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 4
+          },
+          "claims_evidence_supported": {
+            "not_applicable": 3,
+            "yes": 1
+          },
+          "contradicted_claim_count": {
+            "0": 4
+          },
+          "directly_actionable": {
+            "not_applicable": 3,
+            "yes": 1
+          }
+        }
+      }
+    },
+    "round2": {
+      "overall": {
+        "hard_constraints_satisfied": {
+          "not_applicable": 40,
+          "yes": 9,
+          "no": 1
+        },
+        "claims_evidence_supported": {
+          "yes": 34,
+          "not_applicable": 10,
+          "partial": 3,
+          "no": 3
+        },
+        "contradicted_claim_count": {
+          "0": 48,
+          "1": 1,
+          "3": 1
+        },
+        "directly_actionable": {
+          "yes": 25,
+          "not_applicable": 23,
+          "no": 2
+        }
+      },
+      "per_task_class": {
+        "retrieval": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 23,
+            "yes": 8,
+            "no": 1
+          },
+          "claims_evidence_supported": {
+            "yes": 21,
+            "not_applicable": 5,
+            "partial": 3,
+            "no": 3
+          },
+          "contradicted_claim_count": {
+            "0": 30,
+            "1": 1,
+            "3": 1
+          },
+          "directly_actionable": {
+            "yes": 24,
+            "not_applicable": 6,
+            "no": 2
+          }
+        },
+        "calculation": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 7
+          },
+          "claims_evidence_supported": {
+            "yes": 7
+          },
+          "contradicted_claim_count": {
+            "0": 7
+          },
+          "directly_actionable": {
+            "not_applicable": 7
+          }
+        },
+        "memory": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 6,
+            "yes": 1
+          },
+          "claims_evidence_supported": {
+            "yes": 5,
+            "not_applicable": 2
+          },
+          "contradicted_claim_count": {
+            "0": 7
+          },
+          "directly_actionable": {
+            "not_applicable": 6,
+            "yes": 1
+          }
+        },
+        "clarify": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 4
+          },
+          "claims_evidence_supported": {
+            "yes": 1,
+            "not_applicable": 3
+          },
+          "contradicted_claim_count": {
+            "0": 4
+          },
+          "directly_actionable": {
+            "not_applicable": 4
+          }
+        }
+      }
+    },
+    "round3_pro": {
+      "overall": {
+        "hard_constraints_satisfied": {
+          "not_applicable": 40,
+          "yes": 9,
+          "no": 1
+        },
+        "claims_evidence_supported": {
+          "partial": 14,
+          "yes": 24,
+          "not_applicable": 9,
+          "no": 2,
+          "cannot_assess": 1
+        },
+        "contradicted_claim_count": {
+          "0": 47,
+          "1": 1,
+          "cannot_assess": 1,
+          "2": 1
+        },
+        "directly_actionable": {
+          "yes": 31,
+          "not_applicable": 18,
+          "no": 1
+        }
+      },
+      "per_task_class": {
+        "retrieval": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 24,
+            "yes": 7,
+            "no": 1
+          },
+          "claims_evidence_supported": {
+            "partial": 11,
+            "yes": 13,
+            "not_applicable": 5,
+            "no": 2,
+            "cannot_assess": 1
+          },
+          "contradicted_claim_count": {
+            "0": 29,
+            "1": 1,
+            "cannot_assess": 1,
+            "2": 1
+          },
+          "directly_actionable": {
+            "yes": 26,
+            "not_applicable": 5,
+            "no": 1
+          }
+        },
+        "calculation": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 7
+          },
+          "claims_evidence_supported": {
+            "yes": 4,
+            "partial": 3
+          },
+          "contradicted_claim_count": {
+            "0": 7
+          },
+          "directly_actionable": {
+            "not_applicable": 6,
+            "yes": 1
+          }
+        },
+        "memory": {
+          "hard_constraints_satisfied": {
+            "yes": 2,
+            "not_applicable": 5
+          },
+          "claims_evidence_supported": {
+            "yes": 5,
+            "not_applicable": 2
+          },
+          "contradicted_claim_count": {
+            "0": 7
+          },
+          "directly_actionable": {
+            "yes": 3,
+            "not_applicable": 4
+          }
+        },
+        "clarify": {
+          "hard_constraints_satisfied": {
+            "not_applicable": 4
+          },
+          "claims_evidence_supported": {
+            "not_applicable": 2,
+            "yes": 2
+          },
+          "contradicted_claim_count": {
+            "0": 4
+          },
+          "directly_actionable": {
+            "yes": 1,
+            "not_applicable": 3
+          }
+        }
+      }
+    }
+  },
+  "out_of_vocab_answers": {
+    "round1": [],
+    "round2": [],
+    "round3_pro": []
+  }
+}

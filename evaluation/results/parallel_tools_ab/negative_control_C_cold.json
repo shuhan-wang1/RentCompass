@@ -1,0 +1,472 @@
+{
+  "negative_control_primary": {
+    "definition": "per (case, repeat) pair: do the two arms agree on the number of EXECUTED tool calls and on task_completed?",
+    "pairs_compared": 60,
+    "tool_count_mismatch_pairs": 18,
+    "completion_mismatch_pairs": 0,
+    "mismatch_detail": [
+      {
+        "case_id": "B13",
+        "repeat": 2,
+        "serial_tools_executed": 4,
+        "parallel_tools_executed": 1,
+        "serial_list": [
+          "search_properties",
+          "get_property_details",
+          "get_property_details",
+          "search_properties"
+        ],
+        "parallel_list": [
+          "search_properties"
+        ]
+      },
+      {
+        "case_id": "B13",
+        "repeat": 3,
+        "serial_tools_executed": 4,
+        "parallel_tools_executed": 3,
+        "serial_list": [
+          "search_properties",
+          "search_properties",
+          "get_property_details",
+          "get_property_details"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "get_property_details",
+          "get_property_details"
+        ]
+      },
+      {
+        "case_id": "C9",
+        "repeat": 1,
+        "serial_tools_executed": 2,
+        "parallel_tools_executed": 4,
+        "serial_list": [
+          "calculate_commute",
+          "calculate_commute"
+        ],
+        "parallel_list": [
+          "calculate_commute",
+          "calculate_commute",
+          "calculate_commute_cost",
+          "calculate_commute_cost"
+        ]
+      },
+      {
+        "case_id": "E1",
+        "repeat": 1,
+        "serial_tools_executed": 3,
+        "parallel_tools_executed": 5,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "get_property_details",
+          "calculate_commute_cost"
+        ]
+      },
+      {
+        "case_id": "E1",
+        "repeat": 2,
+        "serial_tools_executed": 4,
+        "parallel_tools_executed": 5,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "get_property_details"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "calculate_commute",
+          "check_safety"
+        ]
+      },
+      {
+        "case_id": "E1",
+        "repeat": 3,
+        "serial_tools_executed": 6,
+        "parallel_tools_executed": 5,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "get_property_details",
+          "calculate_commute_cost",
+          "check_safety"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "check_safety",
+          "calculate_commute_cost"
+        ]
+      },
+      {
+        "case_id": "E10",
+        "repeat": 1,
+        "serial_tools_executed": 2,
+        "parallel_tools_executed": 3,
+        "serial_list": [
+          "search_properties",
+          "calculate_commute"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "calculate_commute",
+          "get_property_details"
+        ]
+      },
+      {
+        "case_id": "E10",
+        "repeat": 2,
+        "serial_tools_executed": 2,
+        "parallel_tools_executed": 3,
+        "serial_list": [
+          "search_properties",
+          "calculate_commute"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "calculate_commute",
+          "get_property_details"
+        ]
+      },
+      {
+        "case_id": "E11",
+        "repeat": 1,
+        "serial_tools_executed": 4,
+        "parallel_tools_executed": 3,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "calculate_commute"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute"
+        ]
+      },
+      {
+        "case_id": "E5",
+        "repeat": 1,
+        "serial_tools_executed": 6,
+        "parallel_tools_executed": 8,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "search_nearby_pois",
+          "get_property_details",
+          "web_search"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "search_nearby_pois",
+          "get_property_details",
+          "check_safety",
+          "calculate_commute_cost",
+          "web_search"
+        ]
+      },
+      {
+        "case_id": "E5",
+        "repeat": 2,
+        "serial_tools_executed": 5,
+        "parallel_tools_executed": 7,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "search_nearby_pois",
+          "get_property_details"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "search_nearby_pois",
+          "get_property_details",
+          "check_safety",
+          "calculate_commute_cost"
+        ]
+      },
+      {
+        "case_id": "E5",
+        "repeat": 3,
+        "serial_tools_executed": 5,
+        "parallel_tools_executed": 8,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "search_nearby_pois",
+          "get_property_details"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "search_nearby_pois",
+          "get_property_details",
+          "check_safety",
+          "calculate_commute",
+          "web_search"
+        ]
+      },
+      {
+        "case_id": "E6",
+        "repeat": 1,
+        "serial_tools_executed": 4,
+        "parallel_tools_executed": 3,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "get_property_details"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute"
+        ]
+      },
+      {
+        "case_id": "E6",
+        "repeat": 3,
+        "serial_tools_executed": 5,
+        "parallel_tools_executed": 6,
+        "serial_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "get_property_details",
+          "get_property_details"
+        ],
+        "parallel_list": [
+          "search_properties",
+          "check_safety",
+          "calculate_commute",
+          "get_property_details",
+          "get_property_details",
+          "calculate_commute_cost"
+        ]
+      },
+      {
+        "case_id": "F13",
+        "repeat": 1,
+        "serial_tools_executed": 2,
+        "parallel_tools_executed": 1,
+        "serial_list": [
+          "search_properties",
+          "check_safety"
+        ],
+        "parallel_list": [
+          "search_properties"
+        ]
+      },
+      {
+        "case_id": "F9",
+        "repeat": 1,
+        "serial_tools_executed": 2,
+        "parallel_tools_executed": 4,
+        "serial_list": [
+          "check_safety",
+          "search_properties"
+        ],
+        "parallel_list": [
+          "check_safety",
+          "get_weather",
+          "get_transport_info",
+          "check_transport_cost"
+        ]
+      },
+      {
+        "case_id": "F9",
+        "repeat": 2,
+        "serial_tools_executed": 1,
+        "parallel_tools_executed": 3,
+        "serial_list": [
+          "check_safety"
+        ],
+        "parallel_list": [
+          "check_safety",
+          "search_properties",
+          "get_transport_info"
+        ]
+      },
+      {
+        "case_id": "F9",
+        "repeat": 3,
+        "serial_tools_executed": 1,
+        "parallel_tools_executed": 4,
+        "serial_list": [
+          "check_safety"
+        ],
+        "parallel_list": [
+          "check_safety",
+          "get_weather",
+          "get_transport_info",
+          "get_transport_info"
+        ]
+      }
+    ],
+    "mismatch_direction": {
+      "serial_more": 6,
+      "parallel_more": 12
+    }
+  },
+  "per_arm_failure_and_budget": {
+    "serial_tools": {
+      "runs": 60,
+      "budget_timeout_events": 60,
+      "tools_timed_out": 60,
+      "tools_denied": 0,
+      "soft_wrapped_runs": 10,
+      "retry_count_total": 0,
+      "tool_call_events": 178,
+      "tool_call_failures": 3
+    },
+    "parallel_tools": {
+      "runs": 60,
+      "budget_timeout_events": 39,
+      "tools_timed_out": 39,
+      "tools_denied": 0,
+      "soft_wrapped_runs": 3,
+      "retry_count_total": 0,
+      "tool_call_events": 197,
+      "tool_call_failures": 10
+    }
+  },
+  "secondary_matched_pairs_only": {
+    "label": "pairs whose executed tool-call counts MATCH (the pairs where the same-input/same-evidence premise actually held)",
+    "n_cases": 17,
+    "n_pairs": 42,
+    "serial_retrieval_ms": {
+      "mean": 8248.41292209125,
+      "p50": 4.929902032017708,
+      "p95": 72492.79913357439
+    },
+    "parallel_retrieval_ms": {
+      "mean": 6179.056825892379,
+      "p50": 6.516639608889818,
+      "p95": 48766.1802096757
+    },
+    "bootstrap_parallel_minus_serial": {
+      "retrieval_mean_ms_diff": {
+        "point": -3464.4437740721246,
+        "ci_low": -7683.444866026277,
+        "ci_high": -74.23967948439085,
+        "n_cases": 17,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": false
+      },
+      "retrieval_p50_ms_diff": {
+        "point": 1.5867375768721104,
+        "ci_low": -817.5645191222429,
+        "ci_high": 3.0339471995830536,
+        "n_cases": 17,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": true
+      },
+      "retrieval_p95_ms_diff": {
+        "point": -23726.618923898684,
+        "ci_low": -26962.91190944612,
+        "ci_high": 132.98982426058308,
+        "n_cases": 17,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": true
+      },
+      "e2e_mean_ms_diff": {
+        "point": -3284.852366072728,
+        "ci_low": -6672.60738659682,
+        "ci_high": -606.7028540316701,
+        "n_cases": 17,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": false
+      }
+    }
+  },
+  "secondary_multi_call_batches_only": {
+    "label": "pairs in which at least one arm actually produced a batch of >=2 tool calls (the only runs where dispatch concurrency can matter)",
+    "n_cases": 19,
+    "n_pairs": 54,
+    "serial_retrieval_ms": {
+      "mean": 20397.75602526411,
+      "p50": 7.29319779202342,
+      "p95": 76687.919367617
+    },
+    "parallel_retrieval_ms": {
+      "mean": 16699.180017639366,
+      "p50": 10.27568243443966,
+      "p95": 62378.87314823445
+    },
+    "bootstrap_parallel_minus_serial": {
+      "retrieval_mean_ms_diff": {
+        "point": -3759.6067908922573,
+        "ci_low": -8157.136782192986,
+        "ci_high": 250.0197190578939,
+        "n_cases": 19,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": true
+      },
+      "retrieval_p50_ms_diff": {
+        "point": 2.982484642416239,
+        "ci_low": -5729.487887583673,
+        "ci_high": 759.942380478587,
+        "n_cases": 19,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": true
+      },
+      "retrieval_p95_ms_diff": {
+        "point": -14309.046219382544,
+        "ci_low": -27591.08179435134,
+        "ci_high": 6.383087020367384,
+        "n_cases": 19,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": true
+      },
+      "e2e_mean_ms_diff": {
+        "point": -4327.566154587099,
+        "ci_low": -8681.024503591263,
+        "ci_high": -77.22168260258448,
+        "n_cases": 19,
+        "n_boot": 2000,
+        "seed": 20260804,
+        "n_draws": 2000,
+        "crosses_zero": false
+      }
+    }
+  },
+  "source_files": [
+    "evaluation/results/parallel_tools_ab/cold_shard0/runs.jsonl",
+    "evaluation/results/parallel_tools_ab/cold_shard1/runs.jsonl"
+  ]
+}

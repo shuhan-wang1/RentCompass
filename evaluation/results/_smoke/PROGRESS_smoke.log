@@ -1,0 +1,12 @@
+2026-08-04T17:34:32+01:00 [SMOKE#s0] START arch=fc_loop arms=['baseline_all_strong', 'routed_models'] repeats=1 cases=5 resumed_runs=0 cache=warm serial_tools_arm=None timeout=120.0s deadline=None
+2026-08-04T17:35:16+01:00 [SMOKE#s0] A1#r1#baseline_all_strong arm=baseline_all_strong OK 43497ms llm=6 tools=2 cost=0.0023911608000000005 err=None
+2026-08-04T17:35:22+01:00 [SMOKE#s0] A1#r1#routed_models arm=routed_models OK 5939ms llm=2 tools=1 cost=0.00019447680000000001 err=None
+2026-08-04T17:35:26+01:00 [SMOKE#s0] B1#r1#baseline_all_strong arm=baseline_all_strong OK 3604ms llm=1 tools=0 cost=0.0013907600000000002 err=None
+2026-08-04T17:35:29+01:00 [SMOKE#s0] B1#r1#routed_models arm=routed_models OK 2426ms llm=1 tools=0 cost=0.0012817336000000002 err=None
+2026-08-04T17:35:38+01:00 [SMOKE#s0] C1#r1#baseline_all_strong arm=baseline_all_strong OK 8379ms llm=2 tools=2 cost=0.0013629896 err=None
+2026-08-04T17:35:43+01:00 [SMOKE#s0] C1#r1#routed_models arm=routed_models OK 4549ms llm=2 tools=1 cost=0.0012215560000000002 err=None
+2026-08-04T17:36:12+01:00 [SMOKE#s0] E1#r1#baseline_all_strong arm=baseline_all_strong FAIL 29134ms llm=2 tools=3 cost=0.0012092975999999998 err=BadRequestError: Error code: 400 - {'error': {'message': 'The `reasoning_content` in the thinking mode must be passed back to the API.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_request_error'}}
+2026-08-04T17:37:42+01:00 [SMOKE#s0] E1#r1#routed_models arm=routed_models OK 89338ms llm=3 tools=7 cost=0.0018459392 err=None
+2026-08-04T17:37:49+01:00 [SMOKE#s0] G1#r1#baseline_all_strong arm=baseline_all_strong OK 6785ms llm=2 tools=1 cost=0.0012676944 err=None
+2026-08-04T17:37:53+01:00 [SMOKE#s0] G1#r1#routed_models arm=routed_models OK 3493ms llm=2 tools=1 cost=0.0011645592000000002 err=None
+2026-08-04T17:37:53+01:00 [SMOKE#s0] END rc=0 runs_file=evaluation/results/_smoke/runs.jsonl

@@ -1,0 +1,1518 @@
+{
+  "purpose": "pro",
+  "model": "deepseek-v4-pro",
+  "thinking": true,
+  "temperature": 0.0,
+  "order_seed": 20261359,
+  "criterion_seed": 20261581,
+  "nonce": "RC-B-R3",
+  "presented_order": [
+    "item_047",
+    "item_043",
+    "item_040",
+    "item_021",
+    "item_002",
+    "item_005",
+    "item_023",
+    "item_032",
+    "item_016",
+    "item_044",
+    "item_042",
+    "item_009",
+    "item_006",
+    "item_017",
+    "item_025",
+    "item_030",
+    "item_008",
+    "item_015",
+    "item_045",
+    "item_019",
+    "item_011",
+    "item_035",
+    "item_034",
+    "item_037",
+    "item_036",
+    "item_012",
+    "item_001",
+    "item_048",
+    "item_031",
+    "item_033",
+    "item_004",
+    "item_003",
+    "item_039",
+    "item_022",
+    "item_024",
+    "item_049",
+    "item_014",
+    "item_029",
+    "item_026",
+    "item_038",
+    "item_028",
+    "item_050",
+    "item_020",
+    "item_007",
+    "item_046",
+    "item_027",
+    "item_041",
+    "item_010",
+    "item_013",
+    "item_018"
+  ],
+  "n_items": 50,
+  "n_verdicts": 50,
+  "n_errors": 0,
+  "errors": [],
+  "verdicts": {
+    "item_043": {
+      "item_id": "item_043",
+      "case_id": "G1",
+      "presented_position": 1,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "actionable",
+        "contradictions"
+      ],
+      "latency_ms": 8854.687786661088,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer repeats the stored string exactly as shown in the tool evidence, so every claim is supported.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user's budget was only stated, not used for a search; the assistant saved it without violating that constraint.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer only confirms the budget save and asks for location to start a search, not naming any specific properties or actions.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims contradict the tool evidence; the stored string matches exactly.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer repeats the stored string exactly as shown in the tool evidence, so every claim is supported.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user's budget was only stated, not used for a search; the assistant saved it without violating that constraint.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer only confirms the budget save and asks for location to start a search, not naming any specific properties or actions.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims contradict the tool evidence; the stored string matches exactly."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_047": {
+      "item_id": "item_047",
+      "case_id": "G2",
+      "presented_position": 0,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 17429.226654581726,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"It offers a specific next step: searching for properties in the area.\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The answer contains a number (£1400) and a place (King's Cross) but the tool evidence is empty, providing no support for these claims.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer restates the user's stated budget and location without violating any constraints.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The tool evidence is empty, so there are no claims that contradict it.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "It offers a specific next step: searching for properties in the area.",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The answer contains a number (£1400) and a place (King's Cross) but the tool evidence is empty, providing no support for these claims.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer restates the user's stated budget and location without violating any constraints.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The tool evidence is empty, so there are no claims that contradict it."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_040": {
+      "item_id": "item_040",
+      "case_id": "F5",
+      "presented_position": 2,
+      "criterion_order": [
+        "contradictions",
+        "actionable",
+        "claims_supported",
+        "hard_constraints"
+      ],
+      "latency_ms": 10801.695046015084,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer restates the two listings (£1,500 and £1,600 studios in Camden) exactly as they appear in the tool evidence; no claim contradicts the evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer provides two specific priced options (studio flats at £1,500 and £1,600) and offers to pull up full details on either, giving the user a concrete action.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All price numbers (£1,500, £1,600) and the place 'Camden' are directly supported by the tool evidence string.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user only requested flats in Camden, and the answer presents flats in Camden, satisfying the sole hard constraint.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer restates the two listings (£1,500 and £1,600 studios in Camden) exactly as they appear in the tool evidence; no claim contradicts the evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer provides two specific priced options (studio flats at £1,500 and £1,600) and offers to pull up full details on either, giving the user a concrete action.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All price numbers (£1,500, £1,600) and the place 'Camden' are directly supported by the tool evidence string.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user only requested flats in Camden, and the answer presents flats in Camden, satisfying the sole hard constraint."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_021": {
+      "item_id": "item_021",
+      "case_id": "C8",
+      "presented_position": 3,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 15584.384877234697,
+      "raw": "{\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The tool evidence is empty, so none of the number or place claims (fares, stops, walking time) are supported.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints like budget, bedroom count, or location, so none are violated.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"There is no tool evidence to contradict any claim.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer gives approximate tram fare, walking time, and recommends checking TfGM, so the user can act on that information.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The tool evidence is empty, so none of the number or place claims (fares, stops, walking time) are supported.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints like budget, bedroom count, or location, so none are violated.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "There is no tool evidence to contradict any claim.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer gives approximate tram fare, walking time, and recommends checking TfGM, so the user can act on that information."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_002": {
+      "item_id": "item_002",
+      "case_id": "A13",
+      "presented_position": 4,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "hard_constraints",
+        "claims_supported"
+      ],
+      "latency_ms": 15683.683784678578,
+      "raw": "{\n  \"directly_actionable\": false,\n  \"directly_actionable_reason\": \"The answer only asks clarifying questions and provides no specific rental options or actionable next step.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer makes no factual claims that could contradict the empty tool evidence.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints, so the answer violates none.\",\n  \"claims_evidence_supported\": true,\n  \"claims_evidence_supported_reason\": \"There are no number or specific place claims in the answer that require support from tool evidence.\"\n}",
+      "parsed": {
+        "directly_actionable": false,
+        "directly_actionable_reason": "The answer only asks clarifying questions and provides no specific rental options or actionable next step.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer makes no factual claims that could contradict the empty tool evidence.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints, so the answer violates none.",
+        "claims_evidence_supported": true,
+        "claims_evidence_supported_reason": "There are no number or specific place claims in the answer that require support from tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_023": {
+      "item_id": "item_023",
+      "case_id": "D12",
+      "presented_position": 6,
+      "criterion_order": [
+        "actionable",
+        "hard_constraints",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 16408.770536072552,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The answer provides the crime data and offers to check safety for a specific address or compare areas, giving a concrete next step.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints, so there are none to violate.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All factual numbers and levels stated in the answer match the tool evidence exactly.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every number (130, 24, 46, 39, 20, 35) and safety level (Concerning) appears in the evidence; the place names are correct.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The answer provides the crime data and offers to check safety for a specific address or compare areas, giving a concrete next step.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints, so there are none to violate.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All factual numbers and levels stated in the answer match the tool evidence exactly.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every number (130, 24, 46, 39, 20, 35) and safety level (Concerning) appears in the evidence; the place names are correct."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_005": {
+      "item_id": "item_005",
+      "case_id": "A4",
+      "presented_position": 5,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 27183.918392285705,
+      "raw": "{\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The answer claims 'most one-beds sit around £2,900–£3,300/month', but this specific rent range is not present in the tool evidence; only two one-bed prices are shown, and no summary of typical prices is given.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer lists three specific rental properties with addresses, prices, and features, allowing the user to directly consider or inquire about those options.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user requested places to rent in Shoreditch, and all listed properties are located in Shoreditch, satisfying the area requirement.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the provided evidence; all prices, addresses, and property details match the tool output.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The answer claims 'most one-beds sit around £2,900–£3,300/month', but this specific rent range is not present in the tool evidence; only two one-bed prices are shown, and no summary of typical prices is given.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer lists three specific rental properties with addresses, prices, and features, allowing the user to directly consider or inquire about those options.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user requested places to rent in Shoreditch, and all listed properties are located in Shoreditch, satisfying the area requirement.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the provided evidence; all prices, addresses, and property details match the tool output."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_016": {
+      "item_id": "item_016",
+      "case_id": "C1",
+      "presented_position": 8,
+      "criterion_order": [
+        "hard_constraints",
+        "claims_supported",
+        "actionable",
+        "contradictions"
+      ],
+      "latency_ms": 14838.786366395652,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"No hard constraints (budget, bedroom count, area, move-in date, commute limit) were stated by the user; the original request only asked for a studio near Bloomsbury, so there are no constraints to violate.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The 12-minute walking time, route summary 'via Russell Square', acceptability, and duration category are all directly supported by the tool evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer provides the exact commute time from Scape Bloomsbury to UCL, directly answering the user's question and enabling them to make a decision.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the evidence; all stated details match the tool output.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "No hard constraints (budget, bedroom count, area, move-in date, commute limit) were stated by the user; the original request only asked for a studio near Bloomsbury, so there are no constraints to violate.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The 12-minute walking time, route summary 'via Russell Square', acceptability, and duration category are all directly supported by the tool evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer provides the exact commute time from Scape Bloomsbury to UCL, directly answering the user's question and enabling them to make a decision.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the evidence; all stated details match the tool output."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_032": {
+      "item_id": "item_032",
+      "case_id": "E7",
+      "presented_position": 7,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "claims_supported",
+        "actionable"
+      ],
+      "latency_ms": 24935.215928591788,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the tool evidence; all statements are consistent with the provided data.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer respects the budget, bedroom, area, and amenities constraints by accurately reporting that no property meets them, without suggesting any that violate.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numbers (prices, over-budget amounts, 300m distance) and place names (addresses) in the answer are directly supported by the tool evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer ends with specific actionable next steps (search nearby area or check supermarket for a specific over-budget flat) that the user can respond to.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the tool evidence; all statements are consistent with the provided data.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer respects the budget, bedroom, area, and amenities constraints by accurately reporting that no property meets them, without suggesting any that violate.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numbers (prices, over-budget amounts, 300m distance) and place names (addresses) in the answer are directly supported by the tool evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer ends with specific actionable next steps (search nearby area or check supermarket for a specific over-budget flat) that the user can respond to."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_044": {
+      "item_id": "item_044",
+      "case_id": "G10",
+      "presented_position": 9,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 9333.381998352706,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The answer offers a specific next step: the user can provide budget and room type to start a property search.\",\n  \"claims_evidence_supported\": true,\n  \"claims_evidence_supported_reason\": \"The answer mentions only one place, Canary Wharf, which is in the recall_memory; there are no numbers so all claims are supported.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints in this request; the answer simply echoes the stored commute destination.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer's statement that Canary Wharf is the commute destination and that it's the only stored fact matches the tool evidence exactly.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The answer offers a specific next step: the user can provide budget and room type to start a property search.",
+        "claims_evidence_supported": true,
+        "claims_evidence_supported_reason": "The answer mentions only one place, Canary Wharf, which is in the recall_memory; there are no numbers so all claims are supported.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints in this request; the answer simply echoes the stored commute destination.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer's statement that Canary Wharf is the commute destination and that it's the only stored fact matches the tool evidence exactly."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_009": {
+      "item_id": "item_009",
+      "case_id": "B11",
+      "presented_position": 11,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 18912.951014004648,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user's request was about the correct price for a specific property; the answer provides no conflicting price or constraint violation.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer does not provide a specific next step or actionable option, only a vague offer to look up figures.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence; the answer correctly reflects the failure to retrieve data.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer contains no numbers or place names, so there is nothing to check against the evidence.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user's request was about the correct price for a specific property; the answer provides no conflicting price or constraint violation.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer does not provide a specific next step or actionable option, only a vague offer to look up figures.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence; the answer correctly reflects the failure to retrieve data.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer contains no numbers or place names, so there is nothing to check against the evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_042": {
+      "item_id": "item_042",
+      "case_id": "F8",
+      "presented_position": 10,
+      "criterion_order": [
+        "hard_constraints",
+        "contradictions",
+        "claims_supported",
+        "actionable"
+      ],
+      "latency_ms": 31185.37983763963,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"no\",\n  \"hard_constraints_satisfied_reason\": \"The property mentioned (£2,145 pcm) exceeds the user's £1,500 budget ceiling.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All factual claims (address, price, deposit missing) match the tool evidence exactly.\",\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"The £2,145 price and address are supported, but the mention of £1,500 from an earlier search summary is not in the provided tool evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"It provides a direct link and suggests contacting the agent, and offers to search again within budget, both actionable steps.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "no",
+        "hard_constraints_satisfied_reason": "The property mentioned (£2,145 pcm) exceeds the user's £1,500 budget ceiling.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All factual claims (address, price, deposit missing) match the tool evidence exactly.",
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "The £2,145 price and address are supported, but the mention of £1,500 from an earlier search summary is not in the provided tool evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "It provides a direct link and suggests contacting the agent, and offers to search again within budget, both actionable steps."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "no",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_006": {
+      "item_id": "item_006",
+      "case_id": "A8",
+      "presented_position": 12,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 10720.457314513624,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"No hard constraints were stated by the user, so the assistant's request for clarification does not violate any.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The user can act on the answer directly by responding with the requested details to refine the search.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer makes no factual claims about properties, so nothing contradicts the empty tool evidence.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer contains no numbers or place claims, so it is vacuously supported by the evidence.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "No hard constraints were stated by the user, so the assistant's request for clarification does not violate any.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The user can act on the answer directly by responding with the requested details to refine the search.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer makes no factual claims about properties, so nothing contradicts the empty tool evidence.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer contains no numbers or place claims, so it is vacuously supported by the evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_025": {
+      "item_id": "item_025",
+      "case_id": "D3",
+      "presented_position": 14,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "actionable",
+        "hard_constraints"
+      ],
+      "latency_ms": 19410.36976967007,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer makes no numerical or location-specific factual claims; it only explains its scope and offers alternative help.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No factual claims are made that could contradict the empty tool evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The assistant offers concrete next steps like searching for rentals or checking safety data for a specific property and asks the user to choose.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any hard constraints, so the answer does not violate any.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer makes no numerical or location-specific factual claims; it only explains its scope and offers alternative help.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No factual claims are made that could contradict the empty tool evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The assistant offers concrete next steps like searching for rentals or checking safety data for a specific property and asks the user to choose.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user did not state any hard constraints, so the answer does not violate any."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_017": {
+      "item_id": "item_017",
+      "case_id": "C12",
+      "presented_position": 13,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "claims_supported",
+        "hard_constraints"
+      ],
+      "latency_ms": 26312.400294467807,
+      "raw": "{\n  \"directly_actionable\": false,\n  \"directly_actionable_reason\": \"The answer provides a comparison but does not suggest a specific next step or option for the user to act on directly.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All claims about commute times and routes match the tool evidence exactly.\",\n  \"claims_evidence_supported\": false,\n  \"claims_evidence_supported_reason\": \"The answer claims the addresses are in 'Kensington 一带' and 'Camberwell 一带', which are not present in the tool evidence, making place claims unsupported.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"The user only requested a comparison, and no hard constraints were stated; the answer fulfills the request.\"\n}",
+      "parsed": {
+        "directly_actionable": false,
+        "directly_actionable_reason": "The answer provides a comparison but does not suggest a specific next step or option for the user to act on directly.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All claims about commute times and routes match the tool evidence exactly.",
+        "claims_evidence_supported": false,
+        "claims_evidence_supported_reason": "The answer claims the addresses are in 'Kensington 一带' and 'Camberwell 一带', which are not present in the tool evidence, making place claims unsupported.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "The user only requested a comparison, and no hard constraints were stated; the answer fulfills the request."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_008": {
+      "item_id": "item_008",
+      "case_id": "B1",
+      "presented_position": 16,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 14946.731842122972,
+      "raw": "{\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The tool evidence is empty; the answer's numbers (£350, £1,517, £1,516) are not supported by any tool evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"With no tool evidence, there is nothing for any claim to contradict.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user stated no hard constraints, so the answer vacuously respects all constraints.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer ends with an offer to search but does not provide specific listings or an immediate next step that the user can act on without further interaction.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The tool evidence is empty; the answer's numbers (£350, £1,517, £1,516) are not supported by any tool evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "With no tool evidence, there is nothing for any claim to contradict.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user stated no hard constraints, so the answer vacuously respects all constraints.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer ends with an offer to search but does not provide specific listings or an immediate next step that the user can act on without further interaction."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_030": {
+      "item_id": "item_030",
+      "case_id": "E4",
+      "presented_position": 15,
+      "criterion_order": [
+        "contradictions",
+        "claims_supported",
+        "actionable",
+        "hard_constraints"
+      ],
+      "latency_ms": 22081.27989899367,
+      "raw": "{\n  \"contradicted_claim_count\": 1,\n  \"contradicted_claim_count_reason\": \"The answer claims it searched for a 3-bed house, but the tool evidence shows the search was for a studio (room_type: studio).\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer makes no specific number or place claims from the evidence beyond reporting no results, which is supported by the tool message.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer suggests checking Rightmove/Zoopla, widening the search, and offers to fetch TfL info, giving concrete next steps.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"With no properties found, the answer does not present any option that violates the user's budget, bedroom count, location, or commute constraints.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 1,
+        "contradicted_claim_count_reason": "The answer claims it searched for a 3-bed house, but the tool evidence shows the search was for a studio (room_type: studio).",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer makes no specific number or place claims from the evidence beyond reporting no results, which is supported by the tool message.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer suggests checking Rightmove/Zoopla, widening the search, and offers to fetch TfL info, giving concrete next steps.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "With no properties found, the answer does not present any option that violates the user's budget, bedroom count, location, or commute constraints."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "1",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_015": {
+      "item_id": "item_015",
+      "case_id": "B8",
+      "presented_position": 17,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "claims_supported",
+        "contradictions"
+      ],
+      "latency_ms": 12503.587565384805,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user only specified the rent amount (£1600 pcm) and no other hard constraints, and the assistant used that rent in its calculation.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer provides a calculation breakdown but no specific property listings, options, or actionable next steps.\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"All numbers and place claims (e.g., £1,846.15, £3,446.15, England and Wales) are not supported by the empty tool evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"With no tool evidence, there are no claims that contradict evidence; all claims are simply unsupported.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user only specified the rent amount (£1600 pcm) and no other hard constraints, and the assistant used that rent in its calculation.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer provides a calculation breakdown but no specific property listings, options, or actionable next steps.",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "All numbers and place claims (e.g., £1,846.15, £3,446.15, England and Wales) are not supported by the empty tool evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "With no tool evidence, there are no claims that contradict evidence; all claims are simply unsupported."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_045": {
+      "item_id": "item_045",
+      "case_id": "G11",
+      "presented_position": 18,
+      "criterion_order": [
+        "claims_supported",
+        "hard_constraints",
+        "actionable",
+        "contradictions"
+      ],
+      "latency_ms": 16548.28350339085,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer makes no factual claims about numbers or places that require tool evidence support, so vacuously every claim is supported.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer does not suggest any property that would violate the user's budget ceiling or other hard constraints; it asks for clarification before proceeding.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer is a clarification question rather than a list of specific options or a concrete actionable step like booking a viewing.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer conflict with the empty tool evidence.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer makes no factual claims about numbers or places that require tool evidence support, so vacuously every claim is supported.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer does not suggest any property that would violate the user's budget ceiling or other hard constraints; it asks for clarification before proceeding.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer is a clarification question rather than a list of specific options or a concrete actionable step like booking a viewing.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer conflict with the empty tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_019": {
+      "item_id": "item_019",
+      "case_id": "C4",
+      "presented_position": 19,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "actionable",
+        "hard_constraints"
+      ],
+      "latency_ms": 14377.264483831823,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer states 41 minutes, £336.60 monthly cost, £15.30 daily cap, Zones 1–5, and the student discount note, all of which are directly supported by the tool evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence; all figures and notes align exactly.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"It provides the exact monthly cost and offers to pull Student Travelcard pricing, giving a concrete next step.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user asked only for a commuting cost estimate and specified no budget, bedroom, location, or time constraints, so nothing is violated.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer states 41 minutes, £336.60 monthly cost, £15.30 daily cap, Zones 1–5, and the student discount note, all of which are directly supported by the tool evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence; all figures and notes align exactly.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "It provides the exact monthly cost and offers to pull Student Travelcard pricing, giving a concrete next step.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user asked only for a commuting cost estimate and specified no budget, bedroom, location, or time constraints, so nothing is violated."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_011": {
+      "item_id": "item_011",
+      "case_id": "B14",
+      "presented_position": 20,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "contradictions",
+        "hard_constraints"
+      ],
+      "latency_ms": 10530.625969171524,
+      "raw": "{\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The tool evidence is empty, so no numbers or place claims are supported.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer provides a specific deposit cap and guidance on next steps, enabling the user to act.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The tool evidence is empty and cannot contradict any claim.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user stated no hard constraints; the answer respects the implied constraint of providing a legal deposit maximum for the given rent.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The tool evidence is empty, so no numbers or place claims are supported.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer provides a specific deposit cap and guidance on next steps, enabling the user to act.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The tool evidence is empty and cannot contradict any claim.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user stated no hard constraints; the answer respects the implied constraint of providing a legal deposit maximum for the given rent."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_035": {
+      "item_id": "item_035",
+      "case_id": "F12",
+      "presented_position": 21,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 19491.97874777019,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The assistant did not provide any property or commute information, so it could not have violated the user's studio or location constraints.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer only asks for the specific development or address, offering no property options or next steps the user can immediately act on.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The assistant makes no factual claims that could contradict the empty tool evidence.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer contains no numbers or place claims, so there is nothing to check against the tool evidence.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The assistant did not provide any property or commute information, so it could not have violated the user's studio or location constraints.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer only asks for the specific development or address, offering no property options or next steps the user can immediately act on.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The assistant makes no factual claims that could contradict the empty tool evidence.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer contains no numbers or place claims, so there is nothing to check against the tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_034": {
+      "item_id": "item_034",
+      "case_id": "F1",
+      "presented_position": 22,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 21668.205029331148,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The assistant gives a specific action (contact agent via the listing link) and also asks if the user wants to search within budget.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All stated numbers and places (address, rent, URL, amenities, availability) match the evidence; no unsupported claims.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer does not recommend a property above budget; it warns that the rent is £2,145 which exceeds the £1,500 ceiling, so it respects the constraint.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer conflict with the tool evidence; the deposit absence, rent, and address are all consistent.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The assistant gives a specific action (contact agent via the listing link) and also asks if the user wants to search within budget.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All stated numbers and places (address, rent, URL, amenities, availability) match the evidence; no unsupported claims.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer does not recommend a property above budget; it warns that the rent is £2,145 which exceeds the £1,500 ceiling, so it respects the constraint.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer conflict with the tool evidence; the deposit absence, rent, and address are all consistent."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_036": {
+      "item_id": "item_036",
+      "case_id": "F13",
+      "presented_position": 24,
+      "criterion_order": [
+        "hard_constraints",
+        "claims_supported",
+        "contradictions",
+        "actionable"
+      ],
+      "latency_ms": 19308.155205100775,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user did not state any explicit hard constraints (budget, bedroom count, etc.) beyond reviewing a listing; the answer respects the request by analyzing the listing and flagging inconsistencies.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every number (£1,800, £1,300) and place (Millennium Place, Parmiter Street, Bethnal Green E2) claim is backed by the tool evidence showing the resolved property details.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence; all details about the property match what the data shows.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer warns against sending money and suggests checking Rightmove/Zoopla or asking follow-up questions, providing a concrete next step.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user did not state any explicit hard constraints (budget, bedroom count, etc.) beyond reviewing a listing; the answer respects the request by analyzing the listing and flagging inconsistencies.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every number (£1,800, £1,300) and place (Millennium Place, Parmiter Street, Bethnal Green E2) claim is backed by the tool evidence showing the resolved property details.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence; all details about the property match what the data shows.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer warns against sending money and suggests checking Rightmove/Zoopla or asking follow-up questions, providing a concrete next step."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_037": {
+      "item_id": "item_037",
+      "case_id": "F15",
+      "presented_position": 23,
+      "criterion_order": [
+        "actionable",
+        "hard_constraints",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 37238.96921984851,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The answer lists three specific studio options with addresses, prices, and details, and invites the user to ask for more details or checks.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"All three options are studios in East London priced under £1,500 per month, satisfying every stated hard constraint.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the tool evidence; all prices, addresses, and listed features match the provided data.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every number (rent amounts, scores) and place claim (addresses, area) is directly supported by the tool evidence, with no unsupported figures or locations.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The answer lists three specific studio options with addresses, prices, and details, and invites the user to ask for more details or checks.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "All three options are studios in East London priced under £1,500 per month, satisfying every stated hard constraint.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the tool evidence; all prices, addresses, and listed features match the provided data.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every number (rent amounts, scores) and place claim (addresses, area) is directly supported by the tool evidence, with no unsupported figures or locations."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_012": {
+      "item_id": "item_012",
+      "case_id": "B2",
+      "presented_position": 25,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "claims_supported",
+        "hard_constraints"
+      ],
+      "latency_ms": 12719.770577736199,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The answer offers a specific next step: the user can provide an area or university so the assistant can search for properties within the £1800 pcm budget.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The tool evidence is empty, so there are no claims to contradict.\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The tool evidence is empty, so none of the numbers in the answer are supported by evidence; they are derived solely from the user's input and mathematical conversion.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user specified no hard constraints such as budget ceiling, location, or bedroom count, so the answer does not violate any.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The answer offers a specific next step: the user can provide an area or university so the assistant can search for properties within the £1800 pcm budget.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The tool evidence is empty, so there are no claims to contradict.",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The tool evidence is empty, so none of the numbers in the answer are supported by evidence; they are derived solely from the user's input and mathematical conversion.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user specified no hard constraints such as budget ceiling, location, or bedroom count, so the answer does not violate any."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_048": {
+      "item_id": "item_048",
+      "case_id": "G5",
+      "presented_position": 27,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 21490.15847314149,
+      "raw": "{\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The answer claims to have removed a Shoreditch preference, but no tool evidence is provided to support that action occurred.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer only prompts for a new area without naming specific housing options or a concrete next step beyond continuing the conversation.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user's request to delete a preference involves no hard housing constraints, so the answer does not violate any.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No tool evidence exists to contradict any claim in the answer.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The answer claims to have removed a Shoreditch preference, but no tool evidence is provided to support that action occurred.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer only prompts for a new area without naming specific housing options or a concrete next step beyond continuing the conversation.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user's request to delete a preference involves no hard housing constraints, so the answer does not violate any.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No tool evidence exists to contradict any claim in the answer."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_001": {
+      "item_id": "item_001",
+      "case_id": "A10",
+      "presented_position": 26,
+      "criterion_order": [
+        "actionable",
+        "hard_constraints",
+        "claims_supported",
+        "contradictions"
+      ],
+      "latency_ms": 31228.61927561462,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The answer offers specific next-step options (widen area, adjust budget, try different room type) and asks for user input, so it is directly actionable.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"The answer does not present any property that violates the constraints of 2-bed, Inverness, under £900/month, and no commute; it simply reports no results.\",\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"While the budget and Inverness are supported, the mention of specific surrounding towns (Nairn, Dingwall, Beauly) and their relative prices is not found in the tool evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer directly contradict the tool evidence; unsupported claims are not necessarily contradictory.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The answer offers specific next-step options (widen area, adjust budget, try different room type) and asks for user input, so it is directly actionable.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "The answer does not present any property that violates the constraints of 2-bed, Inverness, under £900/month, and no commute; it simply reports no results.",
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "While the budget and Inverness are supported, the mention of specific surrounding towns (Nairn, Dingwall, Beauly) and their relative prices is not found in the tool evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer directly contradict the tool evidence; unsupported claims are not necessarily contradictory."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_031": {
+      "item_id": "item_031",
+      "case_id": "E5",
+      "presented_position": 28,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 25097.405600361526,
+      "raw": "{\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"The answer claims a 24-minute commute and a 54/100 safety score, but the evidence shows 22 minutes and no safety score for that address; a nearby Sainsbury’s is stated without any evidence.\",\n  \"contradicted_claim_count\": 2,\n  \"contradicted_claim_count_reason\": \"The commute time (24 min) contradicts the search result of 22 min, and the safety score (54/100) is not present in the evidence, implying a fabricated value.\",\n  \"hard_constraints_satisfied\": \"unclear\",\n  \"hard_constraints_satisfied_reason\": \"Budget and commute are met, but the requirement for nearby supermarkets cannot be verified from the evidence (no POI data), and the safety claim lacks supporting facts.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"A specific property (Edith Grove, SW10) is presented with details, price, and a follow‑up offer to adjust the search.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "The answer claims a 24-minute commute and a 54/100 safety score, but the evidence shows 22 minutes and no safety score for that address; a nearby Sainsbury’s is stated without any evidence.",
+        "contradicted_claim_count": 2,
+        "contradicted_claim_count_reason": "The commute time (24 min) contradicts the search result of 22 min, and the safety score (54/100) is not present in the evidence, implying a fabricated value.",
+        "hard_constraints_satisfied": "unclear",
+        "hard_constraints_satisfied_reason": "Budget and commute are met, but the requirement for nearby supermarkets cannot be verified from the evidence (no POI data), and the safety claim lacks supporting facts.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "A specific property (Edith Grove, SW10) is presented with details, price, and a follow‑up offer to adjust the search."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "unclear",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "2",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_033": {
+      "item_id": "item_033",
+      "case_id": "E9",
+      "presented_position": 29,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "claims_supported",
+        "contradictions"
+      ],
+      "latency_ms": 21161.26841586083,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer confirms commute is under 30 minutes, satisfying the only hard constraint explicitly raised; no other constraints like budget, bedroom count, or move-in date are contradicted.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer provides specific commute, safety, and supermarket details and ends by offering next steps, so the user can immediately decide or request further details.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numbers (26 minutes, safety score 68/100, crime figures, distances 150m/300m) and places (address, UCL, supermarkets) exactly match the tool evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No statement in the answer conflicts with any data in the provided tool evidence.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer confirms commute is under 30 minutes, satisfying the only hard constraint explicitly raised; no other constraints like budget, bedroom count, or move-in date are contradicted.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer provides specific commute, safety, and supermarket details and ends by offering next steps, so the user can immediately decide or request further details.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numbers (26 minutes, safety score 68/100, crime figures, distances 150m/300m) and places (address, UCL, supermarkets) exactly match the tool evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No statement in the answer conflicts with any data in the provided tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_003": {
+      "item_id": "item_003",
+      "case_id": "A2",
+      "presented_position": 31,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 15929.223274812102,
+      "raw": "{\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The answer mentions nearby areas King's Cross, Fitzrovia, and Camden which are not supported by the tool evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer makes no claims that contradict the tool evidence.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer acknowledges the user's constraints and does not suggest violating them.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer explicitly asks 'Shall I run the search now?' providing a clear next step for the user.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The answer mentions nearby areas King's Cross, Fitzrovia, and Camden which are not supported by the tool evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer makes no claims that contradict the tool evidence.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer acknowledges the user's constraints and does not suggest violating them.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer explicitly asks 'Shall I run the search now?' providing a clear next step for the user."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_004": {
+      "item_id": "item_004",
+      "case_id": "A3",
+      "presented_position": 30,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 19183.63928887993,
+      "raw": "{\n  \"directly_actionable\": false,\n  \"directly_actionable_reason\": \"The answer does not name any specific property or a single clear next step; it only suggests multiple adjustment directions and asks the user for preferences.\",\n  \"claims_evidence_supported\": false,\n  \"claims_evidence_supported_reason\": \"The answer includes unsupported numbers (weekly £80-150, monthly £350-650) and place names (City Centre, Fallowfield, Withington, Salford) that are not present in the tool evidence.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"The answer does not propose any property that violates the user's constraints; it simply reports no results found.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim directly conflicts with the tool evidence; unsupported price and area mentions are not contradictory.\"\n}",
+      "parsed": {
+        "directly_actionable": false,
+        "directly_actionable_reason": "The answer does not name any specific property or a single clear next step; it only suggests multiple adjustment directions and asks the user for preferences.",
+        "claims_evidence_supported": false,
+        "claims_evidence_supported_reason": "The answer includes unsupported numbers (weekly £80-150, monthly £350-650) and place names (City Centre, Fallowfield, Withington, Salford) that are not present in the tool evidence.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "The answer does not propose any property that violates the user's constraints; it simply reports no results found.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim directly conflicts with the tool evidence; unsupported price and area mentions are not contradictory."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_022": {
+      "item_id": "item_022",
+      "case_id": "D10",
+      "presented_position": 33,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 15122.136886231601,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The answer ends with a concrete offer to check other neighbourhoods or specific properties, giving a clear next step.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"Every number (88, 15, stable, 30, 24, 12, 56/100) and the area Deptford SE8 are directly drawn from the tool evidence.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user stated no hard constraints (budget, bedrooms, move-in date, commute limit), so there are none to violate.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence; the response accurately reflects the provided data.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The answer ends with a concrete offer to check other neighbourhoods or specific properties, giving a clear next step.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "Every number (88, 15, stable, 30, 24, 12, 56/100) and the area Deptford SE8 are directly drawn from the tool evidence.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user stated no hard constraints (budget, bedrooms, move-in date, commute limit), so there are none to violate.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence; the response accurately reflects the provided data."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_039": {
+      "item_id": "item_039",
+      "case_id": "F2",
+      "presented_position": 32,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 19951.26841403544,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No evidence exists to contradict any claim.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer does not violate the user's request for a studio near King's Cross, and no other hard constraints were stated.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer offers specific next steps (pulling up details or checking commute) that the user can immediately respond to.\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"All numeric (£400/week, £1,733/month) and place (Chapter Kings Cross) claims are unsupported as the tool evidence for this turn is empty.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No evidence exists to contradict any claim.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer does not violate the user's request for a studio near King's Cross, and no other hard constraints were stated.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer offers specific next steps (pulling up details or checking commute) that the user can immediately respond to.",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "All numeric (£400/week, £1,733/month) and place (Chapter Kings Cross) claims are unsupported as the tool evidence for this turn is empty."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_024": {
+      "item_id": "item_024",
+      "case_id": "D2",
+      "presented_position": 34,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 12751.308462582529,
+      "raw": "{\n  \"directly_actionable\": true,\n  \"directly_actionable_reason\": \"The answer offers to search for rental listings if the user provides budget and room type, giving a concrete next step.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numbers (safety scores, crime totals, trends, category counts, gap) are drawn exactly from the tool evidence.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"No hard constraints were stated by the user, so the answer trivially respects them all.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the provided crime data or safety scores.\"\n}",
+      "parsed": {
+        "directly_actionable": true,
+        "directly_actionable_reason": "The answer offers to search for rental listings if the user provides budget and room type, giving a concrete next step.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numbers (safety scores, crime totals, trends, category counts, gap) are drawn exactly from the tool evidence.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "No hard constraints were stated by the user, so the answer trivially respects them all.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the provided crime data or safety scores."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_049": {
+      "item_id": "item_049",
+      "case_id": "G6",
+      "presented_position": 35,
+      "criterion_order": [
+        "contradictions",
+        "actionable",
+        "claims_supported",
+        "hard_constraints"
+      ],
+      "latency_ms": 16714.96876142919,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer states no saved information, matching the empty memory evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer asks the user to provide preferences, which is a specific next step.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer contains no numbers or places, so all such claims are trivially supported.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"No hard constraints were stated by the user, so the answer satisfies them.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer states no saved information, matching the empty memory evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer asks the user to provide preferences, which is a specific next step.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer contains no numbers or places, so all such claims are trivially supported.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "No hard constraints were stated by the user, so the answer satisfies them."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_014": {
+      "item_id": "item_014",
+      "case_id": "B7",
+      "presented_position": 36,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "claims_supported",
+        "actionable"
+      ],
+      "latency_ms": 15753.091133199632,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The evidence is empty, so no claims can contradict it.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user did not specify any hard constraints, so none are violated.\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The tool evidence list is empty, so none of the numerical or place claims in the answer are supported.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer provides only a generic deposit cap calculation and legal information, not a specific property or concrete next step to act upon.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The evidence is empty, so no claims can contradict it.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user did not specify any hard constraints, so none are violated.",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The tool evidence list is empty, so none of the numerical or place claims in the answer are supported.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer provides only a generic deposit cap calculation and legal information, not a specific property or concrete next step to act upon."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_029": {
+      "item_id": "item_029",
+      "case_id": "E11",
+      "presented_position": 37,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "hard_constraints",
+        "actionable"
+      ],
+      "latency_ms": 24318.658183328807,
+      "raw": "{\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numbers (safety score, crime counts, pharmacy distances) and places (Boots, Osbon, Stratford) are directly from the tool evidence, and the answer accurately reports no properties found and no measured commute time.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence; the assistant reports both the high safety score and the cautionary note, and does not fabricate any property details or commute times.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer does not present any property that violates the budget, studio type, or area constraints, and it transparently reports the safety information so the user can decide about high-crime spots.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer offers concrete next steps (widen area, raise budget, relax room type) and asks if the user wants to try them, giving a clear path forward.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numbers (safety score, crime counts, pharmacy distances) and places (Boots, Osbon, Stratford) are directly from the tool evidence, and the answer accurately reports no properties found and no measured commute time.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence; the assistant reports both the high safety score and the cautionary note, and does not fabricate any property details or commute times.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer does not present any property that violates the budget, studio type, or area constraints, and it transparently reports the safety information so the user can decide about high-crime spots.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer offers concrete next steps (widen area, raise budget, relax room type) and asks if the user wants to try them, giving a clear path forward."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_026": {
+      "item_id": "item_026",
+      "case_id": "D4",
+      "presented_position": 38,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "contradictions",
+        "claims_supported"
+      ],
+      "latency_ms": 21208.388331346214,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user only asked about supermarkets near the property; no hard constraints like budget or bedroom count were stated in this turn.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"It names three specific supermarkets with approximate distances, allowing the user to choose which to visit.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"All distances and supermarket names in the answer match the tool evidence; the walk-time estimate does not contradict the evidence.\",\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"The distances are directly supported, but the claim 'within a 5-minute walk' is an estimate not provided in the tool evidence.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user only asked about supermarkets near the property; no hard constraints like budget or bedroom count were stated in this turn.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "It names three specific supermarkets with approximate distances, allowing the user to choose which to visit.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "All distances and supermarket names in the answer match the tool evidence; the walk-time estimate does not contradict the evidence.",
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "The distances are directly supported, but the claim 'within a 5-minute walk' is an estimate not provided in the tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_028": {
+      "item_id": "item_028",
+      "case_id": "D8",
+      "presented_position": 40,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "hard_constraints",
+        "claims_supported"
+      ],
+      "latency_ms": 16002.587418071926,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer names two specific pharmacies with distances, allowing the user to walk to them directly.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the tool evidence; the evidence confirms the two pharmacies and their distances.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user only requested information about a pharmacy within walking distance; no other hard constraints were stated, so the answer meets the request.\",\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"The pharmacy names and distances are supported, but the walking time estimates ('under a minute's walk', 'just a couple of minutes further') are not provided in the evidence and are unsupported inferences.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer names two specific pharmacies with distances, allowing the user to walk to them directly.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the tool evidence; the evidence confirms the two pharmacies and their distances.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user only requested information about a pharmacy within walking distance; no other hard constraints were stated, so the answer meets the request.",
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "The pharmacy names and distances are supported, but the walking time estimates ('under a minute's walk', 'just a couple of minutes further') are not provided in the evidence and are unsupported inferences."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_038": {
+      "item_id": "item_038",
+      "case_id": "F17",
+      "presented_position": 39,
+      "criterion_order": [
+        "actionable",
+        "claims_supported",
+        "hard_constraints",
+        "contradictions"
+      ],
+      "latency_ms": 29496.243827044964,
+      "raw": "{\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer gives a specific council tax band (C) and annual charge, and suggests next steps like checking the EPC register or asking the provider.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All mentioned numbers (£1,443) and addresses (19-29 Woburn Place, WC1H 0AQ) are directly supported by the web search results.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user did not impose any hard constraints in this turn, only asking for EPC rating and council tax band.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence; the council tax band matches the web search, and the absence of EPC is noted correctly.\"\n}",
+      "parsed": {
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer gives a specific council tax band (C) and annual charge, and suggests next steps like checking the EPC register or asking the provider.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All mentioned numbers (£1,443) and addresses (19-29 Woburn Place, WC1H 0AQ) are directly supported by the web search results.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user did not impose any hard constraints in this turn, only asking for EPC rating and council tax band.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence; the council tax band matches the web search, and the absence of EPC is noted correctly."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_050": {
+      "item_id": "item_050",
+      "case_id": "G7",
+      "presented_position": 41,
+      "criterion_order": [
+        "actionable",
+        "contradictions",
+        "hard_constraints",
+        "claims_supported"
+      ],
+      "latency_ms": 9492.070428095758,
+      "raw": "{\n  \"directly_actionable\": false,\n  \"directly_actionable_reason\": \"The answer does not name any specific properties, options, or a concrete next step beyond suggesting that a search could be run and asking for confirmation and room-type preference.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The assistant accurately repeats the £1,400 budget, King's Cross location, and UCL commute target from the tool evidence without any contradiction.\",\n  \"hard_constraints_satisfied\": true,\n  \"hard_constraints_satisfied_reason\": \"The user request only asks for a suggestion based on known information; the answer respects the stored £1,400 budget and King's Cross/UCL preferences and does not violate any constraint stated by the user.\",\n  \"claims_evidence_supported\": true,\n  \"claims_evidence_supported_reason\": \"All numbers (£1,400) and places (King's Cross, UCL) mentioned in the answer appear in the recalled memories, so they are fully supported.\"\n}",
+      "parsed": {
+        "directly_actionable": false,
+        "directly_actionable_reason": "The answer does not name any specific properties, options, or a concrete next step beyond suggesting that a search could be run and asking for confirmation and room-type preference.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The assistant accurately repeats the £1,400 budget, King's Cross location, and UCL commute target from the tool evidence without any contradiction.",
+        "hard_constraints_satisfied": true,
+        "hard_constraints_satisfied_reason": "The user request only asks for a suggestion based on known information; the answer respects the stored £1,400 budget and King's Cross/UCL preferences and does not violate any constraint stated by the user.",
+        "claims_evidence_supported": true,
+        "claims_evidence_supported_reason": "All numbers (£1,400) and places (King's Cross, UCL) mentioned in the answer appear in the recalled memories, so they are fully supported."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_007": {
+      "item_id": "item_007",
+      "case_id": "A9",
+      "presented_position": 43,
+      "criterion_order": [
+        "hard_constraints",
+        "actionable",
+        "claims_supported",
+        "contradictions"
+      ],
+      "latency_ms": 9465.782339684665,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"All recommendations are 1-bed flats in Islington under £1700/month, satisfying user’s explicit constraints; no commute restriction to violate.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer names the cheapest property with its full address and price, and lists the other two addresses and prices, giving the user specific options to act on.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All stated rents and addresses match the tool evidence exactly, and the description 'unfurnished' for the Highbury Quadrant flat is supported by the evidence.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the provided tool evidence; every figure and location is accurately reflected.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "All recommendations are 1-bed flats in Islington under £1700/month, satisfying user’s explicit constraints; no commute restriction to violate.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer names the cheapest property with its full address and price, and lists the other two addresses and prices, giving the user specific options to act on.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All stated rents and addresses match the tool evidence exactly, and the description 'unfurnished' for the Highbury Quadrant flat is supported by the evidence.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the provided tool evidence; every figure and location is accurately reflected."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_020": {
+      "item_id": "item_020",
+      "case_id": "C6",
+      "presented_position": 42,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "contradictions",
+        "hard_constraints"
+      ],
+      "latency_ms": 15668.949887156487,
+      "raw": "{\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"All numeric commute times and route summaries match the evidence, but the area names 'Islington', 'Bow', and 'Peckham' are not present in the tool evidence, making those place claims unsupported.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer clearly states which address has the shortest commute, provides a comparison table, and offers a concrete next step (checking safety, amenities, or transport cost), so the user can act directly.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claims in the answer contradict the tool evidence; all minutes and route details align exactly.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user only asked which property has the shortest commute to UCL, with no additional constraints, and the answer directly identifies it.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "All numeric commute times and route summaries match the evidence, but the area names 'Islington', 'Bow', and 'Peckham' are not present in the tool evidence, making those place claims unsupported.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer clearly states which address has the shortest commute, provides a comparison table, and offers a concrete next step (checking safety, amenities, or transport cost), so the user can act directly.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claims in the answer contradict the tool evidence; all minutes and route details align exactly.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user only asked which property has the shortest commute to UCL, with no additional constraints, and the answer directly identifies it."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_046": {
+      "item_id": "item_046",
+      "case_id": "G16",
+      "presented_position": 44,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "actionable",
+        "claims_supported"
+      ],
+      "latency_ms": 15168.630231171846,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer contradicts the tool evidence; every stated detail matches the property listing.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer presents a studio in Camden at £1595/month, which is within the £1800/month budget and in the requested area.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer names a specific property and offers clear next steps (e.g., widen search, check safety) that the user can immediately act on.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"All numbers (rent, deposit, bills) and places (address, proximity) in the answer are directly taken from the tool evidence.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer contradicts the tool evidence; every stated detail matches the property listing.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer presents a studio in Camden at £1595/month, which is within the £1800/month budget and in the requested area.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer names a specific property and offers clear next steps (e.g., widen search, check safety) that the user can immediately act on.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "All numbers (rent, deposit, bills) and places (address, proximity) in the answer are directly taken from the tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_027": {
+      "item_id": "item_027",
+      "case_id": "D5",
+      "presented_position": 45,
+      "criterion_order": [
+        "contradictions",
+        "hard_constraints",
+        "claims_supported",
+        "actionable"
+      ],
+      "latency_ms": 16488.642094656825,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The answer accurately reports the tool evidence that no supermarkets were found within 300m; no claim contradicts it.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user only asked a question; the answer directly addresses it without violating any implicit or explicit constraints.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The only number (300m) is from the evidence, and place mentions (Fen Drayton) are from the evidence; the suggested St Ives is not a factual claim about the evidence.\",\n  \"directly_actionable\": \"no\",\n  \"directly_actionable_reason\": \"The answer only states the lack of supermarkets and offers to search further; it does not provide a specific option or next step that the user could act on immediately.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The answer accurately reports the tool evidence that no supermarkets were found within 300m; no claim contradicts it.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user only asked a question; the answer directly addresses it without violating any implicit or explicit constraints.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The only number (300m) is from the evidence, and place mentions (Fen Drayton) are from the evidence; the suggested St Ives is not a factual claim about the evidence.",
+        "directly_actionable": "no",
+        "directly_actionable_reason": "The answer only states the lack of supermarkets and offers to search further; it does not provide a specific option or next step that the user could act on immediately."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "no"
+      }
+    },
+    "item_041": {
+      "item_id": "item_041",
+      "case_id": "F6",
+      "presented_position": 46,
+      "criterion_order": [
+        "claims_supported",
+        "actionable",
+        "contradictions",
+        "hard_constraints"
+      ],
+      "latency_ms": 18093.59604306519,
+      "raw": "{\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"The answer claims that Nido Spitalfields is a 'purpose-built student studio', but the evidence does not state this for that property; only The Stay Club Camden's evidence includes that description.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer names two specific studios with prices and offers concrete next steps like getting more details or checking commute times.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No claim in the answer directly contradicts the tool evidence; the unsupported claim about Nido is not a contradiction.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"Both properties are studios in London with rents (£1450 and £1390) under the stated £1500/month budget.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "The answer claims that Nido Spitalfields is a 'purpose-built student studio', but the evidence does not state this for that property; only The Stay Club Camden's evidence includes that description.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer names two specific studios with prices and offers concrete next steps like getting more details or checking commute times.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No claim in the answer directly contradicts the tool evidence; the unsupported claim about Nido is not a contradiction.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "Both properties are studios in London with rents (£1450 and £1390) under the stated £1500/month budget."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_010": {
+      "item_id": "item_010",
+      "case_id": "B13",
+      "presented_position": 47,
+      "criterion_order": [
+        "claims_supported",
+        "contradictions",
+        "actionable",
+        "hard_constraints"
+      ],
+      "latency_ms": 24170.39095517248,
+      "raw": "{\n  \"claims_evidence_supported\": \"partial\",\n  \"claims_evidence_supported_reason\": \"The three listing prices and addresses in the comparison table are supported, but the claim that the most expensive 1‑bed flat is £2,000/month is contradicted by evidence showing flats at £2,350 and £2,200/month.\",\n  \"contradicted_claim_count\": 1,\n  \"contradicted_claim_count_reason\": \"The assistant stated that the most expensive 1‑bed flat currently listed is £2,000/month, yet the evidence shows two higher‑priced flats (£2,350 and £2,200/month).\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer ends by offering to look at specific listings in more detail or search nearby areas, providing a concrete next step.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user only asked for an evaluation and gave no hard constraints; the assistant's answer does not violate any.\"\n}",
+      "parsed": {
+        "claims_evidence_supported": "partial",
+        "claims_evidence_supported_reason": "The three listing prices and addresses in the comparison table are supported, but the claim that the most expensive 1‑bed flat is £2,000/month is contradicted by evidence showing flats at £2,350 and £2,200/month.",
+        "contradicted_claim_count": 1,
+        "contradicted_claim_count_reason": "The assistant stated that the most expensive 1‑bed flat currently listed is £2,000/month, yet the evidence shows two higher‑priced flats (£2,350 and £2,200/month).",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer ends by offering to look at specific listings in more detail or search nearby areas, providing a concrete next step.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user only asked for an evaluation and gave no hard constraints; the assistant's answer does not violate any."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "partial",
+        "contradicted_claim_count": "1",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_013": {
+      "item_id": "item_013",
+      "case_id": "B3",
+      "presented_position": 48,
+      "criterion_order": [
+        "contradictions",
+        "claims_supported",
+        "actionable",
+        "hard_constraints"
+      ],
+      "latency_ms": 16786.36479470879,
+      "raw": "{\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"The tool evidence is empty so there are no claims that contradict it.\",\n  \"claims_evidence_supported\": \"no\",\n  \"claims_evidence_supported_reason\": \"The answer contains numbers and places not present in the empty tool evidence.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer gives a specific maximum deposit amount, allowing the user to budget and negotiate.\",\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The user's request contained no explicit hard constraints, so none are violated.\"\n}",
+      "parsed": {
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "The tool evidence is empty so there are no claims that contradict it.",
+        "claims_evidence_supported": "no",
+        "claims_evidence_supported_reason": "The answer contains numbers and places not present in the empty tool evidence.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer gives a specific maximum deposit amount, allowing the user to budget and negotiate.",
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The user's request contained no explicit hard constraints, so none are violated."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "no",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    },
+    "item_018": {
+      "item_id": "item_018",
+      "case_id": "C3",
+      "presented_position": 49,
+      "criterion_order": [
+        "hard_constraints",
+        "claims_supported",
+        "actionable",
+        "contradictions"
+      ],
+      "latency_ms": 21559.42227039486,
+      "raw": "{\n  \"hard_constraints_satisfied\": \"yes\",\n  \"hard_constraints_satisfied_reason\": \"The answer makes no claims that violate any budget, bedroom, location, move-in date, or commute limit constraints; it merely asks for clarification.\",\n  \"claims_evidence_supported\": \"yes\",\n  \"claims_evidence_supported_reason\": \"The answer contains no numbers or place names, so there is nothing to be unsupported.\",\n  \"directly_actionable\": \"yes\",\n  \"directly_actionable_reason\": \"The answer explicitly asks the user to clarify which listing they mean, providing a clear next step for the user.\",\n  \"contradicted_claim_count\": 0,\n  \"contradicted_claim_count_reason\": \"No factual claims are made that could contradict the empty tool evidence.\"\n}",
+      "parsed": {
+        "hard_constraints_satisfied": "yes",
+        "hard_constraints_satisfied_reason": "The answer makes no claims that violate any budget, bedroom, location, move-in date, or commute limit constraints; it merely asks for clarification.",
+        "claims_evidence_supported": "yes",
+        "claims_evidence_supported_reason": "The answer contains no numbers or place names, so there is nothing to be unsupported.",
+        "directly_actionable": "yes",
+        "directly_actionable_reason": "The answer explicitly asks the user to clarify which listing they mean, providing a clear next step for the user.",
+        "contradicted_claim_count": 0,
+        "contradicted_claim_count_reason": "No factual claims are made that could contradict the empty tool evidence."
+      },
+      "normalized": {
+        "hard_constraints_satisfied": "yes",
+        "claims_evidence_supported": "yes",
+        "contradicted_claim_count": "0",
+        "directly_actionable": "yes"
+      }
+    }
+  },
+  "generated_at": "2026-08-04T18:45:54+01:00"
+}

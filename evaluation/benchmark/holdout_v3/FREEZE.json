@@ -1,0 +1,28 @@
+{
+  "benchmark_schema_version": "rentcompass/benchmark/v3",
+  "status": "frozen_before_formal_run",
+  "product_sha": "1c4e42bd82c9cc6be9230365b5d288c6739816fe",
+  "preregistration_commit": "af519d3402f601846ae4d493f66b01e80103db86",
+  "authoring_support_commit": "8d6fc3b61939a26306ed51c25de1f5e8accef229",
+  "formal_case_authoring_commit": "9918ef866c933eab130b1eeed7aa59ba359a971f",
+  "cases_sha256": "b608316849feef4cd6f0fbcbc9df047c898fd25e71326946b57c97c161eeaaca",
+  "manifest_sha256": "150c59c3ff71a7937bfb2e8ea42e033e686531c2042b4e5d4284197ac8fa96c1",
+  "preflight_report_sha256": "d96e09d84716df4c8de1b52138ee15dfcb87be63ed8cf7e24480060520f79205",
+  "preflight_gate_passed": true,
+  "formal_model_requests_before_freeze": 0,
+  "run_command": [
+    "python -m evaluation.run_benchmark",
+    "--live",
+    "--arch",
+    "fc_loop",
+    "--cases",
+    "evaluation/benchmark/holdout_v3/cases_holdout_v3.jsonl",
+    "--case-schema",
+    "evaluation/benchmark/schema_v3.json",
+    "--fixtures-dir",
+    "evaluation/benchmark/holdout_v3/fixtures",
+    "--out",
+    "evaluation/results/holdout_v3_live"
+  ],
+  "results_policy": "Primary analysis reads frozen raw runs plus fixture evidence; missing/unparsed runs stay in their declared denominator as FAIL."
+}

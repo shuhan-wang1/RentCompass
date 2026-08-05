@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1215 Kepler Quay, Umberleigh, London V4 6AB",
+            "area_normalized": "Umberleigh",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Umberleigh",
+            "city": "London",
+            "eval_listing_id": "ho3-021-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 6",
+            "price": "£3,222/month",
+            "price_raw": 3222,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-021-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1216 Kepler Quay, Umberleigh, London V4 6AB",
+            "area_normalized": "Umberleigh",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Umberleigh",
+            "city": "London",
+            "eval_listing_id": "ho3-021-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 6",
+            "price": "£3,301/month",
+            "price_raw": 3301,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-021-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1217 Kepler Quay, Umberleigh, London V4 6AB",
+            "area_normalized": "Umberleigh",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 2,
+            "borough": "Umberleigh",
+            "city": "London",
+            "eval_listing_id": "ho3-021-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 6",
+            "price": "£15,170/month",
+            "price_raw": 15170,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-021-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1218 Kepler Quay, Umberleigh, London V4 6AB",
+            "area_normalized": "Umberleigh",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Umberleigh",
+            "city": "London",
+            "eval_listing_id": "ho3-021-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 6",
+            "price": "£16,870/month",
+            "price_raw": 16870,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-021-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1219 Kepler Quay, Cairnfield, London V4 6AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-021-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 6",
+            "price": "£18,570/month",
+            "price_raw": 18570,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-021-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1210 Kepler Quay, Umberleigh, London V4 6AB",
+            "area_normalized": "Umberleigh",
+            "available_from": "2026-12-01",
+            "available_from_normalized": "2026-12-01",
+            "bedrooms": 1,
+            "borough": "Umberleigh",
+            "city": "London",
+            "eval_listing_id": "ho3-021-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 6",
+            "price": "£20,270/month",
+            "price_raw": 20270,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-021-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1211 Kepler Quay, Umberleigh, London V4 6AB",
+            "area_normalized": "Umberleigh",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Umberleigh",
+            "city": "London",
+            "eval_listing_id": "ho3-021-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 6",
+            "price": "£21,970/month",
+            "price_raw": 21970,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-021-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Umberleigh",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 3270,
+          "max_commute_time": 30,
+          "move_in_date": "2026-11-03",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Umberleigh.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-a",
+        "duration_minutes": 28,
+        "from_address": "1215 Kepler Quay, Umberleigh, London V4 6AB",
+        "origin_eval_listing_id": "ho3-021-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-b",
+        "duration_minutes": 39,
+        "from_address": "1216 Kepler Quay, Umberleigh, London V4 6AB",
+        "origin_eval_listing_id": "ho3-021-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-c",
+        "duration_minutes": 39,
+        "from_address": "1217 Kepler Quay, Umberleigh, London V4 6AB",
+        "origin_eval_listing_id": "ho3-021-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-d",
+        "duration_minutes": 39,
+        "from_address": "1218 Kepler Quay, Umberleigh, London V4 6AB",
+        "origin_eval_listing_id": "ho3-021-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-e",
+        "duration_minutes": 39,
+        "from_address": "1219 Kepler Quay, Cairnfield, London V4 6AB",
+        "origin_eval_listing_id": "ho3-021-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-f",
+        "duration_minutes": 39,
+        "from_address": "1210 Kepler Quay, Umberleigh, London V4 6AB",
+        "origin_eval_listing_id": "ho3-021-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-021-g",
+        "duration_minutes": 39,
+        "from_address": "1211 Kepler Quay, Umberleigh, London V4 6AB",
+        "origin_eval_listing_id": "ho3-021-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

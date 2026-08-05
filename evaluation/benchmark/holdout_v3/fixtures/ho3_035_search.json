@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1355 Arbor Quay, Elmstead, London V9 4AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-035-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£3,460/month",
+            "price_raw": 3460,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-035-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-035-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1356 Arbor Quay, Elmstead, London V9 4AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-035-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£3,539/month",
+            "price_raw": 3539,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-035-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-035-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1357 Arbor Quay, Elmstead, London V9 4AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 2,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-035-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£15,408/month",
+            "price_raw": 15408,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-035-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-035-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1358 Arbor Quay, Elmstead, London V9 4AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-035-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£17,108/month",
+            "price_raw": 17108,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-035-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-035-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1359 Arbor Quay, Mallowbrook, London V9 4AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-035-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£18,808/month",
+            "price_raw": 18808,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-035-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-035-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1350 Arbor Quay, Elmstead, London V9 4AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-10-24",
+            "available_from_normalized": "2026-10-24",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-035-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£20,508/month",
+            "price_raw": 20508,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-035-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-035-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1351 Arbor Quay, Elmstead, London V9 4AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-035-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£22,208/month",
+            "price_raw": 22208,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-035-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-035-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Elmstead",
+          "bedrooms": 1,
+          "max_budget": 3508,
+          "move_in_date": "2026-09-26",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Elmstead.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1565 Jasper Quay, Zephyr Downs, London V3 1AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-056-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£3,817/month",
+            "price_raw": 3817,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-056-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-056-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1566 Jasper Quay, Zephyr Downs, London V3 1AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-056-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£3,896/month",
+            "price_raw": 3896,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-056-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-056-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1567 Jasper Quay, Zephyr Downs, London V3 1AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 2,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-056-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£15,765/month",
+            "price_raw": 15765,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-056-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-056-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1568 Jasper Quay, Zephyr Downs, London V3 1AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-056-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£17,465/month",
+            "price_raw": 17465,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-056-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-056-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1569 Jasper Quay, Dunmere, London V3 1AB",
+            "area_normalized": "Dunmere",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Dunmere",
+            "city": "London",
+            "eval_listing_id": "ho3-056-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£19,165/month",
+            "price_raw": 19165,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-056-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-056-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1560 Jasper Quay, Zephyr Downs, London V3 1AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-056-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£20,865/month",
+            "price_raw": 20865,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-056-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-056-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1561 Jasper Quay, Zephyr Downs, London V3 1AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-056-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£22,565/month",
+            "price_raw": 22565,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-056-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-056-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Zephyr Downs",
+          "bedrooms": 1,
+          "max_budget": 3865,
+          "move_in_date": "2026-09-09",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Zephyr Downs.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

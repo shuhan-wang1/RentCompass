@@ -1,0 +1,27 @@
+{
+  "gate_passed": true,
+  "n_cases": 180,
+  "problems": {},
+  "metric_denominators": {
+    "eligible_recall": 60,
+    "recommendation_precision": 90,
+    "complete_constraint_satisfaction": 60,
+    "required_tool_completion": 60,
+    "unsupported_numeric_control": 180,
+    "task_completion": 180
+  },
+  "tool_contract_denominators": {
+    "commute_per_search_candidate": 30,
+    "remember_write": 30
+  },
+  "hard_slot_coverage": {
+    "budget": 90,
+    "bedroom_count": 90,
+    "room_type": 90,
+    "commute": 30,
+    "area": 90,
+    "move_in_date": 90,
+    "property_feature": 90
+  },
+  "frozen_schema": "rentcompass/benchmark/v3"
+}

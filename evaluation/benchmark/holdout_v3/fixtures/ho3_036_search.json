@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1365 Briar Quay, Foxmere, London V1 5AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-036-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 5",
+            "price": "£3,477/month",
+            "price_raw": 3477,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-036-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-036-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1366 Briar Quay, Foxmere, London V1 5AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-036-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 5",
+            "price": "£3,556/month",
+            "price_raw": 3556,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-036-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-036-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1367 Briar Quay, Foxmere, London V1 5AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 2,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-036-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 5",
+            "price": "£15,425/month",
+            "price_raw": 15425,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-036-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-036-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1368 Briar Quay, Foxmere, London V1 5AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-036-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 5",
+            "price": "£17,125/month",
+            "price_raw": 17125,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-036-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-036-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1369 Briar Quay, Nightingale Park, London V1 5AB",
+            "area_normalized": "Nightingale Park",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Nightingale Park",
+            "city": "London",
+            "eval_listing_id": "ho3-036-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 5",
+            "price": "£18,825/month",
+            "price_raw": 18825,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-036-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-036-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1360 Briar Quay, Foxmere, London V1 5AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-10-27",
+            "available_from_normalized": "2026-10-27",
+            "bedrooms": 1,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-036-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 5",
+            "price": "£20,525/month",
+            "price_raw": 20525,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-036-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-036-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1361 Briar Quay, Foxmere, London V1 5AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-036-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 5",
+            "price": "£22,225/month",
+            "price_raw": 22225,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-036-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-036-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Foxmere",
+          "bedrooms": 1,
+          "max_budget": 3525,
+          "move_in_date": "2026-09-29",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Foxmere.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

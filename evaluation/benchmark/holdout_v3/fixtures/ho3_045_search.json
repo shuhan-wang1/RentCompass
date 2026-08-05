@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1455 Kepler Quay, Orchard Fen, London V1 6AB",
+            "area_normalized": "Orchard Fen",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Orchard Fen",
+            "city": "London",
+            "eval_listing_id": "ho3-045-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£3,630/month",
+            "price_raw": 3630,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-045-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-045-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1456 Kepler Quay, Orchard Fen, London V1 6AB",
+            "area_normalized": "Orchard Fen",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Orchard Fen",
+            "city": "London",
+            "eval_listing_id": "ho3-045-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£3,709/month",
+            "price_raw": 3709,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-045-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-045-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1457 Kepler Quay, Orchard Fen, London V1 6AB",
+            "area_normalized": "Orchard Fen",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 2,
+            "borough": "Orchard Fen",
+            "city": "London",
+            "eval_listing_id": "ho3-045-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£15,578/month",
+            "price_raw": 15578,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-045-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-045-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1458 Kepler Quay, Orchard Fen, London V1 6AB",
+            "area_normalized": "Orchard Fen",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Orchard Fen",
+            "city": "London",
+            "eval_listing_id": "ho3-045-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£17,278/month",
+            "price_raw": 17278,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-045-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-045-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1459 Kepler Quay, Willowgate, London V1 6AB",
+            "area_normalized": "Willowgate",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Willowgate",
+            "city": "London",
+            "eval_listing_id": "ho3-045-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£18,978/month",
+            "price_raw": 18978,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-045-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-045-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1450 Kepler Quay, Orchard Fen, London V1 6AB",
+            "area_normalized": "Orchard Fen",
+            "available_from": "2026-11-23",
+            "available_from_normalized": "2026-11-23",
+            "bedrooms": 1,
+            "borough": "Orchard Fen",
+            "city": "London",
+            "eval_listing_id": "ho3-045-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£20,678/month",
+            "price_raw": 20678,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-045-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-045-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1451 Kepler Quay, Orchard Fen, London V1 6AB",
+            "area_normalized": "Orchard Fen",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Orchard Fen",
+            "city": "London",
+            "eval_listing_id": "ho3-045-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£22,378/month",
+            "price_raw": 22378,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-045-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-045-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Orchard Fen",
+          "bedrooms": 1,
+          "max_budget": 3678,
+          "move_in_date": "2026-10-26",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Orchard Fen.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

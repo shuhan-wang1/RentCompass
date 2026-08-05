@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Juniper Vale",
+      "bedrooms": 1,
+      "max_budget": 4103,
+      "move_in_date": "2026-10-21",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Juniper Vale.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

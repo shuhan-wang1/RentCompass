@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1235 Arbor Quay, Willowgate, London V6 8AB",
+            "area_normalized": "Willowgate",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Willowgate",
+            "city": "London",
+            "eval_listing_id": "ho3-023-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£3,256/month",
+            "price_raw": 3256,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-023-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1236 Arbor Quay, Willowgate, London V6 8AB",
+            "area_normalized": "Willowgate",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Willowgate",
+            "city": "London",
+            "eval_listing_id": "ho3-023-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£3,335/month",
+            "price_raw": 3335,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-023-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1237 Arbor Quay, Willowgate, London V6 8AB",
+            "area_normalized": "Willowgate",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 2,
+            "borough": "Willowgate",
+            "city": "London",
+            "eval_listing_id": "ho3-023-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£15,204/month",
+            "price_raw": 15204,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-023-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1238 Arbor Quay, Willowgate, London V6 8AB",
+            "area_normalized": "Willowgate",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Willowgate",
+            "city": "London",
+            "eval_listing_id": "ho3-023-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£16,904/month",
+            "price_raw": 16904,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-023-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1239 Arbor Quay, Asterbourne, London V6 8AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-023-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£18,604/month",
+            "price_raw": 18604,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-023-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1230 Arbor Quay, Willowgate, London V6 8AB",
+            "area_normalized": "Willowgate",
+            "available_from": "2026-12-07",
+            "available_from_normalized": "2026-12-07",
+            "bedrooms": 1,
+            "borough": "Willowgate",
+            "city": "London",
+            "eval_listing_id": "ho3-023-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£20,304/month",
+            "price_raw": 20304,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-023-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1231 Arbor Quay, Willowgate, London V6 8AB",
+            "area_normalized": "Willowgate",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Willowgate",
+            "city": "London",
+            "eval_listing_id": "ho3-023-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£22,004/month",
+            "price_raw": 22004,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-023-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Willowgate",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 3304,
+          "max_commute_time": 32,
+          "move_in_date": "2026-11-09",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Willowgate.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-a",
+        "duration_minutes": 30,
+        "from_address": "1235 Arbor Quay, Willowgate, London V6 8AB",
+        "origin_eval_listing_id": "ho3-023-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-b",
+        "duration_minutes": 41,
+        "from_address": "1236 Arbor Quay, Willowgate, London V6 8AB",
+        "origin_eval_listing_id": "ho3-023-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-c",
+        "duration_minutes": 41,
+        "from_address": "1237 Arbor Quay, Willowgate, London V6 8AB",
+        "origin_eval_listing_id": "ho3-023-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-d",
+        "duration_minutes": 41,
+        "from_address": "1238 Arbor Quay, Willowgate, London V6 8AB",
+        "origin_eval_listing_id": "ho3-023-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-e",
+        "duration_minutes": 41,
+        "from_address": "1239 Arbor Quay, Asterbourne, London V6 8AB",
+        "origin_eval_listing_id": "ho3-023-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-f",
+        "duration_minutes": 41,
+        "from_address": "1230 Arbor Quay, Willowgate, London V6 8AB",
+        "origin_eval_listing_id": "ho3-023-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-023-g",
+        "duration_minutes": 41,
+        "from_address": "1231 Arbor Quay, Willowgate, London V6 8AB",
+        "origin_eval_listing_id": "ho3-023-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Quarryfield",
+      "bedrooms": 1,
+      "max_budget": 4222,
+      "move_in_date": "2026-11-11",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Quarryfield.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

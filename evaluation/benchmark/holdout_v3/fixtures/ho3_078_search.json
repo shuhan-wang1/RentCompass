@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Rosemere",
+      "bedrooms": 1,
+      "max_budget": 4239,
+      "move_in_date": "2026-11-14",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Rosemere.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

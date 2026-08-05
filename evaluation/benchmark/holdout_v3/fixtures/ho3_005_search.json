@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1055 Garnet Quay, Elmstead, London V6 6AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-005-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£2,950/month",
+            "price_raw": 2950,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-005-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1056 Garnet Quay, Elmstead, London V6 6AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-005-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£3,029/month",
+            "price_raw": 3029,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-005-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1057 Garnet Quay, Elmstead, London V6 6AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 2,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-005-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£14,898/month",
+            "price_raw": 14898,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-005-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1058 Garnet Quay, Elmstead, London V6 6AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-005-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£16,598/month",
+            "price_raw": 16598,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-005-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1059 Garnet Quay, Mallowbrook, London V6 6AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-005-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£18,298/month",
+            "price_raw": 18298,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-005-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1050 Garnet Quay, Elmstead, London V6 6AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-005-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£19,998/month",
+            "price_raw": 19998,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-005-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1051 Garnet Quay, Elmstead, London V6 6AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-16",
+            "available_from_normalized": "2026-09-16",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-005-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£21,698/month",
+            "price_raw": 21698,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-005-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Elmstead",
+          "bedrooms": 1,
+          "commute_destination": "Victoria",
+          "max_budget": 2998,
+          "max_commute_time": 30,
+          "move_in_date": "2026-09-16",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Elmstead.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-a",
+        "duration_minutes": 28,
+        "from_address": "1055 Garnet Quay, Elmstead, London V6 6AB",
+        "origin_eval_listing_id": "ho3-005-a",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-b",
+        "duration_minutes": 39,
+        "from_address": "1056 Garnet Quay, Elmstead, London V6 6AB",
+        "origin_eval_listing_id": "ho3-005-b",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-c",
+        "duration_minutes": 39,
+        "from_address": "1057 Garnet Quay, Elmstead, London V6 6AB",
+        "origin_eval_listing_id": "ho3-005-c",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-d",
+        "duration_minutes": 39,
+        "from_address": "1058 Garnet Quay, Elmstead, London V6 6AB",
+        "origin_eval_listing_id": "ho3-005-d",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-e",
+        "duration_minutes": 39,
+        "from_address": "1059 Garnet Quay, Mallowbrook, London V6 6AB",
+        "origin_eval_listing_id": "ho3-005-e",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-f",
+        "duration_minutes": 39,
+        "from_address": "1050 Garnet Quay, Elmstead, London V6 6AB",
+        "origin_eval_listing_id": "ho3-005-f",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-005-g",
+        "duration_minutes": 39,
+        "from_address": "1051 Garnet Quay, Elmstead, London V6 6AB",
+        "origin_eval_listing_id": "ho3-005-g",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

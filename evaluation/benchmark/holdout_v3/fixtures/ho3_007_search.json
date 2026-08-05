@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1075 Indigo Quay, Glenhaven, London V8 8AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-007-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£2,984/month",
+            "price_raw": 2984,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-007-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1076 Indigo Quay, Glenhaven, London V8 8AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-007-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£3,063/month",
+            "price_raw": 3063,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-007-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1077 Indigo Quay, Glenhaven, London V8 8AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 2,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-007-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£14,932/month",
+            "price_raw": 14932,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-007-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1078 Indigo Quay, Glenhaven, London V8 8AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-007-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£16,632/month",
+            "price_raw": 16632,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-007-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1079 Indigo Quay, Orchard Fen, London V8 8AB",
+            "area_normalized": "Orchard Fen",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Orchard Fen",
+            "city": "London",
+            "eval_listing_id": "ho3-007-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£18,332/month",
+            "price_raw": 18332,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-007-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1070 Indigo Quay, Glenhaven, London V8 8AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-007-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£20,032/month",
+            "price_raw": 20032,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-007-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1071 Indigo Quay, Glenhaven, London V8 8AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-007-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£21,732/month",
+            "price_raw": 21732,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-007-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Glenhaven",
+          "bedrooms": 1,
+          "commute_destination": "Paddington",
+          "max_budget": 3032,
+          "max_commute_time": 32,
+          "move_in_date": "2026-09-22",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Glenhaven.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-a",
+        "duration_minutes": 30,
+        "from_address": "1075 Indigo Quay, Glenhaven, London V8 8AB",
+        "origin_eval_listing_id": "ho3-007-a",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-b",
+        "duration_minutes": 41,
+        "from_address": "1076 Indigo Quay, Glenhaven, London V8 8AB",
+        "origin_eval_listing_id": "ho3-007-b",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-c",
+        "duration_minutes": 41,
+        "from_address": "1077 Indigo Quay, Glenhaven, London V8 8AB",
+        "origin_eval_listing_id": "ho3-007-c",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-d",
+        "duration_minutes": 41,
+        "from_address": "1078 Indigo Quay, Glenhaven, London V8 8AB",
+        "origin_eval_listing_id": "ho3-007-d",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-e",
+        "duration_minutes": 41,
+        "from_address": "1079 Indigo Quay, Orchard Fen, London V8 8AB",
+        "origin_eval_listing_id": "ho3-007-e",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-f",
+        "duration_minutes": 41,
+        "from_address": "1070 Indigo Quay, Glenhaven, London V8 8AB",
+        "origin_eval_listing_id": "ho3-007-f",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-007-g",
+        "duration_minutes": 41,
+        "from_address": "1071 Indigo Quay, Glenhaven, London V8 8AB",
+        "origin_eval_listing_id": "ho3-007-g",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

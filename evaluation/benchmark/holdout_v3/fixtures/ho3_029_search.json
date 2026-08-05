@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1295 Garnet Quay, Cairnfield, London V3 6AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-08",
+            "available_from_normalized": "2026-09-08",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-029-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 6",
+            "price": "£3,358/month",
+            "price_raw": 3358,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-029-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1296 Garnet Quay, Cairnfield, London V3 6AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-08",
+            "available_from_normalized": "2026-09-08",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-029-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 6",
+            "price": "£3,437/month",
+            "price_raw": 3437,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-029-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1297 Garnet Quay, Cairnfield, London V3 6AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-08",
+            "available_from_normalized": "2026-09-08",
+            "bedrooms": 2,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-029-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 6",
+            "price": "£15,306/month",
+            "price_raw": 15306,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-029-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1298 Garnet Quay, Cairnfield, London V3 6AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-08",
+            "available_from_normalized": "2026-09-08",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-029-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 6",
+            "price": "£17,006/month",
+            "price_raw": 17006,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-029-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1299 Garnet Quay, Glenhaven, London V3 6AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-09-08",
+            "available_from_normalized": "2026-09-08",
+            "bedrooms": 1,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-029-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 6",
+            "price": "£18,706/month",
+            "price_raw": 18706,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-029-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1290 Garnet Quay, Cairnfield, London V3 6AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-10-06",
+            "available_from_normalized": "2026-10-06",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-029-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 6",
+            "price": "£20,406/month",
+            "price_raw": 20406,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-029-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1291 Garnet Quay, Cairnfield, London V3 6AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-08",
+            "available_from_normalized": "2026-09-08",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-029-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 6",
+            "price": "£22,106/month",
+            "price_raw": 22106,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-029-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Cairnfield",
+          "bedrooms": 1,
+          "commute_destination": "Farringdon",
+          "max_budget": 3406,
+          "max_commute_time": 38,
+          "move_in_date": "2026-09-08",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Cairnfield.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-a",
+        "duration_minutes": 36,
+        "from_address": "1295 Garnet Quay, Cairnfield, London V3 6AB",
+        "origin_eval_listing_id": "ho3-029-a",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-b",
+        "duration_minutes": 47,
+        "from_address": "1296 Garnet Quay, Cairnfield, London V3 6AB",
+        "origin_eval_listing_id": "ho3-029-b",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-c",
+        "duration_minutes": 47,
+        "from_address": "1297 Garnet Quay, Cairnfield, London V3 6AB",
+        "origin_eval_listing_id": "ho3-029-c",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-d",
+        "duration_minutes": 47,
+        "from_address": "1298 Garnet Quay, Cairnfield, London V3 6AB",
+        "origin_eval_listing_id": "ho3-029-d",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-e",
+        "duration_minutes": 47,
+        "from_address": "1299 Garnet Quay, Glenhaven, London V3 6AB",
+        "origin_eval_listing_id": "ho3-029-e",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-f",
+        "duration_minutes": 47,
+        "from_address": "1290 Garnet Quay, Cairnfield, London V3 6AB",
+        "origin_eval_listing_id": "ho3-029-f",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-029-g",
+        "duration_minutes": 47,
+        "from_address": "1291 Garnet Quay, Cairnfield, London V3 6AB",
+        "origin_eval_listing_id": "ho3-029-g",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

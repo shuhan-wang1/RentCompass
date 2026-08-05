@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1115 Arbor Quay, Kestrelby, London V3 4AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-011-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£3,052/month",
+            "price_raw": 3052,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-011-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1116 Arbor Quay, Kestrelby, London V3 4AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-011-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£3,131/month",
+            "price_raw": 3131,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-011-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1117 Arbor Quay, Kestrelby, London V3 4AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 2,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-011-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£15,000/month",
+            "price_raw": 15000,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-011-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1118 Arbor Quay, Kestrelby, London V3 4AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-011-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£16,700/month",
+            "price_raw": 16700,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-011-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1119 Arbor Quay, Sableford, London V3 4AB",
+            "area_normalized": "Sableford",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Sableford",
+            "city": "London",
+            "eval_listing_id": "ho3-011-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£18,400/month",
+            "price_raw": 18400,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-011-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1110 Arbor Quay, Kestrelby, London V3 4AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-011-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£20,100/month",
+            "price_raw": 20100,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-011-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1111 Arbor Quay, Kestrelby, London V3 4AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-011-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£21,800/month",
+            "price_raw": 21800,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-011-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Kestrelby",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 3100,
+          "max_commute_time": 36,
+          "move_in_date": "2026-10-04",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Kestrelby.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-a",
+        "duration_minutes": 34,
+        "from_address": "1115 Arbor Quay, Kestrelby, London V3 4AB",
+        "origin_eval_listing_id": "ho3-011-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-b",
+        "duration_minutes": 45,
+        "from_address": "1116 Arbor Quay, Kestrelby, London V3 4AB",
+        "origin_eval_listing_id": "ho3-011-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-c",
+        "duration_minutes": 45,
+        "from_address": "1117 Arbor Quay, Kestrelby, London V3 4AB",
+        "origin_eval_listing_id": "ho3-011-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-d",
+        "duration_minutes": 45,
+        "from_address": "1118 Arbor Quay, Kestrelby, London V3 4AB",
+        "origin_eval_listing_id": "ho3-011-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-e",
+        "duration_minutes": 45,
+        "from_address": "1119 Arbor Quay, Sableford, London V3 4AB",
+        "origin_eval_listing_id": "ho3-011-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-f",
+        "duration_minutes": 45,
+        "from_address": "1110 Arbor Quay, Kestrelby, London V3 4AB",
+        "origin_eval_listing_id": "ho3-011-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-011-g",
+        "duration_minutes": 45,
+        "from_address": "1111 Arbor Quay, Kestrelby, London V3 4AB",
+        "origin_eval_listing_id": "ho3-011-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

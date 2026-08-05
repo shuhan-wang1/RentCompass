@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1165 Fable Quay, Peregrine Heath, London V8 1AB",
+            "area_normalized": "Peregrine Heath",
+            "available_from": "2026-10-19",
+            "available_from_normalized": "2026-10-19",
+            "bedrooms": 1,
+            "borough": "Peregrine Heath",
+            "city": "London",
+            "eval_listing_id": "ho3-016-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 1",
+            "price": "£3,137/month",
+            "price_raw": 3137,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-016-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1166 Fable Quay, Peregrine Heath, London V8 1AB",
+            "area_normalized": "Peregrine Heath",
+            "available_from": "2026-10-19",
+            "available_from_normalized": "2026-10-19",
+            "bedrooms": 1,
+            "borough": "Peregrine Heath",
+            "city": "London",
+            "eval_listing_id": "ho3-016-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 1",
+            "price": "£3,216/month",
+            "price_raw": 3216,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-016-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1167 Fable Quay, Peregrine Heath, London V8 1AB",
+            "area_normalized": "Peregrine Heath",
+            "available_from": "2026-10-19",
+            "available_from_normalized": "2026-10-19",
+            "bedrooms": 2,
+            "borough": "Peregrine Heath",
+            "city": "London",
+            "eval_listing_id": "ho3-016-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 1",
+            "price": "£15,085/month",
+            "price_raw": 15085,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-016-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1168 Fable Quay, Peregrine Heath, London V8 1AB",
+            "area_normalized": "Peregrine Heath",
+            "available_from": "2026-10-19",
+            "available_from_normalized": "2026-10-19",
+            "bedrooms": 1,
+            "borough": "Peregrine Heath",
+            "city": "London",
+            "eval_listing_id": "ho3-016-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 1",
+            "price": "£16,785/month",
+            "price_raw": 16785,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-016-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1169 Fable Quay, Xanford, London V8 1AB",
+            "area_normalized": "Xanford",
+            "available_from": "2026-10-19",
+            "available_from_normalized": "2026-10-19",
+            "bedrooms": 1,
+            "borough": "Xanford",
+            "city": "London",
+            "eval_listing_id": "ho3-016-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 1",
+            "price": "£18,485/month",
+            "price_raw": 18485,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-016-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1160 Fable Quay, Peregrine Heath, London V8 1AB",
+            "area_normalized": "Peregrine Heath",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Peregrine Heath",
+            "city": "London",
+            "eval_listing_id": "ho3-016-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 1",
+            "price": "£20,185/month",
+            "price_raw": 20185,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-016-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1161 Fable Quay, Peregrine Heath, London V8 1AB",
+            "area_normalized": "Peregrine Heath",
+            "available_from": "2026-10-19",
+            "available_from_normalized": "2026-10-19",
+            "bedrooms": 1,
+            "borough": "Peregrine Heath",
+            "city": "London",
+            "eval_listing_id": "ho3-016-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 1",
+            "price": "£21,885/month",
+            "price_raw": 21885,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-016-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Peregrine Heath",
+          "bedrooms": 1,
+          "commute_destination": "London Bridge",
+          "max_budget": 3185,
+          "max_commute_time": 25,
+          "move_in_date": "2026-10-19",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Peregrine Heath.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-a",
+        "duration_minutes": 23,
+        "from_address": "1165 Fable Quay, Peregrine Heath, London V8 1AB",
+        "origin_eval_listing_id": "ho3-016-a",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-b",
+        "duration_minutes": 34,
+        "from_address": "1166 Fable Quay, Peregrine Heath, London V8 1AB",
+        "origin_eval_listing_id": "ho3-016-b",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-c",
+        "duration_minutes": 34,
+        "from_address": "1167 Fable Quay, Peregrine Heath, London V8 1AB",
+        "origin_eval_listing_id": "ho3-016-c",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-d",
+        "duration_minutes": 34,
+        "from_address": "1168 Fable Quay, Peregrine Heath, London V8 1AB",
+        "origin_eval_listing_id": "ho3-016-d",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-e",
+        "duration_minutes": 34,
+        "from_address": "1169 Fable Quay, Xanford, London V8 1AB",
+        "origin_eval_listing_id": "ho3-016-e",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-f",
+        "duration_minutes": 34,
+        "from_address": "1160 Fable Quay, Peregrine Heath, London V8 1AB",
+        "origin_eval_listing_id": "ho3-016-f",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-016-g",
+        "duration_minutes": 34,
+        "from_address": "1161 Fable Quay, Peregrine Heath, London V8 1AB",
+        "origin_eval_listing_id": "ho3-016-g",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

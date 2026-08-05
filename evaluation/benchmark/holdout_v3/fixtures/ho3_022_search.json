@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1225 Laurel Quay, Violet Cross, London V5 7AB",
+            "area_normalized": "Violet Cross",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Violet Cross",
+            "city": "London",
+            "eval_listing_id": "ho3-022-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£3,239/month",
+            "price_raw": 3239,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-022-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1226 Laurel Quay, Violet Cross, London V5 7AB",
+            "area_normalized": "Violet Cross",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Violet Cross",
+            "city": "London",
+            "eval_listing_id": "ho3-022-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£3,318/month",
+            "price_raw": 3318,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-022-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1227 Laurel Quay, Violet Cross, London V5 7AB",
+            "area_normalized": "Violet Cross",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 2,
+            "borough": "Violet Cross",
+            "city": "London",
+            "eval_listing_id": "ho3-022-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£15,187/month",
+            "price_raw": 15187,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-022-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1228 Laurel Quay, Violet Cross, London V5 7AB",
+            "area_normalized": "Violet Cross",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Violet Cross",
+            "city": "London",
+            "eval_listing_id": "ho3-022-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£16,887/month",
+            "price_raw": 16887,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-022-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1229 Laurel Quay, Dovecote Rise, London V5 7AB",
+            "area_normalized": "Dovecote Rise",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Dovecote Rise",
+            "city": "London",
+            "eval_listing_id": "ho3-022-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£18,587/month",
+            "price_raw": 18587,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-022-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1220 Laurel Quay, Violet Cross, London V5 7AB",
+            "area_normalized": "Violet Cross",
+            "available_from": "2026-12-04",
+            "available_from_normalized": "2026-12-04",
+            "bedrooms": 1,
+            "borough": "Violet Cross",
+            "city": "London",
+            "eval_listing_id": "ho3-022-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£20,287/month",
+            "price_raw": 20287,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-022-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1221 Laurel Quay, Violet Cross, London V5 7AB",
+            "area_normalized": "Violet Cross",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Violet Cross",
+            "city": "London",
+            "eval_listing_id": "ho3-022-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£21,987/month",
+            "price_raw": 21987,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-022-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Violet Cross",
+          "bedrooms": 1,
+          "commute_destination": "Moorgate",
+          "max_budget": 3287,
+          "max_commute_time": 31,
+          "move_in_date": "2026-11-06",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Violet Cross.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-a",
+        "duration_minutes": 29,
+        "from_address": "1225 Laurel Quay, Violet Cross, London V5 7AB",
+        "origin_eval_listing_id": "ho3-022-a",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-b",
+        "duration_minutes": 40,
+        "from_address": "1226 Laurel Quay, Violet Cross, London V5 7AB",
+        "origin_eval_listing_id": "ho3-022-b",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-c",
+        "duration_minutes": 40,
+        "from_address": "1227 Laurel Quay, Violet Cross, London V5 7AB",
+        "origin_eval_listing_id": "ho3-022-c",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-d",
+        "duration_minutes": 40,
+        "from_address": "1228 Laurel Quay, Violet Cross, London V5 7AB",
+        "origin_eval_listing_id": "ho3-022-d",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-e",
+        "duration_minutes": 40,
+        "from_address": "1229 Laurel Quay, Dovecote Rise, London V5 7AB",
+        "origin_eval_listing_id": "ho3-022-e",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-f",
+        "duration_minutes": 40,
+        "from_address": "1220 Laurel Quay, Violet Cross, London V5 7AB",
+        "origin_eval_listing_id": "ho3-022-f",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-022-g",
+        "duration_minutes": 40,
+        "from_address": "1221 Laurel Quay, Violet Cross, London V5 7AB",
+        "origin_eval_listing_id": "ho3-022-g",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

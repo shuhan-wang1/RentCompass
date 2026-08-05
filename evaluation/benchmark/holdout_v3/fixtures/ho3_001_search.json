@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1015 Cobalt Quay, Asterbourne, London V2 2AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-001-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£2,893/month",
+            "price_raw": 2893,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-001-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1016 Cobalt Quay, Asterbourne, London V2 2AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-001-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£2,961/month",
+            "price_raw": 2961,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-001-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1017 Cobalt Quay, Asterbourne, London V2 2AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 2,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-001-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£14,830/month",
+            "price_raw": 14830,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-001-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1018 Cobalt Quay, Asterbourne, London V2 2AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-001-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£16,530/month",
+            "price_raw": 16530,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-001-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1019 Cobalt Quay, Ivermont, London V2 2AB",
+            "area_normalized": "Ivermont",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Ivermont",
+            "city": "London",
+            "eval_listing_id": "ho3-001-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£18,230/month",
+            "price_raw": 18230,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-001-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1010 Cobalt Quay, Asterbourne, London V2 2AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-10-02",
+            "available_from_normalized": "2026-10-02",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-001-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£19,930/month",
+            "price_raw": 19930,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-001-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1011 Cobalt Quay, Asterbourne, London V2 2AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-001-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£21,630/month",
+            "price_raw": 21630,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-001-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Asterbourne",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 2930,
+          "max_commute_time": 26,
+          "move_in_date": "2026-09-04",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Asterbourne.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-a",
+        "duration_minutes": 24,
+        "from_address": "1015 Cobalt Quay, Asterbourne, London V2 2AB",
+        "origin_eval_listing_id": "ho3-001-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-b",
+        "duration_minutes": 35,
+        "from_address": "1016 Cobalt Quay, Asterbourne, London V2 2AB",
+        "origin_eval_listing_id": "ho3-001-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-c",
+        "duration_minutes": 35,
+        "from_address": "1017 Cobalt Quay, Asterbourne, London V2 2AB",
+        "origin_eval_listing_id": "ho3-001-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-d",
+        "duration_minutes": 35,
+        "from_address": "1018 Cobalt Quay, Asterbourne, London V2 2AB",
+        "origin_eval_listing_id": "ho3-001-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-e",
+        "duration_minutes": 35,
+        "from_address": "1019 Cobalt Quay, Ivermont, London V2 2AB",
+        "origin_eval_listing_id": "ho3-001-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-f",
+        "duration_minutes": 35,
+        "from_address": "1010 Cobalt Quay, Asterbourne, London V2 2AB",
+        "origin_eval_listing_id": "ho3-001-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-001-g",
+        "duration_minutes": 35,
+        "from_address": "1011 Cobalt Quay, Asterbourne, London V2 2AB",
+        "origin_eval_listing_id": "ho3-001-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

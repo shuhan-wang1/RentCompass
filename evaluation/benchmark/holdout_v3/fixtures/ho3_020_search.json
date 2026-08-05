@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1205 Jasper Quay, Thornwick, London V3 5AB",
+            "area_normalized": "Thornwick",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Thornwick",
+            "city": "London",
+            "eval_listing_id": "ho3-020-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£3,205/month",
+            "price_raw": 3205,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-020-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1206 Jasper Quay, Thornwick, London V3 5AB",
+            "area_normalized": "Thornwick",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Thornwick",
+            "city": "London",
+            "eval_listing_id": "ho3-020-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£3,284/month",
+            "price_raw": 3284,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-020-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1207 Jasper Quay, Thornwick, London V3 5AB",
+            "area_normalized": "Thornwick",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 2,
+            "borough": "Thornwick",
+            "city": "London",
+            "eval_listing_id": "ho3-020-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£15,153/month",
+            "price_raw": 15153,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-020-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1208 Jasper Quay, Thornwick, London V3 5AB",
+            "area_normalized": "Thornwick",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Thornwick",
+            "city": "London",
+            "eval_listing_id": "ho3-020-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£16,853/month",
+            "price_raw": 16853,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-020-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1209 Jasper Quay, Bramblehurst, London V3 5AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-020-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£18,553/month",
+            "price_raw": 18553,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-020-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1200 Jasper Quay, Thornwick, London V3 5AB",
+            "area_normalized": "Thornwick",
+            "available_from": "2026-11-28",
+            "available_from_normalized": "2026-11-28",
+            "bedrooms": 1,
+            "borough": "Thornwick",
+            "city": "London",
+            "eval_listing_id": "ho3-020-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£20,253/month",
+            "price_raw": 20253,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-020-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1201 Jasper Quay, Thornwick, London V3 5AB",
+            "area_normalized": "Thornwick",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Thornwick",
+            "city": "London",
+            "eval_listing_id": "ho3-020-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£21,953/month",
+            "price_raw": 21953,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-020-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Thornwick",
+          "bedrooms": 1,
+          "commute_destination": "Euston",
+          "max_budget": 3253,
+          "max_commute_time": 29,
+          "move_in_date": "2026-10-31",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Thornwick.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-a",
+        "duration_minutes": 27,
+        "from_address": "1205 Jasper Quay, Thornwick, London V3 5AB",
+        "origin_eval_listing_id": "ho3-020-a",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-b",
+        "duration_minutes": 38,
+        "from_address": "1206 Jasper Quay, Thornwick, London V3 5AB",
+        "origin_eval_listing_id": "ho3-020-b",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-c",
+        "duration_minutes": 38,
+        "from_address": "1207 Jasper Quay, Thornwick, London V3 5AB",
+        "origin_eval_listing_id": "ho3-020-c",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-d",
+        "duration_minutes": 38,
+        "from_address": "1208 Jasper Quay, Thornwick, London V3 5AB",
+        "origin_eval_listing_id": "ho3-020-d",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-e",
+        "duration_minutes": 38,
+        "from_address": "1209 Jasper Quay, Bramblehurst, London V3 5AB",
+        "origin_eval_listing_id": "ho3-020-e",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-f",
+        "duration_minutes": 38,
+        "from_address": "1200 Jasper Quay, Thornwick, London V3 5AB",
+        "origin_eval_listing_id": "ho3-020-f",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-020-g",
+        "duration_minutes": 38,
+        "from_address": "1201 Jasper Quay, Thornwick, London V3 5AB",
+        "origin_eval_listing_id": "ho3-020-g",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

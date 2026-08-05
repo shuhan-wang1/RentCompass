@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1435 Indigo Quay, Mallowbrook, London V8 4AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-043-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£3,596/month",
+            "price_raw": 3596,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-043-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-043-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1436 Indigo Quay, Mallowbrook, London V8 4AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-043-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£3,675/month",
+            "price_raw": 3675,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-043-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-043-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1437 Indigo Quay, Mallowbrook, London V8 4AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 2,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-043-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£15,544/month",
+            "price_raw": 15544,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-043-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-043-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1438 Indigo Quay, Mallowbrook, London V8 4AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-043-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£17,244/month",
+            "price_raw": 17244,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-043-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-043-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1439 Indigo Quay, Umberleigh, London V8 4AB",
+            "area_normalized": "Umberleigh",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Umberleigh",
+            "city": "London",
+            "eval_listing_id": "ho3-043-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£18,944/month",
+            "price_raw": 18944,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-043-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-043-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1430 Indigo Quay, Mallowbrook, London V8 4AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 1,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-043-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£20,644/month",
+            "price_raw": 20644,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-043-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-043-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1431 Indigo Quay, Mallowbrook, London V8 4AB",
+            "area_normalized": "Mallowbrook",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Mallowbrook",
+            "city": "London",
+            "eval_listing_id": "ho3-043-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£22,344/month",
+            "price_raw": 22344,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-043-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-043-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Mallowbrook",
+          "bedrooms": 1,
+          "max_budget": 3644,
+          "move_in_date": "2026-10-20",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Mallowbrook.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

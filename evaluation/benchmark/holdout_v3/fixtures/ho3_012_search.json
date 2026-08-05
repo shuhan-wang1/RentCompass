@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1125 Briar Quay, Larkhaven, London V4 5AB",
+            "area_normalized": "Larkhaven",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Larkhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-012-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£3,069/month",
+            "price_raw": 3069,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-012-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1126 Briar Quay, Larkhaven, London V4 5AB",
+            "area_normalized": "Larkhaven",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Larkhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-012-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£3,148/month",
+            "price_raw": 3148,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-012-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1127 Briar Quay, Larkhaven, London V4 5AB",
+            "area_normalized": "Larkhaven",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 2,
+            "borough": "Larkhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-012-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£15,017/month",
+            "price_raw": 15017,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-012-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1128 Briar Quay, Larkhaven, London V4 5AB",
+            "area_normalized": "Larkhaven",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Larkhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-012-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£16,717/month",
+            "price_raw": 16717,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-012-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1129 Briar Quay, Thornwick, London V4 5AB",
+            "area_normalized": "Thornwick",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Thornwick",
+            "city": "London",
+            "eval_listing_id": "ho3-012-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£18,417/month",
+            "price_raw": 18417,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-012-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1120 Briar Quay, Larkhaven, London V4 5AB",
+            "area_normalized": "Larkhaven",
+            "available_from": "2026-11-04",
+            "available_from_normalized": "2026-11-04",
+            "bedrooms": 1,
+            "borough": "Larkhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-012-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£20,117/month",
+            "price_raw": 20117,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-012-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1121 Briar Quay, Larkhaven, London V4 5AB",
+            "area_normalized": "Larkhaven",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Larkhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-012-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£21,817/month",
+            "price_raw": 21817,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-012-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Larkhaven",
+          "bedrooms": 1,
+          "commute_destination": "Moorgate",
+          "max_budget": 3117,
+          "max_commute_time": 37,
+          "move_in_date": "2026-10-07",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Larkhaven.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-a",
+        "duration_minutes": 35,
+        "from_address": "1125 Briar Quay, Larkhaven, London V4 5AB",
+        "origin_eval_listing_id": "ho3-012-a",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-b",
+        "duration_minutes": 46,
+        "from_address": "1126 Briar Quay, Larkhaven, London V4 5AB",
+        "origin_eval_listing_id": "ho3-012-b",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-c",
+        "duration_minutes": 46,
+        "from_address": "1127 Briar Quay, Larkhaven, London V4 5AB",
+        "origin_eval_listing_id": "ho3-012-c",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-d",
+        "duration_minutes": 46,
+        "from_address": "1128 Briar Quay, Larkhaven, London V4 5AB",
+        "origin_eval_listing_id": "ho3-012-d",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-e",
+        "duration_minutes": 46,
+        "from_address": "1129 Briar Quay, Thornwick, London V4 5AB",
+        "origin_eval_listing_id": "ho3-012-e",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-f",
+        "duration_minutes": 46,
+        "from_address": "1120 Briar Quay, Larkhaven, London V4 5AB",
+        "origin_eval_listing_id": "ho3-012-f",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-012-g",
+        "duration_minutes": 46,
+        "from_address": "1121 Briar Quay, Larkhaven, London V4 5AB",
+        "origin_eval_listing_id": "ho3-012-g",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

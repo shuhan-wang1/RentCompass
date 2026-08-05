@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1475 Arbor Quay, Quarryfield, London V3 8AB",
+            "area_normalized": "Quarryfield",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quarryfield",
+            "city": "London",
+            "eval_listing_id": "ho3-047-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£3,664/month",
+            "price_raw": 3664,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-047-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-047-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1476 Arbor Quay, Quarryfield, London V3 8AB",
+            "area_normalized": "Quarryfield",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quarryfield",
+            "city": "London",
+            "eval_listing_id": "ho3-047-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£3,743/month",
+            "price_raw": 3743,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-047-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-047-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1477 Arbor Quay, Quarryfield, London V3 8AB",
+            "area_normalized": "Quarryfield",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 2,
+            "borough": "Quarryfield",
+            "city": "London",
+            "eval_listing_id": "ho3-047-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£15,612/month",
+            "price_raw": 15612,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-047-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-047-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1478 Arbor Quay, Quarryfield, London V3 8AB",
+            "area_normalized": "Quarryfield",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quarryfield",
+            "city": "London",
+            "eval_listing_id": "ho3-047-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£17,312/month",
+            "price_raw": 17312,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-047-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-047-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1479 Arbor Quay, Yarrow Hill, London V3 8AB",
+            "area_normalized": "Yarrow Hill",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Yarrow Hill",
+            "city": "London",
+            "eval_listing_id": "ho3-047-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£19,012/month",
+            "price_raw": 19012,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-047-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-047-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1470 Arbor Quay, Quarryfield, London V3 8AB",
+            "area_normalized": "Quarryfield",
+            "available_from": "2026-11-29",
+            "available_from_normalized": "2026-11-29",
+            "bedrooms": 1,
+            "borough": "Quarryfield",
+            "city": "London",
+            "eval_listing_id": "ho3-047-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£20,712/month",
+            "price_raw": 20712,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-047-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-047-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1471 Arbor Quay, Quarryfield, London V3 8AB",
+            "area_normalized": "Quarryfield",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quarryfield",
+            "city": "London",
+            "eval_listing_id": "ho3-047-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£22,412/month",
+            "price_raw": 22412,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-047-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-047-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Quarryfield",
+          "bedrooms": 1,
+          "max_budget": 3712,
+          "move_in_date": "2026-11-01",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Quarryfield.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

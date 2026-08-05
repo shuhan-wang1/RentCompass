@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1315 Indigo Quay, Asterbourne, London V5 8AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-031-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£3,392/month",
+            "price_raw": 3392,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-031-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-031-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1316 Indigo Quay, Asterbourne, London V5 8AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-031-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£3,471/month",
+            "price_raw": 3471,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-031-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-031-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1317 Indigo Quay, Asterbourne, London V5 8AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 2,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-031-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£15,340/month",
+            "price_raw": 15340,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-031-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-031-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1318 Indigo Quay, Asterbourne, London V5 8AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-031-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£17,040/month",
+            "price_raw": 17040,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-031-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-031-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1319 Indigo Quay, Ivermont, London V5 8AB",
+            "area_normalized": "Ivermont",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Ivermont",
+            "city": "London",
+            "eval_listing_id": "ho3-031-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£18,740/month",
+            "price_raw": 18740,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-031-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-031-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1310 Indigo Quay, Asterbourne, London V5 8AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-10-12",
+            "available_from_normalized": "2026-10-12",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-031-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£20,440/month",
+            "price_raw": 20440,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-031-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-031-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1311 Indigo Quay, Asterbourne, London V5 8AB",
+            "area_normalized": "Asterbourne",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Asterbourne",
+            "city": "London",
+            "eval_listing_id": "ho3-031-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£22,140/month",
+            "price_raw": 22140,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-031-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-031-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Asterbourne",
+          "bedrooms": 1,
+          "max_budget": 3440,
+          "move_in_date": "2026-09-14",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Asterbourne.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

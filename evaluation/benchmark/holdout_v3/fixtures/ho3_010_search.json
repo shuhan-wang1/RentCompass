@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1105 Laurel Quay, Juniper Vale, London V2 3AB",
+            "area_normalized": "Juniper Vale",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Juniper Vale",
+            "city": "London",
+            "eval_listing_id": "ho3-010-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£3,035/month",
+            "price_raw": 3035,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-010-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1106 Laurel Quay, Juniper Vale, London V2 3AB",
+            "area_normalized": "Juniper Vale",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Juniper Vale",
+            "city": "London",
+            "eval_listing_id": "ho3-010-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£3,114/month",
+            "price_raw": 3114,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-010-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1107 Laurel Quay, Juniper Vale, London V2 3AB",
+            "area_normalized": "Juniper Vale",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 2,
+            "borough": "Juniper Vale",
+            "city": "London",
+            "eval_listing_id": "ho3-010-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£14,983/month",
+            "price_raw": 14983,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-010-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1108 Laurel Quay, Juniper Vale, London V2 3AB",
+            "area_normalized": "Juniper Vale",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Juniper Vale",
+            "city": "London",
+            "eval_listing_id": "ho3-010-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£16,683/month",
+            "price_raw": 16683,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-010-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1109 Laurel Quay, Rosemere, London V2 3AB",
+            "area_normalized": "Rosemere",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Rosemere",
+            "city": "London",
+            "eval_listing_id": "ho3-010-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£18,383/month",
+            "price_raw": 18383,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-010-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1100 Laurel Quay, Juniper Vale, London V2 3AB",
+            "area_normalized": "Juniper Vale",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Juniper Vale",
+            "city": "London",
+            "eval_listing_id": "ho3-010-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£20,083/month",
+            "price_raw": 20083,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-010-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1101 Laurel Quay, Juniper Vale, London V2 3AB",
+            "area_normalized": "Juniper Vale",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Juniper Vale",
+            "city": "London",
+            "eval_listing_id": "ho3-010-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£21,783/month",
+            "price_raw": 21783,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-010-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Juniper Vale",
+          "bedrooms": 1,
+          "commute_destination": "Euston",
+          "max_budget": 3083,
+          "max_commute_time": 35,
+          "move_in_date": "2026-10-01",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Juniper Vale.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-a",
+        "duration_minutes": 33,
+        "from_address": "1105 Laurel Quay, Juniper Vale, London V2 3AB",
+        "origin_eval_listing_id": "ho3-010-a",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-b",
+        "duration_minutes": 44,
+        "from_address": "1106 Laurel Quay, Juniper Vale, London V2 3AB",
+        "origin_eval_listing_id": "ho3-010-b",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-c",
+        "duration_minutes": 44,
+        "from_address": "1107 Laurel Quay, Juniper Vale, London V2 3AB",
+        "origin_eval_listing_id": "ho3-010-c",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-d",
+        "duration_minutes": 44,
+        "from_address": "1108 Laurel Quay, Juniper Vale, London V2 3AB",
+        "origin_eval_listing_id": "ho3-010-d",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-e",
+        "duration_minutes": 44,
+        "from_address": "1109 Laurel Quay, Rosemere, London V2 3AB",
+        "origin_eval_listing_id": "ho3-010-e",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-f",
+        "duration_minutes": 44,
+        "from_address": "1100 Laurel Quay, Juniper Vale, London V2 3AB",
+        "origin_eval_listing_id": "ho3-010-f",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-010-g",
+        "duration_minutes": 44,
+        "from_address": "1101 Laurel Quay, Juniper Vale, London V2 3AB",
+        "origin_eval_listing_id": "ho3-010-g",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

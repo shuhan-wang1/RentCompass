@@ -36,20 +36,20 @@ STREETS = ("Arbor", "Briar", "Cobalt", "Dahlia", "Ember", "Fable", "Garnet",
            "Harrier", "Indigo", "Jasper", "Kepler", "Laurel")
 RETRIEVAL_TEMPLATES = (
     "I am relocating soon. Please find a 1-bedroom flat in {area}, furnished, under £{budget} a month and available by {move}. Do not include anything that misses a requirement.",
-    "Could you shortlist only furnished one-bed flats in {area} costing no more than £{budget} per month, with move-in no later than {move}?",
-    "For my move, I need a furnished 1-bed flat around {area}. My ceiling is £{budget} monthly and I must be able to move by {move}; filter strictly.",
-    "Please search {area} for a furnished flat with one bedroom. Keep it at or below £{budget} pcm and ready by {move}; leave out near matches.",
-    "I need an exact match: a one-bedroom furnished flat in {area}, maximum £{budget} each month, available by {move}. Show matches only.",
+    "Could you shortlist only furnished 1-bedroom flats in {area} costing no more than £{budget} a month, with move-in no later than {move}?",
+    "For my move, I need a furnished 1-bedroom flat around {area}. My ceiling is £{budget} a month and I must be able to move by {move}; filter strictly.",
+    "Please search {area} for a furnished 1-bedroom flat. Keep it at or below £{budget} a month and ready by {move}; leave out near matches.",
+    "I need an exact match: a 1-bedroom furnished flat in {area}, maximum £{budget} a month, available by {move}. Show matches only.",
 )
 COMMUTE_SUFFIXES = (
     " It also has to be within {limit} minutes of {dest}; verify that for every option.",
-    " Please apply a {limit}-minute maximum commute to {dest}, with evidence for each listing.",
+    " Please apply a maximum commute of {limit} minutes to {dest}, with evidence for each listing.",
     " Each suggested property needs a verified journey of no more than {limit} minutes to {dest}.",
 )
 NO_RESULT_TEMPLATES = (
-    "Please find a furnished one-bedroom flat in {area} under £{budget} a month, available by {move}. If there is no exact match, say so plainly.",
-    "I need a 1-bed furnished flat in {area} for at most £{budget} pcm and no later than {move}. Tell me honestly if none meet all of that.",
-    "Search for only exact matches: furnished, one bedroom, {area}, up to £{budget} monthly, move-in by {move}. Do not invent alternatives if there are none.",
+    "Please find a furnished 1-bedroom flat in {area} under £{budget} a month, available by {move}. If there is no exact match, say so plainly.",
+    "I need a 1-bedroom furnished flat in {area} for at most £{budget} a month and no later than {move}. Tell me honestly if none meet all of that.",
+    "Search for only exact matches: a furnished 1-bedroom flat in {area}, up to £{budget} a month, move-in by {move}. Do not invent alternatives if there are none.",
 )
 
 
@@ -133,7 +133,7 @@ def hard_constraints(area: str, budget: int, move: str, *, move_text: str | None
                      commute: int | None = None, dest: str | None = None) -> list[dict]:
     items = [
         {"type": "all_results_satisfy", "field": "monthly_rent", "op": "<=", "value": budget,
-         "user_text": f"£{budget} a month"},
+         "user_text": f"£{budget}"},
         {"type": "bedroom_count_match", "op": "==", "value": 1, "user_text": "1-bedroom"},
         {"type": "room_type_match", "value": "flat", "user_text": "flat"},
         {"type": "area_match", "granularity": "borough", "value": area, "user_text": area},

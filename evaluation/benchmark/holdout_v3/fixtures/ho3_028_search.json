@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1285 Fable Quay, Bramblehurst, London V2 5AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-028-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 5",
+            "price": "£3,341/month",
+            "price_raw": 3341,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-028-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1286 Fable Quay, Bramblehurst, London V2 5AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-028-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 5",
+            "price": "£3,420/month",
+            "price_raw": 3420,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-028-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1287 Fable Quay, Bramblehurst, London V2 5AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 2,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-028-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 5",
+            "price": "£15,289/month",
+            "price_raw": 15289,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-028-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1288 Fable Quay, Bramblehurst, London V2 5AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-028-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 5",
+            "price": "£16,989/month",
+            "price_raw": 16989,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-028-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1289 Fable Quay, Foxmere, London V2 5AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-028-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 5",
+            "price": "£18,689/month",
+            "price_raw": 18689,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-028-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1280 Fable Quay, Bramblehurst, London V2 5AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-028-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 5",
+            "price": "£20,389/month",
+            "price_raw": 20389,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-028-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1281 Fable Quay, Bramblehurst, London V2 5AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-028-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 5",
+            "price": "£22,089/month",
+            "price_raw": 22089,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-028-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Bramblehurst",
+          "bedrooms": 1,
+          "commute_destination": "Canary Wharf",
+          "max_budget": 3389,
+          "max_commute_time": 37,
+          "move_in_date": "2026-09-05",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Bramblehurst.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-a",
+        "duration_minutes": 35,
+        "from_address": "1285 Fable Quay, Bramblehurst, London V2 5AB",
+        "origin_eval_listing_id": "ho3-028-a",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-b",
+        "duration_minutes": 46,
+        "from_address": "1286 Fable Quay, Bramblehurst, London V2 5AB",
+        "origin_eval_listing_id": "ho3-028-b",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-c",
+        "duration_minutes": 46,
+        "from_address": "1287 Fable Quay, Bramblehurst, London V2 5AB",
+        "origin_eval_listing_id": "ho3-028-c",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-d",
+        "duration_minutes": 46,
+        "from_address": "1288 Fable Quay, Bramblehurst, London V2 5AB",
+        "origin_eval_listing_id": "ho3-028-d",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-e",
+        "duration_minutes": 46,
+        "from_address": "1289 Fable Quay, Foxmere, London V2 5AB",
+        "origin_eval_listing_id": "ho3-028-e",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-f",
+        "duration_minutes": 46,
+        "from_address": "1280 Fable Quay, Bramblehurst, London V2 5AB",
+        "origin_eval_listing_id": "ho3-028-f",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-028-g",
+        "duration_minutes": 46,
+        "from_address": "1281 Fable Quay, Bramblehurst, London V2 5AB",
+        "origin_eval_listing_id": "ho3-028-g",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

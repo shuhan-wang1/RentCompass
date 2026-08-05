@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1325 Jasper Quay, Brackenford, London V6 1AB",
+            "area_normalized": "Brackenford",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Brackenford",
+            "city": "London",
+            "eval_listing_id": "ho3-032-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£3,409/month",
+            "price_raw": 3409,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-032-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-032-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1326 Jasper Quay, Brackenford, London V6 1AB",
+            "area_normalized": "Brackenford",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Brackenford",
+            "city": "London",
+            "eval_listing_id": "ho3-032-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£3,488/month",
+            "price_raw": 3488,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-032-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-032-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1327 Jasper Quay, Brackenford, London V6 1AB",
+            "area_normalized": "Brackenford",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 2,
+            "borough": "Brackenford",
+            "city": "London",
+            "eval_listing_id": "ho3-032-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£15,357/month",
+            "price_raw": 15357,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-032-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-032-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1328 Jasper Quay, Brackenford, London V6 1AB",
+            "area_normalized": "Brackenford",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Brackenford",
+            "city": "London",
+            "eval_listing_id": "ho3-032-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£17,057/month",
+            "price_raw": 17057,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-032-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-032-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1329 Jasper Quay, Juniper Vale, London V6 1AB",
+            "area_normalized": "Juniper Vale",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Juniper Vale",
+            "city": "London",
+            "eval_listing_id": "ho3-032-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£18,757/month",
+            "price_raw": 18757,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-032-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-032-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1320 Jasper Quay, Brackenford, London V6 1AB",
+            "area_normalized": "Brackenford",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 1,
+            "borough": "Brackenford",
+            "city": "London",
+            "eval_listing_id": "ho3-032-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£20,457/month",
+            "price_raw": 20457,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-032-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-032-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1321 Jasper Quay, Brackenford, London V6 1AB",
+            "area_normalized": "Brackenford",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Brackenford",
+            "city": "London",
+            "eval_listing_id": "ho3-032-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£22,157/month",
+            "price_raw": 22157,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-032-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-032-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Brackenford",
+          "bedrooms": 1,
+          "max_budget": 3457,
+          "move_in_date": "2026-09-17",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Brackenford.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

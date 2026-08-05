@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Peregrine Heath",
+      "bedrooms": 1,
+      "max_budget": 4205,
+      "move_in_date": "2026-11-08",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Peregrine Heath.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

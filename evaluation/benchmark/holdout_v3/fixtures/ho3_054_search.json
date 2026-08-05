@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1545 Harrier Quay, Xanford, London V1 7AB",
+            "area_normalized": "Xanford",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xanford",
+            "city": "London",
+            "eval_listing_id": "ho3-054-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£3,783/month",
+            "price_raw": 3783,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-054-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-054-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1546 Harrier Quay, Xanford, London V1 7AB",
+            "area_normalized": "Xanford",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xanford",
+            "city": "London",
+            "eval_listing_id": "ho3-054-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£3,862/month",
+            "price_raw": 3862,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-054-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-054-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1547 Harrier Quay, Xanford, London V1 7AB",
+            "area_normalized": "Xanford",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 2,
+            "borough": "Xanford",
+            "city": "London",
+            "eval_listing_id": "ho3-054-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£15,731/month",
+            "price_raw": 15731,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-054-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-054-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1548 Harrier Quay, Xanford, London V1 7AB",
+            "area_normalized": "Xanford",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xanford",
+            "city": "London",
+            "eval_listing_id": "ho3-054-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£17,431/month",
+            "price_raw": 17431,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-054-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-054-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1549 Harrier Quay, Brackenford, London V1 7AB",
+            "area_normalized": "Brackenford",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Brackenford",
+            "city": "London",
+            "eval_listing_id": "ho3-054-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£19,131/month",
+            "price_raw": 19131,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-054-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-054-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1540 Harrier Quay, Xanford, London V1 7AB",
+            "area_normalized": "Xanford",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Xanford",
+            "city": "London",
+            "eval_listing_id": "ho3-054-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£20,831/month",
+            "price_raw": 20831,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-054-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-054-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1541 Harrier Quay, Xanford, London V1 7AB",
+            "area_normalized": "Xanford",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xanford",
+            "city": "London",
+            "eval_listing_id": "ho3-054-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£22,531/month",
+            "price_raw": 22531,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-054-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-054-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Xanford",
+          "bedrooms": 1,
+          "max_budget": 3831,
+          "move_in_date": "2026-09-03",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Xanford.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

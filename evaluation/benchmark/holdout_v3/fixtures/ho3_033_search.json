@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1335 Kepler Quay, Cedarwick, London V7 2AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-033-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£3,426/month",
+            "price_raw": 3426,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-033-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-033-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1336 Kepler Quay, Cedarwick, London V7 2AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-033-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£3,505/month",
+            "price_raw": 3505,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-033-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-033-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1337 Kepler Quay, Cedarwick, London V7 2AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 2,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-033-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£15,374/month",
+            "price_raw": 15374,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-033-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-033-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1338 Kepler Quay, Cedarwick, London V7 2AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-033-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£17,074/month",
+            "price_raw": 17074,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-033-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-033-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1339 Kepler Quay, Kestrelby, London V7 2AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-033-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£18,774/month",
+            "price_raw": 18774,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-033-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-033-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1330 Kepler Quay, Cedarwick, London V7 2AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-10-18",
+            "available_from_normalized": "2026-10-18",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-033-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£20,474/month",
+            "price_raw": 20474,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-033-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-033-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1331 Kepler Quay, Cedarwick, London V7 2AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-033-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£22,174/month",
+            "price_raw": 22174,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-033-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-033-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Cedarwick",
+          "bedrooms": 1,
+          "max_budget": 3474,
+          "move_in_date": "2026-09-20",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Cedarwick.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1445 Jasper Quay, Nightingale Park, London V9 5AB",
+            "area_normalized": "Nightingale Park",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nightingale Park",
+            "city": "London",
+            "eval_listing_id": "ho3-044-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£3,613/month",
+            "price_raw": 3613,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-044-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-044-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1446 Jasper Quay, Nightingale Park, London V9 5AB",
+            "area_normalized": "Nightingale Park",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nightingale Park",
+            "city": "London",
+            "eval_listing_id": "ho3-044-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£3,692/month",
+            "price_raw": 3692,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-044-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-044-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1447 Jasper Quay, Nightingale Park, London V9 5AB",
+            "area_normalized": "Nightingale Park",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 2,
+            "borough": "Nightingale Park",
+            "city": "London",
+            "eval_listing_id": "ho3-044-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£15,561/month",
+            "price_raw": 15561,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-044-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-044-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1448 Jasper Quay, Nightingale Park, London V9 5AB",
+            "area_normalized": "Nightingale Park",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nightingale Park",
+            "city": "London",
+            "eval_listing_id": "ho3-044-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£17,261/month",
+            "price_raw": 17261,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-044-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-044-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1449 Jasper Quay, Violet Cross, London V9 5AB",
+            "area_normalized": "Violet Cross",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Violet Cross",
+            "city": "London",
+            "eval_listing_id": "ho3-044-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£18,961/month",
+            "price_raw": 18961,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-044-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-044-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1440 Jasper Quay, Nightingale Park, London V9 5AB",
+            "area_normalized": "Nightingale Park",
+            "available_from": "2026-11-20",
+            "available_from_normalized": "2026-11-20",
+            "bedrooms": 1,
+            "borough": "Nightingale Park",
+            "city": "London",
+            "eval_listing_id": "ho3-044-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£20,661/month",
+            "price_raw": 20661,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-044-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-044-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1441 Jasper Quay, Nightingale Park, London V9 5AB",
+            "area_normalized": "Nightingale Park",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nightingale Park",
+            "city": "London",
+            "eval_listing_id": "ho3-044-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£22,361/month",
+            "price_raw": 22361,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-044-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-044-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Nightingale Park",
+          "bedrooms": 1,
+          "max_budget": 3661,
+          "move_in_date": "2026-10-23",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Nightingale Park.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

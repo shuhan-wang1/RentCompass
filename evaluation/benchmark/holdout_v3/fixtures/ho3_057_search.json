@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1575 Kepler Quay, Aldermoor, London V4 2AB",
+            "area_normalized": "Aldermoor",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Aldermoor",
+            "city": "London",
+            "eval_listing_id": "ho3-057-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£3,834/month",
+            "price_raw": 3834,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-057-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-057-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1576 Kepler Quay, Aldermoor, London V4 2AB",
+            "area_normalized": "Aldermoor",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Aldermoor",
+            "city": "London",
+            "eval_listing_id": "ho3-057-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£3,913/month",
+            "price_raw": 3913,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-057-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-057-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1577 Kepler Quay, Aldermoor, London V4 2AB",
+            "area_normalized": "Aldermoor",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 2,
+            "borough": "Aldermoor",
+            "city": "London",
+            "eval_listing_id": "ho3-057-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£15,782/month",
+            "price_raw": 15782,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-057-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-057-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1578 Kepler Quay, Aldermoor, London V4 2AB",
+            "area_normalized": "Aldermoor",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Aldermoor",
+            "city": "London",
+            "eval_listing_id": "ho3-057-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£17,482/month",
+            "price_raw": 17482,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-057-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-057-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1579 Kepler Quay, Elmstead, London V4 2AB",
+            "area_normalized": "Elmstead",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Elmstead",
+            "city": "London",
+            "eval_listing_id": "ho3-057-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£19,182/month",
+            "price_raw": 19182,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-057-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-057-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1570 Kepler Quay, Aldermoor, London V4 2AB",
+            "area_normalized": "Aldermoor",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Aldermoor",
+            "city": "London",
+            "eval_listing_id": "ho3-057-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£20,882/month",
+            "price_raw": 20882,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-057-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-057-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1571 Kepler Quay, Aldermoor, London V4 2AB",
+            "area_normalized": "Aldermoor",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Aldermoor",
+            "city": "London",
+            "eval_listing_id": "ho3-057-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£22,582/month",
+            "price_raw": 22582,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-057-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-057-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Aldermoor",
+          "bedrooms": 1,
+          "max_budget": 3882,
+          "move_in_date": "2026-09-12",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Aldermoor.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

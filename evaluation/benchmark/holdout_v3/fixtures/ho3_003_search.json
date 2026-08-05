@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1035 Ember Quay, Cedarwick, London V4 4AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-003-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£2,927/month",
+            "price_raw": 2927,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-003-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1036 Ember Quay, Cedarwick, London V4 4AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-003-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£2,995/month",
+            "price_raw": 2995,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-003-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1037 Ember Quay, Cedarwick, London V4 4AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 2,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-003-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£14,864/month",
+            "price_raw": 14864,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-003-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1038 Ember Quay, Cedarwick, London V4 4AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-003-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£16,564/month",
+            "price_raw": 16564,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-003-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1039 Ember Quay, Kestrelby, London V4 4AB",
+            "area_normalized": "Kestrelby",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Kestrelby",
+            "city": "London",
+            "eval_listing_id": "ho3-003-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£18,264/month",
+            "price_raw": 18264,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-003-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1030 Ember Quay, Cedarwick, London V4 4AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-10-08",
+            "available_from_normalized": "2026-10-08",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-003-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£19,964/month",
+            "price_raw": 19964,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-003-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1031 Ember Quay, Cedarwick, London V4 4AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-10",
+            "available_from_normalized": "2026-09-10",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-003-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 4",
+            "price": "£21,664/month",
+            "price_raw": 21664,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-003-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Cedarwick",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 2964,
+          "max_commute_time": 28,
+          "move_in_date": "2026-09-10",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Cedarwick.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-a",
+        "duration_minutes": 26,
+        "from_address": "1035 Ember Quay, Cedarwick, London V4 4AB",
+        "origin_eval_listing_id": "ho3-003-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-b",
+        "duration_minutes": 37,
+        "from_address": "1036 Ember Quay, Cedarwick, London V4 4AB",
+        "origin_eval_listing_id": "ho3-003-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-c",
+        "duration_minutes": 37,
+        "from_address": "1037 Ember Quay, Cedarwick, London V4 4AB",
+        "origin_eval_listing_id": "ho3-003-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-d",
+        "duration_minutes": 37,
+        "from_address": "1038 Ember Quay, Cedarwick, London V4 4AB",
+        "origin_eval_listing_id": "ho3-003-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-e",
+        "duration_minutes": 37,
+        "from_address": "1039 Ember Quay, Kestrelby, London V4 4AB",
+        "origin_eval_listing_id": "ho3-003-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-f",
+        "duration_minutes": 37,
+        "from_address": "1030 Ember Quay, Cedarwick, London V4 4AB",
+        "origin_eval_listing_id": "ho3-003-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-003-g",
+        "duration_minutes": 37,
+        "from_address": "1031 Ember Quay, Cedarwick, London V4 4AB",
+        "origin_eval_listing_id": "ho3-003-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

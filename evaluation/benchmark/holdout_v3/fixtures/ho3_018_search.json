@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1185 Harrier Quay, Rosemere, London V1 3AB",
+            "area_normalized": "Rosemere",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Rosemere",
+            "city": "London",
+            "eval_listing_id": "ho3-018-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£3,171/month",
+            "price_raw": 3171,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-018-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1186 Harrier Quay, Rosemere, London V1 3AB",
+            "area_normalized": "Rosemere",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Rosemere",
+            "city": "London",
+            "eval_listing_id": "ho3-018-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£3,250/month",
+            "price_raw": 3250,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-018-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1187 Harrier Quay, Rosemere, London V1 3AB",
+            "area_normalized": "Rosemere",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 2,
+            "borough": "Rosemere",
+            "city": "London",
+            "eval_listing_id": "ho3-018-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£15,119/month",
+            "price_raw": 15119,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-018-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1188 Harrier Quay, Rosemere, London V1 3AB",
+            "area_normalized": "Rosemere",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Rosemere",
+            "city": "London",
+            "eval_listing_id": "ho3-018-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£16,819/month",
+            "price_raw": 16819,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-018-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1189 Harrier Quay, Zephyr Downs, London V1 3AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-018-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£18,519/month",
+            "price_raw": 18519,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-018-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1180 Harrier Quay, Rosemere, London V1 3AB",
+            "area_normalized": "Rosemere",
+            "available_from": "2026-11-22",
+            "available_from_normalized": "2026-11-22",
+            "bedrooms": 1,
+            "borough": "Rosemere",
+            "city": "London",
+            "eval_listing_id": "ho3-018-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£20,219/month",
+            "price_raw": 20219,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-018-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1181 Harrier Quay, Rosemere, London V1 3AB",
+            "area_normalized": "Rosemere",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Rosemere",
+            "city": "London",
+            "eval_listing_id": "ho3-018-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£21,919/month",
+            "price_raw": 21919,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-018-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Rosemere",
+          "bedrooms": 1,
+          "commute_destination": "Canary Wharf",
+          "max_budget": 3219,
+          "max_commute_time": 27,
+          "move_in_date": "2026-10-25",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Rosemere.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-a",
+        "duration_minutes": 25,
+        "from_address": "1185 Harrier Quay, Rosemere, London V1 3AB",
+        "origin_eval_listing_id": "ho3-018-a",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-b",
+        "duration_minutes": 36,
+        "from_address": "1186 Harrier Quay, Rosemere, London V1 3AB",
+        "origin_eval_listing_id": "ho3-018-b",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-c",
+        "duration_minutes": 36,
+        "from_address": "1187 Harrier Quay, Rosemere, London V1 3AB",
+        "origin_eval_listing_id": "ho3-018-c",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-d",
+        "duration_minutes": 36,
+        "from_address": "1188 Harrier Quay, Rosemere, London V1 3AB",
+        "origin_eval_listing_id": "ho3-018-d",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-e",
+        "duration_minutes": 36,
+        "from_address": "1189 Harrier Quay, Zephyr Downs, London V1 3AB",
+        "origin_eval_listing_id": "ho3-018-e",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-f",
+        "duration_minutes": 36,
+        "from_address": "1180 Harrier Quay, Rosemere, London V1 3AB",
+        "origin_eval_listing_id": "ho3-018-f",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-018-g",
+        "duration_minutes": 36,
+        "from_address": "1181 Harrier Quay, Rosemere, London V1 3AB",
+        "origin_eval_listing_id": "ho3-018-g",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

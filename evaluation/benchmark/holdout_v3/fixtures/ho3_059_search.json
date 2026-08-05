@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1595 Arbor Quay, Cairnfield, London V6 4AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-18",
+            "available_from_normalized": "2026-09-18",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-059-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£3,868/month",
+            "price_raw": 3868,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-059-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-059-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1596 Arbor Quay, Cairnfield, London V6 4AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-18",
+            "available_from_normalized": "2026-09-18",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-059-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£3,947/month",
+            "price_raw": 3947,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-059-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-059-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1597 Arbor Quay, Cairnfield, London V6 4AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-18",
+            "available_from_normalized": "2026-09-18",
+            "bedrooms": 2,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-059-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£15,816/month",
+            "price_raw": 15816,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-059-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-059-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1598 Arbor Quay, Cairnfield, London V6 4AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-18",
+            "available_from_normalized": "2026-09-18",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-059-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£17,516/month",
+            "price_raw": 17516,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-059-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-059-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1599 Arbor Quay, Glenhaven, London V6 4AB",
+            "area_normalized": "Glenhaven",
+            "available_from": "2026-09-18",
+            "available_from_normalized": "2026-09-18",
+            "bedrooms": 1,
+            "borough": "Glenhaven",
+            "city": "London",
+            "eval_listing_id": "ho3-059-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£19,216/month",
+            "price_raw": 19216,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-059-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-059-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1590 Arbor Quay, Cairnfield, London V6 4AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-10-16",
+            "available_from_normalized": "2026-10-16",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-059-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£20,916/month",
+            "price_raw": 20916,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-059-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-059-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1591 Arbor Quay, Cairnfield, London V6 4AB",
+            "area_normalized": "Cairnfield",
+            "available_from": "2026-09-18",
+            "available_from_normalized": "2026-09-18",
+            "bedrooms": 1,
+            "borough": "Cairnfield",
+            "city": "London",
+            "eval_listing_id": "ho3-059-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£22,616/month",
+            "price_raw": 22616,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-059-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-059-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Cairnfield",
+          "bedrooms": 1,
+          "max_budget": 3916,
+          "move_in_date": "2026-09-18",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Cairnfield.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

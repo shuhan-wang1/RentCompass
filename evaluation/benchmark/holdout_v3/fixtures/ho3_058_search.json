@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1585 Laurel Quay, Bramblehurst, London V5 3AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-15",
+            "available_from_normalized": "2026-09-15",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-058-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£3,851/month",
+            "price_raw": 3851,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-058-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-058-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1586 Laurel Quay, Bramblehurst, London V5 3AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-15",
+            "available_from_normalized": "2026-09-15",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-058-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£3,930/month",
+            "price_raw": 3930,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-058-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-058-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1587 Laurel Quay, Bramblehurst, London V5 3AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-15",
+            "available_from_normalized": "2026-09-15",
+            "bedrooms": 2,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-058-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£15,799/month",
+            "price_raw": 15799,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-058-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-058-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1588 Laurel Quay, Bramblehurst, London V5 3AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-15",
+            "available_from_normalized": "2026-09-15",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-058-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£17,499/month",
+            "price_raw": 17499,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-058-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-058-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1589 Laurel Quay, Foxmere, London V5 3AB",
+            "area_normalized": "Foxmere",
+            "available_from": "2026-09-15",
+            "available_from_normalized": "2026-09-15",
+            "bedrooms": 1,
+            "borough": "Foxmere",
+            "city": "London",
+            "eval_listing_id": "ho3-058-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£19,199/month",
+            "price_raw": 19199,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-058-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-058-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1580 Laurel Quay, Bramblehurst, London V5 3AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-10-13",
+            "available_from_normalized": "2026-10-13",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-058-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£20,899/month",
+            "price_raw": 20899,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-058-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-058-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1581 Laurel Quay, Bramblehurst, London V5 3AB",
+            "area_normalized": "Bramblehurst",
+            "available_from": "2026-09-15",
+            "available_from_normalized": "2026-09-15",
+            "bedrooms": 1,
+            "borough": "Bramblehurst",
+            "city": "London",
+            "eval_listing_id": "ho3-058-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£22,599/month",
+            "price_raw": 22599,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-058-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-058-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Bramblehurst",
+          "bedrooms": 1,
+          "max_budget": 3899,
+          "move_in_date": "2026-09-15",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Bramblehurst.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

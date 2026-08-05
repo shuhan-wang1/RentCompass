@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1555 Indigo Quay, Yarrow Hill, London V2 8AB",
+            "area_normalized": "Yarrow Hill",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yarrow Hill",
+            "city": "London",
+            "eval_listing_id": "ho3-055-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£3,800/month",
+            "price_raw": 3800,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-055-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-055-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1556 Indigo Quay, Yarrow Hill, London V2 8AB",
+            "area_normalized": "Yarrow Hill",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yarrow Hill",
+            "city": "London",
+            "eval_listing_id": "ho3-055-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£3,879/month",
+            "price_raw": 3879,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-055-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-055-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1557 Indigo Quay, Yarrow Hill, London V2 8AB",
+            "area_normalized": "Yarrow Hill",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 2,
+            "borough": "Yarrow Hill",
+            "city": "London",
+            "eval_listing_id": "ho3-055-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£15,748/month",
+            "price_raw": 15748,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-055-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-055-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1558 Indigo Quay, Yarrow Hill, London V2 8AB",
+            "area_normalized": "Yarrow Hill",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yarrow Hill",
+            "city": "London",
+            "eval_listing_id": "ho3-055-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£17,448/month",
+            "price_raw": 17448,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-055-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-055-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1559 Indigo Quay, Cedarwick, London V2 8AB",
+            "area_normalized": "Cedarwick",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Cedarwick",
+            "city": "London",
+            "eval_listing_id": "ho3-055-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£19,148/month",
+            "price_raw": 19148,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-055-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-055-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1550 Indigo Quay, Yarrow Hill, London V2 8AB",
+            "area_normalized": "Yarrow Hill",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Yarrow Hill",
+            "city": "London",
+            "eval_listing_id": "ho3-055-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£20,848/month",
+            "price_raw": 20848,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-055-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-055-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1551 Indigo Quay, Yarrow Hill, London V2 8AB",
+            "area_normalized": "Yarrow Hill",
+            "available_from": "2026-09-06",
+            "available_from_normalized": "2026-09-06",
+            "bedrooms": 1,
+            "borough": "Yarrow Hill",
+            "city": "London",
+            "eval_listing_id": "ho3-055-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 8",
+            "price": "£22,548/month",
+            "price_raw": 22548,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-055-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-055-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Yarrow Hill",
+          "bedrooms": 1,
+          "max_budget": 3848,
+          "move_in_date": "2026-09-06",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Yarrow Hill.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

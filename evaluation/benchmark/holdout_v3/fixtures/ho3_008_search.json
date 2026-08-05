@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1085 Jasper Quay, Hawkridge, London V9 1AB",
+            "area_normalized": "Hawkridge",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Hawkridge",
+            "city": "London",
+            "eval_listing_id": "ho3-008-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£3,001/month",
+            "price_raw": 3001,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-008-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1086 Jasper Quay, Hawkridge, London V9 1AB",
+            "area_normalized": "Hawkridge",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Hawkridge",
+            "city": "London",
+            "eval_listing_id": "ho3-008-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£3,080/month",
+            "price_raw": 3080,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-008-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1087 Jasper Quay, Hawkridge, London V9 1AB",
+            "area_normalized": "Hawkridge",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 2,
+            "borough": "Hawkridge",
+            "city": "London",
+            "eval_listing_id": "ho3-008-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£14,949/month",
+            "price_raw": 14949,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-008-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1088 Jasper Quay, Hawkridge, London V9 1AB",
+            "area_normalized": "Hawkridge",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Hawkridge",
+            "city": "London",
+            "eval_listing_id": "ho3-008-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£16,649/month",
+            "price_raw": 16649,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-008-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1089 Jasper Quay, Peregrine Heath, London V9 1AB",
+            "area_normalized": "Peregrine Heath",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Peregrine Heath",
+            "city": "London",
+            "eval_listing_id": "ho3-008-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£18,349/month",
+            "price_raw": 18349,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-008-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1080 Jasper Quay, Hawkridge, London V9 1AB",
+            "area_normalized": "Hawkridge",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Hawkridge",
+            "city": "London",
+            "eval_listing_id": "ho3-008-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£20,049/month",
+            "price_raw": 20049,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-008-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1081 Jasper Quay, Hawkridge, London V9 1AB",
+            "area_normalized": "Hawkridge",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Hawkridge",
+            "city": "London",
+            "eval_listing_id": "ho3-008-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£21,749/month",
+            "price_raw": 21749,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-008-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Hawkridge",
+          "bedrooms": 1,
+          "commute_destination": "Canary Wharf",
+          "max_budget": 3049,
+          "max_commute_time": 33,
+          "move_in_date": "2026-09-25",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Hawkridge.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-a",
+        "duration_minutes": 31,
+        "from_address": "1085 Jasper Quay, Hawkridge, London V9 1AB",
+        "origin_eval_listing_id": "ho3-008-a",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-b",
+        "duration_minutes": 42,
+        "from_address": "1086 Jasper Quay, Hawkridge, London V9 1AB",
+        "origin_eval_listing_id": "ho3-008-b",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-c",
+        "duration_minutes": 42,
+        "from_address": "1087 Jasper Quay, Hawkridge, London V9 1AB",
+        "origin_eval_listing_id": "ho3-008-c",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-d",
+        "duration_minutes": 42,
+        "from_address": "1088 Jasper Quay, Hawkridge, London V9 1AB",
+        "origin_eval_listing_id": "ho3-008-d",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-e",
+        "duration_minutes": 42,
+        "from_address": "1089 Jasper Quay, Peregrine Heath, London V9 1AB",
+        "origin_eval_listing_id": "ho3-008-e",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-f",
+        "duration_minutes": 42,
+        "from_address": "1080 Jasper Quay, Hawkridge, London V9 1AB",
+        "origin_eval_listing_id": "ho3-008-f",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-008-g",
+        "duration_minutes": 42,
+        "from_address": "1081 Jasper Quay, Hawkridge, London V9 1AB",
+        "origin_eval_listing_id": "ho3-008-g",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

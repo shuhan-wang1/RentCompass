@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "1265 Dahlia Quay, Zephyr Downs, London V9 3AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-11-18",
+            "available_from_normalized": "2026-11-18",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-026-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 3",
+            "price": "£3,307/month",
+            "price_raw": 3307,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-026-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1266 Dahlia Quay, Zephyr Downs, London V9 3AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-11-18",
+            "available_from_normalized": "2026-11-18",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-026-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 3",
+            "price": "£3,386/month",
+            "price_raw": 3386,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-026-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1267 Dahlia Quay, Zephyr Downs, London V9 3AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-11-18",
+            "available_from_normalized": "2026-11-18",
+            "bedrooms": 2,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-026-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 3",
+            "price": "£15,255/month",
+            "price_raw": 15255,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-026-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1268 Dahlia Quay, Zephyr Downs, London V9 3AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-11-18",
+            "available_from_normalized": "2026-11-18",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-026-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 3",
+            "price": "£16,955/month",
+            "price_raw": 16955,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-026-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1269 Dahlia Quay, Dunmere, London V9 3AB",
+            "area_normalized": "Dunmere",
+            "available_from": "2026-11-18",
+            "available_from_normalized": "2026-11-18",
+            "bedrooms": 1,
+            "borough": "Dunmere",
+            "city": "London",
+            "eval_listing_id": "ho3-026-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 3",
+            "price": "£18,655/month",
+            "price_raw": 18655,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-026-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1260 Dahlia Quay, Zephyr Downs, London V9 3AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-12-16",
+            "available_from_normalized": "2026-12-16",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-026-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 3",
+            "price": "£20,355/month",
+            "price_raw": 20355,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-026-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "1261 Dahlia Quay, Zephyr Downs, London V9 3AB",
+            "area_normalized": "Zephyr Downs",
+            "available_from": "2026-11-18",
+            "available_from_normalized": "2026-11-18",
+            "bedrooms": 1,
+            "borough": "Zephyr Downs",
+            "city": "London",
+            "eval_listing_id": "ho3-026-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 3",
+            "price": "£22,055/month",
+            "price_raw": 22055,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v3",
+            "uid_token": "ho3-026-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Zephyr Downs",
+          "bedrooms": 1,
+          "commute_destination": "London Bridge",
+          "max_budget": 3355,
+          "max_commute_time": 35,
+          "move_in_date": "2026-11-18",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Zephyr Downs.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-a",
+        "duration_minutes": 33,
+        "from_address": "1265 Dahlia Quay, Zephyr Downs, London V9 3AB",
+        "origin_eval_listing_id": "ho3-026-a",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-b",
+        "duration_minutes": 44,
+        "from_address": "1266 Dahlia Quay, Zephyr Downs, London V9 3AB",
+        "origin_eval_listing_id": "ho3-026-b",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-c",
+        "duration_minutes": 44,
+        "from_address": "1267 Dahlia Quay, Zephyr Downs, London V9 3AB",
+        "origin_eval_listing_id": "ho3-026-c",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-d",
+        "duration_minutes": 44,
+        "from_address": "1268 Dahlia Quay, Zephyr Downs, London V9 3AB",
+        "origin_eval_listing_id": "ho3-026-d",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-e",
+        "duration_minutes": 44,
+        "from_address": "1269 Dahlia Quay, Dunmere, London V9 3AB",
+        "origin_eval_listing_id": "ho3-026-e",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-f",
+        "duration_minutes": 44,
+        "from_address": "1260 Dahlia Quay, Zephyr Downs, London V9 3AB",
+        "origin_eval_listing_id": "ho3-026-f",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v3/ho3-026-g",
+        "duration_minutes": 44,
+        "from_address": "1261 Dahlia Quay, Zephyr Downs, London V9 3AB",
+        "origin_eval_listing_id": "ho3-026-g",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

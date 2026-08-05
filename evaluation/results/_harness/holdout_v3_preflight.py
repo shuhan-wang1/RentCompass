@@ -18,7 +18,7 @@ sys.path.insert(0, str(HERE))
 import holdout_v3_metrics as metrics  # noqa: E402
 import constraint_schema_v2 as hard  # noqa: E402
 
-V3_CASE_SCHEMA = "rentcompass/benchmark/v3"
+DEFAULT_CASE_SCHEMA = "rentcompass/benchmark/v3"
 REQUIRED = {
     "case_id", "schema_version", "task_category", "user_id", "user_query",
     "conversation_history", "expected_tools", "forbidden_tools", "expected_constraints",
@@ -90,13 +90,13 @@ def _fixture_fingerprint(records: Iterable[dict]) -> tuple[set[str], set[float],
     return ids, prices, addresses
 
 
-def _check_case(case: dict, fixtures: Path, global_ids: set[str]) -> list[str]:
+def _check_case(case: dict, fixtures: Path, global_ids: set[str], schema_version: str) -> list[str]:
     out = []
     missing = sorted(REQUIRED - set(case))
     if missing:
         out.append(f"M1 missing required fields {missing}")
-    if case.get("schema_version") != V3_CASE_SCHEMA:
-        out.append(f"M2 schema_version must be {V3_CASE_SCHEMA!r}")
+    if case.get("schema_version") != schema_version:
+        out.append(f"M2 schema_version must be {schema_version!r}")
     if case.get("task_category") not in VALID_CATEGORIES:
         out.append("M3 invalid task_category")
     if not isinstance(case.get("completion_oracle"), dict) or case["completion_oracle"].get("kind") not in VALID_ORACLES:
@@ -143,7 +143,8 @@ def _check_case(case: dict, fixtures: Path, global_ids: set[str]) -> list[str]:
     return out
 
 
-def check(cases: list[dict], fixtures: Path, comparison_cases: Iterable[dict] = ()) -> dict:
+def check(cases: list[dict], fixtures: Path, comparison_cases: Iterable[dict] = (),
+          schema_version: str = DEFAULT_CASE_SCHEMA) -> dict:
     problems: dict[str, list[str]] = {}
     seen, global_ids = set(), set()
     counts, tool_counts, slot_counts = Counter(), Counter(), Counter()
@@ -154,7 +155,7 @@ def check(cases: list[dict], fixtures: Path, comparison_cases: Iterable[dict] = 
     # intentionally query-level.  v3's manifest audit adds fixture/listing fingerprint checks.
     for case in cases:
         cid = case.get("case_id")
-        errs = _check_case(case, fixtures, global_ids)
+        errs = _check_case(case, fixtures, global_ids, schema_version)
         if cid in seen:
             errs.append("M4 duplicate case_id")
         seen.add(cid)
@@ -187,7 +188,7 @@ def check(cases: list[dict], fixtures: Path, comparison_cases: Iterable[dict] = 
     return {"gate_passed": not problems, "n_cases": len(cases), "problems": problems,
             "metric_denominators": quota, "tool_contract_denominators": dict(tool_counts),
             "hard_slot_coverage": {slot: slot_counts[slot] for slot in hard.SLOT_MIN_COVERAGE},
-            "frozen_schema": V3_CASE_SCHEMA}
+            "frozen_schema": schema_version}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -196,12 +197,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixtures", type=Path, required=True)
     parser.add_argument("--compare-cases", type=Path, action="append", default=[])
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--schema-version", default=DEFAULT_CASE_SCHEMA,
+                        help="case schema_version required by this run")
     args = parser.parse_args(argv)
     cases = _load_jsonl(args.cases)
     comparison = []
     for path in args.compare_cases:
         comparison.extend(_load_jsonl(path))
-    report = check(cases, args.fixtures, comparison)
+    report = check(cases, args.fixtures, comparison, args.schema_version)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: report[k] for k in ("gate_passed", "n_cases", "metric_denominators", "tool_contract_denominators")}, ensure_ascii=False))

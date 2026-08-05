@@ -17,6 +17,16 @@ from core.tenancy_reference import monthly_from_weekly
 
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+_COMMUTE_CONTEXT = re.compile(
+    r"\b(?:commute|travel\s*time|journey\s*time|minutes?|mins?)\b|通勤|路程|分钟|多久",
+    re.IGNORECASE,
+)
+_COMMUTE_CLAIM = re.compile(
+    r"\b(?:meets?|within|under|over|about|around|takes?)\b[^.!?\n]{0,60}"
+    r"\b\d+(?:\.\d+)?\s*(?:minutes?|mins?)\b|"
+    r"\b\d+(?:\.\d+)?\s*(?:minutes?|mins?)\b|符合|满足|超过|分钟",
+    re.IGNORECASE,
+)
 
 
 def _norm(value: Any) -> str:
@@ -62,6 +72,12 @@ def hard_constraints(criteria: dict | None) -> dict:
         budget = monthly_from_weekly(budget)
     commute = _number(c.get("max_commute_time", c.get("max_travel_time")))
     destination = c.get("commute_destination") or c.get("destination")
+    areas = c.get("areas") or ([c.get("area")] if c.get("area") else [])
+    if isinstance(areas, str):
+        areas = [areas]
+    features = c.get("property_features") or []
+    if isinstance(features, str):
+        features = [features]
     return {
         "max_budget_monthly": budget if budget and budget > 0 else None,
         "max_commute_minutes": commute if commute and commute > 0 else None,
@@ -69,7 +85,9 @@ def hard_constraints(criteria: dict | None) -> dict:
         "no_commute": bool(c.get("no_commute")),
         "bedrooms": _number(c.get("bedrooms")),
         "room_type": _norm(c.get("room_type")) or None,
+        "areas": [value for value in (_norm(area) for area in areas) if value],
         "move_in_date": c.get("move_in_date") or None,
+        "property_features": [value for value in (_norm(feature) for feature in features) if value],
     }
 
 
@@ -112,6 +130,23 @@ def _candidate_bedrooms(candidate: dict) -> float | None:
     return _number(candidate.get("bedrooms", candidate.get("Bedrooms")))
 
 
+def _iso_date(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if text.lower() in {"available now", "now", "immediately"}:
+        return "available_now"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return text
+    return None
+
+
+def _structured_features(candidate: dict) -> set[str] | None:
+    for key in ("verified_features", "features", "amenities"):
+        value = candidate.get(key)
+        if isinstance(value, (list, tuple, set)):
+            return {_norm(item) for item in value if _norm(item)}
+    return None
+
+
 def validate_candidates(candidates: list[dict], criteria: dict | None,
                         commute_evidence: Any = None) -> dict:
     """Classify every candidate without reading model-generated prose.
@@ -149,8 +184,9 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
             actual_bedrooms = _candidate_bedrooms(candidate)
             if actual_bedrooms is None:
                 unknown_reasons.append("bedroom count is not verified")
-            elif actual_bedrooms < bedrooms:
-                reasons.append(f"bedroom count {actual_bedrooms:g} is below {bedrooms:g}")
+            elif actual_bedrooms != bedrooms:
+                reasons.append(
+                    f"bedroom count {actual_bedrooms:g} does not equal requested {bedrooms:g}")
 
         if constraints["room_type"]:
             actual_type = _norm(candidate.get("room_type") or candidate.get("property_type")
@@ -160,11 +196,31 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
             elif constraints["room_type"] not in actual_type:
                 reasons.append(f"room type does not match {constraints['room_type']}")
 
+        requested_areas = constraints["areas"]
+        if requested_areas:
+            actual_area = _norm(candidate.get("area") or candidate.get("Area"))
+            if not actual_area:
+                unknown_reasons.append("area is not verified")
+            elif actual_area not in requested_areas:
+                reasons.append(f"area {actual_area} is outside the requested areas")
+
+        requested_features = constraints["property_features"]
+        if requested_features:
+            available_features = _structured_features(candidate)
+            if available_features is None:
+                unknown_reasons.append("property features are not structurally verified")
+            else:
+                missing_features = [feature for feature in requested_features
+                                    if feature not in available_features]
+                if missing_features:
+                    reasons.append("missing required features: " + ", ".join(missing_features))
+
         if constraints["move_in_date"]:
-            available = candidate.get("available_from")
-            if not available:
+            available = _iso_date(candidate.get("available_from"))
+            requested_date = _iso_date(constraints["move_in_date"])
+            if available is None or requested_date is None:
                 unknown_reasons.append("availability is not verified")
-            elif str(available)[:10] > str(constraints["move_in_date"])[:10]:
+            elif available != "available_now" and available > requested_date:
                 reasons.append(f"available from {available}, after requested date")
 
         if commute_constraint_required(criteria):
@@ -338,10 +394,18 @@ def validate_search_payload(payload: dict, *, commute_evidence: list[dict] | Non
     for row in alternatives:
         row["alternative"] = True
     rows = main + alternatives
+    criteria = payload.get("search_criteria") or payload.get("known_criteria") or {}
+    scoped_areas = hard_constraints(criteria).get("areas") or []
+    if len(scoped_areas) == 1:
+        # Older search payloads carried the authoritative single-area scope once at the
+        # payload level instead of duplicating it into every row. Preserve that structured
+        # evidence during migration; current rows carry their own area and are never changed.
+        for row in rows:
+            if not row.get("area") and not row.get("Area"):
+                row["area"] = scoped_areas[0]
+                row["area_evidence"] = "search_scope"
     validation = validate_candidates(
-        rows,
-        payload.get("search_criteria") or payload.get("known_criteria") or {},
-        commute_evidence=commute_evidence or [],
+        rows, criteria, commute_evidence=commute_evidence or [],
     )
     out = dict(payload)
     out["candidate_validation"] = validation
@@ -351,14 +415,68 @@ def validate_search_payload(payload: dict, *, commute_evidence: list[dict] | Non
     # Keep the established listing-card schema stable. Internal status and evidence
     # details live in candidate_states; they must not leak into eligible card rows.
     _internal = {"candidate_status", "candidate_reasons", "candidate_unknown_reasons",
-                 "verified_commute_minutes"}
+                 "verified_commute_minutes", "area_evidence"}
+
+    def _public_candidate(status: dict) -> dict:
+        candidate = status["candidate"]
+        hidden = set(_internal)
+        if candidate.get("area_evidence") == "search_scope":
+            hidden.add("area")
+        return {key: value for key, value in candidate.items() if key not in hidden}
+
     out["recommendations"] = [
-        {k: v for k, v in s["candidate"].items() if k not in _internal}
-        for s in validation["eligible"]
+        _public_candidate(status) for status in validation["eligible"]
     ]
     out["unverified_candidates"] = [s["candidate"] for s in validation["unknown"]]
     out["excluded_candidates"] = [s["candidate"] for s in validation["excluded"]]
     return out
+
+
+def validate_commute_response(response: str, state: dict) -> str:
+    """Fail closed when prose asserts a commute result without linked evidence.
+
+    Search responses normally use :func:`render_candidate_status`; this is the final
+    defence for plain-text paths. A single successful commute artifact may support a
+    direct one-origin commute answer. Multi-listing recommendations require the
+    per-candidate validation ledger, so one successful call cannot license every row.
+    """
+    text = str(response or "")
+    current = ((state.get("extracted_context") or {}).get("current_message")
+               or state.get("user_query") or "")
+    if not (_COMMUTE_CLAIM.search(text) and _COMMUTE_CONTEXT.search(current + " " + text)):
+        return text
+
+    language = str((state.get("extracted_context") or {}).get("reply_language") or "")
+    fallback = ("本轮无法核实该房源的通勤条件。" if language.lower().startswith("zh")
+                else "The commute condition could not be verified for the listing this round.")
+    validation = state.get("candidate_validation") or {}
+    statuses = list(validation.get("statuses") or [])
+    if statuses:
+        lowered = text.lower()
+        named = []
+        for status in statuses:
+            candidate = status.get("candidate") or {}
+            labels = [candidate.get("address"), candidate.get("Address"), candidate.get("name")]
+            if any(label and str(label).lower() in lowered for label in labels):
+                named.append(status)
+        targets = named or statuses
+        commute_required = bool((validation.get("constraints") or {}).get("max_commute_minutes"))
+        if commute_required and all(
+                status.get("status") == "eligible"
+                and status.get("evidence_status") == "success" for status in targets):
+            return text
+        return fallback
+
+    successful = [
+        artifact for artifact in (state.get("tool_artifacts") or [])
+        if artifact.get("tool") == "calculate_commute"
+        and artifact.get("success") is True
+        and not any(artifact.get(flag) for flag in (
+            "timed_out", "denied", "abandoned", "outcome_unknown"))
+        and isinstance(artifact.get("raw_data"), dict)
+        and isinstance(artifact["raw_data"].get("duration_minutes"), (int, float))
+    ]
+    return text if len(successful) == 1 else fallback
 
 
 async def validate_search_payload_with_provider(provider, payload: dict, *,

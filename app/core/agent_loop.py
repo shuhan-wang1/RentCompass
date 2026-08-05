@@ -66,10 +66,17 @@ from core.langgraph_agent import (
     build_refinement_raw_data,
     format_refinement_output,
 )
-from core.candidate_validation import render_candidate_status, validate_search_payload
-from core.candidate_state import validate_commute_response
+from core.candidate_validation import (
+    render_candidate_status,
+    validate_commute_response,
+    validate_search_payload,
+    validate_search_payload_with_provider,
+)
 from core import refine_results
-from core.candidate_validation import validate_search_payload_with_provider
+from core.memory_contract import (
+    compose_memory_contract_response,
+    memory_contract_from_artifact,
+)
 from uk_rent_agent.agent.guardrails import sanitize_untrusted
 
 logger = logging.getLogger(__name__)
@@ -2156,12 +2163,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 state.get("extracted_context") or {},
                 (state.get("extracted_context") or {}).get("current_message")
                 or _current_message(state.get("user_query") or ""))
-            text = (
-                ("我已经记住了。" if lang == "zh" else "I've saved that to memory.")
-                if memory_contract.get("success") else
-                ("记忆保存失败，本轮没有确认写入。" if lang == "zh"
-                 else "I could not save that to memory because the memory tool failed.")
-            )
+            has_other_result = any(
+                artifact.get("tool") != "remember" and _is_executed(artifact)
+                for artifact in (state.get("tool_artifacts") or []))
+            text = compose_memory_contract_response(
+                text, memory_contract, language=lang, preserve_content=has_other_result)
         return Command(update={
             "messages": messages + [resp], "loop_turn": loop_turn, "final_response": text,
         }, goto="critic")
@@ -2839,19 +2845,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
         memory_contract = dict(state.get("memory_write_contract") or {})
         if memory_art is not None:
-            raw = memory_art.get("raw_data")
-            memory_contract = {
-                "requested": True,
-                "attempted": not memory_art.get("denied"),
-                "success": bool(
-                    memory_art.get("success") is True
-                    and not memory_art.get("timed_out")
-                    and not memory_art.get("outcome_unknown")
-                    and isinstance(raw, dict)
-                    and raw.get("success", True) is not False
-                ),
-                "error": memory_art.get("error"),
-            }
+            memory_contract = memory_contract_from_artifact(memory_art)
         update = {
             "messages": messages,
             "tool_artifacts": artifacts,
@@ -2872,22 +2866,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         response_type = state.get("response_type", "answer") or "answer"
         tool_data: dict = {}
 
-        # Explicit memory writes are rendered from the tool outcome, never from model prose.
+        # Explicit memory writes are rendered from the observed tool outcome, but a
+        # side effect must not swallow an independent result from the same multi-intent turn.
         memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
-        if memory_art is not None:
-            raw = memory_art.get("raw_data")
-            saved = (memory_art.get("success") is True
-                     and not memory_art.get("timed_out")
-                     and not memory_art.get("outcome_unknown")
-                     and isinstance(raw, dict) and raw.get("success") is not False)
-            lang = _reply_language_from_ctx(
-                state.get("extracted_context") or {},
-                (state.get("extracted_context") or {}).get("current_message")
-                or _current_message(state.get("user_query") or ""))
-            response = ("我已经记住了。" if lang == "zh" else "I've saved that to memory.") if saved else (
-                "记忆保存失败，本轮没有确认写入。" if lang == "zh"
-                else "I could not save that to memory because the memory tool failed.")
-            return {"final_response": response, "response_type": "answer", "tool_data": {}}
+        memory_contract = (memory_contract_from_artifact(memory_art) if memory_art is not None
+                           else dict(state.get("memory_write_contract") or {}))
+        lang = _reply_language_from_ctx(
+            state.get("extracted_context") or {},
+            (state.get("extracted_context") or {}).get("current_message")
+            or _current_message(state.get("user_query") or ""))
+        has_other_result = any(
+            artifact.get("tool") != "remember" and _is_executed(artifact)
+            for artifact in artifacts)
+
+        def _apply_memory_contract(response: str) -> str:
+            return compose_memory_contract_response(
+                response, memory_contract, language=lang,
+                preserve_content=has_other_result)
 
         def _last(tool_name):
             for a in reversed(artifacts):
@@ -2909,7 +2904,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 _reply_language_from_ctx(
                     ec, ec.get("current_message") or _current_message(
                         state.get("user_query") or "")))
-            return {"final_response": _sanitize_final_response(response),
+            return {"final_response": _sanitize_final_response(
+                        _apply_memory_contract(response)),
                     "response_type": "search", "tool_data": tool_data}
 
         # ask_user (contract A / §2.5a): clarification payload + deterministic known_criteria.
@@ -2923,8 +2919,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 "known_criteria": _derive_known_criteria(acc),
             }
             response = _sanitize_final_response(data.get("question", "") or final_response)
-            return {"final_response": response, "response_type": "clarification",
-                    "tool_data": tool_data}
+            return {"final_response": _apply_memory_contract(response),
+                    "response_type": "clarification", "tool_data": tool_data}
 
         # search_properties: last successful "found" artifact drives the search card.
         search_found = None
@@ -2987,7 +2983,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             response_type = "search"
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)
-            return {"final_response": _sanitize_final_response(response),
+            return {"final_response": _sanitize_final_response(
+                        _apply_memory_contract(response)),
                     "response_type": response_type, "tool_data": tool_data}
 
         # A dangling search clarification with no final answer -> surface it.
@@ -3000,19 +2997,21 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if search_clarify.get("missing_optional_fields") is not None:
                 tool_data["missing_optional_fields"] = search_clarify.get("missing_optional_fields")
             response = _sanitize_final_response(search_clarify.get("question", ""))
-            return {"final_response": response, "response_type": "clarification",
-                    "tool_data": tool_data}
+            return {"final_response": _apply_memory_contract(response),
+                    "response_type": "clarification", "tool_data": tool_data}
 
         # Structured cards (safety/POI/commute): latest of each kind, all downshipped (§2.8b).
         card_response = _merge_cards(artifacts, tool_data)
         if tool_data and not final_response:
             response = card_response or final_response
-            return {"final_response": _sanitize_final_response(response),
+            return {"final_response": _sanitize_final_response(
+                        _apply_memory_contract(response)),
                     "response_type": "answer", "tool_data": tool_data}
 
         # Plain answer.
         response = _sanitize_final_response(validate_commute_response(final_response, state))
-        return {"final_response": response, "response_type": response_type, "tool_data": tool_data}
+        return {"final_response": _apply_memory_contract(response),
+                "response_type": response_type, "tool_data": tool_data}
 
     return {
         "guard": guard_node,

@@ -94,7 +94,7 @@ _CURRENCY_BEFORE = re.compile(r"(?:£|GBP)\s*\Z", re.IGNORECASE)
 # Period markers immediately *after* the number, optionally after a "GBP" suffix.
 _GBP = r"(?:GBP\s*)?"
 _MONTHLY_AFTER = re.compile(
-    r"\A\s*" + _GBP + r"(?:pcm|pm|weeks?\b|/\s*(?:month|mo)\b|per\s+(?:calendar\s+)?month\b"
+    r"\A\s*" + _GBP + r"(?:pcm|pm\b|/\s*(?:month|mo)\b|per\s+(?:calendar\s+)?month\b"
     r"|a\s+month\b|monthly\b|/month\b)",
     re.IGNORECASE,
 )

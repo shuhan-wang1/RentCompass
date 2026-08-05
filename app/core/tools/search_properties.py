@@ -2636,6 +2636,22 @@ async def search_properties_impl(
                     images = [images] if images else []
                 geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
                 _avail_from = prop.get('_resolved_available_from', '')
+                _prop_rt = str(prop.get('Room_Type_Category', '') or '').lower()
+                _prop_amenities = str(prop.get('Detailed_Amenities', '') or '').lower()
+                _verified_room_type = (room_type if room_type and _matches_room_type(prop, room_type)
+                                       else None)
+                _verified_features = []
+                for _feature in all_property_features:
+                    _normal = str(_feature or '').strip().lower()
+                    _matched = (
+                        (_normal == 'studio' and 'studio' in _prop_rt)
+                        or (_normal == 'private' and 'private' in _prop_rt)
+                        or (_normal in {'en-suite', 'ensuite'}
+                            and ('en-suite' in _prop_rt or 'ensuite' in _prop_rt
+                                 or 'en-suite' in _prop_amenities or 'ensuite' in _prop_amenities))
+                    )
+                    if _matched:
+                        _verified_features.append(_normal)
                 row = {
                     'rank': i,
                     'address': prop.get('Address', prop.get('address', 'Unknown')),
@@ -2644,6 +2660,7 @@ async def search_properties_impl(
                     'score': prop.get('recommendation_score', 0),
                     'score_breakdown': prop.get('score_breakdown', {}),
                     'property_type': prop.get('Type', prop.get('type', 'Flat')),
+                    'room_type': _verified_room_type,
                     'bedrooms': prop.get('Bedrooms', prop.get('bedrooms', 'N/A')),
                     'match_type': prop.get('match_type', 'perfect'),
                     'source': data_source,
@@ -2665,6 +2682,9 @@ async def search_properties_impl(
                     'available_from': _avail_from,
                     # 🆕 与期望入住日的匹配标注（无期望日/未知 → ""）。
                     'availability_status': _availability_status(_avail_from, move_in_date),
+                    # Only exact structured fields enter the hard-constraint contract;
+                    # free-text descriptions never prove that a feature is present.
+                    'verified_features': _verified_features,
                 }
                 # 无通勤目标/无通勤时间时，完全省略 travel_time 字段（不出现 "0 min to None"）。
                 _tt = prop.get('travel_time')

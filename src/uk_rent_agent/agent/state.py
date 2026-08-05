@@ -24,7 +24,6 @@ class AgentState(TypedDict, total=False):
     final_response: str
     response_type: str
     tool_data: Dict[str, Any]
-    candidate_state: Dict[str, Any]
     memory_write_contract: Dict[str, Any]
     run_id: str
     request_id: str
@@ -130,7 +129,6 @@ def create_initial_state(
         final_response="",
         response_type="answer",
         tool_data={},
-        candidate_state={},
         memory_write_contract={},
         run_id=uuid.uuid4().hex,
         request_id=request_id or uuid.uuid4().hex,

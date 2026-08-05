@@ -63,6 +63,7 @@ from uk_rent_agent.agent.critic import (
 from core.candidate_validation import (
     render_candidate_status, validate_search_payload, validate_search_payload_with_provider,
 )
+from core.memory_contract import compose_memory_contract_response
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 # Pure (stdlib-only) narrowing parser/applier for refinement-in-place; see step 1.5 in
 # _compute_decision. Safe to import at module scope — it pulls in nothing heavy.
@@ -3249,6 +3250,16 @@ def _make_execute_tool_node(tool_registry):
         # single-pass route (structured card -> format_output, else -> generate_response),
         # so non-loopable tools and error paths add zero latency.
         errored = observation is not None and str(observation).lstrip().lower().startswith("error")
+        if tool_name == "remember":
+            update["memory_write_contract"] = {
+                "requested": True,
+                "attempted": True,
+                "success": bool(
+                    not errored and isinstance(raw_data, dict)
+                    and raw_data.get("success", True) is not False),
+                "error": (raw_data or {}).get("error") if isinstance(raw_data, dict) else (
+                    observation if errored else None),
+            }
         if tool_name in LOOPABLE_TOOLS and not errored:
             goto = "reflect"
         else:
@@ -4124,16 +4135,26 @@ def _make_format_output_node():
         # ALL observations; a single tool's structured card can't represent it, so pass the
         # generated `response` through untouched rather than overwriting it with one card.
         is_loop_synthesis = len(state.get("observations") or []) > 1
-        if tool_name == "remember":
-            saved = (isinstance(raw_data, dict)
-                     and raw_data.get("success") is True)
-            ec = state.get("extracted_context") or {}
-            lang = _reply_language_from_ctx(
-                ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
-            response = (("我已经记住了。" if lang == "zh" else "I've saved that to memory.")
-                        if saved else
-                        ("记忆保存失败，本轮没有确认写入。" if lang == "zh"
-                         else "I couldn't save that to memory because the memory tool failed."))
+        memory_contract = dict(state.get("memory_write_contract") or {})
+        if tool_name == "remember" and not memory_contract:
+            memory_contract = {
+                "requested": True,
+                "attempted": True,
+                "success": bool(isinstance(raw_data, dict)
+                                and raw_data.get("success", True) is not False),
+            }
+        ec = state.get("extracted_context") or {}
+        memory_language = _reply_language_from_ctx(
+            ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
+        has_other_result = tool_name != "remember" or is_loop_synthesis
+
+        def _apply_memory_contract(text: str) -> str:
+            return compose_memory_contract_response(
+                text, memory_contract, language=memory_language,
+                preserve_content=has_other_result)
+
+        if tool_name == "remember" and not is_loop_synthesis:
+            response = _apply_memory_contract("")
             return {"final_response": _sanitize_final_response(response),
                     "response_type": "answer", "tool_data": {}}
 
@@ -4239,7 +4260,7 @@ def _make_format_output_node():
         # 2a/2e: final single choke point before END — every path reaches here, so scrub
         # system-prompt leaks, raw tool-call/JSON blocks, tracebacks and the 999 sentinel
         # out of the user-facing text no matter which node produced it.
-        response = _sanitize_final_response(response)
+        response = _sanitize_final_response(_apply_memory_contract(response))
         return {"final_response": response, "response_type": response_type, "tool_data": tool_data}
 
     return format_output_node

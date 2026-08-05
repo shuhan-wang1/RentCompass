@@ -788,6 +788,12 @@ class RunResult:
     soft_wrapped: bool = False
     turn_latency_ms: Optional[float] = None
     final_answer: str = ""
+    # Frozen product-output contract used by held-out v3 deterministic grading. v2 only
+    # persisted prose, which made eligible/excluded/unknown impossible to distinguish
+    # without heuristics. Keep the exact structured payload and response kind in every
+    # raw run; old result files remain loadable through the dataclass defaults.
+    response_type: str = "answer"
+    tool_data: Dict[str, Any] = field(default_factory=dict)
     verdict: dict = field(default_factory=dict)   # CaseVerdict.to_dict()
     grounding: dict = field(default_factory=dict)
     cost_usd: Optional[float] = 0.0
@@ -1222,6 +1228,9 @@ class CaseRunner:
         mine = [e for e in events if e.get("run_id") == run_id]
 
         rr.final_answer = (final_state or {}).get("final_response", "") if final_state else ""
+        rr.response_type = str((final_state or {}).get("response_type") or "answer")
+        _tool_data = (final_state or {}).get("tool_data")
+        rr.tool_data = _tool_data if isinstance(_tool_data, dict) else {}
         rr.route = (final_state or {}).get("tool_decision") if final_state else None
         rr.error = run_error
 
@@ -1355,6 +1364,8 @@ class CaseRunner:
                 "evidence": ev,
                 "grader_input": {
                     "final_answer": gctx.final_answer,
+                    "response_type": rr.response_type,
+                    "tool_data": rr.tool_data,
                     "tools_called": list(gctx.tools_called or []),
                     "tool_call_events": list(gctx.tool_call_events or []),
                     "route": gctx.route,

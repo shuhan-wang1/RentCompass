@@ -1,0 +1,52 @@
+# Held-out v3 preregistration
+
+Frozen before formal v3 cases or model requests.  Product under test is commit
+`1c4e42bd82c9cc6be9230365b5d288c6739816fe` on `main`; the earlier v2 held-out result is
+historical evidence only and is not reused after that product change.
+
+The formal set has 180 cases: 60 retrieval-hard (30 with an explicit per-listing commute
+contract and 30 without), 30 retrieval no-result, 30 calculation, 30 memory-write and 30
+clarification.  A sacrificial pilot, if used, is stored separately and never enters this
+set, its freeze record, or its denominator.
+
+Each case declares `metric_eligibility` before execution.  Every headline metric and each
+of the two required-tool contracts has at least 30 cases.  A missing run, malformed
+structured output, missing listing ID, duplicate listing ID or runner error is a FAIL in
+the declared denominator.  No case may be reclassified N/A after output is observed.
+
+Primary deterministic metrics, implemented in
+`evaluation/results/_harness/holdout_v3_metrics.py`:
+
+1. **Eligible recall** — every fixture-truth eligible `eval_listing_id` appears in the
+   product's `tool_data.eligible_recommendations`.
+2. **Recommendation precision / false-positive control** — no ID in that collection is
+   fixture-excluded, unknown, foreign or duplicated.
+3. **Complete constraint satisfaction** — every offered eligible listing independently
+   passes every stated frozen hard constraint; a nonempty truth set must produce an offer.
+4. **Required-tool completion** — 30 commute cases require successful evidence bound to
+   every retrieved listing; 30 memory cases require a successful `remember` side effect.
+5. **Unsupported numeric control** — every currency or minutes claim in the answer is
+   traceable to user input, frozen fixture/tool evidence or the frozen weekly/monthly
+   formula.  Plausible invented market figures fail.
+6. **Task completion** — the per-case machine-readable `completion_oracle` succeeds.
+   Retrieval requires the exact eligible set (or a no-result acknowledgement); calculation,
+   memory-write and clarification each have their own frozen oracle.
+
+The composite case-success rate requires every metric declared applicable by that case to
+pass.  Rates carry raw `k/n` and a Clopper-Pearson exact 95% interval; no bootstrap result
+is quoted at a boundary.  Any LLM blind review is supplemental diagnostic evidence only,
+not a primary metric or CV input.
+
+Static preflight is required before the first formal request:
+
+```bash
+python3 evaluation/results/_harness/holdout_v3_preflight.py \
+  --cases evaluation/benchmark/holdout_v3/cases_holdout_v3.jsonl \
+  --fixtures evaluation/benchmark/holdout_v3/fixtures \
+  --compare-cases evaluation/benchmark/cases.jsonl \
+  --compare-cases evaluation/benchmark/holdout_v2/cases_holdout_v2.jsonl \
+  --out evaluation/benchmark/holdout_v3/preflight_report.json
+```
+
+Exit 0 is necessary, not sufficient: it proves the static contract and quotas, while the
+author audit records the human checks of factual correctness, novelty and fixture logic.

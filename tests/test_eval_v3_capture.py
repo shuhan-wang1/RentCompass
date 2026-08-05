@@ -1,0 +1,46 @@
+"""Regression tests for held-out v3 structured-output capture."""
+from __future__ import annotations
+
+import json
+
+from evaluation import run_benchmark as rb
+from evaluation.metrics.graders import GradeContext
+
+
+def _result() -> rb.RunResult:
+    rr = rb.RunResult(
+        case_id="V3-X", category="E_multi_constraint",
+        config="routed_models", mode="live", run_id="V3-X#r1", repeat=1,
+    )
+    rr.response_type = "search"
+    rr.tool_data = {
+        "eligible_recommendations": [{"url": "https://example.test/listing/v3-x-a"}],
+        "candidate_states": [
+            {"candidate_key": "url:https://example.test/listing/v3-x-a",
+             "status": "eligible"}
+        ],
+    }
+    return rr
+
+
+def test_v3_structured_output_round_trips_through_raw_run_loader():
+    original = _result()
+    restored = rb._runresult_from_dict(original.to_dict())
+    assert restored.response_type == "search"
+    assert restored.tool_data == original.tool_data
+
+
+def test_v3_structured_output_is_in_replayable_grader_packet(tmp_path):
+    rr = _result()
+    runner = object.__new__(rb.CaseRunner)
+    runner.events_log = tmp_path / "events.jsonl"
+    ctx = GradeContext(
+        final_answer="One eligible option.", tools_called=["search_properties"],
+        tool_call_events=[], evidence=[], user_texts=["Find a flat"],
+    )
+
+    runner._persist_grader_input(rr, {"case_id": rr.case_id}, ctx, [])
+    rec = json.loads((tmp_path / "grader_input.jsonl").read_text().strip())
+
+    assert rec["grader_input"]["response_type"] == "search"
+    assert rec["grader_input"]["tool_data"] == rr.tool_data

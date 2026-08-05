@@ -1,0 +1,34 @@
+{
+  "benchmark_schema_version": "rentcompass/benchmark/v3",
+  "product_sha": "1c4e42bd82c9cc6be9230365b5d288c6739816fe",
+  "formal_cases_before_authoring": 0,
+  "formal_model_requests_before_authoring": 0,
+  "planned_case_counts": {
+    "retrieval_hard": 60,
+    "retrieval_soft_no_result": 30,
+    "calculation": 30,
+    "memory_write": 30,
+    "clarify": 30,
+    "total": 180
+  },
+  "minimum_primary_denominator": 30,
+  "primary_metrics": [
+    "eligible_recall",
+    "recommendation_precision",
+    "complete_constraint_satisfaction",
+    "required_tool_completion",
+    "unsupported_numeric_control",
+    "task_completion"
+  ],
+  "required_tool_contract_minima": {
+    "commute_per_search_candidate": 30,
+    "remember_write": 30
+  },
+  "confidence_interval": "Clopper-Pearson exact binomial 95%",
+  "llm_judge_role": "supplemental diagnostic only",
+  "historical_sets_excluded": [
+    "evaluation/benchmark/cases.jsonl",
+    "evaluation/benchmark/holdout_v2/cases_holdout_v2.jsonl"
+  ],
+  "cv_rule": "No CV edit until the frozen v3 run passes preflight and the resulting primary metrics are analyzed."
+}

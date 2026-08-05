@@ -49,6 +49,7 @@ def _rename(value: Any) -> Any:
         return value
     return (value.replace("HO5-", "HO6-")
                  .replace("ho5-", "ho6-")
+                 .replace("ho5_", "ho6_")
                  .replace("u_ho5_", "u_ho6_")
                  .replace("holdout-v5", "holdout-v6")
                  .replace("Fresh v5", "Fresh v6")

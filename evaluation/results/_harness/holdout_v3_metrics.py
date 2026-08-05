@@ -30,7 +30,8 @@ PRIMARY_MIN_DENOMINATOR = 30
 
 _MONEY = re.compile(r"(?:GBP\s*|£\s*)([0-9][0-9,]*(?:\.[0-9]+)?)", re.I)
 _MINUTES = re.compile(r"\b([0-9]+(?:\.[0-9]+)?)\s*(?:minutes?|mins?)\b", re.I)
-_NO_RESULT = ("no match", "no results", "no listings", "none found", "couldn't find",
+_NO_RESULT = ("no match", "no results", "no listings", "no exact", "no exact listing",
+              "no exact listings", "no exact match", "no exact matches", "none found", "couldn't find",
               "could not find", "没有", "无匹配", "查不到", "无法找到")
 _QUESTION_WORDS = ("which", "what", "where", "how much", "how many", "please provide",
                    "tell me", "哪", "什么", "哪里", "多少", "请提供")

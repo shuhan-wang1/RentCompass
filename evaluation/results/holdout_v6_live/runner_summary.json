@@ -1,0 +1,764 @@
+{
+  "config": "routed_models",
+  "arch": "legacy",
+  "mode": "live",
+  "offline": false,
+  "repeats": 1,
+  "n_cases_selected": 180,
+  "n_runs": 180,
+  "passed": {
+    "num": 90,
+    "den": 180,
+    "display": "90/180",
+    "rate": 0.5
+  },
+  "task_completion": {
+    "num": 180,
+    "den": 180,
+    "display": "180/180",
+    "rate": 1.0
+  },
+  "route_accuracy": {
+    "num": 150,
+    "den": 180,
+    "display": "150/180",
+    "rate": 0.8333333333333334
+  },
+  "forbidden_tool_rate": {
+    "num": 0,
+    "den": 180,
+    "display": "0/180",
+    "rate": 0.0
+  },
+  "duplicate_call_rate": {
+    "num": 0,
+    "den": 180,
+    "display": "0/180",
+    "rate": 0.0
+  },
+  "loop_exhaustion_rate": {
+    "num": 0,
+    "den": 180,
+    "display": "0/180",
+    "rate": 0.0
+  },
+  "schema_failure_rate": {
+    "num": 0,
+    "den": 180,
+    "display": "0/180",
+    "rate": 0.0
+  },
+  "hard_gate": {
+    "cases": 0,
+    "runs_total": 0,
+    "runs_passed": 0,
+    "all_pass_cases": [],
+    "failed_case_ids": [],
+    "per_case": {}
+  },
+  "violations": [],
+  "gate_passed": true,
+  "generation_stability": {
+    "mean_pass_ratio": 0.5,
+    "flaky_case_ids": []
+  },
+  "slo": {
+    "p50_ms": 2204.2415346950293,
+    "p95_ms": 4120.3222665935755,
+    "p50_limit": 6000,
+    "p95_limit": 30000,
+    "p50_ok": true,
+    "p95_ok": true,
+    "over_30s_count": 0,
+    "over_30s_rate": 0.0,
+    "method": "nearest_rank",
+    "legacy_relative": null
+  },
+  "slo_ok": true,
+  "cold_resilience": {
+    "applicable": false,
+    "cases": 0,
+    "per_case": {},
+    "over_slo_runs": [],
+    "violations": [],
+    "gate_passed": true
+  },
+  "cache_hit_rate": {
+    "num": 0,
+    "den": 0,
+    "display": "0/0",
+    "rate": null
+  },
+  "tool_budget_timeouts": {
+    "by_tool": {},
+    "total": 0
+  },
+  "soft_wrap_count": 0,
+  "constraints": {
+    "num": 207,
+    "den": 570,
+    "display": "207/570",
+    "rate": 0.3631578947368421
+  },
+  "grounded_rate": {
+    "num": 263,
+    "den": 263,
+    "display": "263/263",
+    "rate": 1.0
+  },
+  "money_grounded_rate": {
+    "num": 171,
+    "den": 171,
+    "display": "171/171",
+    "rate": 1.0
+  },
+  "contradicted_claims": 0,
+  "source_coverage": {
+    "num": 203,
+    "den": 263,
+    "display": "203/263",
+    "rate": 0.7718631178707225
+  },
+  "critic_triggers": 97,
+  "critic_repairs": 4,
+  "latency_ms": {
+    "mean": 2210.3334001472426,
+    "p50": 2204.2415346950293,
+    "p95": 4120.3222665935755,
+    "n": 180
+  },
+  "node_latency_by_kind": {
+    "extract_preferences": {
+      "sum_ms": 94.09447759389877,
+      "max_ms": 4.1823480278253555,
+      "count": 180
+    },
+    "decide_tool": {
+      "sum_ms": 110135.03949344158,
+      "max_ms": 2591.1307018250227,
+      "count": 180
+    },
+    "execute_tool": {
+      "sum_ms": 394.44778487086296,
+      "max_ms": 26.732787489891052,
+      "count": 120
+    },
+    "format_output": {
+      "sum_ms": 39.65352103114128,
+      "max_ms": 3.7666205316781998,
+      "count": 180
+    },
+    "dispatch_tasks": {
+      "sum_ms": 0.17411261796951294,
+      "max_ms": 0.04536844789981842,
+      "count": 6
+    },
+    "task_worker": {
+      "sum_ms": 3.9679091423749924,
+      "max_ms": 1.541927456855774,
+      "count": 6
+    },
+    "gather_wave": {
+      "sum_ms": 0.6114579737186432,
+      "max_ms": 0.2230331301689148,
+      "count": 6
+    },
+    "generate_response": {
+      "sum_ms": 239435.90369448066,
+      "max_ms": 8825.559495016932,
+      "count": 93
+    },
+    "critic": {
+      "sum_ms": 40671.235494315624,
+      "max_ms": 16225.033702328801,
+      "count": 93
+    }
+  },
+  "slowest_cases": [
+    {
+      "run_id": "HO6-208#r1#routed_models",
+      "case_id": "HO6-208",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 23667.493840679526,
+      "llm_calls": 3,
+      "tool_batches": 8,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.6977282464504242,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 810.9829407185316,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 7.35190324485302,
+          "seq": 2
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.04536844789981842,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 0.5554165691137314,
+          "seq": 4
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.10455772280693054,
+          "seq": 5
+        },
+        {
+          "node": "generate_response",
+          "ms": 6591.050012037158,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 16225.033702328801,
+          "seq": 7
+        },
+        {
+          "node": "format_output",
+          "ms": 0.5111079663038254,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-238#r1#routed_models",
+      "case_id": "HO6-238",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 20064.25833143294,
+      "llm_calls": 3,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.5930103361606598,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 989.8768216371536,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 4.904281347990036,
+          "seq": 2
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.03381073474884033,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 0.3017149865627289,
+          "seq": 4
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.07095746695995331,
+          "seq": 5
+        },
+        {
+          "node": "generate_response",
+          "ms": 6258.421074599028,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 12779.195696115494,
+          "seq": 7
+        },
+        {
+          "node": "format_output",
+          "ms": 0.15293993055820465,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-198#r1#routed_models",
+      "case_id": "HO6-198",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 18296.2289955467,
+      "llm_calls": 3,
+      "tool_batches": 9,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.5696061998605728,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 1025.4682842642069,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 3.9459243416786194,
+          "seq": 2
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.02837367355823517,
+          "seq": 3
+        },
+        {
+          "node": "task_worker",
+          "ms": 0.7389504462480545,
+          "seq": 4
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.2230331301689148,
+          "seq": 5
+        },
+        {
+          "node": "generate_response",
+          "ms": 8825.559495016932,
+          "seq": 6
+        },
+        {
+          "node": "critic",
+          "ms": 8403.415780514479,
+          "seq": 7
+        },
+        {
+          "node": "format_output",
+          "ms": 0.5474835634231567,
+          "seq": 8
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-263#r1#routed_models",
+      "case_id": "HO6-263",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 7038.144659250975,
+      "llm_calls": 3,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.7274746894836426,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 741.1264181137085,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 1.1546853929758072,
+          "seq": 2
+        },
+        {
+          "node": "generate_response",
+          "ms": 3110.5816569179296,
+          "seq": 3
+        },
+        {
+          "node": "critic",
+          "ms": 3159.4799645245075,
+          "seq": 4
+        },
+        {
+          "node": "format_output",
+          "ms": 0.14166347682476044,
+          "seq": 5
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-338#r1#routed_models",
+      "case_id": "HO6-338",
+      "category": "A_retrieval",
+      "config": "routed_models",
+      "latency_ms": 5731.046974658966,
+      "llm_calls": 3,
+      "tool_batches": 0,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.3789495676755905,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 2591.1307018250227,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.027410686016082764,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 0.5104783922433853,
+          "seq": 3
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.049814581871032715,
+          "seq": 4
+        },
+        {
+          "node": "generate_response",
+          "ms": 3101.3855896890163,
+          "seq": 5
+        },
+        {
+          "node": "critic",
+          "ms": 1.7174016684293747,
+          "seq": 6
+        },
+        {
+          "node": "format_output",
+          "ms": 0.2387668937444687,
+          "seq": 7
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-337#r1#routed_models",
+      "case_id": "HO6-337",
+      "category": "A_retrieval",
+      "config": "routed_models",
+      "latency_ms": 4787.02443279326,
+      "llm_calls": 3,
+      "tool_batches": 0,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.26792287826538086,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 2365.0318887084723,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.009084120392799377,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 1.541927456855774,
+          "seq": 3
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.08556805551052094,
+          "seq": 4
+        },
+        {
+          "node": "generate_response",
+          "ms": 2382.1912948042154,
+          "seq": 5
+        },
+        {
+          "node": "critic",
+          "ms": 1.4191921800374985,
+          "seq": 6
+        },
+        {
+          "node": "format_output",
+          "ms": 0.25768764317035675,
+          "seq": 7
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-254#r1#routed_models",
+      "case_id": "HO6-254",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 4355.671424418688,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.4834271967411041,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 782.2971697896719,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 1.8153004348278046,
+          "seq": 2
+        },
+        {
+          "node": "generate_response",
+          "ms": 3536.155115813017,
+          "seq": 3
+        },
+        {
+          "node": "critic",
+          "ms": 3.622964024543762,
+          "seq": 4
+        },
+        {
+          "node": "format_output",
+          "ms": 0.3417637199163437,
+          "seq": 5
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-350#r1#routed_models",
+      "case_id": "HO6-350",
+      "category": "A_retrieval",
+      "config": "routed_models",
+      "latency_ms": 4274.288345128298,
+      "llm_calls": 3,
+      "tool_batches": 0,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.29313191771507263,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 2230.0191838294268,
+          "seq": 1
+        },
+        {
+          "node": "dispatch_tasks",
+          "ms": 0.030064955353736877,
+          "seq": 2
+        },
+        {
+          "node": "task_worker",
+          "ms": 0.31942129135131836,
+          "seq": 3
+        },
+        {
+          "node": "gather_wave",
+          "ms": 0.0775270164012909,
+          "seq": 4
+        },
+        {
+          "node": "generate_response",
+          "ms": 2006.7156460136175,
+          "seq": 5
+        },
+        {
+          "node": "critic",
+          "ms": 1.5798341482877731,
+          "seq": 6
+        },
+        {
+          "node": "format_output",
+          "ms": 0.2752132713794708,
+          "seq": 7
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-249#r1#routed_models",
+      "case_id": "HO6-249",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 4152.052925899625,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.9374599903821945,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 1039.5438745617867,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 2.1745488047599792,
+          "seq": 2
+        },
+        {
+          "node": "generate_response",
+          "ms": 3068.052841350436,
+          "seq": 3
+        },
+        {
+          "node": "critic",
+          "ms": 3.7386510521173477,
+          "seq": 4
+        },
+        {
+          "node": "format_output",
+          "ms": 0.2543143928050995,
+          "seq": 5
+        }
+      ]
+    },
+    {
+      "run_id": "HO6-267#r1#routed_models",
+      "case_id": "HO6-267",
+      "category": "E_multi_constraint",
+      "config": "routed_models",
+      "latency_ms": 4120.3222665935755,
+      "llm_calls": 2,
+      "tool_batches": 1,
+      "spans": [
+        {
+          "node": "extract_preferences",
+          "ms": 0.555695965886116,
+          "seq": 0
+        },
+        {
+          "node": "decide_tool",
+          "ms": 788.131520152092,
+          "seq": 1
+        },
+        {
+          "node": "execute_tool",
+          "ms": 1.87578983604908,
+          "seq": 2
+        },
+        {
+          "node": "generate_response",
+          "ms": 3307.5822833925486,
+          "seq": 3
+        },
+        {
+          "node": "critic",
+          "ms": 1.4919023960828781,
+          "seq": 4
+        },
+        {
+          "node": "format_output",
+          "ms": 0.14127232134342194,
+          "seq": 5
+        }
+      ]
+    }
+  ],
+  "profile_totals": {
+    "llm_calls": 220,
+    "tool_batches": 331,
+    "critic_repairs_cases": 4
+  },
+  "tokens": {
+    "input": 261115,
+    "output": 20905
+  },
+  "total_cost_usd": 0.03125788400000001,
+  "cost_cap_usd": 15.0,
+  "stopped_reason": null,
+  "security_audit": {
+    "cases_with_denied_writes": 5,
+    "denied_by_tool": {
+      "search_nearby_pois": 2,
+      "web_search": 3
+    },
+    "denied_cases": [
+      {
+        "case_id": "HO6-208",
+        "run_id": "HO6-208#r1#routed_models",
+        "denied": [
+          "search_nearby_pois"
+        ],
+        "detail": [
+          {
+            "tool": "search_nearby_pois",
+            "digest": "75567ece3acf1a2e",
+            "error": "fixture denied unbound tool: search_nearby_pois"
+          }
+        ]
+      },
+      {
+        "case_id": "HO6-238",
+        "run_id": "HO6-238#r1#routed_models",
+        "denied": [
+          "search_nearby_pois"
+        ],
+        "detail": [
+          {
+            "tool": "search_nearby_pois",
+            "digest": "bf6e96198ebc8f02",
+            "error": "fixture denied unbound tool: search_nearby_pois"
+          }
+        ]
+      },
+      {
+        "case_id": "HO6-337",
+        "run_id": "HO6-337#r1#routed_models",
+        "denied": [
+          "web_search"
+        ],
+        "detail": [
+          {
+            "tool": "web_search",
+            "digest": "3eb1e258b0b62830",
+            "error": "fixture denied unbound tool: web_search"
+          }
+        ]
+      },
+      {
+        "case_id": "HO6-338",
+        "run_id": "HO6-338#r1#routed_models",
+        "denied": [
+          "web_search"
+        ],
+        "detail": [
+          {
+            "tool": "web_search",
+            "digest": "3eb1e258b0b62830",
+            "error": "fixture denied unbound tool: web_search"
+          }
+        ]
+      },
+      {
+        "case_id": "HO6-350",
+        "run_id": "HO6-350#r1#routed_models",
+        "denied": [
+          "web_search"
+        ],
+        "detail": [
+          {
+            "tool": "web_search",
+            "digest": "3eb1e258b0b62830",
+            "error": "fixture denied unbound tool: web_search"
+          }
+        ]
+      }
+    ]
+  },
+  "git_commit": "82274a1",
+  "git_dirty": false,
+  "git_commit_source": "git",
+  "git_dirty_source": "git",
+  "commit_trust": "git-clean",
+  "identity_warnings": [],
+  "self_identifying": true,
+  "timestamp": "2026-08-05T15:19:35",
+  "notes": "LIVE mode: fixtured cases replay recorded evidence; non-fixture cases run tools in-process (may hit cache/live network, nondeterministic)."
+}

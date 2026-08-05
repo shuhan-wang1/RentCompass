@@ -111,6 +111,24 @@ def test_v3_no_result_has_a_frozen_completion_branch_and_missing_run_fails():
     assert any("missing run" in e for e in absent["errors"])
 
 
+def test_v3_no_exact_listings_phrase_is_a_no_result_completion():
+    case = _case(metrics=["recommendation_precision", "task_completion"], contract={})
+    empty = [{"tool_name": "search_properties", "data": {"recommendations": []}}]
+    run = {"final_answer": "The search returned no exact listings.", "response_type": "answer",
+           "tool_data": {"eligible_recommendations": []},
+           "tool_call_events": [{"tool": "search_properties", "success": True, "timeout": False}]}
+    assert m.grade_case(case, run, empty)["composite_pass"] is True
+
+
+def test_v3_no_exact_qualifier_is_a_no_result_completion():
+    case = _case(metrics=["recommendation_precision", "task_completion"], contract={})
+    empty = [{"tool_name": "search_properties", "data": {"recommendations": []}}]
+    run = {"final_answer": "There are no exact furnished options in that area.",
+           "response_type": "answer", "tool_data": {"eligible_recommendations": []},
+           "tool_call_events": [{"tool": "search_properties", "success": True, "timeout": False}]}
+    assert m.grade_case(case, run, empty)["composite_pass"] is True
+
+
 def test_clarification_contract_accepts_explicit_text_question_without_ask_user():
     case = _case(kind="clarification", metrics=["task_completion"], contract={})
     case["completion_oracle"] = {

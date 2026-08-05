@@ -1,0 +1,88 @@
+{
+  "composite_case_success": {
+    "hi": 0.9483365254568148,
+    "lo": 0.8596637840517916,
+    "method": "Clopper-Pearson exact binomial 95%",
+    "n": 180,
+    "rate": 0.9111111111111111,
+    "successes": 164
+  },
+  "metrics": {
+    "complete_constraint_satisfaction": {
+      "hi": 0.9895676703556517,
+      "lo": 0.8607567532789271,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 60,
+      "rate": 0.95,
+      "successes": 57
+    },
+    "eligible_recall": {
+      "hi": 0.9895676703556517,
+      "lo": 0.8607567532789271,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 60,
+      "rate": 0.95,
+      "successes": 57
+    },
+    "recommendation_precision": {
+      "hi": 0.9930723972689899,
+      "lo": 0.9056639065868637,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 90,
+      "rate": 0.9666666666666667,
+      "successes": 87
+    },
+    "required_tool_completion": {
+      "hi": 0.9959373753579066,
+      "lo": 0.8847189555807482,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 60,
+      "rate": 0.9666666666666667,
+      "successes": 58
+    },
+    "task_completion": {
+      "hi": 0.9483365254568148,
+      "lo": 0.8596637840517916,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 180,
+      "rate": 0.9111111111111111,
+      "successes": 164
+    },
+    "unsupported_numeric_control": {
+      "hi": 0.9965496558030271,
+      "lo": 0.9520677995036091,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 180,
+      "rate": 0.9833333333333333,
+      "successes": 177
+    }
+  },
+  "minimum_primary_denominator": 30,
+  "required_tool_by_kind": {
+    "commute_per_search_candidate": {
+      "hi": 0.9918218655393436,
+      "lo": 0.7792645984770381,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 30,
+      "rate": 0.9333333333333333,
+      "successes": 28
+    },
+    "remember_write": {
+      "hi": 1.0,
+      "lo": 0.884296691777972,
+      "method": "Clopper-Pearson exact binomial 95%",
+      "n": 30,
+      "rate": 1.0,
+      "successes": 30
+    }
+  },
+  "run_validity": {
+    "case_sha256": "7b4046c1472c3e81334c00dd588be75c9dd1331c161ea193a0e33876a8ee6f69",
+    "grader_input_sha256": "e7de4a6cdd1f4ddf12e65352b94616c57fc0bcf3142f69c02a61af8b38e81af4",
+    "n_cases": 180,
+    "n_evidence_packets": 180,
+    "n_runs": 180,
+    "raw_runs_sha256": "d6af9b6f4f0b8591bc7190b80ae0e4b9a0673dbbf44d733b6dddd85c1ce0c4fd",
+    "runner_errors": 0
+  }
+}

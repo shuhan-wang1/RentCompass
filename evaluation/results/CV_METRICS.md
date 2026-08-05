@@ -90,6 +90,16 @@ _Generated 2026-07-12T06:27:47Z, HEAD `070675d`. Every number is copied verbatim
 - **Required caveat**: Write "模型盲审 / model blind review". NEVER "human evaluation", "人工盲审", "answer accuracy" or "inter-rater reliability" — no person labelled anything. **Report the counts and the OBSERVED agreement; do NOT report Cohen's kappa for this item**: ~96% of judgments fall in one category, so the expected-agreement term approaches 1 and kappa degenerates (0.226 cross-model against an observed agreement of 0.945). The third round is another model from the SAME vendor, not a genuinely independent third party.
 
 
+### [SAFE-WITH-SCOPE] Held-out v6 structured retrieval and side-effect contracts (n=180, live model + frozen fixtures)
+
+- **中文 CV 表述**: 在一套全新冻结的 180 例合成 held-out 租房基准上（90 检索、30 计算、30 记忆、30 澄清；与历史开发集分离），使用真实模型推理和闭合 fixture 工具，结构化检索契约达到：eligible recall **57/60 (95.0%, Clopper–Pearson 95% CI 86.1%–99.0%)**，recommendation precision **87/90 (96.7%, CI 90.6%–99.3%)**；逐候选通勤证据契约 **28/30 (93.3%, CI 77.9%–99.2%)**，记忆写入契约 **30/30 (100%, CI 88.4%–100%)**。
+- **English CV statement**: On a newly frozen 180-case synthetic held-out rental benchmark (90 retrieval, 30 calculation, 30 memory, 30 clarification), with live model inference and closed fixture tools, RentCompass achieved **57/60 eligible recall (95.0%, exact Clopper–Pearson 95% CI 86.1%–99.0%)** and **87/90 recommendation precision (96.7%, CI 90.6%–99.3%)**; required per-candidate commute evidence was present in **28/30 (93.3%, CI 77.9%–99.2%)** cases and required memory writes in **30/30 (100%, CI 88.4%–100%)**.
+- **Raw data (num/den)**: eligible_recall 57/60; recommendation_precision 87/90; complete_constraint_satisfaction 57/60; commute_per_search_candidate 28/30; remember_write 30/30; 180/180 runner records; 0 runner errors; fixture violations 0; cost `$0.0313`.
+- **Metric definition**: Deterministic structured contracts over unique frozen listing IDs and frozen tool evidence; exact two-sided Clopper–Pearson intervals. Missing structured output remains a declared failure. No prose-only inference is used for retrieval membership.
+- **Result file**: `evaluation/results/holdout_v6_live/HOLDOUT_V6_REPORT.md`, `analysis_summary.json`, `per_case_metrics.jsonl`; benchmark freeze `evaluation/benchmark/holdout_v6/FREEZE.json`.
+- **Safe to use**: YES, only with this exact scope.
+- **Required caveat**: Synthetic fixture-replayed benchmark, not live listing freshness, production SLA, or overall answer accuracy. Three retrieval cases exposed real missing structured-output/commute-evidence defects and remain failures. The raw composite and task-completion rate are intentionally not quoted because the frozen no-result marker list produced 13 semantic false negatives; those are diagnostics pending a future evaluator fix and rerun.
+
 ## 不建议使用
 
 ### [AVOID] Held-out metrics that did NOT clear the threshold — do not quote any of these
@@ -141,4 +151,3 @@ _Generated 2026-07-12T06:27:47Z, HEAD `070675d`. Every number is copied verbatim
 - **Result file**: `not produced (run: run_benchmark --live --judge to generate)`
 - **Safe to use**: NO
 - **Required caveat**: Only quote once actually measured.
-

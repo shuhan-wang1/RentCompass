@@ -337,9 +337,22 @@ _CONVERSION_VERB_RE = re.compile(
 
 
 def standalone_rent_conversion(message: str) -> Optional[tuple[str, float]]:
-    """Return ``(direction, amount)`` for an unambiguous rent conversion."""
+    """Return ``(direction, amount)`` for an unambiguous rent conversion.
+
+    "Unambiguous" means the whole turn is the conversion. B12 — *"I'm looking at a
+    £380/week studio. What'll it cost me all-in per month, including bills and council
+    tax?"* — contains a conversion but is not one: the answer it asks for is a
+    bills-inclusive total, and no weekly-to-monthly arithmetic can produce that. Returning
+    a verdict here short-circuits the entire turn deterministically, so the user would get
+    the rent conversion presented as the answer to a question about total cost. Anything
+    this module cannot derive from a rent hands over to the model, which owns the refusal
+    to invent bills (``_NON_DERIVABLE_COST_RE`` is the same gate ``statutory_money_answer``
+    uses, deliberately — one definition of "not derivable from a rent", not two).
+    """
     text = (message or "").strip()
     if not text or _FIND_INTENT_RE.search(text) or _names_a_place(text):
+        return None
+    if _NON_DERIVABLE_COST_RE.search(text):
         return None
     source = _amount_with_period(text)
     if source is None:

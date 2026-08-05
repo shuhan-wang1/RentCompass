@@ -4185,6 +4185,50 @@ def format_refinement_output(raw_data, prefs, accumulated, reply_language):
     return response, tool_data
 
 
+def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
+    """``(payload, tool_data)`` — the ONE place the eight-key listings contract is built.
+
+    Every path that can end a turn on a search result mounts the panel payload through
+    here: the artifact-ledger recovery, the post-search dimension fan-out synthesis, and
+    the plain ``search_properties`` formatter. Before this existed the fan-out branch
+    hand-rolled a three-key subset (``recommendations`` / ``search_criteria`` /
+    ``area_recommendations``), silently dropping ``eligible_recommendations``,
+    ``candidate_states``, ``excluded_candidates``, ``unverified_candidates`` and
+    ``commute_evidence`` — the exact keys the structured-contract metrics read, so a turn
+    whose ANSWER was correct still scored as if no contract had been mounted at all
+    (held-out v6: HO6-198 / HO6-208 / HO6-238).
+
+    The payload comes back because validation may replace it, and callers that own the
+    payload (the ledger) must keep the validated copy. Already-validated payloads are
+    passed through untouched, so callers that validate earlier keep their own evidence.
+    """
+    if search_payload.get("candidate_validation") is None:
+        search_payload = validate_search_payload(
+            search_payload, commute_evidence=commute_evidence or [])
+    recs = apply_preference_filter(search_payload.get("recommendations") or [], prefs)
+    panel_recs = recs
+    if not panel_recs:
+        # Near-misses stay visible as explicitly excluded alternatives; they never join
+        # the deterministic eligible collection.
+        panel_recs = apply_preference_filter(
+            search_payload.get("over_budget_alternatives") or [], prefs)
+        for row in panel_recs:
+            row.setdefault("candidate_status", "excluded")
+            row.setdefault("status_reason", "over_budget")
+    tool_data = {
+        "recommendations": panel_recs,
+        "eligible_recommendations": recs,
+        "search_criteria": search_payload.get("search_criteria", {}),
+        # 🆕 目的地附近推荐居住区，随搜索结果一并回传前端（可点击 chips）。
+        "area_recommendations": search_payload.get("area_recommendations", []),
+        "candidate_states": search_payload.get("candidate_states", []),
+        "excluded_candidates": search_payload.get("excluded_candidates", []),
+        "unverified_candidates": search_payload.get("unverified_candidates", []),
+        "commute_evidence": search_payload.get("commute_evidence", []),
+    }
+    return search_payload, tool_data
+
+
 def _make_format_output_node():
     """Create the format_output node."""
 
@@ -4216,28 +4260,9 @@ def _make_format_output_node():
                               and (a["raw_data"].get("recommendations")
                                    or a["raw_data"].get("over_budget_alternatives"))), None)
         if is_loop_synthesis and ledger_search is not None:
-            search_payload = ledger_search["raw_data"]
-            if search_payload.get("candidate_validation") is None:
-                search_payload = validate_search_payload(
-                    search_payload, commute_evidence=search_payload.get("commute_evidence") or [])
-                ledger_search["raw_data"] = search_payload
-            recs = apply_preference_filter(search_payload.get("recommendations") or [], prefs)
-            panel_recs = recs or apply_preference_filter(
-                search_payload.get("over_budget_alternatives") or [], prefs)
-            if not recs:
-                for row in panel_recs:
-                    row.setdefault("candidate_status", "excluded")
-                    row.setdefault("status_reason", "over_budget")
-            tool_data = {
-                "recommendations": panel_recs,
-                "eligible_recommendations": recs,
-                "search_criteria": search_payload.get("search_criteria", {}),
-                "area_recommendations": search_payload.get("area_recommendations", []),
-                "candidate_states": search_payload.get("candidate_states", []),
-                "excluded_candidates": search_payload.get("excluded_candidates", []),
-                "unverified_candidates": search_payload.get("unverified_candidates", []),
-                "commute_evidence": search_payload.get("commute_evidence", []),
-            }
+            ledger_search["raw_data"], tool_data = _structured_search_tool_data(
+                ledger_search["raw_data"], prefs,
+                commute_evidence=ledger_search["raw_data"].get("commute_evidence") or [])
         memory_contract = dict(state.get("memory_write_contract") or {})
         if tool_name == "remember" and not memory_contract:
             memory_contract = {
@@ -4269,18 +4294,26 @@ def _make_format_output_node():
             # panel never repaints (/api/alex returns a `chat` payload instead of a `search`
             # one) — i.e. the very "drops the user's listings" failure the plan-trigger
             # exclusion exists to prevent. Text stays the synthesis; only tool_data is filled.
+            #
+            # The panel rides out through the SAME contract mount as every other listings
+            # path (_structured_search_tool_data). Building the dict inline here is what
+            # produced the three-key subset that dropped eligible_recommendations /
+            # candidate_states / excluded_candidates / unverified_candidates /
+            # commute_evidence on held-out v6's HO6-198, HO6-208 and HO6-238 — turns whose
+            # ANSWER was right (HO6-198 ran calculate_commute eight times) but which scored
+            # zero on all three structured-contract metrics. Note this runs AFTER the
+            # artifact-ledger recovery above and overwrites its tool_data, so a subset built
+            # here silently downgrades an already-correct payload.
             if (state.get("plan_origin") == _PLAN_ORIGIN_DIMENSIONS
                     and tool_name == "search_properties"
                     and isinstance(raw_data, dict)
                     and raw_data.get("status") == "found"
                     and (raw_data.get("recommendations")
                          or raw_data.get("over_budget_alternatives"))):
-                _recs = apply_preference_filter(raw_data.get("recommendations") or [], prefs)
-                tool_data = {
-                    "recommendations": _recs,
-                    "search_criteria": raw_data.get("search_criteria", {}),
-                    "area_recommendations": raw_data.get("area_recommendations", []),
-                }
+                _, tool_data = _structured_search_tool_data(
+                    raw_data, prefs,
+                    commute_evidence=(state.get("commute_evidence")
+                                      or raw_data.get("commute_evidence") or []))
 
         elif tool_name == 'check_safety' and raw_data and isinstance(raw_data, dict) and raw_data.get('safety_score') is not None:
             response, tool_data = _format_safety(raw_data)
@@ -4312,14 +4345,9 @@ def _make_format_output_node():
             elif (raw_data.get('status') == 'found'
                     and (raw_data.get('recommendations')
                          or raw_data.get('over_budget_alternatives'))):
-                recs = apply_preference_filter(raw_data.get('recommendations') or [], prefs)
-                panel_recs = recs
-                if not panel_recs:
-                    panel_recs = apply_preference_filter(
-                        raw_data.get('over_budget_alternatives') or [], prefs)
-                    for row in panel_recs:
-                        row.setdefault('candidate_status', 'excluded')
-                        row.setdefault('status_reason', 'over_budget')
+                raw_data, tool_data = _structured_search_tool_data(
+                    raw_data, prefs, commute_evidence=state.get('commute_evidence') or [])
+                recs = tool_data['eligible_recommendations']
 
                 # The summary is now fully localized (zh/en) and already includes the
                 # right-panel hint, so it's used verbatim (no English-only suffix bolted on).
@@ -4332,15 +4360,6 @@ def _make_format_output_node():
                 response = (render_candidate_status(validation, language=language)
                             if requires_status else
                             raw_data.get('summary') or f"Found {len(recs)} properties.")
-                tool_data = {'recommendations': panel_recs, 'eligible_recommendations': recs,
-                             'search_criteria': raw_data.get('search_criteria', {}),
-                             # 🆕 目的地附近推荐居住区，随搜索结果一并回传前端（可点击 chips）。
-                             'area_recommendations': raw_data.get('area_recommendations', [])}
-
-                tool_data['candidate_states'] = raw_data.get('candidate_states', [])
-                tool_data['excluded_candidates'] = raw_data.get('excluded_candidates', [])
-                tool_data['unverified_candidates'] = raw_data.get('unverified_candidates', [])
-                tool_data['commute_evidence'] = raw_data.get('commute_evidence', [])
         if (tool_name == REFINE_TOOL_NAME and isinstance(raw_data, dict)
                 and raw_data.get('recommendations')):
             # Refinement-in-place. Two things happen here and both are load-bearing:

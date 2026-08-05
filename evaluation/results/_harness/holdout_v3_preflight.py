@@ -29,6 +29,7 @@ REQUIRED = {
 VALID_CATEGORIES = {"retrieval_hard", "retrieval_soft", "calculation", "memory", "clarify"}
 VALID_ORACLES = {"retrieval_exact_set", "calculation", "memory_write", "clarification"}
 VALID_TOOL_CONTRACTS = {"commute_per_search_candidate", "remember_write"}
+HARD_SLOT_MINIMUM = 30
 
 
 def _load_jsonl(path: Path) -> list[dict]:
@@ -145,7 +146,7 @@ def _check_case(case: dict, fixtures: Path, global_ids: set[str]) -> list[str]:
 def check(cases: list[dict], fixtures: Path, comparison_cases: Iterable[dict] = ()) -> dict:
     problems: dict[str, list[str]] = {}
     seen, global_ids = set(), set()
-    counts, tool_counts = Counter(), Counter()
+    counts, tool_counts, slot_counts = Counter(), Counter(), Counter()
     source_queries, source_ids, source_prices, source_addresses = set(), set(), set(), set()
     for old in comparison_cases:
         source_queries.add(str(old.get("user_query") or "").strip().casefold())
@@ -161,6 +162,10 @@ def check(cases: list[dict], fixtures: Path, comparison_cases: Iterable[dict] = 
             errs.append("N1 verbatim query overlaps a development/earlier-holdout case")
         for metric in case.get("metric_eligibility") or []:
             counts[metric] += 1
+        for con in hard.user_hard_constraints(case):
+            slot = hard.slot_of(con)
+            if slot:
+                slot_counts[slot] += 1
         contract = (case.get("required_tool_contract") or {}).get("kind")
         if "required_tool_completion" in (case.get("metric_eligibility") or []):
             tool_counts[contract] += 1
@@ -175,8 +180,13 @@ def check(cases: list[dict], fixtures: Path, comparison_cases: Iterable[dict] = 
         if tool_counts[kind] < metrics.PRIMARY_MIN_DENOMINATOR:
             problems.setdefault("__quota__", []).append(
                 f"Q3 {kind} denominator {tool_counts[kind]} < {metrics.PRIMARY_MIN_DENOMINATOR}")
+    for slot in hard.SLOT_MIN_COVERAGE:
+        if slot_counts[slot] < HARD_SLOT_MINIMUM:
+            problems.setdefault("__quota__", []).append(
+                f"Q4 hard-constraint slot {slot} coverage {slot_counts[slot]} < {HARD_SLOT_MINIMUM}")
     return {"gate_passed": not problems, "n_cases": len(cases), "problems": problems,
             "metric_denominators": quota, "tool_contract_denominators": dict(tool_counts),
+            "hard_slot_coverage": {slot: slot_counts[slot] for slot in hard.SLOT_MIN_COVERAGE},
             "frozen_schema": V3_CASE_SCHEMA}
 
 

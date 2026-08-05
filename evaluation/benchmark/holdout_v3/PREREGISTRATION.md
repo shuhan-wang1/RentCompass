@@ -4,10 +4,12 @@ Frozen before formal v3 cases or model requests.  Product under test is commit
 `1c4e42bd82c9cc6be9230365b5d288c6739816fe` on `main`; the earlier v2 held-out result is
 historical evidence only and is not reused after that product change.
 
-The formal set has 180 cases: 60 retrieval-hard (30 with an explicit per-listing commute
-contract and 30 without), 30 retrieval no-result, 30 calculation, 30 memory-write and 30
-clarification.  A sacrificial pilot, if used, is stored separately and never enters this
-set, its freeze record, or its denominator.
+The formal set has 180 cases: 90 retrieval-hard (30 with an explicit per-listing commute
+contract, 30 without, and 30 no-result), 30 calculation, 30 memory-write and 30
+clarification.  The no-result prompts still contain user housing conditions, so calling
+them retrieval-soft would conceal their hard-constraint semantics; this correction is made
+before any v3 case or request exists.  A sacrificial pilot, if used, is stored separately
+and never enters this set, its freeze record, or its denominator.
 
 Each case declares `metric_eligibility` before execution.  Every headline metric and each
 of the two required-tool contracts has at least 30 cases.  A missing run, malformed
@@ -36,6 +38,10 @@ The composite case-success rate requires every metric declared applicable by tha
 pass.  Rates carry raw `k/n` and a Clopper-Pearson exact 95% interval; no bootstrap result
 is quoted at a boundary.  Any LLM blind review is supplemental diagnostic evidence only,
 not a primary metric or CV input.
+
+All seven hard-constraint slots (budget, bedroom count, room type, area, move-in date,
+property feature, commute) have at least 30 satisfaction-trap cases.  The first six occur
+in every non-empty retrieval-hard case; commute occurs in the 30 per-listing contract cases.
 
 Static preflight is required before the first formal request:
 

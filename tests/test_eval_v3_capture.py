@@ -44,3 +44,12 @@ def test_v3_structured_output_is_in_replayable_grader_packet(tmp_path):
 
     assert rec["grader_input"]["response_type"] == "search"
     assert rec["grader_input"]["tool_data"] == rr.tool_data
+
+
+def test_v3_fixture_directory_is_explicit_and_does_not_touch_default(tmp_path):
+    fixture = tmp_path / "v3.json"
+    fixture.write_text(json.dumps({"tool_name": "search_properties", "success": True,
+                                   "data": {"recommendations": []}}), encoding="utf-8")
+    queue = rb.load_fixture_queue({"fixture": "v3.json"}, fixtures_dir=tmp_path)
+    assert list(queue) == ["search_properties"]
+    assert queue["search_properties"][0]["data"]["recommendations"] == []

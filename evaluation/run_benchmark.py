@@ -104,12 +104,16 @@ def load_cases(path: Optional[Path] = None) -> List[dict]:
     return rows
 
 
-def schema_validate(cases: List[dict]) -> List[str]:
-    """Schema-validate every case (reuses jsonschema if available)."""
+def schema_validate(cases: List[dict], schema_path: Optional[Path] = None) -> List[str]:
+    """Schema-validate every case (reuses jsonschema if available).
+
+    schema_path is explicit for versioned held-out shards; the default remains the
+    historical base schema so existing guard validation is unchanged.
+    """
     try:
         import jsonschema
         from jsonschema import Draft202012Validator
-        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+        schema = json.loads((schema_path or SCHEMA_PATH).read_text(encoding="utf-8"))
         validator = Draft202012Validator(schema)
         problems = []
         for c in cases:
@@ -184,7 +188,7 @@ def select_cases(cases: List[dict], *, smoke: bool, limit: Optional[int],
 # --------------------------------------------------------------------------- #
 # Fixtures -> per-tool evidence queue
 # --------------------------------------------------------------------------- #
-def load_fixture_queue(case: dict) -> Dict[str, List[dict]]:
+def load_fixture_queue(case: dict, fixtures_dir: Optional[Path] = None) -> Dict[str, List[dict]]:
     """Return tool_name -> list of recorded ToolResult-shaped dicts, in call order.
 
     The queue is keyed BY TOOL NAME, so a fixture is only ever replayed if the agent
@@ -198,7 +202,7 @@ def load_fixture_queue(case: dict) -> Dict[str, List[dict]]:
     names = [fx] if isinstance(fx, str) else list(fx)
     queue: Dict[str, List[dict]] = {}
     for name in names:
-        path = FIXTURES_DIR / name
+        path = (fixtures_dir or FIXTURES_DIR) / name
         raw = json.loads(path.read_text(encoding="utf-8"))
         items = raw["results"] if isinstance(raw, dict) and "results" in raw else [raw]
         for item in items:
@@ -836,7 +840,8 @@ class CaseRunner:
 
     def __init__(self, *, mode: str, cfg, state_root: Path, events_log: Path,
                  judge: bool, arch: str = "legacy",
-                 cache_protocol: Optional[Dict[str, Any]] = None):
+                 cache_protocol: Optional[Dict[str, Any]] = None,
+                 fixtures_dir: Optional[Path] = None):
         self.mode = mode          # "offline" | "live"
         self.arch = arch          # "legacy" | "fc_loop"
         self.cfg = cfg
@@ -847,6 +852,9 @@ class CaseRunner:
         # cold, _prepare_cache restores/creates a run-scoped listing cache BEFORE each
         # case-run and points the app at it via on_demand.set_cache_path (repeat independence).
         self.cache_protocol = cache_protocol or {"mode": "none"}
+        # v3 uses a separate frozen fixture directory.  Historical cases retain the
+        # default benchmark/fixtures root, so no old result changes interpretation.
+        self.fixtures_dir = fixtures_dir or FIXTURES_DIR
         self._cache_dir = state_root / ("warm_cache" if self.cache_protocol.get("mode") == "warm"
                                         else "cold_cache")
         self._set_cache_path_fn = None  # resolved lazily on first use
@@ -1143,7 +1151,7 @@ class CaseRunner:
         self._seed_memory(case, run_id)
 
         registry = self.create_tool_registry()
-        fixture_queue = load_fixture_queue(case)
+        fixture_queue = load_fixture_queue(case, self.fixtures_dir)
         # Filled by _patch_tools at teardown; copied onto rr below. Pre-seeded with the
         # not-applicable reading so a run that dies before _patch_tools is entered still
         # records a defined value rather than a stale default.
@@ -2218,7 +2226,8 @@ async def _run_all(args) -> int:
 
     cfg = load_config(args.config)
     cases = load_cases(Path(args.cases) if args.cases else None)
-    problems = schema_validate(cases)
+    case_schema = Path(args.case_schema) if args.case_schema else SCHEMA_PATH
+    problems = schema_validate(cases, case_schema)
     if problems:
         print("Schema problems (first 10):")
         for p in problems[:10]:
@@ -2257,7 +2266,8 @@ async def _run_all(args) -> int:
     with apply_config(cfg):
         runner = CaseRunner(mode=mode, cfg=cfg, state_root=state_root,
                             events_log=events_log, judge=args.judge, arch=args.arch,
-                            cache_protocol=cache_protocol)
+                            cache_protocol=cache_protocol,
+                            fixtures_dir=(Path(args.fixtures_dir) if args.fixtures_dir else None))
         for repeat in range(1, args.repeat + 1):
             for case in selected:
                 run_id = f"{case.get('case_id')}#r{repeat}#{cfg.name}"
@@ -2374,6 +2384,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                         "'fc_loop' (native function-calling loop). Sets AGENT_ARCH before build.")
     p.add_argument("--cases", default=None,
                    help="path to an arbitrary case shard (.jsonl); default: benchmark/cases.jsonl")
+    p.add_argument("--fixtures-dir", default=None, metavar="PATH",
+                   help="explicit frozen fixture directory for --cases; defaults to benchmark/fixtures")
+    p.add_argument("--case-schema", default=None, metavar="PATH",
+                   help="explicit JSON schema for --cases; defaults to benchmark/schema.json")
     p.add_argument("--smoke", action="store_true", help="only smoke cases")
     p.add_argument("--limit", type=int, default=None, help="cap number of cases")
     p.add_argument("--category", default=None, help="filter by category (e.g. A_retrieval or A)")

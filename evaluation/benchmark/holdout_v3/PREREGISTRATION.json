@@ -4,8 +4,7 @@
   "formal_cases_before_authoring": 0,
   "formal_model_requests_before_authoring": 0,
   "planned_case_counts": {
-    "retrieval_hard": 60,
-    "retrieval_soft_no_result": 30,
+    "retrieval_hard": 90,
     "calculation": 30,
     "memory_write": 30,
     "clarify": 30,
@@ -24,6 +23,7 @@
     "commute_per_search_candidate": 30,
     "remember_write": 30
   },
+  "hard_constraint_slot_minimum": 30,
   "confidence_interval": "Clopper-Pearson exact binomial 95%",
   "llm_judge_role": "supplemental diagnostic only",
   "historical_sets_excluded": [

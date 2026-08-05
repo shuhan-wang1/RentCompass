@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "13068 Acorn Quay, Cloverlea, London V6 8AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-239-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£11,833/month",
+            "price_raw": 11833,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-239-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-239-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13069 Acorn Quay, Cloverlea, London V6 8AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-239-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£11,901/month",
+            "price_raw": 11901,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-239-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-239-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13070 Acorn Quay, Cloverlea, London V6 8AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 2,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-239-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£32,189/month",
+            "price_raw": 32189,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-239-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-239-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13071 Acorn Quay, Cloverlea, London V6 8AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-239-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£35,089/month",
+            "price_raw": 35089,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-239-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-239-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13072 Acorn Quay, Goldfinch Rise, London V6 8AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-239-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£37,989/month",
+            "price_raw": 37989,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-239-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-239-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13063 Acorn Quay, Cloverlea, London V6 8AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-12-15",
+            "available_from_normalized": "2026-12-15",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-239-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£40,870/month",
+            "price_raw": 40870,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-239-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-239-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13064 Acorn Quay, Cloverlea, London V6 8AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-239-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£43,770/month",
+            "price_raw": 43770,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-239-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-239-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Cloverlea",
+          "bedrooms": 1,
+          "max_budget": 11870,
+          "move_in_date": "2026-11-17",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Cloverlea.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

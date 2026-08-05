@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "13085 Beacon Quay, Dawn Common, London V7 1AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-01",
+            "available_from_normalized": "2026-09-01",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho6-240-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 1",
+            "price": "£11,862/month",
+            "price_raw": 11862,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-240-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-240-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13086 Beacon Quay, Dawn Common, London V7 1AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-01",
+            "available_from_normalized": "2026-09-01",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho6-240-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 1",
+            "price": "£11,930/month",
+            "price_raw": 11930,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-240-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-240-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13087 Beacon Quay, Dawn Common, London V7 1AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-01",
+            "available_from_normalized": "2026-09-01",
+            "bedrooms": 2,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho6-240-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 1",
+            "price": "£32,218/month",
+            "price_raw": 32218,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-240-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-240-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13088 Beacon Quay, Dawn Common, London V7 1AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-01",
+            "available_from_normalized": "2026-09-01",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho6-240-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 1",
+            "price": "£35,118/month",
+            "price_raw": 35118,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-240-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-240-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13089 Beacon Quay, Heather Quay, London V7 1AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-09-01",
+            "available_from_normalized": "2026-09-01",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho6-240-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 1",
+            "price": "£38,018/month",
+            "price_raw": 38018,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-240-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-240-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13080 Beacon Quay, Dawn Common, London V7 1AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho6-240-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 1",
+            "price": "£40,899/month",
+            "price_raw": 40899,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-240-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-240-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13081 Beacon Quay, Dawn Common, London V7 1AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-09-01",
+            "available_from_normalized": "2026-09-01",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho6-240-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 1",
+            "price": "£43,799/month",
+            "price_raw": 43799,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-240-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-240-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Dawn Common",
+          "bedrooms": 1,
+          "max_budget": 11899,
+          "move_in_date": "2026-09-01",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Dawn Common.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

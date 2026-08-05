@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12762 Gossamer Quay, Kingfisher Fields, London V6 6AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-24",
+            "available_from_normalized": "2026-09-24",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-221-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£11,311/month",
+            "price_raw": 11311,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-221-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-221-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12763 Gossamer Quay, Kingfisher Fields, London V6 6AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-24",
+            "available_from_normalized": "2026-09-24",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-221-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£11,379/month",
+            "price_raw": 11379,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-221-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-221-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12764 Gossamer Quay, Kingfisher Fields, London V6 6AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-24",
+            "available_from_normalized": "2026-09-24",
+            "bedrooms": 2,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-221-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£31,667/month",
+            "price_raw": 31667,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-221-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-221-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12765 Gossamer Quay, Kingfisher Fields, London V6 6AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-24",
+            "available_from_normalized": "2026-09-24",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-221-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£34,567/month",
+            "price_raw": 34567,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-221-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-221-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12766 Gossamer Quay, Silver Mews, London V6 6AB",
+            "area_normalized": "Silver Mews",
+            "available_from": "2026-09-24",
+            "available_from_normalized": "2026-09-24",
+            "bedrooms": 1,
+            "borough": "Silver Mews",
+            "city": "London",
+            "eval_listing_id": "ho6-221-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£37,467/month",
+            "price_raw": 37467,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-221-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-221-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12757 Gossamer Quay, Kingfisher Fields, London V6 6AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-221-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£40,348/month",
+            "price_raw": 40348,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-221-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-221-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12758 Gossamer Quay, Kingfisher Fields, London V6 6AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-24",
+            "available_from_normalized": "2026-09-24",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-221-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 6",
+            "price": "£43,248/month",
+            "price_raw": 43248,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-221-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-221-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Kingfisher Fields",
+          "bedrooms": 1,
+          "max_budget": 11348,
+          "move_in_date": "2026-09-24",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Kingfisher Fields.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Evergreen Park",
+      "bedrooms": 1,
+      "max_budget": 12044,
+      "move_in_date": "2026-09-16",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Evergreen Park.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "13017 Juniper Quay, Zenith Place, London V3 5AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-11-08",
+            "available_from_normalized": "2026-11-08",
+            "bedrooms": 1,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho6-236-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£11,746/month",
+            "price_raw": 11746,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-236-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-236-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13018 Juniper Quay, Zenith Place, London V3 5AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-11-08",
+            "available_from_normalized": "2026-11-08",
+            "bedrooms": 1,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho6-236-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£11,814/month",
+            "price_raw": 11814,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-236-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-236-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13019 Juniper Quay, Zenith Place, London V3 5AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-11-08",
+            "available_from_normalized": "2026-11-08",
+            "bedrooms": 2,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho6-236-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£32,102/month",
+            "price_raw": 32102,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-236-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-236-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13020 Juniper Quay, Zenith Place, London V3 5AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-11-08",
+            "available_from_normalized": "2026-11-08",
+            "bedrooms": 1,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho6-236-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£35,002/month",
+            "price_raw": 35002,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-236-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-236-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13021 Juniper Quay, Dewberry Vale, London V3 5AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-11-08",
+            "available_from_normalized": "2026-11-08",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho6-236-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£37,902/month",
+            "price_raw": 37902,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-236-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-236-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13012 Juniper Quay, Zenith Place, London V3 5AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-12-06",
+            "available_from_normalized": "2026-12-06",
+            "bedrooms": 1,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho6-236-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£40,783/month",
+            "price_raw": 40783,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-236-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-236-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "13013 Juniper Quay, Zenith Place, London V3 5AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-11-08",
+            "available_from_normalized": "2026-11-08",
+            "bedrooms": 1,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho6-236-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 5",
+            "price": "£43,683/month",
+            "price_raw": 43683,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-236-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-236-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Zenith Place",
+          "bedrooms": 1,
+          "max_budget": 11783,
+          "move_in_date": "2026-11-08",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Zenith Place.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

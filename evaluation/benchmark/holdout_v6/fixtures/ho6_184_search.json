@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12133 Fountain Quay, Dewberry Vale, London V5 1AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-11-12",
+            "available_from_normalized": "2026-11-12",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho6-184-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£10,238/month",
+            "price_raw": 10238,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-184-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12134 Fountain Quay, Dewberry Vale, London V5 1AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-11-12",
+            "available_from_normalized": "2026-11-12",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho6-184-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£10,306/month",
+            "price_raw": 10306,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-184-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12135 Fountain Quay, Dewberry Vale, London V5 1AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-11-12",
+            "available_from_normalized": "2026-11-12",
+            "bedrooms": 2,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho6-184-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£30,575/month",
+            "price_raw": 30575,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-184-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12136 Fountain Quay, Dewberry Vale, London V5 1AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-11-12",
+            "available_from_normalized": "2026-11-12",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho6-184-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£33,475/month",
+            "price_raw": 33475,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-184-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12137 Fountain Quay, Linden Cross, London V5 1AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-11-12",
+            "available_from_normalized": "2026-11-12",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho6-184-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£36,375/month",
+            "price_raw": 36375,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-184-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12128 Fountain Quay, Dewberry Vale, London V5 1AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-12-10",
+            "available_from_normalized": "2026-12-10",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho6-184-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£39,275/month",
+            "price_raw": 39275,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-184-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12129 Fountain Quay, Dewberry Vale, London V5 1AB",
+            "area_normalized": "Dewberry Vale",
+            "available_from": "2026-11-12",
+            "available_from_normalized": "2026-11-12",
+            "bedrooms": 1,
+            "borough": "Dewberry Vale",
+            "city": "London",
+            "eval_listing_id": "ho6-184-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 1",
+            "price": "£42,175/month",
+            "price_raw": 42175,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-184-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Dewberry Vale",
+          "bedrooms": 1,
+          "commute_destination": "King's Cross",
+          "max_budget": 10275,
+          "max_commute_time": 33,
+          "move_in_date": "2026-11-12",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Dewberry Vale.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-a",
+        "duration_minutes": 31,
+        "from_address": "12133 Fountain Quay, Dewberry Vale, London V5 1AB",
+        "origin_eval_listing_id": "ho6-184-a",
+        "to_address": "King's Cross"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-b",
+        "duration_minutes": 42,
+        "from_address": "12134 Fountain Quay, Dewberry Vale, London V5 1AB",
+        "origin_eval_listing_id": "ho6-184-b",
+        "to_address": "King's Cross"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-c",
+        "duration_minutes": 42,
+        "from_address": "12135 Fountain Quay, Dewberry Vale, London V5 1AB",
+        "origin_eval_listing_id": "ho6-184-c",
+        "to_address": "King's Cross"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-d",
+        "duration_minutes": 42,
+        "from_address": "12136 Fountain Quay, Dewberry Vale, London V5 1AB",
+        "origin_eval_listing_id": "ho6-184-d",
+        "to_address": "King's Cross"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-e",
+        "duration_minutes": 42,
+        "from_address": "12137 Fountain Quay, Linden Cross, London V5 1AB",
+        "origin_eval_listing_id": "ho6-184-e",
+        "to_address": "King's Cross"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-f",
+        "duration_minutes": 42,
+        "from_address": "12128 Fountain Quay, Dewberry Vale, London V5 1AB",
+        "origin_eval_listing_id": "ho6-184-f",
+        "to_address": "King's Cross"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-184-g",
+        "duration_minutes": 42,
+        "from_address": "12129 Fountain Quay, Dewberry Vale, London V5 1AB",
+        "origin_eval_listing_id": "ho6-184-g",
+        "to_address": "King's Cross"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

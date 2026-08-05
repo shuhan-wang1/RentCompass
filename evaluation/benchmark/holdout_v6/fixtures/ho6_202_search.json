@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12439 Lantern Quay, Verona Lock, London V5 3AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-10-17",
+            "available_from_normalized": "2026-10-17",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho6-202-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£10,760/month",
+            "price_raw": 10760,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-202-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12440 Lantern Quay, Verona Lock, London V5 3AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-10-17",
+            "available_from_normalized": "2026-10-17",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho6-202-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£10,828/month",
+            "price_raw": 10828,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-202-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12441 Lantern Quay, Verona Lock, London V5 3AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-10-17",
+            "available_from_normalized": "2026-10-17",
+            "bedrooms": 2,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho6-202-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£31,116/month",
+            "price_raw": 31116,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-202-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12442 Lantern Quay, Verona Lock, London V5 3AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-10-17",
+            "available_from_normalized": "2026-10-17",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho6-202-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£34,016/month",
+            "price_raw": 34016,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-202-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12443 Lantern Quay, Dawn Common, London V5 3AB",
+            "area_normalized": "Dawn Common",
+            "available_from": "2026-10-17",
+            "available_from_normalized": "2026-10-17",
+            "bedrooms": 1,
+            "borough": "Dawn Common",
+            "city": "London",
+            "eval_listing_id": "ho6-202-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£36,916/month",
+            "price_raw": 36916,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-202-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12434 Lantern Quay, Verona Lock, London V5 3AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-11-14",
+            "available_from_normalized": "2026-11-14",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho6-202-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£39,797/month",
+            "price_raw": 39797,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-202-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12435 Lantern Quay, Verona Lock, London V5 3AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-10-17",
+            "available_from_normalized": "2026-10-17",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho6-202-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 3",
+            "price": "£42,697/month",
+            "price_raw": 42697,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-202-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Verona Lock",
+          "bedrooms": 1,
+          "commute_destination": "Moorgate",
+          "max_budget": 10797,
+          "max_commute_time": 35,
+          "move_in_date": "2026-10-17",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Verona Lock.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-a",
+        "duration_minutes": 33,
+        "from_address": "12439 Lantern Quay, Verona Lock, London V5 3AB",
+        "origin_eval_listing_id": "ho6-202-a",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-b",
+        "duration_minutes": 44,
+        "from_address": "12440 Lantern Quay, Verona Lock, London V5 3AB",
+        "origin_eval_listing_id": "ho6-202-b",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-c",
+        "duration_minutes": 44,
+        "from_address": "12441 Lantern Quay, Verona Lock, London V5 3AB",
+        "origin_eval_listing_id": "ho6-202-c",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-d",
+        "duration_minutes": 44,
+        "from_address": "12442 Lantern Quay, Verona Lock, London V5 3AB",
+        "origin_eval_listing_id": "ho6-202-d",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-e",
+        "duration_minutes": 44,
+        "from_address": "12443 Lantern Quay, Dawn Common, London V5 3AB",
+        "origin_eval_listing_id": "ho6-202-e",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-f",
+        "duration_minutes": 44,
+        "from_address": "12434 Lantern Quay, Verona Lock, London V5 3AB",
+        "origin_eval_listing_id": "ho6-202-f",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-202-g",
+        "duration_minutes": 44,
+        "from_address": "12435 Lantern Quay, Verona Lock, London V5 3AB",
+        "origin_eval_listing_id": "ho6-202-g",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

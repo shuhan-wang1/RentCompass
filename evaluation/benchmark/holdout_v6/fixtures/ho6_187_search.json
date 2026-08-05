@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12184 Island Quay, Goldfinch Rise, London V8 4AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-187-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£10,325/month",
+            "price_raw": 10325,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-187-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12185 Island Quay, Goldfinch Rise, London V8 4AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-187-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£10,393/month",
+            "price_raw": 10393,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-187-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12186 Island Quay, Goldfinch Rise, London V8 4AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 2,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-187-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£30,662/month",
+            "price_raw": 30662,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-187-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12187 Island Quay, Goldfinch Rise, London V8 4AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-187-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£33,562/month",
+            "price_raw": 33562,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-187-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12188 Island Quay, Olive Terrace, London V8 4AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-187-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£36,462/month",
+            "price_raw": 36462,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-187-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12179 Island Quay, Goldfinch Rise, London V8 4AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-187-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£39,362/month",
+            "price_raw": 39362,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-187-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12180 Island Quay, Goldfinch Rise, London V8 4AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-187-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 4",
+            "price": "£42,262/month",
+            "price_raw": 42262,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-187-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Goldfinch Rise",
+          "bedrooms": 1,
+          "commute_destination": "Paddington",
+          "max_budget": 10362,
+          "max_commute_time": 36,
+          "move_in_date": "2026-09-02",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Goldfinch Rise.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-a",
+        "duration_minutes": 34,
+        "from_address": "12184 Island Quay, Goldfinch Rise, London V8 4AB",
+        "origin_eval_listing_id": "ho6-187-a",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-b",
+        "duration_minutes": 45,
+        "from_address": "12185 Island Quay, Goldfinch Rise, London V8 4AB",
+        "origin_eval_listing_id": "ho6-187-b",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-c",
+        "duration_minutes": 45,
+        "from_address": "12186 Island Quay, Goldfinch Rise, London V8 4AB",
+        "origin_eval_listing_id": "ho6-187-c",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-d",
+        "duration_minutes": 45,
+        "from_address": "12187 Island Quay, Goldfinch Rise, London V8 4AB",
+        "origin_eval_listing_id": "ho6-187-d",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-e",
+        "duration_minutes": 45,
+        "from_address": "12188 Island Quay, Olive Terrace, London V8 4AB",
+        "origin_eval_listing_id": "ho6-187-e",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-f",
+        "duration_minutes": 45,
+        "from_address": "12179 Island Quay, Goldfinch Rise, London V8 4AB",
+        "origin_eval_listing_id": "ho6-187-f",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-187-g",
+        "duration_minutes": 45,
+        "from_address": "12180 Island Quay, Goldfinch Rise, London V8 4AB",
+        "origin_eval_listing_id": "ho6-187-g",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Yewtree Row",
+      "bedrooms": 1,
+      "max_budget": 12624,
+      "move_in_date": "2026-11-15",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Yewtree Row.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

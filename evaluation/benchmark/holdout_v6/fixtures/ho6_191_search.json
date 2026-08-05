@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12252 Acorn Quay, Kingfisher Fields, London V3 8AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-191-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£10,441/month",
+            "price_raw": 10441,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-191-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12253 Acorn Quay, Kingfisher Fields, London V3 8AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-191-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£10,509/month",
+            "price_raw": 10509,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-191-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12254 Acorn Quay, Kingfisher Fields, London V3 8AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 2,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-191-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£30,778/month",
+            "price_raw": 30778,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-191-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12255 Acorn Quay, Kingfisher Fields, London V3 8AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-191-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£33,678/month",
+            "price_raw": 33678,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-191-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12256 Acorn Quay, Silver Mews, London V3 8AB",
+            "area_normalized": "Silver Mews",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Silver Mews",
+            "city": "London",
+            "eval_listing_id": "ho6-191-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£36,578/month",
+            "price_raw": 36578,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-191-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12247 Acorn Quay, Kingfisher Fields, London V3 8AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-10-12",
+            "available_from_normalized": "2026-10-12",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-191-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£39,478/month",
+            "price_raw": 39478,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-191-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12248 Acorn Quay, Kingfisher Fields, London V3 8AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-191-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£42,378/month",
+            "price_raw": 42378,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-191-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Kingfisher Fields",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 10478,
+          "max_commute_time": 40,
+          "move_in_date": "2026-09-14",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Kingfisher Fields.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-a",
+        "duration_minutes": 38,
+        "from_address": "12252 Acorn Quay, Kingfisher Fields, London V3 8AB",
+        "origin_eval_listing_id": "ho6-191-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-b",
+        "duration_minutes": 49,
+        "from_address": "12253 Acorn Quay, Kingfisher Fields, London V3 8AB",
+        "origin_eval_listing_id": "ho6-191-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-c",
+        "duration_minutes": 49,
+        "from_address": "12254 Acorn Quay, Kingfisher Fields, London V3 8AB",
+        "origin_eval_listing_id": "ho6-191-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-d",
+        "duration_minutes": 49,
+        "from_address": "12255 Acorn Quay, Kingfisher Fields, London V3 8AB",
+        "origin_eval_listing_id": "ho6-191-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-e",
+        "duration_minutes": 49,
+        "from_address": "12256 Acorn Quay, Silver Mews, London V3 8AB",
+        "origin_eval_listing_id": "ho6-191-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-f",
+        "duration_minutes": 49,
+        "from_address": "12247 Acorn Quay, Kingfisher Fields, London V3 8AB",
+        "origin_eval_listing_id": "ho6-191-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-191-g",
+        "duration_minutes": 49,
+        "from_address": "12248 Acorn Quay, Kingfisher Fields, London V3 8AB",
+        "origin_eval_listing_id": "ho6-191-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

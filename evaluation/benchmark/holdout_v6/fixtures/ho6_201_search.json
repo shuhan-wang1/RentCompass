@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12422 Kite Quay, Umber Hill, London V4 2AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-201-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£10,731/month",
+            "price_raw": 10731,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-201-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12423 Kite Quay, Umber Hill, London V4 2AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-201-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£10,799/month",
+            "price_raw": 10799,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-201-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12424 Kite Quay, Umber Hill, London V4 2AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 2,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-201-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£31,087/month",
+            "price_raw": 31087,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-201-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12425 Kite Quay, Umber Hill, London V4 2AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-201-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£33,987/month",
+            "price_raw": 33987,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-201-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12426 Kite Quay, Cloverlea, London V4 2AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-201-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£36,887/month",
+            "price_raw": 36887,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-201-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12417 Kite Quay, Umber Hill, London V4 2AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-11-11",
+            "available_from_normalized": "2026-11-11",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-201-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£39,768/month",
+            "price_raw": 39768,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-201-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12418 Kite Quay, Umber Hill, London V4 2AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-10-14",
+            "available_from_normalized": "2026-10-14",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-201-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£42,668/month",
+            "price_raw": 42668,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-201-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Umber Hill",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 10768,
+          "max_commute_time": 34,
+          "move_in_date": "2026-10-14",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Umber Hill.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-a",
+        "duration_minutes": 32,
+        "from_address": "12422 Kite Quay, Umber Hill, London V4 2AB",
+        "origin_eval_listing_id": "ho6-201-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-b",
+        "duration_minutes": 43,
+        "from_address": "12423 Kite Quay, Umber Hill, London V4 2AB",
+        "origin_eval_listing_id": "ho6-201-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-c",
+        "duration_minutes": 43,
+        "from_address": "12424 Kite Quay, Umber Hill, London V4 2AB",
+        "origin_eval_listing_id": "ho6-201-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-d",
+        "duration_minutes": 43,
+        "from_address": "12425 Kite Quay, Umber Hill, London V4 2AB",
+        "origin_eval_listing_id": "ho6-201-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-e",
+        "duration_minutes": 43,
+        "from_address": "12426 Kite Quay, Cloverlea, London V4 2AB",
+        "origin_eval_listing_id": "ho6-201-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-f",
+        "duration_minutes": 43,
+        "from_address": "12417 Kite Quay, Umber Hill, London V4 2AB",
+        "origin_eval_listing_id": "ho6-201-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-201-g",
+        "duration_minutes": 43,
+        "from_address": "12418 Kite Quay, Umber Hill, London V4 2AB",
+        "origin_eval_listing_id": "ho6-201-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

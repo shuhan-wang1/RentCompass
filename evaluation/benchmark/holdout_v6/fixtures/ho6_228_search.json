@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12881 Beacon Quay, Redwood Bay, London V4 5AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho6-228-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£11,514/month",
+            "price_raw": 11514,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-228-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-228-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12882 Beacon Quay, Redwood Bay, London V4 5AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho6-228-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£11,582/month",
+            "price_raw": 11582,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-228-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-228-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12883 Beacon Quay, Redwood Bay, London V4 5AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 2,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho6-228-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£31,870/month",
+            "price_raw": 31870,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-228-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-228-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12884 Beacon Quay, Redwood Bay, London V4 5AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho6-228-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£34,770/month",
+            "price_raw": 34770,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-228-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-228-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12885 Beacon Quay, Zenith Place, London V4 5AB",
+            "area_normalized": "Zenith Place",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 1,
+            "borough": "Zenith Place",
+            "city": "London",
+            "eval_listing_id": "ho6-228-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£37,670/month",
+            "price_raw": 37670,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-228-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-228-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12876 Beacon Quay, Redwood Bay, London V4 5AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-11-12",
+            "available_from_normalized": "2026-11-12",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho6-228-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£40,551/month",
+            "price_raw": 40551,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-228-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-228-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12877 Beacon Quay, Redwood Bay, London V4 5AB",
+            "area_normalized": "Redwood Bay",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 1,
+            "borough": "Redwood Bay",
+            "city": "London",
+            "eval_listing_id": "ho6-228-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 5",
+            "price": "£43,451/month",
+            "price_raw": 43451,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-228-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-228-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Redwood Bay",
+          "bedrooms": 1,
+          "max_budget": 11551,
+          "move_in_date": "2026-10-15",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Redwood Bay.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Wildrose Ford",
+      "bedrooms": 1,
+      "max_budget": 12566,
+      "move_in_date": "2026-11-09",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Wildrose Ford.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

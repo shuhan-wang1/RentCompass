@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12524 Estuary Quay, Amber Brook, London V1 8AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho6-207-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 8",
+            "price": "£10,905/month",
+            "price_raw": 10905,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-207-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12525 Estuary Quay, Amber Brook, London V1 8AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho6-207-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 8",
+            "price": "£10,973/month",
+            "price_raw": 10973,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-207-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12526 Estuary Quay, Amber Brook, London V1 8AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 2,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho6-207-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 8",
+            "price": "£31,261/month",
+            "price_raw": 31261,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-207-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12527 Estuary Quay, Amber Brook, London V1 8AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho6-207-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 8",
+            "price": "£34,161/month",
+            "price_raw": 34161,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-207-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12528 Estuary Quay, Evergreen Park, London V1 8AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho6-207-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 8",
+            "price": "£37,061/month",
+            "price_raw": 37061,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-207-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12519 Estuary Quay, Amber Brook, London V1 8AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-11-29",
+            "available_from_normalized": "2026-11-29",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho6-207-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 8",
+            "price": "£39,942/month",
+            "price_raw": 39942,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-207-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12520 Estuary Quay, Amber Brook, London V1 8AB",
+            "area_normalized": "Amber Brook",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Amber Brook",
+            "city": "London",
+            "eval_listing_id": "ho6-207-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 8",
+            "price": "£42,842/month",
+            "price_raw": 42842,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-207-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Amber Brook",
+          "bedrooms": 1,
+          "commute_destination": "Paddington",
+          "max_budget": 10942,
+          "max_commute_time": 40,
+          "move_in_date": "2026-11-01",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Amber Brook.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-a",
+        "duration_minutes": 38,
+        "from_address": "12524 Estuary Quay, Amber Brook, London V1 8AB",
+        "origin_eval_listing_id": "ho6-207-a",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-b",
+        "duration_minutes": 49,
+        "from_address": "12525 Estuary Quay, Amber Brook, London V1 8AB",
+        "origin_eval_listing_id": "ho6-207-b",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-c",
+        "duration_minutes": 49,
+        "from_address": "12526 Estuary Quay, Amber Brook, London V1 8AB",
+        "origin_eval_listing_id": "ho6-207-c",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-d",
+        "duration_minutes": 49,
+        "from_address": "12527 Estuary Quay, Amber Brook, London V1 8AB",
+        "origin_eval_listing_id": "ho6-207-d",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-e",
+        "duration_minutes": 49,
+        "from_address": "12528 Estuary Quay, Evergreen Park, London V1 8AB",
+        "origin_eval_listing_id": "ho6-207-e",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-f",
+        "duration_minutes": 49,
+        "from_address": "12519 Estuary Quay, Amber Brook, London V1 8AB",
+        "origin_eval_listing_id": "ho6-207-f",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-207-g",
+        "duration_minutes": 49,
+        "from_address": "12520 Estuary Quay, Amber Brook, London V1 8AB",
+        "origin_eval_listing_id": "ho6-207-g",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

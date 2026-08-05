@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Quill End",
+      "bedrooms": 1,
+      "max_budget": 12392,
+      "move_in_date": "2026-10-22",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Quill End.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12915 Dovetail Quay, Tansy Gardens, London V6 7AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho6-230-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 7",
+            "price": "£11,572/month",
+            "price_raw": 11572,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-230-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-230-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12916 Dovetail Quay, Tansy Gardens, London V6 7AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho6-230-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 7",
+            "price": "£11,640/month",
+            "price_raw": 11640,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-230-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-230-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12917 Dovetail Quay, Tansy Gardens, London V6 7AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 2,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho6-230-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 7",
+            "price": "£31,928/month",
+            "price_raw": 31928,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-230-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-230-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12918 Dovetail Quay, Tansy Gardens, London V6 7AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho6-230-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 7",
+            "price": "£34,828/month",
+            "price_raw": 34828,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-230-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-230-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12919 Dovetail Quay, Bramble Point, London V6 7AB",
+            "area_normalized": "Bramble Point",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 1,
+            "borough": "Bramble Point",
+            "city": "London",
+            "eval_listing_id": "ho6-230-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 7",
+            "price": "£37,728/month",
+            "price_raw": 37728,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-230-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-230-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12910 Dovetail Quay, Tansy Gardens, London V6 7AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-11-18",
+            "available_from_normalized": "2026-11-18",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho6-230-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 7",
+            "price": "£40,609/month",
+            "price_raw": 40609,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-230-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-230-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12911 Dovetail Quay, Tansy Gardens, London V6 7AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho6-230-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 7",
+            "price": "£43,509/month",
+            "price_raw": 43509,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-230-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-230-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Tansy Gardens",
+          "bedrooms": 1,
+          "max_budget": 11609,
+          "move_in_date": "2026-10-21",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Tansy Gardens.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

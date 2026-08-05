@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12150 Gossamer Quay, Evergreen Park, London V6 2AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-11-15",
+            "available_from_normalized": "2026-11-15",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho6-185-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 2",
+            "price": "£10,267/month",
+            "price_raw": 10267,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-185-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12151 Gossamer Quay, Evergreen Park, London V6 2AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-11-15",
+            "available_from_normalized": "2026-11-15",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho6-185-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 2",
+            "price": "£10,335/month",
+            "price_raw": 10335,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-185-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12152 Gossamer Quay, Evergreen Park, London V6 2AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-11-15",
+            "available_from_normalized": "2026-11-15",
+            "bedrooms": 2,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho6-185-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 2",
+            "price": "£30,604/month",
+            "price_raw": 30604,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-185-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12153 Gossamer Quay, Evergreen Park, London V6 2AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-11-15",
+            "available_from_normalized": "2026-11-15",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho6-185-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 2",
+            "price": "£33,504/month",
+            "price_raw": 33504,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-185-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12154 Gossamer Quay, Marigold Yard, London V6 2AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-11-15",
+            "available_from_normalized": "2026-11-15",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-185-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 2",
+            "price": "£36,404/month",
+            "price_raw": 36404,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-185-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12145 Gossamer Quay, Evergreen Park, London V6 2AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-12-13",
+            "available_from_normalized": "2026-12-13",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho6-185-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 2",
+            "price": "£39,304/month",
+            "price_raw": 39304,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-185-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12146 Gossamer Quay, Evergreen Park, London V6 2AB",
+            "area_normalized": "Evergreen Park",
+            "available_from": "2026-11-15",
+            "available_from_normalized": "2026-11-15",
+            "bedrooms": 1,
+            "borough": "Evergreen Park",
+            "city": "London",
+            "eval_listing_id": "ho6-185-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 2",
+            "price": "£42,204/month",
+            "price_raw": 42204,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-185-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Evergreen Park",
+          "bedrooms": 1,
+          "commute_destination": "Victoria",
+          "max_budget": 10304,
+          "max_commute_time": 34,
+          "move_in_date": "2026-11-15",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Evergreen Park.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-a",
+        "duration_minutes": 32,
+        "from_address": "12150 Gossamer Quay, Evergreen Park, London V6 2AB",
+        "origin_eval_listing_id": "ho6-185-a",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-b",
+        "duration_minutes": 43,
+        "from_address": "12151 Gossamer Quay, Evergreen Park, London V6 2AB",
+        "origin_eval_listing_id": "ho6-185-b",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-c",
+        "duration_minutes": 43,
+        "from_address": "12152 Gossamer Quay, Evergreen Park, London V6 2AB",
+        "origin_eval_listing_id": "ho6-185-c",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-d",
+        "duration_minutes": 43,
+        "from_address": "12153 Gossamer Quay, Evergreen Park, London V6 2AB",
+        "origin_eval_listing_id": "ho6-185-d",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-e",
+        "duration_minutes": 43,
+        "from_address": "12154 Gossamer Quay, Marigold Yard, London V6 2AB",
+        "origin_eval_listing_id": "ho6-185-e",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-f",
+        "duration_minutes": 43,
+        "from_address": "12145 Gossamer Quay, Evergreen Park, London V6 2AB",
+        "origin_eval_listing_id": "ho6-185-f",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-185-g",
+        "duration_minutes": 43,
+        "from_address": "12146 Gossamer Quay, Evergreen Park, London V6 2AB",
+        "origin_eval_listing_id": "ho6-185-g",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

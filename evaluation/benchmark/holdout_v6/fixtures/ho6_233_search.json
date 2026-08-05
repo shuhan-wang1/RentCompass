@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12966 Gossamer Quay, Wildrose Ford, London V9 2AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-30",
+            "available_from_normalized": "2026-10-30",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-233-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£11,659/month",
+            "price_raw": 11659,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-233-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-233-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12967 Gossamer Quay, Wildrose Ford, London V9 2AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-30",
+            "available_from_normalized": "2026-10-30",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-233-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£11,727/month",
+            "price_raw": 11727,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-233-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-233-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12968 Gossamer Quay, Wildrose Ford, London V9 2AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-30",
+            "available_from_normalized": "2026-10-30",
+            "bedrooms": 2,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-233-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£32,015/month",
+            "price_raw": 32015,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-233-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-233-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12969 Gossamer Quay, Wildrose Ford, London V9 2AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-30",
+            "available_from_normalized": "2026-10-30",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-233-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£34,915/month",
+            "price_raw": 34915,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-233-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-233-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12970 Gossamer Quay, Alabaster Reach, London V9 2AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-10-30",
+            "available_from_normalized": "2026-10-30",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-233-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£37,815/month",
+            "price_raw": 37815,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-233-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-233-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12961 Gossamer Quay, Wildrose Ford, London V9 2AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-11-27",
+            "available_from_normalized": "2026-11-27",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-233-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£40,696/month",
+            "price_raw": 40696,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-233-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-233-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12962 Gossamer Quay, Wildrose Ford, London V9 2AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-30",
+            "available_from_normalized": "2026-10-30",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-233-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£43,596/month",
+            "price_raw": 43596,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-233-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-233-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Wildrose Ford",
+          "bedrooms": 1,
+          "max_budget": 11696,
+          "move_in_date": "2026-10-30",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Wildrose Ford.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

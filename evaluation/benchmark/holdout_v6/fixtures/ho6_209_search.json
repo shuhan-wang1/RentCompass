@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12558 Gossamer Quay, Cloverlea, London V3 2AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-07",
+            "available_from_normalized": "2026-11-07",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-209-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 2",
+            "price": "£10,963/month",
+            "price_raw": 10963,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-209-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12559 Gossamer Quay, Cloverlea, London V3 2AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-07",
+            "available_from_normalized": "2026-11-07",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-209-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 2",
+            "price": "£11,031/month",
+            "price_raw": 11031,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-209-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12560 Gossamer Quay, Cloverlea, London V3 2AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-07",
+            "available_from_normalized": "2026-11-07",
+            "bedrooms": 2,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-209-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 2",
+            "price": "£31,319/month",
+            "price_raw": 31319,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-209-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12561 Gossamer Quay, Cloverlea, London V3 2AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-07",
+            "available_from_normalized": "2026-11-07",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-209-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 2",
+            "price": "£34,219/month",
+            "price_raw": 34219,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-209-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12562 Gossamer Quay, Goldfinch Rise, London V3 2AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-11-07",
+            "available_from_normalized": "2026-11-07",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-209-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 2",
+            "price": "£37,119/month",
+            "price_raw": 37119,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-209-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12553 Gossamer Quay, Cloverlea, London V3 2AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-12-05",
+            "available_from_normalized": "2026-12-05",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-209-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 2",
+            "price": "£40,000/month",
+            "price_raw": 40000,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-209-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12554 Gossamer Quay, Cloverlea, London V3 2AB",
+            "area_normalized": "Cloverlea",
+            "available_from": "2026-11-07",
+            "available_from_normalized": "2026-11-07",
+            "bedrooms": 1,
+            "borough": "Cloverlea",
+            "city": "London",
+            "eval_listing_id": "ho6-209-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 2",
+            "price": "£42,900/month",
+            "price_raw": 42900,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-209-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Cloverlea",
+          "bedrooms": 1,
+          "commute_destination": "Farringdon",
+          "max_budget": 11000,
+          "max_commute_time": 26,
+          "move_in_date": "2026-11-07",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Cloverlea.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-a",
+        "duration_minutes": 24,
+        "from_address": "12558 Gossamer Quay, Cloverlea, London V3 2AB",
+        "origin_eval_listing_id": "ho6-209-a",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-b",
+        "duration_minutes": 35,
+        "from_address": "12559 Gossamer Quay, Cloverlea, London V3 2AB",
+        "origin_eval_listing_id": "ho6-209-b",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-c",
+        "duration_minutes": 35,
+        "from_address": "12560 Gossamer Quay, Cloverlea, London V3 2AB",
+        "origin_eval_listing_id": "ho6-209-c",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-d",
+        "duration_minutes": 35,
+        "from_address": "12561 Gossamer Quay, Cloverlea, London V3 2AB",
+        "origin_eval_listing_id": "ho6-209-d",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-e",
+        "duration_minutes": 35,
+        "from_address": "12562 Gossamer Quay, Goldfinch Rise, London V3 2AB",
+        "origin_eval_listing_id": "ho6-209-e",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-f",
+        "duration_minutes": 35,
+        "from_address": "12553 Gossamer Quay, Cloverlea, London V3 2AB",
+        "origin_eval_listing_id": "ho6-209-f",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-209-g",
+        "duration_minutes": 35,
+        "from_address": "12554 Gossamer Quay, Cloverlea, London V3 2AB",
+        "origin_eval_listing_id": "ho6-209-g",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

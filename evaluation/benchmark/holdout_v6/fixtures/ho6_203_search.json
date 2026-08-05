@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12456 Acorn Quay, Wildrose Ford, London V6 4AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-203-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£10,789/month",
+            "price_raw": 10789,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-203-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12457 Acorn Quay, Wildrose Ford, London V6 4AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-203-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£10,857/month",
+            "price_raw": 10857,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-203-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12458 Acorn Quay, Wildrose Ford, London V6 4AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 2,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-203-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£31,145/month",
+            "price_raw": 31145,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-203-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12459 Acorn Quay, Wildrose Ford, London V6 4AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-203-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£34,045/month",
+            "price_raw": 34045,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-203-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12460 Acorn Quay, Alabaster Reach, London V6 4AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-203-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£36,945/month",
+            "price_raw": 36945,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-203-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12451 Acorn Quay, Wildrose Ford, London V6 4AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-11-17",
+            "available_from_normalized": "2026-11-17",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-203-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£39,826/month",
+            "price_raw": 39826,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-203-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12452 Acorn Quay, Wildrose Ford, London V6 4AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-203-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 4",
+            "price": "£42,726/month",
+            "price_raw": 42726,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-203-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Wildrose Ford",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 10826,
+          "max_commute_time": 36,
+          "move_in_date": "2026-10-20",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Wildrose Ford.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-a",
+        "duration_minutes": 34,
+        "from_address": "12456 Acorn Quay, Wildrose Ford, London V6 4AB",
+        "origin_eval_listing_id": "ho6-203-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-b",
+        "duration_minutes": 45,
+        "from_address": "12457 Acorn Quay, Wildrose Ford, London V6 4AB",
+        "origin_eval_listing_id": "ho6-203-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-c",
+        "duration_minutes": 45,
+        "from_address": "12458 Acorn Quay, Wildrose Ford, London V6 4AB",
+        "origin_eval_listing_id": "ho6-203-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-d",
+        "duration_minutes": 45,
+        "from_address": "12459 Acorn Quay, Wildrose Ford, London V6 4AB",
+        "origin_eval_listing_id": "ho6-203-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-e",
+        "duration_minutes": 45,
+        "from_address": "12460 Acorn Quay, Alabaster Reach, London V6 4AB",
+        "origin_eval_listing_id": "ho6-203-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-f",
+        "duration_minutes": 45,
+        "from_address": "12451 Acorn Quay, Wildrose Ford, London V6 4AB",
+        "origin_eval_listing_id": "ho6-203-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-203-g",
+        "duration_minutes": 45,
+        "from_address": "12452 Acorn Quay, Wildrose Ford, London V6 4AB",
+        "origin_eval_listing_id": "ho6-203-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

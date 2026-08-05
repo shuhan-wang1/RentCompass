@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12337 Fountain Quay, Poppywick, London V8 5AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho6-196-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£10,586/month",
+            "price_raw": 10586,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-196-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12338 Fountain Quay, Poppywick, London V8 5AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho6-196-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£10,654/month",
+            "price_raw": 10654,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-196-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12339 Fountain Quay, Poppywick, London V8 5AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 2,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho6-196-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£30,923/month",
+            "price_raw": 30923,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-196-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12340 Fountain Quay, Poppywick, London V8 5AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho6-196-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£33,823/month",
+            "price_raw": 33823,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-196-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12341 Fountain Quay, Xenia Court, London V8 5AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho6-196-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£36,723/month",
+            "price_raw": 36723,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-196-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12332 Fountain Quay, Poppywick, London V8 5AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-10-27",
+            "available_from_normalized": "2026-10-27",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho6-196-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£39,623/month",
+            "price_raw": 39623,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-196-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12333 Fountain Quay, Poppywick, London V8 5AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-09-29",
+            "available_from_normalized": "2026-09-29",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho6-196-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£42,523/month",
+            "price_raw": 42523,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-196-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Poppywick",
+          "bedrooms": 1,
+          "commute_destination": "London Bridge",
+          "max_budget": 10623,
+          "max_commute_time": 29,
+          "move_in_date": "2026-09-29",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Poppywick.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-a",
+        "duration_minutes": 27,
+        "from_address": "12337 Fountain Quay, Poppywick, London V8 5AB",
+        "origin_eval_listing_id": "ho6-196-a",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-b",
+        "duration_minutes": 38,
+        "from_address": "12338 Fountain Quay, Poppywick, London V8 5AB",
+        "origin_eval_listing_id": "ho6-196-b",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-c",
+        "duration_minutes": 38,
+        "from_address": "12339 Fountain Quay, Poppywick, London V8 5AB",
+        "origin_eval_listing_id": "ho6-196-c",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-d",
+        "duration_minutes": 38,
+        "from_address": "12340 Fountain Quay, Poppywick, London V8 5AB",
+        "origin_eval_listing_id": "ho6-196-d",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-e",
+        "duration_minutes": 38,
+        "from_address": "12341 Fountain Quay, Xenia Court, London V8 5AB",
+        "origin_eval_listing_id": "ho6-196-e",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-f",
+        "duration_minutes": 38,
+        "from_address": "12332 Fountain Quay, Poppywick, London V8 5AB",
+        "origin_eval_listing_id": "ho6-196-f",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-196-g",
+        "duration_minutes": 38,
+        "from_address": "12333 Fountain Quay, Poppywick, London V8 5AB",
+        "origin_eval_listing_id": "ho6-196-g",
+        "to_address": "London Bridge"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

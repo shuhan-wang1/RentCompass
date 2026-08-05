@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12320 Estuary Quay, Olive Terrace, London V7 4AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-195-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£10,557/month",
+            "price_raw": 10557,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-195-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12321 Estuary Quay, Olive Terrace, London V7 4AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-195-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£10,625/month",
+            "price_raw": 10625,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-195-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12322 Estuary Quay, Olive Terrace, London V7 4AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 2,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-195-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£30,894/month",
+            "price_raw": 30894,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-195-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12323 Estuary Quay, Olive Terrace, London V7 4AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-195-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£33,794/month",
+            "price_raw": 33794,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-195-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12324 Estuary Quay, Wildrose Ford, London V7 4AB",
+            "area_normalized": "Wildrose Ford",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Wildrose Ford",
+            "city": "London",
+            "eval_listing_id": "ho6-195-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£36,694/month",
+            "price_raw": 36694,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-195-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12315 Estuary Quay, Olive Terrace, London V7 4AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-10-24",
+            "available_from_normalized": "2026-10-24",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-195-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£39,594/month",
+            "price_raw": 39594,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-195-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12316 Estuary Quay, Olive Terrace, London V7 4AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-195-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£42,494/month",
+            "price_raw": 42494,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-195-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Olive Terrace",
+          "bedrooms": 1,
+          "commute_destination": "Victoria",
+          "max_budget": 10594,
+          "max_commute_time": 28,
+          "move_in_date": "2026-09-26",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Olive Terrace.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-a",
+        "duration_minutes": 26,
+        "from_address": "12320 Estuary Quay, Olive Terrace, London V7 4AB",
+        "origin_eval_listing_id": "ho6-195-a",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-b",
+        "duration_minutes": 37,
+        "from_address": "12321 Estuary Quay, Olive Terrace, London V7 4AB",
+        "origin_eval_listing_id": "ho6-195-b",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-c",
+        "duration_minutes": 37,
+        "from_address": "12322 Estuary Quay, Olive Terrace, London V7 4AB",
+        "origin_eval_listing_id": "ho6-195-c",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-d",
+        "duration_minutes": 37,
+        "from_address": "12323 Estuary Quay, Olive Terrace, London V7 4AB",
+        "origin_eval_listing_id": "ho6-195-d",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-e",
+        "duration_minutes": 37,
+        "from_address": "12324 Estuary Quay, Wildrose Ford, London V7 4AB",
+        "origin_eval_listing_id": "ho6-195-e",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-f",
+        "duration_minutes": 37,
+        "from_address": "12315 Estuary Quay, Olive Terrace, London V7 4AB",
+        "origin_eval_listing_id": "ho6-195-f",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-195-g",
+        "duration_minutes": 37,
+        "from_address": "12316 Estuary Quay, Olive Terrace, London V7 4AB",
+        "origin_eval_listing_id": "ho6-195-g",
+        "to_address": "Victoria"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

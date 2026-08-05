@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12201 Juniper Quay, Heather Quay, London V9 5AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho6-188-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£10,354/month",
+            "price_raw": 10354,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-188-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12202 Juniper Quay, Heather Quay, London V9 5AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho6-188-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£10,422/month",
+            "price_raw": 10422,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-188-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12203 Juniper Quay, Heather Quay, London V9 5AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 2,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho6-188-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£30,691/month",
+            "price_raw": 30691,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-188-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12204 Juniper Quay, Heather Quay, London V9 5AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho6-188-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£33,591/month",
+            "price_raw": 33591,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-188-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12205 Juniper Quay, Poppywick, London V9 5AB",
+            "area_normalized": "Poppywick",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Poppywick",
+            "city": "London",
+            "eval_listing_id": "ho6-188-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£36,491/month",
+            "price_raw": 36491,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-188-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12196 Juniper Quay, Heather Quay, London V9 5AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho6-188-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£39,391/month",
+            "price_raw": 39391,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-188-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12197 Juniper Quay, Heather Quay, London V9 5AB",
+            "area_normalized": "Heather Quay",
+            "available_from": "2026-09-05",
+            "available_from_normalized": "2026-09-05",
+            "bedrooms": 1,
+            "borough": "Heather Quay",
+            "city": "London",
+            "eval_listing_id": "ho6-188-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£42,291/month",
+            "price_raw": 42291,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-188-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Heather Quay",
+          "bedrooms": 1,
+          "commute_destination": "Canary Wharf",
+          "max_budget": 10391,
+          "max_commute_time": 37,
+          "move_in_date": "2026-09-05",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Heather Quay.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-a",
+        "duration_minutes": 35,
+        "from_address": "12201 Juniper Quay, Heather Quay, London V9 5AB",
+        "origin_eval_listing_id": "ho6-188-a",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-b",
+        "duration_minutes": 46,
+        "from_address": "12202 Juniper Quay, Heather Quay, London V9 5AB",
+        "origin_eval_listing_id": "ho6-188-b",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-c",
+        "duration_minutes": 46,
+        "from_address": "12203 Juniper Quay, Heather Quay, London V9 5AB",
+        "origin_eval_listing_id": "ho6-188-c",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-d",
+        "duration_minutes": 46,
+        "from_address": "12204 Juniper Quay, Heather Quay, London V9 5AB",
+        "origin_eval_listing_id": "ho6-188-d",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-e",
+        "duration_minutes": 46,
+        "from_address": "12205 Juniper Quay, Poppywick, London V9 5AB",
+        "origin_eval_listing_id": "ho6-188-e",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-f",
+        "duration_minutes": 46,
+        "from_address": "12196 Juniper Quay, Heather Quay, London V9 5AB",
+        "origin_eval_listing_id": "ho6-188-f",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-188-g",
+        "duration_minutes": 46,
+        "from_address": "12197 Juniper Quay, Heather Quay, London V9 5AB",
+        "origin_eval_listing_id": "ho6-188-g",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

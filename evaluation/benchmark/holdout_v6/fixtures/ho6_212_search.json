@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12609 Juniper Quay, Blackthorn Grove, London V6 5AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-212-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 5",
+            "price": "£11,050/month",
+            "price_raw": 11050,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-212-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-212-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12610 Juniper Quay, Blackthorn Grove, London V6 5AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-212-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 5",
+            "price": "£11,118/month",
+            "price_raw": 11118,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-212-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-212-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12611 Juniper Quay, Blackthorn Grove, London V6 5AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 2,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-212-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 5",
+            "price": "£31,406/month",
+            "price_raw": 31406,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-212-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-212-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12612 Juniper Quay, Blackthorn Grove, London V6 5AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-212-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 5",
+            "price": "£34,306/month",
+            "price_raw": 34306,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-212-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-212-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12613 Juniper Quay, Jet Hollow, London V6 5AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho6-212-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 5",
+            "price": "£37,206/month",
+            "price_raw": 37206,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-212-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-212-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12604 Juniper Quay, Blackthorn Grove, London V6 5AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-12-14",
+            "available_from_normalized": "2026-12-14",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-212-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 5",
+            "price": "£40,087/month",
+            "price_raw": 40087,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-212-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-212-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12605 Juniper Quay, Blackthorn Grove, London V6 5AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-212-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 5",
+            "price": "£42,987/month",
+            "price_raw": 42987,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-212-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-212-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Blackthorn Grove",
+          "bedrooms": 1,
+          "max_budget": 11087,
+          "move_in_date": "2026-11-16",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Blackthorn Grove.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

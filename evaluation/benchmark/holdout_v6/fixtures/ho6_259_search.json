@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Silver Mews",
+      "bedrooms": 1,
+      "max_budget": 12450,
+      "move_in_date": "2026-10-28",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Silver Mews.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

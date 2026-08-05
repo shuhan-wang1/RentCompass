@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12694 Crescent Quay, Goldfinch Rise, London V2 2AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-217-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£11,195/month",
+            "price_raw": 11195,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-217-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-217-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12695 Crescent Quay, Goldfinch Rise, London V2 2AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-217-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£11,263/month",
+            "price_raw": 11263,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-217-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-217-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12696 Crescent Quay, Goldfinch Rise, London V2 2AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 2,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-217-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£31,551/month",
+            "price_raw": 31551,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-217-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-217-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12697 Crescent Quay, Goldfinch Rise, London V2 2AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-217-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£34,451/month",
+            "price_raw": 34451,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-217-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-217-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12698 Crescent Quay, Olive Terrace, London V2 2AB",
+            "area_normalized": "Olive Terrace",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Olive Terrace",
+            "city": "London",
+            "eval_listing_id": "ho6-217-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£37,351/month",
+            "price_raw": 37351,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-217-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-217-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12689 Crescent Quay, Goldfinch Rise, London V2 2AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-217-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£40,232/month",
+            "price_raw": 40232,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-217-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-217-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12690 Crescent Quay, Goldfinch Rise, London V2 2AB",
+            "area_normalized": "Goldfinch Rise",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Goldfinch Rise",
+            "city": "London",
+            "eval_listing_id": "ho6-217-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£43,132/month",
+            "price_raw": 43132,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-217-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-217-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Goldfinch Rise",
+          "bedrooms": 1,
+          "max_budget": 11232,
+          "move_in_date": "2026-09-12",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Goldfinch Rise.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

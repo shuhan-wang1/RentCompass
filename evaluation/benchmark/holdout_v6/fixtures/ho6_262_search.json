@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Verona Lock",
+      "bedrooms": 1,
+      "max_budget": 12537,
+      "move_in_date": "2026-11-06",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Verona Lock.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12099 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-182-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£10,180/month",
+            "price_raw": 10180,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-182-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12100 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-182-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£10,248/month",
+            "price_raw": 10248,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-182-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12101 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 2,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-182-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£30,517/month",
+            "price_raw": 30517,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-182-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12102 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-182-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£33,417/month",
+            "price_raw": 33417,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-182-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12103 Dovetail Quay, Jet Hollow, London V3 7AB",
+            "area_normalized": "Jet Hollow",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Jet Hollow",
+            "city": "London",
+            "eval_listing_id": "ho6-182-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£36,317/month",
+            "price_raw": 36317,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-182-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12094 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-12-04",
+            "available_from_normalized": "2026-12-04",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-182-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£39,217/month",
+            "price_raw": 39217,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-182-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12095 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-182-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 7",
+            "price": "£42,117/month",
+            "price_raw": 42117,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-182-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Blackthorn Grove",
+          "bedrooms": 1,
+          "commute_destination": "Moorgate",
+          "max_budget": 10217,
+          "max_commute_time": 31,
+          "move_in_date": "2026-11-06",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Blackthorn Grove.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-a",
+        "duration_minutes": 29,
+        "from_address": "12099 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+        "origin_eval_listing_id": "ho6-182-a",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-b",
+        "duration_minutes": 40,
+        "from_address": "12100 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+        "origin_eval_listing_id": "ho6-182-b",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-c",
+        "duration_minutes": 40,
+        "from_address": "12101 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+        "origin_eval_listing_id": "ho6-182-c",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-d",
+        "duration_minutes": 40,
+        "from_address": "12102 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+        "origin_eval_listing_id": "ho6-182-d",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-e",
+        "duration_minutes": 40,
+        "from_address": "12103 Dovetail Quay, Jet Hollow, London V3 7AB",
+        "origin_eval_listing_id": "ho6-182-e",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-f",
+        "duration_minutes": 40,
+        "from_address": "12094 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+        "origin_eval_listing_id": "ho6-182-f",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-182-g",
+        "duration_minutes": 40,
+        "from_address": "12095 Dovetail Quay, Blackthorn Grove, London V3 7AB",
+        "origin_eval_listing_id": "ho6-182-g",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12983 Hearth Quay, Xenia Court, London V1 3AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-11-02",
+            "available_from_normalized": "2026-11-02",
+            "bedrooms": 1,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho6-234-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£11,688/month",
+            "price_raw": 11688,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-234-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-234-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12984 Hearth Quay, Xenia Court, London V1 3AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-11-02",
+            "available_from_normalized": "2026-11-02",
+            "bedrooms": 1,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho6-234-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£11,756/month",
+            "price_raw": 11756,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-234-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-234-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12985 Hearth Quay, Xenia Court, London V1 3AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-11-02",
+            "available_from_normalized": "2026-11-02",
+            "bedrooms": 2,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho6-234-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£32,044/month",
+            "price_raw": 32044,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-234-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-234-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12986 Hearth Quay, Xenia Court, London V1 3AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-11-02",
+            "available_from_normalized": "2026-11-02",
+            "bedrooms": 1,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho6-234-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£34,944/month",
+            "price_raw": 34944,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-234-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-234-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12987 Hearth Quay, Blackthorn Grove, London V1 3AB",
+            "area_normalized": "Blackthorn Grove",
+            "available_from": "2026-11-02",
+            "available_from_normalized": "2026-11-02",
+            "bedrooms": 1,
+            "borough": "Blackthorn Grove",
+            "city": "London",
+            "eval_listing_id": "ho6-234-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£37,844/month",
+            "price_raw": 37844,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-234-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-234-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12978 Hearth Quay, Xenia Court, London V1 3AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-11-30",
+            "available_from_normalized": "2026-11-30",
+            "bedrooms": 1,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho6-234-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£40,725/month",
+            "price_raw": 40725,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-234-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-234-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12979 Hearth Quay, Xenia Court, London V1 3AB",
+            "area_normalized": "Xenia Court",
+            "available_from": "2026-11-02",
+            "available_from_normalized": "2026-11-02",
+            "bedrooms": 1,
+            "borough": "Xenia Court",
+            "city": "London",
+            "eval_listing_id": "ho6-234-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£43,625/month",
+            "price_raw": 43625,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-234-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-234-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Xenia Court",
+          "bedrooms": 1,
+          "max_budget": 11725,
+          "move_in_date": "2026-11-02",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Xenia Court.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

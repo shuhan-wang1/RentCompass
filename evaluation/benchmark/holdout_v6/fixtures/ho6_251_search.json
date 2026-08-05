@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Kingfisher Fields",
+      "bedrooms": 1,
+      "max_budget": 12218,
+      "move_in_date": "2026-10-04",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Kingfisher Fields.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

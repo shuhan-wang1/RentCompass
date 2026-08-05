@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12813 Juniper Quay, Northstar Heath, London V9 1AB",
+            "area_normalized": "Northstar Heath",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 1,
+            "borough": "Northstar Heath",
+            "city": "London",
+            "eval_listing_id": "ho6-224-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£11,398/month",
+            "price_raw": 11398,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-224-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-224-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12814 Juniper Quay, Northstar Heath, London V9 1AB",
+            "area_normalized": "Northstar Heath",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 1,
+            "borough": "Northstar Heath",
+            "city": "London",
+            "eval_listing_id": "ho6-224-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£11,466/month",
+            "price_raw": 11466,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-224-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-224-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12815 Juniper Quay, Northstar Heath, London V9 1AB",
+            "area_normalized": "Northstar Heath",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 2,
+            "borough": "Northstar Heath",
+            "city": "London",
+            "eval_listing_id": "ho6-224-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£31,754/month",
+            "price_raw": 31754,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-224-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-224-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12816 Juniper Quay, Northstar Heath, London V9 1AB",
+            "area_normalized": "Northstar Heath",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 1,
+            "borough": "Northstar Heath",
+            "city": "London",
+            "eval_listing_id": "ho6-224-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£34,654/month",
+            "price_raw": 34654,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-224-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-224-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12817 Juniper Quay, Verona Lock, London V9 1AB",
+            "area_normalized": "Verona Lock",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 1,
+            "borough": "Verona Lock",
+            "city": "London",
+            "eval_listing_id": "ho6-224-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£37,554/month",
+            "price_raw": 37554,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-224-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-224-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12808 Juniper Quay, Northstar Heath, London V9 1AB",
+            "area_normalized": "Northstar Heath",
+            "available_from": "2026-10-31",
+            "available_from_normalized": "2026-10-31",
+            "bedrooms": 1,
+            "borough": "Northstar Heath",
+            "city": "London",
+            "eval_listing_id": "ho6-224-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£40,435/month",
+            "price_raw": 40435,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-224-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-224-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12809 Juniper Quay, Northstar Heath, London V9 1AB",
+            "area_normalized": "Northstar Heath",
+            "available_from": "2026-10-03",
+            "available_from_normalized": "2026-10-03",
+            "bedrooms": 1,
+            "borough": "Northstar Heath",
+            "city": "London",
+            "eval_listing_id": "ho6-224-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£43,335/month",
+            "price_raw": 43335,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-224-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-224-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Northstar Heath",
+          "bedrooms": 1,
+          "max_budget": 11435,
+          "move_in_date": "2026-10-03",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Northstar Heath.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

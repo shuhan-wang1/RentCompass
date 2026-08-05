@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12286 Crescent Quay, Marigold Yard, London V5 2AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-193-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 2",
+            "price": "£10,499/month",
+            "price_raw": 10499,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-193-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12287 Crescent Quay, Marigold Yard, London V5 2AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-193-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 2",
+            "price": "£10,567/month",
+            "price_raw": 10567,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-193-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12288 Crescent Quay, Marigold Yard, London V5 2AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 2,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-193-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 2",
+            "price": "£30,836/month",
+            "price_raw": 30836,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-193-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12289 Crescent Quay, Marigold Yard, London V5 2AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-193-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 2",
+            "price": "£33,736/month",
+            "price_raw": 33736,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-193-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12290 Crescent Quay, Umber Hill, London V5 2AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-193-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 2",
+            "price": "£36,636/month",
+            "price_raw": 36636,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-193-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12281 Crescent Quay, Marigold Yard, London V5 2AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-10-18",
+            "available_from_normalized": "2026-10-18",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-193-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 2",
+            "price": "£39,536/month",
+            "price_raw": 39536,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-193-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12282 Crescent Quay, Marigold Yard, London V5 2AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-193-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 2",
+            "price": "£42,436/month",
+            "price_raw": 42436,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-193-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Marigold Yard",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 10536,
+          "max_commute_time": 26,
+          "move_in_date": "2026-09-20",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Marigold Yard.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-a",
+        "duration_minutes": 24,
+        "from_address": "12286 Crescent Quay, Marigold Yard, London V5 2AB",
+        "origin_eval_listing_id": "ho6-193-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-b",
+        "duration_minutes": 35,
+        "from_address": "12287 Crescent Quay, Marigold Yard, London V5 2AB",
+        "origin_eval_listing_id": "ho6-193-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-c",
+        "duration_minutes": 35,
+        "from_address": "12288 Crescent Quay, Marigold Yard, London V5 2AB",
+        "origin_eval_listing_id": "ho6-193-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-d",
+        "duration_minutes": 35,
+        "from_address": "12289 Crescent Quay, Marigold Yard, London V5 2AB",
+        "origin_eval_listing_id": "ho6-193-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-e",
+        "duration_minutes": 35,
+        "from_address": "12290 Crescent Quay, Umber Hill, London V5 2AB",
+        "origin_eval_listing_id": "ho6-193-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-f",
+        "duration_minutes": 35,
+        "from_address": "12281 Crescent Quay, Marigold Yard, London V5 2AB",
+        "origin_eval_listing_id": "ho6-193-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-193-g",
+        "duration_minutes": 35,
+        "from_address": "12282 Crescent Quay, Marigold Yard, London V5 2AB",
+        "origin_eval_listing_id": "ho6-193-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12796 Island Quay, Marigold Yard, London V8 8AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-223-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£11,369/month",
+            "price_raw": 11369,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-223-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-223-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12797 Island Quay, Marigold Yard, London V8 8AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-223-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£11,437/month",
+            "price_raw": 11437,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-223-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-223-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12798 Island Quay, Marigold Yard, London V8 8AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 2,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-223-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£31,725/month",
+            "price_raw": 31725,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-223-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-223-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12799 Island Quay, Marigold Yard, London V8 8AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-223-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£34,625/month",
+            "price_raw": 34625,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-223-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-223-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12800 Island Quay, Umber Hill, London V8 8AB",
+            "area_normalized": "Umber Hill",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 1,
+            "borough": "Umber Hill",
+            "city": "London",
+            "eval_listing_id": "ho6-223-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£37,525/month",
+            "price_raw": 37525,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-223-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-223-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12791 Island Quay, Marigold Yard, London V8 8AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-10-28",
+            "available_from_normalized": "2026-10-28",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-223-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£40,406/month",
+            "price_raw": 40406,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-223-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-223-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12792 Island Quay, Marigold Yard, London V8 8AB",
+            "area_normalized": "Marigold Yard",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 1,
+            "borough": "Marigold Yard",
+            "city": "London",
+            "eval_listing_id": "ho6-223-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£43,306/month",
+            "price_raw": 43306,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-223-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-223-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Marigold Yard",
+          "bedrooms": 1,
+          "max_budget": 11406,
+          "move_in_date": "2026-09-30",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Marigold Yard.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

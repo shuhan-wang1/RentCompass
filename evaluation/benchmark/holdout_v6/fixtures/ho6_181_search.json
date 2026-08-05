@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12082 Crescent Quay, Alabaster Reach, London V2 6AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-181-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 6",
+            "price": "£10,151/month",
+            "price_raw": 10151,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-181-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12083 Crescent Quay, Alabaster Reach, London V2 6AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-181-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 6",
+            "price": "£10,219/month",
+            "price_raw": 10219,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-181-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12084 Crescent Quay, Alabaster Reach, London V2 6AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 2,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-181-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 6",
+            "price": "£30,488/month",
+            "price_raw": 30488,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-181-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12085 Crescent Quay, Alabaster Reach, London V2 6AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-181-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 6",
+            "price": "£33,388/month",
+            "price_raw": 33388,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-181-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12086 Crescent Quay, Ivory Green, London V2 6AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho6-181-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 6",
+            "price": "£36,288/month",
+            "price_raw": 36288,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-181-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12077 Crescent Quay, Alabaster Reach, London V2 6AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-12-01",
+            "available_from_normalized": "2026-12-01",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-181-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 6",
+            "price": "£39,188/month",
+            "price_raw": 39188,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-181-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12078 Crescent Quay, Alabaster Reach, London V2 6AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-03",
+            "available_from_normalized": "2026-11-03",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-181-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 6",
+            "price": "£42,088/month",
+            "price_raw": 42088,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-181-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Alabaster Reach",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 10188,
+          "max_commute_time": 30,
+          "move_in_date": "2026-11-03",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Alabaster Reach.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-a",
+        "duration_minutes": 28,
+        "from_address": "12082 Crescent Quay, Alabaster Reach, London V2 6AB",
+        "origin_eval_listing_id": "ho6-181-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-b",
+        "duration_minutes": 39,
+        "from_address": "12083 Crescent Quay, Alabaster Reach, London V2 6AB",
+        "origin_eval_listing_id": "ho6-181-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-c",
+        "duration_minutes": 39,
+        "from_address": "12084 Crescent Quay, Alabaster Reach, London V2 6AB",
+        "origin_eval_listing_id": "ho6-181-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-d",
+        "duration_minutes": 39,
+        "from_address": "12085 Crescent Quay, Alabaster Reach, London V2 6AB",
+        "origin_eval_listing_id": "ho6-181-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-e",
+        "duration_minutes": 39,
+        "from_address": "12086 Crescent Quay, Ivory Green, London V2 6AB",
+        "origin_eval_listing_id": "ho6-181-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-f",
+        "duration_minutes": 39,
+        "from_address": "12077 Crescent Quay, Alabaster Reach, London V2 6AB",
+        "origin_eval_listing_id": "ho6-181-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-181-g",
+        "duration_minutes": 39,
+        "from_address": "12078 Crescent Quay, Alabaster Reach, London V2 6AB",
+        "origin_eval_listing_id": "ho6-181-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

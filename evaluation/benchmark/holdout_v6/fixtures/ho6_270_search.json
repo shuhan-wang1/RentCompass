@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Dawn Common",
+      "bedrooms": 1,
+      "max_budget": 12769,
+      "move_in_date": "2026-09-11",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Dawn Common.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

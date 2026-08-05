@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12779 Hearth Quay, Linden Cross, London V7 7AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-09-27",
+            "available_from_normalized": "2026-09-27",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho6-222-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£11,340/month",
+            "price_raw": 11340,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-222-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-222-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12780 Hearth Quay, Linden Cross, London V7 7AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-09-27",
+            "available_from_normalized": "2026-09-27",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho6-222-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£11,408/month",
+            "price_raw": 11408,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-222-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-222-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12781 Hearth Quay, Linden Cross, London V7 7AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-09-27",
+            "available_from_normalized": "2026-09-27",
+            "bedrooms": 2,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho6-222-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£31,696/month",
+            "price_raw": 31696,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-222-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-222-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12782 Hearth Quay, Linden Cross, London V7 7AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-09-27",
+            "available_from_normalized": "2026-09-27",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho6-222-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£34,596/month",
+            "price_raw": 34596,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-222-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-222-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12783 Hearth Quay, Tansy Gardens, London V7 7AB",
+            "area_normalized": "Tansy Gardens",
+            "available_from": "2026-09-27",
+            "available_from_normalized": "2026-09-27",
+            "bedrooms": 1,
+            "borough": "Tansy Gardens",
+            "city": "London",
+            "eval_listing_id": "ho6-222-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£37,496/month",
+            "price_raw": 37496,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-222-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-222-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12774 Hearth Quay, Linden Cross, London V7 7AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho6-222-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£40,377/month",
+            "price_raw": 40377,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-222-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-222-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12775 Hearth Quay, Linden Cross, London V7 7AB",
+            "area_normalized": "Linden Cross",
+            "available_from": "2026-09-27",
+            "available_from_normalized": "2026-09-27",
+            "bedrooms": 1,
+            "borough": "Linden Cross",
+            "city": "London",
+            "eval_listing_id": "ho6-222-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 7",
+            "price": "£43,277/month",
+            "price_raw": 43277,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-222-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-222-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Linden Cross",
+          "bedrooms": 1,
+          "max_budget": 11377,
+          "move_in_date": "2026-09-27",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Linden Cross.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

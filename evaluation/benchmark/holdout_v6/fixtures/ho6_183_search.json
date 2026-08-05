@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12116 Estuary Quay, Coral Wharf, London V4 8AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho6-183-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 8",
+            "price": "£10,209/month",
+            "price_raw": 10209,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-183-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12117 Estuary Quay, Coral Wharf, London V4 8AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho6-183-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 8",
+            "price": "£10,277/month",
+            "price_raw": 10277,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-183-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12118 Estuary Quay, Coral Wharf, London V4 8AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 2,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho6-183-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 8",
+            "price": "£30,546/month",
+            "price_raw": 30546,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-183-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12119 Estuary Quay, Coral Wharf, London V4 8AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho6-183-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 8",
+            "price": "£33,446/month",
+            "price_raw": 33446,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-183-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12120 Estuary Quay, Kingfisher Fields, London V4 8AB",
+            "area_normalized": "Kingfisher Fields",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Kingfisher Fields",
+            "city": "London",
+            "eval_listing_id": "ho6-183-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 8",
+            "price": "£36,346/month",
+            "price_raw": 36346,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-183-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12111 Estuary Quay, Coral Wharf, London V4 8AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-12-07",
+            "available_from_normalized": "2026-12-07",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho6-183-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 8",
+            "price": "£39,246/month",
+            "price_raw": 39246,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-183-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12112 Estuary Quay, Coral Wharf, London V4 8AB",
+            "area_normalized": "Coral Wharf",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Coral Wharf",
+            "city": "London",
+            "eval_listing_id": "ho6-183-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 8",
+            "price": "£42,146/month",
+            "price_raw": 42146,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-183-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Coral Wharf",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 10246,
+          "max_commute_time": 32,
+          "move_in_date": "2026-11-09",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Coral Wharf.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-a",
+        "duration_minutes": 30,
+        "from_address": "12116 Estuary Quay, Coral Wharf, London V4 8AB",
+        "origin_eval_listing_id": "ho6-183-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-b",
+        "duration_minutes": 41,
+        "from_address": "12117 Estuary Quay, Coral Wharf, London V4 8AB",
+        "origin_eval_listing_id": "ho6-183-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-c",
+        "duration_minutes": 41,
+        "from_address": "12118 Estuary Quay, Coral Wharf, London V4 8AB",
+        "origin_eval_listing_id": "ho6-183-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-d",
+        "duration_minutes": 41,
+        "from_address": "12119 Estuary Quay, Coral Wharf, London V4 8AB",
+        "origin_eval_listing_id": "ho6-183-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-e",
+        "duration_minutes": 41,
+        "from_address": "12120 Estuary Quay, Kingfisher Fields, London V4 8AB",
+        "origin_eval_listing_id": "ho6-183-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-f",
+        "duration_minutes": 41,
+        "from_address": "12111 Estuary Quay, Coral Wharf, London V4 8AB",
+        "origin_eval_listing_id": "ho6-183-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v6/ho6-183-g",
+        "duration_minutes": 41,
+        "from_address": "12112 Estuary Quay, Coral Wharf, London V4 8AB",
+        "origin_eval_listing_id": "ho6-183-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

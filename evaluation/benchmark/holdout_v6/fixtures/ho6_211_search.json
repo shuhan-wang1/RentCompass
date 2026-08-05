@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "12592 Island Quay, Alabaster Reach, London V5 4AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-211-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 4",
+            "price": "£11,021/month",
+            "price_raw": 11021,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-211-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-211-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12593 Island Quay, Alabaster Reach, London V5 4AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-211-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 4",
+            "price": "£11,089/month",
+            "price_raw": 11089,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-211-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-211-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12594 Island Quay, Alabaster Reach, London V5 4AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 2,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-211-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 4",
+            "price": "£31,377/month",
+            "price_raw": 31377,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-211-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-211-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12595 Island Quay, Alabaster Reach, London V5 4AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-211-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 4",
+            "price": "£34,277/month",
+            "price_raw": 34277,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-211-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-211-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12596 Island Quay, Ivory Green, London V5 4AB",
+            "area_normalized": "Ivory Green",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Ivory Green",
+            "city": "London",
+            "eval_listing_id": "ho6-211-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 4",
+            "price": "£37,177/month",
+            "price_raw": 37177,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-211-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-211-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12587 Island Quay, Alabaster Reach, London V5 4AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-12-11",
+            "available_from_normalized": "2026-12-11",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-211-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 4",
+            "price": "£40,058/month",
+            "price_raw": 40058,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-211-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-211-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "12588 Island Quay, Alabaster Reach, London V5 4AB",
+            "area_normalized": "Alabaster Reach",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Alabaster Reach",
+            "city": "London",
+            "eval_listing_id": "ho6-211-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 4",
+            "price": "£42,958/month",
+            "price_raw": 42958,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v5",
+            "uid_token": "ho6-211-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v6/ho6-211-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Alabaster Reach",
+          "bedrooms": 1,
+          "max_budget": 11058,
+          "move_in_date": "2026-11-13",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Alabaster Reach.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "benchmark_schema_version": "rentcompass/benchmark/v4",
+  "status": "frozen_before_formal_run",
+  "product_sha": "1c4e42bd82c9cc6be9230365b5d288c6739816fe",
+  "preregistration_commit": "210c843e4b5f64d901b0813c37ec8170312704eb",
+  "formal_case_authoring_commit": "a9d3283ac6734b4d8d999f4d356eaea12ad6b68a",
+  "evaluator_commit_before_freeze": "a9d3283ac6734b4d8d999f4d356eaea12ad6b68a",
+  "cases_sha256": "f2d8bebaa1b9306570ec1514c6dc9821381a1b0538089bd5364486fabb884d4a",
+  "manifest_sha256": "a5e1070aae661781fe2fa861c0b6ca6800bbe63074b5679aeb74148843768587",
+  "preflight_report_sha256": "97533236abb4465f6ad64e8494f7610e142a3147c9f81465a092974c84c4a3f1",
+  "preflight_gate_passed": true,
+  "v3_exclusion": "v3 had overlapping execution processes and is not used for any metric, comparison or CV claim.",
+  "formal_model_requests_before_freeze": 0,
+  "execution_mode": "single external-output process with recorded pid; no --resume unless the same pid terminates and the checkpoint is preserved.",
+  "run_command": [
+    "python -m evaluation.run_benchmark",
+    "--live",
+    "--arch",
+    "fc_loop",
+    "--cases",
+    "evaluation/benchmark/holdout_v4/cases_holdout_v4.jsonl",
+    "--case-schema",
+    "evaluation/benchmark/schema_v4.json",
+    "--fixtures-dir",
+    "evaluation/benchmark/holdout_v4/fixtures",
+    "--out",
+    "/tmp/rentcompass-holdout-v4-live-output"
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "experiment": "D",
+  "frozen_at": "2026-08-05T19:50+01:00",
+  "source": {
+    "path": "evaluation/benchmark/cases.jsonl",
+    "sha256": "164ccd1e39d7ce6d5af13b63830862cdbdb580270c0eed30ebe5ab6678d51a31",
+    "n_cases": 98,
+    "git_commit": "d7a77026d2a61e5043c152ec9daa529f9cc9db6c"
+  },
+  "rule": "a case qualifies when its `user_query` cues >=2 DISTINCT dimensions under the product's own vocabulary, core.dimensions.cued_dimensions (which reads core.dimensions.DIMENSION_CUES). No look-alike matcher is used: the same function the fan-out itself gates on decides eligibility.",
+  "rule_rationale": "The mechanism under test packs a CUED-but-UNSERVED read into a batch that is being dispatched anyway. A message that cues >=2 of the 3 dimensions is the population where at least one dimension is likely to go unrequested by the model, which is the only situation in which the fan-out can act. This is the rule the GOAL proposed and it is frozen BEFORE any run.",
+  "rules_considered_and_rejected": [
+    {
+      "rule": ">=1 cued dimension (n=40)",
+      "rejected_because": "32 of the 40 cue exactly one dimension, and in most of those the cued dimension IS the case's own expected tool (C_commute -> calculate_commute, D_crime_poi -> check_safety), so the model serves it directly and the fan-out has nothing to add."
+    },
+    {
+      "rule": ">=1 cued dimension not covered by the case's expected_tools (n=13)",
+      "rejected_because": "dominated by NEGATED mentions ('no commute to worry about', 'no commute needed' -- A1/A3/A10/A11/A14/E8) and by G_memory recall turns, where the fan-out correctly declines for want of a derivable destination. Those cases contribute a guaranteed zero to BOTH arms and would dilute the coverage metric without adding information."
+    }
+  ],
+  "cued_dimension_count_histogram": {
+    "0": 58,
+    "1": 32,
+    "2": 3,
+    "3": 5
+  },
+  "n_selected": 8,
+  "selected_case_ids": [
+    "E1",
+    "E10",
+    "E11",
+    "E3",
+    "E5",
+    "E6",
+    "E7",
+    "E9"
+  ],
+  "selected": [
+    {
+      "case_id": "E1",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "safety",
+        "commute",
+        "nearby"
+      ],
+      "expected_tools": [
+        "search_properties",
+        "calculate_commute",
+        "search_nearby_pois",
+        "check_safety"
+      ],
+      "user_query_prefix": "Find me a 1-bed in Islington under £1600/month with a commute to UCL under 40 minutes, a supermarket nearby, and avoid h"
+    },
+    {
+      "case_id": "E10",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "commute",
+        "nearby"
+      ],
+      "expected_tools": [
+        "search_properties"
+      ],
+      "user_query_prefix": "帮我找南肯辛顿月租1300镑以内的单间，通勤到帝国理工学院30分钟内，附近要有超市，直接搜索吧。"
+    },
+    {
+      "case_id": "E11",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "safety",
+        "commute",
+        "nearby"
+      ],
+      "expected_tools": [
+        "search_properties",
+        "calculate_commute",
+        "search_nearby_pois",
+        "check_safety"
+      ],
+      "user_query_prefix": "Find a studio in Stratford under £1300/month, with a commute to Canary Wharf under 25 minutes, a pharmacy nearby, and st"
+    },
+    {
+      "case_id": "E3",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "safety",
+        "nearby"
+      ],
+      "expected_tools": [
+        "check_safety",
+        "search_nearby_pois"
+      ],
+      "user_query_prefix": "Is that one both safe and near a supermarket?"
+    },
+    {
+      "case_id": "E5",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "safety",
+        "commute",
+        "nearby"
+      ],
+      "expected_tools": [
+        "search_properties",
+        "calculate_commute",
+        "search_nearby_pois",
+        "check_safety"
+      ],
+      "user_query_prefix": "帮我找伦敦月租不超过1400镑的单间，通勤到帝国理工不超过35分钟，附近要有超市，尽量避开治安差的区域。"
+    },
+    {
+      "case_id": "E6",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "safety",
+        "commute",
+        "nearby"
+      ],
+      "expected_tools": [
+        "search_properties",
+        "calculate_commute",
+        "search_nearby_pois",
+        "check_safety"
+      ],
+      "user_query_prefix": "Find me a 1-bed in Islington under £1500/month, with a commute to UCL under 35 minutes, a supermarket nearby, avoiding h"
+    },
+    {
+      "case_id": "E7",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "commute",
+        "nearby"
+      ],
+      "expected_tools": [
+        "search_properties"
+      ],
+      "user_query_prefix": "I need a 1-bed near Islington under £1500/month with a supermarket nearby and no commute worries — search it."
+    },
+    {
+      "case_id": "E9",
+      "category": "E_multi_constraint",
+      "cued_dimensions": [
+        "safety",
+        "commute",
+        "nearby"
+      ],
+      "expected_tools": [
+        "calculate_commute",
+        "check_safety",
+        "search_nearby_pois"
+      ],
+      "user_query_prefix": "For that place, is the commute to UCL under 30 minutes, is the area safe, and is there a supermarket nearby?"
+    }
+  ],
+  "known_limitation": "n = 8 cases. The cluster bootstrap resamples CASES, so 8 is the effective resampling unit no matter how many repeats are run; the CIs will be wide and the study is underpowered for small effects. Repeats were raised to 12 to shrink WITHIN-case noise on the paired discrete counters, not to inflate the bootstrap n. Reported as a limitation rather than fixed by widening the filter (GOAL rule 4.2)."
+}

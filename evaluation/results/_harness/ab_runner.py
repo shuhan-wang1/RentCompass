@@ -147,6 +147,140 @@ def _reset_tool_pool() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# dimension fan-out / batch packing (Experiment D)
+# --------------------------------------------------------------------------- #
+# The mechanism fc_loop has and legacy does not is BATCH PACKING: agent_loop's
+# _dimension_fanout_calls (plan time) and _completion_sweep_into_batch (answer time) put a
+# read the user CUED but the model did not request into a batch that is being dispatched
+# anyway. What that saves is a whole LLM round-trip, not milliseconds of dispatch.
+#
+# The switch is already in the product -- FC_DIMENSION_FANOUT_MAX, read through
+# agent_loop._dimension_fanout_cap() on EVERY call (os.getenv, not import-time), and
+# _dimension_fanout_calls returns [] immediately when the cap is <= 0. _dimension_fanout_cap
+# has exactly one caller, so 0 disables the plan-time fan-out AND the completion sweep (the
+# sweep routes through the same helper). Nothing under app/ is edited; this sets the env
+# per arm, exactly as --serial-tools-arm swaps the tool-offload pool per arm.
+_FANOUT_ON_ARM = "fanout_on"
+_FANOUT_OFF_ARM = "fanout_off"
+
+# Per-run recording, reset by _fanout_record_reset() before each run. The product function
+# is wrapped rather than re-implemented: what is recorded is literally what the fan-out
+# returned, including the message IT saw, so the coverage metric cannot drift from the
+# mechanism it claims to measure.
+_FANOUT_REC: dict = {}
+
+
+def _fanout_record_reset() -> None:
+    _FANOUT_REC.clear()
+    _FANOUT_REC.update({"calls": 0, "fired": 0, "added": [], "messages": [],
+                        "added_plan_time": [], "added_answer_time": [],
+                        "fired_plan_time": 0, "fired_answer_time": 0})
+
+
+def _fanout_site() -> str:
+    """Which of the two fan-out entry points is running, read off the call stack.
+
+    This distinction is the whole cost argument and cannot be recovered afterwards from the
+    run record. ``agent_node`` -> PLAN TIME: the model is already opening a batch, so the
+    added reads ride along and cost no extra LLM round-trip. ``_completion_sweep_into_batch``
+    -> ANSWER TIME: the model produced plain text with no tool calls, so the sweep OPENS a
+    batch that would not otherwise exist -- it buys the evidence at the price of one more
+    execute_tools hop plus the synthesis call.
+
+    Walks outward past this helper, the recording wrapper and ``_fanout_into_batch`` rather
+    than indexing a fixed frame, so adding or removing a wrapper layer cannot silently
+    mislabel every firing (which it did on the first smoke run).
+    """
+    skip = {"_fanout_site", "_recording", "_fanout_into_batch"}
+    try:
+        depth = 0
+        while depth < 12:
+            name = sys._getframe(depth).f_code.co_name
+            if name not in skip:
+                return name
+            depth += 1
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _install_fanout_recorder() -> None:
+    """Wrap ``agent_loop._dimension_fanout_calls`` to record every expansion decision.
+
+    ``_fanout_into_batch`` looks the helper up as a module global at call time, so replacing
+    the module attribute captures BOTH entry points (plan-time fan-out and the answer-time
+    completion sweep). The wrapper adds no behaviour: it calls through and records.
+    """
+    import core.agent_loop as al
+
+    if getattr(al, "_ab_fanout_recorded", False):
+        return
+    original = al._dimension_fanout_calls
+
+    def _recording(state, batch_calls, cur_msg, **kwargs):
+        added = original(state, batch_calls, cur_msg, **kwargs)
+        _FANOUT_REC["calls"] = _FANOUT_REC.get("calls", 0) + 1
+        msgs = _FANOUT_REC.setdefault("messages", [])
+        if cur_msg and cur_msg not in msgs:
+            msgs.append(cur_msg)
+        if added:
+            site = _fanout_site()
+            plan_time = site == "agent_node"
+            _FANOUT_REC["fired"] = _FANOUT_REC.get("fired", 0) + 1
+            _FANOUT_REC.setdefault("added", []).extend(name for name, _args in added)
+            bucket = "added_plan_time" if plan_time else "added_answer_time"
+            _FANOUT_REC.setdefault(bucket, []).extend(name for name, _args in added)
+            key = "fired_plan_time" if plan_time else "fired_answer_time"
+            _FANOUT_REC[key] = _FANOUT_REC.get(key, 0) + 1
+            _FANOUT_REC.setdefault("sites", []).append(site)
+        return added
+
+    al._dimension_fanout_calls = _recording
+    al._ab_fanout_recorded = True
+
+
+def _fanout_metrics(case, rec) -> dict:
+    """The Experiment-D fields for one run record.
+
+    The dimension vocabulary is the PRODUCT's own: ``core.dimensions.cued_dimensions`` for
+    what the message asked about, and ``agent_loop._unserved_cued_dimensions`` for what was
+    left unserved -- the same function the fan-out itself gates on. A look-alike written
+    here would make "dimension coverage" mean something other than what it claims.
+    """
+    import core.agent_loop as al
+    from core import dimensions as dims
+
+    # The message the fan-out actually saw, when it ran at all; the case's own query is the
+    # fallback for a turn that never reached a batch (both arms fall back identically).
+    seen = (rec.get("messages") or [None])[0]
+    message = seen or case.get("user_query") or ""
+    executed = list(rec.get("tools_executed") or [])
+    # _unserved_cued_dimensions keys on "this tool has an artifact"; feeding it the EXECUTED
+    # tools makes the answer "cued dimensions with no tool evidence", which is the metric.
+    artifacts = [{"tool": t} for t in executed]
+    cued = dims.cued_dimensions(message)
+    unserved = al._unserved_cued_dimensions(message, artifacts)
+    covered = [d for d in cued if d not in set(unserved)]
+    return {
+        "fanout_cap_observed": al._dimension_fanout_cap(),
+        "fanout_calls": rec.get("calls", 0),
+        "fanout_fired": rec.get("fired", 0),
+        "fanout_added_tools": list(rec.get("added") or []),
+        "fanout_added_plan_time": list(rec.get("added_plan_time") or []),
+        "fanout_added_answer_time": list(rec.get("added_answer_time") or []),
+        "fanout_fired_plan_time": rec.get("fired_plan_time", 0),
+        "fanout_fired_answer_time": rec.get("fired_answer_time", 0),
+        "fanout_sites": list(rec.get("sites") or []),
+        "dim_message_source": "fanout_helper" if seen else "case_user_query",
+        "dim_cued": cued,
+        "dim_covered": covered,
+        "dim_unserved": unserved,
+        "dim_cued_n": len(cued),
+        "dim_covered_n": len(covered),
+    }
+
+
+# --------------------------------------------------------------------------- #
 def _now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -226,6 +360,13 @@ def main(argv=None) -> int:
                    help="Experiment C control arm: pin the tool-offload pool to 1 worker")
     p.add_argument("--serial-tools-arm", default=None,
                    help="apply --serial-tools ONLY to this arm name (paired C design)")
+    p.add_argument("--fanout-max", type=int, default=3,
+                   help="Experiment D: FC_DIMENSION_FANOUT_MAX for the ON arm "
+                        "(3 = the product default = every row in dimensions.DIMENSION_CUES)")
+    p.add_argument("--fanout-max-arm", default=None,
+                   help="apply --fanout-max ONLY to this arm name; every other arm runs "
+                        "with FC_DIMENSION_FANOUT_MAX=0. The arm names 'fanout_on' / "
+                        "'fanout_off' imply this without the flag (paired D design)")
     args = p.parse_args(argv)
 
     out = Path(args.out)
@@ -288,7 +429,8 @@ def main(argv=None) -> int:
     # ARM_ALL_PRO / the two Experiment-C arms reuse the UNPATCHED production config and
     # install their own process-local override (route table for A, tool-offload pool for C);
     # every other arm names a config in evaluation/configs/.
-    _PRODUCTION_CFG_ARMS = {ARM_ALL_PRO, "serial_tools", "parallel_tools"}
+    _PRODUCTION_CFG_ARMS = {ARM_ALL_PRO, "serial_tools", "parallel_tools",
+                            _FANOUT_ON_ARM, _FANOUT_OFF_ARM}
     cfgs = {a: load_config("routed_models" if a in _PRODUCTION_CFG_ARMS else a) for a in arms}
     deadline = datetime.fromisoformat(args.deadline).timestamp() if args.deadline else None
 
@@ -328,6 +470,18 @@ def main(argv=None) -> int:
                     else:
                         _reset_tool_pool()
 
+                    # Experiment D: set the cap for THIS arm before the run. Only touched
+                    # when the run actually names a fan-out arm, so every other experiment
+                    # keeps the process default (unset -> agent_loop's own 3).
+                    fanout_arm = bool(args.fanout_max_arm) or arm in (_FANOUT_ON_ARM,
+                                                                      _FANOUT_OFF_ARM)
+                    if fanout_arm:
+                        on = (arm == args.fanout_max_arm) if args.fanout_max_arm \
+                            else (arm == _FANOUT_ON_ARM)
+                        os.environ["FC_DIMENSION_FANOUT_MAX"] = str(args.fanout_max if on else 0)
+                        _install_fanout_recorder()
+                    _fanout_record_reset()
+
                     cfg = cfgs[arm]
                     t_start = _now_iso()
                     t0 = time.perf_counter()
@@ -361,6 +515,16 @@ def main(argv=None) -> int:
                                     "ab_serial_tools": serial, "shard": args.shard_index})
                         rec.update(_tool_stats(rr))
                         consecutive_failures = 0 if rr.error is None else consecutive_failures + 1
+                    if fanout_arm:
+                        # Recorded for BOTH outcomes: a run that errored still tells us
+                        # whether the switch was in the state the arm claims.
+                        d = dict(_FANOUT_REC)
+                        d["tools_executed"] = rec.get("tools_executed") or []
+                        rec.update(_fanout_metrics(case, d))
+                        rec["fanout_arm_on"] = (
+                            (arm == args.fanout_max_arm) if args.fanout_max_arm
+                            else (arm == _FANOUT_ON_ARM))
+                        rec["fanout_max_env"] = os.environ.get("FC_DIMENSION_FANOUT_MAX")
 
                     with runs_path.open("a", encoding="utf-8") as fh:
                         fh.write(json.dumps(rec, ensure_ascii=False, default=str) + "\n")

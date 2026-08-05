@@ -87,7 +87,7 @@ def test_apply_explicit_criteria_raises_budget(lga):
 def test_apply_explicit_criteria_weekly_is_normalised_to_monthly(lga):
     acc = {"max_budget": 1200}
     out = lga._apply_explicit_criteria_updates(acc, "I can do £250 per week max")
-    assert out["max_budget"] == int(round(250 * 4.33))
+    assert out["max_budget"] == int(round(250 * 52 / 12))
 
 
 def test_apply_explicit_criteria_commute_update(lga):

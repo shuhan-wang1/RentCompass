@@ -108,12 +108,12 @@ def test_aggregate_min_max_median_sample_freshness(cache_path):
 
 
 def test_weekly_price_normalised_to_monthly(cache_path):
-    # "£300 pw" -> 300 * 4.33 = 1299/month; a plain pcm row stays monthly.
+    # "£300 pw" -> 300 * 52 / 12 = 1300/month; a plain pcm row stays monthly.
     rows = [_row("w1", "£300 pw"), _row("m1", "£1300 pcm")]
     _seed_cache(cache_path, {"otm|leeds|b0-2|p100-5000": (rows, NOW - DAY)})
 
     st = area_stats.aggregate(["leeds"], now=NOW)["leeds"]
-    assert st["min"] == 1299.0            # weekly converted, not read as £300/month
+    assert st["min"] == 1300.0            # weekly converted with 300 * 52 / 12, then rounded
     assert st["max"] == 1300.0
     assert st["sample_size"] == 2
 

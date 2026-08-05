@@ -168,6 +168,13 @@ def user_authorizes_memory(current_message: str) -> bool:
     text = (current_message or "").strip()
     if not text:
         return False
+    # "I remember my old budget" is a statement about the user's own recollection,
+    # not an imperative to persist anything. Keep an explicit later imperative available.
+    if re.match(r"^(?:i|we)\s+remember\b", text, re.IGNORECASE):
+        remainder = text[re.match(r"^(?:i|we)\s+remember\b", text, re.IGNORECASE).end():]
+        if not re.search(r"(?:please|also|just|help me)\s+remember\b|[.;]\s*remember\b",
+                         remainder, re.IGNORECASE):
+            return False
     if _has_recall_cue(text):
         return False
     if any(pat.search(text) for pat in _AUTHORIZE_EN):

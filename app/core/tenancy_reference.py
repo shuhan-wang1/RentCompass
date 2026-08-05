@@ -70,6 +70,11 @@ from __future__ import annotations
 
 from typing import Optional
 
+from uk_rent_agent.agent.contracts import (
+    monthly_from_weekly,
+    weekly_from_monthly,
+)
+
 # ─── Tenant Fees Act 2019, Schedule 1 ────────────────────────────────
 # para 2: tenancy deposit capped at 5 weeks' rent, or 6 weeks' rent where the ANNUAL
 #         rent for the tenancy is £50,000 or more.
@@ -85,16 +90,6 @@ HOLDING_DEPOSIT_CAP_WEEKS = 1
 
 WEEKS_PER_YEAR = 52
 MONTHS_PER_YEAR = 12
-
-
-def weekly_from_monthly(monthly_rent: float) -> float:
-    """UK convention: a monthly rent is an annual rent in twelfths, so the weekly
-    equivalent is ``monthly * 12 / 52`` — NOT ``monthly / 4``."""
-    return monthly_rent * MONTHS_PER_YEAR / WEEKS_PER_YEAR
-
-
-def monthly_from_weekly(weekly_rent: float) -> float:
-    return weekly_rent * WEEKS_PER_YEAR / MONTHS_PER_YEAR
 
 
 def annual_from(*, weekly_rent: Optional[float] = None,

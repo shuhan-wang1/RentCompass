@@ -57,6 +57,11 @@ from uk_rent_agent.agent.critic import (
     evidence_usable,
     has_specific_price_claims,
     no_reliable_data_message,
+    unsupported_external_numbers,
+    enforce_no_evidence_numeric_contract,
+)
+from core.candidate_validation import (
+    render_candidate_status, validate_search_payload, validate_search_payload_with_provider,
 )
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 # Pure (stdlib-only) narrowing parser/applier for refinement-in-place; see step 1.5 in
@@ -363,14 +368,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
         _extract_budget, _extract_commute_minutes, _extract_no_commute,
         _extract_room_type, _extract_area, _extract_budget_clear,
     )
-    from uk_rent_agent.domain import constants as C
+    from core.tenancy_reference import monthly_from_weekly
 
     result = dict(accumulated)
     changed = False
 
     amount, period = _extract_budget(current_message)
     if amount:
-        monthly = int(round(amount * C.WEEKS_PER_MONTH)) if period == 'week' else int(amount)
+        monthly = int(round(monthly_from_weekly(amount))) if period == 'week' else int(amount)
         if result.get('max_budget') != monthly:
             result['max_budget'] = monthly
             changed = True
@@ -1356,6 +1361,17 @@ def _make_decide_tool_node(tool_registry, classification_llm, search_entry="disp
                                           else _FAIR_HOUSING_REFUSAL_EN),
                 "reason": "Discriminatory filter by protected characteristic — refused (Equality Act 2010)",
             }
+
+        # Explicit memory-save intent is deterministic orchestration. The model may not
+        # acknowledge persistence without first dispatching the side-effect tool.
+        try:
+            from core import memory_gate as _memory_gate
+            if _memory_gate.user_authorizes_memory(_cm_raw):
+                return {"tool": "remember",
+                        "params": {"content": _cm_raw, "kind": "semantic"},
+                        "reason": "Explicit user request to save memory"}
+        except Exception:
+            pass
 
         # 0.1) Memory-recall questions -> answer conversationally from the injected
         #    long-term memory (which is already prepended to user_query).
@@ -3147,7 +3163,14 @@ def _make_execute_tool_node(tool_registry):
                 # use success=False but still carry authoritative structured data.
                 # Keep that payload so routing/formatting can handle the outcome.
                 raw_data = result.data
+                if result.success and isinstance(raw_data, dict):
+                    raw_data, commute_evidence = await validate_search_payload_with_provider(
+                        tool_registry, raw_data,
+                        timeout_s=TOOL_TIMEOUTS.get("calculate_commute", TOOL_TIMEOUT_DEFAULT))
+                    update["candidate_validation"] = raw_data.get("candidate_validation", {})
+                    update["commute_evidence"] = commute_evidence
                 if result.data is not None:
+                    result.data = raw_data
                     observation = json.dumps(result.data, ensure_ascii=False, indent=2)
                 else:
                     observation = f"Error: {result.error}"
@@ -3201,7 +3224,7 @@ def _make_execute_tool_node(tool_registry):
                     # whether the write lands.
                     _note_legacy_write_dispatch(_inv_key)
                 result = await tool_registry.execute_tool(tool_name, **params)
-                raw_data = result.data if result.success else None
+                raw_data = result.data if result.success else {"success": False, "error": result.error}
 
                 if result.success:
                     if isinstance(result.data, (dict, list)):
@@ -3757,10 +3780,10 @@ def _has_usable_retrieval_evidence(state: AgentState, artifacts: list) -> bool:
         if evidence_usable(state.get("tool_raw_data")):
             return True
         observation = state.get("tool_observation")
-        if observation and str(observation).strip():
+        if evidence_usable(observation):
             return True
         for e in state.get("observations") or []:
-            if e.get("observation"):
+            if evidence_usable(e.get("observation")):
                 return True
     return False
 
@@ -3784,6 +3807,8 @@ def _collect_grounding_evidence(state: AgentState, tool_name: str) -> list:
     accumulated = state.get("accumulated_search_criteria") or {}
 
     pieces: list = [
+        {"user_message": extracted_context.get("current_message")
+         or _current_message(state.get("user_query") or "")},
         state.get("tool_raw_data"),
         state.get("tool_observation"),
         build_context_info(extracted_context, tool_name, prefs),
@@ -3880,6 +3905,8 @@ def _make_critic_node():
 
     async def critic_node(state: AgentState) -> dict:
         decision = state.get("tool_decision") or {}
+        current_message = ((state.get("extracted_context") or {}).get("current_message")
+                           or _current_message(state.get("user_query") or ""))
         tool_name = decision.get("tool", "")
         artifacts = list(state.get("tool_artifacts") or [])
         # Retrieval detection (shared NON_RETRIEVAL_TOOLS source of truth). fc_loop turns
@@ -3933,6 +3960,7 @@ def _make_critic_node():
             response,
             evidence,
             regenerate=_regen,
+            user_text=current_message,
             retrieval_expected=retrieval_expected,
             tool_errored=tool_errored,
             on_verdict=_on_verdict,
@@ -3958,7 +3986,7 @@ def _make_critic_node():
         if (
             retrieval_expected
             and not getattr(outcome.verdict, "grounded", False)
-            and has_specific_price_claims(final)
+            and unsupported_external_numbers(final, evidence, current_message)
             and not _has_usable_retrieval_evidence(state, artifacts)
         ):
             ec = state.get("extracted_context") or {}
@@ -3995,6 +4023,33 @@ def _make_critic_node():
                 tool=tool_name,
                 critic_attempts=attempts_before + outcome.attempts,
                 reply_language=reply_language,
+            )
+
+        if retrieval_expected:
+            retrieved_evidence = []
+            if state.get("tool_raw_data") is not None:
+                raw = state.get("tool_raw_data")
+                if tool_name == "search_properties" and isinstance(raw, dict):
+                    retrieved_evidence.extend([
+                        raw.get("recommendations") or [],
+                        raw.get("over_budget_alternatives") or [],
+                        raw.get("commute_evidence") or [],
+                    ])
+                else:
+                    retrieved_evidence.append(raw)
+            for artifact in artifacts:
+                if (_is_retrieval_tool(artifact.get("tool"))
+                        and artifact.get("success", True) is not False):
+                    retrieved_evidence.append(artifact.get("raw_data"))
+            ec = state.get("extracted_context") or {}
+            final = enforce_no_evidence_numeric_contract(
+                final,
+                retrieved_evidence=retrieved_evidence,
+                user_message=ec.get("current_message") or _current_message(
+                    state.get("user_query") or ""),
+                reply_language=_reply_language_from_ctx(
+                    ec, ec.get("current_message") or _current_message(
+                        state.get("user_query") or "")),
             )
 
         if final != response:
@@ -4069,6 +4124,18 @@ def _make_format_output_node():
         # ALL observations; a single tool's structured card can't represent it, so pass the
         # generated `response` through untouched rather than overwriting it with one card.
         is_loop_synthesis = len(state.get("observations") or []) > 1
+        if tool_name == "remember":
+            saved = (isinstance(raw_data, dict)
+                     and raw_data.get("success") is True)
+            ec = state.get("extracted_context") or {}
+            lang = _reply_language_from_ctx(
+                ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
+            response = (("我已经记住了。" if lang == "zh" else "I've saved that to memory.")
+                        if saved else
+                        ("记忆保存失败，本轮没有确认写入。" if lang == "zh"
+                         else "I couldn't save that to memory because the memory tool failed."))
+            return {"final_response": _sanitize_final_response(response),
+                    "response_type": "answer", "tool_data": {}}
 
         # Format based on tool type
         if is_loop_synthesis:
@@ -4085,9 +4152,6 @@ def _make_format_output_node():
                     and (raw_data.get("recommendations")
                          or raw_data.get("over_budget_alternatives"))):
                 _recs = apply_preference_filter(raw_data.get("recommendations") or [], prefs)
-                if not _recs:  # ISSUE #78 — over-budget-only still repaints the panel
-                    _recs = apply_preference_filter(
-                        raw_data.get("over_budget_alternatives") or [], prefs)
                 tool_data = {
                     "recommendations": _recs,
                     "search_criteria": raw_data.get("search_criteria", {}),
@@ -4107,6 +4171,10 @@ def _make_format_output_node():
             if raw_data.get('status') == 'need_clarification':
                 response = raw_data.get('question', 'Could you please provide more details?')
                 response_type = 'question'
+            if isinstance(raw_data, dict) and raw_data.get('candidate_validation') is None:
+                raw_data = validate_search_payload(
+                    raw_data, commute_evidence=state.get("commute_evidence") or [])
+            if isinstance(raw_data, dict) and raw_data.get('status') == 'need_clarification':
                 # Surface the structured clarification payload so the API/frontend can
                 # render the area form or the soft-criteria prompt (Agent 3 reads tool_data).
                 if raw_data.get('missing_fields') is not None:
@@ -4121,21 +4189,35 @@ def _make_format_output_node():
                     and (raw_data.get('recommendations')
                          or raw_data.get('over_budget_alternatives'))):
                 recs = apply_preference_filter(raw_data.get('recommendations') or [], prefs)
-                if not recs:
-                    # ISSUE #78 (same defect as format_output_fc_node): nothing inside
-                    # budget but near-misses exist. Ship them instead of an empty panel —
-                    # they carry match_type='soft_violation' + budget_status, so the
-                    # frontend renders them as amber over-budget cards.
-                    recs = apply_preference_filter(
+                panel_recs = recs
+                if not panel_recs:
+                    panel_recs = apply_preference_filter(
                         raw_data.get('over_budget_alternatives') or [], prefs)
+                    for row in panel_recs:
+                        row.setdefault('candidate_status', 'excluded')
+                        row.setdefault('status_reason', 'over_budget')
+
                 # The summary is now fully localized (zh/en) and already includes the
                 # right-panel hint, so it's used verbatim (no English-only suffix bolted on).
-                response = raw_data.get('summary') or f"I found {len(recs)} properties."
-                tool_data = {'recommendations': recs, 'search_criteria': raw_data.get('search_criteria', {}),
+                ec = state.get('extracted_context') or {}
+                language = _reply_language_from_ctx(
+                    ec, ec.get('current_message') or _current_message(state.get('user_query') or ''))
+                validation = raw_data.get('candidate_validation') or {}
+                requires_status = bool(validation.get('excluded') or validation.get('unknown')
+                                        or (validation.get('constraints') or {}).get('max_commute_minutes'))
+                response = (render_candidate_status(validation, language=language)
+                            if requires_status else
+                            raw_data.get('summary') or f"Found {len(recs)} properties.")
+                tool_data = {'recommendations': panel_recs, 'eligible_recommendations': recs,
+                             'search_criteria': raw_data.get('search_criteria', {}),
                              # 🆕 目的地附近推荐居住区，随搜索结果一并回传前端（可点击 chips）。
                              'area_recommendations': raw_data.get('area_recommendations', [])}
 
-        elif (tool_name == REFINE_TOOL_NAME and isinstance(raw_data, dict)
+                tool_data['candidate_states'] = raw_data.get('candidate_states', [])
+                tool_data['excluded_candidates'] = raw_data.get('excluded_candidates', [])
+                tool_data['unverified_candidates'] = raw_data.get('unverified_candidates', [])
+                tool_data['commute_evidence'] = raw_data.get('commute_evidence', [])
+        if (tool_name == REFINE_TOOL_NAME and isinstance(raw_data, dict)
                 and raw_data.get('recommendations')):
             # Refinement-in-place. Two things happen here and both are load-bearing:
             # the refined listings ride back out in tool_data — which is what makes

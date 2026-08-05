@@ -173,7 +173,7 @@ def test_found_count_and_summary_exclude_over_budget(stub_env, monkeypatch):
 # Weekly budget: conversion happens BEFORE the hard ceiling is applied.
 # --------------------------------------------------------------------------
 def test_weekly_budget_converts_then_enforces_hard_ceiling(stub_env, monkeypatch):
-    # £350/week -> int(350 * 4.33) = £1515/month ceiling.
+    # £350/week -> ceil(round(350 * 52 / 12, 2)) = £1517/month ceiling.
     _install_listings(monkeypatch, [
         _row("A, London", 1500),   # <= 1515 -> in budget
         _row("B, London", 1515),   # exactly at converted ceiling -> in budget
@@ -182,7 +182,7 @@ def test_weekly_budget_converts_then_enforces_hard_ceiling(stub_env, monkeypatch
     ])
     res = _run(area="Camden", max_budget=350, budget_period="week", reply_language="en")
     assert res["status"] == "found"
-    assert res["search_criteria"]["max_budget"] == 1515      # converted to monthly
+    assert res["search_criteria"]["max_budget"] == 1517      # converted to monthly
 
     assert _prices(res["recommendations"]) == [1500, 1515]
     assert _prices(res["over_budget_alternatives"]) == [1600]

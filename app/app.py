@@ -57,6 +57,9 @@ from core.context_assembler import (
 from core.llm_interface import call_ollama
 
 
+from core.candidate_validation import (
+    render_candidate_status, validate_search_payload_with_provider,
+)
 def _llm_complete(prompt: str) -> str:
     """Sync completion used by the rolling-summary folder (dependency-injected into
     context_assembler.update_rolling_summary). Never raises — an empty string makes the
@@ -1583,6 +1586,9 @@ def _merge_recommended_registry(existing, recommendations, max_items=_REGISTRY_M
     for rec in (recommendations or []):
         if not isinstance(rec, dict):
             continue
+        if rec.get('candidate_status') in {'excluded', 'unknown'}:
+            # Excluded or unverified listings never enter durable recommendations.
+            continue
         key = _registry_entry_key(rec.get('url'), rec.get('address'), rec.get('price'))
         if key is None or key in seen:
             continue
@@ -2585,21 +2591,35 @@ async def api_search_direct():
             # The tool returns structured failures instead of raising. Do not turn a
             # provider/RAG failure into the misleading "no matching properties" state.
             raise RuntimeError((result or {}).get('error', 'property search failed'))
-        recommendations = result.get('recommendations') or []
+        result, commute_evidence = await validate_search_payload_with_provider(
+            tool_registry, result,
+            timeout_s=20.0)
+        result["commute_evidence"] = commute_evidence
+        if result.get("candidate_validation") is not None:
+            result["candidate_status_text"] = render_candidate_status(
+                result["candidate_validation"], language=reply_language)
         # 工具已按 reply_language 本地化 summary；仅兜底文案由本端点自己本地化。
+        recommendations = result.get('recommendations') or []
         if recommendations:
             _fallback = (f"为你找到 {len(recommendations)} 套匹配房源。" if reply_language == 'zh'
                          else f"Found {len(recommendations)} matching properties.")
         else:
             _fallback = ("没有找到符合条件的房源，试着放宽搜索条件。" if reply_language == 'zh'
                          else "No matching properties found. Try widening your criteria.")
-        message = result.get('summary') or result.get('message') or _fallback
+        message = (result.get("candidate_status_text")
+                   if result.get("candidate_status_text")
+                   and (recommendations or result.get("over_budget_alternatives"))
+                   else result.get('summary') or result.get('message') or _fallback)
         payload = {
             "response_type": "search",
             "message": message,
             "recommendations": recommendations,
             "search_criteria": result.get('search_criteria') or {},
             # 🆕 目的地附近"已验证的推荐居住区"，前端渲染为可点击 chips → 一键多区域再搜。
+            "candidate_states": result.get("candidate_states") or [],
+            "excluded_candidates": result.get("excluded_candidates") or [],
+            "unverified_candidates": result.get("unverified_candidates") or [],
+            "commute_evidence": result.get("commute_evidence") or [],
             "area_recommendations": result.get('area_recommendations') or [],
         }
     except Exception as e:

@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 
 from uk_rent_agent.data.parsing import parse_price
-from uk_rent_agent.domain.constants import WEEKS_PER_MONTH
+from core.tenancy_reference import monthly_from_weekly
 
 _THIS = Path(__file__).resolve()
 REPO_ROOT = _THIS.parents[2]  # app/core/area_stats.py -> repo root
@@ -61,7 +61,7 @@ def monthly_price(raw) -> float | None:
         return None
     s = str(raw)
     if _WEEKLY_RE.search(s) and not _MONTHLY_RE.search(s):
-        amt = amt * float(WEEKS_PER_MONTH)
+        amt = monthly_from_weekly(amt)
     return round(float(amt), 2)
 
 
@@ -85,7 +85,7 @@ def monthly_budget(budget) -> float | None:
     if amount <= 0:
         return None
     if str(period or "month").strip().lower().startswith("w"):
-        amount = amount * float(WEEKS_PER_MONTH)
+        amount = monthly_from_weekly(amount)
     return amount
 
 

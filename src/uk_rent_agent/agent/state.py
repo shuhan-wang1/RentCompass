@@ -24,6 +24,8 @@ class AgentState(TypedDict, total=False):
     final_response: str
     response_type: str
     tool_data: Dict[str, Any]
+    candidate_state: Dict[str, Any]
+    memory_write_contract: Dict[str, Any]
     run_id: str
     request_id: str
     context_tainted: bool
@@ -91,6 +93,11 @@ class AgentState(TypedDict, total=False):
     plan_notes: list
     plan_just_completed: bool
     task_results: Annotated[list, bounded_add]
+    # Deterministic response-contract channels. Candidate state is produced from tool
+    # payloads/evidence, never inferred from generated prose. Commute evidence is a
+    # per-listing ledger so one successful call cannot cover another listing.
+    candidate_validation: Dict[str, Any]
+    commute_evidence: list
 
 
 def create_initial_state(
@@ -123,6 +130,8 @@ def create_initial_state(
         final_response="",
         response_type="answer",
         tool_data={},
+        candidate_state={},
+        memory_write_contract={},
         run_id=uuid.uuid4().hex,
         request_id=request_id or uuid.uuid4().hex,
         context_tainted=False,
@@ -143,6 +152,8 @@ def create_initial_state(
         turn_start_monotonic=0.0,
         task_plan=[],
         plan_origin="",
+        candidate_validation={},
+        commute_evidence=[],
         plan_notes=[],
         plan_just_completed=False,
         task_results=[],

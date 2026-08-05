@@ -13,6 +13,7 @@ from core.llm_config import (
 # cover a later rebinding of the name in this module. _call_deepseek drives the raw openai
 # SDK and is the third and last place in app/ + src/ that hands a model name to a provider.
 from uk_rent_agent.llm.router import reject_retired_model_names
+from core.tenancy_reference import monthly_from_weekly
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL_NAME = "gemma3:27b-cloud"  # 使用 Ollama 云端模型，更强的推理能力
@@ -541,7 +542,7 @@ def _normalize_price_format(price_str: str) -> str:
     # Check if it's weekly (pw) and convert to monthly (pcm)
     if 'pw' in price_lower or 'per week' in price_lower or 'weekly' in price_lower:
         # Convert weekly to monthly: multiply by 52 weeks, divide by 12 months
-        price_value = (price_value * 52) / 12
+        price_value = monthly_from_weekly(price_value)
         print(f"  [Price] Converted weekly price to monthly: {price_str} -> £{int(price_value)} pcm")
     
     # Return normalized format: £XXXX pcm (no decimals for monthly rent)

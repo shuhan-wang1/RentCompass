@@ -28,6 +28,7 @@ from datetime import date
 import json
 import re
 from uk_rent_agent.domain import constants as C
+from core.tenancy_reference import monthly_from_weekly
 
 # Sentinel meaning "user set no commute limit" — kept internally so the search can
 # proceed without asking, but must never be shown to the user (see _commute_phrase).
@@ -1695,7 +1696,9 @@ async def search_properties_impl(
         has_budget = bool(max_budget) and int(max_budget) > 0
         if has_budget and budget_period and budget_period.lower() == 'week':
             original_budget = max_budget
-            max_budget = int(max_budget * C.WEEKS_PER_MONTH)
+            # Preserve the full weekly budget at the monthly filter boundary; the
+            # formula and penny rounding live in one shared helper.
+            max_budget = int(math.ceil(monthly_from_weekly(max_budget)))
             print(f"\n💱 [BUDGET] 周租转月租: £{original_budget}/week → £{max_budget}/month")
 
         # 通勤开关：有目标才标注；有目标且有真实上限才过滤。

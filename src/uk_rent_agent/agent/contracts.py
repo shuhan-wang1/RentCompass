@@ -7,6 +7,20 @@ from typing import Any, Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
+WEEKS_PER_YEAR = 52
+MONTHS_PER_YEAR = 12
+
+
+def monthly_from_weekly(weekly_rent: float) -> float:
+    """Convert weekly rent using the product-wide UK annualized convention."""
+    return float(weekly_rent) * WEEKS_PER_YEAR / MONTHS_PER_YEAR
+
+
+def weekly_from_monthly(monthly_rent: float) -> float:
+    """Convert monthly rent to its exact annualized weekly equivalent."""
+    return float(monthly_rent) * MONTHS_PER_YEAR / WEEKS_PER_YEAR
+
+
 class ContractModel(BaseModel):
     """Base for state slices crossing node and tool boundaries."""
 

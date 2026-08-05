@@ -66,7 +66,10 @@ from core.langgraph_agent import (
     build_refinement_raw_data,
     format_refinement_output,
 )
+from core.candidate_validation import render_candidate_status, validate_search_payload
+from core.candidate_state import validate_commute_response
 from core import refine_results
+from core.candidate_validation import validate_search_payload_with_provider
 from uk_rent_agent.agent.guardrails import sanitize_untrusted
 
 logger = logging.getLogger(__name__)
@@ -2018,9 +2021,18 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
     async def agent_node(state: AgentState) -> Command[Literal["execute_tools", "critic", "format_output_fc"]]:
         messages = list(state.get("messages") or [])
+        explicit_memory_required = False
         if not messages:
             replay_note = await _resolve_pending_memory(state)
             messages = _build_messages(state)
+            # Record the explicit save contract, but let the model propose its content first.
+            # The execute-time memory gate must still be able to reject tool-derived content.
+            current_message = ((state.get("extracted_context") or {}).get("current_message")
+                               or _current_message(state.get("user_query") or ""))
+            memory_gate = _load_memory_gate()
+            explicit_memory_required = (memory_gate is not None
+                                        and bool(memory_gate.user_authorizes_memory(current_message))
+                                        and any(spec.name == "remember" for spec in provider.list_specs()))
             if replay_note:
                 messages.append(SystemMessage(content=replay_note))
 
@@ -2075,6 +2087,16 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         llm = _llm().bind_tools(_specs_to_openai(specs))
         resp = await llm.ainvoke(messages)
         tool_calls = list(getattr(resp, "tool_calls", None) or [])
+        if (explicit_memory_required
+                and not any(tc.get("name") == "remember" for tc in tool_calls)):
+            forced_call = {
+                "name": "remember",
+                "args": {"content": current_message, "kind": "semantic"},
+                "id": f"forced_remember_{loop_turn}",
+            }
+            tool_calls.append(forced_call)
+            resp = AIMessage(content=getattr(resp, "content", "") or "",
+                             tool_calls=tool_calls)
 
         if tool_calls:
             terminal_names = {s.name for s in specs if getattr(s, "terminal", False)}
@@ -2127,6 +2149,19 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Plain text -> final answer through the legacy critic.
         text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
+        text = validate_commute_response(text, state)
+        memory_contract = state.get("memory_write_contract") or {}
+        if memory_contract.get("requested"):
+            lang = _reply_language_from_ctx(
+                state.get("extracted_context") or {},
+                (state.get("extracted_context") or {}).get("current_message")
+                or _current_message(state.get("user_query") or ""))
+            text = (
+                ("我已经记住了。" if lang == "zh" else "I've saved that to memory.")
+                if memory_contract.get("success") else
+                ("记忆保存失败，本轮没有确认写入。" if lang == "zh"
+                 else "I could not save that to memory because the memory tool failed.")
+            )
         return Command(update={
             "messages": messages + [resp], "loop_turn": loop_turn, "final_response": text,
         }, goto="critic")
@@ -2763,6 +2798,24 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
                 continue
             result = result_by_idx[i]
+            if (name == "search_properties" and getattr(result, "success", False)
+                    and isinstance(getattr(result, "data", None), dict)):
+                validated, commute_evidence = await validate_search_payload_with_provider(
+                    provider, result.data,
+                    timeout_s=TOOL_TIMEOUTS.get("calculate_commute", TOOL_TIMEOUT_DEFAULT))
+                for evidence in commute_evidence:
+                    commute_args = {
+                        "from_address": evidence.get("from_address", ""),
+                        "to_address": evidence.get("to_address", ""),
+                        "mode": evidence.get("mode", "transit"),
+                    }
+                    artifacts.append(_artifact(
+                        turn, "calculate_commute", evidence.get("raw_data"),
+                        _params_digest("calculate_commute", commute_args),
+                        success=evidence.get("evidence_status") == "success",
+                        error=evidence.get("error"),
+                        timed_out=evidence.get("evidence_status") == "timeout"))
+                result.data = validated
             # A SUCCESSFUL call can also have queued behind a saturated pool — that time is
             # indistinguishable from tool latency in elapsed_ms. Recorded only when it is
             # material (>= _QUEUE_WAIT_NOTE_MS), so the normal artifact shape is unchanged and
@@ -2779,11 +2832,34 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             tainted_any = tainted_any or tainted
             messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
 
+        latest_search = next((a for a in reversed(artifacts)
+                              if a.get("tool") == "search_properties"
+                              and isinstance(a.get("raw_data"), dict)), None)
+        latest_search_data = latest_search.get("raw_data") if latest_search else {}
+        memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
+        memory_contract = dict(state.get("memory_write_contract") or {})
+        if memory_art is not None:
+            raw = memory_art.get("raw_data")
+            memory_contract = {
+                "requested": True,
+                "attempted": not memory_art.get("denied"),
+                "success": bool(
+                    memory_art.get("success") is True
+                    and not memory_art.get("timed_out")
+                    and not memory_art.get("outcome_unknown")
+                    and isinstance(raw, dict)
+                    and raw.get("success", True) is not False
+                ),
+                "error": memory_art.get("error"),
+            }
         update = {
             "messages": messages,
             "tool_artifacts": artifacts,
             "context_tainted": state.get("context_tainted", False) or tainted_any,
             "turn_tool_budget_used_s": turn_used,
+            "candidate_validation": latest_search_data.get("candidate_validation", {}),
+            "commute_evidence": latest_search_data.get("commute_evidence", []),
+            "memory_write_contract": memory_contract,
         }
         return Command(update=update, goto="agent")
 
@@ -2795,6 +2871,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         final_response = state.get("final_response", "") or ""
         response_type = state.get("response_type", "answer") or "answer"
         tool_data: dict = {}
+
+        # Explicit memory writes are rendered from the tool outcome, never from model prose.
+        memory_art = next((a for a in reversed(artifacts) if a.get("tool") == "remember"), None)
+        if memory_art is not None:
+            raw = memory_art.get("raw_data")
+            saved = (memory_art.get("success") is True
+                     and not memory_art.get("timed_out")
+                     and not memory_art.get("outcome_unknown")
+                     and isinstance(raw, dict) and raw.get("success") is not False)
+            lang = _reply_language_from_ctx(
+                state.get("extracted_context") or {},
+                (state.get("extracted_context") or {}).get("current_message")
+                or _current_message(state.get("user_query") or ""))
+            response = ("我已经记住了。" if lang == "zh" else "I've saved that to memory.") if saved else (
+                "记忆保存失败，本轮没有确认写入。" if lang == "zh"
+                else "I could not save that to memory because the memory tool failed.")
+            return {"final_response": response, "response_type": "answer", "tool_data": {}}
 
         def _last(tool_name):
             for a in reversed(artifacts):
@@ -2842,6 +2935,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             raw = a.get("raw_data")
             if not isinstance(raw, dict):
                 continue
+            if raw.get("candidate_validation") is None:
+                raw = validate_search_payload(
+                    raw, commute_evidence=raw.get("commute_evidence") or [])
+                a["raw_data"] = raw
             # ISSUE #78: an over-budget-ONLY result is still a result. The tool reports
             # `status: found, recommendations: [], over_budget_alternatives: [...]` when
             # nothing lands inside budget but near-misses exist; requiring a non-empty
@@ -2858,21 +2955,35 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         if search_found is not None:
             recs = apply_preference_filter(search_found.get("recommendations") or [], prefs)
-            if not recs:
-                # Nothing in budget: ship the near-misses as the panel content rather than
-                # an empty panel. Each row already carries match_type='soft_violation' and
-                # a budget_status string, which the frontend renders as an amber
-                # over-budget card — so they can never read as in-budget matches. Scoped to
-                # the empty case on purpose: when real matches exist the alternatives stay
-                # out of the panel, exactly as before.
-                recs = apply_preference_filter(
+            panel_recs = recs
+            if not panel_recs:
+                # Near-misses remain visible as explicitly excluded alternatives; they are
+                # never placed in the deterministic eligible/recommended collection.
+                panel_recs = apply_preference_filter(
                     search_found.get("over_budget_alternatives") or [], prefs)
+                for row in panel_recs:
+                    row.setdefault("candidate_status", "excluded")
+                    row.setdefault("status_reason", "over_budget")
+
             tool_data = {
-                "recommendations": recs,
+                "recommendations": panel_recs,
+                "eligible_recommendations": recs,
                 "search_criteria": search_found.get("search_criteria", {}),
                 "area_recommendations": search_found.get("area_recommendations", []),
+                "candidate_states": search_found.get("candidate_states", []),
+                "excluded_candidates": search_found.get("excluded_candidates", []),
+                "unverified_candidates": search_found.get("unverified_candidates", []),
+                "commute_evidence": search_found.get("commute_evidence", []),
             }
-            response = final_response or search_found.get("summary") or f"I found {len(recs)} properties."
+            ec = state.get("extracted_context") or {}
+            language = _reply_language_from_ctx(
+                ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
+            validation = search_found.get("candidate_validation") or {}
+            requires_status = bool(validation.get("excluded") or validation.get("unknown")
+                                    or (validation.get("constraints") or {}).get("max_commute_minutes"))
+            response = (render_candidate_status(validation, language=language)
+                        if requires_status else
+                        final_response or search_found.get("summary") or f"I found {len(recs)} properties.")
             response_type = "search"
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)
@@ -2900,7 +3011,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     "response_type": "answer", "tool_data": tool_data}
 
         # Plain answer.
-        response = _sanitize_final_response(final_response)
+        response = _sanitize_final_response(validate_commute_response(final_response, state))
         return {"final_response": response, "response_type": response_type, "tool_data": tool_data}
 
     return {

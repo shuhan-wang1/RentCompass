@@ -42,6 +42,8 @@ import re
 from copy import deepcopy
 from typing import Any, Callable, Dict, List, Optional
 
+from core.tenancy_reference import monthly_from_weekly
+
 CONTEXT_SCHEMA_VERSION = 1
 
 # Maximum length (characters) of a rolling summary produced by update_rolling_summary.
@@ -330,10 +332,10 @@ _PERIOD_CUES_ZH = (
     ("month", ("每月", "一个月", "每個月", "每个月", "月租")),
     ("year", ("每年", "一年")),
 )
-_MONTHLY_FACTOR = {"week": 52.0 / 12.0, "month": 1.0, "year": 1.0 / 12.0}
+_MONTHLY_FACTOR = {"week": monthly_from_weekly(1.0), "month": 1.0, "year": 1.0 / 12.0}
 
 # How far a cross-unit restatement may drift from the original before it stops being a
-# plausible refinement. £1200/month vs £280/week is 1.01x (fine); vs £1200/week is 4.33x.
+# plausible refinement. £1200/month vs £280/week is 1.01x (fine); vs £1200/week is about 52/12x.
 _MAGNITUDE_RATIO = 1.5
 
 # Fields we can compare. Only quantity fields are listed: the detector needs a value and

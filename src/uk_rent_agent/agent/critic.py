@@ -79,8 +79,11 @@ import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Optional
 
-from uk_rent_agent.agent.contracts import CriticVerdict
-
+from uk_rent_agent.agent.contracts import (
+    CriticVerdict,
+    monthly_from_weekly,
+    weekly_from_monthly,
+)
 
 # ── numeric parsing ────────────────────────────────────────────────────────
 # A bare number with optional thousands separators / decimals.
@@ -91,7 +94,7 @@ _CURRENCY_BEFORE = re.compile(r"(?:£|GBP)\s*\Z", re.IGNORECASE)
 # Period markers immediately *after* the number, optionally after a "GBP" suffix.
 _GBP = r"(?:GBP\s*)?"
 _MONTHLY_AFTER = re.compile(
-    r"\A\s*" + _GBP + r"(?:pcm|pm\b|/\s*(?:month|mo)\b|per\s+(?:calendar\s+)?month\b"
+    r"\A\s*" + _GBP + r"(?:pcm|pm|weeks?\b|/\s*(?:month|mo)\b|per\s+(?:calendar\s+)?month\b"
     r"|a\s+month\b|monthly\b|/month\b)",
     re.IGNORECASE,
 )
@@ -322,10 +325,10 @@ def _derivations(value: float, unit: str) -> set[float]:
     for n in range(2, _MAX_MONTHS + 1):
         out.add(value * n)
     if unit in ("weekly", "unknown"):
-        out.add(value * _WEEKS_PER_YEAR / _MONTHS_PER_YEAR)
+        out.add(monthly_from_weekly(value))
         out.add(value * _WEEKS_PER_YEAR)
     if unit in ("monthly", "unknown"):
-        weekly = value * _MONTHS_PER_YEAR / _WEEKS_PER_YEAR
+        weekly = weekly_from_monthly(value)
         out.add(weekly)
         for n in range(1, _MAX_DEPOSIT_WEEKS + 1):
             out.add(weekly * n)
@@ -469,6 +472,61 @@ def unsupported_reply_prices(response: str, evidence: Any) -> list[float]:
         unsupported.append(value)
     return sorted(set(unsupported))
 
+
+def _successful_numeric_evidence(evidence: Any) -> str:
+    """Serialize only successful evidence, excluding failed/unknown tool outcomes."""
+    if isinstance(evidence, (list, tuple)):
+        return " ".join(_successful_numeric_evidence(item) for item in evidence)
+    if isinstance(evidence, dict):
+        if evidence.get("success") is False or any(
+                evidence.get(flag) for flag in ("timed_out", "abandoned", "outcome_unknown", "denied")):
+            return ""
+        if "raw_data" in evidence:
+            return _successful_numeric_evidence(evidence.get("raw_data"))
+        return " ".join(
+            _successful_numeric_evidence(value) for value in evidence.values()
+            if not isinstance(value, (bytes, bytearray))
+        )
+    if isinstance(evidence, str):
+        return evidence
+    return ""
+
+
+def _unit_numbers(text: str) -> set[float]:
+    values: set[float] = set()
+    for match in re.finditer(
+        r"(?<![\w])([0-9][0-9,]*(?:\.\d+)?)\s*"
+        r"(minutes?|mins?|分钟|km|kilomet(?:er|re)s?|miles?|mi|metres?|meters?|m)\b",
+        text or "", re.IGNORECASE,
+    ):
+        try:
+            values.add(float(match.group(1).replace(",", "")))
+        except ValueError:
+            pass
+    return values
+
+
+def unsupported_external_numbers(response: str, evidence: Any, user_text: str = "") -> bool:
+    """Return True when an external fact number lacks this turn's provenance.
+
+    User-supplied figures remain valid evidence. Tool figures count only when the
+    corresponding artifact is successful and observable; failed, denied, timed-out,
+    or abandoned artifacts contribute no numbers.
+    """
+    successful = _successful_numeric_evidence(evidence)
+    allowed = _unit_numbers(successful + " " + (user_text or ""))
+    # Hypothetical prose (for example, "would put you 20 minutes...") is not
+    # presented as a measured fact here. Final response assembly still applies the
+    # stricter per-listing commute guard to any user-facing commute judgment.
+    asserted_response = re.sub(r"\bwould\b[^.!?\n]*", "", response or "", flags=re.IGNORECASE)
+    unit_unsupported = any(not any(abs(value - known) <= 0.01 for known in allowed)
+                          for value in _unit_numbers(asserted_response))
+    if unit_unsupported:
+        return True
+    # The live critic supplies the current user message. Keep the legacy direct
+    # evaluate_grounding helper compatible when that context is intentionally absent.
+    return bool(user_text and unsupported_reply_prices(
+        response or "", [successful, user_text]))
 
 # ── station-name grounding ─────────────────────────────────────────────────
 # THE LEGITIMATE NAME UNIVERSE, enumerated. Every source of a real station/place name
@@ -731,6 +789,7 @@ def evaluate_grounding(
     *,
     retrieval_expected: bool = True,
     tool_errored: bool = False,
+    user_text: str = "",
 ) -> CriticVerdict:
     """Deterministic grounding rubric shared by online guardrails and evals.
 
@@ -755,6 +814,7 @@ def evaluate_grounding(
         )
 
     unsupported = unsupported_reply_prices(answer, evidence)
+    unsupported_external = unsupported_external_numbers(answer, evidence, user_text)
     # An asserted station name is graded by the same rule as a price: present in the
     # evidence, or not asserted at all. This is the check that was missing when the
     # model named "Covent Garden" — see piece 4 of the module docstring.
@@ -767,13 +827,15 @@ def evaluate_grounding(
 
     if unsupported:
         issues.append("unsupported_prices:" + ",".join(f"{v:g}" for v in unsupported))
+    if unsupported_external and not unsupported:
+        issues.append("unsupported_external_numbers")
     if ungrounded_stations:
         issues.append("ungrounded_stations:" + ",".join(ungrounded_stations))
     if retrieval_miss:
         issues.append("retrieval_miss")
 
     grounded = (answered and not unsupported and not ungrounded_stations
-                and not retrieval_miss)
+                and not retrieval_miss and not unsupported_external)
     return CriticVerdict(
         grounded=grounded,
         answered=answered,
@@ -872,6 +934,7 @@ async def enforce_grounding(
     retrieval_expected: bool = True,
     tool_errored: bool = False,
     on_verdict: Optional[Callable[..., None]] = None,
+    user_text: str = "",
 ) -> GroundingOutcome:
     """Grade ``response`` and, if it fails, run one corrective regeneration pass.
 
@@ -893,7 +956,7 @@ async def enforce_grounding(
             on_verdict(verdict, stage=stage)
 
     verdict = evaluate_grounding(
-        response, evidence, retrieval_expected=retrieval_expected, tool_errored=tool_errored
+        response, evidence, retrieval_expected=retrieval_expected, tool_errored=tool_errored, user_text=user_text
     )
     _emit(verdict, "initial")
     if verdict.grounded:
@@ -925,7 +988,7 @@ async def enforce_grounding(
         )
 
     verdict2 = evaluate_grounding(
-        new_text, evidence, retrieval_expected=retrieval_expected, tool_errored=tool_errored
+        new_text, evidence, retrieval_expected=retrieval_expected, tool_errored=tool_errored, user_text=user_text
     )
     _emit(verdict2, "regenerated")
     if verdict2.grounded:
@@ -946,6 +1009,28 @@ def has_specific_price_claims(text: str) -> bool:
     no-evidence 兜底 in the critic node.
     """
     return bool(_money_mentions(text or ""))
+
+
+def enforce_no_evidence_numeric_contract(response: str, *, retrieved_evidence: Any,
+                                        user_message: str = "", reply_language: str = "") -> str:
+    """Fail closed on external money claims when retrieval returned no usable data.
+
+    The current user message is an explicit provenance source: repeating ``£900/month``
+    that the user supplied is allowed. A new market/listing amount is not. This helper is
+    intentionally separate from the general critic so callers can apply the same final
+    response guard after regeneration and on deterministic fallback paths.
+    """
+    if evidence_usable(retrieved_evidence) or not has_specific_price_claims(response):
+        return response
+    user_money = _evidence_money_mentions({"user_message": user_message})
+    supported = set()
+    for value, unit in user_money:
+        supported |= _derivations(value, unit)
+    unsupported = [value for value, _unit in _money_mentions(response)
+                   if not _close_to_any(value, supported)]
+    if unsupported:
+        return no_reliable_data_message(reply_language)
+    return response
 
 
 # ── evidence usability (H3) ──────────────────────────────────────────────────

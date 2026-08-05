@@ -1,0 +1,38 @@
+{
+  "benchmark_schema_version": "rentcompass/benchmark/v6",
+  "cases_sha256": "7b4046c1472c3e81334c00dd588be75c9dd1331c161ea193a0e33876a8ee6f69",
+  "manifest_sha256": "af8b9aad574dbbe4fd431a7b2ac0a23f682833c5be7b5acd7767fbd43af3a938",
+  "preflight_report_sha256": "883a460970c74fa73661c900d809921e03fecb07c72d2a830d1742eef62d6472",
+  "product_sha": "523745d",
+  "evaluator_sha": "5b74650",
+  "formal_case_authoring_commit": "8d0cd80",
+  "formal_cases_before_authoring": 0,
+  "formal_model_requests_before_freeze": 0,
+  "preflight_gate_passed": true,
+  "fixture_boundary": "Closed fixtures deny every unrecorded tool; no live-tool fallback is permitted.",
+  "execution_mode": "One monitored process from a clean checkout; no resume or concurrent runner.",
+  "historical_exclusions": {
+    "base98": "development/tuning corpus",
+    "holdout_v2": "historical instrument validation",
+    "holdout_v3": "operationally invalid",
+    "holdout_v4": "operationally invalid",
+    "holdout_v5": "postmortem diagnostic; excluded from v6 quality denominator"
+  },
+  "run_command": [
+    "python -m evaluation.run_benchmark",
+    "--live",
+    "--arch",
+    "legacy",
+    "--config",
+    "routed_models",
+    "--cases",
+    "evaluation/benchmark/holdout_v6/cases_holdout_v6.jsonl",
+    "--case-schema",
+    "evaluation/benchmark/schema_v6.json",
+    "--fixtures-dir",
+    "evaluation/benchmark/holdout_v6/fixtures",
+    "--out",
+    "/tmp/rentcompass-holdout-v6-live-output"
+  ],
+  "status": "frozen_before_formal_run"
+}

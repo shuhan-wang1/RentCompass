@@ -4,15 +4,27 @@ _Generated 2026-07-12T06:27:47Z, HEAD `070675d`. Every number is copied verbatim
 
 ## 可安全使用
 
-### [SAFE] Model-routing A/B engineering deltas (n=98, live)
+### [SAFE-WITH-SCOPE] Model-routing A/B on the CURRENT fc_loop architecture (n=98 x 3 x 2 = 588 live runs)
 
-- **中文 CV 表述**: 在 98 例真实基准上，按节点路由模型（强模型仅用于必要节点）相较全强模型基线：强模型调用 165/170→78/172（-52.7%），总 token 197981→185612（-6.2%），输出 token -28.6%，成本 -24.3%，端到端均值 -38.4%，grounding 基本持平（160/207 vs 160/207）。
-- **English CV statement**: On the 98-case live benchmark, per-node model routing vs an all-strong baseline cut strong-model calls 165/170->78/172 (-52.7%), total tokens (-6.2%), output tokens (-28.6%), cost (-24.3%), and mean e2e latency (-38.4%), while grounding held (160/207 vs 160/207).
-- **Raw data (num/den)**: strong_calls 165/170 -> 78/172; tokens 197981 -> 185612; output_tokens 56014 -> 40013; cost $0.02105 -> $0.01594; e2e_mean_ms 9338 -> 5754; grounded 160/207 vs 160/207
-- **Metric definition**: Aggregated per-config token/call/cost/latency counters over 98 cases x 1 repeat; cost = published DeepSeek rate x measured tokens.
-- **Result file**: `evaluation/results/ablation_model.json (+ ablation_model.csv)`
-- **Safe to use**: YES
-- **Required caveat**: Cost/token saving is TOKEN-VOLUME driven, NOT a cheaper per-token rate (chat & reasoner share one rate). Single live run; offline benchmark, not real users; live tool variance applies.
+> 取代了 2026-07-12 的旧路由条目（−52.7% / −38.4%）。旧条目已移入「不建议使用」，原因见那一节。
+
+- **中文 CV 表述**: 在 98 例自建基准上做配对 A/B（每臂 3 次运行，共 588 次 live 请求，0 失败）：相对「所有节点使用更强模型 deepseek-v4-pro」的基线，当前分档路由把成本降低 **67.7%**（bootstrap 95% CI −70.4%…−65.0%），端到端延迟均值降低 **5.5 s**（CI −7.4…−3.8 s），证据支撑率未见下降（77.0% → 84.1%）。
+- **English CV statement**: On a 98-case self-built benchmark, a paired A/B (3 runs per arm, 588 live requests, 0 failures) shows the tiered model routing cuts cost by **67.7%** (bootstrap 95% CI −70.4%…−65.0%) and mean end-to-end latency by **5.5 s** (CI −7.4…−3.8 s) against an all-strong-model (deepseek-v4-pro) baseline, with no drop in grounding fidelity (77.0% → 84.1%).
+- **Raw data (num/den)**: cost USD 0.4084 → 0.1320 (−67.7%, CI −70.4%…−65.0%); e2e_mean_ms 12,046 → 6,528 (−5,518 ms, CI −7,428…−3,815); e2e_p50 8,645 → 5,682 (−2,963 ms, CI −3,780…−2,240); e2e_p95 37,628 → 16,024 (−21,604 ms, CI −37,653…−8,935); tokens_total 6,141,143 → 5,435,909 (−11.5%, CI −19.9%…−3.1%); llm_calls 620 → 564 (−9.0%, CI −16.0%…−2.0%); pro-model calls 618/620 → 0/564; grounded 843/1095 (77.0%) → 812/965 (84.1%), +7.16 pp (CI +1.72…+13.00); money_grounded 489/655 (74.7%) → 447/560 (79.8%), +5.16 pp (CI −1.06…+11.53, **crosses 0**); contradicted 4 → 1; constraint_pass 227/294 vs 228/294
+- **Metric definition**: Paired per-case A/B on the fc_loop graph (`app/core/agent_loop.py::build_fc_graph`). Control arm forces every node to `deepseek-v4-pro` via an in-process `ModelRouter.route` override (message protocol identical to production); test arm is `evaluation/configs/routed_models.yaml` unpatched. "Strong-model call" = a `deepseek-v4-pro` call, NOT a model-name heuristic — `chat` and `reasoner` resolve to the same model on this commit. Cost from the fixed price table in the report §0.2. CIs are cluster bootstrap with the CASE as the resampling unit, 2000 resamples, seed `20260804`.
+- **Result file**: `evaluation/results/fc_loop_routing_ab/analysis_A.json` (+ `table_A.md`, raw `shard{0,1}/runs.jsonl`); design, limits and conclusions in `evaluation/results/EVAL_REPORT_20260804.md` §1.
+- **Safe to use**: YES, with the scope below
+- **Required caveat**: Measured at commit `0952c56` (branch `telemetry-issue78`, 2026-08-04) — **not the current HEAD**; `app/core/agent_loop.py` and `langgraph_agent.py` have changed since on `evaluation/holdout-v3`. Offline self-built benchmark in a throwaway container, NOT a production SLA (the serving pools were untouched). Latency is WARM-cache relative (every run restores the same 19-row snapshot), so it is not a cold-start figure — cost and call-count conclusions are unaffected. Do NOT call the grounding delta an accuracy gain: the two arms hit different external-tool failure rates (11.8% vs 5.9%), so the +7.16 pp cannot be cleanly attributed to model tier; write "未见质量下降", not "质量提升". Money-grounding CI crosses 0 → 未观察到显著差异. Never mix or add the retrieval-stage number to the end-to-end number. `task_completed` is saturated (294/294 both arms) and carries no information — do not quote it.
+
+### [SAFE] All-thinking baseline fails intermittently inside the deep tool loop (mechanism finding, n=50)
+
+- **中文 CV 表述**: 把任一节点切到 thinking 档后，多约束类请求有 **7/11 (63.6%)** 的概率在轮内 HTTP 400（`reasoning_content` 未回传给 API），全样本 **7/50 (14.0%)**；失败全部集中在 `E_multi_constraint`，其余六类 0 失败。这是消息构造层的机制缺陷，不是答案质量结论。
+- **English CV statement**: Switching any node into thinking mode makes multi-constraint requests fail inside the turn with HTTP 400 (`reasoning_content` not passed back) in **7/11 (63.6%)** of cases — **7/50 (14.0%)** across the whole probe — with every failure landing in `E_multi_constraint` and zero in the other six categories. This is a message-construction mechanism defect, not an answer-quality result.
+- **Raw data (num/den)**: 7/50 overall (smoke 1/5 + probe#1 0/25 + probe#2 6/20); by category E_multi_constraint 7/11, A 0/4, B 0/6, C 0/10, D 0/7, F 0/7, G 0/5; the v4-pro control arm failed 0/294 by contrast
+- **Metric definition**: Feasibility probes of the discarded first-design control arm (`baseline_all_strong.yaml`, which only enables thinking mode). Thinking was verified active (all 30 `llm_call` events in probe #1 tagged `responder#think`), so this is not an unapplied patch.
+- **Result file**: `evaluation/results/fc_loop_routing_ab/thinking_probe{,2}/runs.jsonl`, `evaluation/results/_smoke/runs.jsonl`; analysis in `EVAL_REPORT_20260804.md` §1.5.
+- **Safe to use**: YES, as a mechanism/engineering finding
+- **Required caveat**: Production never triggers this today — the fc hot path is built with `low_latency=True` and is always non-thinking. Quote it as "a latent failure mode found by the A/B, which is why the all-thinking baseline could not be used for a paired 588-run sweep" (arm-specific dropout concentrated in the hardest category would have biased every surviving pair). Do not present it as a production incident or an availability rate.
 
 ### [SAFE] Grounding fidelity on the live 98-case benchmark
 
@@ -101,6 +113,16 @@ _Generated 2026-07-12T06:27:47Z, HEAD `070675d`. Every number is copied verbatim
 - **Required caveat**: Synthetic fixture-replayed benchmark, not live listing freshness, production SLA, or overall answer accuracy. Three retrieval cases exposed real missing structured-output/commute-evidence defects and remain failures. The raw composite and task-completion rate are intentionally not quoted because the frozen no-result marker list produced 13 semantic false negatives; those are diagnostics pending a future evaluator fix and rerun.
 
 ## 不建议使用
+
+### [AVOID] 旧的模型路由数字 −52.7% / −38.4%（2026-07-12，legacy 架构）— 已被取代，禁止引用
+
+- **中文 CV 表述**: ~~强模型调用 165/170→78/172（−52.7%）、总 token −6.2%、成本 −24.3%、端到端均值 −38.4%~~。**禁止引用**：该口径的「强模型」判定依赖 `evaluation/run_ablation.py::_is_strong` 的**模型名匹配**，而它依赖的 `deepseek-reasoner` 已退役；在当前模型线上 `chat` 与 `reasoner` 解析成同一个模型，该判定会把两臂都算成 100% 强模型调用，数字无法复现也无法解释。且该轮是 legacy 图、单次运行。
+- **English CV statement**: ~~strong-model calls −52.7%, tokens −6.2%, cost −24.3%, mean e2e −38.4%~~. **Do not quote**: the "strong model" predicate is a model-NAME match in `run_ablation.py::_is_strong`, and the name it relied on (`deepseek-reasoner`) is retired — on the current model line `chat` and `reasoner` resolve to the same model, so the predicate scores both arms as 100% strong. Legacy graph, single run.
+- **Raw data (num/den)**: strong_calls 165/170 → 78/172; tokens 197981 → 185612; cost $0.02105 → $0.01594; e2e_mean_ms 9338 → 5754; grounded 160/207 vs 160/207
+- **Metric definition**: 见 `evaluation/results/ablation_model.json`；判定逻辑 `evaluation/run_ablation.py::_is_strong`（已失效）。
+- **Result file**: `evaluation/results/ablation_model.json (+ ablation_model.csv)`
+- **Safe to use**: NO
+- **Required caveat**: **改引用上面 [SAFE-WITH-SCOPE] 的当前 fc_loop 条目**（588 run 配对 A/B，成本 −67.7%，端到端均值 −5.5 s）。若要提强模型调用量，当前架构的正确写法是「deepseek-v4-pro 调用 618/620 → 0/564」。另注：`run_ablation.py` 没有 `--arch` 参数，它永远只测 legacy 图——这也是 2026-08-04 那一轮必须绕开它的原因。
 
 ### [AVOID] Held-out metrics that did NOT clear the threshold — do not quote any of these
 

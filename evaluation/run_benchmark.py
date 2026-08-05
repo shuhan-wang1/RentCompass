@@ -2142,6 +2142,17 @@ def _save_checkpoint(out: Path, done_run_ids: List[str], cumulative_cost: float,
     }, indent=2), encoding="utf-8")
 
 
+def fatal_provider_authentication(error: Optional[str]) -> bool:
+    """True only for an unrecoverable provider credential rejection.
+
+    A 401 without an authentication class is not enough: ordinary tool/API errors must
+    remain case-level observations. Continuing through a known-invalid model credential
+    makes every later case an artificial FAIL and wastes the frozen set.
+    """
+    text = str(error or "").casefold()
+    return "authenticationerror" in text and ("401" in text or "authentication" in text)
+
+
 # --------------------------------------------------------------------------- #
 # Main async driver
 # --------------------------------------------------------------------------- #
@@ -2292,6 +2303,11 @@ async def _run_all(args) -> int:
                 # Persist incremental results + checkpoint after EACH case.
                 write_raw_runs(out, runs)
                 _save_checkpoint(out, list(done_ids), cumulative_cost, stopped_reason)
+                if mode == "live" and fatal_provider_authentication(rr.error):
+                    stopped_reason = (f"fatal provider authentication failure: stopped after "
+                                      f"{completed_units}/{total_units} runs; no later case was attempted")
+                    print(stopped_reason)
+                    break
                 if cumulative_cost > args.max_cost_usd:
                     stopped_reason = (f"cost cap reached: stopped after "
                                       f"{completed_units}/{total_units} runs "

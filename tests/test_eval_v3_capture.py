@@ -53,3 +53,10 @@ def test_v3_fixture_directory_is_explicit_and_does_not_touch_default(tmp_path):
     queue = rb.load_fixture_queue({"fixture": "v3.json"}, fixtures_dir=tmp_path)
     assert list(queue) == ["search_properties"]
     assert queue["search_properties"][0]["data"]["recommendations"] == []
+
+
+def test_provider_authentication_fuse_is_narrow():
+    assert rb.fatal_provider_authentication("AuthenticationError: Error code: 401") is True
+    assert rb.fatal_provider_authentication("AuthenticationError: provider rejected credentials") is True
+    assert rb.fatal_provider_authentication("HTTP 401 from an unrelated tool") is False
+    assert rb.fatal_provider_authentication("TimeoutError: upstream slow") is False

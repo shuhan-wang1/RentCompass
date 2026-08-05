@@ -1,0 +1,92 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "31 Kelsterne Mews, Peckham, London SE15 5RF",
+    "price": "£1,925/month",
+    "price_raw": 1925,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/kelsterne-mews-31/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "33 Lambourne Mews, Peckham, London SE15 5UG",
+    "price": "£2,005/month",
+    "price_raw": 2005,
+    "score": 86,
+    "property_type": "House · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "house",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/lambourne-mews-33/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "34 Mortlake Mews, Leyton, London E10 5XZ",
+    "price": "£2,045/month",
+    "price_raw": 2045,
+    "score": 83,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Leyton",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E10",
+    "postcode_sector": "E10 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/mortlake-mews-34/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 3 options in Peckham.",
+  "search_criteria": {
+   "area": "Peckham",
+   "room_type": "studio"
+  }
+ },
+ "description": "HO2-021: frozen search evidence for Peckham. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

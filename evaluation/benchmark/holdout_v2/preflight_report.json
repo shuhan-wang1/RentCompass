@@ -1,0 +1,899 @@
+{
+  "gate": "holdout_preflight",
+  "schema_version": "rentcompass/hard_constraints/v2",
+  "rule": "§2.13 配额 + owner ruling 2026-08-05：未通过者必须替换，不允许在跑完之后用 not_applicable 消化",
+  "checks": {
+    "Q1": "分层配额",
+    "Q2": "替换未通过题后是否仍达标",
+    "Q3": "词表审计（UNCLASSIFIED 必须为空）",
+    "Q4": "语义槽位的满足性覆盖下限",
+    "Q5": "无结果/未知的行为覆盖下限",
+    "H1": "hard 配额题必须有可机器核验的硬约束",
+    "H2": "硬约束参数齐全",
+    "H2b": "参数值在冻结词表内（v2）",
+    "H3": "数值出现在请求文本中（v1）",
+    "H4": "同槽位互不矛盾",
+    "H5": "至少一条约束能走确定性满足性谓词",
+    "H6": "每条约束的 user_text 是原文子串且能复现规范化值（v2）",
+    "C1": "写明正确完成态",
+    "E1": "有用户上下文",
+    "E2": "纯计算题有 reference_calculations",
+    "E3": "声明了 expected_tools 就必须有冻结 fixture",
+    "M1-M6": "held-out 必备元数据 / 唯一 id / 分层合法 / schema 版本一致 / 槽位声明与实际一致",
+    "N1": "检索类的无结果题必须写明诚实说明无匹配"
+  },
+  "cases_file": "evaluation/benchmark/holdout_v2/cases_holdout_v2.jsonl",
+  "n_cases": 110,
+  "stratum_counts": {
+    "retrieval_hard": 35,
+    "retrieval_soft": 20,
+    "calculation": 20,
+    "memory": 20,
+    "clarify": 15
+  },
+  "quota": {
+    "retrieval_hard": 35,
+    "retrieval_soft": 20,
+    "calculation": 20,
+    "memory": 20,
+    "clarify": 15
+  },
+  "quota_problems": [],
+  "residual_after_replacement": [],
+  "n_failed": 0,
+  "failed_case_ids": [],
+  "problem_kind_counts": {},
+  "vocabulary_audit": {
+    "schema_version": "rentcompass/hard_constraints/v2",
+    "user_hard": [
+      "all_results_satisfy",
+      "area_match",
+      "bedroom_count_match",
+      "commute_leq_minutes",
+      "move_in_date_satisfied",
+      "property_feature_present",
+      "room_type_match"
+    ],
+    "excluded_instrument": [],
+    "UNCLASSIFIED": []
+  },
+  "slot_coverage": {
+    "satisfaction": {
+      "budget": 16,
+      "bedroom_count": 13,
+      "room_type": 22,
+      "commute": 16,
+      "area": 35,
+      "move_in_date": 9,
+      "property_feature": 8
+    },
+    "behavior_only": {
+      "budget": 8,
+      "bedroom_count": 4,
+      "room_type": 6,
+      "commute": 0,
+      "area": 20,
+      "move_in_date": 5,
+      "property_feature": 1
+    },
+    "no_result_or_unknown_cases": 13
+  },
+  "slot_min_coverage": {
+    "budget": 15,
+    "bedroom_count": 12,
+    "room_type": 8,
+    "commute": 12,
+    "area": 12,
+    "move_in_date": 8,
+    "property_feature": 8
+  },
+  "behavior_min_coverage": {
+    "no_result_or_unknown": 12
+  },
+  "slot_evidence_field": {
+    "budget": [
+      "listing",
+      "price_raw"
+    ],
+    "bedroom_count": [
+      "listing",
+      "bedrooms"
+    ],
+    "room_type": [
+      "listing",
+      "room_type_normalized"
+    ],
+    "commute": [
+      "tool_result",
+      "duration_minutes"
+    ],
+    "area": [
+      "listing",
+      "area_normalized"
+    ],
+    "move_in_date": [
+      "listing",
+      "available_from_normalized"
+    ],
+    "property_feature": [
+      "listing",
+      "features"
+    ]
+  },
+  "denominator_rule": "满足性分母只收「fixture 有结构化字段 + 有 listing + 谓词可判定」的题；heuristic/unknown/无 listing 分支只计入行为覆盖",
+  "semantic_slots_without_a_type": [],
+  "per_case": [
+    {
+      "case_id": "HO2-001",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-002",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-003",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-004",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-005",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-006",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-007",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-008",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-009",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-010",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-011",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-012",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-013",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-014",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-015",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-016",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-017",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-018",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-019",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-020",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-021",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-022",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-023",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-024",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-025",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-026",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-027",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-028",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-029",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-030",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-031",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-032",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-033",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-034",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-035",
+      "task_class": "retrieval",
+      "stratum": "retrieval_hard",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-036",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-037",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-038",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-039",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-040",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-041",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-042",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-043",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-044",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-045",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-046",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-047",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-048",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-049",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-050",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-051",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-052",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-053",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-054",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-055",
+      "task_class": "retrieval",
+      "stratum": "retrieval_soft",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-056",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-057",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-058",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-059",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-060",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-061",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-062",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-063",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-064",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-065",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-066",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-067",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-068",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-069",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-070",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-071",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-072",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-073",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-074",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-075",
+      "task_class": "calculation",
+      "stratum": "calculation",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-076",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-077",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-078",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-079",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-080",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-081",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-082",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-083",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-084",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-085",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-086",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-087",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-088",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-089",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-090",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-091",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-092",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-093",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-094",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-095",
+      "task_class": "memory",
+      "stratum": "memory",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-096",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-097",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-098",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-099",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-100",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-101",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-102",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-103",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-104",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-105",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-106",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-107",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-108",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-109",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    },
+    {
+      "case_id": "HO2-110",
+      "task_class": "clarify",
+      "stratum": "clarify",
+      "passed": true,
+      "problems": []
+    }
+  ],
+  "gate_passed": true,
+  "static_only_caveat": "静态检查只能确认「有没有写」和「能不能机器核验」；「写得对不对」必须由人工抽查确认，见 checklist"
+}

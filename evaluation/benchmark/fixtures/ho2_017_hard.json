@@ -1,0 +1,180 @@
+{
+ "description": "HO2-017: frozen search evidence for Willesden Green. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['room_type', 'commute', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Baker Street are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "27 Sowerby Mews, Willesden Green, London NW2 5LW",
+      "price": "£1,825/month",
+      "price_raw": 1825,
+      "score": 89,
+      "property_type": "Studio",
+      "bedrooms": 1,
+      "room_type_normalized": "studio",
+      "area_normalized": "Willesden Green",
+      "borough": "Brent",
+      "city": "London",
+      "postcode_district": "NW2",
+      "postcode_sector": "NW2 5",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/sowerby-mews-27/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 2,
+      "address": "29 Thackray Mews, Willesden Green, London NW2 5QX",
+      "price": "£1,905/month",
+      "price_raw": 1905,
+      "score": 86,
+      "property_type": "House · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "house",
+      "area_normalized": "Willesden Green",
+      "borough": "Brent",
+      "city": "London",
+      "postcode_district": "NW2",
+      "postcode_sector": "NW2 5",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/thackray-mews-29/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 3,
+      "address": "30 Ulverton Mews, Willesden Green, London NW2 5SQ",
+      "price": "£1,945/month",
+      "price_raw": 1945,
+      "score": 83,
+      "property_type": "Studio",
+      "bedrooms": 1,
+      "room_type_normalized": "studio",
+      "area_normalized": "Willesden Green",
+      "borough": "Brent",
+      "city": "London",
+      "postcode_district": "NW2",
+      "postcode_sector": "NW2 5",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/ulverton-mews-30/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 4,
+      "address": "31 Vandermeer Mews, Bermondsey, London SE16 4UG",
+      "price": "£1,985/month",
+      "price_raw": 1985,
+      "score": 80,
+      "property_type": "Studio",
+      "bedrooms": 1,
+      "room_type_normalized": "studio",
+      "area_normalized": "Bermondsey",
+      "borough": "Southwark",
+      "city": "London",
+      "postcode_district": "SE16",
+      "postcode_sector": "SE16 4",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/vandermeer-mews-31/",
+      "explanation": "Comes fully furnished."
+     }
+    ],
+    "summary": "Found 4 options in Willesden Green.",
+    "search_criteria": {
+     "area": "Willesden Green",
+     "room_type": "studio"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Sowerby Mews",
+    "from_address": "27 Sowerby Mews, Willesden Green, London NW2 5LW",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 24,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Thackray Mews",
+    "from_address": "29 Thackray Mews, Willesden Green, London NW2 5QX",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Ulverton Mews",
+    "from_address": "30 Ulverton Mews, Willesden Green, London NW2 5SQ",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 40,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Vandermeer Mews",
+    "from_address": "31 Vandermeer Mews, Bermondsey, London SE16 4UG",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

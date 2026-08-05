@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "8 Pyrford Terrace, Crouch End, London N8 9NE",
+    "price": "£1,375/month",
+    "price_raw": 1375,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Crouch End",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N8",
+    "postcode_sector": "N8 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/pyrford-terrace-8/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "15 Quenby Terrace, Crouch End, London N8 9XZ",
+    "price": "£1,550/month",
+    "price_raw": 1550,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Crouch End",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N8",
+    "postcode_sector": "N8 9",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/quenby-terrace-15/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "22 Rushmoor Terrace, Crouch End, London N8 9GU",
+    "price": "£1,725/month",
+    "price_raw": 1725,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Crouch End",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N8",
+    "postcode_sector": "N8 9",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/rushmoor-terrace-22/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Crouch End.",
+  "search_criteria": {
+   "area": "Crouch End"
+  }
+ },
+ "description": "HO2-040: frozen open-ended search evidence for Crouch End."
+}

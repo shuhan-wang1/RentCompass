@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "6 Jarrowfield Terrace, Tooting, London SW17 0JN",
+    "price": "£1,345/month",
+    "price_raw": 1345,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Tooting",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW17",
+    "postcode_sector": "SW17 0",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/jarrowfield-terrace-6/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "13 Kelsterne Terrace, Tooting, London SW17 0UG",
+    "price": "£1,520/month",
+    "price_raw": 1520,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Tooting",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW17",
+    "postcode_sector": "SW17 0",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/kelsterne-terrace-13/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "20 Lambourne Terrace, Tooting, London SW17 0EB",
+    "price": "£1,695/month",
+    "price_raw": 1695,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Tooting",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW17",
+    "postcode_sector": "SW17 0",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/lambourne-terrace-20/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Tooting.",
+  "search_criteria": {
+   "area": "Tooting"
+  }
+ },
+ "description": "HO2-038: frozen open-ended search evidence for Tooting."
+}

@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "12 Marchcroft Row, Leyton, London E10 5SQ",
+    "price": "£1,300/month",
+    "price_raw": 1300,
+    "score": 89,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Leyton",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E10",
+    "postcode_sector": "E10 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/marchcroft-row-12/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "14 Denbury Row, Leyton, London E10 5WR",
+    "price": "£1,650/month",
+    "price_raw": 1650,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Leyton",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E10",
+    "postcode_sector": "E10 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/denbury-row-14/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "15 Osterlyn Row, Leyton, London E10 5YH",
+    "price": "£1,420/month",
+    "price_raw": 1420,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Leyton",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E10",
+    "postcode_sector": "E10 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/osterlyn-row-15/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "16 Pentworth Row, Leyton, London E10 5AA",
+    "price": "£1,460/month",
+    "price_raw": 1460,
+    "score": 80,
+    "property_type": "Bungalow · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Leyton",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E10",
+    "postcode_sector": "E10 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/pentworth-row-16/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "17 Ravensmere Row, Hendon, London NW4 3DT",
+    "price": "£1,500/month",
+    "price_raw": 1500,
+    "score": 77,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Hendon",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW4",
+    "postcode_sector": "NW4 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ravensmere-row-17/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Leyton.",
+  "search_criteria": {
+   "area": "Leyton",
+   "max_budget": 1450,
+   "room_type": "flat",
+   "bedrooms": 1
+  }
+ },
+ "description": "HO2-002: frozen search evidence for Leyton. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

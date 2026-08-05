@@ -1,0 +1,218 @@
+{
+ "description": "HO2-033: frozen search evidence for Hendon. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'move_in_date', 'property_feature'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Baker Street are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 5,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "43 Ashlin Terrace, Hendon, London NW4 3FL",
+      "price": "£2,225/month",
+      "price_raw": 2225,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Hendon",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW4",
+      "postcode_sector": "NW4 3",
+      "available_from": "10 October 2026",
+      "available_from_normalized": "2026-10-10",
+      "features": [
+       "lift"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/ashlin-terrace-43/",
+      "explanation": "Lift access to all floors."
+     },
+     {
+      "rank": 2,
+      "address": "45 Marchcroft Terrace, Hendon, London NW4 3JN",
+      "price": "£2,305/month",
+      "price_raw": 2305,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Hendon",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW4",
+      "postcode_sector": "NW4 3",
+      "available_from": "10 October 2026",
+      "available_from_normalized": "2026-10-10",
+      "features": [
+       "lift"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/marchcroft-terrace-45/",
+      "explanation": "Lift access to all floors."
+     },
+     {
+      "rank": 3,
+      "address": "46 Denbury Terrace, Colindale, London NW9 5NE",
+      "price": "£2,345/month",
+      "price_raw": 2345,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Colindale",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW9",
+      "postcode_sector": "NW9 5",
+      "available_from": "10 October 2026",
+      "available_from_normalized": "2026-10-10",
+      "features": [
+       "lift"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/denbury-terrace-46/",
+      "explanation": "Lift access to all floors."
+     },
+     {
+      "rank": 4,
+      "address": "47 Osterlyn Terrace, Hendon, London NW4 3QX",
+      "price": "£2,385/month",
+      "price_raw": 2385,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Hendon",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW4",
+      "postcode_sector": "NW4 3",
+      "available_from": "24 November 2026",
+      "available_from_normalized": "2026-11-24",
+      "features": [
+       "lift"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/osterlyn-terrace-47/",
+      "explanation": "Lift access to all floors."
+     },
+     {
+      "rank": 5,
+      "address": "48 Pentworth Terrace, Hendon, London NW4 3SQ",
+      "price": "£2,425/month",
+      "price_raw": 2425,
+      "score": 77,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Hendon",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW4",
+      "postcode_sector": "NW4 3",
+      "available_from": "10 October 2026",
+      "available_from_normalized": "2026-10-10",
+      "features": [
+       "unfurnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/pentworth-terrace-48/",
+      "explanation": "Let unfurnished."
+     }
+    ],
+    "summary": "Found 5 options in Hendon.",
+    "search_criteria": {
+     "area": "Hendon"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Ashlin Terrace",
+    "from_address": "43 Ashlin Terrace, Hendon, London NW4 3FL",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 24,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Marchcroft Terrace",
+    "from_address": "45 Marchcroft Terrace, Hendon, London NW4 3JN",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 40,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Denbury Terrace",
+    "from_address": "46 Denbury Terrace, Colindale, London NW9 5NE",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Osterlyn Terrace",
+    "from_address": "47 Osterlyn Terrace, Hendon, London NW4 3QX",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Pentworth Terrace",
+    "from_address": "48 Pentworth Terrace, Hendon, London NW4 3SQ",
+    "to_address": "Baker Street, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Baker Street",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

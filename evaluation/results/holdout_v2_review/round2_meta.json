@@ -1,0 +1,16 @@
+{
+  "round": "round2",
+  "purpose": "judge",
+  "model": "deepseek-v4-flash",
+  "thinking": false,
+  "temperature": 0.0,
+  "order_seed": 20260887,
+  "criterion_seed": 20260909,
+  "nonce": "RC-HO2-R2",
+  "n_items": 110,
+  "n_verdicts": 110,
+  "n_new_ok": 104,
+  "n_new_fail": 0,
+  "aborted": false,
+  "generated_at": "2026-08-05T07:39:14+01:00"
+}

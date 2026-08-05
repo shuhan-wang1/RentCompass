@@ -1,0 +1,117 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 4,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "25 Halstow Mews, Forest Gate, London E7 8HD",
+    "price": "£1,000/month",
+    "price_raw": 1000,
+    "score": 89,
+    "property_type": "Room in shared house · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "room_in_shared",
+    "area_normalized": "Forest Gate",
+    "borough": "Newham",
+    "city": "London",
+    "postcode_district": "E7",
+    "postcode_sector": "E7 8",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/halstow-mews-25/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "27 Wraysbury Mews, Forest Gate, London E7 8NE",
+    "price": "£1,350/month",
+    "price_raw": 1350,
+    "score": 86,
+    "property_type": "Room in shared house · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "room_in_shared",
+    "area_normalized": "Forest Gate",
+    "borough": "Newham",
+    "city": "London",
+    "postcode_district": "E7",
+    "postcode_sector": "E7 8",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/wraysbury-mews-27/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "28 Quillon Mews, Forest Gate, London E7 8QX",
+    "price": "£1,120/month",
+    "price_raw": 1120,
+    "score": 83,
+    "property_type": "Bungalow · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Forest Gate",
+    "borough": "Newham",
+    "city": "London",
+    "postcode_district": "E7",
+    "postcode_sector": "E7 8",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/quillon-mews-28/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "29 Ashlin Mews, Deptford, London SE8 3SQ",
+    "price": "£1,160/month",
+    "price_raw": 1160,
+    "score": 80,
+    "property_type": "Room in shared house · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "room_in_shared",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ashlin-mews-29/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 4 options in Forest Gate.",
+  "search_criteria": {
+   "area": "Forest Gate",
+   "max_budget": 1150,
+   "room_type": "room_in_shared"
+  }
+ },
+ "description": "HO2-015: frozen search evidence for Forest Gate. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'room_type', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

@@ -1,0 +1,179 @@
+{
+ "description": "HO2-024: frozen search evidence for Bermondsey. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to London Bridge are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "34 Verwood Mews, Bermondsey, London SE16 4UG",
+      "price": "£2,000/month",
+      "price_raw": 2000,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Bermondsey",
+      "borough": "Southwark",
+      "city": "London",
+      "postcode_district": "SE16",
+      "postcode_sector": "SE16 4",
+      "available_from": "5 October 2026",
+      "available_from_normalized": "2026-10-05",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/verwood-mews-34/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 2,
+      "address": "36 Whitmarsh Mews, Bermondsey, London SE16 4YH",
+      "price": "£2,080/month",
+      "price_raw": 2080,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Bermondsey",
+      "borough": "Southwark",
+      "city": "London",
+      "postcode_district": "SE16",
+      "postcode_sector": "SE16 4",
+      "available_from": "5 October 2026",
+      "available_from_normalized": "2026-10-05",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/whitmarsh-mews-36/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 3,
+      "address": "37 Xanthe Mews, Wood Green, London N22 6AA",
+      "price": "£2,120/month",
+      "price_raw": 2120,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Wood Green",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N22",
+      "postcode_sector": "N22 6",
+      "available_from": "5 October 2026",
+      "available_from_normalized": "2026-10-05",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/xanthe-mews-37/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 4,
+      "address": "38 Yealand Mews, Bermondsey, London SE16 4DT",
+      "price": "£2,160/month",
+      "price_raw": 2160,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Bermondsey",
+      "borough": "Southwark",
+      "city": "London",
+      "postcode_district": "SE16",
+      "postcode_sector": "SE16 4",
+      "available_from": "19 November 2026",
+      "available_from_normalized": "2026-11-19",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/yealand-mews-38/",
+      "explanation": "Comes fully furnished."
+     }
+    ],
+    "summary": "Found 4 options in Bermondsey.",
+    "search_criteria": {
+     "area": "Bermondsey"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Verwood Mews",
+    "from_address": "34 Verwood Mews, Bermondsey, London SE16 4UG",
+    "to_address": "London Bridge, London",
+    "mode": "transit",
+    "duration_minutes": 19,
+    "duration_category": "Short (<20 min)",
+    "route_summary": "Direct service to London Bridge",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Whitmarsh Mews",
+    "from_address": "36 Whitmarsh Mews, Bermondsey, London SE16 4YH",
+    "to_address": "London Bridge, London",
+    "mode": "transit",
+    "duration_minutes": 35,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to London Bridge",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Xanthe Mews",
+    "from_address": "37 Xanthe Mews, Wood Green, London N22 6AA",
+    "to_address": "London Bridge, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to London Bridge",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Yealand Mews",
+    "from_address": "38 Yealand Mews, Bermondsey, London SE16 4DT",
+    "to_address": "London Bridge, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to London Bridge",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

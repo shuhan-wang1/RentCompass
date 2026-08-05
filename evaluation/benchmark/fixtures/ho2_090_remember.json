@@ -1,0 +1,12 @@
+{
+ "tool_name": "remember",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "stored": "User has a dog and needs a pet-friendly let.",
+  "mtype": "semantic",
+  "message": "Saved to your profile."
+ },
+ "description": "HO2-090: frozen remember() acknowledgement for a preference update."
+}

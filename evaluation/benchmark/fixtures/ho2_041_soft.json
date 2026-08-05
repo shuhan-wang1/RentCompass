@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "9 Stanbrook Terrace, Bermondsey, London SE16 4PP",
+    "price": "£1,390/month",
+    "price_raw": 1390,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/stanbrook-terrace-9/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "16 Tarleton Terrace, Bermondsey, London SE16 4YH",
+    "price": "£1,565/month",
+    "price_raw": 1565,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/tarleton-terrace-16/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "23 Uffington Terrace, Bermondsey, London SE16 4HD",
+    "price": "£1,740/month",
+    "price_raw": 1740,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/uffington-terrace-23/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Bermondsey.",
+  "search_criteria": {
+   "area": "Bermondsey"
+  }
+ },
+ "description": "HO2-041: frozen open-ended search evidence for Bermondsey."
+}

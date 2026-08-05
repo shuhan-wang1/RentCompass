@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "7 Mortlake Terrace, Acton, London W3 6LW",
+    "price": "£1,360/month",
+    "price_raw": 1360,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Acton",
+    "borough": "Ealing",
+    "city": "London",
+    "postcode_district": "W3",
+    "postcode_sector": "W3 6",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/mortlake-terrace-7/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "14 Netherby Terrace, Acton, London W3 6WR",
+    "price": "£1,535/month",
+    "price_raw": 1535,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Acton",
+    "borough": "Ealing",
+    "city": "London",
+    "postcode_district": "W3",
+    "postcode_sector": "W3 6",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/netherby-terrace-14/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "21 Ockendale Terrace, Acton, London W3 6FL",
+    "price": "£1,710/month",
+    "price_raw": 1710,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Acton",
+    "borough": "Ealing",
+    "city": "London",
+    "postcode_district": "W3",
+    "postcode_sector": "W3 6",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ockendale-terrace-21/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Acton.",
+  "search_criteria": {
+   "area": "Acton"
+  }
+ },
+ "description": "HO2-039: frozen open-ended search evidence for Acton."
+}

@@ -1,0 +1,179 @@
+{
+ "description": "HO2-029: frozen search evidence for Wood Green. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'property_feature'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Holborn are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "39 Quarrendon Mews, Wood Green, London N22 6AA",
+      "price": "£2,125/month",
+      "price_raw": 2125,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Wood Green",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N22",
+      "postcode_sector": "N22 6",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "pet_friendly"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/quarrendon-mews-39/",
+      "explanation": "Landlord accepts pets."
+     },
+     {
+      "rank": 2,
+      "address": "41 Redbourne Mews, Wood Green, London N22 6EB",
+      "price": "£2,205/month",
+      "price_raw": 2205,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Wood Green",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N22",
+      "postcode_sector": "N22 6",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "pet_friendly"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/redbourne-mews-41/",
+      "explanation": "Landlord accepts pets."
+     },
+     {
+      "rank": 3,
+      "address": "42 Sandhurst Mews, Harringay, London N4 1GU",
+      "price": "£2,245/month",
+      "price_raw": 2245,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Harringay",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N4",
+      "postcode_sector": "N4 1",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "pet_friendly"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/sandhurst-mews-42/",
+      "explanation": "Landlord accepts pets."
+     },
+     {
+      "rank": 4,
+      "address": "43 Thornbury Mews, Wood Green, London N22 6JN",
+      "price": "£2,285/month",
+      "price_raw": 2285,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Wood Green",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N22",
+      "postcode_sector": "N22 6",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "unfurnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/thornbury-mews-43/",
+      "explanation": "Let unfurnished."
+     }
+    ],
+    "summary": "Found 4 options in Wood Green.",
+    "search_criteria": {
+     "area": "Wood Green"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Quarrendon Mews",
+    "from_address": "39 Quarrendon Mews, Wood Green, London N22 6AA",
+    "to_address": "Holborn, London",
+    "mode": "transit",
+    "duration_minutes": 24,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Holborn",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Redbourne Mews",
+    "from_address": "41 Redbourne Mews, Wood Green, London N22 6EB",
+    "to_address": "Holborn, London",
+    "mode": "transit",
+    "duration_minutes": 40,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Holborn",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Sandhurst Mews",
+    "from_address": "42 Sandhurst Mews, Harringay, London N4 1GU",
+    "to_address": "Holborn, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Holborn",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Thornbury Mews",
+    "from_address": "43 Thornbury Mews, Wood Green, London N22 6JN",
+    "to_address": "Holborn, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Holborn",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

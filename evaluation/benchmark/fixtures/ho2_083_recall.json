@@ -1,0 +1,18 @@
+{
+ "tool_name": "recall_memory",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "count": 1,
+  "memories": [
+   {
+    "content": "User works from home three days a week and wants a study or second room.",
+    "mtype": "semantic",
+    "score": 0.94
+   }
+  ],
+  "formatted": "- User works from home three days a week and wants a study or second room."
+ },
+ "description": "HO2-083: frozen recall_memory bucket holding exactly one fact (worktype)."
+}

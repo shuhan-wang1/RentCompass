@@ -1,0 +1,35 @@
+{
+  "frozen_at": "2026-08-05T07:16:35+01:00",
+  "git": {
+    "head": "0952c56e21b9b0dac3fb10fe99ee907c36b3a2d8",
+    "branch": "telemetry-issue78",
+    "user.name": "shuhan-wang1",
+    "user.email": "130167280+shuhan-wang1@users.noreply.github.com"
+  },
+  "sha256": {
+    "cases": "0294584c69bf60147e199b6d8430bfc4b041d0ea110bec6d11922feb7b88fe34",
+    "manifest": "1062ea06c89822375cc7422625ce64e673aff5eb010270c493099540b4809031",
+    "schema_module": "acc571c5b860ef52979b683b8426bbdacd7f73b83ca5556a6992bce6ed8e9c2d",
+    "schema_json": "35bf5568570f9c8e2c50a6b9dc0afc92cf425e9b53cc04680f7c5a740c5d0130",
+    "generator": "38ba370007ed6f1c0e771784d0f38e77cf57a5c09e88fdb2d30639b34ac45ff9",
+    "preflight": "2ab11d4ba901c14f0fcf2376700343c7bdaca7d17a037a20529a56e30e3c7809",
+    "tests": "bf223826bb24252d93a877a441e8ae3b0cebcdf42ee40d06f99c005d59b163c3",
+    "preflight_report": "e73de47568ac3432a435ad86bfaa74ddd9998379791bbb2b77e48fca4acf102b",
+    "author_audit": "4ab80ac26be2800baa35c607389c241d8179ad45364dfd72bec9da5d22fb4acd"
+  },
+  "n_cases": 110,
+  "n_fixtures": 75,
+  "fixtures_sha256_count": 75,
+  "build_seed": "none — the generator is fully deterministic (no RNG); preflight checklist sampling seed 20260805; bootstrap seed 20260805",
+  "paths": {
+    "cases": "evaluation/benchmark/holdout_v2/cases_holdout_v2.jsonl",
+    "manifest": "evaluation/benchmark/holdout_v2/MANIFEST.json",
+    "schema_module": "evaluation/results/_harness/constraint_schema_v2.py",
+    "schema_json": "evaluation/benchmark/schema_v2.json",
+    "generator": "evaluation/results/_harness/build_holdout_v2.py",
+    "preflight": "evaluation/results/_harness/holdout_preflight.py",
+    "tests": "evaluation/results/_harness/test_constraint_schema_v2.py",
+    "preflight_report": "evaluation/benchmark/holdout_v2/preflight_report.json",
+    "author_audit": "evaluation/benchmark/holdout_v2/AUTHOR_AUDIT.md"
+  }
+}

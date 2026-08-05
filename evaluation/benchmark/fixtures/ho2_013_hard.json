@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "23 Upwaltham Row, Balham, London SW12 9FL",
+    "price": "£1,900/month",
+    "price_raw": 1900,
+    "score": 89,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Balham",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW12",
+    "postcode_sector": "SW12 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/upwaltham-row-23/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "25 Vellacott Row, Balham, London SW12 9JN",
+    "price": "£2,250/month",
+    "price_raw": 2250,
+    "score": 86,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Balham",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW12",
+    "postcode_sector": "SW12 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/vellacott-row-25/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "26 Wandlebury Row, Balham, London SW12 9NE",
+    "price": "£2,020/month",
+    "price_raw": 2020,
+    "score": 83,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Balham",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW12",
+    "postcode_sector": "SW12 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/wandlebury-row-26/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "27 Yarrowby Row, Balham, London SW12 9QX",
+    "price": "£2,060/month",
+    "price_raw": 2060,
+    "score": 80,
+    "property_type": "Bungalow · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Balham",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW12",
+    "postcode_sector": "SW12 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/yarrowby-row-27/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "28 Ashmansworth Row, Hendon, London NW4 3SQ",
+    "price": "£2,100/month",
+    "price_raw": 2100,
+    "score": 77,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Hendon",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW4",
+    "postcode_sector": "NW4 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ashmansworth-row-28/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Balham.",
+  "search_criteria": {
+   "area": "Balham",
+   "max_budget": 2050,
+   "room_type": "flat",
+   "bedrooms": 2
+  }
+ },
+ "description": "HO2-013: frozen search evidence for Balham. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

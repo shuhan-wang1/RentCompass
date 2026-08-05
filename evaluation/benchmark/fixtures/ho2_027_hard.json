@@ -1,0 +1,179 @@
+{
+ "description": "HO2-027: frozen search evidence for New Cross. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'property_feature'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Old Street are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "37 Ilmington Mews, New Cross, London SE14 6YH",
+      "price": "£2,075/month",
+      "price_raw": 2075,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "New Cross",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE14",
+      "postcode_sector": "SE14 6",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "garden"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/ilmington-mews-37/",
+      "explanation": "Private rear garden."
+     },
+     {
+      "rank": 2,
+      "address": "39 Jevington Mews, New Cross, London SE14 6BJ",
+      "price": "£2,155/month",
+      "price_raw": 2155,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "New Cross",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE14",
+      "postcode_sector": "SE14 6",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "garden"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/jevington-mews-39/",
+      "explanation": "Private rear garden."
+     },
+     {
+      "rank": 3,
+      "address": "40 Kirkstall Mews, Willesden Green, London NW2 5EB",
+      "price": "£2,195/month",
+      "price_raw": 2195,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Willesden Green",
+      "borough": "Brent",
+      "city": "London",
+      "postcode_district": "NW2",
+      "postcode_sector": "NW2 5",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "garden"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/kirkstall-mews-40/",
+      "explanation": "Private rear garden."
+     },
+     {
+      "rank": 4,
+      "address": "41 Longmynd Mews, New Cross, London SE14 6GU",
+      "price": "£2,235/month",
+      "price_raw": 2235,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "New Cross",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE14",
+      "postcode_sector": "SE14 6",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "unfurnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/longmynd-mews-41/",
+      "explanation": "Let unfurnished."
+     }
+    ],
+    "summary": "Found 4 options in New Cross.",
+    "search_criteria": {
+     "area": "New Cross"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Ilmington Mews",
+    "from_address": "37 Ilmington Mews, New Cross, London SE14 6YH",
+    "to_address": "Old Street, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Old Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Jevington Mews",
+    "from_address": "39 Jevington Mews, New Cross, London SE14 6BJ",
+    "to_address": "Old Street, London",
+    "mode": "transit",
+    "duration_minutes": 50,
+    "duration_category": "Long (>45 min)",
+    "route_summary": "Direct service to Old Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Kirkstall Mews",
+    "from_address": "40 Kirkstall Mews, Willesden Green, London NW2 5EB",
+    "to_address": "Old Street, London",
+    "mode": "transit",
+    "duration_minutes": 44,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Old Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Longmynd Mews",
+    "from_address": "41 Longmynd Mews, New Cross, London SE14 6GU",
+    "to_address": "Old Street, London",
+    "mode": "transit",
+    "duration_minutes": 44,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Old Street",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

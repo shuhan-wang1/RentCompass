@@ -1,0 +1,18 @@
+{
+ "tool_name": "recall_memory",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "count": 1,
+  "memories": [
+   {
+    "content": "User wants to live in Walthamstow.",
+    "mtype": "semantic",
+    "score": 0.94
+   }
+  ],
+  "formatted": "- User wants to live in Walthamstow."
+ },
+ "description": "HO2-077: frozen recall_memory bucket holding exactly one fact (area)."
+}

@@ -1,0 +1,20 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "no_results",
+  "total_found": 0,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [],
+  "summary": "Found 0 options in Leyton.",
+  "search_criteria": {
+   "area": "Leyton",
+   "max_budget": 500
+  },
+  "message": "I could not find any listings in Leyton matching those criteria right now."
+ },
+ "description": "HO2-051: frozen NO-RESULT search evidence for Leyton at £500/month."
+}

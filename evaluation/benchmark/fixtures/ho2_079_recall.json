@@ -1,0 +1,18 @@
+{
+ "tool_name": "recall_memory",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "count": 1,
+  "memories": [
+   {
+    "content": "User needs a 2-bedroom property.",
+    "mtype": "semantic",
+    "score": 0.94
+   }
+  ],
+  "formatted": "- User needs a 2-bedroom property."
+ },
+ "description": "HO2-079: frozen recall_memory bucket holding exactly one fact (beds)."
+}

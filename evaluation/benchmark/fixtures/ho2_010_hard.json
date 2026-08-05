@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "20 Eastnor Row, Hendon, London NW4 3BJ",
+    "price": "£1,600/month",
+    "price_raw": 1600,
+    "score": 89,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Hendon",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW4",
+    "postcode_sector": "NW4 3",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/eastnor-row-20/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "22 Fairholme Row, Hendon, London NW4 3FL",
+    "price": "£1,950/month",
+    "price_raw": 1950,
+    "score": 86,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Hendon",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW4",
+    "postcode_sector": "NW4 3",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/fairholme-row-22/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "23 Glaisdale Row, Hendon, London NW4 3HD",
+    "price": "£1,720/month",
+    "price_raw": 1720,
+    "score": 83,
+    "property_type": "Flat · 3 bed",
+    "bedrooms": 3,
+    "room_type_normalized": "flat",
+    "area_normalized": "Hendon",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW4",
+    "postcode_sector": "NW4 3",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/glaisdale-row-23/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "24 Hartsmere Row, Hendon, London NW4 3LW",
+    "price": "£1,760/month",
+    "price_raw": 1760,
+    "score": 80,
+    "property_type": "Bungalow · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Hendon",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW4",
+    "postcode_sector": "NW4 3",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/hartsmere-row-24/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "25 Ilmington Row, Colindale, London NW9 5PP",
+    "price": "£1,800/month",
+    "price_raw": 1800,
+    "score": 77,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Colindale",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW9",
+    "postcode_sector": "NW9 5",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ilmington-row-25/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Hendon.",
+  "search_criteria": {
+   "area": "Hendon",
+   "max_budget": 1750,
+   "room_type": "flat",
+   "bedrooms": 2
+  }
+ },
+ "description": "HO2-010: frozen search evidence for Hendon. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

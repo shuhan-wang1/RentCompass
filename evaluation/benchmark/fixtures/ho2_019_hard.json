@@ -1,0 +1,180 @@
+{
+ "description": "HO2-019: frozen search evidence for Leyton. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['room_type', 'commute', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Liverpool Street are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "29 Calthorpe Mews, Leyton, London E10 5PP",
+      "price": "£1,875/month",
+      "price_raw": 1875,
+      "score": 89,
+      "property_type": "Room in shared house · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "room_in_shared",
+      "area_normalized": "Leyton",
+      "borough": "Waltham Forest",
+      "city": "London",
+      "postcode_district": "E10",
+      "postcode_sector": "E10 5",
+      "available_from": "Contact agent",
+      "available_from_normalized": "contact agent",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/calthorpe-mews-29/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 2,
+      "address": "31 Drayfield Mews, Leyton, London E10 5SQ",
+      "price": "£1,955/month",
+      "price_raw": 1955,
+      "score": 86,
+      "property_type": "Bungalow · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "bungalow",
+      "area_normalized": "Leyton",
+      "borough": "Waltham Forest",
+      "city": "London",
+      "postcode_district": "E10",
+      "postcode_sector": "E10 5",
+      "available_from": "Contact agent",
+      "available_from_normalized": "contact agent",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/drayfield-mews-31/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 3,
+      "address": "32 Ellesbury Mews, Leyton, London E10 5UG",
+      "price": "£1,995/month",
+      "price_raw": 1995,
+      "score": 83,
+      "property_type": "Room in shared house · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "room_in_shared",
+      "area_normalized": "Leyton",
+      "borough": "Waltham Forest",
+      "city": "London",
+      "postcode_district": "E10",
+      "postcode_sector": "E10 5",
+      "available_from": "Contact agent",
+      "available_from_normalized": "contact agent",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/ellesbury-mews-32/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 4,
+      "address": "33 Foxhollow Mews, Hendon, London NW4 3XZ",
+      "price": "£2,035/month",
+      "price_raw": 2035,
+      "score": 80,
+      "property_type": "Room in shared house · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "room_in_shared",
+      "area_normalized": "Hendon",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW4",
+      "postcode_sector": "NW4 3",
+      "available_from": "Contact agent",
+      "available_from_normalized": "contact agent",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/foxhollow-mews-33/",
+      "explanation": "Comes fully furnished."
+     }
+    ],
+    "summary": "Found 4 options in Leyton.",
+    "search_criteria": {
+     "area": "Leyton",
+     "room_type": "room_in_shared"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Calthorpe Mews",
+    "from_address": "29 Calthorpe Mews, Leyton, London E10 5PP",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Drayfield Mews",
+    "from_address": "31 Drayfield Mews, Leyton, London E10 5SQ",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 44,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Ellesbury Mews",
+    "from_address": "32 Ellesbury Mews, Leyton, London E10 5UG",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 50,
+    "duration_category": "Long (>45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Foxhollow Mews",
+    "from_address": "33 Foxhollow Mews, Hendon, London NW4 3XZ",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 44,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

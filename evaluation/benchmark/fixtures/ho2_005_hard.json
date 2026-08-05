@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "15 Ellesbury Row, Catford, London SE6 4WR",
+    "price": "£1,150/month",
+    "price_raw": 1150,
+    "score": 89,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Catford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE6",
+    "postcode_sector": "SE6 4",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ellesbury-row-15/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "17 Foxhollow Row, Catford, London SE6 4ZS",
+    "price": "£1,500/month",
+    "price_raw": 1500,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Catford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE6",
+    "postcode_sector": "SE6 4",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/foxhollow-row-17/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "18 Garrowby Row, Catford, London SE6 4BJ",
+    "price": "£1,270/month",
+    "price_raw": 1270,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Catford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE6",
+    "postcode_sector": "SE6 4",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/garrowby-row-18/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "19 Hazelbourne Row, Catford, London SE6 4EB",
+    "price": "£1,310/month",
+    "price_raw": 1310,
+    "score": 80,
+    "property_type": "Bungalow · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Catford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE6",
+    "postcode_sector": "SE6 4",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/hazelbourne-row-19/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "20 Inglewhite Row, Leyton, London E10 5GU",
+    "price": "£1,350/month",
+    "price_raw": 1350,
+    "score": 77,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Leyton",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E10",
+    "postcode_sector": "E10 5",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/inglewhite-row-20/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Catford.",
+  "search_criteria": {
+   "area": "Catford",
+   "max_budget": 1300,
+   "room_type": "flat",
+   "bedrooms": 1
+  }
+ },
+ "description": "HO2-005: frozen search evidence for Catford. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

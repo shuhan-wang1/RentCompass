@@ -1,0 +1,12 @@
+{
+ "tool_name": "remember",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "stored": "User needs to be within 30 minutes of London Bridge.",
+  "mtype": "semantic",
+  "message": "Saved to your profile."
+ },
+ "description": "HO2-088: frozen remember() acknowledgement for a preference update."
+}

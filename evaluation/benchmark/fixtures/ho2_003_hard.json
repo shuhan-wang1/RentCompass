@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "13 Sowerby Row, Peckham, London SE15 5TY",
+    "price": "£1,950/month",
+    "price_raw": 1950,
+    "score": 89,
+    "property_type": "House · 3 bed",
+    "bedrooms": 3,
+    "room_type_normalized": "house",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/sowerby-row-13/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "15 Thackray Row, Peckham, London SE15 5XZ",
+    "price": "£2,300/month",
+    "price_raw": 2300,
+    "score": 86,
+    "property_type": "House · 3 bed",
+    "bedrooms": 3,
+    "room_type_normalized": "house",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/thackray-row-15/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "16 Ulverton Row, Peckham, London SE15 5ZS",
+    "price": "£2,070/month",
+    "price_raw": 2070,
+    "score": 83,
+    "property_type": "House · 4 bed",
+    "bedrooms": 4,
+    "room_type_normalized": "house",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ulverton-row-16/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "17 Vandermeer Row, Peckham, London SE15 5BJ",
+    "price": "£2,110/month",
+    "price_raw": 2110,
+    "score": 80,
+    "property_type": "Studio",
+    "bedrooms": 3,
+    "room_type_normalized": "studio",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/vandermeer-row-17/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "18 Wexcombe Row, Leyton, London E10 5EB",
+    "price": "£2,150/month",
+    "price_raw": 2150,
+    "score": 77,
+    "property_type": "House · 3 bed",
+    "bedrooms": 3,
+    "room_type_normalized": "house",
+    "area_normalized": "Leyton",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E10",
+    "postcode_sector": "E10 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/wexcombe-row-18/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Peckham.",
+  "search_criteria": {
+   "area": "Peckham",
+   "max_budget": 2100,
+   "room_type": "house",
+   "bedrooms": 3
+  }
+ },
+ "description": "HO2-003: frozen search evidence for Peckham. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

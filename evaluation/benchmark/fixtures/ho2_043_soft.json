@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "11 Yealand Terrace, Wood Green, London N22 6RF",
+    "price": "£1,420/month",
+    "price_raw": 1420,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Wood Green",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N22",
+    "postcode_sector": "N22 6",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/yealand-terrace-11/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "18 Zennorby Terrace, Wood Green, London N22 6AA",
+    "price": "£1,595/month",
+    "price_raw": 1595,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Wood Green",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N22",
+    "postcode_sector": "N22 6",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/zennorby-terrace-18/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "25 Ambrose Terrace, Wood Green, London N22 6LW",
+    "price": "£1,770/month",
+    "price_raw": 1770,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Wood Green",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N22",
+    "postcode_sector": "N22 6",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ambrose-terrace-25/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Wood Green.",
+  "search_criteria": {
+   "area": "Wood Green"
+  }
+ },
+ "description": "HO2-043: frozen open-ended search evidence for Wood Green."
+}

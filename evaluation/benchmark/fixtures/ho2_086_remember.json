@@ -1,0 +1,12 @@
+{
+ "tool_name": "remember",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "stored": "User's maximum rent is now £1,900 per month.",
+  "mtype": "semantic",
+  "message": "Saved to your profile."
+ },
+ "description": "HO2-086: frozen remember() acknowledgement for a preference update."
+}

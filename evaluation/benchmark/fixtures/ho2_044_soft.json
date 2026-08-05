@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "12 Beaumaris Terrace, Balham, London SW12 9SQ",
+    "price": "£1,435/month",
+    "price_raw": 1435,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Balham",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW12",
+    "postcode_sector": "SW12 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/beaumaris-terrace-12/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "19 Carbery Terrace, Balham, London SW12 9BJ",
+    "price": "£1,610/month",
+    "price_raw": 1610,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Balham",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW12",
+    "postcode_sector": "SW12 9",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/carbery-terrace-19/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "26 Dunsfold Terrace, Balham, London SW12 9NE",
+    "price": "£1,785/month",
+    "price_raw": 1785,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Balham",
+    "borough": "Wandsworth",
+    "city": "London",
+    "postcode_district": "SW12",
+    "postcode_sector": "SW12 9",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/dunsfold-terrace-26/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Balham.",
+  "search_criteria": {
+   "area": "Balham"
+  }
+ },
+ "description": "HO2-044: frozen open-ended search evidence for Balham."
+}

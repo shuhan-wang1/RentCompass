@@ -1,0 +1,92 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "30 Hazelbourne Mews, Walthamstow, London E17 4QX",
+    "price": "£1,900/month",
+    "price_raw": 1900,
+    "score": 89,
+    "property_type": "Maisonette · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "maisonette",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/hazelbourne-mews-30/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "32 Inglewhite Mews, Walthamstow, London E17 4TY",
+    "price": "£1,980/month",
+    "price_raw": 1980,
+    "score": 86,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/inglewhite-mews-32/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "33 Jarrowfield Mews, Deptford, London SE8 3WR",
+    "price": "£2,020/month",
+    "price_raw": 2020,
+    "score": 83,
+    "property_type": "Maisonette · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "maisonette",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/jarrowfield-mews-33/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 3 options in Walthamstow.",
+  "search_criteria": {
+   "area": "Walthamstow",
+   "room_type": "maisonette"
+  }
+ },
+ "description": "HO2-020: frozen search evidence for Walthamstow. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

@@ -1,0 +1,50 @@
+{
+  "round1": {
+    "round": "round1",
+    "purpose": "judge",
+    "model": "deepseek-v4-flash",
+    "thinking": false,
+    "temperature": 0.0,
+    "order_seed": 20260811,
+    "criterion_seed": 20260812,
+    "nonce": "RC-HO2-R1",
+    "n_items": 110,
+    "n_verdicts": 110,
+    "n_new_ok": 104,
+    "n_new_fail": 0,
+    "aborted": false,
+    "generated_at": "2026-08-05T07:36:51+01:00"
+  },
+  "round2": {
+    "round": "round2",
+    "purpose": "judge",
+    "model": "deepseek-v4-flash",
+    "thinking": false,
+    "temperature": 0.0,
+    "order_seed": 20260887,
+    "criterion_seed": 20260909,
+    "nonce": "RC-HO2-R2",
+    "n_items": 110,
+    "n_verdicts": 110,
+    "n_new_ok": 104,
+    "n_new_fail": 0,
+    "aborted": false,
+    "generated_at": "2026-08-05T07:39:14+01:00"
+  },
+  "round3_pro": {
+    "round": "round3_pro",
+    "purpose": "pro",
+    "model": "deepseek-v4-pro",
+    "thinking": true,
+    "temperature": 0.0,
+    "order_seed": 20261365,
+    "criterion_seed": 20261587,
+    "nonce": "RC-HO2-R3",
+    "n_items": 110,
+    "n_verdicts": 110,
+    "n_new_ok": 104,
+    "n_new_fail": 0,
+    "aborted": false,
+    "generated_at": "2026-08-05T08:05:45+01:00"
+  }
+}

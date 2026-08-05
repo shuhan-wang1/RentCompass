@@ -1,0 +1,20 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "no_results",
+  "total_found": 0,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [],
+  "summary": "Found 0 options in Willesden Green.",
+  "search_criteria": {
+   "area": "Willesden Green",
+   "max_budget": 600
+  },
+  "message": "I could not find any listings in Willesden Green matching those criteria right now."
+ },
+ "description": "HO2-053: frozen NO-RESULT search evidence for Willesden Green at £600/month."
+}

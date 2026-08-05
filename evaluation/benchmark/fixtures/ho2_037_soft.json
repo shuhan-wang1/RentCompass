@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "5 Garrowby Terrace, Peckham, London SE15 5HD",
+    "price": "£1,330/month",
+    "price_raw": 1330,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/garrowby-terrace-5/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "12 Hazelbourne Terrace, Peckham, London SE15 5TY",
+    "price": "£1,505/month",
+    "price_raw": 1505,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/hazelbourne-terrace-12/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "19 Inglewhite Terrace, Peckham, London SE15 5DT",
+    "price": "£1,680/month",
+    "price_raw": 1680,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Peckham",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE15",
+    "postcode_sector": "SE15 5",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/inglewhite-terrace-19/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Peckham.",
+  "search_criteria": {
+   "area": "Peckham"
+  }
+ },
+ "description": "HO2-037: frozen open-ended search evidence for Peckham."
+}

@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "10 Verwood Terrace, Catford, London SE6 4QX",
+    "price": "£1,405/month",
+    "price_raw": 1405,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Catford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE6",
+    "postcode_sector": "SE6 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/verwood-terrace-10/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "17 Whitmarsh Terrace, Catford, London SE6 4ZS",
+    "price": "£1,580/month",
+    "price_raw": 1580,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Catford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE6",
+    "postcode_sector": "SE6 4",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/whitmarsh-terrace-17/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "24 Xanthe Terrace, Catford, London SE6 4JN",
+    "price": "£1,755/month",
+    "price_raw": 1755,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Catford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE6",
+    "postcode_sector": "SE6 4",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/xanthe-terrace-24/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Catford.",
+  "search_criteria": {
+   "area": "Catford"
+  }
+ },
+ "description": "HO2-042: frozen open-ended search evidence for Catford."
+}

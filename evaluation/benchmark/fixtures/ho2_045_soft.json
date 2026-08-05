@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "13 Eastnor Terrace, Deptford, London SE8 3TY",
+    "price": "£1,450/month",
+    "price_raw": 1450,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/eastnor-terrace-13/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "20 Fairholme Terrace, Deptford, London SE8 3DT",
+    "price": "£1,625/month",
+    "price_raw": 1625,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/fairholme-terrace-20/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "27 Glaisdale Terrace, Deptford, London SE8 3PP",
+    "price": "£1,800/month",
+    "price_raw": 1800,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/glaisdale-terrace-27/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Deptford.",
+  "search_criteria": {
+   "area": "Deptford"
+  }
+ },
+ "description": "HO2-045: frozen open-ended search evidence for Deptford."
+}

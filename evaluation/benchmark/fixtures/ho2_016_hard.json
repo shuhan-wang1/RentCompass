@@ -1,0 +1,117 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 4,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "26 Denbury Mews, Harringay, London N4 1JN",
+    "price": "£2,150/month",
+    "price_raw": 2150,
+    "score": 89,
+    "property_type": "House · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "house",
+    "area_normalized": "Harringay",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N4",
+    "postcode_sector": "N4 1",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/denbury-mews-26/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "28 Osterlyn Mews, Harringay, London N4 1PP",
+    "price": "£2,500/month",
+    "price_raw": 2500,
+    "score": 86,
+    "property_type": "House · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "house",
+    "area_normalized": "Harringay",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N4",
+    "postcode_sector": "N4 1",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/osterlyn-mews-28/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "29 Pentworth Mews, Harringay, London N4 1RF",
+    "price": "£2,270/month",
+    "price_raw": 2270,
+    "score": 83,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Harringay",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N4",
+    "postcode_sector": "N4 1",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/pentworth-mews-29/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "30 Ravensmere Mews, Acton, London W3 6TY",
+    "price": "£2,310/month",
+    "price_raw": 2310,
+    "score": 80,
+    "property_type": "House · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "house",
+    "area_normalized": "Acton",
+    "borough": "Ealing",
+    "city": "London",
+    "postcode_district": "W3",
+    "postcode_sector": "W3 6",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ravensmere-mews-30/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 4 options in Harringay.",
+  "search_criteria": {
+   "area": "Harringay",
+   "max_budget": 2300,
+   "room_type": "house"
+  }
+ },
+ "description": "HO2-016: frozen search evidence for Harringay. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

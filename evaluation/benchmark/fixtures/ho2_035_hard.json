@@ -1,0 +1,218 @@
+{
+ "description": "HO2-035: frozen search evidence for Crouch End. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'move_in_date', 'property_feature'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Moorgate are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 5,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "45 Wexcombe Terrace, Crouch End, London N8 9HD",
+      "price": "£2,275/month",
+      "price_raw": 2275,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Crouch End",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N8",
+      "postcode_sector": "N8 9",
+      "available_from": "25 September 2026",
+      "available_from_normalized": "2026-09-25",
+      "features": [
+       "washing_machine"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/wexcombe-terrace-45/",
+      "explanation": "Washing machine installed."
+     },
+     {
+      "rank": 2,
+      "address": "47 Yarnfield Terrace, Crouch End, London N8 9NE",
+      "price": "£2,355/month",
+      "price_raw": 2355,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Crouch End",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N8",
+      "postcode_sector": "N8 9",
+      "available_from": "25 September 2026",
+      "available_from_normalized": "2026-09-25",
+      "features": [
+       "washing_machine"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/yarnfield-terrace-47/",
+      "explanation": "Washing machine installed."
+     },
+     {
+      "rank": 3,
+      "address": "48 Zephyrn Terrace, Wood Green, London N22 6QX",
+      "price": "£2,395/month",
+      "price_raw": 2395,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Wood Green",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N22",
+      "postcode_sector": "N22 6",
+      "available_from": "25 September 2026",
+      "available_from_normalized": "2026-09-25",
+      "features": [
+       "washing_machine"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/zephyrn-terrace-48/",
+      "explanation": "Washing machine installed."
+     },
+     {
+      "rank": 4,
+      "address": "49 Brackendale Terrace, Crouch End, London N8 9SQ",
+      "price": "£2,435/month",
+      "price_raw": 2435,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Crouch End",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N8",
+      "postcode_sector": "N8 9",
+      "available_from": "9 November 2026",
+      "available_from_normalized": "2026-11-09",
+      "features": [
+       "washing_machine"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/brackendale-terrace-49/",
+      "explanation": "Washing machine installed."
+     },
+     {
+      "rank": 5,
+      "address": "50 Calthorpe Terrace, Crouch End, London N8 9UG",
+      "price": "£2,475/month",
+      "price_raw": 2475,
+      "score": 77,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Crouch End",
+      "borough": "Haringey",
+      "city": "London",
+      "postcode_district": "N8",
+      "postcode_sector": "N8 9",
+      "available_from": "25 September 2026",
+      "available_from_normalized": "2026-09-25",
+      "features": [
+       "unfurnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/calthorpe-terrace-50/",
+      "explanation": "Let unfurnished."
+     }
+    ],
+    "summary": "Found 5 options in Crouch End.",
+    "search_criteria": {
+     "area": "Crouch End"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Wexcombe Terrace",
+    "from_address": "45 Wexcombe Terrace, Crouch End, London N8 9HD",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Yarnfield Terrace",
+    "from_address": "47 Yarnfield Terrace, Crouch End, London N8 9NE",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 50,
+    "duration_category": "Long (>45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Zephyrn Terrace",
+    "from_address": "48 Zephyrn Terrace, Wood Green, London N22 6QX",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 44,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Brackendale Terrace",
+    "from_address": "49 Brackendale Terrace, Crouch End, London N8 9SQ",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 44,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Calthorpe Terrace",
+    "from_address": "50 Calthorpe Terrace, Crouch End, London N8 9UG",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 44,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

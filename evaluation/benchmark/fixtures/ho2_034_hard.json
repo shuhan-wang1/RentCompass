@@ -1,0 +1,218 @@
+{
+ "description": "HO2-034: frozen search evidence for Forest Gate. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'move_in_date', 'property_feature'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Liverpool Street are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 5,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "44 Ravensmere Terrace, Forest Gate, London E7 8GU",
+      "price": "£2,250/month",
+      "price_raw": 2250,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Forest Gate",
+      "borough": "Newham",
+      "city": "London",
+      "postcode_district": "E7",
+      "postcode_sector": "E7 8",
+      "available_from": "5 November 2026",
+      "available_from_normalized": "2026-11-05",
+      "features": [
+       "bills_included"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/ravensmere-terrace-44/",
+      "explanation": "Bills included in the rent."
+     },
+     {
+      "rank": 2,
+      "address": "46 Sowerby Terrace, Forest Gate, London E7 8LW",
+      "price": "£2,330/month",
+      "price_raw": 2330,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Forest Gate",
+      "borough": "Newham",
+      "city": "London",
+      "postcode_district": "E7",
+      "postcode_sector": "E7 8",
+      "available_from": "5 November 2026",
+      "available_from_normalized": "2026-11-05",
+      "features": [
+       "bills_included"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/sowerby-terrace-46/",
+      "explanation": "Bills included in the rent."
+     },
+     {
+      "rank": 3,
+      "address": "47 Thackray Terrace, Deptford, London SE8 3PP",
+      "price": "£2,370/month",
+      "price_raw": 2370,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Deptford",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE8",
+      "postcode_sector": "SE8 3",
+      "available_from": "5 November 2026",
+      "available_from_normalized": "2026-11-05",
+      "features": [
+       "bills_included"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/thackray-terrace-47/",
+      "explanation": "Bills included in the rent."
+     },
+     {
+      "rank": 4,
+      "address": "48 Ulverton Terrace, Forest Gate, London E7 8RF",
+      "price": "£2,410/month",
+      "price_raw": 2410,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Forest Gate",
+      "borough": "Newham",
+      "city": "London",
+      "postcode_district": "E7",
+      "postcode_sector": "E7 8",
+      "available_from": "20 December 2026",
+      "available_from_normalized": "2026-12-20",
+      "features": [
+       "bills_included"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/ulverton-terrace-48/",
+      "explanation": "Bills included in the rent."
+     },
+     {
+      "rank": 5,
+      "address": "49 Vandermeer Terrace, Forest Gate, London E7 8TY",
+      "price": "£2,450/month",
+      "price_raw": 2450,
+      "score": 77,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Forest Gate",
+      "borough": "Newham",
+      "city": "London",
+      "postcode_district": "E7",
+      "postcode_sector": "E7 8",
+      "available_from": "5 November 2026",
+      "available_from_normalized": "2026-11-05",
+      "features": [
+       "unfurnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/vandermeer-terrace-49/",
+      "explanation": "Let unfurnished."
+     }
+    ],
+    "summary": "Found 5 options in Forest Gate.",
+    "search_criteria": {
+     "area": "Forest Gate"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Ravensmere Terrace",
+    "from_address": "44 Ravensmere Terrace, Forest Gate, London E7 8GU",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Sowerby Terrace",
+    "from_address": "46 Sowerby Terrace, Forest Gate, London E7 8LW",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 45,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Thackray Terrace",
+    "from_address": "47 Thackray Terrace, Deptford, London SE8 3PP",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Ulverton Terrace",
+    "from_address": "48 Ulverton Terrace, Forest Gate, London E7 8RF",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Vandermeer Terrace",
+    "from_address": "49 Vandermeer Terrace, Forest Gate, London E7 8TY",
+    "to_address": "Liverpool Street, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Liverpool Street",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "15 Kirkstall Terrace, Colindale, London NW9 5WR",
+    "price": "£1,480/month",
+    "price_raw": 1480,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Colindale",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW9",
+    "postcode_sector": "NW9 5",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/kirkstall-terrace-15/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "22 Longmynd Terrace, Colindale, London NW9 5FL",
+    "price": "£1,655/month",
+    "price_raw": 1655,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Colindale",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW9",
+    "postcode_sector": "NW9 5",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/longmynd-terrace-22/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "29 Merrivale Terrace, Colindale, London NW9 5RF",
+    "price": "£1,830/month",
+    "price_raw": 1830,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Colindale",
+    "borough": "Barnet",
+    "city": "London",
+    "postcode_district": "NW9",
+    "postcode_sector": "NW9 5",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/merrivale-terrace-29/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Colindale.",
+  "search_criteria": {
+   "area": "Colindale"
+  }
+ },
+ "description": "HO2-047: frozen open-ended search evidence for Colindale."
+}

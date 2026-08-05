@@ -1,0 +1,36 @@
+{
+  "design": "held_out_v2_blind_review",
+  "held_out_requirement_met": true,
+  "not_human_review": "every label in this directory is produced by a MODEL; nothing here is human review, human evaluation, answer accuracy or inter-rater reliability",
+  "dataset": "/work/evaluation/benchmark/holdout_v2/cases_holdout_v2.jsonl",
+  "n_items": 110,
+  "task_class_counts": {
+    "retrieval_hard": 35,
+    "retrieval_soft": 20,
+    "calculation": 20,
+    "memory": 20,
+    "clarify": 15
+  },
+  "evidence_truncated_items": [],
+  "evidence_chars_max": 9377,
+  "rounds": {
+    "round1": {
+      "purpose": "judge",
+      "order_seed": 20260811,
+      "criterion_seed": 20260812,
+      "nonce": "RC-HO2-R1"
+    },
+    "round2": {
+      "purpose": "judge",
+      "order_seed": 20260887,
+      "criterion_seed": 20260909,
+      "nonce": "RC-HO2-R2"
+    },
+    "round3_pro": {
+      "purpose": "pro",
+      "order_seed": 20261365,
+      "criterion_seed": 20261587,
+      "nonce": "RC-HO2-R3"
+    }
+  }
+}

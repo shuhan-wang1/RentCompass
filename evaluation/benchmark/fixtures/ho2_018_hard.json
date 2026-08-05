@@ -1,0 +1,180 @@
+{
+ "description": "HO2-018: frozen search evidence for Colindale. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['room_type', 'commute', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Moorgate are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "28 Wexcombe Mews, Colindale, London NW9 5NE",
+      "price": "£1,850/month",
+      "price_raw": 1850,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Colindale",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW9",
+      "postcode_sector": "NW9 5",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/wexcombe-mews-28/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 2,
+      "address": "30 Yarnfield Mews, Colindale, London NW9 5RF",
+      "price": "£1,930/month",
+      "price_raw": 1930,
+      "score": 86,
+      "property_type": "Bungalow · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "bungalow",
+      "area_normalized": "Colindale",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW9",
+      "postcode_sector": "NW9 5",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/yarnfield-mews-30/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 3,
+      "address": "31 Zephyrn Mews, Colindale, London NW9 5TY",
+      "price": "£1,970/month",
+      "price_raw": 1970,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Colindale",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW9",
+      "postcode_sector": "NW9 5",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/zephyrn-mews-31/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 4,
+      "address": "32 Brackendale Mews, Acton, London W3 6WR",
+      "price": "£2,010/month",
+      "price_raw": 2010,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Acton",
+      "borough": "Ealing",
+      "city": "London",
+      "postcode_district": "W3",
+      "postcode_sector": "W3 6",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/brackendale-mews-32/",
+      "explanation": "Comes fully furnished."
+     }
+    ],
+    "summary": "Found 4 options in Colindale.",
+    "search_criteria": {
+     "area": "Colindale",
+     "room_type": "flat"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Wexcombe Mews",
+    "from_address": "28 Wexcombe Mews, Colindale, London NW9 5NE",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Yarnfield Mews",
+    "from_address": "30 Yarnfield Mews, Colindale, London NW9 5RF",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Zephyrn Mews",
+    "from_address": "31 Zephyrn Mews, Colindale, London NW9 5TY",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 45,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Brackendale Mews",
+    "from_address": "32 Brackendale Mews, Acton, London W3 6WR",
+    "to_address": "Moorgate, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Moorgate",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

@@ -1,0 +1,218 @@
+{
+ "description": "HO2-026: frozen search evidence for Streatham. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'move_in_date', 'property_feature'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Victoria are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 5,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "36 Dunsfold Mews, Streatham, London SW16 1XZ",
+      "price": "£2,050/month",
+      "price_raw": 2050,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Streatham",
+      "borough": "Lambeth",
+      "city": "London",
+      "postcode_district": "SW16",
+      "postcode_sector": "SW16 1",
+      "available_from": "20 October 2026",
+      "available_from_normalized": "2026-10-20",
+      "features": [
+       "parking"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/dunsfold-mews-36/",
+      "explanation": "Allocated parking space."
+     },
+     {
+      "rank": 2,
+      "address": "38 Eastnor Mews, Streatham, London SW16 1AA",
+      "price": "£2,130/month",
+      "price_raw": 2130,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Streatham",
+      "borough": "Lambeth",
+      "city": "London",
+      "postcode_district": "SW16",
+      "postcode_sector": "SW16 1",
+      "available_from": "20 October 2026",
+      "available_from_normalized": "2026-10-20",
+      "features": [
+       "parking"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/eastnor-mews-38/",
+      "explanation": "Allocated parking space."
+     },
+     {
+      "rank": 3,
+      "address": "39 Fairholme Mews, Willesden Green, London NW2 5DT",
+      "price": "£2,170/month",
+      "price_raw": 2170,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Willesden Green",
+      "borough": "Brent",
+      "city": "London",
+      "postcode_district": "NW2",
+      "postcode_sector": "NW2 5",
+      "available_from": "20 October 2026",
+      "available_from_normalized": "2026-10-20",
+      "features": [
+       "parking"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/fairholme-mews-39/",
+      "explanation": "Allocated parking space."
+     },
+     {
+      "rank": 4,
+      "address": "40 Glaisdale Mews, Streatham, London SW16 1FL",
+      "price": "£2,210/month",
+      "price_raw": 2210,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Streatham",
+      "borough": "Lambeth",
+      "city": "London",
+      "postcode_district": "SW16",
+      "postcode_sector": "SW16 1",
+      "available_from": "4 December 2026",
+      "available_from_normalized": "2026-12-04",
+      "features": [
+       "parking"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/glaisdale-mews-40/",
+      "explanation": "Allocated parking space."
+     },
+     {
+      "rank": 5,
+      "address": "41 Hartsmere Mews, Streatham, London SW16 1HD",
+      "price": "£2,250/month",
+      "price_raw": 2250,
+      "score": 77,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Streatham",
+      "borough": "Lambeth",
+      "city": "London",
+      "postcode_district": "SW16",
+      "postcode_sector": "SW16 1",
+      "available_from": "20 October 2026",
+      "available_from_normalized": "2026-10-20",
+      "features": [
+       "unfurnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/hartsmere-mews-41/",
+      "explanation": "Let unfurnished."
+     }
+    ],
+    "summary": "Found 5 options in Streatham.",
+    "search_criteria": {
+     "area": "Streatham"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Dunsfold Mews",
+    "from_address": "36 Dunsfold Mews, Streatham, London SW16 1XZ",
+    "to_address": "Victoria, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Victoria",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Eastnor Mews",
+    "from_address": "38 Eastnor Mews, Streatham, London SW16 1AA",
+    "to_address": "Victoria, London",
+    "mode": "transit",
+    "duration_minutes": 45,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Victoria",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Fairholme Mews",
+    "from_address": "39 Fairholme Mews, Willesden Green, London NW2 5DT",
+    "to_address": "Victoria, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Victoria",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Glaisdale Mews",
+    "from_address": "40 Glaisdale Mews, Streatham, London SW16 1FL",
+    "to_address": "Victoria, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Victoria",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Hartsmere Mews",
+    "from_address": "41 Hartsmere Mews, Streatham, London SW16 1HD",
+    "to_address": "Victoria, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Victoria",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

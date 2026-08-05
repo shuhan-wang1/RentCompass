@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "4 Drayfield Terrace, Walthamstow, London E17 4GU",
+    "price": "£1,315/month",
+    "price_raw": 1315,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/drayfield-terrace-4/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "11 Ellesbury Terrace, Walthamstow, London E17 4SQ",
+    "price": "£1,490/month",
+    "price_raw": 1490,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ellesbury-terrace-11/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "18 Foxhollow Terrace, Walthamstow, London E17 4BJ",
+    "price": "£1,665/month",
+    "price_raw": 1665,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/foxhollow-terrace-18/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Walthamstow.",
+  "search_criteria": {
+   "area": "Walthamstow"
+  }
+ },
+ "description": "HO2-036: frozen open-ended search evidence for Walthamstow."
+}

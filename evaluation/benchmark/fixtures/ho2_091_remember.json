@@ -1,0 +1,12 @@
+{
+ "tool_name": "remember",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "stored": "User cannot move before 15 November 2026.",
+  "mtype": "semantic",
+  "message": "Saved to your profile."
+ },
+ "description": "HO2-091: frozen remember() acknowledgement for a preference update."
+}

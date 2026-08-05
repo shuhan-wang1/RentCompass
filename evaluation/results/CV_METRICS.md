@@ -64,7 +64,43 @@ _Generated 2026-07-12T06:27:47Z, HEAD `070675d`. Every number is copied verbatim
 - **Safe to use**: YES
 - **Required caveat**: Describe as engineering SCOPE (framework built), not as a quality score.
 
+---
+
+> ⚠️ **以下三节是 2026-08-05 手工追加的，不是 `evaluation/report.py` 生成的。**
+> 若将来重新生成本文件，请保留以下手工追加段落；其直接来源是 `evaluation/results/holdout_v2_review/analysis_holdout_v2.json`、冻结数据集与门禁产物，不在旧的 `ablation_*.json` 中。
+
+### [SAFE-WITH-SCOPE] Held-out benchmark: compliant-option identification (n=33, live model + frozen fixtures)
+
+- **中文 CV 表述**: 构建并冻结了一套 110 例合成 held-out 租房评测集及版本化约束 schema（199 项确定性测试、静态门禁全部通过，与此前用于调参的 98 例逐字零重合）。6 例冒烟暴露原主指标定义缺陷后，在其余 **33** 道未查看的硬约束检索题上冻结替代指标并确认：使用真实模型推理与冻结工具 fixture，RentCompass **33/33** 次至少点名了一处由结构化证据判定为满足全部声明条件的候选房源（**Clopper–Pearson 95% CI 89.4%–100%**）。
+- **English CV statement**: Built and froze a 110-case synthetic held-out rental benchmark with a versioned constraint schema (199 deterministic tests and a passing static preflight, with zero verbatim overlap against the 98 development cases). After a six-case smoke exposed a defect in the original primary metric, a replacement metric was frozen and confirmed on the remaining **33** unseen hard-constraint retrieval cases: with live model inference and frozen tool fixtures, RentCompass named at least one fixture-grounded candidate satisfying every stated condition in **33/33** cases (**Clopper–Pearson 95% CI 89.4%–100%**).
+- **Raw data (num/den)**: 33/33 (primary, excludes HO2-001 / HO2-023 whose answers were seen during the 6-case smoke before this metric was defined); 35/35 including them, exact 95% CI [90.0%, 100%]. Dataset sha256 `0294584c69bf60147e199b6d8430bfc4b041d0ea110bec6d11922feb7b88fe34`; 110 agent runs, 0 failures, 0 timeouts, USD 0.0985.
+- **Metric definition**: For each `retrieval_hard` case whose FROZEN fixture contains at least one listing satisfying EVERY stated user condition, PASS iff the answer names such a listing by its unique street token or its exact monthly price. Deterministic string match, no text heuristic. Predicates and evidence fields are frozen in `evaluation/results/_harness/constraint_schema_v2.py`.
+- **Result file**: `evaluation/results/holdout_v2_review/analysis_holdout_v2.json` → `deterministic.D6_correct_option_identified.primary`; dataset `evaluation/benchmark/holdout_v2/cases_holdout_v2.jsonl`; freeze record `evaluation/benchmark/holdout_v2/FREEZE.json`; gate `preflight_report.json` (gate_passed=true, exit 0).
+- **Safe to use**: YES, only with the exact scope above
+- **Required caveat**: This is a synthetic fixed benchmark with LIVE MODEL inference and FROZEN/fixture-replayed tools (`fixture_served=true`), not a live external-listing/tool test, production SLA or overall answer accuracy. D6 measures compliant-option RECALL: it does not require the answer to avoid also recommending a non-compliant option, to call every required tool, or to be wholly correct. The metric was defined after a 6-case smoke, so the primary denominator excludes the two hard-retrieval answers seen at that point. Quote the Clopper-Pearson interval, never the degenerate [100%, 100%] bootstrap interval. One run per case; no agent-side variance is measured.
+
+### [SAFE-WITH-SCOPE] Held-out benchmark: MODEL blind review of evidence contradictions (n=110, live models + frozen evidence)
+
+- **中文 CV 表述**: 在同一套冻结的 110 例合成 held-out 基准上，三轮独立**模型盲审**（两轮 deepseek-v4-flash + 一轮 deepseek-v4-pro，temperature 0，配置与轮次标签均对评审模型隐藏）分别判定 **107/110、108/109、105/110** 个回答与冻结证据**零处矛盾**，跨模型**观察一致率 0.945**。**该结果是模型盲审，不是人工评审，也不是答案正确率。**
+- **English CV statement**: On the same frozen 110-case synthetic held-out benchmark, three independent **model blind-review** rounds (two deepseek-v4-flash, one deepseek-v4-pro, temperature 0, configuration and round labels withheld) found zero claims contradicting the frozen evidence in **107/110, 108/109 and 105/110** answers respectively, with a cross-model **observed agreement of 0.945**. This is a model blind review — not human evaluation and not answer accuracy.
+- **Raw data (num/den)**: zero-contradiction 107/110 (R1), 108/109 (R2, one response failed to parse and is counted as unjudged), 105/110 (R3 pro); cross-model observed agreement 0.945; same-model two-round observed agreement 0.982. All 330 review requests returned, but one returned response was unusable because it failed parsing; 0 out-of-vocabulary answers and 0 `cannot_assess` (no evidence packet was truncated).
+- **Metric definition**: Each judge sees the request, the full history, the case's own allowed evidence sources, the reference calculations, the memory read/write results, the executed tool list and the complete structured tool evidence, then answers `contradicted_claim_count` as an integer (or `cannot_assess`). Labels outside the frozen vocabulary are recorded verbatim as judge failures and never normalised.
+- **Result file**: `evaluation/results/holdout_v2_review/{round1,round2,round3_pro}.jsonl` and `analysis_holdout_v2.json` → `model_blind_review`.
+- **Safe to use**: YES, with the scope below
+- **Required caveat**: Write "模型盲审 / model blind review". NEVER "human evaluation", "人工盲审", "answer accuracy" or "inter-rater reliability" — no person labelled anything. **Report the counts and the OBSERVED agreement; do NOT report Cohen's kappa for this item**: ~96% of judgments fall in one category, so the expected-agreement term approaches 1 and kappa degenerates (0.226 cross-model against an observed agreement of 0.945). The third round is another model from the SAME vendor, not a genuinely independent third party.
+
+
 ## 不建议使用
+
+### [AVOID] Held-out metrics that did NOT clear the threshold — do not quote any of these
+
+- **中文 CV 表述**: 同一批次里以下指标**未过门槛，禁止进入 CV**：预注册的硬约束满足率 0/119（案例级 0/35）——谓词在该系统「符合／已排除」的答案格式上退化，把透明的排除清单也判成违规，已如实上报但禁止引用；模型盲审的硬约束满足判定（三轮可判分母 36/34/46，比率 88.9%/97.1%/78.3%）——**分母本身在轮次间变动，口径不稳**；模型盲审的证据支撑判定（80.4%/83.5%/62.6%）——跨模型 κ 0.571，pro 的 `partial` 用量是 flash 的三倍，粒度未收敛；计算题命中参考值 20/20——**n=20 < 30**，且其中 9 道由确定性模块 `app/core/tenancy_reference.py` 而非模型回答；无结果题不补金额 4/8——n=8 且属诊断项。
+- **English CV statement**: From the same batch, these did NOT clear the pre-registered threshold and must not be quoted: the pre-registered hard-constraint satisfaction rate 0/119 (case level 0/35) — the predicate degenerates on this system's "meets / excluded" answer format and scores a transparent rejection list as a violation; the model blind review's hard-constraint judgment (judgeable denominators 36/34/46 across rounds, rates 88.9%/97.1%/78.3%) — the DENOMINATOR itself moves between rounds; the model blind review's evidence-support judgment (80.4%/83.5%/62.6%) — cross-model kappa 0.571 and the pro round uses `partial` three times as often; reference-calculation match 20/20 — n=20 < 30, and 9 of those turns were answered by the deterministic module `app/core/tenancy_reference.py` rather than the model; no-result turns free of invented money 4/8 — n=8 and diagnostic only.
+- **Raw data (num/den)**: D1 0/119; D2 0/35; hard_constraints_satisfied 32/36, 33/34, 36/46; claims_evidence_supported 74/92, 76/91, 57/91; D5 20/20 (9/9 deterministic module + 11/11 model); D4 4/8.
+- **Metric definition**: See `evaluation/results/holdout_v2_review/analysis_holdout_v2.json` and `evaluation/results/_harness/analyze_holdout.py`.
+- **Result file**: `evaluation/results/holdout_v2_review/analysis_holdout_v2.json`
+- **Safe to use**: NO
+- **Required caveat**: Also do not quote as CV numbers the agent-side defect counts (4/16 commute tasks answered without ever calling `calculate_commute`; 3/10 memory-write tasks that never called `remember`; 3 no-result turns that invented market rents) — they are a real DEFECT LIST worth citing in a write-up, but the denominators are far too small to be rates.
 
 ### [AVOID] Raw end-to-end pass_rate as a quality headline
 

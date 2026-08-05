@@ -1,0 +1,5061 @@
+{
+  "batch": "held_out_v2",
+  "deterministic": {
+    "per_case": {
+      "HO2-001": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "14 Wraysbury Row, Walthamstow, London E17 4XZ"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "15 Quillon Row, Walthamstow, London E17 4ZS"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "16 Ashlin Row, Deptford, London SE8 3BJ"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "13 Halstow Row, Walthamstow, London E17 4UG",
+              "15 Quillon Row, Walthamstow, London E17 4ZS",
+              "16 Ashlin Row, Deptford, London SE8 3BJ"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-002": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "15 Osterlyn Row, Leyton, London E10 5YH"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "16 Pentworth Row, Leyton, London E10 5AA"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "17 Ravensmere Row, Hendon, London NW4 3DT"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "14 Denbury Row, Leyton, London E10 5WR",
+              "16 Pentworth Row, Leyton, London E10 5AA",
+              "17 Ravensmere Row, Hendon, London NW4 3DT"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-003": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "16 Ulverton Row, Peckham, London SE15 5ZS"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "17 Vandermeer Row, Peckham, London SE15 5BJ"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "18 Wexcombe Row, Leyton, London E10 5EB"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "15 Thackray Row, Peckham, London SE15 5XZ",
+              "17 Vandermeer Row, Peckham, London SE15 5BJ",
+              "18 Wexcombe Row, Leyton, London E10 5EB"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-004": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "17 Brackendale Row, Tooting, London SW17 0AA"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "18 Calthorpe Row, Tooting, London SW17 0DT"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "19 Drayfield Row, Leyton, London E10 5FL"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "16 Zephyrn Row, Tooting, London SW17 0YH",
+              "18 Calthorpe Row, Tooting, London SW17 0DT",
+              "19 Drayfield Row, Leyton, London E10 5FL"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-005": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "18 Garrowby Row, Catford, London SE6 4BJ"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "19 Hazelbourne Row, Catford, London SE6 4EB"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "20 Inglewhite Row, Leyton, London E10 5GU"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "17 Foxhollow Row, Catford, London SE6 4ZS",
+              "19 Hazelbourne Row, Catford, London SE6 4EB",
+              "20 Inglewhite Row, Leyton, London E10 5GU"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "unknown",
+            "verdict": "unknown",
+            "offenders": [],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-006": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "19 Mortlake Row, Acton, London W3 6DT"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "20 Netherby Row, Acton, London W3 6FL"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "21 Ockendale Row, Streatham, London SW16 1HD"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "18 Lambourne Row, Acton, London W3 6AA",
+              "20 Netherby Row, Acton, London W3 6FL",
+              "21 Ockendale Row, Streatham, London SW16 1HD"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-007": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "20 Rushmoor Row, Crouch End, London N8 9EB"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "21 Stanbrook Row, Crouch End, London N8 9GU"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "22 Tarleton Row, Wood Green, London N22 6JN"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "19 Quenby Row, Crouch End, London N8 9BJ",
+              "21 Stanbrook Row, Crouch End, London N8 9GU",
+              "22 Tarleton Row, Wood Green, London N22 6JN"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-008": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "21 Whitmarsh Row, Bermondsey, London SE16 4FL"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "22 Xanthe Row, Bermondsey, London SE16 4HD"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "23 Yealand Row, Wood Green, London N22 6LW"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "20 Verwood Row, Bermondsey, London SE16 4DT",
+              "22 Xanthe Row, Bermondsey, London SE16 4HD",
+              "23 Yealand Row, Wood Green, London N22 6LW"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-009": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "22 Beaumaris Row, Wood Green, London N22 6GU"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "23 Carbery Row, Wood Green, London N22 6JN"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "24 Dunsfold Row, Harringay, London N4 1NE"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "21 Ambrose Row, Wood Green, London N22 6EB",
+              "23 Carbery Row, Wood Green, London N22 6JN",
+              "24 Dunsfold Row, Harringay, London N4 1NE"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-010": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "23 Glaisdale Row, Hendon, London NW4 3HD"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "24 Hartsmere Row, Hendon, London NW4 3LW"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "25 Ilmington Row, Colindale, London NW9 5PP"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "22 Fairholme Row, Hendon, London NW4 3FL",
+              "24 Hartsmere Row, Hendon, London NW4 3LW",
+              "25 Ilmington Row, Colindale, London NW9 5PP"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "unknown",
+            "verdict": "unknown",
+            "offenders": [],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-011": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "24 Merrivale Row, New Cross, London SE14 6JN"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "25 Northiam Row, New Cross, London SE14 6NE"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "26 Oakhanger Row, Willesden Green, London NW2 5QX"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "23 Longmynd Row, New Cross, London SE14 6GU",
+              "25 Northiam Row, New Cross, London SE14 6NE",
+              "26 Oakhanger Row, Willesden Green, London NW2 5QX"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-012": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "25 Redbourne Row, Streatham, London SW16 1LW"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "26 Sandhurst Row, Streatham, London SW16 1PP"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "27 Thornbury Row, Willesden Green, London NW2 5RF"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "24 Quarrendon Row, Streatham, London SW16 1HD",
+              "26 Sandhurst Row, Streatham, London SW16 1PP",
+              "27 Thornbury Row, Willesden Green, London NW2 5RF"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-013": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "26 Wandlebury Row, Balham, London SW12 9NE"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "27 Yarrowby Row, Balham, London SW12 9QX"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "28 Ashmansworth Row, Hendon, London NW4 3SQ"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "25 Vellacott Row, Balham, London SW12 9JN",
+              "27 Yarrowby Row, Balham, London SW12 9QX",
+              "28 Ashmansworth Row, Hendon, London NW4 3SQ"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-014": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "27 Dunmowe Row, Deptford, London SE8 3PP"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "28 Fernbrook Mews, Bermondsey, London SE16 4RF"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "26 Chalvington Row, Deptford, London SE8 3LW",
+              "28 Fernbrook Mews, Bermondsey, London SE16 4RF"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-015": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "28 Quillon Mews, Forest Gate, London E7 8QX"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "29 Ashlin Mews, Deptford, London SE8 3SQ"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "27 Wraysbury Mews, Forest Gate, London E7 8NE",
+              "29 Ashlin Mews, Deptford, London SE8 3SQ"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "unknown",
+            "verdict": "unknown",
+            "offenders": [],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-016": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "29 Pentworth Mews, Harringay, London N4 1RF"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "30 Ravensmere Mews, Acton, London W3 6TY"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "28 Osterlyn Mews, Harringay, London N4 1PP",
+              "30 Ravensmere Mews, Acton, London W3 6TY"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-017": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "29 Thackray Mews, Willesden Green, London NW2 5QX"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "31 Vandermeer Mews, Bermondsey, London SE16 4UG"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-018": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "30 Yarnfield Mews, Colindale, London NW9 5RF"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "32 Brackendale Mews, Acton, London W3 6WR"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-019": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "31 Drayfield Mews, Leyton, London E10 5SQ"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "33 Foxhollow Mews, Hendon, London NW4 3XZ"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "unknown",
+            "verdict": "unknown",
+            "offenders": [],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-020": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "32 Inglewhite Mews, Walthamstow, London E17 4TY"
+            ],
+            "n_surfaced": 3
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "33 Jarrowfield Mews, Deptford, London SE8 3WR"
+            ],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-021": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "33 Lambourne Mews, Peckham, London SE15 5UG"
+            ],
+            "n_surfaced": 3
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "34 Mortlake Mews, Leyton, London E10 5XZ"
+            ],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-022": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "34 Ockendale Mews, Acton, London W3 6WR"
+            ],
+            "n_surfaced": 3
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "35 Pyrford Mews, Streatham, London SW16 1YH"
+            ],
+            "n_surfaced": 3
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "unknown",
+            "verdict": "unknown",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-023": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "36 Tarleton Mews, Leyton, London E10 5ZS"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "37 Uffington Mews, Tooting, London SW17 0BJ"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-024": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "37 Xanthe Mews, Wood Green, London N22 6AA"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "38 Yealand Mews, Bermondsey, London SE16 4DT"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-025": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "38 Beaumaris Mews, Leyton, London E10 5BJ"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "39 Carbery Mews, Catford, London SE6 4EB"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-026": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "39 Fairholme Mews, Willesden Green, London NW2 5DT"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "40 Glaisdale Mews, Streatham, London SW16 1FL"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "41 Hartsmere Mews, Streatham, London SW16 1HD"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-027": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "40 Kirkstall Mews, Willesden Green, London NW2 5EB"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "41 Longmynd Mews, New Cross, London SE14 6GU"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-028": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "41 Oakhanger Mews, Acton, London W3 6FL"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "42 Pilgrims Mews, Harringay, London N4 1HD"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-029": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "42 Sandhurst Mews, Harringay, London N4 1GU"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "43 Thornbury Mews, Wood Green, London N22 6JN"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-030": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "43 Wandlebury Mews, Hendon, London NW4 3HD"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "44 Yarrowby Mews, Balham, London SW12 9LW"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-031": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "44 Chalvington Mews, Acton, London W3 6JN"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "45 Dunmowe Mews, Colindale, London NW9 5NE"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-032": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "45 Wraysbury Terrace, Bermondsey, London SE16 4LW"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 4
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "46 Quillon Terrace, Deptford, London SE8 3PP"
+            ],
+            "n_surfaced": 4
+          }
+        ]
+      },
+      "HO2-033": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "46 Denbury Terrace, Colindale, London NW9 5NE"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "47 Osterlyn Terrace, Hendon, London NW4 3QX"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "48 Pentworth Terrace, Hendon, London NW4 3SQ"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-034": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "47 Thackray Terrace, Deptford, London SE8 3PP"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "48 Ulverton Terrace, Forest Gate, London E7 8RF"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "49 Vandermeer Terrace, Forest Gate, London E7 8TY"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-035": {
+        "task_category": "retrieval_hard",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "48 Zephyrn Terrace, Wood Green, London N22 6QX"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "commute",
+            "type": "commute_leq_minutes",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "?",
+              "?",
+              "?",
+              "?"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "move_in_date",
+            "type": "move_in_date_satisfied",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "49 Brackendale Terrace, Crouch End, London N8 9SQ"
+            ],
+            "n_surfaced": 5
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "satisfaction",
+            "verdict": "fail",
+            "offenders": [
+              "50 Calthorpe Terrace, Crouch End, London N8 9UG"
+            ],
+            "n_surfaced": 5
+          }
+        ]
+      },
+      "HO2-036": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-037": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-038": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-039": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-040": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-041": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-042": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-043": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-044": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-045": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-046": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "not_surfaced",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-047": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "trivial",
+            "verdict": "pass",
+            "offenders": [],
+            "n_surfaced": 3
+          }
+        ]
+      },
+      "HO2-048": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-049": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "property_feature",
+            "type": "property_feature_present",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-050": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-051": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-052": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-053": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-054": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "bedroom_count",
+            "type": "bedroom_count_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-055": {
+        "task_category": "retrieval_soft",
+        "constraints": [
+          {
+            "slot": "budget",
+            "type": "all_results_satisfy",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "area",
+            "type": "area_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          },
+          {
+            "slot": "room_type",
+            "type": "room_type_match",
+            "branch": "no_result",
+            "verdict": "no_result",
+            "offenders": [],
+            "n_surfaced": 0
+          }
+        ]
+      },
+      "HO2-056": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-057": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-058": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-059": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-060": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-061": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-062": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-063": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-064": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-065": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-066": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-067": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-068": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-069": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-070": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-071": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-072": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-073": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-074": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-075": {
+        "task_category": "calculation",
+        "constraints": []
+      },
+      "HO2-076": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-077": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-078": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-079": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-080": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-081": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-082": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-083": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-084": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-085": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-086": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-087": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-088": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-089": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-090": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-091": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-092": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-093": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-094": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-095": {
+        "task_category": "memory",
+        "constraints": []
+      },
+      "HO2-096": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-097": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-098": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-099": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-100": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-101": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-102": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-103": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-104": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-105": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-106": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-107": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-108": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-109": {
+        "task_category": "clarify",
+        "constraints": []
+      },
+      "HO2-110": {
+        "task_category": "clarify",
+        "constraints": []
+      }
+    },
+    "D1_hard_constraint_satisfaction": {
+      "definition": "unit = (case, constraint) pair whose frozen evidence carries both a satisfying and a violating record; PASS = the answer surfaced no violating record",
+      "read_as": "the answer put no non-compliant option in front of the user AT ALL; an answer that names the compliant option and then lists the rejects transparently is scored FAIL here",
+      "cv_eligible": false,
+      "numerator": 0,
+      "denominator": 119,
+      "n_cases": 35,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "n_units": 35,
+        "resamples": 2000,
+        "seed": 20260805
+      },
+      "failures": [
+        {
+          "case_id": "HO2-001",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "14 Wraysbury Row, Walthamstow, London E17 4XZ"
+          ]
+        },
+        {
+          "case_id": "HO2-001",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "15 Quillon Row, Walthamstow, London E17 4ZS"
+          ]
+        },
+        {
+          "case_id": "HO2-001",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "16 Ashlin Row, Deptford, London SE8 3BJ"
+          ]
+        },
+        {
+          "case_id": "HO2-001",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "13 Halstow Row, Walthamstow, London E17 4UG",
+            "15 Quillon Row, Walthamstow, London E17 4ZS",
+            "16 Ashlin Row, Deptford, London SE8 3BJ"
+          ]
+        },
+        {
+          "case_id": "HO2-002",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "15 Osterlyn Row, Leyton, London E10 5YH"
+          ]
+        },
+        {
+          "case_id": "HO2-002",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "16 Pentworth Row, Leyton, London E10 5AA"
+          ]
+        },
+        {
+          "case_id": "HO2-002",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "17 Ravensmere Row, Hendon, London NW4 3DT"
+          ]
+        },
+        {
+          "case_id": "HO2-002",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "14 Denbury Row, Leyton, London E10 5WR",
+            "16 Pentworth Row, Leyton, London E10 5AA",
+            "17 Ravensmere Row, Hendon, London NW4 3DT"
+          ]
+        },
+        {
+          "case_id": "HO2-003",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "16 Ulverton Row, Peckham, London SE15 5ZS"
+          ]
+        },
+        {
+          "case_id": "HO2-003",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "17 Vandermeer Row, Peckham, London SE15 5BJ"
+          ]
+        },
+        {
+          "case_id": "HO2-003",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "18 Wexcombe Row, Leyton, London E10 5EB"
+          ]
+        },
+        {
+          "case_id": "HO2-003",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "15 Thackray Row, Peckham, London SE15 5XZ",
+            "17 Vandermeer Row, Peckham, London SE15 5BJ",
+            "18 Wexcombe Row, Leyton, London E10 5EB"
+          ]
+        },
+        {
+          "case_id": "HO2-004",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "17 Brackendale Row, Tooting, London SW17 0AA"
+          ]
+        },
+        {
+          "case_id": "HO2-004",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "18 Calthorpe Row, Tooting, London SW17 0DT"
+          ]
+        },
+        {
+          "case_id": "HO2-004",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "19 Drayfield Row, Leyton, London E10 5FL"
+          ]
+        },
+        {
+          "case_id": "HO2-004",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "16 Zephyrn Row, Tooting, London SW17 0YH",
+            "18 Calthorpe Row, Tooting, London SW17 0DT",
+            "19 Drayfield Row, Leyton, London E10 5FL"
+          ]
+        },
+        {
+          "case_id": "HO2-005",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "18 Garrowby Row, Catford, London SE6 4BJ"
+          ]
+        },
+        {
+          "case_id": "HO2-005",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "19 Hazelbourne Row, Catford, London SE6 4EB"
+          ]
+        },
+        {
+          "case_id": "HO2-005",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "20 Inglewhite Row, Leyton, London E10 5GU"
+          ]
+        },
+        {
+          "case_id": "HO2-005",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "17 Foxhollow Row, Catford, London SE6 4ZS",
+            "19 Hazelbourne Row, Catford, London SE6 4EB",
+            "20 Inglewhite Row, Leyton, London E10 5GU"
+          ]
+        },
+        {
+          "case_id": "HO2-006",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "19 Mortlake Row, Acton, London W3 6DT"
+          ]
+        },
+        {
+          "case_id": "HO2-006",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "20 Netherby Row, Acton, London W3 6FL"
+          ]
+        },
+        {
+          "case_id": "HO2-006",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "21 Ockendale Row, Streatham, London SW16 1HD"
+          ]
+        },
+        {
+          "case_id": "HO2-006",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "18 Lambourne Row, Acton, London W3 6AA",
+            "20 Netherby Row, Acton, London W3 6FL",
+            "21 Ockendale Row, Streatham, London SW16 1HD"
+          ]
+        },
+        {
+          "case_id": "HO2-007",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "20 Rushmoor Row, Crouch End, London N8 9EB"
+          ]
+        },
+        {
+          "case_id": "HO2-007",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "21 Stanbrook Row, Crouch End, London N8 9GU"
+          ]
+        },
+        {
+          "case_id": "HO2-007",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "22 Tarleton Row, Wood Green, London N22 6JN"
+          ]
+        },
+        {
+          "case_id": "HO2-007",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "19 Quenby Row, Crouch End, London N8 9BJ",
+            "21 Stanbrook Row, Crouch End, London N8 9GU",
+            "22 Tarleton Row, Wood Green, London N22 6JN"
+          ]
+        },
+        {
+          "case_id": "HO2-008",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "21 Whitmarsh Row, Bermondsey, London SE16 4FL"
+          ]
+        },
+        {
+          "case_id": "HO2-008",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "22 Xanthe Row, Bermondsey, London SE16 4HD"
+          ]
+        },
+        {
+          "case_id": "HO2-008",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "23 Yealand Row, Wood Green, London N22 6LW"
+          ]
+        },
+        {
+          "case_id": "HO2-008",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "20 Verwood Row, Bermondsey, London SE16 4DT",
+            "22 Xanthe Row, Bermondsey, London SE16 4HD",
+            "23 Yealand Row, Wood Green, London N22 6LW"
+          ]
+        },
+        {
+          "case_id": "HO2-009",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "22 Beaumaris Row, Wood Green, London N22 6GU"
+          ]
+        },
+        {
+          "case_id": "HO2-009",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "23 Carbery Row, Wood Green, London N22 6JN"
+          ]
+        },
+        {
+          "case_id": "HO2-009",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "24 Dunsfold Row, Harringay, London N4 1NE"
+          ]
+        },
+        {
+          "case_id": "HO2-009",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "21 Ambrose Row, Wood Green, London N22 6EB",
+            "23 Carbery Row, Wood Green, London N22 6JN",
+            "24 Dunsfold Row, Harringay, London N4 1NE"
+          ]
+        },
+        {
+          "case_id": "HO2-010",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "23 Glaisdale Row, Hendon, London NW4 3HD"
+          ]
+        },
+        {
+          "case_id": "HO2-010",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "24 Hartsmere Row, Hendon, London NW4 3LW"
+          ]
+        },
+        {
+          "case_id": "HO2-010",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "25 Ilmington Row, Colindale, London NW9 5PP"
+          ]
+        },
+        {
+          "case_id": "HO2-010",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "22 Fairholme Row, Hendon, London NW4 3FL",
+            "24 Hartsmere Row, Hendon, London NW4 3LW",
+            "25 Ilmington Row, Colindale, London NW9 5PP"
+          ]
+        },
+        {
+          "case_id": "HO2-011",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "24 Merrivale Row, New Cross, London SE14 6JN"
+          ]
+        },
+        {
+          "case_id": "HO2-011",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "25 Northiam Row, New Cross, London SE14 6NE"
+          ]
+        },
+        {
+          "case_id": "HO2-011",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "26 Oakhanger Row, Willesden Green, London NW2 5QX"
+          ]
+        },
+        {
+          "case_id": "HO2-011",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "23 Longmynd Row, New Cross, London SE14 6GU",
+            "25 Northiam Row, New Cross, London SE14 6NE",
+            "26 Oakhanger Row, Willesden Green, London NW2 5QX"
+          ]
+        },
+        {
+          "case_id": "HO2-012",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "25 Redbourne Row, Streatham, London SW16 1LW"
+          ]
+        },
+        {
+          "case_id": "HO2-012",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "26 Sandhurst Row, Streatham, London SW16 1PP"
+          ]
+        },
+        {
+          "case_id": "HO2-012",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "27 Thornbury Row, Willesden Green, London NW2 5RF"
+          ]
+        },
+        {
+          "case_id": "HO2-012",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "24 Quarrendon Row, Streatham, London SW16 1HD",
+            "26 Sandhurst Row, Streatham, London SW16 1PP",
+            "27 Thornbury Row, Willesden Green, London NW2 5RF"
+          ]
+        },
+        {
+          "case_id": "HO2-013",
+          "slot": "bedroom_count",
+          "verdict": "fail",
+          "offenders": [
+            "26 Wandlebury Row, Balham, London SW12 9NE"
+          ]
+        },
+        {
+          "case_id": "HO2-013",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "27 Yarrowby Row, Balham, London SW12 9QX"
+          ]
+        },
+        {
+          "case_id": "HO2-013",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "28 Ashmansworth Row, Hendon, London NW4 3SQ"
+          ]
+        },
+        {
+          "case_id": "HO2-013",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "25 Vellacott Row, Balham, London SW12 9JN",
+            "27 Yarrowby Row, Balham, London SW12 9QX",
+            "28 Ashmansworth Row, Hendon, London NW4 3SQ"
+          ]
+        },
+        {
+          "case_id": "HO2-014",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "27 Dunmowe Row, Deptford, London SE8 3PP"
+          ]
+        },
+        {
+          "case_id": "HO2-014",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "28 Fernbrook Mews, Bermondsey, London SE16 4RF"
+          ]
+        },
+        {
+          "case_id": "HO2-014",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "26 Chalvington Row, Deptford, London SE8 3LW",
+            "28 Fernbrook Mews, Bermondsey, London SE16 4RF"
+          ]
+        },
+        {
+          "case_id": "HO2-015",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "28 Quillon Mews, Forest Gate, London E7 8QX"
+          ]
+        },
+        {
+          "case_id": "HO2-015",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "29 Ashlin Mews, Deptford, London SE8 3SQ"
+          ]
+        },
+        {
+          "case_id": "HO2-015",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "27 Wraysbury Mews, Forest Gate, London E7 8NE",
+            "29 Ashlin Mews, Deptford, London SE8 3SQ"
+          ]
+        },
+        {
+          "case_id": "HO2-016",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "29 Pentworth Mews, Harringay, London N4 1RF"
+          ]
+        },
+        {
+          "case_id": "HO2-016",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "30 Ravensmere Mews, Acton, London W3 6TY"
+          ]
+        },
+        {
+          "case_id": "HO2-016",
+          "slot": "budget",
+          "verdict": "fail",
+          "offenders": [
+            "28 Osterlyn Mews, Harringay, London N4 1PP",
+            "30 Ravensmere Mews, Acton, London W3 6TY"
+          ]
+        },
+        {
+          "case_id": "HO2-017",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "29 Thackray Mews, Willesden Green, London NW2 5QX"
+          ]
+        },
+        {
+          "case_id": "HO2-017",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "31 Vandermeer Mews, Bermondsey, London SE16 4UG"
+          ]
+        },
+        {
+          "case_id": "HO2-017",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-018",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "30 Yarnfield Mews, Colindale, London NW9 5RF"
+          ]
+        },
+        {
+          "case_id": "HO2-018",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "32 Brackendale Mews, Acton, London W3 6WR"
+          ]
+        },
+        {
+          "case_id": "HO2-018",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-019",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "31 Drayfield Mews, Leyton, London E10 5SQ"
+          ]
+        },
+        {
+          "case_id": "HO2-019",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "33 Foxhollow Mews, Hendon, London NW4 3XZ"
+          ]
+        },
+        {
+          "case_id": "HO2-019",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-020",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "32 Inglewhite Mews, Walthamstow, London E17 4TY"
+          ]
+        },
+        {
+          "case_id": "HO2-020",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "33 Jarrowfield Mews, Deptford, London SE8 3WR"
+          ]
+        },
+        {
+          "case_id": "HO2-021",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "33 Lambourne Mews, Peckham, London SE15 5UG"
+          ]
+        },
+        {
+          "case_id": "HO2-021",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "34 Mortlake Mews, Leyton, London E10 5XZ"
+          ]
+        },
+        {
+          "case_id": "HO2-022",
+          "slot": "room_type",
+          "verdict": "fail",
+          "offenders": [
+            "34 Ockendale Mews, Acton, London W3 6WR"
+          ]
+        },
+        {
+          "case_id": "HO2-022",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "35 Pyrford Mews, Streatham, London SW16 1YH"
+          ]
+        },
+        {
+          "case_id": "HO2-023",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "36 Tarleton Mews, Leyton, London E10 5ZS"
+          ]
+        },
+        {
+          "case_id": "HO2-023",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-023",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "37 Uffington Mews, Tooting, London SW17 0BJ"
+          ]
+        },
+        {
+          "case_id": "HO2-024",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "37 Xanthe Mews, Wood Green, London N22 6AA"
+          ]
+        },
+        {
+          "case_id": "HO2-024",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-024",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "38 Yealand Mews, Bermondsey, London SE16 4DT"
+          ]
+        },
+        {
+          "case_id": "HO2-025",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "38 Beaumaris Mews, Leyton, London E10 5BJ"
+          ]
+        },
+        {
+          "case_id": "HO2-025",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-025",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "39 Carbery Mews, Catford, London SE6 4EB"
+          ]
+        },
+        {
+          "case_id": "HO2-026",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "39 Fairholme Mews, Willesden Green, London NW2 5DT"
+          ]
+        },
+        {
+          "case_id": "HO2-026",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-026",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "40 Glaisdale Mews, Streatham, London SW16 1FL"
+          ]
+        },
+        {
+          "case_id": "HO2-026",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "41 Hartsmere Mews, Streatham, London SW16 1HD"
+          ]
+        },
+        {
+          "case_id": "HO2-027",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "40 Kirkstall Mews, Willesden Green, London NW2 5EB"
+          ]
+        },
+        {
+          "case_id": "HO2-027",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-027",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "41 Longmynd Mews, New Cross, London SE14 6GU"
+          ]
+        },
+        {
+          "case_id": "HO2-028",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "41 Oakhanger Mews, Acton, London W3 6FL"
+          ]
+        },
+        {
+          "case_id": "HO2-028",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-028",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "42 Pilgrims Mews, Harringay, London N4 1HD"
+          ]
+        },
+        {
+          "case_id": "HO2-029",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "42 Sandhurst Mews, Harringay, London N4 1GU"
+          ]
+        },
+        {
+          "case_id": "HO2-029",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-029",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "43 Thornbury Mews, Wood Green, London N22 6JN"
+          ]
+        },
+        {
+          "case_id": "HO2-030",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "43 Wandlebury Mews, Hendon, London NW4 3HD"
+          ]
+        },
+        {
+          "case_id": "HO2-030",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-030",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "44 Yarrowby Mews, Balham, London SW12 9LW"
+          ]
+        },
+        {
+          "case_id": "HO2-031",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "44 Chalvington Mews, Acton, London W3 6JN"
+          ]
+        },
+        {
+          "case_id": "HO2-031",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-031",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "45 Dunmowe Mews, Colindale, London NW9 5NE"
+          ]
+        },
+        {
+          "case_id": "HO2-032",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "45 Wraysbury Terrace, Bermondsey, London SE16 4LW"
+          ]
+        },
+        {
+          "case_id": "HO2-032",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-032",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "46 Quillon Terrace, Deptford, London SE8 3PP"
+          ]
+        },
+        {
+          "case_id": "HO2-033",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "46 Denbury Terrace, Colindale, London NW9 5NE"
+          ]
+        },
+        {
+          "case_id": "HO2-033",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-033",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "47 Osterlyn Terrace, Hendon, London NW4 3QX"
+          ]
+        },
+        {
+          "case_id": "HO2-033",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "48 Pentworth Terrace, Hendon, London NW4 3SQ"
+          ]
+        },
+        {
+          "case_id": "HO2-034",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "47 Thackray Terrace, Deptford, London SE8 3PP"
+          ]
+        },
+        {
+          "case_id": "HO2-034",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-034",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "48 Ulverton Terrace, Forest Gate, London E7 8RF"
+          ]
+        },
+        {
+          "case_id": "HO2-034",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "49 Vandermeer Terrace, Forest Gate, London E7 8TY"
+          ]
+        },
+        {
+          "case_id": "HO2-035",
+          "slot": "area",
+          "verdict": "fail",
+          "offenders": [
+            "48 Zephyrn Terrace, Wood Green, London N22 6QX"
+          ]
+        },
+        {
+          "case_id": "HO2-035",
+          "slot": "commute",
+          "verdict": "fail",
+          "offenders": [
+            "?",
+            "?",
+            "?",
+            "?"
+          ]
+        },
+        {
+          "case_id": "HO2-035",
+          "slot": "move_in_date",
+          "verdict": "fail",
+          "offenders": [
+            "49 Brackendale Terrace, Crouch End, London N8 9SQ"
+          ]
+        },
+        {
+          "case_id": "HO2-035",
+          "slot": "property_feature",
+          "verdict": "fail",
+          "offenders": [
+            "50 Calthorpe Terrace, Crouch End, London N8 9UG"
+          ]
+        }
+      ]
+    },
+    "D2_case_all_constraints_pass": {
+      "numerator": 0,
+      "denominator": 35,
+      "ci": {
+        "point": 0.0,
+        "lo": 0.0,
+        "hi": 0.0,
+        "n_units": 35,
+        "resamples": 2000,
+        "seed": 20260805
+      },
+      "intervals": {
+        "bootstrap_ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 35,
+          "resamples": 2000,
+          "seed": 20260805
+        },
+        "exact_binomial_ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.10003243557210512,
+          "k": 0,
+          "n": 35,
+          "method": "Clopper-Pearson exact binomial, 95%"
+        },
+        "bootstrap_degenerate": "every resample reproduces the point estimate (the rate sits on a boundary), so the percentile interval collapses to a point and must NOT be quoted as a confidence statement — quote the exact binomial interval instead"
+      },
+      "cv_eligible": false
+    },
+    "D3_per_slot": {
+      "budget": {
+        "numerator": 0,
+        "denominator": 16,
+        "n_cases": 16,
+        "ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 16,
+          "resamples": 2000,
+          "seed": 20260805
+        }
+      },
+      "bedroom_count": {
+        "numerator": 0,
+        "denominator": 13,
+        "n_cases": 13,
+        "ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 13,
+          "resamples": 2000,
+          "seed": 20260805
+        }
+      },
+      "room_type": {
+        "numerator": 0,
+        "denominator": 22,
+        "n_cases": 22,
+        "ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 22,
+          "resamples": 2000,
+          "seed": 20260805
+        }
+      },
+      "commute": {
+        "numerator": 0,
+        "denominator": 16,
+        "n_cases": 16,
+        "ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 16,
+          "resamples": 2000,
+          "seed": 20260805
+        }
+      },
+      "area": {
+        "numerator": 0,
+        "denominator": 35,
+        "n_cases": 35,
+        "ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 35,
+          "resamples": 2000,
+          "seed": 20260805
+        }
+      },
+      "move_in_date": {
+        "numerator": 0,
+        "denominator": 9,
+        "n_cases": 9,
+        "ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 9,
+          "resamples": 2000,
+          "seed": 20260805
+        }
+      },
+      "property_feature": {
+        "numerator": 0,
+        "denominator": 8,
+        "n_cases": 8,
+        "ci": {
+          "point": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_units": 8,
+          "resamples": 2000,
+          "seed": 20260805
+        }
+      }
+    },
+    "D6_correct_option_identified": {
+      "definition": "unit = retrieval_hard case whose frozen evidence contains at least one listing satisfying EVERY stated condition; PASS = the answer names such a listing (street token or exact price)",
+      "added": "after the 6-case smoke; disclosed in PROGRESS.log 2026-08-05 07:26",
+      "primary": {
+        "numerator": 33,
+        "denominator": 33,
+        "excludes": [
+          "HO2-001",
+          "HO2-023"
+        ],
+        "ci": {
+          "point": 1.0,
+          "lo": 1.0,
+          "hi": 1.0,
+          "n_units": 33,
+          "resamples": 2000,
+          "seed": 20260805
+        },
+        "intervals": {
+          "bootstrap_ci": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "n_units": 33,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "exact_binomial_ci": {
+            "point": 1.0,
+            "lo": 0.8942371899254207,
+            "hi": 1.0,
+            "k": 33,
+            "n": 33,
+            "method": "Clopper-Pearson exact binomial, 95%"
+          },
+          "bootstrap_degenerate": "every resample reproduces the point estimate (the rate sits on a boundary), so the percentile interval collapses to a point and must NOT be quoted as a confidence statement — quote the exact binomial interval instead"
+        }
+      },
+      "all_cases": {
+        "numerator": 35,
+        "denominator": 35,
+        "ci": {
+          "point": 1.0,
+          "lo": 1.0,
+          "hi": 1.0,
+          "n_units": 35,
+          "resamples": 2000,
+          "seed": 20260805
+        },
+        "intervals": {
+          "bootstrap_ci": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "n_units": 35,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "exact_binomial_ci": {
+            "point": 1.0,
+            "lo": 0.8999675644278948,
+            "hi": 1.0,
+            "k": 35,
+            "n": 35,
+            "method": "Clopper-Pearson exact binomial, 95%"
+          },
+          "bootstrap_degenerate": "every resample reproduces the point estimate (the rate sits on a boundary), so the percentile interval collapses to a point and must NOT be quoted as a confidence statement — quote the exact binomial interval instead"
+        }
+      },
+      "per_case": {
+        "HO2-001": 1,
+        "HO2-002": 1,
+        "HO2-003": 1,
+        "HO2-004": 1,
+        "HO2-005": 1,
+        "HO2-006": 1,
+        "HO2-007": 1,
+        "HO2-008": 1,
+        "HO2-009": 1,
+        "HO2-010": 1,
+        "HO2-011": 1,
+        "HO2-012": 1,
+        "HO2-013": 1,
+        "HO2-014": 1,
+        "HO2-015": 1,
+        "HO2-016": 1,
+        "HO2-017": 1,
+        "HO2-018": 1,
+        "HO2-019": 1,
+        "HO2-020": 1,
+        "HO2-021": 1,
+        "HO2-022": 1,
+        "HO2-023": 1,
+        "HO2-024": 1,
+        "HO2-025": 1,
+        "HO2-026": 1,
+        "HO2-027": 1,
+        "HO2-028": 1,
+        "HO2-029": 1,
+        "HO2-030": 1,
+        "HO2-031": 1,
+        "HO2-032": 1,
+        "HO2-033": 1,
+        "HO2-034": 1,
+        "HO2-035": 1
+      }
+    },
+    "D5_reference_calculation_match": {
+      "numerator": 20,
+      "denominator": 20,
+      "ci": {
+        "point": 1.0,
+        "lo": 1.0,
+        "hi": 1.0,
+        "n_units": 20,
+        "resamples": 2000,
+        "seed": 20260805
+      },
+      "intervals": {
+        "bootstrap_ci": {
+          "point": 1.0,
+          "lo": 1.0,
+          "hi": 1.0,
+          "n_units": 20,
+          "resamples": 2000,
+          "seed": 20260805
+        },
+        "exact_binomial_ci": {
+          "point": 1.0,
+          "lo": 0.8315665290169145,
+          "hi": 1.0,
+          "k": 20,
+          "n": 20,
+          "method": "Clopper-Pearson exact binomial, 95%"
+        },
+        "bootstrap_degenerate": "every resample reproduces the point estimate (the rate sits on a boundary), so the percentile interval collapses to a point and must NOT be quoted as a confidence statement — quote the exact binomial interval instead"
+      },
+      "split_by_who_answered": {
+        "deterministic_module_zero_llm_calls": {
+          "numerator": 9,
+          "denominator": 9,
+          "note": "these turns were answered by app/core/tenancy_reference.py, a deterministic non-LLM module: 0 LLM calls, ~20 ms"
+        },
+        "model_answered": {
+          "numerator": 11,
+          "denominator": 11
+        }
+      },
+      "per_case": {
+        "HO2-056": {
+          "expected": 1191.67,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-057": {
+          "expected": 1473.33,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-058": {
+          "expected": 1711.67,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-059": {
+          "expected": 1841.67,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-060": {
+          "expected": 2080.0,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-061": {
+          "expected": 297.69,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-062": {
+          "expected": 386.54,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-063": {
+          "expected": 572.31,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-064": {
+          "expected": 1638.46,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-065": {
+          "expected": 1823.08,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-066": {
+          "expected": 2163.46,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-067": {
+          "expected": 2423.08,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-068": {
+          "expected": 5953.85,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-069": {
+          "expected": 6576.92,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-070": {
+          "expected": 2907.69,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-071": {
+          "expected": 3640.0,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-072": {
+          "expected": 4846.15,
+          "matched": true,
+          "llm_calls": 0
+        },
+        "HO2-073": {
+          "expected": 14160,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-074": {
+          "expected": 23100,
+          "matched": true,
+          "llm_calls": 1
+        },
+        "HO2-075": {
+          "expected": 36600,
+          "matched": true,
+          "llm_calls": 1
+        }
+      }
+    },
+    "D4_no_result_no_other_money": {
+      "secondary_diagnostic_only": true,
+      "numerator": 4,
+      "denominator": 8,
+      "ci": {
+        "point": 0.5,
+        "lo": 0.125,
+        "hi": 0.875,
+        "n_units": 8,
+        "resamples": 2000,
+        "seed": 20260805
+      },
+      "intervals": {
+        "bootstrap_ci": {
+          "point": 0.5,
+          "lo": 0.125,
+          "hi": 0.875,
+          "n_units": 8,
+          "resamples": 2000,
+          "seed": 20260805
+        },
+        "exact_binomial_ci": {
+          "point": 0.5,
+          "lo": 0.15701277048705792,
+          "hi": 0.8429872295129421,
+          "k": 4,
+          "n": 8,
+          "method": "Clopper-Pearson exact binomial, 95%"
+        }
+      },
+      "offending_figures": {
+        "HO2-048": [],
+        "HO2-049": [
+          800.0,
+          900.0
+        ],
+        "HO2-050": [],
+        "HO2-051": [],
+        "HO2-052": [
+          2500.0,
+          3000.0,
+          2500.0,
+          3000.0
+        ],
+        "HO2-053": [
+          1200.0
+        ],
+        "HO2-054": [
+          1400.0,
+          1600.0,
+          1800.0,
+          2200.0,
+          1800.0,
+          2200.0
+        ],
+        "HO2-055": []
+      }
+    }
+  },
+  "model_blind_review": {
+    "not_human_review": "all labels below are produced by MODELS; never report them as human review, answer accuracy or inter-rater reliability",
+    "judgeable_counts": {
+      "hard_constraints_satisfied": {
+        "round1": {
+          "n_items": 110,
+          "truly_judgeable_n": 36,
+          "not_applicable": 74,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "yes": 32,
+            "not_applicable": 74,
+            "no": 4
+          }
+        },
+        "round2": {
+          "n_items": 110,
+          "truly_judgeable_n": 34,
+          "not_applicable": 75,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 1,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "yes": 33,
+            "not_applicable": 75,
+            "no": 1,
+            "null": 1
+          }
+        },
+        "round3_pro": {
+          "n_items": 110,
+          "truly_judgeable_n": 46,
+          "not_applicable": 64,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "not_applicable": 64,
+            "yes": 36,
+            "no": 10
+          }
+        }
+      },
+      "claims_evidence_supported": {
+        "round1": {
+          "n_items": 110,
+          "truly_judgeable_n": 92,
+          "not_applicable": 18,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "yes": 74,
+            "no": 7,
+            "not_applicable": 18,
+            "partial": 11
+          }
+        },
+        "round2": {
+          "n_items": 110,
+          "truly_judgeable_n": 91,
+          "not_applicable": 18,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 1,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "yes": 76,
+            "not_applicable": 18,
+            "no": 7,
+            "partial": 8,
+            "null": 1
+          }
+        },
+        "round3_pro": {
+          "n_items": 110,
+          "truly_judgeable_n": 91,
+          "not_applicable": 19,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "not_applicable": 19,
+            "yes": 57,
+            "partial": 32,
+            "no": 2
+          }
+        }
+      },
+      "contradicted_claim_count": {
+        "round1": {
+          "n_items": 110,
+          "truly_judgeable_n": 110,
+          "not_applicable": 0,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "0": 107,
+            "1": 3
+          }
+        },
+        "round2": {
+          "n_items": 110,
+          "truly_judgeable_n": 109,
+          "not_applicable": 0,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 1,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "0": 108,
+            "null": 1,
+            "1": 1
+          }
+        },
+        "round3_pro": {
+          "n_items": 110,
+          "truly_judgeable_n": 110,
+          "not_applicable": 0,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "0": 105,
+            "3": 1,
+            "1": 4
+          }
+        }
+      },
+      "task_completed_correctly": {
+        "round1": {
+          "n_items": 110,
+          "truly_judgeable_n": 110,
+          "not_applicable": 0,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "yes": 104,
+            "no": 6
+          }
+        },
+        "round2": {
+          "n_items": 110,
+          "truly_judgeable_n": 109,
+          "not_applicable": 0,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 1,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "yes": 107,
+            "no": 2,
+            "null": 1
+          }
+        },
+        "round3_pro": {
+          "n_items": 110,
+          "truly_judgeable_n": 110,
+          "not_applicable": 0,
+          "cannot_assess": 0,
+          "unparsed_or_missing": 0,
+          "out_of_vocab": 0,
+          "raw_counts": {
+            "yes": 100,
+            "no": 10
+          }
+        }
+      }
+    },
+    "rates_among_judgeable": {
+      "hard_constraints_satisfied": {
+        "round1": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 32,
+          "denominator": 36,
+          "ci": {
+            "point": 0.8888888888888888,
+            "lo": 0.7777777777777778,
+            "hi": 0.9722222222222222,
+            "n_units": 36,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.8888888888888888,
+              "lo": 0.7777777777777778,
+              "hi": 0.9722222222222222,
+              "n_units": 36,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.8888888888888888,
+              "lo": 0.7393890794891707,
+              "hi": 0.9688838600549847,
+              "k": 32,
+              "n": 36,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round2": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 33,
+          "denominator": 34,
+          "ci": {
+            "point": 0.9705882352941176,
+            "lo": 0.9117647058823529,
+            "hi": 1.0,
+            "n_units": 34,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.9705882352941176,
+              "lo": 0.9117647058823529,
+              "hi": 1.0,
+              "n_units": 34,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.9705882352941176,
+              "lo": 0.8467323304396821,
+              "hi": 0.9992556357653097,
+              "k": 33,
+              "n": 34,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round3_pro": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 36,
+          "denominator": 46,
+          "ci": {
+            "point": 0.782608695652174,
+            "lo": 0.6521739130434783,
+            "hi": 0.8913043478260869,
+            "n_units": 46,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.782608695652174,
+              "lo": 0.6521739130434783,
+              "hi": 0.8913043478260869,
+              "n_units": 46,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.782608695652174,
+              "lo": 0.6363756413846033,
+              "hi": 0.8905182998311809,
+              "k": 36,
+              "n": 46,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        }
+      },
+      "claims_evidence_supported": {
+        "round1": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 74,
+          "denominator": 92,
+          "ci": {
+            "point": 0.8043478260869565,
+            "lo": 0.717391304347826,
+            "hi": 0.8804347826086957,
+            "n_units": 92,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.8043478260869565,
+              "lo": 0.717391304347826,
+              "hi": 0.8804347826086957,
+              "n_units": 92,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.8043478260869565,
+              "lo": 0.7085262787942337,
+              "hi": 0.8797239824931542,
+              "k": 74,
+              "n": 92,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round2": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 76,
+          "denominator": 91,
+          "ci": {
+            "point": 0.8351648351648352,
+            "lo": 0.7582417582417582,
+            "hi": 0.9120879120879121,
+            "n_units": 91,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.8351648351648352,
+              "lo": 0.7582417582417582,
+              "hi": 0.9120879120879121,
+              "n_units": 91,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.8351648351648352,
+              "lo": 0.7427426634202687,
+              "hi": 0.904704029789513,
+              "k": 76,
+              "n": 91,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round3_pro": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 57,
+          "denominator": 91,
+          "ci": {
+            "point": 0.6263736263736264,
+            "lo": 0.5274725274725275,
+            "hi": 0.7252747252747253,
+            "n_units": 91,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.6263736263736264,
+              "lo": 0.5274725274725275,
+              "hi": 0.7252747252747253,
+              "n_units": 91,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.6263736263736264,
+              "lo": 0.5186848209212489,
+              "hi": 0.7255924755008123,
+              "k": 57,
+              "n": 91,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        }
+      },
+      "contradicted_claim_count": {
+        "round1": {
+          "positive_label": [
+            "0"
+          ],
+          "numerator": 107,
+          "denominator": 110,
+          "ci": {
+            "point": 0.9727272727272728,
+            "lo": 0.9363636363636364,
+            "hi": 1.0,
+            "n_units": 110,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.9727272727272728,
+              "lo": 0.9363636363636364,
+              "hi": 1.0,
+              "n_units": 110,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.9727272727272728,
+              "lo": 0.9223632295004867,
+              "hi": 0.9943400035585208,
+              "k": 107,
+              "n": 110,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round2": {
+          "positive_label": [
+            "0"
+          ],
+          "numerator": 108,
+          "denominator": 109,
+          "ci": {
+            "point": 0.9908256880733946,
+            "lo": 0.9724770642201835,
+            "hi": 1.0,
+            "n_units": 109,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.9908256880733946,
+              "lo": 0.9724770642201835,
+              "hi": 1.0,
+              "n_units": 109,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.9908256880733946,
+              "lo": 0.9499431769151876,
+              "hi": 0.9997677535056477,
+              "k": 108,
+              "n": 109,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round3_pro": {
+          "positive_label": [
+            "0"
+          ],
+          "numerator": 105,
+          "denominator": 110,
+          "ci": {
+            "point": 0.9545454545454546,
+            "lo": 0.9090909090909091,
+            "hi": 0.990909090909091,
+            "n_units": 110,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.9545454545454546,
+              "lo": 0.9090909090909091,
+              "hi": 0.990909090909091,
+              "n_units": 110,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.9545454545454546,
+              "lo": 0.8971078656084808,
+              "hi": 0.9850785259260779,
+              "k": 105,
+              "n": 110,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        }
+      },
+      "task_completed_correctly": {
+        "round1": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 104,
+          "denominator": 110,
+          "ci": {
+            "point": 0.9454545454545454,
+            "lo": 0.9,
+            "hi": 0.9818181818181818,
+            "n_units": 110,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.9454545454545454,
+              "lo": 0.9,
+              "hi": 0.9818181818181818,
+              "n_units": 110,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.9454545454545454,
+              "lo": 0.8850533748777116,
+              "hi": 0.979722279030451,
+              "k": 104,
+              "n": 110,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round2": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 107,
+          "denominator": 109,
+          "ci": {
+            "point": 0.981651376146789,
+            "lo": 0.9541284403669725,
+            "hi": 1.0,
+            "n_units": 109,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.981651376146789,
+              "lo": 0.9541284403669725,
+              "hi": 1.0,
+              "n_units": 109,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.981651376146789,
+              "lo": 0.9352881443899184,
+              "hi": 0.9977701206843328,
+              "k": 107,
+              "n": 109,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        },
+        "round3_pro": {
+          "positive_label": [
+            "yes"
+          ],
+          "numerator": 100,
+          "denominator": 110,
+          "ci": {
+            "point": 0.9090909090909091,
+            "lo": 0.8454545454545455,
+            "hi": 0.9545454545454546,
+            "n_units": 110,
+            "resamples": 2000,
+            "seed": 20260805
+          },
+          "intervals": {
+            "bootstrap_ci": {
+              "point": 0.9090909090909091,
+              "lo": 0.8454545454545455,
+              "hi": 0.9545454545454546,
+              "n_units": 110,
+              "resamples": 2000,
+              "seed": 20260805
+            },
+            "exact_binomial_ci": {
+              "point": 0.9090909090909091,
+              "lo": 0.8391651177609853,
+              "hi": 0.9555404943642196,
+              "k": 100,
+              "n": 110,
+              "method": "Clopper-Pearson exact binomial, 95%"
+            }
+          }
+        }
+      }
+    },
+    "unparsed_items": {
+      "round1": [],
+      "round2": [
+        "item_HO2-006"
+      ],
+      "round3_pro": []
+    },
+    "raw_label_counts": {
+      "round1": {
+        "hard_constraints_satisfied": {
+          "yes": 32,
+          "not_applicable": 74,
+          "no": 4
+        },
+        "claims_evidence_supported": {
+          "yes": 74,
+          "no": 7,
+          "not_applicable": 18,
+          "partial": 11
+        },
+        "contradicted_claim_count": {
+          "0": 107,
+          "1": 3
+        },
+        "task_completed_correctly": {
+          "yes": 104,
+          "no": 6
+        }
+      },
+      "round2": {
+        "hard_constraints_satisfied": {
+          "yes": 33,
+          "not_applicable": 75,
+          "no": 1,
+          "null": 1
+        },
+        "claims_evidence_supported": {
+          "yes": 76,
+          "not_applicable": 18,
+          "no": 7,
+          "partial": 8,
+          "null": 1
+        },
+        "contradicted_claim_count": {
+          "0": 108,
+          "null": 1,
+          "1": 1
+        },
+        "task_completed_correctly": {
+          "yes": 107,
+          "no": 2,
+          "null": 1
+        }
+      },
+      "round3_pro": {
+        "hard_constraints_satisfied": {
+          "not_applicable": 64,
+          "yes": 36,
+          "no": 10
+        },
+        "claims_evidence_supported": {
+          "not_applicable": 19,
+          "yes": 57,
+          "partial": 32,
+          "no": 2
+        },
+        "contradicted_claim_count": {
+          "0": 105,
+          "3": 1,
+          "1": 4
+        },
+        "task_completed_correctly": {
+          "yes": 100,
+          "no": 10
+        }
+      }
+    },
+    "judge_failures": {
+      "round1": [],
+      "round2": [],
+      "round3_pro": []
+    },
+    "same_model_two_rounds": {
+      "comparison": "round1 vs round2 (SAME model deepseek-v4-flash) — SELF-CONSISTENCY, not inter-rater reliability",
+      "note": "MODEL vs MODEL. Observed agreement is the headline; kappa is auxiliary and degenerates when one category dominates.",
+      "overall": {
+        "hard_constraints_satisfied": {
+          "n": 109,
+          "observed_agreement": 0.944954128440367,
+          "expected_agreement": 0.5535729315714166,
+          "kappa": 0.8766968325791855,
+          "prevalence_degeneration": false,
+          "prevalence_note": null,
+          "distribution_a": {
+            "yes": 31,
+            "not_applicable": 74,
+            "no": 4
+          },
+          "distribution_b": {
+            "yes": 33,
+            "not_applicable": 75,
+            "no": 1
+          }
+        },
+        "claims_evidence_supported": {
+          "n": 109,
+          "observed_agreement": 0.9541284403669725,
+          "expected_agreement": 0.505765507953876,
+          "kappa": 0.9071866485013625,
+          "prevalence_degeneration": false,
+          "prevalence_note": null,
+          "distribution_a": {
+            "yes": 73,
+            "no": 7,
+            "not_applicable": 18,
+            "partial": 11
+          },
+          "distribution_b": {
+            "yes": 76,
+            "no": 7,
+            "not_applicable": 18,
+            "partial": 8
+          }
+        },
+        "contradicted_claim_count": {
+          "n": 109,
+          "observed_agreement": 0.981651376146789,
+          "expected_agreement": 0.963807760289538,
+          "kappa": 0.49302325581395284,
+          "prevalence_degeneration": true,
+          "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+          "distribution_a": {
+            "0": 106,
+            "1": 3
+          },
+          "distribution_b": {
+            "0": 108,
+            "1": 1
+          }
+        },
+        "task_completed_correctly": {
+          "n": 109,
+          "observed_agreement": 0.944954128440367,
+          "expected_agreement": 0.9286255365709957,
+          "kappa": 0.22877358490566074,
+          "prevalence_degeneration": true,
+          "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+          "distribution_a": {
+            "yes": 103,
+            "no": 6
+          },
+          "distribution_b": {
+            "yes": 107,
+            "no": 2
+          }
+        }
+      },
+      "per_task_class": {
+        "hard_constraints_satisfied": {
+          "retrieval_hard": {
+            "n": 34,
+            "observed_agreement": 0.8823529411764706,
+            "expected_agreement": 0.8339100346020761,
+            "kappa": 0.29166666666666646,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 30,
+              "no": 4
+            },
+            "distribution_b": {
+              "yes": 32,
+              "no": 1,
+              "not_applicable": 1
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 0.9,
+            "expected_agreement": 0.9049999999999999,
+            "kappa": -0.05263157894736725,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 19,
+              "yes": 1
+            },
+            "distribution_b": {
+              "not_applicable": 19,
+              "yes": 1
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 20
+            },
+            "distribution_b": {
+              "not_applicable": 20
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 20
+            },
+            "distribution_b": {
+              "not_applicable": 20
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 15
+            },
+            "distribution_b": {
+              "not_applicable": 15
+            }
+          }
+        },
+        "claims_evidence_supported": {
+          "retrieval_hard": {
+            "n": 34,
+            "observed_agreement": 0.9117647058823529,
+            "expected_agreement": 0.8598615916955018,
+            "kappa": 0.3703703703703699,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 30,
+              "partial": 4
+            },
+            "distribution_b": {
+              "yes": 33,
+              "partial": 1
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 0.9,
+            "expected_agreement": 0.365,
+            "kappa": 0.8425196850393701,
+            "prevalence_degeneration": false,
+            "prevalence_note": null,
+            "distribution_a": {
+              "no": 7,
+              "yes": 9,
+              "partial": 4
+            },
+            "distribution_b": {
+              "no": 7,
+              "yes": 9,
+              "partial": 4
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 0.8200000000000001,
+            "kappa": 1.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 18,
+              "partial": 2
+            },
+            "distribution_b": {
+              "yes": 18,
+              "partial": 2
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 0.6800000000000002,
+            "kappa": 1.0,
+            "prevalence_degeneration": false,
+            "prevalence_note": null,
+            "distribution_a": {
+              "yes": 16,
+              "not_applicable": 4
+            },
+            "distribution_b": {
+              "yes": 16,
+              "not_applicable": 4
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 1.0,
+            "expected_agreement": 0.8755555555555556,
+            "kappa": 1.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 14,
+              "partial": 1
+            },
+            "distribution_b": {
+              "not_applicable": 14,
+              "partial": 1
+            }
+          }
+        },
+        "contradicted_claim_count": {
+          "retrieval_hard": {
+            "n": 34,
+            "observed_agreement": 1.0,
+            "expected_agreement": 0.9429065743944636,
+            "kappa": 1.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 33,
+              "1": 1
+            },
+            "distribution_b": {
+              "0": 33,
+              "1": 1
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 20
+            },
+            "distribution_b": {
+              "0": 20
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 0.9,
+            "expected_agreement": 0.9,
+            "kappa": 0.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 18,
+              "1": 2
+            },
+            "distribution_b": {
+              "0": 20
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 20
+            },
+            "distribution_b": {
+              "0": 20
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 15
+            },
+            "distribution_b": {
+              "0": 15
+            }
+          }
+        },
+        "task_completed_correctly": {
+          "retrieval_hard": {
+            "n": 34,
+            "observed_agreement": 0.9117647058823529,
+            "expected_agreement": 0.8598615916955018,
+            "kappa": 0.3703703703703699,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 30,
+              "no": 4
+            },
+            "distribution_b": {
+              "yes": 33,
+              "no": 1
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 20
+            },
+            "distribution_b": {
+              "yes": 20
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 0.9,
+            "expected_agreement": 0.9049999999999999,
+            "kappa": -0.05263157894736725,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 19,
+              "no": 1
+            },
+            "distribution_b": {
+              "yes": 19,
+              "no": 1
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 0.95,
+            "expected_agreement": 0.95,
+            "kappa": 0.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 19,
+              "no": 1
+            },
+            "distribution_b": {
+              "yes": 20
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 15
+            },
+            "distribution_b": {
+              "yes": 15
+            }
+          }
+        }
+      }
+    },
+    "cross_model": {
+      "comparison": "round1 (deepseek-v4-flash) vs round3 (deepseek-v4-pro) — cross-model, same vendor",
+      "note": "MODEL vs MODEL. Observed agreement is the headline; kappa is auxiliary and degenerates when one category dominates.",
+      "overall": {
+        "hard_constraints_satisfied": {
+          "n": 110,
+          "observed_agreement": 0.8727272727272727,
+          "expected_agreement": 0.4899173553719008,
+          "kappa": 0.7504860661049901,
+          "prevalence_degeneration": false,
+          "prevalence_note": null,
+          "distribution_a": {
+            "yes": 32,
+            "not_applicable": 74,
+            "no": 4
+          },
+          "distribution_b": {
+            "yes": 36,
+            "not_applicable": 64,
+            "no": 10
+          }
+        },
+        "claims_evidence_supported": {
+          "n": 110,
+          "observed_agreement": 0.7454545454545455,
+          "expected_agreement": 0.40710743801652893,
+          "kappa": 0.5706718706439923,
+          "prevalence_degeneration": false,
+          "prevalence_note": null,
+          "distribution_a": {
+            "yes": 74,
+            "no": 7,
+            "not_applicable": 18,
+            "partial": 11
+          },
+          "distribution_b": {
+            "partial": 32,
+            "yes": 57,
+            "not_applicable": 19,
+            "no": 2
+          }
+        },
+        "contradicted_claim_count": {
+          "n": 110,
+          "observed_agreement": 0.9454545454545454,
+          "expected_agreement": 0.929504132231405,
+          "kappa": 0.22626025791324617,
+          "prevalence_degeneration": true,
+          "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+          "distribution_a": {
+            "0": 107,
+            "1": 3
+          },
+          "distribution_b": {
+            "3": 1,
+            "0": 105,
+            "1": 4
+          }
+        },
+        "task_completed_correctly": {
+          "n": 110,
+          "observed_agreement": 0.9454545454545454,
+          "expected_agreement": 0.8644628099173552,
+          "kappa": 0.5975609756097563,
+          "prevalence_degeneration": true,
+          "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+          "distribution_a": {
+            "yes": 104,
+            "no": 6
+          },
+          "distribution_b": {
+            "yes": 100,
+            "no": 10
+          }
+        }
+      },
+      "per_task_class": {
+        "hard_constraints_satisfied": {
+          "retrieval_hard": {
+            "n": 35,
+            "observed_agreement": 0.8857142857142857,
+            "expected_agreement": 0.7093877551020408,
+            "kappa": 0.6067415730337078,
+            "prevalence_degeneration": false,
+            "prevalence_note": null,
+            "distribution_a": {
+              "yes": 31,
+              "no": 4
+            },
+            "distribution_b": {
+              "yes": 27,
+              "no": 8
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 0.6,
+            "expected_agreement": 0.5425,
+            "kappa": 0.1256830601092896,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 19,
+              "yes": 1
+            },
+            "distribution_b": {
+              "yes": 8,
+              "not_applicable": 11,
+              "no": 1
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 20
+            },
+            "distribution_b": {
+              "not_applicable": 20
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 0.95,
+            "expected_agreement": 0.95,
+            "kappa": 0.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 20
+            },
+            "distribution_b": {
+              "not_applicable": 19,
+              "yes": 1
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 0.9333333333333333,
+            "expected_agreement": 0.9333333333333333,
+            "kappa": 0.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 15
+            },
+            "distribution_b": {
+              "not_applicable": 14,
+              "no": 1
+            }
+          }
+        },
+        "claims_evidence_supported": {
+          "retrieval_hard": {
+            "n": 35,
+            "observed_agreement": 0.8285714285714286,
+            "expected_agreement": 0.6653061224489796,
+            "kappa": 0.4878048780487807,
+            "prevalence_degeneration": false,
+            "prevalence_note": null,
+            "distribution_a": {
+              "yes": 31,
+              "partial": 4
+            },
+            "distribution_b": {
+              "partial": 10,
+              "yes": 25
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 0.5,
+            "expected_agreement": 0.30000000000000004,
+            "kappa": 0.28571428571428564,
+            "prevalence_degeneration": false,
+            "prevalence_note": null,
+            "distribution_a": {
+              "no": 7,
+              "yes": 9,
+              "partial": 4
+            },
+            "distribution_b": {
+              "partial": 12,
+              "yes": 8
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 0.65,
+            "expected_agreement": 0.54,
+            "kappa": 0.23913043478260868,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 18,
+              "partial": 2
+            },
+            "distribution_b": {
+              "yes": 11,
+              "partial": 9
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 0.85,
+            "expected_agreement": 0.59,
+            "kappa": 0.6341463414634146,
+            "prevalence_degeneration": false,
+            "prevalence_note": null,
+            "distribution_a": {
+              "yes": 16,
+              "not_applicable": 4
+            },
+            "distribution_b": {
+              "yes": 13,
+              "not_applicable": 7
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 0.8666666666666667,
+            "expected_agreement": 0.7511111111111112,
+            "kappa": 0.46428571428571425,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "not_applicable": 14,
+              "partial": 1
+            },
+            "distribution_b": {
+              "not_applicable": 12,
+              "no": 2,
+              "partial": 1
+            }
+          }
+        },
+        "contradicted_claim_count": {
+          "retrieval_hard": {
+            "n": 35,
+            "observed_agreement": 0.8571428571428571,
+            "expected_agreement": 0.8628571428571429,
+            "kappa": -0.04166666666666717,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 34,
+              "1": 1
+            },
+            "distribution_b": {
+              "3": 1,
+              "0": 31,
+              "1": 3
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 20
+            },
+            "distribution_b": {
+              "0": 20
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 0.95,
+            "expected_agreement": 0.86,
+            "kappa": 0.6428571428571426,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 18,
+              "1": 2
+            },
+            "distribution_b": {
+              "0": 19,
+              "1": 1
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 20
+            },
+            "distribution_b": {
+              "0": 20
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "0": 15
+            },
+            "distribution_b": {
+              "0": 15
+            }
+          }
+        },
+        "task_completed_correctly": {
+          "retrieval_hard": {
+            "n": 35,
+            "observed_agreement": 0.8857142857142857,
+            "expected_agreement": 0.7093877551020408,
+            "kappa": 0.6067415730337078,
+            "prevalence_degeneration": false,
+            "prevalence_note": null,
+            "distribution_a": {
+              "yes": 31,
+              "no": 4
+            },
+            "distribution_b": {
+              "yes": 27,
+              "no": 8
+            }
+          },
+          "retrieval_soft": {
+            "n": 20,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 20
+            },
+            "distribution_b": {
+              "yes": 20
+            }
+          },
+          "calculation": {
+            "n": 20,
+            "observed_agreement": 0.95,
+            "expected_agreement": 0.95,
+            "kappa": 0.0,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 19,
+              "no": 1
+            },
+            "distribution_b": {
+              "yes": 20
+            }
+          },
+          "memory": {
+            "n": 20,
+            "observed_agreement": 0.95,
+            "expected_agreement": 0.86,
+            "kappa": 0.6428571428571426,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 19,
+              "no": 1
+            },
+            "distribution_b": {
+              "yes": 18,
+              "no": 2
+            }
+          },
+          "clarify": {
+            "n": 15,
+            "observed_agreement": 1.0,
+            "expected_agreement": 1.0,
+            "kappa": null,
+            "prevalence_degeneration": true,
+            "prevalence_note": "one category holds >=90% of the mass; kappa's denominator collapses and the value is unstable — report observed agreement and raw counts instead",
+            "distribution_a": {
+              "yes": 15
+            },
+            "distribution_b": {
+              "yes": 15
+            }
+          }
+        }
+      }
+    },
+    "contradicted_claim_count_raw": {
+      "round1": {
+        "0": 107,
+        "1": 3
+      },
+      "round2": {
+        "0": 108,
+        "unparsed": 1,
+        "1": 1
+      },
+      "round3_pro": {
+        "0": 105,
+        "2+": 1,
+        "1": 4
+      }
+    }
+  },
+  "operations": {
+    "n_runs": 110,
+    "llm_calls": 208,
+    "tokens_in": 2079544,
+    "tokens_out": 40834,
+    "cost_usd": 0.098506,
+    "failures": 0,
+    "tool_calls": 125,
+    "tool_fail": 7,
+    "latency_ms": {
+      "mean": 5037.01734458181,
+      "p50": 4575.039906427264,
+      "p95": 11826.211990788579
+    }
+  },
+  "bootstrap": {
+    "unit": "case",
+    "resamples": 2000,
+    "seed": 20260805,
+    "interval": "95% percentile"
+  }
+}

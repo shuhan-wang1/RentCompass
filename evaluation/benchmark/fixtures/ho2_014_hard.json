@@ -1,0 +1,117 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 4,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "24 Bishopstone Row, Deptford, London SE8 3GU",
+    "price": "£1,200/month",
+    "price_raw": 1200,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/bishopstone-row-24/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "26 Chalvington Row, Deptford, London SE8 3LW",
+    "price": "£1,550/month",
+    "price_raw": 1550,
+    "score": 86,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/chalvington-row-26/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "27 Dunmowe Row, Deptford, London SE8 3PP",
+    "price": "£1,320/month",
+    "price_raw": 1320,
+    "score": 83,
+    "property_type": "House · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "house",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/dunmowe-row-27/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "28 Fernbrook Mews, Bermondsey, London SE16 4RF",
+    "price": "£1,360/month",
+    "price_raw": 1360,
+    "score": 80,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/fernbrook-mews-28/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 4 options in Deptford.",
+  "search_criteria": {
+   "area": "Deptford",
+   "max_budget": 1350,
+   "room_type": "studio"
+  }
+ },
+ "description": "HO2-014: frozen search evidence for Deptford. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

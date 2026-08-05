@@ -1,0 +1,18 @@
+{
+ "tool_name": "recall_memory",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "count": 1,
+  "memories": [
+   {
+    "content": "User needs to move in by 1 October 2026.",
+    "mtype": "semantic",
+    "score": 0.94
+   }
+  ],
+  "formatted": "- User needs to move in by 1 October 2026."
+ },
+ "description": "HO2-081: frozen recall_memory bucket holding exactly one fact (movein)."
+}

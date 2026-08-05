@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rentcompass.eval/benchmark/case.v2.schema.json",
+  "title": "RentCompass held-out benchmark case (hard-constraint schema v2)",
+  "description": "One held-out task-benchmark case. v2 replaces the OVERLOADED room_type_match of v1 (which carried both a room-type label and a bedroom count, discriminated by re.match(r'\\d+') on the value) with two separate types, and adds the three semantic slots v1 had no type for at all: area, move-in date and property feature. The frozen semantics of every type live in evaluation/results/_harness/constraint_schema_v2.py; this file is the structural contract only. The v1 file evaluation/benchmark/schema.json is UNCHANGED and still governs evaluation/benchmark/cases.jsonl.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id", "schema_version", "task_category", "category", "authored_on",
+    "user_id", "user_query", "conversation_history", "expected_tools", "forbidden_tools",
+    "expected_constraints", "hard_constraint_slots", "correct_completion",
+    "failure_conditions", "allowed_evidence_sources", "expected_grounding_sources",
+    "reference_calculations", "novelty_note", "notes"
+  ],
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "pattern": "^HO2-[0-9]{3}$",
+      "description": "Unique id inside the held-out set. The HO2- prefix keeps it disjoint from the v1 id space (^(CR|[A-H])[0-9]+$) so the two sets can never be silently merged."
+    },
+    "schema_version": {
+      "const": "rentcompass/hard_constraints/v2",
+      "description": "Pinned so a case authored under v2 can never be graded by a v1 predicate, or vice versa. The preflight fails on a mismatch (check M4)."
+    },
+    "task_category": {
+      "type": "string",
+      "enum": ["retrieval_hard", "retrieval_soft", "calculation", "memory", "clarify"],
+      "description": "The FROZEN stratum, written at authoring time. Never re-derived from a heuristic at scoring time. retrieval_hard = a retrieval turn that occupies the hard quota and must carry a deterministically decidable constraint; retrieval_soft = every other retrieval turn (open browse, and no-result probes whose constraints can only exercise the behaviour branch)."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["A_retrieval", "B_money", "C_commute", "D_crime_poi", "E_multi_constraint", "F_grounding", "G_memory"],
+      "description": "v1-compatible category, kept only so the existing runner code paths that switch on it keep working. task_category is the authoritative stratum."
+    },
+    "authored_on": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "user_id": { "type": "string", "minLength": 1, "description": "Unique per case, so memory buckets cannot leak between cases." },
+    "user_query": { "type": "string", "minLength": 1 },
+    "conversation_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "type": "string", "enum": ["user", "assistant", "system"] },
+          "content": { "type": "string" }
+        }
+      }
+    },
+    "expected_tools": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "forbidden_tools": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "expected_route": { "type": "string" },
+    "expected_constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "all_results_satisfy",
+              "bedroom_count_match",
+              "room_type_match",
+              "area_match",
+              "move_in_date_satisfied",
+              "property_feature_present",
+              "commute_leq_minutes"
+            ]
+          },
+          "user_text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "REQUIRED for every user hard constraint. The VERBATIM span of user_query / conversation_history that states this condition. The preflight (check H6) re-runs the frozen normaliser on this span and fails the case unless it reproduces the stored value — so 'the user explicitly said this' is machine-checked rather than assumed."
+          },
+          "field": { "type": "string", "enum": ["monthly_rent"] },
+          "op": { "type": "string", "enum": ["<=", "<", ">=", ">", "==", "between"] },
+          "value": {},
+          "dest": { "type": "string", "description": "commute_leq_minutes only: the destination, verbatim." },
+          "granularity": {
+            "type": "string",
+            "enum": ["borough", "city", "postcode_district", "postcode_sector", "adjacent"],
+            "description": "area_match only. postcode_district compares the WHOLE outward district with exact equality, so N1 does not match N1C."
+          },
+          "accept": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "area_match with granularity 'adjacent' only: the FROZEN list of area tokens that count as adjacent. Adjacency is never inferred at grading time; without this list the constraint is unjudgeable by construction."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "hard_constraint_slots": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["budget", "bedroom_count", "room_type", "commute", "area", "move_in_date", "property_feature"]
+      },
+      "description": "The semantic slots this case declares. MUST equal the slots implied by expected_constraints (preflight check M5). An empty array is required, not optional, for a case with no hard constraint — 'declared none' and 'forgot to write it' must be distinguishable."
+    },
+    "correct_completion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What a correct answer does for THIS task, written before any model request. Covers the no-result, unknown and partial-match branches where they apply."
+    },
+    "failure_conditions": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "allowed_evidence_sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The only facts a judge may accept as support for this case. Structured fixture fields, the user's own figures, and the frozen derivation formulas — never a listing's free-text description."
+    },
+    "expected_grounding_sources": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "reference_calculations": {
+      "type": ["object", "null"],
+      "additionalProperties": {
+        "type": "object",
+        "required": ["formula", "result"],
+        "properties": {
+          "formula": { "type": "string" },
+          "result": { "type": "number" },
+          "unit": { "type": "string" }
+        }
+      },
+      "description": "REQUIRED (non-null) for task_category 'calculation' — preflight check E2."
+    },
+    "novelty_note": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Why this case is not a reuse or a light rewrite of any of the 98 tuning cases."
+    },
+    "notes": { "type": "string" },
+    "fixture": {
+      "description": "Frozen tool evidence replayed for this case. REQUIRED whenever expected_tools is non-empty — preflight check E3, because unfrozen evidence is not reproducible across rounds.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    }
+  }
+}

@@ -1,0 +1,179 @@
+{
+ "description": "HO2-030: frozen search evidence for Balham. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Aldgate are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "40 Upwaltham Mews, Balham, London SW12 9BJ",
+      "price": "£2,150/month",
+      "price_raw": 2150,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Balham",
+      "borough": "Wandsworth",
+      "city": "London",
+      "postcode_district": "SW12",
+      "postcode_sector": "SW12 9",
+      "available_from": "20 September 2026",
+      "available_from_normalized": "2026-09-20",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/upwaltham-mews-40/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 2,
+      "address": "42 Vellacott Mews, Balham, London SW12 9FL",
+      "price": "£2,230/month",
+      "price_raw": 2230,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Balham",
+      "borough": "Wandsworth",
+      "city": "London",
+      "postcode_district": "SW12",
+      "postcode_sector": "SW12 9",
+      "available_from": "20 September 2026",
+      "available_from_normalized": "2026-09-20",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/vellacott-mews-42/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 3,
+      "address": "43 Wandlebury Mews, Hendon, London NW4 3HD",
+      "price": "£2,270/month",
+      "price_raw": 2270,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Hendon",
+      "borough": "Barnet",
+      "city": "London",
+      "postcode_district": "NW4",
+      "postcode_sector": "NW4 3",
+      "available_from": "20 September 2026",
+      "available_from_normalized": "2026-09-20",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/wandlebury-mews-43/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 4,
+      "address": "44 Yarrowby Mews, Balham, London SW12 9LW",
+      "price": "£2,310/month",
+      "price_raw": 2310,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Balham",
+      "borough": "Wandsworth",
+      "city": "London",
+      "postcode_district": "SW12",
+      "postcode_sector": "SW12 9",
+      "available_from": "4 November 2026",
+      "available_from_normalized": "2026-11-04",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/yarrowby-mews-44/",
+      "explanation": "Comes fully furnished."
+     }
+    ],
+    "summary": "Found 4 options in Balham.",
+    "search_criteria": {
+     "area": "Balham"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Upwaltham Mews",
+    "from_address": "40 Upwaltham Mews, Balham, London SW12 9BJ",
+    "to_address": "Aldgate, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Aldgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Vellacott Mews",
+    "from_address": "42 Vellacott Mews, Balham, London SW12 9FL",
+    "to_address": "Aldgate, London",
+    "mode": "transit",
+    "duration_minutes": 45,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Aldgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Wandlebury Mews",
+    "from_address": "43 Wandlebury Mews, Hendon, London NW4 3HD",
+    "to_address": "Aldgate, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Aldgate",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Yarrowby Mews",
+    "from_address": "44 Yarrowby Mews, Balham, London SW12 9LW",
+    "to_address": "Aldgate, London",
+    "mode": "transit",
+    "duration_minutes": 39,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Aldgate",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

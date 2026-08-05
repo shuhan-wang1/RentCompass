@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "17 Pyrford Row, Crouch End, London N8 9YH",
+    "price": "£2,100/month",
+    "price_raw": 2100,
+    "score": 89,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Crouch End",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N8",
+    "postcode_sector": "N8 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/pyrford-row-17/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "19 Quenby Row, Crouch End, London N8 9BJ",
+    "price": "£2,450/month",
+    "price_raw": 2450,
+    "score": 86,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Crouch End",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N8",
+    "postcode_sector": "N8 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/quenby-row-19/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "20 Rushmoor Row, Crouch End, London N8 9EB",
+    "price": "£2,220/month",
+    "price_raw": 2220,
+    "score": 83,
+    "property_type": "Flat · 3 bed",
+    "bedrooms": 3,
+    "room_type_normalized": "flat",
+    "area_normalized": "Crouch End",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N8",
+    "postcode_sector": "N8 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/rushmoor-row-20/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "21 Stanbrook Row, Crouch End, London N8 9GU",
+    "price": "£2,260/month",
+    "price_raw": 2260,
+    "score": 80,
+    "property_type": "Bungalow · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Crouch End",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N8",
+    "postcode_sector": "N8 9",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/stanbrook-row-21/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "22 Tarleton Row, Wood Green, London N22 6JN",
+    "price": "£2,300/month",
+    "price_raw": 2300,
+    "score": 77,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Wood Green",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N22",
+    "postcode_sector": "N22 6",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/tarleton-row-22/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Crouch End.",
+  "search_criteria": {
+   "area": "Crouch End",
+   "max_budget": 2250,
+   "room_type": "flat",
+   "bedrooms": 2
+  }
+ },
+ "description": "HO2-007: frozen search evidence for Crouch End. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "11 Fernbrook Row, Walthamstow, London E17 4RF",
+    "price": "£1,550/month",
+    "price_raw": 1550,
+    "score": 89,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/fernbrook-row-11/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "13 Halstow Row, Walthamstow, London E17 4UG",
+    "price": "£1,900/month",
+    "price_raw": 1900,
+    "score": 86,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/halstow-row-13/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "14 Wraysbury Row, Walthamstow, London E17 4XZ",
+    "price": "£1,670/month",
+    "price_raw": 1670,
+    "score": 83,
+    "property_type": "Flat · 3 bed",
+    "bedrooms": 3,
+    "room_type_normalized": "flat",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/wraysbury-row-14/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "15 Quillon Row, Walthamstow, London E17 4ZS",
+    "price": "£1,710/month",
+    "price_raw": 1710,
+    "score": 80,
+    "property_type": "Bungalow · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Walthamstow",
+    "borough": "Waltham Forest",
+    "city": "London",
+    "postcode_district": "E17",
+    "postcode_sector": "E17 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/quillon-row-15/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "16 Ashlin Row, Deptford, London SE8 3BJ",
+    "price": "£1,750/month",
+    "price_raw": 1750,
+    "score": 77,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Deptford",
+    "borough": "Lewisham",
+    "city": "London",
+    "postcode_district": "SE8",
+    "postcode_sector": "SE8 3",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ashlin-row-16/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Walthamstow.",
+  "search_criteria": {
+   "area": "Walthamstow",
+   "max_budget": 1700,
+   "room_type": "flat",
+   "bedrooms": 2
+  }
+ },
+ "description": "HO2-001: frozen search evidence for Walthamstow. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

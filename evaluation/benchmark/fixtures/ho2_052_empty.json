@@ -1,0 +1,20 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "no_results",
+  "total_found": 0,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [],
+  "summary": "Found 0 options in Forest Gate.",
+  "search_criteria": {
+   "area": "Forest Gate",
+   "max_budget": 1500
+  },
+  "message": "I could not find any listings in Forest Gate matching those criteria right now."
+ },
+ "description": "HO2-052: frozen NO-RESULT search evidence for Forest Gate at £1500/month."
+}

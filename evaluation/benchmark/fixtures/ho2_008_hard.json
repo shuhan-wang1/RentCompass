@@ -1,0 +1,142 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 5,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "18 Uffington Row, Bermondsey, London SE16 4ZS",
+    "price": "£2,250/month",
+    "price_raw": 2250,
+    "score": 89,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/uffington-row-18/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "20 Verwood Row, Bermondsey, London SE16 4DT",
+    "price": "£2,600/month",
+    "price_raw": 2600,
+    "score": 86,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/verwood-row-20/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "21 Whitmarsh Row, Bermondsey, London SE16 4FL",
+    "price": "£2,370/month",
+    "price_raw": 2370,
+    "score": 83,
+    "property_type": "Flat · 3 bed",
+    "bedrooms": 3,
+    "room_type_normalized": "flat",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/whitmarsh-row-21/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 4,
+    "address": "22 Xanthe Row, Bermondsey, London SE16 4HD",
+    "price": "£2,410/month",
+    "price_raw": 2410,
+    "score": 80,
+    "property_type": "Bungalow · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "bungalow",
+    "area_normalized": "Bermondsey",
+    "borough": "Southwark",
+    "city": "London",
+    "postcode_district": "SE16",
+    "postcode_sector": "SE16 4",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/xanthe-row-22/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 5,
+    "address": "23 Yealand Row, Wood Green, London N22 6LW",
+    "price": "£2,450/month",
+    "price_raw": 2450,
+    "score": 77,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Wood Green",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N22",
+    "postcode_sector": "N22 6",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/yealand-row-23/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 5 options in Bermondsey.",
+  "search_criteria": {
+   "area": "Bermondsey",
+   "max_budget": 2400,
+   "room_type": "flat",
+   "bedrooms": 2
+  }
+ },
+ "description": "HO2-008: frozen search evidence for Bermondsey. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['budget', 'bedroom_count', 'room_type', 'area'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

@@ -1,0 +1,179 @@
+{
+ "description": "HO2-032: frozen search evidence for Deptford. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'property_feature'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Barbican are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "42 Fernbrook Terrace, Deptford, London SE8 3EB",
+      "price": "£2,200/month",
+      "price_raw": 2200,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Deptford",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE8",
+      "postcode_sector": "SE8 3",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "balcony"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/fernbrook-terrace-42/",
+      "explanation": "Balcony off the living room."
+     },
+     {
+      "rank": 2,
+      "address": "44 Halstow Terrace, Deptford, London SE8 3HD",
+      "price": "£2,280/month",
+      "price_raw": 2280,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Deptford",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE8",
+      "postcode_sector": "SE8 3",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "balcony"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/halstow-terrace-44/",
+      "explanation": "Balcony off the living room."
+     },
+     {
+      "rank": 3,
+      "address": "45 Wraysbury Terrace, Bermondsey, London SE16 4LW",
+      "price": "£2,320/month",
+      "price_raw": 2320,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Bermondsey",
+      "borough": "Southwark",
+      "city": "London",
+      "postcode_district": "SE16",
+      "postcode_sector": "SE16 4",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "balcony"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/wraysbury-terrace-45/",
+      "explanation": "Balcony off the living room."
+     },
+     {
+      "rank": 4,
+      "address": "46 Quillon Terrace, Deptford, London SE8 3PP",
+      "price": "£2,360/month",
+      "price_raw": 2360,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Deptford",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE8",
+      "postcode_sector": "SE8 3",
+      "available_from": "Now",
+      "available_from_normalized": "now",
+      "features": [
+       "unfurnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/quillon-terrace-46/",
+      "explanation": "Let unfurnished."
+     }
+    ],
+    "summary": "Found 4 options in Deptford.",
+    "search_criteria": {
+     "area": "Deptford"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Fernbrook Terrace",
+    "from_address": "42 Fernbrook Terrace, Deptford, London SE8 3EB",
+    "to_address": "Barbican, London",
+    "mode": "transit",
+    "duration_minutes": 19,
+    "duration_category": "Short (<20 min)",
+    "route_summary": "Direct service to Barbican",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Halstow Terrace",
+    "from_address": "44 Halstow Terrace, Deptford, London SE8 3HD",
+    "to_address": "Barbican, London",
+    "mode": "transit",
+    "duration_minutes": 35,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Barbican",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Wraysbury Terrace",
+    "from_address": "45 Wraysbury Terrace, Bermondsey, London SE16 4LW",
+    "to_address": "Barbican, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Barbican",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Quillon Terrace",
+    "from_address": "46 Quillon Terrace, Deptford, London SE8 3PP",
+    "to_address": "Barbican, London",
+    "mode": "transit",
+    "duration_minutes": 29,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Barbican",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

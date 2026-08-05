@@ -1,0 +1,179 @@
+{
+ "description": "HO2-025: frozen search evidence for Catford. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['commute', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter. Commute legs to Blackfriars are measured per property and keyed by origin_uid.",
+ "results": [
+  {
+   "tool_name": "search_properties",
+   "success": true,
+   "error": null,
+   "data": {
+    "success": true,
+    "status": "found",
+    "total_found": 4,
+    "data_source": "onthemarket_live",
+    "possibly_outdated": false,
+    "recommendations": [
+     {
+      "rank": 1,
+      "address": "35 Zennorby Mews, Catford, London SE6 4WR",
+      "price": "£2,025/month",
+      "price_raw": 2025,
+      "score": 89,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Catford",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE6",
+      "postcode_sector": "SE6 4",
+      "available_from": "15 November 2026",
+      "available_from_normalized": "2026-11-15",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/zennorby-mews-35/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 2,
+      "address": "37 Ambrose Mews, Catford, London SE6 4ZS",
+      "price": "£2,105/month",
+      "price_raw": 2105,
+      "score": 86,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Catford",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE6",
+      "postcode_sector": "SE6 4",
+      "available_from": "15 November 2026",
+      "available_from_normalized": "2026-11-15",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/ambrose-mews-37/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 3,
+      "address": "38 Beaumaris Mews, Leyton, London E10 5BJ",
+      "price": "£2,145/month",
+      "price_raw": 2145,
+      "score": 83,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Leyton",
+      "borough": "Waltham Forest",
+      "city": "London",
+      "postcode_district": "E10",
+      "postcode_sector": "E10 5",
+      "available_from": "15 November 2026",
+      "available_from_normalized": "2026-11-15",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/beaumaris-mews-38/",
+      "explanation": "Comes fully furnished."
+     },
+     {
+      "rank": 4,
+      "address": "39 Carbery Mews, Catford, London SE6 4EB",
+      "price": "£2,185/month",
+      "price_raw": 2185,
+      "score": 80,
+      "property_type": "Flat · 1 bed",
+      "bedrooms": 1,
+      "room_type_normalized": "flat",
+      "area_normalized": "Catford",
+      "borough": "Lewisham",
+      "city": "London",
+      "postcode_district": "SE6",
+      "postcode_sector": "SE6 4",
+      "available_from": "30 December 2026",
+      "available_from_normalized": "2026-12-30",
+      "features": [
+       "furnished"
+      ],
+      "match_type": "candidate",
+      "source": "onthemarket_live",
+      "url": "https://www.onthemarket.com/details/carbery-mews-39/",
+      "explanation": "Comes fully furnished."
+     }
+    ],
+    "summary": "Found 4 options in Catford.",
+    "search_criteria": {
+     "area": "Catford"
+    }
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Zennorby Mews",
+    "from_address": "35 Zennorby Mews, Catford, London SE6 4WR",
+    "to_address": "Blackfriars, London",
+    "mode": "transit",
+    "duration_minutes": 24,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Blackfriars",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Ambrose Mews",
+    "from_address": "37 Ambrose Mews, Catford, London SE6 4ZS",
+    "to_address": "Blackfriars, London",
+    "mode": "transit",
+    "duration_minutes": 40,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Blackfriars",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Beaumaris Mews",
+    "from_address": "38 Beaumaris Mews, Leyton, London E10 5BJ",
+    "to_address": "Blackfriars, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Blackfriars",
+    "route_source": "tfl"
+   }
+  },
+  {
+   "tool_name": "calculate_commute",
+   "success": true,
+   "error": null,
+   "data": {
+    "origin_uid": "Carbery Mews",
+    "from_address": "39 Carbery Mews, Catford, London SE6 4EB",
+    "to_address": "Blackfriars, London",
+    "mode": "transit",
+    "duration_minutes": 34,
+    "duration_category": "Medium (20-45 min)",
+    "route_summary": "Direct service to Blackfriars",
+    "route_source": "tfl"
+   }
+  }
+ ]
+}

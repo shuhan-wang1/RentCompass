@@ -1,0 +1,12 @@
+{
+ "tool_name": "remember",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "stored": "User requires a garden.",
+  "mtype": "semantic",
+  "message": "Saved to your profile."
+ },
+ "description": "HO2-093: frozen remember() acknowledgement for a preference update."
+}

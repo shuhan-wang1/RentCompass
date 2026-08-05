@@ -1,0 +1,91 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "14 Hartsmere Terrace, Harringay, London N4 1UG",
+    "price": "£1,465/month",
+    "price_raw": 1465,
+    "score": 89,
+    "property_type": "Studio",
+    "bedrooms": 0,
+    "room_type_normalized": "studio",
+    "area_normalized": "Harringay",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N4",
+    "postcode_sector": "N4 1",
+    "available_from": "Now",
+    "available_from_normalized": "now",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/hartsmere-terrace-14/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "21 Ilmington Terrace, Harringay, London N4 1EB",
+    "price": "£1,640/month",
+    "price_raw": 1640,
+    "score": 86,
+    "property_type": "Flat · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "flat",
+    "area_normalized": "Harringay",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N4",
+    "postcode_sector": "N4 1",
+    "available_from": "1 October 2026",
+    "available_from_normalized": "2026-10-01",
+    "features": [
+     "garden"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ilmington-terrace-21/",
+    "explanation": "Private rear garden."
+   },
+   {
+    "rank": 3,
+    "address": "28 Jevington Terrace, Harringay, London N4 1QX",
+    "price": "£1,815/month",
+    "price_raw": 1815,
+    "score": 83,
+    "property_type": "Flat · 2 bed",
+    "bedrooms": 2,
+    "room_type_normalized": "flat",
+    "area_normalized": "Harringay",
+    "borough": "Haringey",
+    "city": "London",
+    "postcode_district": "N4",
+    "postcode_sector": "N4 1",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "parking"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/jevington-terrace-28/",
+    "explanation": "Allocated parking space."
+   }
+  ],
+  "summary": "Found 3 options in Harringay.",
+  "search_criteria": {
+   "area": "Harringay"
+  }
+ },
+ "description": "HO2-046: frozen open-ended search evidence for Harringay."
+}

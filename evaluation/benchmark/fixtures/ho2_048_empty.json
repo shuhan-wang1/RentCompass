@@ -1,0 +1,20 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "no_results",
+  "total_found": 0,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [],
+  "summary": "Found 0 options in Streatham.",
+  "search_criteria": {
+   "area": "Streatham",
+   "max_budget": 1200
+  },
+  "message": "I could not find any listings in Streatham matching those criteria right now."
+ },
+ "description": "HO2-048: frozen NO-RESULT search evidence for Streatham at £1200/month."
+}

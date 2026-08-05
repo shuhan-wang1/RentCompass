@@ -1,0 +1,18 @@
+{
+ "tool_name": "recall_memory",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "count": 1,
+  "memories": [
+   {
+    "content": "User will share the property with two friends (three people total).",
+    "mtype": "semantic",
+    "score": 0.94
+   }
+  ],
+  "formatted": "- User will share the property with two friends (three people total)."
+ },
+ "description": "HO2-085: frozen recall_memory bucket holding exactly one fact (sharers)."
+}

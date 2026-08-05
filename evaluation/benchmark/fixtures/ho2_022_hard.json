@@ -1,0 +1,92 @@
+{
+ "tool_name": "search_properties",
+ "success": true,
+ "error": null,
+ "data": {
+  "success": true,
+  "status": "found",
+  "total_found": 3,
+  "data_source": "onthemarket_live",
+  "possibly_outdated": false,
+  "recommendations": [
+   {
+    "rank": 1,
+    "address": "32 Netherby Mews, Acton, London W3 6SQ",
+    "price": "£1,950/month",
+    "price_raw": 1950,
+    "score": 89,
+    "property_type": "House · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "house",
+    "area_normalized": "Acton",
+    "borough": "Ealing",
+    "city": "London",
+    "postcode_district": "W3",
+    "postcode_sector": "W3 6",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/netherby-mews-32/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 2,
+    "address": "34 Ockendale Mews, Acton, London W3 6WR",
+    "price": "£2,030/month",
+    "price_raw": 2030,
+    "score": 86,
+    "property_type": "Studio",
+    "bedrooms": 1,
+    "room_type_normalized": "studio",
+    "area_normalized": "Acton",
+    "borough": "Ealing",
+    "city": "London",
+    "postcode_district": "W3",
+    "postcode_sector": "W3 6",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/ockendale-mews-34/",
+    "explanation": "Comes fully furnished."
+   },
+   {
+    "rank": 3,
+    "address": "35 Pyrford Mews, Streatham, London SW16 1YH",
+    "price": "£2,070/month",
+    "price_raw": 2070,
+    "score": 83,
+    "property_type": "House · 1 bed",
+    "bedrooms": 1,
+    "room_type_normalized": "house",
+    "area_normalized": "Streatham",
+    "borough": "Lambeth",
+    "city": "London",
+    "postcode_district": "SW16",
+    "postcode_sector": "SW16 1",
+    "available_from": "Contact agent",
+    "available_from_normalized": "contact agent",
+    "features": [
+     "furnished"
+    ],
+    "match_type": "candidate",
+    "source": "onthemarket_live",
+    "url": "https://www.onthemarket.com/details/pyrford-mews-35/",
+    "explanation": "Comes fully furnished."
+   }
+  ],
+  "summary": "Found 3 options in Acton.",
+  "search_criteria": {
+   "area": "Acton",
+   "room_type": "house"
+  }
+ },
+ "description": "HO2-022: frozen search evidence for Acton. Alongside one fully compliant option the result set carries one option that breaks exactly one of ['room_type', 'area', 'move_in_date'] (including a nearby-area result), which is what a real search returns and what the assistant is supposed to filter."
+}

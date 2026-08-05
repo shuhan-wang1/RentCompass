@@ -385,6 +385,28 @@ def move_in_answer(mi: dict, *, language: str = "en") -> str:
 ANSWER_KINDS = ("deposit", "move_in")
 
 
+def rent_conversion_answer(direction: str, amount: float, *, language: str = "en") -> str:
+    """Render an authoritative weekly/monthly rent conversion."""
+    if direction == "week_to_month":
+        result = monthly_from_weekly(float(amount))
+        formula = "weekly × 52 ÷ 12"
+        source = "per week"
+        target = "per calendar month"
+    elif direction == "month_to_week":
+        result = weekly_from_monthly(float(amount))
+        formula = "monthly × 12 ÷ 52"
+        source = "per calendar month"
+        target = "per week"
+    else:
+        raise ValueError(f"rent_conversion_answer(): unknown direction {direction!r}")
+    result = round(result, 2)
+    if language == "zh":
+        return (f"£{float(amount):,.2f} {source} = £{result:,.2f} {target}。"
+                f"计算公式：{formula}。")
+    return (f"£{float(amount):,.2f} {source} = £{result:,.2f} {target}. "
+            f"Formula: {formula}.")
+
+
 def statutory_answer(kind: str, amount: float, period: str, *,
                      language: str = "en",
                      holding_deposit_gbp: Optional[float] = None) -> str:

@@ -299,6 +299,38 @@ def test_legacy_multi_intent_memory_render_preserves_non_memory_answer():
     assert "I have saved" not in rendered["final_response"]
 
 
+def test_legacy_multi_tool_render_preserves_validated_search_card():
+    """An auxiliary tool after search must not erase the eligible listing payload."""
+    from core.langgraph_agent import _make_format_output_node
+
+    listing = {
+        "eval_listing_id": "synthetic-a", "address": "11 Cedar Way, Camden",
+        "url": "https://list.test/synthetic-a", "price": "£900/month",
+        "area": "Camden", "bedrooms": 1, "property_type": "flat",
+        "verified_features": ["furnished"], "available_from": "2026-08-01",
+    }
+    search = {
+        "status": "found", "recommendations": [listing],
+        "search_criteria": {"area": "Camden", "max_budget": 1000},
+    }
+    state = _state("Find a furnished one-bed in Camden, then check the commute")
+    state.update({
+        "tool_decision": {"tool": "calculate_commute"},
+        "tool_raw_data": {"success": True, "duration_minutes": 20},
+        "final_response": "The commute is 20 minutes.",
+        "observations": [{"tool": "search_properties"}, {"tool": "calculate_commute"}],
+        "tool_artifacts": [
+            agent_loop._artifact(0, "search_properties", search, success=True),
+            agent_loop._artifact(1, "calculate_commute",
+                                 {"success": True, "duration_minutes": 20}, success=True),
+        ],
+        "accumulated_search_criteria": {},
+    })
+
+    rendered = _make_format_output_node()(state)
+    assert rendered["tool_data"]["eligible_recommendations"][0]["eval_listing_id"] == "synthetic-a"
+
+
 def test_empty_retrieval_cannot_license_market_amount_but_user_amount_is_allowed():
     from uk_rent_agent.agent.critic import unsupported_external_numbers
 

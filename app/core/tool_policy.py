@@ -327,6 +327,35 @@ def statutory_money_answer(message: str) -> Optional[tuple]:
     return kind, amount, period, holding
 
 
+# ─── standalone weekly/monthly conversion ──────────────────────────
+_CONVERSION_TARGET_MONTH_RE = re.compile(
+    r"(?:monthly|per\s+(?:calendar\s+)?month|pcm|month(?:ly)?\s+equivalent|每月|一个月)", re.I)
+_CONVERSION_TARGET_WEEK_RE = re.compile(
+    r"(?:weekly|per\s+week|pw|week(?:ly)?\s+equivalent|每周|一周)", re.I)
+_CONVERSION_VERB_RE = re.compile(
+    r"(?:convert|conversion|equivalent|how\s+much|calculate|work\s+out|换算|折算|计算)", re.I)
+
+
+def standalone_rent_conversion(message: str) -> Optional[tuple[str, float]]:
+    """Return ``(direction, amount)`` for an unambiguous rent conversion."""
+    text = (message or "").strip()
+    if not text or _FIND_INTENT_RE.search(text) or _names_a_place(text):
+        return None
+    source = _amount_with_period(text)
+    if source is None:
+        return None
+    amount, period = source
+    target_month = bool(_CONVERSION_TARGET_MONTH_RE.search(text))
+    target_week = bool(_CONVERSION_TARGET_WEEK_RE.search(text))
+    if period == "week":
+        if not target_month or (target_week and not _CONVERSION_VERB_RE.search(text)):
+            return None
+        return "week_to_month", amount
+    if not target_week or (target_month and not _CONVERSION_VERB_RE.search(text)):
+        return None
+    return "month_to_week", amount
+
+
 def read_tool_denial(tool: str, args: dict, *, current_message: str) -> Optional[ReadDenial]:
     """The pre-dispatch verdict for one read call. ``None`` means dispatch it.
 

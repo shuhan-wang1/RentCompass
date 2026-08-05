@@ -1176,6 +1176,19 @@ def _build_statutory_money_decision(amount: float, period: str) -> dict:
     }
 
 
+def _build_rent_conversion_decision(direction: str, amount: float,
+                                    language: str = "en") -> dict:
+    """Build a deterministic terminal decision for an explicit rent conversion."""
+    from core.tenancy_reference import rent_conversion_answer
+    answer = rent_conversion_answer(direction, amount, language=language)
+    return {
+        "tool": "direct_answer", "params": {},
+        "deterministic_answer": answer,
+        "raw_data": {"conversion": {"direction": direction, "amount": amount}},
+        "reason": "Standalone weekly/monthly rent conversion — product-owned formula",
+    }
+
+
 # Protected-characteristic DEMOGRAPHIC terms — about PEOPLE/communities. Places of
 # worship / amenities (mosque, church, synagogue, halal, 清真寺) are DELIBERATELY
 # excluded so amenity/POI queries always pass.
@@ -1305,6 +1318,13 @@ def _route_base_decision(decision: dict, search_entry: str) -> Command:
             # statute table that way tells the model not to rely on it.
             "context_tainted": not decision.get("observation_trusted", False),
         }, goto="generate_response")
+    if decision.get("deterministic_answer") is not None:
+        return Command(update={
+            "tool_decision": decision,
+            "final_response": decision["deterministic_answer"],
+            "response_type": "answer",
+            "tool_raw_data": decision.get("raw_data"),
+        }, goto="format_output")
     if tool == "direct_answer":
         return Command(update={"tool_decision": decision}, goto="generate_response")
     if tool == REFINE_TOOL_NAME:
@@ -1473,6 +1493,17 @@ def _make_decide_tool_node(tool_registry, classification_llm, search_entry="disp
         _money_rent = _self_contained_money_rent(_cm_raw)
         if _money_rent is not None:
             return _build_statutory_money_decision(*_money_rent)
+
+        try:
+            from core.tool_policy import standalone_rent_conversion
+            _conversion = standalone_rent_conversion(_cm_raw)
+        except Exception:
+            _conversion = None
+        if _conversion is not None:
+            return _build_rent_conversion_decision(
+                *_conversion,
+                language=_reply_language_from_ctx(extracted_context, _cm_raw),
+            )
 
         # 1.7) market_info NEGATIVE GUARD (deterministic, pre-vote). An explicit
         #      do-not-search research request (先不要搜索…) — or a research verb + a
@@ -3043,6 +3074,7 @@ def _make_execute_tool_node(tool_registry):
 
         observation = None
         raw_data = None
+        tool_success = False
         update = {}
 
         try:
@@ -3160,6 +3192,7 @@ def _make_execute_tool_node(tool_registry):
                 )
                 params["idempotency_key"] = invocation.idempotency_key
                 result = await tool_registry.execute_tool(tool_name, **params)
+                tool_success = bool(result.success)
                 # Domain-level outcomes such as ``need_clarification`` deliberately
                 # use success=False but still carry authoritative structured data.
                 # Keep that payload so routing/formatting can handle the outcome.
@@ -3225,6 +3258,7 @@ def _make_execute_tool_node(tool_registry):
                     # whether the write lands.
                     _note_legacy_write_dispatch(_inv_key)
                 result = await tool_registry.execute_tool(tool_name, **params)
+                tool_success = bool(result.success)
                 raw_data = result.data if result.success else {"success": False, "error": result.error}
 
                 if result.success:
@@ -3239,6 +3273,19 @@ def _make_execute_tool_node(tool_registry):
             logger.error(f"Tool execution error ({tool_name}): {e}", exc_info=True)
             observation = f"Error executing {tool_name}: {str(e)}"
             raw_data = None
+
+        # The legacy graph historically kept only the latest tool_raw_data. A later
+        # multi-tool synthesis therefore discarded an earlier search card (and its
+        # per-listing commute evidence), even though the evidence had been fetched and
+        # the answer was correctly forced to say it could not verify a commute. Keep the
+        # same raw per-turn ledger used by fc_loop so the formatter can render the search
+        # result regardless of which auxiliary tool ran last.
+        artifacts = list(state.get("tool_artifacts") or [])
+        artifacts.append(_legacy_tool_artifact(
+            int(state.get("loop_turn", 0)), tool_name, raw_data,
+            _params_digest(tool_name, params), success=tool_success,
+        ))
+        update["tool_artifacts"] = artifacts
 
         update["tool_observation"] = observation
         update["tool_raw_data"] = raw_data
@@ -3463,6 +3510,26 @@ def _params_digest(tool_name: str, params: dict) -> str:
     stable = {k: v for k, v in (params or {}).items() if k not in _DIGEST_VOLATILE_KEYS}
     payload = tool_name + "|" + json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,
+                          params_digest: str = "", success: bool = True,
+                          error: Optional[str] = None) -> dict:
+    """Create the shared artifact shape without importing the fc-loop module.
+
+    ``langgraph_agent`` is also imported by the fc-loop implementation, so importing
+    ``core.agent_loop._artifact`` at module scope would create a circular dependency.
+    The legacy executor needs only the stable base fields; optional budget markers are
+    added by the fc-loop executor itself.
+    """
+    return {
+        "turn": int(turn),
+        "tool": tool,
+        "raw_data": raw_data,
+        "params_digest": params_digest,
+        "success": bool(success),
+        "error": error,
+    }
 
 
 # Which loopable INTENT group is the router's view of a user-visible DIMENSION. Three of the
@@ -4135,6 +4202,42 @@ def _make_format_output_node():
         # ALL observations; a single tool's structured card can't represent it, so pass the
         # generated `response` through untouched rather than overwriting it with one card.
         is_loop_synthesis = len(state.get("observations") or []) > 1
+        # Legacy also has a multi-tool loop, but historically only ``tool_raw_data`` from
+        # the last tool reached this formatter. If the last tool was an auxiliary commute,
+        # details, or cost call, the earlier validated search disappeared from the API
+        # payload. Recover the latest successful search from the shared artifact ledger;
+        # prose remains the model's synthesis, while the card is rendered deterministically
+        # from the same frozen search payload.
+        ledger_search = next((a for a in reversed(state.get("tool_artifacts") or [])
+                              if a.get("tool") == "search_properties"
+                              and a.get("success") is not False
+                              and isinstance(a.get("raw_data"), dict)
+                              and a["raw_data"].get("status") == "found"
+                              and (a["raw_data"].get("recommendations")
+                                   or a["raw_data"].get("over_budget_alternatives"))), None)
+        if is_loop_synthesis and ledger_search is not None:
+            search_payload = ledger_search["raw_data"]
+            if search_payload.get("candidate_validation") is None:
+                search_payload = validate_search_payload(
+                    search_payload, commute_evidence=search_payload.get("commute_evidence") or [])
+                ledger_search["raw_data"] = search_payload
+            recs = apply_preference_filter(search_payload.get("recommendations") or [], prefs)
+            panel_recs = recs or apply_preference_filter(
+                search_payload.get("over_budget_alternatives") or [], prefs)
+            if not recs:
+                for row in panel_recs:
+                    row.setdefault("candidate_status", "excluded")
+                    row.setdefault("status_reason", "over_budget")
+            tool_data = {
+                "recommendations": panel_recs,
+                "eligible_recommendations": recs,
+                "search_criteria": search_payload.get("search_criteria", {}),
+                "area_recommendations": search_payload.get("area_recommendations", []),
+                "candidate_states": search_payload.get("candidate_states", []),
+                "excluded_candidates": search_payload.get("excluded_candidates", []),
+                "unverified_candidates": search_payload.get("unverified_candidates", []),
+                "commute_evidence": search_payload.get("commute_evidence", []),
+            }
         memory_contract = dict(state.get("memory_write_contract") or {})
         if tool_name == "remember" and not memory_contract:
             memory_contract = {

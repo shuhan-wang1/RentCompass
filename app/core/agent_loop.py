@@ -227,6 +227,23 @@ def _statutory_money_answer(current_message: str, reply_language: str):
         return None
 
 
+def _rent_conversion_answer(current_message: str, reply_language: str):
+    """Return the product-owned answer for an explicit weekly/monthly conversion."""
+    policy = _load_tool_policy()
+    if policy is None or not hasattr(policy, "standalone_rent_conversion"):
+        return None
+    try:
+        verdict = policy.standalone_rent_conversion(current_message)
+        if verdict is None:
+            return None
+        direction, amount = verdict
+        from core.tenancy_reference import rent_conversion_answer
+        return rent_conversion_answer(direction, amount, language=reply_language)
+    except Exception:
+        logger.warning("fc_loop.rent_conversion_answer_error", exc_info=True)
+        return None
+
+
 # ─── message assembly (contract C, imported defensively) ────────────
 def _behaviour_directive(reply_language: str) -> str:
     return (
@@ -1713,6 +1730,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         #     benchmark cases (B3, B4, B7, B8, B10, B14, B15) and refuses anything only
         #     PARTLY derivable — B12 asks for an all-in figure including bills, which needs
         #     the model and a refusal to fabricate, so it still goes to the model.
+        _conversion_answer = _rent_conversion_answer(cm, lang)
+        if _conversion_answer:
+            return Command(update={"final_response": _conversion_answer,
+                                   "response_type": "answer"}, goto="format_output_fc")
         _stat_answer = _statutory_money_answer(cm, lang)
         if _stat_answer:
             return Command(update={"final_response": _stat_answer,

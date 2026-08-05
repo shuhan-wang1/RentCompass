@@ -1,0 +1,13 @@
+{
+  "benchmark_schema_version": "rentcompass/benchmark/v3",
+  "status": "rerun_frozen_after_invalid_authentication_attempt",
+  "product_sha": "1c4e42bd82c9cc6be9230365b5d288c6739816fe",
+  "cases_sha256": "b608316849feef4cd6f0fbcbc9df047c898fd25e71326946b57c97c161eeaaca",
+  "manifest_sha256": "150c59c3ff71a7937bfb2e8ea42e033e686531c2042b4e5d4284197ac8fa96c1",
+  "preflight_report_sha256": "d96e09d84716df4c8de1b52138ee15dfcb87be63ed8cf7e24480060520f79205",
+  "metrics_implementation_commit": "b9fbf677ff30bed50703696bbc37ea6319b08f46",
+  "metrics_changed_since_initial_freeze": false,
+  "prior_invalid_attempt": "evaluation/results/holdout_v3_invalid_attempt_001/ATTEMPT.json",
+  "rerun_justification": "The prior attempt contains 88 provider AuthenticationError records, zero nonempty model answers and zero cost. It yielded no agent observation. The only capture change is fail-fast handling for the same credential condition.",
+  "formal_model_requests_with_valid_credential_before_this_freeze": 0
+}

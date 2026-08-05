@@ -1,0 +1,13 @@
+{
+  "status": "INVALID_AUTHENTICATION_ATTEMPT_DO_NOT_ANALYZE",
+  "attempt": 1,
+  "frozen_contract_commit": "e35f922f1f4ffd6530c7ad99abb410499c4ba31d",
+  "capture_commit": "e35f922f1f4ffd6530c7ad99abb410499c4ba31d",
+  "n_attempted": 88,
+  "n_successful_model_responses": 0,
+  "n_nonempty_final_answers": 0,
+  "cost_usd": 0.0,
+  "raw_runs_sha256": "9f794bc4750a24b26b91feae9ef11c55a705fa9b063adcff74e387f6d7e20c03",
+  "cause": "Provider rejected the root .env credential with AuthenticationError / HTTP 401. This is environment failure, not an agent outcome.",
+  "analysis_rule": "This directory is excluded from all metrics, comparisons and CV wording. The same cases may be rerun because no model output was observed."
+}

@@ -117,6 +117,9 @@ def _check_case(case: dict, fixtures: Path, global_ids: set[str], schema_version
         out.append("C4 formal memory stratum is a write-completion stratum")
     if case.get("task_category") == "clarify" and case.get("completion_oracle", {}).get("kind") != "clarification":
         out.append("C5 clarify task must use clarification completion oracle")
+    if (case.get("task_category") == "clarify" and schema_version.endswith("/v6")
+            and case.get("completion_oracle", {}).get("accept_text_question") is not True):
+        out.append("C6 v6 clarify oracle must explicitly separate text-question completion from ask_user dispatch")
     for c in hard.user_hard_constraints(case):
         out.extend(hard.arg_domain_problems(c))
     out.extend(hard.explicitness_problems(case))

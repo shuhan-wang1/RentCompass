@@ -40,3 +40,11 @@ def test_v3_preflight_rejects_missing_completion_oracle_and_bad_tool_contract(tm
     failures = report["problems"]["HO3-001"]
     assert any("completion_oracle" in item for item in failures)
     assert any("invalid required_tool_contract" in item for item in failures)
+
+
+def test_v6_preflight_requires_explicit_text_question_contract(tmp_path):
+    (tmp_path / "empty.json").write_text(json.dumps({"tool_name": "ask_user", "data": {}}))
+    case = _case(1)
+    case["schema_version"] = "rentcompass/benchmark/v6"
+    report = gate.check([case], tmp_path, schema_version="rentcompass/benchmark/v6")
+    assert any("C6 v6 clarify oracle" in item for item in report["problems"]["HO3-001"])

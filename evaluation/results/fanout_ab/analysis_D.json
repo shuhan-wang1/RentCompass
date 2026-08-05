@@ -1,0 +1,262 @@
+{
+  "experiment": "D",
+  "preregistration": "evaluation/results/fanout_ab/PREREGISTRATION.md",
+  "arm_base": "fanout_off",
+  "arm_test": "fanout_on",
+  "difference_convention": "ON - OFF (positive = the fan-out arm is higher)",
+  "bootstrap": {
+    "resampling_unit": "case",
+    "n_boot": 10000,
+    "seed": 20260805,
+    "interval": "95% percentile",
+    "rng_deviation": "prereg named numpy.random.default_rng; this reuses analyze.cluster_bootstrap (stdlib random.Random) with the same seed and n_boot"
+  },
+  "negative_controls_verdict": {
+    "all_passed": true,
+    "nc_a": true,
+    "nc_b": true,
+    "nc_c": true,
+    "note": "negative controls are computed and written BEFORE the contrasts; a failure here makes the headline numbers unusable"
+  },
+  "runs_total": 192,
+  "runs_ok": 192,
+  "runs_failed": 0,
+  "failures": [],
+  "cases_seen": 8,
+  "pairs_usable": 96,
+  "pairs_dropped": [],
+  "per_arm": {
+    "fanout_on": {
+      "n_runs_ok": 96,
+      "dimension_coverage_pooled": {
+        "num_dimensions_covered": 204,
+        "den_dimensions_cued": 252,
+        "rate": 0.8095238095238095
+      },
+      "dimension_coverage_per_run": {
+        "mean": 0.75,
+        "n": 96
+      },
+      "llm_calls": {
+        "mean": 2.5416666666666665,
+        "p50": 2.0,
+        "p95": 5.0,
+        "n": 96
+      },
+      "tool_batches": {
+        "mean": 1.28125,
+        "p50": 1.0,
+        "p95": 3.0,
+        "n": 96
+      },
+      "n_tools_executed": {
+        "mean": 3.78125,
+        "p50": 3.5,
+        "p95": 9.0,
+        "n": 96
+      },
+      "wall_ms": {
+        "mean": 14478.287364608454,
+        "p50": 9158.815868198872,
+        "p95": 51752.34173703939,
+        "n": 96
+      },
+      "turn_latency_ms": {
+        "mean": 13963.337002011636,
+        "p50": 8541.980097070336,
+        "p95": 51452.27053295821,
+        "n": 96
+      },
+      "cost_usd_total": 0.0544963944,
+      "tokens_in_total": 2614421,
+      "tokens_out_total": 73831,
+      "soft_wrapped_runs": 1,
+      "runs_where_fanout_fired": 72,
+      "fanout_firings_plan_time": 72,
+      "fanout_firings_answer_time": 0
+    },
+    "fanout_off": {
+      "n_runs_ok": 96,
+      "dimension_coverage_pooled": {
+        "num_dimensions_covered": 138,
+        "den_dimensions_cued": 252,
+        "rate": 0.5476190476190477
+      },
+      "dimension_coverage_per_run": {
+        "mean": 0.5208333333333334,
+        "n": 96
+      },
+      "llm_calls": {
+        "mean": 2.9895833333333335,
+        "p50": 2.0,
+        "p95": 5.0,
+        "n": 96
+      },
+      "tool_batches": {
+        "mean": 1.5625,
+        "p50": 1.0,
+        "p95": 3.0,
+        "n": 96
+      },
+      "n_tools_executed": {
+        "mean": 2.6666666666666665,
+        "p50": 2.0,
+        "p95": 5.25,
+        "n": 96
+      },
+      "wall_ms": {
+        "mean": 20297.075714392122,
+        "p50": 8092.701367102563,
+        "p95": 66030.59278195724,
+        "n": 96
+      },
+      "turn_latency_ms": {
+        "mean": 19825.09826901757,
+        "p50": 7759.916097857058,
+        "p95": 65678.21483314037,
+        "n": 96
+      },
+      "cost_usd_total": 0.0541472344,
+      "tokens_in_total": 3015657,
+      "tokens_out_total": 77374,
+      "soft_wrapped_runs": 2,
+      "runs_where_fanout_fired": 0,
+      "fanout_firings_plan_time": 0,
+      "fanout_firings_answer_time": 0
+    }
+  },
+  "paired_contrasts": {
+    "dimension_coverage_ratio": {
+      "point": 0.22916666666666669,
+      "ci_low": 0.03819444444444445,
+      "ci_high": 0.4409722222222222,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON higher"
+    },
+    "dimensions_covered_count": {
+      "point": 0.6875,
+      "ci_low": 0.11458333333333333,
+      "ci_high": 1.3229166666666667,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON higher"
+    },
+    "llm_calls": {
+      "point": -0.4479166666666667,
+      "ci_low": -0.9377604166666664,
+      "ci_high": -0.09375,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON lower"
+    },
+    "tool_batches": {
+      "point": -0.28125,
+      "ci_low": -0.5833333333333334,
+      "ci_high": -0.03125,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON lower"
+    },
+    "n_tools_executed": {
+      "point": 1.1145833333333333,
+      "ci_low": 0.14583333333333334,
+      "ci_high": 2.3020833333333335,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON higher"
+    },
+    "wall_ms": {
+      "point": -5818.788349783668,
+      "ci_low": -15247.597421448638,
+      "ci_high": -563.9072471725133,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON lower"
+    },
+    "turn_latency_ms": {
+      "point": -5861.761267005932,
+      "ci_low": -15350.024859101783,
+      "ci_high": -577.0386511576371,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON lower"
+    },
+    "cost_usd": {
+      "point": 3.637083333333334e-06,
+      "ci_low": -0.00010682968333333335,
+      "ci_high": 0.00014403274812499996,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": true,
+      "n_paired_observations": 96,
+      "verdict": "no significant difference observed"
+    },
+    "tokens_in": {
+      "point": -4179.541666666666,
+      "ci_low": -11135.109635416666,
+      "ci_high": 1028.0729166666665,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": true,
+      "n_paired_observations": 96,
+      "verdict": "no significant difference observed"
+    },
+    "tokens_out": {
+      "point": -36.90625,
+      "ci_low": -155.8770833333333,
+      "ci_high": 65.69895833333332,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": true,
+      "n_paired_observations": 96,
+      "verdict": "no significant difference observed"
+    },
+    "soft_wrapped": {
+      "point": -0.010416666666666666,
+      "ci_low": -0.03125,
+      "ci_high": 0.0,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": true,
+      "n_paired_observations": 96,
+      "verdict": "no significant difference observed"
+    }
+  }
+}

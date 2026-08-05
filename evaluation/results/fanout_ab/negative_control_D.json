@@ -1,0 +1,61 @@
+{
+  "nc_c_switch_integrity": {
+    "name": "NC-c switch integrity",
+    "statement": "every fanout_off run records cap==0 and zero firings; every fanout_on run records cap==3",
+    "off_runs_checked": 96,
+    "on_runs_checked": 96,
+    "violations_off": [],
+    "violations_on": [],
+    "passed": true
+  },
+  "nc_b_read_tools_only": {
+    "name": "NC-b fan-out touches only read tools",
+    "statement": "none of ['remember', 'ask_user'] may appear in fanout_added_tools",
+    "runs_checked": 192,
+    "total_fanout_additions": 179,
+    "added_tool_histogram": {
+      "calculate_commute": 60,
+      "check_safety": 47,
+      "search_nearby_pois": 72
+    },
+    "violations": [],
+    "passed": true
+  },
+  "nc_a_no_extra_batches": {
+    "name": "NC-a the ON arm must not add batches",
+    "statement": "paired tool_batches (ON - OFF) must not be significantly positive",
+    "n_pairs": 96,
+    "pairs_on_batches_greater": 7,
+    "pairs_on_batches_fewer": 27,
+    "pairs_on_batches_equal": 62,
+    "strict_all_pairs": {
+      "point": -0.28125,
+      "ci_low": -0.5833333333333334,
+      "ci_high": -0.03125,
+      "n_cases": 8,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 96,
+      "verdict": "ON lower"
+    },
+    "plan_time_only_pairs": {
+      "point": -0.3888888888888889,
+      "ci_low": -0.763888888888889,
+      "ci_high": -0.06944444444444446,
+      "n_cases": 6,
+      "n_boot": 10000,
+      "seed": 20260805,
+      "n_draws": 10000,
+      "crosses_zero": false,
+      "n_paired_observations": 72,
+      "verdict": "ON lower"
+    },
+    "n_pairs_plan_time_only": 72,
+    "n_pairs_with_answer_time_firing": 0,
+    "passed": true,
+    "significant_increase": false
+  },
+  "all_passed": true
+}

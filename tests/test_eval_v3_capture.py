@@ -60,3 +60,9 @@ def test_provider_authentication_fuse_is_narrow():
     assert rb.fatal_provider_authentication("AuthenticationError: provider rejected credentials") is True
     assert rb.fatal_provider_authentication("HTTP 401 from an unrelated tool") is False
     assert rb.fatal_provider_authentication("TimeoutError: upstream slow") is False
+
+
+def test_fixtured_case_denies_unbound_tools_but_allows_bound_replays():
+    assert rb.fixture_denies_unbound_tool({"search_properties": 1}, "get_property_details") is True
+    assert rb.fixture_denies_unbound_tool({"search_properties": 1}, "search_properties") is False
+    assert rb.fixture_denies_unbound_tool({}, "get_property_details") is False

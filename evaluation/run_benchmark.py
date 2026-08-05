@@ -211,6 +211,15 @@ def load_fixture_queue(case: dict, fixtures_dir: Optional[Path] = None) -> Dict[
     return queue
 
 
+def fixture_denies_unbound_tool(declared: Dict[str, int], tool_name: str) -> bool:
+    """Whether a fixtured live case must deny an unrecorded tool call.
+
+    A frozen case may replay a bound tool repeatedly (the queue reuses its last record),
+    but an entirely unbound tool must never fall through to network/live production data.
+    """
+    return bool(declared) and tool_name not in declared
+
+
 def fixture_service_report(declared: Dict[str, int], served: Dict[str, int]) -> dict:
     """Was the case's fixture evidence actually delivered to the agent?
 
@@ -1090,6 +1099,17 @@ class CaseRunner:
 
             if item is not None:
                 result = _result_from_fixture(name, item)
+                record(name, result, kwargs, mcp=False)
+            elif fixture_denies_unbound_tool(declared_records, name):
+                # A fixtured held-out case is a closed evidence world.  Letting an
+                # unrecorded tool fall through to production mixes live data into a
+                # supposedly frozen packet and makes a rerun non-reproducible.
+                result = ToolResult(
+                    success=False,
+                    data={"success": False, "fixture_unbound_tool": name},
+                    error=f"fixture denied unbound tool: {name}",
+                    tool_name=name, execution_time_ms=0.0,
+                )
                 record(name, result, kwargs, mcp=False)
             elif offline:
                 data = _CANNED_TOOL_DATA.get(name, {"success": True, "stub": True})

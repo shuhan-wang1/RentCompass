@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5109 Windrow Quay, Heliotrope Quay, London V9 1AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-008-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£4,066/month",
+            "price_raw": 4066,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-008-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5110 Windrow Quay, Heliotrope Quay, London V9 1AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-008-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£4,134/month",
+            "price_raw": 4134,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-008-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5111 Windrow Quay, Heliotrope Quay, London V9 1AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 2,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-008-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£20,203/month",
+            "price_raw": 20203,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-008-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5112 Windrow Quay, Heliotrope Quay, London V9 1AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-008-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£22,503/month",
+            "price_raw": 22503,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-008-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5113 Windrow Quay, Pearlwick, London V9 1AB",
+            "area_normalized": "Pearlwick",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Pearlwick",
+            "city": "London",
+            "eval_listing_id": "ho4-008-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£24,803/month",
+            "price_raw": 24803,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-008-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5104 Windrow Quay, Heliotrope Quay, London V9 1AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-008-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£27,103/month",
+            "price_raw": 27103,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-008-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5105 Windrow Quay, Heliotrope Quay, London V9 1AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-09-25",
+            "available_from_normalized": "2026-09-25",
+            "bedrooms": 1,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-008-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 1",
+            "price": "£29,403/month",
+            "price_raw": 29403,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-008-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Heliotrope Quay",
+          "bedrooms": 1,
+          "commute_destination": "Canary Wharf",
+          "max_budget": 4103,
+          "max_commute_time": 33,
+          "move_in_date": "2026-09-25",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Heliotrope Quay.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-a",
+        "duration_minutes": 31,
+        "from_address": "5109 Windrow Quay, Heliotrope Quay, London V9 1AB",
+        "origin_eval_listing_id": "ho4-008-a",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-b",
+        "duration_minutes": 42,
+        "from_address": "5110 Windrow Quay, Heliotrope Quay, London V9 1AB",
+        "origin_eval_listing_id": "ho4-008-b",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-c",
+        "duration_minutes": 42,
+        "from_address": "5111 Windrow Quay, Heliotrope Quay, London V9 1AB",
+        "origin_eval_listing_id": "ho4-008-c",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-d",
+        "duration_minutes": 42,
+        "from_address": "5112 Windrow Quay, Heliotrope Quay, London V9 1AB",
+        "origin_eval_listing_id": "ho4-008-d",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-e",
+        "duration_minutes": 42,
+        "from_address": "5113 Windrow Quay, Pearlwick, London V9 1AB",
+        "origin_eval_listing_id": "ho4-008-e",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-f",
+        "duration_minutes": 42,
+        "from_address": "5104 Windrow Quay, Heliotrope Quay, London V9 1AB",
+        "origin_eval_listing_id": "ho4-008-f",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-008-g",
+        "duration_minutes": 42,
+        "from_address": "5105 Windrow Quay, Heliotrope Quay, London V9 1AB",
+        "origin_eval_listing_id": "ho4-008-g",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

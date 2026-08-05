@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5174 Plover Quay, Moonstone Yard, London V5 6AB",
+            "area_normalized": "Moonstone Yard",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Moonstone Yard",
+            "city": "London",
+            "eval_listing_id": "ho4-013-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 6",
+            "price": "£4,181/month",
+            "price_raw": 4181,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-013-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5175 Plover Quay, Moonstone Yard, London V5 6AB",
+            "area_normalized": "Moonstone Yard",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Moonstone Yard",
+            "city": "London",
+            "eval_listing_id": "ho4-013-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 6",
+            "price": "£4,249/month",
+            "price_raw": 4249,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-013-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5176 Plover Quay, Moonstone Yard, London V5 6AB",
+            "area_normalized": "Moonstone Yard",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 2,
+            "borough": "Moonstone Yard",
+            "city": "London",
+            "eval_listing_id": "ho4-013-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 6",
+            "price": "£20,318/month",
+            "price_raw": 20318,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-013-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5177 Plover Quay, Moonstone Yard, London V5 6AB",
+            "area_normalized": "Moonstone Yard",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Moonstone Yard",
+            "city": "London",
+            "eval_listing_id": "ho4-013-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 6",
+            "price": "£22,618/month",
+            "price_raw": 22618,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-013-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5178 Plover Quay, Ultramarine Hill, London V5 6AB",
+            "area_normalized": "Ultramarine Hill",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Ultramarine Hill",
+            "city": "London",
+            "eval_listing_id": "ho4-013-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 6",
+            "price": "£24,918/month",
+            "price_raw": 24918,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-013-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5169 Plover Quay, Moonstone Yard, London V5 6AB",
+            "area_normalized": "Moonstone Yard",
+            "available_from": "2026-11-07",
+            "available_from_normalized": "2026-11-07",
+            "bedrooms": 1,
+            "borough": "Moonstone Yard",
+            "city": "London",
+            "eval_listing_id": "ho4-013-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 6",
+            "price": "£27,218/month",
+            "price_raw": 27218,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-013-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5170 Plover Quay, Moonstone Yard, London V5 6AB",
+            "area_normalized": "Moonstone Yard",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Moonstone Yard",
+            "city": "London",
+            "eval_listing_id": "ho4-013-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 6",
+            "price": "£29,518/month",
+            "price_raw": 29518,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-013-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Moonstone Yard",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 4218,
+          "max_commute_time": 38,
+          "move_in_date": "2026-10-10",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Moonstone Yard.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-a",
+        "duration_minutes": 36,
+        "from_address": "5174 Plover Quay, Moonstone Yard, London V5 6AB",
+        "origin_eval_listing_id": "ho4-013-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-b",
+        "duration_minutes": 47,
+        "from_address": "5175 Plover Quay, Moonstone Yard, London V5 6AB",
+        "origin_eval_listing_id": "ho4-013-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-c",
+        "duration_minutes": 47,
+        "from_address": "5176 Plover Quay, Moonstone Yard, London V5 6AB",
+        "origin_eval_listing_id": "ho4-013-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-d",
+        "duration_minutes": 47,
+        "from_address": "5177 Plover Quay, Moonstone Yard, London V5 6AB",
+        "origin_eval_listing_id": "ho4-013-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-e",
+        "duration_minutes": 47,
+        "from_address": "5178 Plover Quay, Ultramarine Hill, London V5 6AB",
+        "origin_eval_listing_id": "ho4-013-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-f",
+        "duration_minutes": 47,
+        "from_address": "5169 Plover Quay, Moonstone Yard, London V5 6AB",
+        "origin_eval_listing_id": "ho4-013-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-013-g",
+        "duration_minutes": 47,
+        "from_address": "5170 Plover Quay, Moonstone Yard, London V5 6AB",
+        "origin_eval_listing_id": "ho4-013-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

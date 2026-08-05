@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5707 Upland Quay, Xylo Court, London V1 7AB",
+            "area_normalized": "Xylo Court",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xylo Court",
+            "city": "London",
+            "eval_listing_id": "ho4-054-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£5,124/month",
+            "price_raw": 5124,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-054-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-054-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5708 Upland Quay, Xylo Court, London V1 7AB",
+            "area_normalized": "Xylo Court",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xylo Court",
+            "city": "London",
+            "eval_listing_id": "ho4-054-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£5,192/month",
+            "price_raw": 5192,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-054-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-054-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5709 Upland Quay, Xylo Court, London V1 7AB",
+            "area_normalized": "Xylo Court",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 2,
+            "borough": "Xylo Court",
+            "city": "London",
+            "eval_listing_id": "ho4-054-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£21,261/month",
+            "price_raw": 21261,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-054-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-054-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5710 Upland Quay, Xylo Court, London V1 7AB",
+            "area_normalized": "Xylo Court",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xylo Court",
+            "city": "London",
+            "eval_listing_id": "ho4-054-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£23,561/month",
+            "price_raw": 23561,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-054-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-054-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5711 Upland Quay, Beryl Grove, London V1 7AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-054-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£25,861/month",
+            "price_raw": 25861,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-054-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-054-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5702 Upland Quay, Xylo Court, London V1 7AB",
+            "area_normalized": "Xylo Court",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Xylo Court",
+            "city": "London",
+            "eval_listing_id": "ho4-054-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£28,161/month",
+            "price_raw": 28161,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-054-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-054-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5703 Upland Quay, Xylo Court, London V1 7AB",
+            "area_normalized": "Xylo Court",
+            "available_from": "2026-09-03",
+            "available_from_normalized": "2026-09-03",
+            "bedrooms": 1,
+            "borough": "Xylo Court",
+            "city": "London",
+            "eval_listing_id": "ho4-054-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 7",
+            "price": "£30,461/month",
+            "price_raw": 30461,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-054-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-054-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Xylo Court",
+          "bedrooms": 1,
+          "max_budget": 5161,
+          "move_in_date": "2026-09-03",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Xylo Court.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

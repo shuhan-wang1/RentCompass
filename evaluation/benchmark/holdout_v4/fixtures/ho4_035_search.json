@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5460 Nimbus Quay, Eclipse Park, London V9 4AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-035-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£4,687/month",
+            "price_raw": 4687,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-035-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-035-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5461 Nimbus Quay, Eclipse Park, London V9 4AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-035-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£4,755/month",
+            "price_raw": 4755,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-035-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-035-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5462 Nimbus Quay, Eclipse Park, London V9 4AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 2,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-035-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£20,824/month",
+            "price_raw": 20824,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-035-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-035-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5463 Nimbus Quay, Eclipse Park, London V9 4AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-035-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£23,124/month",
+            "price_raw": 23124,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-035-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-035-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5464 Nimbus Quay, Moonstone Yard, London V9 4AB",
+            "area_normalized": "Moonstone Yard",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Moonstone Yard",
+            "city": "London",
+            "eval_listing_id": "ho4-035-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£25,424/month",
+            "price_raw": 25424,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-035-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-035-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5455 Nimbus Quay, Eclipse Park, London V9 4AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-10-24",
+            "available_from_normalized": "2026-10-24",
+            "bedrooms": 1,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-035-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£27,724/month",
+            "price_raw": 27724,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-035-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-035-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5456 Nimbus Quay, Eclipse Park, London V9 4AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-09-26",
+            "available_from_normalized": "2026-09-26",
+            "bedrooms": 1,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-035-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 4",
+            "price": "£30,024/month",
+            "price_raw": 30024,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-035-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-035-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Eclipse Park",
+          "bedrooms": 1,
+          "max_budget": 4724,
+          "move_in_date": "2026-09-26",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Eclipse Park.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

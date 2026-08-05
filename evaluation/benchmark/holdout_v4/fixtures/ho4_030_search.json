@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5395 Upland Quay, Daybreak Common, London V4 7AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-030-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£4,572/month",
+            "price_raw": 4572,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-030-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5396 Upland Quay, Daybreak Common, London V4 7AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-030-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£4,640/month",
+            "price_raw": 4640,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-030-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5397 Upland Quay, Daybreak Common, London V4 7AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 2,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-030-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£20,709/month",
+            "price_raw": 20709,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-030-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5398 Upland Quay, Daybreak Common, London V4 7AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-030-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£23,009/month",
+            "price_raw": 23009,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-030-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5399 Upland Quay, Heliotrope Quay, London V4 7AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-030-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£25,309/month",
+            "price_raw": 25309,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-030-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5390 Upland Quay, Daybreak Common, London V4 7AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-10-09",
+            "available_from_normalized": "2026-10-09",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-030-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£27,609/month",
+            "price_raw": 27609,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-030-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5391 Upland Quay, Daybreak Common, London V4 7AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-11",
+            "available_from_normalized": "2026-09-11",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-030-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 7",
+            "price": "£29,909/month",
+            "price_raw": 29909,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-030-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Daybreak Common",
+          "bedrooms": 1,
+          "commute_destination": "Euston",
+          "max_budget": 4609,
+          "max_commute_time": 39,
+          "move_in_date": "2026-09-11",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Daybreak Common.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-a",
+        "duration_minutes": 37,
+        "from_address": "5395 Upland Quay, Daybreak Common, London V4 7AB",
+        "origin_eval_listing_id": "ho4-030-a",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-b",
+        "duration_minutes": 48,
+        "from_address": "5396 Upland Quay, Daybreak Common, London V4 7AB",
+        "origin_eval_listing_id": "ho4-030-b",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-c",
+        "duration_minutes": 48,
+        "from_address": "5397 Upland Quay, Daybreak Common, London V4 7AB",
+        "origin_eval_listing_id": "ho4-030-c",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-d",
+        "duration_minutes": 48,
+        "from_address": "5398 Upland Quay, Daybreak Common, London V4 7AB",
+        "origin_eval_listing_id": "ho4-030-d",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-e",
+        "duration_minutes": 48,
+        "from_address": "5399 Upland Quay, Heliotrope Quay, London V4 7AB",
+        "origin_eval_listing_id": "ho4-030-e",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-f",
+        "duration_minutes": 48,
+        "from_address": "5390 Upland Quay, Daybreak Common, London V4 7AB",
+        "origin_eval_listing_id": "ho4-030-f",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-030-g",
+        "duration_minutes": 48,
+        "from_address": "5391 Upland Quay, Daybreak Common, London V4 7AB",
+        "origin_eval_listing_id": "ho4-030-g",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

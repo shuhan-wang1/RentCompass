@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5785 Oriel Quay, Daybreak Common, London V7 5AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-21",
+            "available_from_normalized": "2026-09-21",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-060-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 5",
+            "price": "£5,262/month",
+            "price_raw": 5262,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-060-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-060-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5786 Oriel Quay, Daybreak Common, London V7 5AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-21",
+            "available_from_normalized": "2026-09-21",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-060-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 5",
+            "price": "£5,330/month",
+            "price_raw": 5330,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-060-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-060-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5787 Oriel Quay, Daybreak Common, London V7 5AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-21",
+            "available_from_normalized": "2026-09-21",
+            "bedrooms": 2,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-060-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 5",
+            "price": "£21,399/month",
+            "price_raw": 21399,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-060-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-060-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5788 Oriel Quay, Daybreak Common, London V7 5AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-21",
+            "available_from_normalized": "2026-09-21",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-060-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 5",
+            "price": "£23,699/month",
+            "price_raw": 23699,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-060-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-060-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5789 Oriel Quay, Heliotrope Quay, London V7 5AB",
+            "area_normalized": "Heliotrope Quay",
+            "available_from": "2026-09-21",
+            "available_from_normalized": "2026-09-21",
+            "bedrooms": 1,
+            "borough": "Heliotrope Quay",
+            "city": "London",
+            "eval_listing_id": "ho4-060-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 5",
+            "price": "£25,999/month",
+            "price_raw": 25999,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-060-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-060-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5780 Oriel Quay, Daybreak Common, London V7 5AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-10-19",
+            "available_from_normalized": "2026-10-19",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-060-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 5",
+            "price": "£28,299/month",
+            "price_raw": 28299,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-060-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-060-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5781 Oriel Quay, Daybreak Common, London V7 5AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-09-21",
+            "available_from_normalized": "2026-09-21",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-060-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 5",
+            "price": "£30,599/month",
+            "price_raw": 30599,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-060-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-060-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Daybreak Common",
+          "bedrooms": 1,
+          "max_budget": 5299,
+          "move_in_date": "2026-09-21",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Daybreak Common.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5447 Zinnia Quay, Driftwood Vale, London V8 3AB",
+            "area_normalized": "Driftwood Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Driftwood Vale",
+            "city": "London",
+            "eval_listing_id": "ho4-034-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£4,664/month",
+            "price_raw": 4664,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-034-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-034-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5448 Zinnia Quay, Driftwood Vale, London V8 3AB",
+            "area_normalized": "Driftwood Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Driftwood Vale",
+            "city": "London",
+            "eval_listing_id": "ho4-034-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£4,732/month",
+            "price_raw": 4732,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-034-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-034-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5449 Zinnia Quay, Driftwood Vale, London V8 3AB",
+            "area_normalized": "Driftwood Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 2,
+            "borough": "Driftwood Vale",
+            "city": "London",
+            "eval_listing_id": "ho4-034-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£20,801/month",
+            "price_raw": 20801,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-034-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-034-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5450 Zinnia Quay, Driftwood Vale, London V8 3AB",
+            "area_normalized": "Driftwood Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Driftwood Vale",
+            "city": "London",
+            "eval_listing_id": "ho4-034-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£23,101/month",
+            "price_raw": 23101,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-034-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-034-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5451 Zinnia Quay, Lumen Cross, London V8 3AB",
+            "area_normalized": "Lumen Cross",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Lumen Cross",
+            "city": "London",
+            "eval_listing_id": "ho4-034-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£25,401/month",
+            "price_raw": 25401,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-034-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-034-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5442 Zinnia Quay, Driftwood Vale, London V8 3AB",
+            "area_normalized": "Driftwood Vale",
+            "available_from": "2026-10-21",
+            "available_from_normalized": "2026-10-21",
+            "bedrooms": 1,
+            "borough": "Driftwood Vale",
+            "city": "London",
+            "eval_listing_id": "ho4-034-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£27,701/month",
+            "price_raw": 27701,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-034-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-034-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5443 Zinnia Quay, Driftwood Vale, London V8 3AB",
+            "area_normalized": "Driftwood Vale",
+            "available_from": "2026-09-23",
+            "available_from_normalized": "2026-09-23",
+            "bedrooms": 1,
+            "borough": "Driftwood Vale",
+            "city": "London",
+            "eval_listing_id": "ho4-034-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 3",
+            "price": "£30,001/month",
+            "price_raw": 30001,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-034-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-034-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Driftwood Vale",
+          "bedrooms": 1,
+          "max_budget": 4701,
+          "move_in_date": "2026-09-23",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Driftwood Vale.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

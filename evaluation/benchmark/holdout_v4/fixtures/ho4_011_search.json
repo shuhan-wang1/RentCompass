@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5148 Nimbus Quay, Kyanite Fields, London V3 4AB",
+            "area_normalized": "Kyanite Fields",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kyanite Fields",
+            "city": "London",
+            "eval_listing_id": "ho4-011-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£4,135/month",
+            "price_raw": 4135,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-011-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5149 Nimbus Quay, Kyanite Fields, London V3 4AB",
+            "area_normalized": "Kyanite Fields",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kyanite Fields",
+            "city": "London",
+            "eval_listing_id": "ho4-011-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£4,203/month",
+            "price_raw": 4203,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-011-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5150 Nimbus Quay, Kyanite Fields, London V3 4AB",
+            "area_normalized": "Kyanite Fields",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 2,
+            "borough": "Kyanite Fields",
+            "city": "London",
+            "eval_listing_id": "ho4-011-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£20,272/month",
+            "price_raw": 20272,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-011-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5151 Nimbus Quay, Kyanite Fields, London V3 4AB",
+            "area_normalized": "Kyanite Fields",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kyanite Fields",
+            "city": "London",
+            "eval_listing_id": "ho4-011-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£22,572/month",
+            "price_raw": 22572,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-011-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5152 Nimbus Quay, Saffron Mews, London V3 4AB",
+            "area_normalized": "Saffron Mews",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Saffron Mews",
+            "city": "London",
+            "eval_listing_id": "ho4-011-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£24,872/month",
+            "price_raw": 24872,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-011-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5143 Nimbus Quay, Kyanite Fields, London V3 4AB",
+            "area_normalized": "Kyanite Fields",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Kyanite Fields",
+            "city": "London",
+            "eval_listing_id": "ho4-011-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£27,172/month",
+            "price_raw": 27172,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-011-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5144 Nimbus Quay, Kyanite Fields, London V3 4AB",
+            "area_normalized": "Kyanite Fields",
+            "available_from": "2026-10-04",
+            "available_from_normalized": "2026-10-04",
+            "bedrooms": 1,
+            "borough": "Kyanite Fields",
+            "city": "London",
+            "eval_listing_id": "ho4-011-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 4",
+            "price": "£29,472/month",
+            "price_raw": 29472,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-011-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Kyanite Fields",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 4172,
+          "max_commute_time": 36,
+          "move_in_date": "2026-10-04",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Kyanite Fields.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-a",
+        "duration_minutes": 34,
+        "from_address": "5148 Nimbus Quay, Kyanite Fields, London V3 4AB",
+        "origin_eval_listing_id": "ho4-011-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-b",
+        "duration_minutes": 45,
+        "from_address": "5149 Nimbus Quay, Kyanite Fields, London V3 4AB",
+        "origin_eval_listing_id": "ho4-011-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-c",
+        "duration_minutes": 45,
+        "from_address": "5150 Nimbus Quay, Kyanite Fields, London V3 4AB",
+        "origin_eval_listing_id": "ho4-011-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-d",
+        "duration_minutes": 45,
+        "from_address": "5151 Nimbus Quay, Kyanite Fields, London V3 4AB",
+        "origin_eval_listing_id": "ho4-011-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-e",
+        "duration_minutes": 45,
+        "from_address": "5152 Nimbus Quay, Saffron Mews, London V3 4AB",
+        "origin_eval_listing_id": "ho4-011-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-f",
+        "duration_minutes": 45,
+        "from_address": "5143 Nimbus Quay, Kyanite Fields, London V3 4AB",
+        "origin_eval_listing_id": "ho4-011-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-011-g",
+        "duration_minutes": 45,
+        "from_address": "5144 Nimbus Quay, Kyanite Fields, London V3 4AB",
+        "origin_eval_listing_id": "ho4-011-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

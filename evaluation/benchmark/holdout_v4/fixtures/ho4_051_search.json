@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5668 Rill Quay, Ultramarine Hill, London V7 4AB",
+            "area_normalized": "Ultramarine Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Ultramarine Hill",
+            "city": "London",
+            "eval_listing_id": "ho4-051-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£5,055/month",
+            "price_raw": 5055,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-051-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-051-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5669 Rill Quay, Ultramarine Hill, London V7 4AB",
+            "area_normalized": "Ultramarine Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Ultramarine Hill",
+            "city": "London",
+            "eval_listing_id": "ho4-051-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£5,123/month",
+            "price_raw": 5123,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-051-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-051-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5670 Rill Quay, Ultramarine Hill, London V7 4AB",
+            "area_normalized": "Ultramarine Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 2,
+            "borough": "Ultramarine Hill",
+            "city": "London",
+            "eval_listing_id": "ho4-051-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£21,192/month",
+            "price_raw": 21192,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-051-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-051-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5671 Rill Quay, Ultramarine Hill, London V7 4AB",
+            "area_normalized": "Ultramarine Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Ultramarine Hill",
+            "city": "London",
+            "eval_listing_id": "ho4-051-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£23,492/month",
+            "price_raw": 23492,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-051-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-051-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5672 Rill Quay, Copperlea, London V7 4AB",
+            "area_normalized": "Copperlea",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Copperlea",
+            "city": "London",
+            "eval_listing_id": "ho4-051-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£25,792/month",
+            "price_raw": 25792,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-051-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-051-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5663 Rill Quay, Ultramarine Hill, London V7 4AB",
+            "area_normalized": "Ultramarine Hill",
+            "available_from": "2026-12-11",
+            "available_from_normalized": "2026-12-11",
+            "bedrooms": 1,
+            "borough": "Ultramarine Hill",
+            "city": "London",
+            "eval_listing_id": "ho4-051-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£28,092/month",
+            "price_raw": 28092,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-051-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-051-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5664 Rill Quay, Ultramarine Hill, London V7 4AB",
+            "area_normalized": "Ultramarine Hill",
+            "available_from": "2026-11-13",
+            "available_from_normalized": "2026-11-13",
+            "bedrooms": 1,
+            "borough": "Ultramarine Hill",
+            "city": "London",
+            "eval_listing_id": "ho4-051-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 4",
+            "price": "£30,392/month",
+            "price_raw": 30392,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-051-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-051-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Ultramarine Hill",
+          "bedrooms": 1,
+          "max_budget": 5092,
+          "move_in_date": "2026-11-13",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Ultramarine Hill.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

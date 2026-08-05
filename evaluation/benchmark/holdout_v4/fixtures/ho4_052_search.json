@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5681 Sundial Quay, Verdant Lock, London V8 5AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-052-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£5,078/month",
+            "price_raw": 5078,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-052-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-052-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5682 Sundial Quay, Verdant Lock, London V8 5AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-052-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£5,146/month",
+            "price_raw": 5146,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-052-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-052-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5683 Sundial Quay, Verdant Lock, London V8 5AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 2,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-052-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£21,215/month",
+            "price_raw": 21215,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-052-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-052-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5684 Sundial Quay, Verdant Lock, London V8 5AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-052-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£23,515/month",
+            "price_raw": 23515,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-052-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-052-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5685 Sundial Quay, Daybreak Common, London V8 5AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-052-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£25,815/month",
+            "price_raw": 25815,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-052-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-052-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5676 Sundial Quay, Verdant Lock, London V8 5AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-12-14",
+            "available_from_normalized": "2026-12-14",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-052-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£28,115/month",
+            "price_raw": 28115,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-052-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-052-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5677 Sundial Quay, Verdant Lock, London V8 5AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-16",
+            "available_from_normalized": "2026-11-16",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-052-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 5",
+            "price": "£30,415/month",
+            "price_raw": 30415,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-052-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-052-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Verdant Lock",
+          "bedrooms": 1,
+          "max_budget": 5115,
+          "move_in_date": "2026-11-16",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Verdant Lock.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

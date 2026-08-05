@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5252 Vesper Quay, Saffron Mews, London V2 4AB",
+            "area_normalized": "Saffron Mews",
+            "available_from": "2026-10-28",
+            "available_from_normalized": "2026-10-28",
+            "bedrooms": 1,
+            "borough": "Saffron Mews",
+            "city": "London",
+            "eval_listing_id": "ho4-019-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 4",
+            "price": "£4,319/month",
+            "price_raw": 4319,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-019-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5253 Vesper Quay, Saffron Mews, London V2 4AB",
+            "area_normalized": "Saffron Mews",
+            "available_from": "2026-10-28",
+            "available_from_normalized": "2026-10-28",
+            "bedrooms": 1,
+            "borough": "Saffron Mews",
+            "city": "London",
+            "eval_listing_id": "ho4-019-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 4",
+            "price": "£4,387/month",
+            "price_raw": 4387,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-019-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5254 Vesper Quay, Saffron Mews, London V2 4AB",
+            "area_normalized": "Saffron Mews",
+            "available_from": "2026-10-28",
+            "available_from_normalized": "2026-10-28",
+            "bedrooms": 2,
+            "borough": "Saffron Mews",
+            "city": "London",
+            "eval_listing_id": "ho4-019-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 4",
+            "price": "£20,456/month",
+            "price_raw": 20456,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-019-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5255 Vesper Quay, Saffron Mews, London V2 4AB",
+            "area_normalized": "Saffron Mews",
+            "available_from": "2026-10-28",
+            "available_from_normalized": "2026-10-28",
+            "bedrooms": 1,
+            "borough": "Saffron Mews",
+            "city": "London",
+            "eval_listing_id": "ho4-019-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 4",
+            "price": "£22,756/month",
+            "price_raw": 22756,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-019-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5256 Vesper Quay, Ashen Brook, London V2 4AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-10-28",
+            "available_from_normalized": "2026-10-28",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-019-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 4",
+            "price": "£25,056/month",
+            "price_raw": 25056,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-019-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5247 Vesper Quay, Saffron Mews, London V2 4AB",
+            "area_normalized": "Saffron Mews",
+            "available_from": "2026-11-25",
+            "available_from_normalized": "2026-11-25",
+            "bedrooms": 1,
+            "borough": "Saffron Mews",
+            "city": "London",
+            "eval_listing_id": "ho4-019-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 4",
+            "price": "£27,356/month",
+            "price_raw": 27356,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-019-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5248 Vesper Quay, Saffron Mews, London V2 4AB",
+            "area_normalized": "Saffron Mews",
+            "available_from": "2026-10-28",
+            "available_from_normalized": "2026-10-28",
+            "bedrooms": 1,
+            "borough": "Saffron Mews",
+            "city": "London",
+            "eval_listing_id": "ho4-019-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 4",
+            "price": "£29,656/month",
+            "price_raw": 29656,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-019-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Saffron Mews",
+          "bedrooms": 1,
+          "commute_destination": "Farringdon",
+          "max_budget": 4356,
+          "max_commute_time": 28,
+          "move_in_date": "2026-10-28",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Saffron Mews.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-a",
+        "duration_minutes": 26,
+        "from_address": "5252 Vesper Quay, Saffron Mews, London V2 4AB",
+        "origin_eval_listing_id": "ho4-019-a",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-b",
+        "duration_minutes": 37,
+        "from_address": "5253 Vesper Quay, Saffron Mews, London V2 4AB",
+        "origin_eval_listing_id": "ho4-019-b",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-c",
+        "duration_minutes": 37,
+        "from_address": "5254 Vesper Quay, Saffron Mews, London V2 4AB",
+        "origin_eval_listing_id": "ho4-019-c",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-d",
+        "duration_minutes": 37,
+        "from_address": "5255 Vesper Quay, Saffron Mews, London V2 4AB",
+        "origin_eval_listing_id": "ho4-019-d",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-e",
+        "duration_minutes": 37,
+        "from_address": "5256 Vesper Quay, Ashen Brook, London V2 4AB",
+        "origin_eval_listing_id": "ho4-019-e",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-f",
+        "duration_minutes": 37,
+        "from_address": "5247 Vesper Quay, Saffron Mews, London V2 4AB",
+        "origin_eval_listing_id": "ho4-019-f",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-019-g",
+        "duration_minutes": 37,
+        "from_address": "5248 Vesper Quay, Saffron Mews, London V2 4AB",
+        "origin_eval_listing_id": "ho4-019-g",
+        "to_address": "Farringdon"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Beryl Grove",
+      "bedrooms": 1,
+      "max_budget": 5345,
+      "move_in_date": "2026-09-27",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Beryl Grove.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

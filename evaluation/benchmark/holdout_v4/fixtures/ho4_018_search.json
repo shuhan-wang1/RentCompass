@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5239 Upland Quay, Ravenstone Bay, London V1 3AB",
+            "area_normalized": "Ravenstone Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Ravenstone Bay",
+            "city": "London",
+            "eval_listing_id": "ho4-018-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£4,296/month",
+            "price_raw": 4296,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-018-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5240 Upland Quay, Ravenstone Bay, London V1 3AB",
+            "area_normalized": "Ravenstone Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Ravenstone Bay",
+            "city": "London",
+            "eval_listing_id": "ho4-018-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£4,364/month",
+            "price_raw": 4364,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-018-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5241 Upland Quay, Ravenstone Bay, London V1 3AB",
+            "area_normalized": "Ravenstone Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 2,
+            "borough": "Ravenstone Bay",
+            "city": "London",
+            "eval_listing_id": "ho4-018-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£20,433/month",
+            "price_raw": 20433,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-018-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5242 Upland Quay, Ravenstone Bay, London V1 3AB",
+            "area_normalized": "Ravenstone Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Ravenstone Bay",
+            "city": "London",
+            "eval_listing_id": "ho4-018-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£22,733/month",
+            "price_raw": 22733,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-018-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5243 Upland Quay, Zircon Place, London V1 3AB",
+            "area_normalized": "Zircon Place",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Zircon Place",
+            "city": "London",
+            "eval_listing_id": "ho4-018-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£25,033/month",
+            "price_raw": 25033,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-018-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5234 Upland Quay, Ravenstone Bay, London V1 3AB",
+            "area_normalized": "Ravenstone Bay",
+            "available_from": "2026-11-22",
+            "available_from_normalized": "2026-11-22",
+            "bedrooms": 1,
+            "borough": "Ravenstone Bay",
+            "city": "London",
+            "eval_listing_id": "ho4-018-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£27,333/month",
+            "price_raw": 27333,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-018-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5235 Upland Quay, Ravenstone Bay, London V1 3AB",
+            "area_normalized": "Ravenstone Bay",
+            "available_from": "2026-10-25",
+            "available_from_normalized": "2026-10-25",
+            "bedrooms": 1,
+            "borough": "Ravenstone Bay",
+            "city": "London",
+            "eval_listing_id": "ho4-018-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 3",
+            "price": "£29,633/month",
+            "price_raw": 29633,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-018-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Ravenstone Bay",
+          "bedrooms": 1,
+          "commute_destination": "Canary Wharf",
+          "max_budget": 4333,
+          "max_commute_time": 27,
+          "move_in_date": "2026-10-25",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Ravenstone Bay.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-a",
+        "duration_minutes": 25,
+        "from_address": "5239 Upland Quay, Ravenstone Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho4-018-a",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-b",
+        "duration_minutes": 36,
+        "from_address": "5240 Upland Quay, Ravenstone Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho4-018-b",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-c",
+        "duration_minutes": 36,
+        "from_address": "5241 Upland Quay, Ravenstone Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho4-018-c",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-d",
+        "duration_minutes": 36,
+        "from_address": "5242 Upland Quay, Ravenstone Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho4-018-d",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-e",
+        "duration_minutes": 36,
+        "from_address": "5243 Upland Quay, Zircon Place, London V1 3AB",
+        "origin_eval_listing_id": "ho4-018-e",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-f",
+        "duration_minutes": 36,
+        "from_address": "5234 Upland Quay, Ravenstone Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho4-018-f",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-018-g",
+        "duration_minutes": 36,
+        "from_address": "5235 Upland Quay, Ravenstone Bay, London V1 3AB",
+        "origin_eval_listing_id": "ho4-018-g",
+        "to_address": "Canary Wharf"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5616 Nimbus Quay, Quartz End, London V3 8AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-047-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£4,963/month",
+            "price_raw": 4963,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-047-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-047-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5617 Nimbus Quay, Quartz End, London V3 8AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-047-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£5,031/month",
+            "price_raw": 5031,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-047-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-047-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5618 Nimbus Quay, Quartz End, London V3 8AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 2,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-047-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£21,100/month",
+            "price_raw": 21100,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-047-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-047-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5619 Nimbus Quay, Quartz End, London V3 8AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-047-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£23,400/month",
+            "price_raw": 23400,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-047-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-047-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5620 Nimbus Quay, Yellowbrick Row, London V3 8AB",
+            "area_normalized": "Yellowbrick Row",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Yellowbrick Row",
+            "city": "London",
+            "eval_listing_id": "ho4-047-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£25,700/month",
+            "price_raw": 25700,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-047-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-047-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5611 Nimbus Quay, Quartz End, London V3 8AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-11-29",
+            "available_from_normalized": "2026-11-29",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-047-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£28,000/month",
+            "price_raw": 28000,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-047-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-047-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5612 Nimbus Quay, Quartz End, London V3 8AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-11-01",
+            "available_from_normalized": "2026-11-01",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-047-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 8",
+            "price": "£30,300/month",
+            "price_raw": 30300,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-047-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-047-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Quartz End",
+          "bedrooms": 1,
+          "max_budget": 5000,
+          "move_in_date": "2026-11-01",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Quartz End.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

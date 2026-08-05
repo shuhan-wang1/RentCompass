@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5577 Windrow Quay, Nova Heath, London V9 5AB",
+            "area_normalized": "Nova Heath",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nova Heath",
+            "city": "London",
+            "eval_listing_id": "ho4-044-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£4,894/month",
+            "price_raw": 4894,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-044-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-044-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5578 Windrow Quay, Nova Heath, London V9 5AB",
+            "area_normalized": "Nova Heath",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nova Heath",
+            "city": "London",
+            "eval_listing_id": "ho4-044-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£4,962/month",
+            "price_raw": 4962,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-044-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-044-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5579 Windrow Quay, Nova Heath, London V9 5AB",
+            "area_normalized": "Nova Heath",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 2,
+            "borough": "Nova Heath",
+            "city": "London",
+            "eval_listing_id": "ho4-044-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£21,031/month",
+            "price_raw": 21031,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-044-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-044-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5580 Windrow Quay, Nova Heath, London V9 5AB",
+            "area_normalized": "Nova Heath",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nova Heath",
+            "city": "London",
+            "eval_listing_id": "ho4-044-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£23,331/month",
+            "price_raw": 23331,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-044-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-044-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5581 Windrow Quay, Verdant Lock, London V9 5AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-044-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£25,631/month",
+            "price_raw": 25631,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-044-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-044-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5572 Windrow Quay, Nova Heath, London V9 5AB",
+            "area_normalized": "Nova Heath",
+            "available_from": "2026-11-20",
+            "available_from_normalized": "2026-11-20",
+            "bedrooms": 1,
+            "borough": "Nova Heath",
+            "city": "London",
+            "eval_listing_id": "ho4-044-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£27,931/month",
+            "price_raw": 27931,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-044-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-044-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5573 Windrow Quay, Nova Heath, London V9 5AB",
+            "area_normalized": "Nova Heath",
+            "available_from": "2026-10-23",
+            "available_from_normalized": "2026-10-23",
+            "bedrooms": 1,
+            "borough": "Nova Heath",
+            "city": "London",
+            "eval_listing_id": "ho4-044-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 5",
+            "price": "£30,231/month",
+            "price_raw": 30231,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-044-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-044-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Nova Heath",
+          "bedrooms": 1,
+          "max_budget": 4931,
+          "move_in_date": "2026-10-23",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Nova Heath.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5304 Nimbus Quay, Wrenford, London V6 8AB",
+            "area_normalized": "Wrenford",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Wrenford",
+            "city": "London",
+            "eval_listing_id": "ho4-023-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£4,411/month",
+            "price_raw": 4411,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-023-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5305 Nimbus Quay, Wrenford, London V6 8AB",
+            "area_normalized": "Wrenford",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Wrenford",
+            "city": "London",
+            "eval_listing_id": "ho4-023-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£4,479/month",
+            "price_raw": 4479,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-023-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5306 Nimbus Quay, Wrenford, London V6 8AB",
+            "area_normalized": "Wrenford",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 2,
+            "borough": "Wrenford",
+            "city": "London",
+            "eval_listing_id": "ho4-023-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£20,548/month",
+            "price_raw": 20548,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-023-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5307 Nimbus Quay, Wrenford, London V6 8AB",
+            "area_normalized": "Wrenford",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Wrenford",
+            "city": "London",
+            "eval_listing_id": "ho4-023-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£22,848/month",
+            "price_raw": 22848,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-023-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5308 Nimbus Quay, Aquila Reach, London V6 8AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-023-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£25,148/month",
+            "price_raw": 25148,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-023-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5299 Nimbus Quay, Wrenford, London V6 8AB",
+            "area_normalized": "Wrenford",
+            "available_from": "2026-12-07",
+            "available_from_normalized": "2026-12-07",
+            "bedrooms": 1,
+            "borough": "Wrenford",
+            "city": "London",
+            "eval_listing_id": "ho4-023-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£27,448/month",
+            "price_raw": 27448,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-023-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5300 Nimbus Quay, Wrenford, London V6 8AB",
+            "area_normalized": "Wrenford",
+            "available_from": "2026-11-09",
+            "available_from_normalized": "2026-11-09",
+            "bedrooms": 1,
+            "borough": "Wrenford",
+            "city": "London",
+            "eval_listing_id": "ho4-023-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 8",
+            "price": "£29,748/month",
+            "price_raw": 29748,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-023-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Wrenford",
+          "bedrooms": 1,
+          "commute_destination": "Liverpool Street",
+          "max_budget": 4448,
+          "max_commute_time": 32,
+          "move_in_date": "2026-11-09",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Wrenford.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-a",
+        "duration_minutes": 30,
+        "from_address": "5304 Nimbus Quay, Wrenford, London V6 8AB",
+        "origin_eval_listing_id": "ho4-023-a",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-b",
+        "duration_minutes": 41,
+        "from_address": "5305 Nimbus Quay, Wrenford, London V6 8AB",
+        "origin_eval_listing_id": "ho4-023-b",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-c",
+        "duration_minutes": 41,
+        "from_address": "5306 Nimbus Quay, Wrenford, London V6 8AB",
+        "origin_eval_listing_id": "ho4-023-c",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-d",
+        "duration_minutes": 41,
+        "from_address": "5307 Nimbus Quay, Wrenford, London V6 8AB",
+        "origin_eval_listing_id": "ho4-023-d",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-e",
+        "duration_minutes": 41,
+        "from_address": "5308 Nimbus Quay, Aquila Reach, London V6 8AB",
+        "origin_eval_listing_id": "ho4-023-e",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-f",
+        "duration_minutes": 41,
+        "from_address": "5299 Nimbus Quay, Wrenford, London V6 8AB",
+        "origin_eval_listing_id": "ho4-023-f",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-023-g",
+        "duration_minutes": 41,
+        "from_address": "5300 Nimbus Quay, Wrenford, London V6 8AB",
+        "origin_eval_listing_id": "ho4-023-g",
+        "to_address": "Liverpool Street"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

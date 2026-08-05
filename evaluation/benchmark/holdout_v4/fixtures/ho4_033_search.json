@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5434 Yew Quay, Cinnabar Wharf, London V7 2AB",
+            "area_normalized": "Cinnabar Wharf",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cinnabar Wharf",
+            "city": "London",
+            "eval_listing_id": "ho4-033-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£4,641/month",
+            "price_raw": 4641,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-033-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-033-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5435 Yew Quay, Cinnabar Wharf, London V7 2AB",
+            "area_normalized": "Cinnabar Wharf",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cinnabar Wharf",
+            "city": "London",
+            "eval_listing_id": "ho4-033-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£4,709/month",
+            "price_raw": 4709,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-033-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-033-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5436 Yew Quay, Cinnabar Wharf, London V7 2AB",
+            "area_normalized": "Cinnabar Wharf",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 2,
+            "borough": "Cinnabar Wharf",
+            "city": "London",
+            "eval_listing_id": "ho4-033-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£20,778/month",
+            "price_raw": 20778,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-033-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-033-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5437 Yew Quay, Cinnabar Wharf, London V7 2AB",
+            "area_normalized": "Cinnabar Wharf",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cinnabar Wharf",
+            "city": "London",
+            "eval_listing_id": "ho4-033-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£23,078/month",
+            "price_raw": 23078,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-033-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-033-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5438 Yew Quay, Kyanite Fields, London V7 2AB",
+            "area_normalized": "Kyanite Fields",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Kyanite Fields",
+            "city": "London",
+            "eval_listing_id": "ho4-033-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£25,378/month",
+            "price_raw": 25378,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-033-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-033-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5429 Yew Quay, Cinnabar Wharf, London V7 2AB",
+            "area_normalized": "Cinnabar Wharf",
+            "available_from": "2026-10-18",
+            "available_from_normalized": "2026-10-18",
+            "bedrooms": 1,
+            "borough": "Cinnabar Wharf",
+            "city": "London",
+            "eval_listing_id": "ho4-033-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£27,678/month",
+            "price_raw": 27678,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-033-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-033-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5430 Yew Quay, Cinnabar Wharf, London V7 2AB",
+            "area_normalized": "Cinnabar Wharf",
+            "available_from": "2026-09-20",
+            "available_from_normalized": "2026-09-20",
+            "bedrooms": 1,
+            "borough": "Cinnabar Wharf",
+            "city": "London",
+            "eval_listing_id": "ho4-033-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V7",
+            "postcode_sector": "V7 2",
+            "price": "£29,978/month",
+            "price_raw": 29978,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-033-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-033-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Cinnabar Wharf",
+          "bedrooms": 1,
+          "max_budget": 4678,
+          "move_in_date": "2026-09-20",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Cinnabar Wharf.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

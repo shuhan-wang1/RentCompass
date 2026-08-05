@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5226 Tamarind Quay, Quartz End, London V9 2AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-017-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£4,273/month",
+            "price_raw": 4273,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-017-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5227 Tamarind Quay, Quartz End, London V9 2AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-017-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£4,341/month",
+            "price_raw": 4341,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-017-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5228 Tamarind Quay, Quartz End, London V9 2AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 2,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-017-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£20,410/month",
+            "price_raw": 20410,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-017-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5229 Tamarind Quay, Quartz End, London V9 2AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-017-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£22,710/month",
+            "price_raw": 22710,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-017-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5230 Tamarind Quay, Yellowbrick Row, London V9 2AB",
+            "area_normalized": "Yellowbrick Row",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Yellowbrick Row",
+            "city": "London",
+            "eval_listing_id": "ho4-017-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£25,010/month",
+            "price_raw": 25010,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-017-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5221 Tamarind Quay, Quartz End, London V9 2AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-11-19",
+            "available_from_normalized": "2026-11-19",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-017-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£27,310/month",
+            "price_raw": 27310,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-017-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5222 Tamarind Quay, Quartz End, London V9 2AB",
+            "area_normalized": "Quartz End",
+            "available_from": "2026-10-22",
+            "available_from_normalized": "2026-10-22",
+            "bedrooms": 1,
+            "borough": "Quartz End",
+            "city": "London",
+            "eval_listing_id": "ho4-017-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V9",
+            "postcode_sector": "V9 2",
+            "price": "£29,610/month",
+            "price_raw": 29610,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-017-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Quartz End",
+          "bedrooms": 1,
+          "commute_destination": "Paddington",
+          "max_budget": 4310,
+          "max_commute_time": 26,
+          "move_in_date": "2026-10-22",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Quartz End.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-a",
+        "duration_minutes": 24,
+        "from_address": "5226 Tamarind Quay, Quartz End, London V9 2AB",
+        "origin_eval_listing_id": "ho4-017-a",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-b",
+        "duration_minutes": 35,
+        "from_address": "5227 Tamarind Quay, Quartz End, London V9 2AB",
+        "origin_eval_listing_id": "ho4-017-b",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-c",
+        "duration_minutes": 35,
+        "from_address": "5228 Tamarind Quay, Quartz End, London V9 2AB",
+        "origin_eval_listing_id": "ho4-017-c",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-d",
+        "duration_minutes": 35,
+        "from_address": "5229 Tamarind Quay, Quartz End, London V9 2AB",
+        "origin_eval_listing_id": "ho4-017-d",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-e",
+        "duration_minutes": 35,
+        "from_address": "5230 Tamarind Quay, Yellowbrick Row, London V9 2AB",
+        "origin_eval_listing_id": "ho4-017-e",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-f",
+        "duration_minutes": 35,
+        "from_address": "5221 Tamarind Quay, Quartz End, London V9 2AB",
+        "origin_eval_listing_id": "ho4-017-f",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-017-g",
+        "duration_minutes": 35,
+        "from_address": "5222 Tamarind Quay, Quartz End, London V9 2AB",
+        "origin_eval_listing_id": "ho4-017-g",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

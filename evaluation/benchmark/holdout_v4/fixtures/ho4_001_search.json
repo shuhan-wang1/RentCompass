@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5018 Plover Quay, Aquila Reach, London V2 2AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-001-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£3,905/month",
+            "price_raw": 3905,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-001-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5019 Plover Quay, Aquila Reach, London V2 2AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-001-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£3,973/month",
+            "price_raw": 3973,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-001-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5020 Plover Quay, Aquila Reach, London V2 2AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 2,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-001-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£20,042/month",
+            "price_raw": 20042,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-001-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5021 Plover Quay, Aquila Reach, London V2 2AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-001-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£22,342/month",
+            "price_raw": 22342,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-001-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5022 Plover Quay, Ironwood Green, London V2 2AB",
+            "area_normalized": "Ironwood Green",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Ironwood Green",
+            "city": "London",
+            "eval_listing_id": "ho4-001-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£24,642/month",
+            "price_raw": 24642,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-001-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5013 Plover Quay, Aquila Reach, London V2 2AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-10-02",
+            "available_from_normalized": "2026-10-02",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-001-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£26,942/month",
+            "price_raw": 26942,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-001-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5014 Plover Quay, Aquila Reach, London V2 2AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-04",
+            "available_from_normalized": "2026-09-04",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-001-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 2",
+            "price": "£29,242/month",
+            "price_raw": 29242,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-001-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Aquila Reach",
+          "bedrooms": 1,
+          "commute_destination": "Waterloo",
+          "max_budget": 3942,
+          "max_commute_time": 26,
+          "move_in_date": "2026-09-04",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Aquila Reach.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-a",
+        "duration_minutes": 24,
+        "from_address": "5018 Plover Quay, Aquila Reach, London V2 2AB",
+        "origin_eval_listing_id": "ho4-001-a",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-b",
+        "duration_minutes": 35,
+        "from_address": "5019 Plover Quay, Aquila Reach, London V2 2AB",
+        "origin_eval_listing_id": "ho4-001-b",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-c",
+        "duration_minutes": 35,
+        "from_address": "5020 Plover Quay, Aquila Reach, London V2 2AB",
+        "origin_eval_listing_id": "ho4-001-c",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-d",
+        "duration_minutes": 35,
+        "from_address": "5021 Plover Quay, Aquila Reach, London V2 2AB",
+        "origin_eval_listing_id": "ho4-001-d",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-e",
+        "duration_minutes": 35,
+        "from_address": "5022 Plover Quay, Ironwood Green, London V2 2AB",
+        "origin_eval_listing_id": "ho4-001-e",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-f",
+        "duration_minutes": 35,
+        "from_address": "5013 Plover Quay, Aquila Reach, London V2 2AB",
+        "origin_eval_listing_id": "ho4-001-f",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-001-g",
+        "duration_minutes": 35,
+        "from_address": "5014 Plover Quay, Aquila Reach, London V2 2AB",
+        "origin_eval_listing_id": "ho4-001-g",
+        "to_address": "Waterloo"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

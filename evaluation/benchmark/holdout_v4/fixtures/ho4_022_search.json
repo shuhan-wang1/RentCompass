@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5291 Zinnia Quay, Verdant Lock, London V5 7AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-022-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£4,388/month",
+            "price_raw": 4388,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-022-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5292 Zinnia Quay, Verdant Lock, London V5 7AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-022-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£4,456/month",
+            "price_raw": 4456,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-022-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5293 Zinnia Quay, Verdant Lock, London V5 7AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 2,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-022-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£20,544/month",
+            "price_raw": 20544,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-022-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5294 Zinnia Quay, Verdant Lock, London V5 7AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-022-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£22,825/month",
+            "price_raw": 22825,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-022-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5295 Zinnia Quay, Daybreak Common, London V5 7AB",
+            "area_normalized": "Daybreak Common",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Daybreak Common",
+            "city": "London",
+            "eval_listing_id": "ho4-022-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£25,125/month",
+            "price_raw": 25125,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-022-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5286 Zinnia Quay, Verdant Lock, London V5 7AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-12-04",
+            "available_from_normalized": "2026-12-04",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-022-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£27,425/month",
+            "price_raw": 27425,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-022-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5287 Zinnia Quay, Verdant Lock, London V5 7AB",
+            "area_normalized": "Verdant Lock",
+            "available_from": "2026-11-06",
+            "available_from_normalized": "2026-11-06",
+            "bedrooms": 1,
+            "borough": "Verdant Lock",
+            "city": "London",
+            "eval_listing_id": "ho4-022-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 7",
+            "price": "£29,725/month",
+            "price_raw": 29725,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-022-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Verdant Lock",
+          "bedrooms": 1,
+          "commute_destination": "Moorgate",
+          "max_budget": 4425,
+          "max_commute_time": 31,
+          "move_in_date": "2026-11-06",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Verdant Lock.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-a",
+        "duration_minutes": 29,
+        "from_address": "5291 Zinnia Quay, Verdant Lock, London V5 7AB",
+        "origin_eval_listing_id": "ho4-022-a",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-b",
+        "duration_minutes": 40,
+        "from_address": "5292 Zinnia Quay, Verdant Lock, London V5 7AB",
+        "origin_eval_listing_id": "ho4-022-b",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-c",
+        "duration_minutes": 40,
+        "from_address": "5293 Zinnia Quay, Verdant Lock, London V5 7AB",
+        "origin_eval_listing_id": "ho4-022-c",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-d",
+        "duration_minutes": 40,
+        "from_address": "5294 Zinnia Quay, Verdant Lock, London V5 7AB",
+        "origin_eval_listing_id": "ho4-022-d",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-e",
+        "duration_minutes": 40,
+        "from_address": "5295 Zinnia Quay, Daybreak Common, London V5 7AB",
+        "origin_eval_listing_id": "ho4-022-e",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-f",
+        "duration_minutes": 40,
+        "from_address": "5286 Zinnia Quay, Verdant Lock, London V5 7AB",
+        "origin_eval_listing_id": "ho4-022-f",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-022-g",
+        "duration_minutes": 40,
+        "from_address": "5287 Zinnia Quay, Verdant Lock, London V5 7AB",
+        "origin_eval_listing_id": "ho4-022-g",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

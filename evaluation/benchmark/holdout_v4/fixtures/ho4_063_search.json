@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Cinnabar Wharf",
+      "bedrooms": 1,
+      "max_budget": 5368,
+      "move_in_date": "2026-09-30",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Cinnabar Wharf.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

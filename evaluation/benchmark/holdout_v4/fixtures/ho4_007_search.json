@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5096 Vesper Quay, Galena Rise, London V8 8AB",
+            "area_normalized": "Galena Rise",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Galena Rise",
+            "city": "London",
+            "eval_listing_id": "ho4-007-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£4,043/month",
+            "price_raw": 4043,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-007-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5097 Vesper Quay, Galena Rise, London V8 8AB",
+            "area_normalized": "Galena Rise",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Galena Rise",
+            "city": "London",
+            "eval_listing_id": "ho4-007-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£4,111/month",
+            "price_raw": 4111,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-007-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5098 Vesper Quay, Galena Rise, London V8 8AB",
+            "area_normalized": "Galena Rise",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 2,
+            "borough": "Galena Rise",
+            "city": "London",
+            "eval_listing_id": "ho4-007-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£20,180/month",
+            "price_raw": 20180,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-007-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5099 Vesper Quay, Galena Rise, London V8 8AB",
+            "area_normalized": "Galena Rise",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Galena Rise",
+            "city": "London",
+            "eval_listing_id": "ho4-007-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£22,499/month",
+            "price_raw": 22499,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-007-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5100 Vesper Quay, Onyx Terrace, London V8 8AB",
+            "area_normalized": "Onyx Terrace",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Onyx Terrace",
+            "city": "London",
+            "eval_listing_id": "ho4-007-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£24,780/month",
+            "price_raw": 24780,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-007-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5091 Vesper Quay, Galena Rise, London V8 8AB",
+            "area_normalized": "Galena Rise",
+            "available_from": "2026-10-20",
+            "available_from_normalized": "2026-10-20",
+            "bedrooms": 1,
+            "borough": "Galena Rise",
+            "city": "London",
+            "eval_listing_id": "ho4-007-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£27,080/month",
+            "price_raw": 27080,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-007-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5092 Vesper Quay, Galena Rise, London V8 8AB",
+            "area_normalized": "Galena Rise",
+            "available_from": "2026-09-22",
+            "available_from_normalized": "2026-09-22",
+            "bedrooms": 1,
+            "borough": "Galena Rise",
+            "city": "London",
+            "eval_listing_id": "ho4-007-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V8",
+            "postcode_sector": "V8 8",
+            "price": "£29,380/month",
+            "price_raw": 29380,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-007-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Galena Rise",
+          "bedrooms": 1,
+          "commute_destination": "Paddington",
+          "max_budget": 4080,
+          "max_commute_time": 32,
+          "move_in_date": "2026-09-22",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Galena Rise.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-a",
+        "duration_minutes": 30,
+        "from_address": "5096 Vesper Quay, Galena Rise, London V8 8AB",
+        "origin_eval_listing_id": "ho4-007-a",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-b",
+        "duration_minutes": 41,
+        "from_address": "5097 Vesper Quay, Galena Rise, London V8 8AB",
+        "origin_eval_listing_id": "ho4-007-b",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-c",
+        "duration_minutes": 41,
+        "from_address": "5098 Vesper Quay, Galena Rise, London V8 8AB",
+        "origin_eval_listing_id": "ho4-007-c",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-d",
+        "duration_minutes": 41,
+        "from_address": "5099 Vesper Quay, Galena Rise, London V8 8AB",
+        "origin_eval_listing_id": "ho4-007-d",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-e",
+        "duration_minutes": 41,
+        "from_address": "5100 Vesper Quay, Onyx Terrace, London V8 8AB",
+        "origin_eval_listing_id": "ho4-007-e",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-f",
+        "duration_minutes": 41,
+        "from_address": "5091 Vesper Quay, Galena Rise, London V8 8AB",
+        "origin_eval_listing_id": "ho4-007-f",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-007-g",
+        "duration_minutes": 41,
+        "from_address": "5092 Vesper Quay, Galena Rise, London V8 8AB",
+        "origin_eval_listing_id": "ho4-007-g",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

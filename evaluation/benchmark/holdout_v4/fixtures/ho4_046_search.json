@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5603 Zinnia Quay, Pearlwick, London V2 7AB",
+            "area_normalized": "Pearlwick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Pearlwick",
+            "city": "London",
+            "eval_listing_id": "ho4-046-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£4,940/month",
+            "price_raw": 4940,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-046-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-046-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5604 Zinnia Quay, Pearlwick, London V2 7AB",
+            "area_normalized": "Pearlwick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Pearlwick",
+            "city": "London",
+            "eval_listing_id": "ho4-046-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£5,008/month",
+            "price_raw": 5008,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-046-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-046-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5605 Zinnia Quay, Pearlwick, London V2 7AB",
+            "area_normalized": "Pearlwick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 2,
+            "borough": "Pearlwick",
+            "city": "London",
+            "eval_listing_id": "ho4-046-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£21,077/month",
+            "price_raw": 21077,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-046-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-046-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5606 Zinnia Quay, Pearlwick, London V2 7AB",
+            "area_normalized": "Pearlwick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Pearlwick",
+            "city": "London",
+            "eval_listing_id": "ho4-046-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£23,377/month",
+            "price_raw": 23377,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-046-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-046-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5607 Zinnia Quay, Xylo Court, London V2 7AB",
+            "area_normalized": "Xylo Court",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Xylo Court",
+            "city": "London",
+            "eval_listing_id": "ho4-046-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£25,677/month",
+            "price_raw": 25677,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-046-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-046-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5598 Zinnia Quay, Pearlwick, London V2 7AB",
+            "area_normalized": "Pearlwick",
+            "available_from": "2026-11-26",
+            "available_from_normalized": "2026-11-26",
+            "bedrooms": 1,
+            "borough": "Pearlwick",
+            "city": "London",
+            "eval_listing_id": "ho4-046-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£27,977/month",
+            "price_raw": 27977,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-046-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-046-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5599 Zinnia Quay, Pearlwick, London V2 7AB",
+            "area_normalized": "Pearlwick",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Pearlwick",
+            "city": "London",
+            "eval_listing_id": "ho4-046-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 7",
+            "price": "£30,277/month",
+            "price_raw": 30277,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-046-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-046-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Pearlwick",
+          "bedrooms": 1,
+          "max_budget": 4977,
+          "move_in_date": "2026-10-29",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Pearlwick.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

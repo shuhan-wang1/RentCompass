@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5408 Vesper Quay, Aquila Reach, London V5 8AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-031-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£4,595/month",
+            "price_raw": 4595,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-031-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-031-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5409 Vesper Quay, Aquila Reach, London V5 8AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-031-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£4,663/month",
+            "price_raw": 4663,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-031-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-031-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5410 Vesper Quay, Aquila Reach, London V5 8AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 2,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-031-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£20,732/month",
+            "price_raw": 20732,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-031-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-031-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5411 Vesper Quay, Aquila Reach, London V5 8AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-031-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£23,032/month",
+            "price_raw": 23032,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-031-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-031-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5412 Vesper Quay, Ironwood Green, London V5 8AB",
+            "area_normalized": "Ironwood Green",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Ironwood Green",
+            "city": "London",
+            "eval_listing_id": "ho4-031-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£25,332/month",
+            "price_raw": 25332,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-031-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-031-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5403 Vesper Quay, Aquila Reach, London V5 8AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-10-12",
+            "available_from_normalized": "2026-10-12",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-031-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£27,632/month",
+            "price_raw": 27632,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-031-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-031-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5404 Vesper Quay, Aquila Reach, London V5 8AB",
+            "area_normalized": "Aquila Reach",
+            "available_from": "2026-09-14",
+            "available_from_normalized": "2026-09-14",
+            "bedrooms": 1,
+            "borough": "Aquila Reach",
+            "city": "London",
+            "eval_listing_id": "ho4-031-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V5",
+            "postcode_sector": "V5 8",
+            "price": "£29,932/month",
+            "price_raw": 29932,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-031-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-031-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Aquila Reach",
+          "bedrooms": 1,
+          "max_budget": 4632,
+          "move_in_date": "2026-09-14",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Aquila Reach.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

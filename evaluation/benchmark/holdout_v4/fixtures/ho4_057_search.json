@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5746 Yew Quay, Ashen Brook, London V4 2AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-057-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£5,193/month",
+            "price_raw": 5193,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-057-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-057-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5747 Yew Quay, Ashen Brook, London V4 2AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-057-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£5,261/month",
+            "price_raw": 5261,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-057-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-057-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5748 Yew Quay, Ashen Brook, London V4 2AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 2,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-057-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£21,330/month",
+            "price_raw": 21330,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-057-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-057-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5749 Yew Quay, Ashen Brook, London V4 2AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-057-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£23,630/month",
+            "price_raw": 23630,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-057-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-057-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5750 Yew Quay, Eclipse Park, London V4 2AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-057-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£25,930/month",
+            "price_raw": 25930,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-057-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-057-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5741 Yew Quay, Ashen Brook, London V4 2AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-10-10",
+            "available_from_normalized": "2026-10-10",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-057-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£28,230/month",
+            "price_raw": 28230,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-057-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-057-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5742 Yew Quay, Ashen Brook, London V4 2AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-12",
+            "available_from_normalized": "2026-09-12",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-057-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V4",
+            "postcode_sector": "V4 2",
+            "price": "£30,530/month",
+            "price_raw": 30530,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-057-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-057-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Ashen Brook",
+          "bedrooms": 1,
+          "max_budget": 5230,
+          "move_in_date": "2026-09-12",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Ashen Brook.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

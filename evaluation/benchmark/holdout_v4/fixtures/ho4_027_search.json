@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5356 Rill Quay, Ashen Brook, London V1 4AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-027-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 4",
+            "price": "£4,503/month",
+            "price_raw": 4503,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-027-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5357 Rill Quay, Ashen Brook, London V1 4AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-027-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 4",
+            "price": "£4,571/month",
+            "price_raw": 4571,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-027-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5358 Rill Quay, Ashen Brook, London V1 4AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 2,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-027-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 4",
+            "price": "£20,640/month",
+            "price_raw": 20640,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-027-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5359 Rill Quay, Ashen Brook, London V1 4AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-027-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 4",
+            "price": "£22,940/month",
+            "price_raw": 22940,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-027-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5360 Rill Quay, Eclipse Park, London V1 4AB",
+            "area_normalized": "Eclipse Park",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Eclipse Park",
+            "city": "London",
+            "eval_listing_id": "ho4-027-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 4",
+            "price": "£25,240/month",
+            "price_raw": 25240,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-027-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5351 Rill Quay, Ashen Brook, London V1 4AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-30",
+            "available_from_normalized": "2026-09-30",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-027-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 4",
+            "price": "£27,540/month",
+            "price_raw": 27540,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-027-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5352 Rill Quay, Ashen Brook, London V1 4AB",
+            "area_normalized": "Ashen Brook",
+            "available_from": "2026-09-02",
+            "available_from_normalized": "2026-09-02",
+            "bedrooms": 1,
+            "borough": "Ashen Brook",
+            "city": "London",
+            "eval_listing_id": "ho4-027-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 4",
+            "price": "£29,840/month",
+            "price_raw": 29840,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-027-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Ashen Brook",
+          "bedrooms": 1,
+          "commute_destination": "Paddington",
+          "max_budget": 4540,
+          "max_commute_time": 36,
+          "move_in_date": "2026-09-02",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Ashen Brook.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-a",
+        "duration_minutes": 34,
+        "from_address": "5356 Rill Quay, Ashen Brook, London V1 4AB",
+        "origin_eval_listing_id": "ho4-027-a",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-b",
+        "duration_minutes": 45,
+        "from_address": "5357 Rill Quay, Ashen Brook, London V1 4AB",
+        "origin_eval_listing_id": "ho4-027-b",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-c",
+        "duration_minutes": 45,
+        "from_address": "5358 Rill Quay, Ashen Brook, London V1 4AB",
+        "origin_eval_listing_id": "ho4-027-c",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-d",
+        "duration_minutes": 45,
+        "from_address": "5359 Rill Quay, Ashen Brook, London V1 4AB",
+        "origin_eval_listing_id": "ho4-027-d",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-e",
+        "duration_minutes": 45,
+        "from_address": "5360 Rill Quay, Eclipse Park, London V1 4AB",
+        "origin_eval_listing_id": "ho4-027-e",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-f",
+        "duration_minutes": 45,
+        "from_address": "5351 Rill Quay, Ashen Brook, London V1 4AB",
+        "origin_eval_listing_id": "ho4-027-f",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-027-g",
+        "duration_minutes": 45,
+        "from_address": "5352 Rill Quay, Ashen Brook, London V1 4AB",
+        "origin_eval_listing_id": "ho4-027-g",
+        "to_address": "Paddington"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

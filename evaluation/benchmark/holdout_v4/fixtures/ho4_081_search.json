@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Ultramarine Hill",
+      "bedrooms": 1,
+      "max_budget": 5782,
+      "move_in_date": "2026-09-04",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Ultramarine Hill.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

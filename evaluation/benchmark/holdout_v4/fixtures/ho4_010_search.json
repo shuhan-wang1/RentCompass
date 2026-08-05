@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5135 Zinnia Quay, Jade Hollow, London V2 3AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-010-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£4,112/month",
+            "price_raw": 4112,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-010-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5136 Zinnia Quay, Jade Hollow, London V2 3AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-010-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£4,180/month",
+            "price_raw": 4180,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-010-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5137 Zinnia Quay, Jade Hollow, London V2 3AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 2,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-010-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£20,249/month",
+            "price_raw": 20249,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-010-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5138 Zinnia Quay, Jade Hollow, London V2 3AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-010-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£22,549/month",
+            "price_raw": 22549,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-010-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5139 Zinnia Quay, Ravenstone Bay, London V2 3AB",
+            "area_normalized": "Ravenstone Bay",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Ravenstone Bay",
+            "city": "London",
+            "eval_listing_id": "ho4-010-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£24,849/month",
+            "price_raw": 24849,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-010-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5130 Zinnia Quay, Jade Hollow, London V2 3AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-10-29",
+            "available_from_normalized": "2026-10-29",
+            "bedrooms": 1,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-010-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£27,149/month",
+            "price_raw": 27149,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-010-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5131 Zinnia Quay, Jade Hollow, London V2 3AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-10-01",
+            "available_from_normalized": "2026-10-01",
+            "bedrooms": 1,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-010-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V2",
+            "postcode_sector": "V2 3",
+            "price": "£29,449/month",
+            "price_raw": 29449,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-010-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Jade Hollow",
+          "bedrooms": 1,
+          "commute_destination": "Euston",
+          "max_budget": 4149,
+          "max_commute_time": 35,
+          "move_in_date": "2026-10-01",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Jade Hollow.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-a",
+        "duration_minutes": 33,
+        "from_address": "5135 Zinnia Quay, Jade Hollow, London V2 3AB",
+        "origin_eval_listing_id": "ho4-010-a",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-b",
+        "duration_minutes": 44,
+        "from_address": "5136 Zinnia Quay, Jade Hollow, London V2 3AB",
+        "origin_eval_listing_id": "ho4-010-b",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-c",
+        "duration_minutes": 44,
+        "from_address": "5137 Zinnia Quay, Jade Hollow, London V2 3AB",
+        "origin_eval_listing_id": "ho4-010-c",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-d",
+        "duration_minutes": 44,
+        "from_address": "5138 Zinnia Quay, Jade Hollow, London V2 3AB",
+        "origin_eval_listing_id": "ho4-010-d",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-e",
+        "duration_minutes": 44,
+        "from_address": "5139 Zinnia Quay, Ravenstone Bay, London V2 3AB",
+        "origin_eval_listing_id": "ho4-010-e",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-f",
+        "duration_minutes": 44,
+        "from_address": "5130 Zinnia Quay, Jade Hollow, London V2 3AB",
+        "origin_eval_listing_id": "ho4-010-f",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-010-g",
+        "duration_minutes": 44,
+        "from_address": "5131 Zinnia Quay, Jade Hollow, London V2 3AB",
+        "origin_eval_listing_id": "ho4-010-g",
+        "to_address": "Euston"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

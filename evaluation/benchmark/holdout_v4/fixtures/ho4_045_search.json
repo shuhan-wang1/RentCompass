@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5590 Yew Quay, Onyx Terrace, London V1 6AB",
+            "area_normalized": "Onyx Terrace",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Onyx Terrace",
+            "city": "London",
+            "eval_listing_id": "ho4-045-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£4,917/month",
+            "price_raw": 4917,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-045-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-045-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5591 Yew Quay, Onyx Terrace, London V1 6AB",
+            "area_normalized": "Onyx Terrace",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Onyx Terrace",
+            "city": "London",
+            "eval_listing_id": "ho4-045-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£4,985/month",
+            "price_raw": 4985,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-045-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-045-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5592 Yew Quay, Onyx Terrace, London V1 6AB",
+            "area_normalized": "Onyx Terrace",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 2,
+            "borough": "Onyx Terrace",
+            "city": "London",
+            "eval_listing_id": "ho4-045-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£21,054/month",
+            "price_raw": 21054,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-045-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-045-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5593 Yew Quay, Onyx Terrace, London V1 6AB",
+            "area_normalized": "Onyx Terrace",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Onyx Terrace",
+            "city": "London",
+            "eval_listing_id": "ho4-045-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£23,354/month",
+            "price_raw": 23354,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-045-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-045-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5594 Yew Quay, Wrenford, London V1 6AB",
+            "area_normalized": "Wrenford",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Wrenford",
+            "city": "London",
+            "eval_listing_id": "ho4-045-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£25,654/month",
+            "price_raw": 25654,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-045-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-045-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5585 Yew Quay, Onyx Terrace, London V1 6AB",
+            "area_normalized": "Onyx Terrace",
+            "available_from": "2026-11-23",
+            "available_from_normalized": "2026-11-23",
+            "bedrooms": 1,
+            "borough": "Onyx Terrace",
+            "city": "London",
+            "eval_listing_id": "ho4-045-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£27,954/month",
+            "price_raw": 27954,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-045-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-045-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5586 Yew Quay, Onyx Terrace, London V1 6AB",
+            "area_normalized": "Onyx Terrace",
+            "available_from": "2026-10-26",
+            "available_from_normalized": "2026-10-26",
+            "bedrooms": 1,
+            "borough": "Onyx Terrace",
+            "city": "London",
+            "eval_listing_id": "ho4-045-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V1",
+            "postcode_sector": "V1 6",
+            "price": "£30,254/month",
+            "price_raw": 30254,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-045-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-045-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Onyx Terrace",
+          "bedrooms": 1,
+          "max_budget": 4954,
+          "move_in_date": "2026-10-26",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Onyx Terrace.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

@@ -39,7 +39,7 @@ STREETS = ("Nimbus", "Oriel", "Plover", "Quince", "Rill", "Sundial", "Tamarind",
 RETRIEVAL_TEMPLATES = (
     "Build me a strict shortlist of furnished 1-bedroom flats in {area}: maximum £{budget} a month and available by {move}. Exclude every near miss.",
     "I am comparing rentals in {area}. Return only furnished 1-bedroom flats priced at £{budget} a month or less and ready no later than {move}.",
-    "Search {area} on a hard filter: 1-bedroom, furnished, £{budget} a month maximum, and a move date by {move}.",
+    "Search {area} on a hard filter: a 1-bedroom flat, furnished, £{budget} a month maximum, and a move date by {move}.",
     "For this housing search I will accept just a furnished 1-bedroom flat in {area}, at most £{budget} a month, available by {move}.",
     "Please screen options strictly for a furnished 1-bedroom flat in {area}; my limit is £{budget} a month and my deadline is {move}.",
 )
@@ -236,9 +236,9 @@ def hard_case(case_no: int, *, commute: bool, no_result: bool, banned_prices: se
 
 
 def calculation_case(case_no: int) -> tuple[dict, dict]:
-    weekly = 241 + case_no * 7
+    weekly = 389 + case_no * 11
     result = round(weekly * 52 / 12, 2)
-    query = f"What is £{weekly} per week as a monthly rent using weekly × 52 ÷ 12? Please show the amount in pounds."
+    query = f"Convert a weekly rent of £{weekly} into monthly GBP with the exact formula weekly × 52 ÷ 12. What is the result?"
     case = {
         "case_id": f"HO4-{case_no:03d}", "schema_version": SCHEMA, "task_category": "calculation",
         "category": "B_money", "authored_on": "2026-08-05", "user_id": f"u_ho4_{case_no:03d}",
@@ -257,7 +257,7 @@ def calculation_case(case_no: int) -> tuple[dict, dict]:
 
 
 def memory_case(case_no: int) -> tuple[dict, dict]:
-    preference = f"my V3 preference marker {case_no}: quiet top-floor flat"
+    preference = f"my V4 preference marker {case_no}: quiet top-floor flat"
     query = f"Please remember {preference} for future searches."
     case = {
         "case_id": f"HO4-{case_no:03d}", "schema_version": SCHEMA, "task_category": "memory",
@@ -276,7 +276,7 @@ def memory_case(case_no: int) -> tuple[dict, dict]:
 
 
 def clarify_case(case_no: int) -> tuple[dict, dict]:
-    query = f"I want to rent somewhere soon, but I have not picked an area or a budget yet. Ask me the single most useful first question (request {case_no})."
+    query = f"I am beginning a rental search with neither an area nor a budget chosen. Ask one focused first question before searching (v4 clarification {case_no})."
     case = {
         "case_id": f"HO4-{case_no:03d}", "schema_version": SCHEMA, "task_category": "clarify",
         "category": "A_retrieval", "authored_on": "2026-08-05", "user_id": f"u_ho4_{case_no:03d}",

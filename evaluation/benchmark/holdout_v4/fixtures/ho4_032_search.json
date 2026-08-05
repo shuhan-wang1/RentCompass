@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5421 Windrow Quay, Beryl Grove, London V6 1AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-032-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£4,618/month",
+            "price_raw": 4618,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-032-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-032-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5422 Windrow Quay, Beryl Grove, London V6 1AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-032-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£4,686/month",
+            "price_raw": 4686,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-032-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-032-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5423 Windrow Quay, Beryl Grove, London V6 1AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 2,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-032-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£20,755/month",
+            "price_raw": 20755,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-032-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-032-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5424 Windrow Quay, Beryl Grove, London V6 1AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-032-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£23,055/month",
+            "price_raw": 23055,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-032-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-032-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5425 Windrow Quay, Jade Hollow, London V6 1AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-032-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£25,355/month",
+            "price_raw": 25355,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-032-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-032-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5416 Windrow Quay, Beryl Grove, London V6 1AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-10-15",
+            "available_from_normalized": "2026-10-15",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-032-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£27,655/month",
+            "price_raw": 27655,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-032-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-032-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5417 Windrow Quay, Beryl Grove, London V6 1AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-17",
+            "available_from_normalized": "2026-09-17",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-032-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V6",
+            "postcode_sector": "V6 1",
+            "price": "£29,955/month",
+            "price_raw": 29955,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-032-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-032-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Beryl Grove",
+          "bedrooms": 1,
+          "max_budget": 4655,
+          "move_in_date": "2026-09-17",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Beryl Grove.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

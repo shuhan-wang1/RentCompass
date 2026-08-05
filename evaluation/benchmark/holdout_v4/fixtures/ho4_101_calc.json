@@ -1,0 +1,8 @@
+{
+  "data": {
+    "monthly_rent": 6500.0,
+    "weekly_rent": 1500
+  },
+  "success": true,
+  "tool_name": "calculation_reference"
+}

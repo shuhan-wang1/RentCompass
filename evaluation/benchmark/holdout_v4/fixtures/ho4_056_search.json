@@ -1,0 +1,208 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5733 Windrow Quay, Zircon Place, London V3 1AB",
+            "area_normalized": "Zircon Place",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zircon Place",
+            "city": "London",
+            "eval_listing_id": "ho4-056-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£5,170/month",
+            "price_raw": 5170,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-056-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-056-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5734 Windrow Quay, Zircon Place, London V3 1AB",
+            "area_normalized": "Zircon Place",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zircon Place",
+            "city": "London",
+            "eval_listing_id": "ho4-056-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£5,238/month",
+            "price_raw": 5238,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-056-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-056-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5735 Windrow Quay, Zircon Place, London V3 1AB",
+            "area_normalized": "Zircon Place",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 2,
+            "borough": "Zircon Place",
+            "city": "London",
+            "eval_listing_id": "ho4-056-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£21,307/month",
+            "price_raw": 21307,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-056-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-056-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5736 Windrow Quay, Zircon Place, London V3 1AB",
+            "area_normalized": "Zircon Place",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zircon Place",
+            "city": "London",
+            "eval_listing_id": "ho4-056-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£23,607/month",
+            "price_raw": 23607,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-056-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-056-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5737 Windrow Quay, Driftwood Vale, London V3 1AB",
+            "area_normalized": "Driftwood Vale",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Driftwood Vale",
+            "city": "London",
+            "eval_listing_id": "ho4-056-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£25,907/month",
+            "price_raw": 25907,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-056-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-056-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5728 Windrow Quay, Zircon Place, London V3 1AB",
+            "area_normalized": "Zircon Place",
+            "available_from": "2026-10-07",
+            "available_from_normalized": "2026-10-07",
+            "bedrooms": 1,
+            "borough": "Zircon Place",
+            "city": "London",
+            "eval_listing_id": "ho4-056-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£28,207/month",
+            "price_raw": 28207,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-056-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-056-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5729 Windrow Quay, Zircon Place, London V3 1AB",
+            "area_normalized": "Zircon Place",
+            "available_from": "2026-09-09",
+            "available_from_normalized": "2026-09-09",
+            "bedrooms": 1,
+            "borough": "Zircon Place",
+            "city": "London",
+            "eval_listing_id": "ho4-056-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 1",
+            "price": "£30,507/month",
+            "price_raw": 30507,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-056-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-056-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Zircon Place",
+          "bedrooms": 1,
+          "max_budget": 5207,
+          "move_in_date": "2026-09-09",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Zircon Place.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    }
+  ]
+}

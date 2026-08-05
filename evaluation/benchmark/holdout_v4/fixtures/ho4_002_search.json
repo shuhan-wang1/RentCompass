@@ -1,0 +1,287 @@
+{
+  "results": [
+    {
+      "data": {
+        "recommendations": [
+          {
+            "address": "5031 Quince Quay, Beryl Grove, London V3 3AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-07",
+            "available_from_normalized": "2026-09-07",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-002-a",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 3",
+            "price": "£3,928/month",
+            "price_raw": 3928,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-002-a",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-a",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5032 Quince Quay, Beryl Grove, London V3 3AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-07",
+            "available_from_normalized": "2026-09-07",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-002-b",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 3",
+            "price": "£3,996/month",
+            "price_raw": 3996,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-002-b",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-b",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5033 Quince Quay, Beryl Grove, London V3 3AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-07",
+            "available_from_normalized": "2026-09-07",
+            "bedrooms": 2,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-002-c",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 3",
+            "price": "£20,065/month",
+            "price_raw": 20065,
+            "property_type": "Flat · 2 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-002-c",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-c",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5034 Quince Quay, Beryl Grove, London V3 3AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-07",
+            "available_from_normalized": "2026-09-07",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-002-d",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 3",
+            "price": "£22,365/month",
+            "price_raw": 22365,
+            "property_type": "House · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "house",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-002-d",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-d",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5035 Quince Quay, Jade Hollow, London V3 3AB",
+            "area_normalized": "Jade Hollow",
+            "available_from": "2026-09-07",
+            "available_from_normalized": "2026-09-07",
+            "bedrooms": 1,
+            "borough": "Jade Hollow",
+            "city": "London",
+            "eval_listing_id": "ho4-002-e",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 3",
+            "price": "£24,665/month",
+            "price_raw": 24665,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-002-e",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-e",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5026 Quince Quay, Beryl Grove, London V3 3AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-10-05",
+            "available_from_normalized": "2026-10-05",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-002-f",
+            "features": [
+              "furnished"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 3",
+            "price": "£26,965/month",
+            "price_raw": 26965,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-002-f",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-f",
+            "verified_features": [
+              "furnished"
+            ]
+          },
+          {
+            "address": "5027 Quince Quay, Beryl Grove, London V3 3AB",
+            "area_normalized": "Beryl Grove",
+            "available_from": "2026-09-07",
+            "available_from_normalized": "2026-09-07",
+            "bedrooms": 1,
+            "borough": "Beryl Grove",
+            "city": "London",
+            "eval_listing_id": "ho4-002-g",
+            "features": [
+              "garden"
+            ],
+            "postcode_district": "V3",
+            "postcode_sector": "V3 3",
+            "price": "£29,265/month",
+            "price_raw": 29265,
+            "property_type": "Flat · 1 bed",
+            "rank": 1,
+            "room_type_normalized": "flat",
+            "source": "frozen_holdout_v4",
+            "uid_token": "ho4-002-g",
+            "url": "https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-g",
+            "verified_features": [
+              "garden"
+            ]
+          }
+        ],
+        "search_criteria": {
+          "area": "Beryl Grove",
+          "bedrooms": 1,
+          "commute_destination": "Moorgate",
+          "max_budget": 3965,
+          "max_commute_time": 27,
+          "move_in_date": "2026-09-07",
+          "property_features": [
+            "furnished"
+          ],
+          "room_type": "flat"
+        },
+        "status": "found",
+        "success": true,
+        "summary": "Frozen candidates for Beryl Grove.",
+        "total_found": 7
+      },
+      "success": true,
+      "tool_name": "search_properties"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-a",
+        "duration_minutes": 25,
+        "from_address": "5031 Quince Quay, Beryl Grove, London V3 3AB",
+        "origin_eval_listing_id": "ho4-002-a",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-b",
+        "duration_minutes": 36,
+        "from_address": "5032 Quince Quay, Beryl Grove, London V3 3AB",
+        "origin_eval_listing_id": "ho4-002-b",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-c",
+        "duration_minutes": 36,
+        "from_address": "5033 Quince Quay, Beryl Grove, London V3 3AB",
+        "origin_eval_listing_id": "ho4-002-c",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-d",
+        "duration_minutes": 36,
+        "from_address": "5034 Quince Quay, Beryl Grove, London V3 3AB",
+        "origin_eval_listing_id": "ho4-002-d",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-e",
+        "duration_minutes": 36,
+        "from_address": "5035 Quince Quay, Jade Hollow, London V3 3AB",
+        "origin_eval_listing_id": "ho4-002-e",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-f",
+        "duration_minutes": 36,
+        "from_address": "5026 Quince Quay, Beryl Grove, London V3 3AB",
+        "origin_eval_listing_id": "ho4-002-f",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    },
+    {
+      "data": {
+        "candidate_key": "url:https://fixtures.rentcompass.invalid/holdout-v4/ho4-002-g",
+        "duration_minutes": 36,
+        "from_address": "5027 Quince Quay, Beryl Grove, London V3 3AB",
+        "origin_eval_listing_id": "ho4-002-g",
+        "to_address": "Moorgate"
+      },
+      "success": true,
+      "tool_name": "calculate_commute"
+    }
+  ]
+}

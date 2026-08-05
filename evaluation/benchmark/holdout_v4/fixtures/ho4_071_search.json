@@ -1,0 +1,21 @@
+{
+  "data": {
+    "recommendations": [],
+    "search_criteria": {
+      "area": "Kyanite Fields",
+      "bedrooms": 1,
+      "max_budget": 5552,
+      "move_in_date": "2026-10-24",
+      "property_features": [
+        "furnished"
+      ],
+      "room_type": "flat"
+    },
+    "status": "no_results",
+    "success": true,
+    "summary": "No exact listings in Kyanite Fields.",
+    "total_found": 0
+  },
+  "success": true,
+  "tool_name": "search_properties"
+}

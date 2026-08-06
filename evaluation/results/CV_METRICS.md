@@ -1,6 +1,8 @@
 # CV_METRICS — RentCompass Evaluation
 
-_Generated 2026-07-12T06:27:47Z, HEAD `070675d`. Every number is copied verbatim from a result file; nothing is estimated. Each rate carries its denominator._
+_Last updated 2026-08-06, HEAD `d74561b`. Every number is copied verbatim from a result file; nothing is estimated. Each rate carries its denominator._
+
+> **架构标注是必需的。** 本文件的条目分别测在两条架构上：`fc_loop`（`app/core/agent_loop.py::build_fc_graph`，**线上服务的那条**）与 `legacy`（`app/core/langgraph_agent.py`）。引用任何一条前先看它的 **Metric definition** 写的是哪条——把 legacy 上测到的数字说成"当前架构"是本文件最容易犯的错。
 
 ## 可安全使用
 
@@ -110,9 +112,51 @@ _Generated 2026-07-12T06:27:47Z, HEAD `070675d`. Every number is copied verbatim
 - **Metric definition**: Deterministic structured contracts over unique frozen listing IDs and frozen tool evidence; exact two-sided Clopper–Pearson intervals. Missing structured output remains a declared failure. No prose-only inference is used for retrieval membership.
 - **Result file**: `evaluation/results/holdout_v6_live/HOLDOUT_V6_REPORT.md`, `analysis_summary.json`, `per_case_metrics.jsonl`; benchmark freeze `evaluation/benchmark/holdout_v6/FREEZE.json`.
 - **Safe to use**: YES, only with this exact scope.
-- **Required caveat**: Synthetic fixture-replayed benchmark, not live listing freshness, production SLA, or overall answer accuracy. Three retrieval cases exposed real missing structured-output/commute-evidence defects and remain failures. The raw composite and task-completion rate are intentionally not quoted because the frozen no-result marker list produced 13 semantic false negatives; those are diagnostics pending a future evaluator fix and rerun.
+- **Required caveat**: **这一轮跑的是 `legacy` 架构，不是线上的 `fc_loop`**（`manifest.json` 的 `"arch": "legacy"`、命令行 `--arch legacy`、`AGENT_ARCH=legacy`）。契约加固同时改了两条路径，但**只有 legacy 那一份有 held-out 证据**；引用时必须写明架构，不可含糊成"RentCompass 达到…"。此外：合成 fixture 回放基准，不代表线上房源鲜度、生产 SLA 或整体答案正确率。三例检索题暴露了真实的结构化输出/通勤证据缺陷并保留为失败（已于 `d7a7702` 修复，但**未在 fc_loop 上复测**）。原始 composite 与 task-completion 刻意不引用：冻结的 no-result marker 列表产生了 13 个语义假阴性，属待修诊断项。另注：180 例中的 30 道计算题**去掉金额后只有 1 个 distinct 模板**，且由确定性模块回答；本条引用的四个数字分母（60/90/30/30）均不含这 30 例，但不要把"180 例"当卖点。
+
+### [SAFE-WITH-SCOPE] fc_loop vs legacy 架构对照（各 98 例 live，同树同日，逐例配对）
+
+- **中文 CV 表述**: 把智能体从固定路由图（legacy）重构为模型驱动的工具调用循环（fc_loop）后，在同一套 98 例基准上同日逐例配对对比：任务通过率 **34.7% → 60.2%**（34/98 → 59/98），路由准确率 **58.2% → 80.6%**（57/98 → 79/98），与证据矛盾的声明 **1 → 0**。关键在分母：新架构产出 **280** 条可核验声明（旧架构 152 条，**+84%**），在多答 84% 的前提下接地率仍从 74.3% 升至 **79.6%** —— 指标提升不是靠少答换来的。
+- **English CV statement**: Re-architecting the agent from a fixed routing graph (legacy) to a model-driven tool-calling loop (fc_loop), compared case-by-case on the same 98-case benchmark on the same day: task pass rate **34.7% → 60.2%** (34/98 → 59/98), routing accuracy **58.2% → 80.6%** (57/98 → 79/98), evidence-contradicting claims **1 → 0**. Read the denominators: the new architecture makes **280** verifiable claims against legacy's 152 (**+84%**), and its grounding rate still rises from 74.3% to **79.6%** — the gain is not bought by answering less.
+- **Raw data (num/den)**: passed fc 59/98 (60.2%) vs legacy 34/98 (34.7%); route_accuracy 79/98 (80.6%) vs 57/98 (58.2%); grounded 223/280 (79.6%) vs 113/152 (74.3%); money_grounded 135/160 (84.4%) vs 88/99 (88.9%); contradicted_claims 0 vs 1; latency p50 5,481 vs 2,672 ms, p95 24,011 vs 10,438 ms; total cost USD 0.0480 vs 0.0218; `execute_tools` node invocations 133 vs 60
+- **Metric definition**: 两臂各跑 `evaluation/benchmark/cases.jsonl` 全部 98 例，**每例 1 次**，同一棵树、同一天、同一评分器。`arch` 由 `manifest.json` 标识（`fc_loop` / `legacy`）。"可核验声明"= 评分器可判定接地与否的声明条数，即 grounded 的分母。
+- **Result file**: `.runtime/round-8793c0b-internal-2026-07-25/eval/{sweep,sweep-legacy}/summary.json`（+ `per_case.csv`、`raw_runs.jsonl`）；叙述见 `docs/HANDOFF.md` §3.9
+- **Safe to use**: YES, within the scope below
+- **Required caveat**: **每例只跑了 1 次，没有置信区间** —— 这是本条相对其它条目最大的短板，25.5pp 的差距很大但未做显著性检验；要升级成带 CI 的结论需每臂 3 次重复 + cluster bootstrap（harness `evaluation/results/_harness/ab_runner.py` 现成）。测于 commit `8793c0b`（2026-07-25），**不是当前 HEAD**。**必须主动披露 fc 更慢更贵**（p50 5,481 vs 2,672 ms，成本 $0.0480 vs $0.0218）并解释为"多做了 84% 的工作"。legacy 更高的 `money_grounded`（88.9% n=99 vs 84.4% n=160）同样是小基数效应，被问到用分母回答，不要主动引用。`.runtime/` 不在 git 里，引用前先确认该目录仍在磁盘上。
+
+### [SAFE-WITH-SCOPE] Batch packing: dimension coverage up while LLM round-trips go down (paired A/B, 192 live runs)
+
+- **中文 CV 表述**: 在 8 例多维度请求上做配对 A/B（每臂 12 次重复，共 192 次 live 请求，0 失败）：把「用户提到但模型没请求的读取」打包进同一批次后，维度覆盖率从 **138/252 (54.8%)** 升到 **204/252 (81.0%)**（配对差 **+0.229**，bootstrap 95% CI +0.038…+0.441），同时 LLM 调用数**下降** 0.45 次/回合（CI −0.94…−0.09）、工具批次数下降 0.28（CI −0.58…−0.03）。三项阴性对照全部通过。
+- **English CV statement**: A paired A/B on 8 multi-dimension requests (12 repeats per arm, 192 live runs, 0 failures) shows that packing a *cued but unrequested* read into an existing tool batch raises dimension coverage from **138/252 (54.8%)** to **204/252 (81.0%)** — paired difference **+0.229**, bootstrap 95% CI +0.038…+0.441 — while **reducing** LLM calls by 0.45 per turn (CI −0.94…−0.09) and tool batches by 0.28 (CI −0.58…−0.03). All three negative controls passed.
+- **Raw data (num/den)**: coverage 138/252 → 204/252; runs at full coverage 34/96 → 72/96; llm_calls mean 2.99 → 2.54 (−0.45, CI −0.94…−0.09); tool_batches mean 1.56 → 1.28 (−0.28, CI −0.58…−0.03); tools executed 2.67 → 3.78 (+1.11, CI +0.15…+2.30); e2e mean −5,819 ms (CI −15,248…−564) but paired **median −40 ms**, 51/96 pairs faster, p50 8,093 → 9,159, p95 66,031 → 51,752; cost_usd +0.0000 (CI −0.0001…+0.0001, **crosses 0**); tokens_in −4,180 (CI −11,135…+1,028, **crosses 0**); soft-wrapped 2/96 → 1/96 (CI **crosses 0**); 192/192 runs ok; total cost USD 0.1086
+- **Metric definition**: Paired per-case A/B on the fc_loop graph (`app/core/agent_loop.py::build_fc_graph`), arms differing **only** in `FC_DIMENSION_FANOUT_MAX` (3 vs 0), set in process per arm; no product code changed. "Cued dimension" and "unserved dimension" are the product's own `core.dimensions.cued_dimensions` and `agent_loop::_unserved_cued_dimensions`, fed the run's **executed** tools — not a look-alike matcher. Population frozen before the run: cases in `evaluation/benchmark/cases.jsonl` cueing ≥2 distinct dimensions (n=8). CIs are cluster bootstrap, CASE as resampling unit, 10,000 resamples, seed `20260805`.
+- **Result file**: `evaluation/results/fanout_ab/analysis_D.json` (+ `table_D.md`, `negative_control_D.json`, raw `main/runs.jsonl`); design frozen in `evaluation/results/fanout_ab/PREREGISTRATION.md`; write-up in `evaluation/results/FANOUT_AB_REPORT_20260805.md` §Phase 2.
+- **Safe to use**: YES, within the scope below
+- **Required caveat**: **n = 8 cases** — the bootstrap resamples cases, so every CI is wide; 2 of the 8 (E3, E9) never triggered the mechanism and 2 more (E7, E10) sit at coverage 0.000 in both arms because their fanned-out reads were denied at the execute-time gate. `E_multi_constraint` only. Measured on branch `experiment/fanout-ab-20260805`: product code `d7a7702` (i.e. `778714a` plus this session's two Phase 1 fixes, neither of which touches the fc_loop path exercised here — Fix A is in the legacy formatter and Fix B only affects rent-conversion turns), harness `6bad6d9`. **Not** a deployed build; the serving pools were untouched. Warm-cache relative (`warm_v3.sqlite3` restored per run), so latency is not a cold-start figure. **Never quote this as a latency win**: the paired median is −40 ms and 51/96 pairs favoured ON — the significant mean is tail-only, so say "shorter tail (p95 66.0 s → 51.8 s)", never "faster". Cost, tokens and soft-wrap CIs cross 0 → 未观察到显著差异. **Do not describe this as "fc parallel vs legacy serial"** — legacy is not serial, and its own map-reduce fan-out is a separate `[SAFE]` positive result in this file. The two arms hit different external-tool failure rates (12.7% vs 7.2%, because the ON arm attempts more of the flakiest tool class), so treat the latency and token figures as availability-dependent; the coverage figure counts executed tools only and is unaffected.
+
+### [SAFE] Mechanism finding: only the plan-time entry point was exercised (n=192 runs)
+
+- **中文 CV 表述**: 全部 192 次运行中，72 次维度扩展**全部**发生在 plan 阶段（`agent_node`，模型已经在开批次，扩展不额外花一次 LLM 往返）；answer 阶段的 `_completion_sweep_into_batch` **一次都没触发**。因此该实验只验证了「搭顺风车」这一条机制。
+- **English CV statement**: Across all 192 runs, every one of the 72 fan-out firings happened at **plan time** (`agent_node`, where the model is already opening a batch, so the expansion costs no extra LLM round-trip); the answer-time `_completion_sweep_into_batch` fired **zero** times. The result therefore validates the free-ride mechanism only.
+- **Raw data (num/den)**: firings plan-time 72/72, answer-time 0/72; runs where the fan-out fired 72/96 (ON arm); additions that actually executed 143/179 (79.9%), the remaining 36 denied at the execute-time gate; added-tool histogram `search_nearby_pois` 72, `calculate_commute` 60, `check_safety` 47, `remember`/`ask_user` 0
+- **Metric definition**: Each call into `agent_loop::_dimension_fanout_calls` was tagged with its call site by walking the stack in the harness; the product function itself was wrapped, not reimplemented, so what is recorded is literally what the fan-out returned.
+- **Result file**: `evaluation/results/fanout_ab/negative_control_D.json`, raw `main/runs.jsonl`
+- **Safe to use**: YES, as a mechanism/engineering finding
+- **Required caveat**: State it as scope, not as a property of the product — the answer-time sweep exists and is reachable; this 8-case population simply never took that branch, so **no claim about it is supported either way**. The "no extra batches" control passing is therefore evidence about plan-time packing only.
 
 ## 不建议使用
+
+### [AVOID] 「维度 fan-out 让回合更快」
+
+- **Why**: 96 组配对的延迟中位数差是 **−40 ms**，且只有 51/96 组配对偏向 fan-out 臂；fan-out 臂的 **p50 反而更高**（9,159 vs 8,093 ms）。那个显著的均值（−5,819 ms）完全由尾部产生。
+- **Say instead**: 「延迟尾部收窄（p95 66.0 s → 51.8 s）；中位数未观察到差异。」
+- **Result file**: `evaluation/results/fanout_ab/analysis_D.json` → `paired_contrasts.wall_ms`，以及 `table_D.md` 里的分臂 `wall_ms` 分位数。
+
+### [AVOID] 「fc_loop 的批内并发比串行派发快」— 两轮实验均为负结果
+
+- **Why**: warm 与 cold 两轮配对 A/B（各 120 次 live 运行）检索阶段延迟的 bootstrap 95% CI **都跨 0**；且**阴性对照两轮都未通过**（16/60、18/60 组配对执行的工具数不一致），配对前提不成立。根因是 244 个工具批次里只有 65 个（26.6%）装了 ≥2 个调用——批次大小为 1 时批内并发收益恒为 0。
+- **Say instead**: 把它作为**方法论叙事**引用：「预注册了并发派发假设，两轮配对 A/B 均未观察到显著差异且阴性对照未通过；进一步测出只有 26.6% 的批次装了 ≥2 个调用，据此判定瓶颈在规划层而非派发层，并改做批次打包（见上文 `[SAFE-WITH-SCOPE]` 批次打包条目）。」批内并发的**机制正确性**另有确定性证据（`tests/test_parallel_tool_batch.py`：N 个独立读取 ≈ S 而非 N×S，n 至 8；重新串行化会让 17 个测试挂掉 10 个），但那**只能写成机制正确性，不可写成端到端加速**。
+- **Result file**: `evaluation/results/parallel_tools_ab/{analysis_C.json, negative_control_C.json, analysis_C_cold.json, negative_control_C_cold.json}`；选例口径 `case_selection.json`；叙述见 `EVAL_REPORT_20260804.md` §3
 
 ### [AVOID] 旧的模型路由数字 −52.7% / −38.4%（2026-07-12，legacy 架构）— 已被取代，禁止引用
 

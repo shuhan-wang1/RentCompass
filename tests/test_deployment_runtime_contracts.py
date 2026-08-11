@@ -59,6 +59,7 @@ def test_image_is_multistage_and_runtime_is_non_root():
     assert " AS runtime" in dockerfile
     assert "COPY --from=builder /opt/venv /opt/venv" in dockerfile
     assert "\nUSER app\n" in dockerfile
+    assert "APP_PROJECT_ROOT=/app" in dockerfile
     runtime = dockerfile.split(" AS runtime", 1)[1]
     assert "build-essential" not in runtime
 
@@ -81,3 +82,7 @@ def test_ci_required_check_names_and_python_version_match_release_gate():
     assert "gitleaks/gitleaks-action@v2" not in workflow
     assert "--randomly-seed=1009" in workflow
     assert "--randomly-seed=2027" in workflow
+    assert "/tests/seed-1009/" in workflow
+    assert "/tests/seed-2027/" in workflow
+    assert "--skip-editable" in workflow
+    assert 'RELEASE_TRACK_REF:-origin/main' in release

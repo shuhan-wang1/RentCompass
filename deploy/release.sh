@@ -67,7 +67,7 @@ SUDO_CMD="${RELEASE_SUDO_CMD:-sudo}"
 UPDATE_CMD="${RELEASE_UPDATE_CMD:-bash deploy/update.sh}"
 PIN_ENV_FILE="${DEPLOY_PIN_ENV:-/etc/rentcompass/deploy.env}"
 # REMOTE on purpose: a local branch can hold commits that never saw a PR.
-TRACK_REF="${RELEASE_TRACK_REF:-origin/telemetry/v2-layer-b}"
+TRACK_REF="${RELEASE_TRACK_REF:-origin/main}"
 REQUIRED_CHECKS="${RELEASE_REQUIRED_CHECKS:-Tests (Python 3.12),Compose smoke,Eval smoke,Supply chain gates}"
 
 say()  { printf '==> %s\n' "$*"; }

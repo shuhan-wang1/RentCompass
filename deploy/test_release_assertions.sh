@@ -37,11 +37,11 @@ setup() {
     echo two > f; git add -A; git commit -qm c2
     NEW=$(git rev-parse HEAD)
     # a remote-tracking ref, without needing an actual remote
-    git update-ref refs/remotes/origin/telemetry/v2-layer-b "$NEW"
+    git update-ref refs/remotes/origin/main "$NEW"
     git checkout -q --detach "$OLD"
   ) >/dev/null 2>&1
   OLD_SHA="$(cd "$repo" && git rev-parse HEAD)"
-  NEW_SHA="$(cd "$repo" && git rev-parse refs/remotes/origin/telemetry/v2-layer-b)"
+  NEW_SHA="$(cd "$repo" && git rev-parse refs/remotes/origin/main)"
   printf 'DEPLOY_PINNED_SHA=%s\n' "$OLD_SHA" > "$SANDBOX/pin.env"
 
   cat > "$SANDBOX/bin/fakegh" <<'EOF'

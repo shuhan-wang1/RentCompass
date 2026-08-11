@@ -71,7 +71,9 @@ def test_release_target_comes_from_a_remote_ref():
     can hold commits that never went through a PR, which is the whole reason the
     gate is allowed to be advanced automatically at all."""
     src = _src(_RELEASE)
-    assert 'RELEASE_TRACK_REF:-origin/' in src, "the default track ref must be a remote ref"
+    assert 'RELEASE_TRACK_REF:-origin/main' in src, (
+        "the default release track must be the canonical remote main branch"
+    )
 
 
 def test_release_never_invokes_sudo_outside_the_pin_write():

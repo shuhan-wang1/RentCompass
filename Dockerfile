@@ -43,6 +43,7 @@ LABEL org.opencontainers.image.title="RentCompass agent" \
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH=/opt/venv/bin:${PATH} \
+    APP_PROJECT_ROOT=/app \
     HF_HOME=/opt/hf-cache \
     XDG_CACHE_HOME=/opt/hf-cache/xdg \
     MPLCONFIGDIR=/tmp/matplotlib \

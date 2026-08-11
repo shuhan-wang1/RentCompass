@@ -33,22 +33,36 @@ jobs:
         run: |
           python -m pip install "pip==25.1.1"
           python -m pip install -e ".[dev]" "pytest-randomly==3.16.0"
-      - name: Run randomized isolated suite
+      - name: Run randomized isolated suite (seed 1009)
         env:
-          CHECKPOINT_DB_PATH: ${{ runner.temp }}/tests/checkpoints.sqlite3
-          CONVERSATION_DB_PATH: ${{ runner.temp }}/tests/conversations.sqlite3
-          AUTH_DB_PATH: ${{ runner.temp }}/tests/auth.sqlite3
-          RATE_LIMIT_DB_PATH: ${{ runner.temp }}/tests/rate-limits.sqlite3
-          RUNTIME_CACHE_PATH: ${{ runner.temp }}/tests/runtime-cache.sqlite3
-          SEARCH_LISTING_CACHE_PATH: ${{ runner.temp }}/tests/listing-cache.sqlite3
-          SEARCH_CACHE_DB_PATH: ${{ runner.temp }}/tests/search-cache.sqlite3
+          CHECKPOINT_DB_PATH: ${{ runner.temp }}/tests/seed-1009/checkpoints.sqlite3
+          CONVERSATION_DB_PATH: ${{ runner.temp }}/tests/seed-1009/conversations.sqlite3
+          AUTH_DB_PATH: ${{ runner.temp }}/tests/seed-1009/auth.sqlite3
+          RATE_LIMIT_DB_PATH: ${{ runner.temp }}/tests/seed-1009/rate-limits.sqlite3
+          RUNTIME_CACHE_PATH: ${{ runner.temp }}/tests/seed-1009/runtime-cache.sqlite3
+          SEARCH_LISTING_CACHE_PATH: ${{ runner.temp }}/tests/seed-1009/listing-cache.sqlite3
+          SEARCH_CACHE_DB_PATH: ${{ runner.temp }}/tests/seed-1009/search-cache.sqlite3
           ENABLE_CHECKPOINTER: "0"
           BACKGROUND_JOBS_ENABLED: "0"
           CANARY_LOG_PATH: "off"
         run: |
-          mkdir -p "${{ runner.temp }}/tests/pytest-a" "${{ runner.temp }}/tests/pytest-b"
-          python -m pytest -q --basetemp "${{ runner.temp }}/tests/pytest-a" --randomly-seed=1009
-          python -m pytest -q --basetemp "${{ runner.temp }}/tests/pytest-b" --randomly-seed=2027
+          mkdir -p "${{ runner.temp }}/tests/seed-1009"
+          python -m pytest -q --basetemp "${{ runner.temp }}/tests/seed-1009/pytest" --randomly-seed=1009
+      - name: Run randomized isolated suite (seed 2027)
+        env:
+          CHECKPOINT_DB_PATH: ${{ runner.temp }}/tests/seed-2027/checkpoints.sqlite3
+          CONVERSATION_DB_PATH: ${{ runner.temp }}/tests/seed-2027/conversations.sqlite3
+          AUTH_DB_PATH: ${{ runner.temp }}/tests/seed-2027/auth.sqlite3
+          RATE_LIMIT_DB_PATH: ${{ runner.temp }}/tests/seed-2027/rate-limits.sqlite3
+          RUNTIME_CACHE_PATH: ${{ runner.temp }}/tests/seed-2027/runtime-cache.sqlite3
+          SEARCH_LISTING_CACHE_PATH: ${{ runner.temp }}/tests/seed-2027/listing-cache.sqlite3
+          SEARCH_CACHE_DB_PATH: ${{ runner.temp }}/tests/seed-2027/search-cache.sqlite3
+          ENABLE_CHECKPOINTER: "0"
+          BACKGROUND_JOBS_ENABLED: "0"
+          CANARY_LOG_PATH: "off"
+        run: |
+          mkdir -p "${{ runner.temp }}/tests/seed-2027"
+          python -m pytest -q --basetemp "${{ runner.temp }}/tests/seed-2027/pytest" --randomly-seed=2027
 
   compose-smoke:
     name: Compose smoke
@@ -71,6 +85,8 @@ jobs:
           TRANSFORMERS_OFFLINE=1
           EOF
           PROMPT_SHA="$(sha256sum app/core/loop_prompts.py | awk '{print $1}')"
+          RUNTIME_PROMPT_VERSION="$(awk -F'"' '/^FC_LOOP_SYSTEM_PROMPT_VERSION = / {print $2; exit}' app/core/loop_prompts.py)"
+          test -n "$RUNTIME_PROMPT_VERSION"
           cat > .env <<EOF
           SEARXNG_SECRET=ci-only-searx-secret
           LEGACY_APP_SHA=${GITHUB_SHA}
@@ -78,8 +94,9 @@ jobs:
           FC_CANARY_IMAGE=uk-rent-agent:latest
           FC_CANARY_SHA=${GITHUB_SHA}
           FC_IMAGE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000
-          PROMPT_VERSION=ci-smoke
+          PROMPT_VERSION=${RUNTIME_PROMPT_VERSION}
           PROMPT_SCHEMA_SHA=${PROMPT_SHA}
+          RELEASE_METADATA_REQUIRED=1
           EOF
       - name: Validate and build compose stack
         run: |
@@ -157,7 +174,7 @@ jobs:
           python -m pip install -e .
           python -m pip install "pip-audit==2.9.0" "cyclonedx-bom==7.1.0"
       - name: Dependency vulnerability gate
-        run: pip-audit --strict --progress-spinner=off
+        run: pip-audit --strict --progress-spinner=off --skip-editable
       - name: Generate and validate SBOM
         run: |
           cyclonedx-py environment --output-reproducible --output-format JSON --output-file sbom.json

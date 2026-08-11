@@ -84,7 +84,12 @@ class Config:
 
     @classmethod
     def from_env(cls, *, require_secret: bool = False) -> "Config":
-        root = Path(__file__).resolve().parents[2]
+        root_override = os.getenv("APP_PROJECT_ROOT", "").strip()
+        root = (
+            Path(root_override).expanduser().resolve()
+            if root_override
+            else Path(__file__).resolve().parents[2]
+        )
         load_dotenv(root / "app" / ".env", override=False)
         secret = os.getenv("FLASK_SECRET_KEY", "")
         if require_secret and not secret:

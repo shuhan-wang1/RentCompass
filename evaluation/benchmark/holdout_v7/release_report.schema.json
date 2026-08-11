@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rentcompass.eval/release-report.v7.schema.json",
+  "title": "RentCompass deterministic v7 release report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "binding", "run_binding", "tracks", "input_hashes", "release_floors", "zero_tolerance", "integrity_errors", "decision", "reasons", "exit_code"],
+  "properties": {
+    "schema_version": {"const": "rentcompass/release-report/v7"},
+    "status": {"enum": ["complete", "incomplete"]},
+    "binding": {"type": "object"},
+    "run_binding": {"type": "object"},
+    "tracks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deterministic_fixture", "live_freshness"],
+      "properties": {
+        "deterministic_fixture": {"type": "object"},
+        "live_freshness": {"type": "object"}
+      }
+    },
+    "input_hashes": {"type": "object"},
+    "release_floors": {"type": "array"},
+    "zero_tolerance": {"type": "object"},
+    "integrity_errors": {"type": "array", "items": {"type": "string"}},
+    "decision": {"enum": ["PASS", "HOLD", "BLOCK"]},
+    "reasons": {"type": "array", "items": {"type": "string"}},
+    "exit_code": {"enum": [0, 2, 3]}
+  }
+}

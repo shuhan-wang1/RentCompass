@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import hashlib
+import hmac
 import json
 import logging
+import os
 import time
 import uuid
 from collections.abc import Iterator
@@ -15,6 +18,25 @@ user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", def
 
 def new_request_id(value: str | None = None) -> str:
     return value or uuid.uuid4().hex
+
+
+def pseudonymous_user_ref(value: str | None) -> str:
+    """Return a stable log correlation value without emitting the raw identity."""
+    raw = str(value or "").strip()
+    if not raw or raw == "-":
+        return "-"
+    secret = (
+        os.getenv("LOG_ID_HMAC_KEY", "").strip()
+        or os.getenv("CANARY_HMAC_SECRET", "").strip()
+        or os.getenv("FLASK_SECRET_KEY", "").strip()
+    )
+    if secret:
+        digest = hmac.new(secret.encode("utf-8"), raw.encode("utf-8"), hashlib.sha256).hexdigest()
+    else:
+        # User ids are server-generated high-entropy values. Domain separation
+        # still prevents the raw value appearing when local development has no key.
+        digest = hashlib.sha256(("rentcompass-log-id\0" + raw).encode("utf-8")).hexdigest()
+    return digest[:20]
 
 
 @contextlib.contextmanager
@@ -36,7 +58,9 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
             "request_id": getattr(record, "request_id", request_id_var.get()),
-            "user_id": getattr(record, "user_id", user_id_var.get()),
+            "user_ref": pseudonymous_user_ref(
+                getattr(record, "user_id", user_id_var.get())
+            ),
         }
         for key in ("node", "tool", "latency_ms", "cache_hit", "input_tokens", "output_tokens"):
             if hasattr(record, key):

@@ -94,6 +94,17 @@ CANONICAL_MAX_PRICE = 5000
 # more than a one-page 15-row scrape) — trivial under the per-scrape budget_s.
 CANONICAL_SCRAPE_LIMIT = int(os.getenv("SEARCH_CANONICAL_SCRAPE_LIMIT", "40"))
 
+# Timed-out Python threads cannot be force-killed.  A process-wide bounded pool
+# plus a matching admission semaphore prevents repeated deadlines from creating
+# an unbounded number of orphan threads or queued network calls.  The scraper's
+# own HTTP timeouts eventually release each slot.
+MAX_IN_FLIGHT_SCRAPES = max(1, int(os.getenv("SEARCH_MAX_IN_FLIGHT_SCRAPES", "2")))
+_SCRAPE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=MAX_IN_FLIGHT_SCRAPES,
+    thread_name_prefix="listing-scrape",
+)
+_SCRAPE_SLOTS = threading.BoundedSemaphore(MAX_IN_FLIGHT_SCRAPES)
+
 # --------------------------------------------------------------------------
 # Band rescue (see _band_rescue)
 # --------------------------------------------------------------------------
@@ -1402,26 +1413,30 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
       * budget hit -> ``(None, True)`` — the deadline was reached, so the caller can report
         the area as INCOMPLETE (distinct from a genuinely empty result);
       * error -> ``(None, False)`` -> caller does stale-if-error.
-    On timeout the underlying scrape thread is left running (shutdown(wait=False)); its
-    eventual result is discarded and never cached, so a budget-abandoned area can't pollute
-    the store."""
-    ex = ThreadPoolExecutor(max_workers=1)
-    fut = ex.submit(
-        onthemarket.find_rich_onthemarket,
-        slug, 1.0, int(min_price), int(max_price),
-        limit, int(min_beds), int(max_beds),
-    )
+    On timeout the bounded worker may finish in the background, but no more than
+    ``MAX_IN_FLIGHT_SCRAPES`` calls can run or queue process-wide. Its result is
+    discarded and never cached, so an abandoned area cannot pollute the store."""
+    if not _SCRAPE_SLOTS.acquire(blocking=False):
+        print(f"  [on_demand] scrape capacity exhausted for '{slug}'")
+        return None, True
+    try:
+        fut = _SCRAPE_EXECUTOR.submit(
+            onthemarket.find_rich_onthemarket,
+            slug, 1.0, int(min_price), int(max_price),
+            limit, int(min_beds), int(max_beds),
+        )
+    except Exception:
+        _SCRAPE_SLOTS.release()
+        raise
+    fut.add_done_callback(lambda _future: _SCRAPE_SLOTS.release())
     try:
         rows = fut.result(timeout=budget_s)
-        ex.shutdown(wait=False)
         return rows, False
     except FuturesTimeout:
         print(f"  [on_demand] scrape budget ({budget_s}s) exceeded for '{slug}'")
-        ex.shutdown(wait=False)
         return None, True
     except Exception as e:  # network/parse failure -> stale-if-error
         print(f"  [on_demand] scrape error for '{slug}': {e}")
-        ex.shutdown(wait=False)
         return None, False
 
 

@@ -3,55 +3,21 @@ Tool: Calculate Commute Cost
 综合计算通勤成本的工具 - 整合通勤时间 + 交通费用 + 月度总成本
 
 功能:
-1. 计算从房源到目的地的通勤时间 (使用 Google Maps API)
-2. 检查路线是否包含公共交通 (使用 Google Maps Directions API)
-3. 根据起点和终点所在的 Zone 计算交通费用 (基于 travel_cost_data.csv)
+1. 计算从房源到目的地的通勤时间 (使用 TfL Journey Planner)
+2. 判断路线是否需要公共交通
+3. 根据起点和终点所在的 Zone 计算交通费用 (统一 TfL 2026 票价表)
 4. 返回综合信息: 通勤时间、月度交通成本、建议购买哪种票
 
 数据来源:
-- 通勤时间: Google Maps API (实时数据)
-- 路线详情: Google Maps Directions API (检查是否使用公共交通)
-- 交通费用: travel_cost_data.csv (TfL 官方票价)
-- Zone 判断: Google Maps Geocoding API
+- 通勤时间: TfL Journey Planner（无路线时仅提供有标注的估算）
+- 交通费用: TfL 官方 2026 票价表（含生效日期和来源链接）
+- Zone 判断: Postcodes.io / OpenStreetMap 地理编码后的简化邮编规则
 """
 
 from core.tool_system import Tool
 from typing import Optional
 import re
-import csv
-import os
-import logging
-
-logger = logging.getLogger(__name__)
-
-# Load travel cost data from CSV
-def _load_travel_cost_data():
-    """Load TfL fare data from travel_cost_data.csv"""
-    csv_path = os.path.join(os.path.dirname(__file__), 'travel_cost_data.csv')
-    cost_data = {}
-
-    try:
-        with open(csv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                zone_key = row['Zone'].lower().replace(' ', '')  # e.g., "zone1-2" or "zones1-2"
-                # Normalize to consistent format
-                zone_key = zone_key.replace('zones', 'zone')  # "zones1-2" -> "zone1-2"
-
-                cost_data[zone_key] = {
-                    'daily_peak': float(row['Pay as you go caps: Daily peak'].replace('£', '')),
-                    'daily_off_peak': float(row['Pay as you go caps: Daily off-peak'].replace('£', '')),
-                    'day_anytime': float(row['Travelcards: Day anytime'].replace('£', '')),
-                    'day_off_peak': float(row['Travelcards: Day off-peak'].replace('£', ''))
-                }
-        logger.info("Loaded %s fare zones from CSV", len(cost_data))
-        return cost_data
-    except Exception as e:
-        logger.exception("Failed to load travel_cost_data.csv: %s", e)
-        return {}
-
-# Cache the loaded data
-_TRAVEL_COST_DATA = _load_travel_cost_data()
+from uk_rent_agent.data.tfl_fares import get_zonal_fare
 
 
 def _check_route_uses_transit(route_data: dict, requested_mode: str) -> bool:
@@ -392,57 +358,57 @@ def calculate_commute_cost_impl(
                 # 确定 Zone 范围
                 min_zone = min(from_zone, to_zone)
                 max_zone = max(from_zone, to_zone)
-
-                # 构建 zone key (e.g., "zone1-2", "zone2-4", "zone1-1" for same zone)
-                if min_zone == max_zone:
-                    # Same zone travel
-                    zone_key = f"zone{min_zone}only" if min_zone == 1 else f"zone{min_zone}only"
-                    # Normalize to match CSV format: "Zone 1 only" -> "zone1only"
-                    zone_key = zone_key.replace('only', '')
-                    # Try different formats
-                    possible_keys = [
-                        f"zone{min_zone}only",
-                        f"zone{min_zone}",
-                    ]
-                    prices = None
-                    for key in possible_keys:
-                        prices = _TRAVEL_COST_DATA.get(key)
-                        if prices:
-                            zone_key = key
-                            break
-                elif min_zone == 1:
-                    zone_key = f"zone1-{max_zone}"
+                user_type = "student" if "student" in travel_type.lower() else "adult"
+                try:
+                    prices = get_zonal_fare(min_zone, max_zone, user_type)
+                except (TypeError, ValueError) as exc:
+                    transport_cost_info = {
+                        "error": f"{exc}. Please check tfl.gov.uk/fares."
+                    }
                 else:
-                    zone_key = f"zone{min_zone}-{max_zone}"
-
-                print(f"   📍 Looking up fares for: {zone_key} (Zone {min_zone} to Zone {max_zone})")
-
-                # 从 CSV 数据获取价格 (if not already fetched above for same-zone)
-                if 'prices' not in locals() or prices is None:
-                    prices = _TRAVEL_COST_DATA.get(zone_key)
-
-                if prices:
-                    # 计算月度成本: 假设每月工作 22 天，使用 daily peak cap
-                    monthly_cost = prices['daily_peak'] * 22
-
-                    # 学生使用 18+ Student Oyster 可享受 30% 折扣 (仅限 Travelcard)
-                    # 但 Pay As You Go 没有折扣
-                    is_student = "student" in travel_type.lower()
+                    zone_label = (
+                        f"Zone {min_zone}" if min_zone == max_zone
+                        else f"Zone {min_zone}-{max_zone}"
+                    )
+                    print(f"   📍 Looking up fares for: {prices['zone_key']} ({zone_label})")
+                    payg_monthly_estimate = round(prices['daily_cap'] * 22, 2)
+                    monthly_travelcard = prices['monthly']
+                    recommended_cost = min(payg_monthly_estimate, monthly_travelcard)
+                    recommended_product = (
+                        "Monthly Travelcard"
+                        if monthly_travelcard <= payg_monthly_estimate
+                        else "PAYG daily caps (22-day estimate)"
+                    )
+                    is_student = user_type == "student"
 
                     transport_cost_info = {
                         "from_zone": from_zone,
                         "to_zone": to_zone,
-                        "recommended_pass": zone_key.replace('zone', 'Zone '),
-                        "user_type": "18+ Student Oyster (Pay As You Go)" if is_student else "Adult Oyster",
-                        "monthly_cost": monthly_cost,
-                        "daily_cap": prices['daily_peak'],
-                        "daily_off_peak_cap": prices['daily_off_peak'],
+                        "recommended_pass": f"{zone_label} {recommended_product}",
+                        "user_type": (
+                            "18+ Student Oyster" if is_student else "Adult Oyster/contactless"
+                        ),
+                        # Backwards-compatible field, now explicitly the cheaper
+                        # of the two published options rather than a PAYG-only guess.
+                        "monthly_cost": recommended_cost,
+                        "monthly_cost_basis": recommended_product,
+                        "payg_monthly_estimate_22_days": payg_monthly_estimate,
+                        "monthly_travelcard": monthly_travelcard,
+                        "weekly_travelcard": prices['weekly'],
+                        "daily_cap": prices['daily_cap'],
+                        "daily_off_peak_cap": prices['daily_off_peak_cap'],
+                        "daily_off_peak_cap_note": prices['daily_off_peak_cap_note'],
                         "currency": "GBP",
-                        "note": "Cost calculated using Pay As You Go daily cap (£{:.2f}) × 22 working days. Student Oyster cards do NOT get discounts on Pay As You Go - discount only applies to Travelcards.".format(prices['daily_peak'])
-                    }
-                else:
-                    transport_cost_info = {
-                        "error": f"No fare data for {zone_key}. Please check tfl.gov.uk for accurate pricing."
+                        "effective_date": prices['effective_date'],
+                        "fare_edition": prices['edition'],
+                        "source": prices['source'],
+                        "source_url": prices['source_url'],
+                        "note": (
+                            f"Compared the standard PAYG daily cap (£{prices['daily_cap']:.2f}) "
+                            f"× 22 commuting days (£{payg_monthly_estimate:.2f}) with the "
+                            f"{zone_label} monthly Travelcard (£{monthly_travelcard:.2f}). "
+                            "18+ Student Oyster discounts apply to Travelcards, not standard PAYG."
+                        ),
                     }
             else:
                 transport_cost_info = {
@@ -557,7 +523,7 @@ def calculate_commute_cost_impl(
 calculate_commute_cost_tool = Tool(
     name="calculate_commute_cost",
 
-    description="""Calculate the combined commute cost (time + monthly fare) from a listing to a destination via Google Maps; only charges a fare when the route uses public transport (walking/cycling or same-zone = £0). Fares come from TfL 2025 official prices (daily cap x 22 days). Use when the user asks a property's commute cost or monthly transport spend.
+    description="""Calculate commute time plus a monthly fare comparison from a listing to a destination. For public transport, compare TfL's official 2026 PAYG daily cap x 22 commuting days with the exact weekly/monthly Travelcard for the passenger and zones, then report the cheaper monthly option with source and effective date.
 READ THE BASIS FIELD — same contract as calculate_commute: `commute.duration_minutes` is populated ONLY when TfL returned a real journey plan (basis=tfl_journey_plan) and is the only figure you may state as a commute time. When TfL has no journey the block instead carries `estimated_duration_minutes` plus `estimate_low_minutes`/`estimate_high_minutes` (basis=straight_line_estimate) and `duration_category`/`is_acceptable` are null — quote that as an estimated RANGE and say it is derived from the straight-line distance, or, when it is null too, say no commute time is available. The FARE figures are unaffected either way and may always be stated. Never present an estimate as a measured journey time, and never state a monthly commuting-HOURS total derived from one.
 计算房源到目的地的通勤时间与月度交通费用（票价来源 TfL）。""",
 

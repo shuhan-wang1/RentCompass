@@ -316,10 +316,12 @@ def test_travelcard_student_zone2():
                                       travel_type="student")
     assert out["success"] is True
     assert out["zones"] == "Zone 1-2"
-    assert out["monthly_gbp"] == 114.80
-    assert out["monthly_display"] == "£114.80"
-    assert out["weekly_display"] == "£29.80"
+    assert out["monthly_gbp"] == 119.90
+    assert out["monthly_display"] == "£119.90"
+    assert out["weekly_display"] == "£31.20"
     assert "Student" in out["user_type"]
+    assert out["effective_date"] == "2026-03-01"
+    assert out["source_url"].endswith("18-plus-student-oyster-photocard-fares.pdf")
 
 
 def test_travelcard_without_zone_asks_for_it(monkeypatch):

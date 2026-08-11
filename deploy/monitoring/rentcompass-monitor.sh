@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RentCompass health monitor — runs every 5 min via systemd timer (see the .timer
-# unit next to this file). READ-ONLY probes only: /health endpoints, docker
+# unit next to this file). READ-ONLY probes only: /ready endpoints, docker
 # inspect, free/df/stat, and log greps. It never calls /api/*, so it cannot
 # pollute agent state or the canary telemetry the gate reads.
 #
@@ -63,9 +63,15 @@ LOG_FILE="${MON_LOG:-/var/log/rentcompass/monitor.log}"
 STATE="${MON_STATE:-/run/rentcompass-monitor.state}"
 LOCK="${MON_LOCK:-/run/rentcompass-monitor.lock}"
 
-PUBLIC_URL="${MON_PUBLIC_URL:-https://rentcompass.co.uk/health}"
-LEGACY_URL="${MON_LEGACY_URL:-http://127.0.0.1:5001/health}"
-FC_URL="${MON_FC_URL:-http://127.0.0.1:5002/health}"
+PUBLIC_URL="${MON_PUBLIC_URL:-https://rentcompass.co.uk/ready}"
+LEGACY_URL="${MON_LEGACY_URL:-http://127.0.0.1:5001/ready}"
+FC_URL="${MON_FC_URL:-http://127.0.0.1:5002/ready}"
+NGINX_CONF="${MON_NGINX_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
+COMPOSE_ENV="${MON_COMPOSE_ENV:-$REPO/.env}"
+WEBHOOK_URL="${MON_WEBHOOK_URL:-}"
+EMAIL_TO="${MON_EMAIL_TO:-}"
+MAIL_CMD="${MON_MAIL_CMD:-mail}"
+HEARTBEAT_URL="${MON_HEARTBEAT_URL:-}"
 
 MEM_FREE_MIN_MB="${MON_MEM_FREE_MIN_MB:-800}"
 DISK_USE_MAX_PCT="${MON_DISK_USE_MAX_PCT:-90}"
@@ -97,6 +103,7 @@ flock -n 9 || exit 0
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
 ts="$(date -Is)"
 alerts=0
+alert_text=""
 # src= leads the summary so the running build is the first thing on every status line,
 # including on runs that alert. `tail -1 monitor.log` now answers "what is guarding
 # production right now" without shelling out to compare files.
@@ -105,6 +112,7 @@ summary="src=$SELF_SHA "
 emit_alert() { # <priority> <message...>
   local pri="$1"; shift
   alerts=$((alerts + 1))
+  alert_text+="[$pri] $*"$'\n'
   printf '<%s>ALERT %s\n' "$pri" "$*"                     # -> journal (systemd reads <N>)
   printf '%s ALERT[%s] %s\n' "$ts" "$pri" "$*" >> "$LOG_FILE" 2>/dev/null || true
 }
@@ -130,7 +138,7 @@ if [ -n "$EXPECTED_SRC_SHA" ] && [ "$SELF_SHA" != "unknown" ] \
   emit_alert 3 "monitor build drift: running src=$SELF_SHA but MON_EXPECTED_SRC_SHA=${EXPECTED_SRC_SHA:0:12} — reinstall from deploy/monitoring (see check_install_drift.sh)"
 fi
 
-# --- probe a /health endpoint: echoes "code arch version" -------------------
+# --- probe a /ready endpoint: echoes "code arch version" -------------------
 probe() {
   local url="$1" hdr code arch ver
   hdr="$(curl -s -k --max-time 8 -D - -o /dev/null "$url" 2>/dev/null)"
@@ -151,7 +159,32 @@ probe() {
 # of any cutover or rollback; a mismatch still pages, because an UNPLANNED change of what the
 # public edge serves is exactly what this check is for. deploy/switch_pool.sh is what moves
 # the upstream, and this variable is what records that the move was on purpose.
-EXPECTED_PUBLIC_ARCH="${MON_EXPECTED_PUBLIC_ARCH:-fc_loop}"
+# Derive intent from the public nginx upstream and the matching immutable pool
+# pin. Explicit MON_EXPECTED_PUBLIC_* values remain available for rehearsals.
+EXPECTED_PUBLIC_ARCH="${MON_EXPECTED_PUBLIC_ARCH:-auto}"
+ACTIVE_PORT="${MON_ACTIVE_PORT:-}"
+if [ -z "$ACTIVE_PORT" ] && [ -r "$NGINX_CONF" ]; then
+  ACTIVE_PORT="$(awk '/^upstream rentcompass_app[[:space:]]*\{/,/^\}/' "$NGINX_CONF" \
+    | sed -n 's/.*server[[:space:]]\+127\.0\.0\.1:\([0-9]\+\);.*/\1/p' | head -1)"
+fi
+if [ "$EXPECTED_PUBLIC_ARCH" = "auto" ]; then
+  case "$ACTIVE_PORT" in
+    5001) EXPECTED_PUBLIC_ARCH=legacy ;;
+    5002) EXPECTED_PUBLIC_ARCH=fc_loop ;;
+    *) EXPECTED_PUBLIC_ARCH=unknown; emit_alert 3 "cannot resolve the active public pool from $NGINX_CONF (port='${ACTIVE_PORT:-none}')" ;;
+  esac
+fi
+EXPECTED_PUBLIC_SHA="${MON_EXPECTED_PUBLIC_SHA:-}"
+if [ -z "$EXPECTED_PUBLIC_SHA" ] && [ -r "$COMPOSE_ENV" ]; then
+  case "$EXPECTED_PUBLIC_ARCH" in
+    legacy) _pin_key=LEGACY_APP_SHA ;;
+    fc_loop) _pin_key=FC_CANARY_SHA ;;
+    *) _pin_key= ;;
+  esac
+  if [ -n "${_pin_key:-}" ]; then
+    EXPECTED_PUBLIC_SHA="$(sed -n "s/^${_pin_key}=//p" "$COMPOSE_ENV" | tr -d '\r"' | head -1)"
+  fi
+fi
 
 read -r p_code p_arch p_ver <<<"$(probe "$PUBLIC_URL")"
 summary+="pub=$p_code/$p_arch "
@@ -159,6 +192,11 @@ if [ "$p_code" != "200" ]; then
   emit_alert 3 "public $PUBLIC_URL returned HTTP $p_code (expected 200)"
 elif [ "$p_arch" != "$EXPECTED_PUBLIC_ARCH" ]; then
   emit_alert 3 "public edge x-agent-arch=$p_arch but MON_EXPECTED_PUBLIC_ARCH=$EXPECTED_PUBLIC_ARCH — the public pool changed without the monitor being told"
+fi
+if ! [[ "$EXPECTED_PUBLIC_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  emit_alert 3 "expected public SHA is missing/invalid for active arch $EXPECTED_PUBLIC_ARCH (set the matching pool pin or MON_EXPECTED_PUBLIC_SHA)"
+elif [ "$p_code" = "200" ] && [ "$p_ver" != "$EXPECTED_PUBLIC_SHA" ]; then
+  emit_alert 3 "public edge serves SHA '$p_ver' but active $EXPECTED_PUBLIC_ARCH is pinned to '$EXPECTED_PUBLIC_SHA'"
 fi
 
 # 2) local legacy pool -------------------------------------------------------
@@ -337,7 +375,7 @@ done
 
 # 10) OUT-OF-BAND PROVIDER PROBE --------------------------------------------
 # The 2026-07-24 class: a retired model name makes the provider reject every real
-# question while the process stays healthy, never restarts, and answers /health
+# question while the process stays ready, never restarts, and answers /ready
 # 200. Checks 1-9 are all blind to it -- see the header.
 #
 # Two rules make this probe worth having, and getting either wrong makes it
@@ -359,7 +397,11 @@ done
 # from the 2026-07-25 round (uncached input $0.139/M) this is far below a cent
 # per month.
 PROVIDER_PROBE_EVERY_S="${MON_PROVIDER_PROBE_EVERY_S:-3600}"
-PROVIDER_PROBE_CONTAINER="${MON_PROVIDER_PROBE_CONTAINER:-uk-rent-app}"
+case "$EXPECTED_PUBLIC_ARCH" in
+  fc_loop) _default_probe_container=uk-rent-app-fc ;;
+  *) _default_probe_container=uk-rent-app ;;
+esac
+PROVIDER_PROBE_CONTAINER="${MON_PROVIDER_PROBE_CONTAINER:-$_default_probe_container}"
 now_s="$(date +%s)"
 last_probe="${PREV[provider_probe_at]:-0}"
 NOW["provider_probe_at"]="$last_probe"
@@ -418,7 +460,7 @@ PYPROBE
     HTTP\ 4*)
       # Any OTHER 4xx on a one-token ping is a configuration fault, not load. This
       # is the 07-24 signature and it is the whole reason this check exists.
-      emit_alert 3 "PROVIDER REJECTS THE CONFIGURED MODEL — real questions are failing while /health stays 200: $probe_out"
+      emit_alert 3 "PROVIDER REJECTS THE CONFIGURED MODEL — real questions are failing while /ready stays 200: $probe_out"
       summary+="provider=REJECTED "
       ;;
     HTTP\ 5*|NETFAIL*)
@@ -468,7 +510,35 @@ fi
 # --- persist state ----------------------------------------------------------
 { for k in "${!NOW[@]}"; do printf '%s %s\n' "$k" "${NOW[$k]}"; done; } > "$STATE" 2>/dev/null || true
 
-# --- always append one status line ------------------------------------------
+# Optional notifications. A dead-man heartbeat is the monitor's own supervision:
+# if the timer/script stops running, the external heartbeat service detects it.
+if [ "$alerts" -gt 0 ]; then
+  if [ -n "$WEBHOOK_URL" ]; then
+    payload="$(MON_ALERT_TEXT="$alert_text" python3 -c 'import json,os; print(json.dumps({"service":"rentcompass-monitor","status":"alert","text":os.environ.get("MON_ALERT_TEXT", "")}))' 2>/dev/null)"
+    if ! curl -fsS --max-time 10 -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK_URL" >/dev/null 2>&1; then
+      printf '<3>ALERT monitor notification webhook failed\n'
+      alerts=$((alerts + 1))
+    fi
+  fi
+  if [ -n "$EMAIL_TO" ]; then
+    if command -v "${MAIL_CMD%% *}" >/dev/null 2>&1; then
+      if ! printf '%s\n' "$alert_text" | $MAIL_CMD -s "RentCompass monitor alert" "$EMAIL_TO"; then
+        printf '<3>ALERT monitor email notification failed\n'
+        alerts=$((alerts + 1))
+      fi
+    else
+      printf '<3>ALERT MON_EMAIL_TO is set but mail command is unavailable\n'
+      alerts=$((alerts + 1))
+    fi
+  fi
+else
+  if [ -n "$HEARTBEAT_URL" ] && ! curl -fsS --max-time 10 "$HEARTBEAT_URL" >/dev/null 2>&1; then
+    emit_alert 3 "monitor dead-man heartbeat failed"
+  fi
+fi
+
+# --- always append one final status line ------------------------------------
 status="OK"; [ "$alerts" -gt 0 ] && status="ALERTS=$alerts"
 printf '%s %s %s\n' "$ts" "$status" "$summary" >> "$LOG_FILE" 2>/dev/null || true
-exit 0
+[ "$alerts" -eq 0 ] && exit 0
+exit 1

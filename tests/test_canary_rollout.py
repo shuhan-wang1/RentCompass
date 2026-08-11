@@ -251,7 +251,8 @@ def test_arch_mismatch_overwrites_and_warns(client, user, monkeypatch, caplog):
     assert len(mm) == 1
     assert mm[0]["stored_arch"] == "fc_loop"
     assert mm[0]["serving_arch"] == "legacy"
-    assert mm[0]["conversation_id"] == cid
+    assert "conversation_id" not in mm[0]
+    assert mm[0]["conversation_id_hash"]
 
     # Stored assignment overwritten to THIS process's arch so subsequent turns are consistent.
     conv = appmod.conversation_store.get_conversation(user, cid)
@@ -369,7 +370,7 @@ def test_canary_turn_record_crashed_turn_defaults(client, user, monkeypatch, cap
 
     with caplog.at_level(logging.INFO, logger="canary"):
         r = _alex(client, user, "crash please")
-    assert r.status_code == 200  # always-200 contract
+    assert r.status_code == 502
     turns = _canary_turns(caplog)
     assert len(turns) == 1
     rec = turns[0]

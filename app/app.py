@@ -18,6 +18,7 @@ import threading
 import os
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 import subprocess
 import contextvars
 from flask import Flask, request, jsonify, render_template, session, g
@@ -28,9 +29,11 @@ import traceback
 import re
 from datetime import datetime
 from uk_rent_agent.web.session_store import SessionStore
+from uk_rent_agent.web.background_jobs import OutboxWorker
 from uk_rent_agent.web.conversation_store import (
     ConversationStore, ConversationNotFound, NoCompletedTurn, TurnNotFound,
-    TurnNotInConversation, TurnNotCompleted,
+    TurnNotInConversation, TurnNotCompleted, ConversationBusy,
+    PrivacyErasureInProgress,
 )
 from uk_rent_agent.web.identity import (
     resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
@@ -82,7 +85,9 @@ _runtime_config = Config.from_env()
 # authenticated identity) survives cross-origin requests when the UI is opened over a
 # different origin (e.g. file://). Same-origin (render_template at :5001) works regardless.
 CORS(app, origins=list(_runtime_config.cors_origins), supports_credentials=True)
-_api_rate_limiter = SlidingWindowRateLimiter()
+_api_rate_limiter = SlidingWindowRateLimiter(
+    db_path=_runtime_config.rate_limit_db_path
+)
 
 # Secret key — needed for the server-side `session` cookie used as a per-browser
 # identity fallback (priority (c) in resolve_identity). Read from env first so a real
@@ -170,12 +175,17 @@ def _conversation_db_path():
 
 conversation_store = ConversationStore(_conversation_db_path())
 print(f"[STARTUP] Conversation store: {conversation_store.db_path}")
+_turn_background_jobs = contextvars.ContextVar(
+    "turn_background_jobs", default=None
+)
+_outbox_worker = None
+_outbox_worker_lock = threading.Lock()
 
 # ============================================================================
 # Canary rollout (Shuhan's design, 2026-07-20) — process-level constants.
 # ----------------------------------------------------------------------------
-# The deployment runs TWO worker pools (legacy vs fc_loop) with per-conversation sticky
-# routing; each conversation durably records the arch that serves it (ConversationStore).
+# The deployment runs TWO worker pools (legacy vs fc_loop) with pool-level nginx cutover;
+# each conversation durably records the arch/version that last served it for provenance.
 # These three values describe THIS process and are read EXACTLY ONCE at startup — never
 # per-request (hot-path getenv is forbidden). AGENT_ARCH itself is (separately) read once
 # at first graph build in core.langgraph_agent (:3706); we mirror the SAME parse here so the
@@ -226,6 +236,34 @@ logger = logging.getLogger("app")
 # module, or re-calling _wire_canary_sink after monkeypatching env) can find + replace OUR
 # handler without stacking duplicates or disturbing handlers ops may have added.
 _CANARY_SINK_MARKER = "_canary_sink"
+_canary_sink_failures = 0
+_canary_sink_lock = threading.Lock()
+
+
+class _CanaryRotatingFileHandler(RotatingFileHandler):
+    def handleError(self, record) -> None:  # noqa: N802 - logging API name
+        global _canary_sink_failures
+        with _canary_sink_lock:
+            _canary_sink_failures += 1
+        super().handleError(record)
+
+
+def canary_sink_health() -> dict:
+    raw = (os.getenv("CANARY_LOG_PATH") or "").strip()
+    if raw.lower() in {"off", "0", "disabled"}:
+        return {"status": "disabled", "required": False, "failures": 0}
+    with _canary_sink_lock:
+        failures = int(_canary_sink_failures)
+    attached = any(
+        getattr(handler, _CANARY_SINK_MARKER, False)
+        for handler in _canary_logger.handlers
+    )
+    return {
+        "status": "degraded" if failures or not attached else "ok",
+        "required": False,
+        "failures": failures,
+        "attached": attached,
+    }
 
 
 def _wire_canary_sink() -> None:
@@ -281,7 +319,13 @@ def _wire_canary_sink() -> None:
                 return
 
         path.parent.mkdir(parents=True, exist_ok=True)
-        handler = logging.FileHandler(path, encoding="utf-8", delay=True)
+        handler = _CanaryRotatingFileHandler(
+            path,
+            maxBytes=max(1024, int(os.getenv("CANARY_LOG_MAX_BYTES", str(20 * 1024 * 1024)))),
+            backupCount=max(1, int(os.getenv("CANARY_LOG_BACKUP_COUNT", "5"))),
+            encoding="utf-8",
+            delay=True,
+        )
         handler.setFormatter(logging.Formatter("%(message)s"))
         setattr(handler, _CANARY_SINK_MARKER, True)
         _canary_logger.addHandler(handler)
@@ -317,7 +361,7 @@ def _whitelist_extracted_context(ctx) -> dict:
 
 
 # ============================================================================
-# Canary rollout — sticky-assignment reconciliation, per-turn telemetry, headers.
+# Canary rollout — architecture-provenance reconciliation, per-turn telemetry, headers.
 # ============================================================================
 
 @app.after_request
@@ -332,22 +376,24 @@ def _canary_headers(response):
 
 
 def _reconcile_agent_arch(user_id: str, conversation_id: str, conv: dict) -> None:
-    """Enforce the sticky per-conversation arch assignment when a turn starts on an EXISTING
-    conversation. Steady-state this is a no-op (stored arch == this process's arch).
+    """Reconcile architecture provenance when a turn starts on an existing conversation.
+    Steady-state this is a no-op (stored arch == this process's arch).
 
     Emergency-rollback path (documented in the design): if the stored arch differs from this
     process's AGENT_ARCH — e.g. an fc conversation now being served by a rebuilt/rolled-back
     legacy process — the process serves it with ITS OWN arch anyway (legacy rebuilds cleanly
     from the shared message history), but we LOG a structured arch_mismatch warning and
-    OVERWRITE the stored assignment to this process's arch so every subsequent turn is
-    consistent. A freshly created conversation already carries this process's arch, so this
+    overwrite the stored provenance with this process's arch so subsequent telemetry is
+    accurate. A freshly created conversation already carries this process's arch, so this
     never fires for new conversations."""
     stored = (conv or {}).get("agent_arch")
     if stored and stored != AGENT_ARCH:
+        user_hash, _ = hash_user_id(user_id)
+        conversation_hash, _ = hash_user_id(conversation_id)
         _canary_logger.warning(json.dumps({
             "event": "canary.arch_mismatch",
-            "conversation_id": conversation_id,
-            "user_id": user_id,
+            "conversation_id_hash": conversation_hash,
+            "user_id_hash": user_hash,
             "stored_arch": stored,
             "serving_arch": AGENT_ARCH,
             "candidate_sha": APP_CANDIDATE_SHA,
@@ -359,7 +405,7 @@ def _reconcile_agent_arch(user_id: str, conversation_id: str, conv: dict) -> Non
 from core.canary_telemetry import (  # noqa: E402
     ENDPOINT_ALEX, ENDPOINT_SEARCH_DIRECT, OUTCOME_AGENT_ERROR, OUTCOME_CRASH,
     OUTCOME_OK, OUTCOME_SERVER_ERROR, aggregate_llm_usage, build_canary_turn_record,
-    search_direct_signals, unknown_turn_signals,
+    hash_user_id, search_direct_signals, unknown_turn_signals,
 )
 from core import turn_observations  # noqa: E402
 from core import dsml_guard  # noqa: E402
@@ -460,10 +506,15 @@ def _dsml_boundary_check(response, payload):
         # field is added: an unknown key is dropped, not shipped unchecked.
         safe = {k: v for k, v in safe.items()
                 if k in ("message", "response_type", "conversation_id", "turn_id")}
+        if isinstance(payload, dict):
+            payload.clear()
+            payload.update(safe)
         replaced = jsonify(safe)
+        replaced.status_code = 502
         for k, v in response.headers.items():
             if k.lower().startswith("x-"):
                 replaced.headers[k] = v
+        replaced.headers["X-Agent-Outcome"] = "error"
         return replaced
     except Exception:
         # The guard must never be the reason a request fails. A scan that raises
@@ -471,6 +522,54 @@ def _dsml_boundary_check(response, payload):
         # reported as it was.
         logger.exception("canary: dsml boundary check failed")
         return response
+
+
+class ResponsePayloadSerializationError(TypeError):
+    """The response object cannot satisfy the JSON API contract."""
+
+
+def _guard_payload_before_persistence(payload: dict) -> tuple[dict, bool]:
+    """Scan the complete response object before it can reach any durable store.
+
+    Layer 1 sanitizes the main answer. This structural backstop covers every nested
+    user-visible field. A hit means the primary control missed something, so the turn
+    is persisted as a failed, whitelisted fallback and no background job is committed.
+    """
+    # Serialization errors are response-boundary failures, not security findings.
+    # Let them reach the existing 500 handler so telemetry records the real failure
+    # and the open turn is released; only a scanner failure itself is fail-closed.
+    try:
+        serialized = json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+    except Exception as exc:
+        raise ResponsePayloadSerializationError(
+            "response payload is not JSON serializable"
+        ) from exc
+    try:
+        hit = dsml_guard.scan_serialized(serialized)
+    except Exception as exc:
+        logger.error(
+            "response.security_scan_failed",
+            extra={"error_type": type(exc).__name__},
+        )
+        hit = True
+    if not hit:
+        return payload, False
+
+    turn_observations.note_dsml_leak()
+    logger.error(
+        "canary: unsafe model/tool markup blocked before persistence (arch=%s)",
+        AGENT_ARCH,
+    )
+    safe = {
+        "message": dsml_guard.fallback_text(getattr(g, "reply_language", None)),
+        "response_type": "error",
+    }
+    for key in ("conversation_id", "turn_id"):
+        if key in payload:
+            safe[key] = payload[key]
+    return safe, True
 
 
 def _crashed_turn_observations() -> dict:
@@ -642,7 +741,10 @@ def _get_session(user_id, conversation_id):
         except SnapshotSchemaError:
             pass  # unknown schema → fall through to the legacy message-only rehydrate
         except Exception as e:
-            print(f"[rehydrate] snapshot skipped ({user_id}:{conversation_id}): {e}")
+            logger.warning(
+                "session.rehydrate_snapshot_skipped",
+                extra={"error_type": type(e).__name__},
+            )
         try:
             if not sess.history:
                 sess.history = conversation_store.rehydrate_history(
@@ -661,7 +763,10 @@ def _get_session(user_id, conversation_id):
                         sess.persistent_state['extracted_context']['last_results'] = structured
                         break
         except Exception as e:
-            print(f"[rehydrate] failed ({user_id}:{conversation_id}): {e}")
+            logger.warning(
+                "session.rehydrate_failed",
+                extra={"error_type": type(e).__name__},
+            )
         sess.rehydrated = True
     return sess
 
@@ -876,15 +981,30 @@ def _identity_from_request(data=None):
     return resolve_identity(data)
 
 
-def _delete_checkpoint_thread(user_id: str, conversation_id: str) -> None:
-    """Drop a conversation's LangGraph checkpointer thread (best-effort)."""
+def _delete_checkpoint_thread(user_id: str, conversation_id: str) -> dict:
+    """Drop and verify one LangGraph checkpoint thread.
+
+    Callers that are not privacy boundaries may ignore the structured result. The
+    erasure route treats any failed/residual result as partial and never claims success.
+    """
     try:
-        if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
-            cp = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
-            if cp is not None:
-                cp.delete_thread(f"{user_id}:{conversation_id}")
+        if not (_runtime_config.enable_checkpointer and _runtime_config.checkpoint_path):
+            return {"status": "disabled", "residual": False}
+        cp = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+        if cp is None:
+            return {"status": "failed", "residual": None, "error_type": "Unavailable"}
+        thread = f"{user_id}:{conversation_id}"
+        cp.delete_thread(thread)
+        residual = cp.get_tuple(graph_config(user_id, conversation_id)) is not None
+        if residual:
+            return {"status": "failed", "residual": True, "error_type": "ResidualData"}
+        return {"status": "deleted", "residual": False}
     except Exception as e:
-        print(f"[checkpoint] delete_thread failed ({user_id}:{conversation_id}): {e}")
+        logger.error(
+            "checkpoint.delete_failed",
+            extra={"error_type": type(e).__name__},
+        )
+        return {"status": "failed", "residual": None, "error_type": type(e).__name__}
 
 # --- Tool System Setup (从 fengyuan-agent 迁移) ---
 print("[STARTUP] Initializing Tool System...")
@@ -1027,11 +1147,9 @@ def _rate_limit_subject() -> str:
         return f"user:{user_id}"
     remote = request.remote_addr or "unknown"
     if remote in {"127.0.0.1", "::1"}:
-        # Behind our own nginx (which binds the app to loopback and APPENDS the
-        # real client IP as the last X-Forwarded-For entry). Trust exactly one
-        # proxy hop: take the RIGHTMOST XFF value, not the leftmost. A guest can
-        # forge leading XFF entries to rotate their rate-limit bucket, but cannot
-        # forge the final entry our own nginx writes.
+        # Direct WSGI/test deployments may not run Uvicorn's proxy middleware.
+        # Production nginx overwrites XFF with exactly one address; accepting
+        # the rightmost value here preserves that one-hop contract.
         xff = request.headers.get("X-Forwarded-For", "")
         forwarded = xff.rsplit(",", 1)[-1].strip() if xff else ""
         if forwarded:
@@ -1078,7 +1196,7 @@ def auth_register():
     except AuthError as e:
         raise ApiError(400, str(e))
     _establish_session(view)
-    print(f"[AUTH] registered + logged in: {view['username']} -> {view['user_id']}")
+    logger.info("auth.registered")
     return jsonify({"authenticated": True, **view})
 
 
@@ -1090,7 +1208,7 @@ def auth_login():
     if not view:
         raise ApiError(401, "invalid username or password")
     _establish_session(view)
-    print(f"[AUTH] login: {view['username']} -> {view['user_id']}")
+    logger.info("auth.login")
     return jsonify({"authenticated": True, **view})
 
 
@@ -1115,6 +1233,29 @@ def auth_me():
 # 2. 所有请求都通过 LangGraph StateGraph Agent
 # 3. search_properties 工具内部整合了 Fine-tuned Model
 # ============================================================================
+
+def _request_replay_response(user_id: str, request_id: str, turn: dict):
+    """Return a durable response for a duplicate request without running the agent again."""
+    if turn.get("status") == "running":
+        response = jsonify({
+            "error": "request is still in progress",
+            "conversation_id": turn.get("conversation_id"),
+            "turn_id": turn.get("id"),
+            "request_id": request_id,
+            "replayed": True,
+        })
+        response.status_code = 409
+        response.headers["Retry-After"] = "1"
+    else:
+        payload = conversation_store.get_turn_response(user_id, turn.get("id"))
+        if payload is None:
+            raise ApiError(500, "persisted request has no response")
+        response = jsonify(payload)
+        response.status_code = 502 if turn.get("status") == "failed" else 200
+    response.headers["X-Request-Id"] = request_id
+    response.headers["X-Idempotent-Replay"] = "1"
+    return response
+
 
 @app.route('/api/alex', methods=['POST'])
 async def api_alex():
@@ -1143,42 +1284,78 @@ async def api_alex():
     # 前端 UI 语言（并行 agent 发送 ui_language）；缺失/非法按 'en'。用于回复语言决策。
     ui_language = _normalize_ui_language(data.get('ui_language'))
 
+    request_id = new_request_id(request.headers.get("X-Request-Id"))
+    # Idempotency is user-global, not merely conversation-local. This matters when
+    # the first request implicitly creates a conversation and the client retries
+    # before it has received that conversation id.
+    existing_turn = conversation_store.get_request_turn(user_id, request_id)
+    if existing_turn is not None:
+        return _request_replay_response(user_id, request_id, existing_turn)
+
     # --- resolve / implicitly create the conversation --------------------------
-    # New conversations are stamped with THIS process's sticky canary assignment at creation;
-    # existing ones are reconciled (emergency-rollback path only — normally a no-op).
+    # New conversations are stamped with THIS process's architecture provenance at creation;
+    # existing ones are reconciled after a pool switch (normally a no-op).
     conversation_id = data.get('conversation_id')
     conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
-    if not conv:
-        conv = conversation_store.create_conversation(
-            user_id, title=_derive_title(user_message),
-            agent_arch=AGENT_ARCH, agent_version=APP_CANDIDATE_SHA, strict=DEEPSEEK_STRICT)
-        conversation_id = conv['id']
-        print(f"🆕 [ALEX] implicitly created conversation {conversation_id}")
-    else:
+    if conv:
+        conversation_id = conv["id"]
         _reconcile_agent_arch(user_id, conversation_id, conv)
+    else:
+        conversation_id = None
 
-    print(f"\n{'='*60}")
-    print(f"🤖 [ALEX - LangGraph Agent] 收到消息: {user_message}")
-    print(f"👤 [ALEX] user_id: {user_id} | 🧵 conversation_id: {conversation_id}")
-    print(f"📋 [ALEX] is_continuation: {is_continuation}")
-    print(f"📋 [ALEX] context: {context}")
-    print(f"{'='*60}")
-
-    request_id = new_request_id(request.headers.get("X-Request-Id"))
     # Correlation for a boundary 5xx (see _emit_canary_boundary_5xx): stamped as
     # early as possible so even a failure before the turn anchor is joinable.
     g.canary_request_id = request_id
 
-    # Persist the user turn up-front (survives a crash mid-generation) and open a turn.
-    # begin_turn needs the user message's rowid, so the user row is written first; once the
-    # turn id exists we stamp it back onto the user row so BOTH the user and assistant rows
-    # carry turn_id (the frontend edits a USER message and needs its turn_id to branch).
-    _user_msg = conversation_store.add_message(user_id, conversation_id, "user", user_message)
-    turn = conversation_store.begin_turn(
-        user_id, conversation_id, request_id=request_id,
-        user_message_id=_user_msg.get("id"))
+    # One transaction creates an implicit conversation (if needed), stores the user
+    # message, claims the request id and acquires the cross-process conversation lease.
+    try:
+        turn = conversation_store.start_request_turn(
+            user_id,
+            conversation_id,
+            request_id,
+            user_message,
+            lease_seconds=_runtime_config.turn_lease_seconds,
+            create_title=_derive_title(user_message),
+            agent_arch=AGENT_ARCH,
+            agent_version=APP_CANDIDATE_SHA,
+            strict=DEEPSEEK_STRICT,
+        )
+    except ConversationBusy as exc:
+        response = jsonify({
+            "error": "another turn is already running for this conversation",
+            "running_turn_id": exc.turn_id,
+            "conversation_id": conversation_id,
+        })
+        response.status_code = 409
+        response.headers["Retry-After"] = str(exc.retry_after)
+        response.headers["X-Request-Id"] = request_id
+        return response
+    except PrivacyErasureInProgress:
+        response = jsonify({"error": "privacy erasure is in progress"})
+        response.status_code = 423
+        response.headers["Retry-After"] = "1"
+        response.headers["X-Request-Id"] = request_id
+        return response
+
+    if turn.get("replayed"):
+        return _request_replay_response(user_id, request_id, turn)
+
+    conversation_id = turn["conversation_id"]
     turn_id = turn["id"]
-    conversation_store.set_message_turn(user_id, _user_msg.get("id"), turn_id)
+    uid_hash, _ = hash_user_id(user_id)
+    logger.info(
+        "agent.turn.start",
+        extra={
+            "request_id": request_id,
+            "conversation_id": conversation_id,
+            "user_id_hash": uid_hash,
+            "agent_arch": AGENT_ARCH,
+            "is_continuation": bool(is_continuation),
+            "message_chars": len(user_message),
+            "context_keys": sorted(str(key) for key in context.keys()) if isinstance(context, dict) else [],
+        },
+    )
 
     _turn_crashed = False
     # Canary: clear any inherited fc-signal carrier, then time the whole turn. handle_with_
@@ -1195,6 +1372,8 @@ async def api_alex():
     g.canary_turn_started = _turn_started_ms
     g.canary_conversation_id = conversation_id
     g.canary_user_id = user_id
+    _outbox_token = _turn_background_jobs.set([])
+    _background_jobs = []
     try:
         # 所有请求都通过 ReAct Agent 处理
         with request_context(request_id, user_id):
@@ -1203,8 +1382,15 @@ async def api_alex():
                 ui_language=ui_language, turn=turn,
             )
     except Exception as e:
-        print(f"❌ [ALEX] 错误: {e}")
-        traceback.print_exc()
+        logger.error(
+            "agent.turn.execution_failed",
+            extra={
+                "request_id": request_id,
+                "conversation_id": conversation_id,
+                "error_type": type(e).__name__,
+                "agent_arch": AGENT_ARCH,
+            },
+        )
         _turn_crashed = True
         # 错误文案也遵循回复语言策略（本条消息含中文→中文，否则跟随 UI 语言）。
         _err_zh = _resolve_reply_language(user_message, ui_language) == "zh"
@@ -1213,38 +1399,112 @@ async def api_alex():
             "message": ("抱歉，处理您的请求时出错了。请稍后再试。" if _err_zh
                         else "Sorry, something went wrong while handling your request. Please try again."),
         }
+    finally:
+        _background_jobs = list(_turn_background_jobs.get() or [])
+        _turn_background_jobs.reset(_outbox_token)
 
     # conversation_id + turn_id are echoed in EVERY response (incl. errors + implicit creation).
     payload["conversation_id"] = conversation_id
     payload["turn_id"] = turn_id
-
-    # Persist the assistant reply (tagged with turn_id; recommendations preserved verbatim).
-    _asst_msg_id = None
+    _serialization_failed = False
     try:
-        _asst = conversation_store.add_message(
-            user_id, conversation_id, "assistant",
-            payload.get("message", ""),
+        payload, _boundary_blocked = _guard_payload_before_persistence(payload)
+    except ResponsePayloadSerializationError as e:
+        logger.error(
+            "response.serialization_failed",
+            extra={"request_id": request_id, "error_type": type(e.__cause__).__name__},
+        )
+        payload = {
+            "response_type": "error",
+            "message": "internal server error",
+            "conversation_id": conversation_id,
+            "turn_id": turn_id,
+        }
+        _boundary_blocked = False
+        _serialization_failed = True
+    if _boundary_blocked:
+        _turn_crashed = True
+    if _serialization_failed:
+        _turn_crashed = True
+
+    # Build the snapshot before opening the final database transaction. A successful
+    # response without a durable snapshot is not a completed turn.
+    _terminal_failed = _turn_crashed or payload.get("response_type") == "error"
+    _snapshot = None
+    if not _terminal_failed:
+        try:
+            _snapshot = _build_turn_snapshot_after_turn(
+                user_id, conversation_id, turn_id
+            )
+        except Exception as e:
+            logger.error(
+                "agent.turn.snapshot_failed",
+                extra={
+                    "request_id": request_id,
+                    "conversation_id": conversation_id,
+                    "error_type": type(e).__name__,
+                },
+            )
+            _turn_crashed = True
+            _terminal_failed = True
+            _err_zh = _resolve_reply_language(user_message, ui_language) == "zh"
+            payload = {
+                "response_type": "error",
+                "message": (
+                    "抱歉，无法可靠保存本轮结果，请稍后重试。"
+                    if _err_zh
+                    else "Sorry, this turn could not be saved reliably. Please try again."
+                ),
+                "conversation_id": conversation_id,
+                "turn_id": turn_id,
+            }
+
+    # Assistant message, terminal status and snapshot are committed together. A
+    # database failure escapes to the API 500 handler; fail_turn releases the lease
+    # so the conversation is not permanently wedged.
+    try:
+        conversation_store.finalize_request_turn(
+            user_id,
+            turn_id,
+            status="failed" if _terminal_failed else "completed",
+            assistant_content=payload.get("message", ""),
             response_type=payload.get("response_type"),
             recommendations=payload.get("recommendations"),
-            turn_id=turn_id,
+            snapshot=_snapshot,
+            background_jobs=([] if _terminal_failed else _background_jobs),
         )
-        _asst_msg_id = _asst.get("id")
     except Exception as e:
-        print(f"[persist] assistant message failed: {e}")
+        logger.error(
+            "agent.turn.persistence_failed",
+            extra={
+                "request_id": request_id,
+                "conversation_id": conversation_id,
+                "error_type": type(e).__name__,
+            },
+        )
+        try:
+            conversation_store.fail_turn(user_id, turn_id)
+        finally:
+            _session_store.clear(user_id, conversation_id)
+        raise
 
-    # Finalize the turn: an agent-side error (or a crash) fails the turn; a real answer
-    # completes it and snapshots the post-turn context (built AFTER _write_back_turn ran
-    # inside handle_with_react_agent). A failed turn is never a valid fork target.
-    if _turn_crashed or payload.get("response_type") == "error":
-        conversation_store.fail_turn(user_id, turn_id)
-    else:
-        conversation_store.complete_turn(user_id, turn_id, assistant_message_id=_asst_msg_id)
-        _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id)
+    if _terminal_failed:
+        # Discard any speculative L2 mutation from a failed run; the next request
+        # rehydrates from the latest completed durable snapshot.
+        _session_store.clear(user_id, conversation_id)
+    elif _background_jobs:
+        try:
+            _ensure_outbox_worker()
+        except Exception as e:
+            # The jobs are already committed. A later request/process will restart
+            # the consumer, so worker startup failure must not falsify this turn.
+            logger.error(
+                "background_worker.start_failed",
+                extra={"error_type": type(e).__name__},
+            )
 
-    # Always HTTP 200: an agent-side "error" is a normal response_type the client renders,
-    # and returning 200 lets the frontend adopt conversation_id + persist the turn even when
-    # generation failed (a 500 would orphan the freshly-created conversation).
-    #
+    _http_status = 500 if _serialization_failed else (502 if _terminal_failed else 200)
+
     # ORDER MATTERS: the response is fully materialized BEFORE the canary record is
     # emitted. jsonify() is the last thing that can still fail (a non-serializable
     # payload raises here), and if it does we must NOT have already logged
@@ -1254,16 +1514,19 @@ async def api_alex():
     # means a failure falls through to _handle_uncaught with canary_emitted still
     # False, so exactly one record is written and it says server_error.
     response = jsonify(payload)
+    response.status_code = _http_status
     response.headers["X-Request-Id"] = request_id
+    response.headers["X-Agent-Outcome"] = "error" if _terminal_failed else "ok"
     response = _dsml_boundary_check(response, payload)
 
     # Canary: one structured record per turn (both archs; fc signals default when absent).
-    # http_status is 200 here because the response above was built successfully.
+    # http_status reflects the actual response, including a controlled agent 502.
     _emit_canary_turn(
         endpoint=ENDPOINT_ALEX,
         conversation_id=conversation_id, user_id=user_id, request_id=request_id,
-        http_status=200,
-        turn_outcome=(OUTCOME_CRASH if _turn_crashed else
+        http_status=response.status_code,
+        turn_outcome=(OUTCOME_SERVER_ERROR if _serialization_failed else
+                      OUTCOME_CRASH if _turn_crashed else
                       OUTCOME_AGENT_ERROR if payload.get("response_type") == "error"
                       else OUTCOME_OK),
         turn_latency_ms=(time.perf_counter() - _turn_started_ms) * 1000.0,
@@ -1769,12 +2032,13 @@ def _narrates_cached_listings(response_text, last_results,
     return False
 
 
-def _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
-    """Build + persist the post-turn context snapshot AFTER _write_back_turn ran.
+def _build_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
+    """Build the post-turn context snapshot AFTER _write_back_turn ran.
 
     Runs under the per-conversation turn lock so the read of _sess.persistent_state is
-    consistent with the just-completed write-back. Best-effort — a snapshot failure must
-    never turn a successful turn into an error (the durable transcript still persisted).
+    consistent with the just-completed write-back. The HTTP request path passes the
+    returned value to ConversationStore.finalize_request_turn so assistant/status/snapshot
+    commit in one transaction.
 
     context_revision: a monotonic per-conversation counter = previous snapshot's
     context_revision + 1 (starting at 1). complete_turn has already marked THIS turn
@@ -1782,50 +2046,149 @@ def _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
     PREVIOUS turn's snapshot — the revision keeps climbing across turns and across a fork
     (the child inherits the copied snapshots and continues from their revision).
     """
-    try:
-        prev = conversation_store.latest_snapshot(user_id, conversation_id)
-        if isinstance(prev, dict):
-            try:
-                context_revision = int(prev.get("context_revision", 0)) + 1
-            except (TypeError, ValueError):
-                context_revision = 1
-        else:
+    prev = conversation_store.latest_snapshot(user_id, conversation_id)
+    if isinstance(prev, dict):
+        try:
+            context_revision = int(prev.get("context_revision", 0)) + 1
+        except (TypeError, ValueError):
             context_revision = 1
-        with _session_store.turn_lock(user_id, conversation_id):
-            _sess = _get_session(user_id, conversation_id)
-            snapshot = build_turn_snapshot(
-                turn_id=turn_id,
-                persistent_state=_sess.persistent_state,
-                context_revision=context_revision,
+    else:
+        context_revision = 1
+    with _session_store.turn_lock(user_id, conversation_id):
+        _sess = _get_session(user_id, conversation_id)
+        return build_turn_snapshot(
+            turn_id=turn_id,
+            persistent_state=_sess.persistent_state,
+            context_revision=context_revision,
+        )
+
+
+def _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
+    """Compatibility helper for non-request callers; request routes finalize atomically."""
+    snapshot = _build_turn_snapshot_after_turn(user_id, conversation_id, turn_id)
+    conversation_store.save_turn_snapshot(user_id, conversation_id, turn_id, snapshot)
+    return snapshot
+
+
+def _queue_background_job(job: dict) -> bool:
+    """Attach work to the active turn; finalization persists it atomically."""
+    jobs = _turn_background_jobs.get()
+    if jobs is None:
+        logger.warning(
+            "background_job.no_turn_outbox",
+            extra={"job_kind": str((job or {}).get("kind") or "unknown")},
+        )
+        return False
+    jobs.append(copy.deepcopy(job))
+    return True
+
+
+def _process_background_job(job: dict, worker_id: str) -> None:
+    """Prepare and apply one leased outbox job.
+
+    Summary preparation is checkpointed before it mutates the latest snapshot, so a
+    crash re-applies the same value rather than making a second LLM call. Memory uses
+    its own per-user idempotency key and is therefore safe under at-least-once delivery.
+    """
+    kind = job.get("kind")
+    payload = job.get("payload") or {}
+    if not isinstance(payload, dict):
+        raise ValueError("background job payload is invalid")
+
+    if kind == "rolling_summary":
+        result = job.get("result")
+        if not isinstance(result, dict):
+            latest = conversation_store.latest_snapshot(
+                job["user_id"], job["conversation_id"]
+            ) or {}
+            prior = latest.get("summary")
+            summary = update_rolling_summary(
+                _llm_complete,
+                prior,
+                payload.get("dropped_turns") or [],
+                payload.get("reply_language") or "en",
             )
-        conversation_store.save_turn_snapshot(user_id, conversation_id, turn_id, snapshot)
-    except Exception as e:
-        print(f"[snapshot] save skipped ({user_id}:{conversation_id}): {e}")
+            result = {
+                "summary": summary,
+                "through_turn_id": payload.get("through_turn_id") or job["turn_id"],
+            }
+            conversation_store.save_background_job_result(
+                job["id"], worker_id, result
+            )
+        through = str(result.get("through_turn_id") or job["turn_id"])
+        if not conversation_store.patch_latest_snapshot_summary(
+            job["user_id"], job["conversation_id"],
+            str(result.get("summary") or ""), through,
+        ):
+            raise RuntimeError("no completed snapshot exists for summary job")
+        with _session_store.turn_lock(job["user_id"], job["conversation_id"]):
+            sess = _get_session(job["user_id"], job["conversation_id"])
+            ec = sess.persistent_state.setdefault("extracted_context", {})
+            ec["rolling_summary"] = str(result.get("summary") or "")
+            ec["rolling_summary_through_turn_id"] = through
+        return
+
+    if kind == "memory_turn":
+        if not isinstance(job.get("result"), dict):
+            from rag.agent_memory import get_agent_memory
+            ok = get_agent_memory().remember_turn(
+                payload.get("user_message") or "",
+                payload.get("assistant_message") or "",
+                session_id=payload.get("session_id") or job["user_id"],
+                user_id=job["user_id"],
+                tool_used=payload.get("tool_used"),
+                idempotency_key=payload.get("idempotency_key"),
+                conversation_id=job["conversation_id"],
+                turn_id=job["turn_id"],
+                turn_started_at=payload.get("turn_started_at"),
+                context_tainted=bool(payload.get("context_tainted", False)),
+            )
+            if ok is False:
+                raise RuntimeError("memory store did not acknowledge the turn")
+            conversation_store.save_background_job_result(
+                job["id"], worker_id, {"stored": True}
+            )
+        return
+
+    raise ValueError(f"unsupported background job kind: {kind!r}")
+
+
+def _ensure_outbox_worker():
+    """Start/restart the durable consumer and wake it after a commit."""
+    global _outbox_worker
+    configured = os.getenv("BACKGROUND_JOBS_ENABLED")
+    if configured is None and "PYTEST_CURRENT_TEST" in os.environ:
+        return None
+    if configured is not None and configured.strip().lower() not in {
+        "1", "true", "yes", "on"
+    }:
+        return None
+    with _outbox_worker_lock:
+        if _outbox_worker is None:
+            _outbox_worker = OutboxWorker(
+                conversation_store,
+                _process_background_job,
+                poll_seconds=float(os.getenv("BACKGROUND_JOB_POLL_S", "2")),
+                lease_seconds=int(os.getenv("BACKGROUND_JOB_LEASE_S", "300")),
+                max_attempts=int(os.getenv("BACKGROUND_JOB_MAX_ATTEMPTS", "5")),
+            )
+        _outbox_worker.start()
+        _outbox_worker.wake()
+        return _outbox_worker
 
 
 def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
                                   through_turn_id, reply_language):
-    """Fold the turns just trimmed out of the hot history into the rolling summary on a
-    daemon background thread (an LLM call — must never block or break the turn). The
-    result is written under the turn lock into extracted_context so the NEXT turn's
-    snapshot captures it. Any failure is swallowed (update_rolling_summary itself keeps
-    the prior summary on error)."""
-    def _run():
-        try:
-            lock = _session_store.turn_lock(user_id, conversation_id)
-            with lock:
-                _s = _get_session(user_id, conversation_id)
-                prior = (_s.persistent_state.get("extracted_context") or {}).get("rolling_summary")
-            new_summary = update_rolling_summary(
-                _llm_complete, prior, dropped_turns, reply_language)
-            with lock:
-                _s = _get_session(user_id, conversation_id)
-                ec = _s.persistent_state.setdefault("extracted_context", {})
-                ec["rolling_summary"] = new_summary
-                ec["rolling_summary_through_turn_id"] = through_turn_id
-        except Exception as e:
-            print(f"[summary] rolling update skipped ({user_id}:{conversation_id}): {e}")
-    threading.Thread(target=_run, daemon=True).start()
+    """Queue a durable summary fold; no LLM work runs before turn commit."""
+    return _queue_background_job({
+        "kind": "rolling_summary",
+        "dedupe_key": f"turn:{through_turn_id}:rolling-summary",
+        "payload": {
+            "dropped_turns": copy.deepcopy(dropped_turns),
+            "through_turn_id": through_turn_id,
+            "reply_language": reply_language,
+        },
+    })
 
 
 def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
@@ -2241,25 +2604,28 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         reply_language=extracted_context.get('reply_language', 'en'),
     )
 
-    # ── 写入长期记忆（后台线程: Mem0 式抽取+整合 / GA 反思，不阻塞响应）──
-    # 记忆按 user_id 命名空间共享（跨会话），故 session_id 传 user_id。
-    try:
-        from rag.agent_memory import get_agent_memory
-        _td = final_state.get('tool_decision')
-        _tool_used = _td.get('tool') if isinstance(_td, dict) else None
-        get_agent_memory().remember_turn_async(
-            user_message, response_text,
-            session_id=user_id, user_id=user_id, tool_used=_tool_used,
-            idempotency_key=f"turn:{request_id}" if request_id else None,
-            conversation_id=conversation_id,
-            turn_id=(turn.get("id") if isinstance(turn, dict) else None),
-            turn_started_at=(turn.get("started_at") if isinstance(turn, dict) else None),
+    # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/Chroma 写入 ──
+    # 记忆按 user_id 命名空间共享（跨会话）；worker 使用 idempotency_key 做 at-least-once
+    # 去重。进程若在响应后退出，租约到期后另一进程会继续，不会静默丢任务。
+    _td = final_state.get('tool_decision')
+    _tool_used = _td.get('tool') if isinstance(_td, dict) else None
+    _queue_background_job({
+        "kind": "memory_turn",
+        "dedupe_key": f"turn:{request_id}:memory" if request_id else (
+            f"turn:{turn.get('id')}:memory" if isinstance(turn, dict) else "memory:unanchored"
+        ),
+        "payload": {
+            "user_message": user_message,
+            "assistant_message": response_text,
+            "session_id": user_id,
+            "tool_used": _tool_used,
+            "idempotency_key": f"turn:{request_id}" if request_id else None,
+            "turn_started_at": (turn.get("started_at") if isinstance(turn, dict) else None),
             # Taint A+ (§2.8c): a tainted turn hardens the auto-memory bypass to
             # user-only fact extraction so untrusted content can't seed durable memory.
-            context_tainted=final_state.get('context_tainted', False),
-        )
-    except Exception as _e:
-        print(f"[Memory] write skipped: {_e}")
+            "context_tainted": bool(final_state.get('context_tainted', False)),
+        },
+    })
 
     # ── 构建响应 payload（conversation_id 由调用方 api_alex 注入）──
     _tool_data = tool_data if isinstance(tool_data, dict) else {}
@@ -2523,17 +2889,54 @@ async def api_search_direct():
         no_commute, commute_destination, max_commute_time, move_in_date,
         reply_language=reply_language)
 
+    request_id = new_request_id(request.headers.get("X-Request-Id"))
+    existing_turn = conversation_store.get_request_turn(user_id, request_id)
+    if existing_turn is not None:
+        return _request_replay_response(user_id, request_id, existing_turn)
+
     # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
     conversation_id = data.get('conversation_id')
     conv = conversation_store.get_conversation(user_id, conversation_id) if conversation_id else None
-    if not conv:
-        conv = conversation_store.create_conversation(
-            user_id, title=_derive_title(readable),
-            agent_arch=AGENT_ARCH, agent_version=APP_CANDIDATE_SHA, strict=DEEPSEEK_STRICT)
-        conversation_id = conv['id']
-        print(f"🆕 [SEARCH_DIRECT] implicitly created conversation {conversation_id}")
-    else:
+    if conv:
+        conversation_id = conv["id"]
         _reconcile_agent_arch(user_id, conversation_id, conv)
+    else:
+        conversation_id = None
+
+    g.canary_request_id = request_id
+    try:
+        turn = conversation_store.start_request_turn(
+            user_id,
+            conversation_id,
+            request_id,
+            readable,
+            lease_seconds=_runtime_config.turn_lease_seconds,
+            create_title=_derive_title(readable),
+            agent_arch=AGENT_ARCH,
+            agent_version=APP_CANDIDATE_SHA,
+            strict=DEEPSEEK_STRICT,
+        )
+    except ConversationBusy as exc:
+        response = jsonify({
+            "error": "another turn is already running for this conversation",
+            "running_turn_id": exc.turn_id,
+            "conversation_id": conversation_id,
+        })
+        response.status_code = 409
+        response.headers["Retry-After"] = str(exc.retry_after)
+        response.headers["X-Request-Id"] = request_id
+        return response
+    except PrivacyErasureInProgress:
+        response = jsonify({"error": "privacy erasure is in progress"})
+        response.status_code = 423
+        response.headers["Retry-After"] = "1"
+        response.headers["X-Request-Id"] = request_id
+        return response
+
+    if turn.get("replayed"):
+        return _request_replay_response(user_id, request_id, turn)
+    conversation_id = turn["conversation_id"]
+    turn_id = turn["id"]
 
     # Open an observation window here too. This path makes no LLM call, so
     # search_direct_signals() can assert provable zeros for everything else — but the
@@ -2546,25 +2949,19 @@ async def api_search_direct():
     g.canary_conversation_id = conversation_id
     g.canary_user_id = user_id
 
-    print(f"\n{'='*60}")
-    print(f"🔍 [SEARCH_DIRECT] {readable}")
-    print(f"👤 [SEARCH_DIRECT] user_id: {user_id} | 🧵 conversation_id: {conversation_id}")
-    print(f"{'='*60}")
-
-    request_id = new_request_id(request.headers.get("X-Request-Id"))
-    # Correlation for a boundary 5xx (see _emit_canary_boundary_5xx): stamped as
-    # early as possible so even a failure before the turn anchor is joinable.
-    g.canary_request_id = request_id
-
-    # Persist the user turn up-front (survives a crash mid-search) and open a turn spanning
-    # this request. (See /api/alex: the user row is stamped with turn_id after begin_turn so
-    # both the user and assistant rows carry it, which the edit-and-branch flow relies on.)
-    _user_msg = conversation_store.add_message(user_id, conversation_id, "user", readable)
-    turn = conversation_store.begin_turn(
-        user_id, conversation_id, request_id=request_id,
-        user_message_id=_user_msg.get("id"))
-    turn_id = turn["id"]
-    conversation_store.set_message_turn(user_id, _user_msg.get("id"), turn_id)
+    uid_hash, _ = hash_user_id(user_id)
+    logger.info(
+        "search_direct.turn.start",
+        extra={
+            "request_id": request_id,
+            "conversation_id": conversation_id,
+            "user_id_hash": uid_hash,
+            "agent_arch": AGENT_ARCH,
+            "area_count": len(areas),
+            "has_budget": max_budget is not None,
+            "has_commute": bool(tool_commute_destination),
+        },
+    )
 
     # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
     try:
@@ -2623,11 +3020,14 @@ async def api_search_direct():
             "area_recommendations": result.get('area_recommendations') or [],
         }
     except Exception as e:
-        # Same convention as /api/alex: a tool-side error is a normal response_type the
-        # client renders, returned at HTTP 200 so the freshly-created conversation isn't
-        # orphaned and the frontend can still adopt conversation_id.
-        print(f"❌ [SEARCH_DIRECT] 错误: {e}")
-        traceback.print_exc()
+        logger.error(
+            "search_direct.turn.execution_failed",
+            extra={
+                "request_id": request_id,
+                "conversation_id": conversation_id,
+                "error_type": type(e).__name__,
+            },
+        )
         recommendations = []
         message = ("抱歉，搜索房源时出错了。请稍后再试。" if reply_language == 'zh'
                    else "Sorry, something went wrong while searching. Please try again.")
@@ -2641,58 +3041,134 @@ async def api_search_direct():
     # conversation_id + turn_id echoed in EVERY response (incl. errors + implicit creation).
     payload["conversation_id"] = conversation_id
     payload["turn_id"] = turn_id
-
-    # --- L2 write-back — SAME helper the ReAct path uses (phase 3) --------------
-    # A form submit is authoritative, so OVERWRITE the scalar accumulated criteria (the
-    # list fields are kept as-is by _write_back_turn). user_preferences is left untouched
-    # (no LLM preference extraction on this path). Deliberately NO remember_turn_async:
-    # deterministic form input is not a conversational signal worth writing to long-term
-    # memory (unlike a chat turn on /api/alex).
-    _write_back_turn(
-        user_id, conversation_id, readable, message, recommendations,
-        criteria_overwrite={
-            'area': area,
-            'areas': areas,   # 🆕 多区域：持久化提交的区域集合
-            'commute_destination': commute_destination,
-            'destination': commute_destination,   # legacy mirror consumed by older paths
-            'max_budget': max_budget,
-            'max_travel_time': max_commute_time,
-            'no_commute': no_commute,
-            'bedrooms': bedrooms,
-            'budget_period': budget_period,
-            'room_type': room_type,
-            'move_in_date': move_in_date,   # 🆕 期望入住日持久化（表单值跨轮保留）
-        },
-        turn_id=turn_id,
-        reply_language=reply_language,
-    )
-
-    # Persist the assistant reply (tagged with turn_id; recommendations preserved verbatim).
-    _asst_msg_id = None
+    _serialization_failed = False
     try:
-        _asst = conversation_store.add_message(
-            user_id, conversation_id, "assistant", message,
+        payload, _boundary_blocked = _guard_payload_before_persistence(payload)
+    except ResponsePayloadSerializationError as e:
+        logger.error(
+            "response.serialization_failed",
+            extra={"request_id": request_id, "error_type": type(e.__cause__).__name__},
+        )
+        payload = {
+            "response_type": "error",
+            "message": "internal server error",
+            "conversation_id": conversation_id,
+            "turn_id": turn_id,
+        }
+        _boundary_blocked = False
+        _serialization_failed = True
+    if _boundary_blocked:
+        recommendations = []
+        message = payload["message"]
+    if _serialization_failed:
+        recommendations = []
+        message = payload["message"]
+
+    _terminal_failed = (
+        _serialization_failed or _boundary_blocked
+        or payload.get("response_type") == "error"
+    )
+    _snapshot = None
+    _background_jobs = []
+    if not _terminal_failed:
+        _outbox_token = _turn_background_jobs.set([])
+        try:
+            # A form submit is authoritative, so overwrite scalar accumulated criteria.
+            # No long-term-memory write occurs on this deterministic path.
+            _write_back_turn(
+                user_id, conversation_id, readable, message, recommendations,
+                criteria_overwrite={
+                    'area': area,
+                    'areas': areas,
+                    'commute_destination': commute_destination,
+                    'destination': commute_destination,
+                    'max_budget': max_budget,
+                    'max_travel_time': max_commute_time,
+                    'no_commute': no_commute,
+                    'bedrooms': bedrooms,
+                    'budget_period': budget_period,
+                    'room_type': room_type,
+                    'move_in_date': move_in_date,
+                },
+                turn_id=turn_id,
+                reply_language=reply_language,
+            )
+            _snapshot = _build_turn_snapshot_after_turn(
+                user_id, conversation_id, turn_id
+            )
+        except Exception as e:
+            logger.error(
+                "search_direct.turn_state_failed",
+                extra={
+                    "request_id": request_id,
+                    "conversation_id": conversation_id,
+                    "error_type": type(e).__name__,
+                },
+            )
+            _terminal_failed = True
+            recommendations = []
+            message = (
+                "抱歉，无法可靠保存搜索结果，请稍后重试。"
+                if reply_language == "zh"
+                else "Sorry, the search result could not be saved reliably. Please try again."
+            )
+            payload = {
+                "response_type": "error",
+                "message": message,
+                "recommendations": [],
+                "search_criteria": {},
+                "conversation_id": conversation_id,
+                "turn_id": turn_id,
+            }
+        finally:
+            _background_jobs = list(_turn_background_jobs.get() or [])
+            _turn_background_jobs.reset(_outbox_token)
+
+    try:
+        conversation_store.finalize_request_turn(
+            user_id,
+            turn_id,
+            status="failed" if _terminal_failed else "completed",
+            assistant_content=message,
             response_type=payload.get("response_type"),
             recommendations=recommendations,
-            turn_id=turn_id,
+            snapshot=_snapshot,
+            background_jobs=([] if _terminal_failed else _background_jobs),
         )
-        _asst_msg_id = _asst.get("id")
     except Exception as e:
-        print(f"[persist] assistant message failed: {e}")
+        logger.error(
+            "search_direct.turn.persistence_failed",
+            extra={
+                "request_id": request_id,
+                "conversation_id": conversation_id,
+                "error_type": type(e).__name__,
+            },
+        )
+        try:
+            conversation_store.fail_turn(user_id, turn_id)
+        finally:
+            _session_store.clear(user_id, conversation_id)
+        raise
 
-    # Finalize the turn: a tool-side error fails it; a real search completes it and
-    # snapshots the post-turn context (built AFTER _write_back_turn cached the criteria).
-    if payload.get("response_type") == "error":
-        conversation_store.fail_turn(user_id, turn_id)
-    else:
-        conversation_store.complete_turn(user_id, turn_id, assistant_message_id=_asst_msg_id)
-        _save_turn_snapshot_after_turn(user_id, conversation_id, turn_id)
+    if not _terminal_failed and _background_jobs:
+        try:
+            _ensure_outbox_worker()
+        except Exception as e:
+            logger.error(
+                "background_worker.start_failed",
+                extra={"error_type": type(e).__name__},
+            )
+
+    if _terminal_failed:
+        _session_store.clear(user_id, conversation_id)
 
     # Serialize BEFORE emitting — same ordering rule as /api/alex: a jsonify() failure
     # must reach the 500 handler with canary_emitted still False so the boundary
     # record is the one and only record, and it reports the 500 the user actually got.
     response = jsonify(payload)
+    response.status_code = 500 if _serialization_failed else (502 if _terminal_failed else 200)
     response.headers["X-Request-Id"] = request_id
+    response.headers["X-Agent-Outcome"] = "error" if _terminal_failed else "ok"
     # This path is LLM-free, so a hit here would be genuinely surprising — which is
     # the reason to check rather than to assume.
     response = _dsml_boundary_check(response, payload)
@@ -2705,8 +3181,9 @@ async def api_search_direct():
     _emit_canary_turn(
         endpoint=ENDPOINT_SEARCH_DIRECT,
         conversation_id=conversation_id, user_id=user_id, request_id=request_id,
-        http_status=200,
-        turn_outcome=(OUTCOME_AGENT_ERROR if payload.get("response_type") == "error"
+        http_status=response.status_code,
+        turn_outcome=(OUTCOME_SERVER_ERROR if _serialization_failed else
+                      OUTCOME_AGENT_ERROR if payload.get("response_type") == "error"
                       else OUTCOME_OK),
         turn_latency_ms=(time.perf_counter() - _turn_started_ms) * 1000.0,
         fc_signals=search_direct_signals())
@@ -2730,7 +3207,7 @@ def create_conversation():
     """Create a new conversation. Body: {user_id, title?}."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
-    # Stamp the sticky canary assignment at creation (this process's constants).
+    # Stamp architecture provenance at creation (this process's constants).
     conv = conversation_store.create_conversation(
         user_id, title=data.get('title'),
         agent_arch=AGENT_ARCH, agent_version=APP_CANDIDATE_SHA, strict=DEEPSEEK_STRICT)
@@ -2921,7 +3398,13 @@ def clear_history():
         for c in conversation_store.delete_all_conversations(user_id):
             _delete_checkpoint_thread(user_id, c)
         _session_store.clear_user(user_id)
-    print(f"[ALEX] 对话历史已清除 (user_id={user_id}, conversation_id={cid})")
+    logger.info(
+        "conversation.history_cleared",
+        extra={
+            "user_id_hash": hash_user_id(user_id)[0],
+            "scope": "conversation" if cid else "user",
+        },
+    )
     return jsonify({"success": True, "message": "Conversation history cleared"})
 
 
@@ -2932,22 +3415,159 @@ def forget_me():
     checkpointer threads, and hot-cache slices."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
-
-    # 1) long-term memory (ChromaDB, namespaced by user_id)
     try:
-        from rag.agent_memory import get_agent_memory
-        wiped = get_agent_memory().forget(user_id)
-        print(f"[forget_me] wiped {wiped} memory records for user_id={user_id}")
-    except Exception as e:
-        print(f"[forget_me] memory wipe skipped: {e}")
+        conversation_store.begin_privacy_erasure(user_id)
+    except ConversationBusy as exc:
+        response = jsonify({
+            "forgotten": False,
+            "status": "busy",
+            "error": "a conversation turn is still running; retry after it finishes",
+            "running_turn_id": exc.turn_id,
+        })
+        response.status_code = 409
+        response.headers["Retry-After"] = str(exc.retry_after)
+        return response
+    except PrivacyErasureInProgress:
+        response = jsonify({
+            "forgotten": False,
+            "status": "busy",
+            "error": "privacy erasure is already in progress",
+        })
+        response.status_code = 409
+        response.headers["Retry-After"] = "1"
+        return response
 
-    # 2) conversations + messages (+ checkpointer threads) + favorites + hot cache
-    for c in conversation_store.delete_all_conversations(user_id):
-        _delete_checkpoint_thread(user_id, c)
-    conversation_store.delete_all_favorites(user_id)
-    _session_store.clear_user(user_id)
+    layers: dict[str, dict] = {}
+    try:
+        # Capture identifiers only; no message/favorite/memory content is read or logged.
+        conversation_ids = [
+            item["id"] for item in conversation_store.list_conversations(user_id)
+        ]
 
-    return jsonify({"forgotten": True})
+        try:
+            from rag.agent_memory import get_agent_memory
+            memory = get_agent_memory()
+            before_memory = memory.privacy_inventory(user_id)
+            deleted_memory = memory.forget(user_id)
+            after_memory = memory.privacy_inventory(user_id)
+            memory_ok = after_memory["total"] == 0
+            layers["memory"] = {
+                "status": "deleted" if memory_ok else "failed",
+                "deleted": int(deleted_memory),
+                "before": before_memory,
+                "after": after_memory,
+            }
+        except Exception as exc:
+            memory_ok = False
+            layers["memory"] = {
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "after": None,
+            }
+
+        checkpoint_results = [
+            _delete_checkpoint_thread(user_id, cid)
+            for cid in conversation_ids
+        ]
+        checkpoints_ok = all(
+            result.get("status") in {"deleted", "disabled"}
+            and result.get("residual") is False
+            for result in checkpoint_results
+        )
+        layers["checkpoints"] = {
+            "status": "deleted" if checkpoints_ok else "failed",
+            "threads": len(conversation_ids),
+            "results": checkpoint_results,
+        }
+
+        if memory_ok and checkpoints_ok:
+            try:
+                relational = conversation_store.delete_all_user_data(user_id)
+                relational_ok = relational["after"]["total"] == 0
+                layers["relational"] = {
+                    "status": "deleted" if relational_ok else "failed",
+                    "before": relational["before"],
+                    "after": relational["after"],
+                }
+            except Exception as exc:
+                relational_ok = False
+                layers["relational"] = {
+                    "status": "failed",
+                    "error_type": type(exc).__name__,
+                    "after": None,
+                }
+        else:
+            relational_ok = False
+            retained = conversation_store.privacy_inventory(user_id)
+            layers["relational"] = {
+                "status": "retained_for_retry",
+                "after": retained,
+            }
+
+        if memory_ok and checkpoints_ok and relational_ok:
+            try:
+                before_credentials = auth_store.privacy_inventory(user_id)
+                deleted_credentials = auth_store.delete_user_id(user_id)
+                after_credentials = auth_store.privacy_inventory(user_id)
+                credentials_ok = after_credentials["total"] == 0
+                layers["credentials"] = {
+                    "status": "deleted" if credentials_ok else "failed",
+                    "deleted": int(deleted_credentials),
+                    "before": before_credentials,
+                    "after": after_credentials,
+                }
+            except Exception as exc:
+                credentials_ok = False
+                layers["credentials"] = {
+                    "status": "failed",
+                    "error_type": type(exc).__name__,
+                    "after": None,
+                }
+        else:
+            credentials_ok = False
+            layers["credentials"] = {"status": "retained_for_retry"}
+
+        if memory_ok and checkpoints_ok and relational_ok and credentials_ok:
+            _session_store.clear_user(user_id)
+            hot_after = _session_store.privacy_inventory(user_id)
+            hot_ok = hot_after["session_slices"] == 0
+            layers["hot_cache"] = {
+                "status": "deleted" if hot_ok else "failed",
+                "after": hot_after,
+            }
+        else:
+            hot_ok = False
+            layers["hot_cache"] = {"status": "retained_for_retry"}
+
+        complete = (
+            memory_ok and checkpoints_ok and relational_ok
+            and credentials_ok and hot_ok
+        )
+        if complete:
+            for key in (
+                "authenticated", "auth_user_id", "username", "display_name", "user_id"
+            ):
+                session.pop(key, None)
+        logger.info(
+            "privacy.erasure.completed" if complete else "privacy.erasure.partial",
+            extra={
+                "user_id_hash": hash_user_id(user_id)[0],
+                "layer_status": {
+                    name: value.get("status") for name, value in layers.items()
+                },
+            },
+        )
+        response = jsonify({
+            "forgotten": bool(complete),
+            "status": "complete" if complete else "partial",
+            "layers": layers,
+        })
+        response.status_code = 200 if complete else 503
+        if not complete:
+            response.headers["Retry-After"] = "5"
+        return response
+    finally:
+        conversation_store.end_privacy_erasure(user_id)
 
 
 # ============================================================================

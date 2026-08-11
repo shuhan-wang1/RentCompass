@@ -13,9 +13,9 @@ real search backend (SearXNG) instead of a dead `localhost:8080`.
 
 | Service   | Image                        | Port (host) | Purpose                                   |
 |-----------|------------------------------|-------------|-------------------------------------------|
-| `app`     | built from `Dockerfile`      | `5001`      | Agent web app (uvicorn/ASGI)              |
-| `searxng` | `searxng/searxng:latest`     | `8080`      | Search backend for the `web_search` tool  |
-| `valkey`  | `valkey/valkey:8-alpine`     | —           | Cache / rate-limit store for SearXNG      |
+| `app`     | built from multi-stage `Dockerfile` | `127.0.0.1:5001` | Agent web app (uvicorn/ASGI)       |
+| `searxng` | digest-pinned SearXNG image  | `127.0.0.1:8080` | Private search backend                |
+| `valkey`  | digest-pinned Valkey image   | —           | Internal SearXNG cache/limiter             |
 
 ## Prerequisites
 
@@ -38,7 +38,8 @@ docker compose ps                 # all should be Up / healthy
 own uid, which would otherwise clash with git. `deploy/update.sh` recreates it
 from the example automatically if it's missing.
 
-Then open <http://localhost:5001>.
+Then open <http://localhost:5001>. `/live` checks only the process; `/ready`
+checks required state and reports optional SearXNG/RAG loss as degraded.
 
 > **Port 5001:** if you already run the app on the host (`uvicorn ... --port 5001`),
 > stop it first — the container publishes the same port. The container replaces it.
@@ -55,6 +56,8 @@ Then open <http://localhost:5001>.
   `.env` are **bind-mounted** from the host, so the container shares the same data
   as a host run and persists writes back.
 - The embedding model is cached in the `hf_cache` named volume (downloaded once).
+- Both published ports bind to loopback. Nginx overwrites `X-Forwarded-For`
+  with the socket peer instead of appending a client-controlled chain.
 
 ## Verify the search backend directly
 
@@ -74,6 +77,10 @@ docker compose restart app        # restart after editing .env
 docker compose up -d --build app  # rebuild after changing app code
 docker compose down               # stop everything (data volumes persist)
 ```
+
+Persistent bind mounts and databases still require an off-host backup plan. Use
+the verified, encrypted workflow in [`runtime_recovery.md`](runtime_recovery.md);
+do not treat Docker volumes or a successful container restart as a backup.
 
 ## Notes
 

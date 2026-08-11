@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rentcompass.eval/run-record.v7.schema.json",
+  "title": "RentCompass v7 scored run record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "case_id", "track", "repeat", "semantic_cluster", "template_cluster", "binding", "track_contract_sha256", "metrics", "violations"],
+  "properties": {
+    "schema_version": {"const": "rentcompass/eval-run/v7"},
+    "case_id": {"type": "string", "minLength": 1},
+    "track": {"enum": ["deterministic_fixture", "live_freshness"]},
+    "repeat": {"type": "integer", "minimum": 1},
+    "semantic_cluster": {"type": "string", "minLength": 1},
+    "template_cluster": {"type": "string", "minLength": 1},
+    "binding": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["product_sha", "capture_sha", "evaluator_sha", "arch", "image_digest", "prompt_set_sha256", "model_policy_sha256", "tool_policy_sha256", "evaluator_set_sha256"]
+    },
+    "track_contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {"oneOf": [{"type": "boolean"}, {"type": "number", "minimum": 0, "maximum": 1}]}
+    },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {"kind": {"type": "string", "minLength": 1}, "detail": {"type": "string"}}
+      }
+    },
+    "capture_evidence": {
+      "type": "object",
+      "required": ["captured_at", "source_observations"],
+      "properties": {
+        "captured_at": {"type": "string", "format": "date-time"},
+        "source_observations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["source_id", "source_url", "retrieved_at", "verified_at", "availability", "provenance"],
+            "properties": {
+              "source_id": {"type": "string", "minLength": 1},
+              "source_url": {"type": "string", "minLength": 1},
+              "retrieved_at": {"type": "string", "format": "date-time"},
+              "verified_at": {"type": "string", "format": "date-time"},
+              "availability": {"enum": ["current", "changed", "unavailable", "unknown"]},
+              "provenance": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"track": {"const": "live_freshness"}}},
+      "then": {"required": ["capture_evidence"]}
+    },
+    {
+      "if": {"properties": {"track": {"const": "deterministic_fixture"}}},
+      "then": {"not": {"required": ["capture_evidence"]}}
+    }
+  ]
+}

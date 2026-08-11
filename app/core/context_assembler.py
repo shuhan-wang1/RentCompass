@@ -27,8 +27,9 @@ Public API
                               reply_language="en") -> dict | None
     assemble(*, user_message, history, memory_block="", has_property_context=False,
              rolling_summary=None, token_budget=6000) -> str
-    assemble_messages(*, user_message, history, memory_block="", context_block=None,
-                      reply_language="en", token_budget=6000) -> list  # BaseMessage list
+    assemble_messages(*, user_message, history, memory_block="", rolling_summary="",
+                      context_block=None, reply_language="en",
+                      token_budget=6000) -> list  # BaseMessage list
     estimate_tokens(text) -> int
     update_rolling_summary(llm_complete, prior_summary, folded_turns,
                            reply_language="en") -> str
@@ -754,6 +755,7 @@ def assemble(*, user_message: str, history: Optional[List[Dict[str, str]]],
 def assemble_messages(*, user_message: str,
                       history: Optional[List[Dict[str, str]]],
                       memory_block: str = "",
+                      rolling_summary: str = "",
                       context_block: Optional[Dict[str, Any]] = None,
                       reply_language: str = "en",
                       token_budget: int = 6000) -> list:
@@ -763,10 +765,10 @@ def assemble_messages(*, user_message: str,
     concatenated string for the legacy path). It returns a list of ``langchain_core``
     BaseMessage objects in this fixed order (design §2.7):
 
-      1. SystemMessage — identity/capability boundary + SECURITY_DIRECTIVE +
-         reply-language directive + behaviour rules. NEVER trimmed.
-      2. SystemMessage — the context block (accumulated criteria | focused property |
-         last-results digest | recommendations index | memory). OMITTED when empty.
+      1. SystemMessage — one immutable, versioned PromptSpec containing the
+         identity/capability/security/behaviour contract. NEVER trimmed.
+      2. HumanMessage — an explicitly labelled LOW-PRIVILEGE UNTRUSTED DATA packet
+         containing runtime context | rolling summary | memory. OMITTED when empty.
       3. History turns as alternating HumanMessage / AIMessage from the SessionStore
          shape ``[{"user": str, "assistant": str}, ...]``.
       4. HumanMessage — the current ``user_message`` VERBATIM (no prefix concatenation;
@@ -784,22 +786,24 @@ def assemble_messages(*, user_message: str,
     reads. A record keyed ``property_address`` renders as "(no details captured)".
 
     Token budget: the :func:`assemble` trimming ladder ported to message granularity —
-    (1) drop oldest history turns down to a floor of 2; (2) cap ``memory_block`` at 25%
-    of budget (whole lines from the end); (3) cap the context sections to the remaining
-    budget. The system directives (message #1) and the current ``user_message`` are
-    never trimmed.
+    (1) drop oldest history turns down to a floor of 2; (2) cap memory at 25% of
+    budget (whole lines from the end); (3) cap the rolling summary at 20%; (4) cap
+    context sections to the remaining budget. The PromptSpec (message #1) and current
+    user message are never trimmed.
     """
     # Lazy imports: keeps context_assembler import-time free of LLM/provider modules
     # (langchain_core.messages is a light message-class module; loop_prompts pulls the
     # security/language directives from langgraph_agent only when called).
-    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langchain_core.messages import AIMessage, HumanMessage
     from core import loop_prompts
+    from core.prompt_spec import assert_registered_system_messages, system_message
 
     history = history or []
     memory_block = memory_block or ""
+    rolling_summary = rolling_summary or ""
     ctx = context_block or {}
 
-    system_directive = loop_prompts.build_system_directive(reply_language)
+    system_spec = loop_prompts.get_system_prompt_spec(reply_language)
     context_sections = loop_prompts.build_context_sections(
         accumulated_criteria=ctx.get("accumulated_criteria"),
         focused_property=ctx.get("focused_property"),
@@ -818,11 +822,13 @@ def assemble_messages(*, user_message: str,
         context_sections = (f"{conflict_section}\n\n{context_sections}"
                             if context_sections else conflict_section)
 
-    def build(n_turns: int, mem: str, sections: str) -> list:
-        msgs: list = [SystemMessage(content=system_directive)]
-        context_msg = loop_prompts.compose_context_message(sections, mem)
+    def build(n_turns: int, mem: str, summary: str, sections: str) -> list:
+        msgs: list = [system_message(system_spec)]
+        context_msg = loop_prompts.compose_context_message(sections, mem, summary)
         if context_msg:
-            msgs.append(SystemMessage(content=context_msg))
+            # Runtime context can contain listing descriptions, remembered user text,
+            # and an LLM-derived rolling summary. It must never inherit system priority.
+            msgs.append(HumanMessage(content=context_msg))
         turns = history[-n_turns:] if n_turns > 0 else []
         for h in turns:
             if not isinstance(h, dict):
@@ -835,6 +841,7 @@ def assemble_messages(*, user_message: str,
                 msgs.append(AIMessage(content=assistant_text))
         # Current message VERBATIM — never a wrapper, never trimmed.
         msgs.append(HumanMessage(content=user_message))
+        assert_registered_system_messages(msgs)
         return msgs
 
     def total_tokens(msgs: list) -> int:
@@ -842,32 +849,41 @@ def assemble_messages(*, user_message: str,
 
     n_turns = len(history)
     mem = memory_block
+    summary = rolling_summary
     sections = context_sections
 
-    msgs = build(n_turns, mem, sections)
+    msgs = build(n_turns, mem, summary, sections)
     if total_tokens(msgs) <= token_budget:
         return msgs
 
     # (1) drop oldest history turns down to a floor of 2.
     while n_turns > _MIN_HISTORY_TURNS:
         n_turns -= 1
-        msgs = build(n_turns, mem, sections)
+        msgs = build(n_turns, mem, summary, sections)
         if total_tokens(msgs) <= token_budget:
             return msgs
 
     # (2) cap memory_block at 25% of budget (whole lines from the END).
     if mem:
         mem = _truncate_lines_to_cap(mem, token_budget * 0.25)
-        msgs = build(n_turns, mem, sections)
+        msgs = build(n_turns, mem, summary, sections)
         if total_tokens(msgs) <= token_budget:
             return msgs
 
-    # (3) cap the context sections to whatever budget the never-trimmed parts leave.
+    # (3) cap the rolling summary at 20% of budget. It remains available after hot
+    # history turns are trimmed, but can never crowd out the current request.
+    if summary:
+        summary = _truncate_lines_to_cap(summary, token_budget * 0.20)
+        msgs = build(n_turns, mem, summary, sections)
+        if total_tokens(msgs) <= token_budget:
+            return msgs
+
+    # (4) cap the context sections to whatever budget the never-trimmed parts leave.
     if sections:
-        without_sections = total_tokens(build(n_turns, mem, ""))
+        without_sections = total_tokens(build(n_turns, mem, summary, ""))
         remaining = max(int(token_budget - without_sections), 0)
         sections = _truncate_lines_to_cap(sections, remaining)
-        msgs = build(n_turns, mem, sections)
+        msgs = build(n_turns, mem, summary, sections)
 
     # Best effort: message #1 and the current user_message are never trimmed, so the
     # result may still exceed a pathologically small budget — that is by contract.

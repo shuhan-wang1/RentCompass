@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rentcompass.eval/evidence-manifest.v7.schema.json",
+  "title": "RentCompass sealed v7 evidence manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "preregistration", "binding", "artifacts"],
+  "$defs": {
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "rentcompass/evidence-manifest/v7"},
+    "status": {"const": "complete"},
+    "preregistration": {"$ref": "#/$defs/fileRef"},
+    "binding": {
+      "type": "object",
+      "required": ["product_sha", "capture_sha", "evaluator_sha", "arch", "image_digest", "prompts", "prompt_set_sha256", "model_policy", "model_policy_sha256", "tool_policy", "tool_policy_sha256", "evaluator_files", "evaluator_set_sha256"]
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "allOf": [
+          {"$ref": "#/$defs/fileRef"},
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role", "track", "path", "sha256"],
+            "properties": {
+              "role": {"enum": ["cases", "runs", "release_report", "capture_log", "grader_input", "tool_trace"]},
+              "track": {"enum": ["deterministic_fixture", "live_freshness", "all"]},
+              "path": {"type": "string", "minLength": 1},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

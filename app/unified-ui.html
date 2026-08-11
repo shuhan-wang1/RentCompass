@@ -2597,8 +2597,23 @@
 
                 if (!response.ok) {
                     let errMsg = t('error_connection');
-                    try { const ed = await response.json(); if (ed && ed.error) errMsg = ed.error; } catch (_) {}
-                    addMessage(pane, errMsg, 'alex', { icon: 'error' });
+                    let errorData = null;
+                    try {
+                        errorData = await response.json();
+                        if (errorData) errMsg = errorData.message || errorData.error || errMsg;
+                    } catch (_) {}
+                    if (errorData && errorData.conversation_id) {
+                        adoptConversationId(errorData.conversation_id, pane);
+                    }
+                    const failedTurnId = errorData && errorData.turn_id != null
+                        ? errorData.turn_id : null;
+                    if (failedTurnId != null && userMsgEl) {
+                        tagUserTurn(pane, userMsgEl, failedTurnId);
+                    }
+                    addMessage(pane, cleanRawResponse(String(errMsg)), 'alex', {
+                        icon: 'error',
+                        turnId: failedTurnId
+                    });
                     pane.lastResponseType = 'error';
                     showRetryToast(pane);
                 } else {
@@ -5191,8 +5206,23 @@
 
                 if (!response.ok) {
                     let errMsg = t('error_connection');
-                    try { const ed = await response.json(); if (ed && ed.error) errMsg = ed.error; } catch (_) {}
-                    addMessage(pane, errMsg, 'alex', { icon: 'error' });
+                    let errorData = null;
+                    try {
+                        errorData = await response.json();
+                        if (errorData) errMsg = errorData.message || errorData.error || errMsg;
+                    } catch (_) {}
+                    if (errorData && errorData.conversation_id) {
+                        adoptConversationId(errorData.conversation_id, pane);
+                    }
+                    const failedTurnId = errorData && errorData.turn_id != null
+                        ? errorData.turn_id : null;
+                    if (failedTurnId != null && userMsgEl) {
+                        tagUserTurn(pane, userMsgEl, failedTurnId);
+                    }
+                    addMessage(pane, cleanRawResponse(String(errMsg)), 'alex', {
+                        icon: 'error',
+                        turnId: failedTurnId
+                    });
                     pane.lastResponseType = 'error';
                     showToast(errMsg, 'error');
                 } else {

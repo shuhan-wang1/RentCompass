@@ -7,7 +7,7 @@ TfL Unified API (https://api.tfl.gov.uk, no key required at low volume):
   * journey planning between two places / postcodes / stations
     (duration + route legs + pay-as-you-go single FARE when available),
   * fare lookup between two stations,
-  * monthly / weekly Travelcard prices by zone (reuses the shared 2025 fare table),
+  * monthly / weekly Travelcard prices by zone (shared official 2026 table),
   * line status ("are there delays on the Victoria line?").
 
 Conventions are shared with the existing London-commute path (maps_service):
@@ -27,15 +27,13 @@ silently dropped before the function is called.
 """
 
 import re
-import time
 import requests
 
 from core.tool_system import Tool
 from core import maps_service
 from core.maps_service import TFL_APP_KEY
 from core.cache_service import get_from_cache, set_to_cache, create_cache_key
-# Single source of truth for zone Travelcard prices (real TfL 2025 table).
-from core.tools.check_transport_cost import TFL_FARES_2025
+from uk_rent_agent.data.tfl_fares import get_zonal_fare
 
 TFL_BASE = "https://api.tfl.gov.uk"
 
@@ -52,6 +50,7 @@ _STATUS_TTL = 15 * 60          # live line status: 15 minutes
 _FARE_TTL = 24 * 60 * 60       # fares change rarely: 1 day
 _JOURNEY_TTL = 6 * 60 * 60     # journeys/duration: 6 hours
 _GEO_TTL = 7 * 24 * 60 * 60    # geocode -> station: 1 week
+_LIVE_CACHE_VERSION = "tfl-live-api-v1"
 
 # TfL line ids (tube + others) we recognise for a single-line status lookup.
 _KNOWN_LINE_IDS = {
@@ -93,16 +92,31 @@ def _tfl_get(path: str, params: dict | None = None, timeout: int = 15):
 
 
 def _cache_get(key: str, ttl: int):
-    """TTL-aware read over the shared (TTL-less) persistent cache."""
-    entry = get_from_cache(key)
-    if isinstance(entry, dict) and '_ts' in entry and 'v' in entry:
-        if time.time() - entry['_ts'] <= ttl:
+    """TTL-aware read using the shared cache-envelope contract."""
+    try:
+        return get_from_cache(
+            key,
+            ttl_seconds=ttl,
+            version=_LIVE_CACHE_VERSION,
+        )
+    except TypeError:
+        # Compatibility with old one-argument cache fakes and legacy wrapped rows.
+        entry = get_from_cache(key)
+        if isinstance(entry, dict) and '_ts' in entry and 'v' in entry:
             return entry['v']
-    return None
+        return entry
 
 
 def _cache_set(key: str, value) -> None:
-    set_to_cache(key, {'_ts': time.time(), 'v': value})
+    try:
+        set_to_cache(
+            key,
+            value,
+            version=_LIVE_CACHE_VERSION,
+            provenance={"provider": "TfL Unified API"},
+        )
+    except TypeError:
+        set_to_cache(key, value)
 
 
 def _geocode(location: str):
@@ -491,7 +505,7 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool) -> dict:
 
 def _do_travelcard(end_zone: int | None, from_location: str, to_location: str,
                    travel_type: str) -> dict:
-    """Weekly/monthly Travelcard prices for Zone 1-N (reuses the shared 2025 table)."""
+    """Weekly/monthly Travelcard prices for Zone 1-N from the shared fare table."""
     zone = end_zone
     if not zone:
         # Try to infer the furthest zone from a named destination/origin.
@@ -508,8 +522,9 @@ def _do_travelcard(end_zone: int | None, from_location: str, to_location: str,
                          "station/area? Travelcards are priced Zone 1 to Zone N."}
     zone = max(2, min(6, int(zone)))
     user_type = "student" if "student" in (travel_type or "").lower() else "adult"
-    prices = TFL_FARES_2025.get(user_type, {}).get(f"zone1-{zone}")
-    if not prices:
+    try:
+        prices = get_zonal_fare(1, zone, user_type)
+    except (TypeError, ValueError):
         return {"success": False, "error": f"No Travelcard data for Zone 1-{zone}; see tfl.gov.uk/fares."}
     return {
         "success": True,
@@ -524,7 +539,10 @@ def _do_travelcard(end_zone: int | None, from_location: str, to_location: str,
         "daily_cap_gbp": prices['daily_cap'],
         "daily_cap_display": f"£{prices['daily_cap']:.2f}",
         "note": "Student (30% off) applies to weekly/monthly Travelcards, NOT pay-as-you-go.",
-        "source": "TfL 2025 fares",
+        "source": prices["source"],
+        "source_url": prices["source_url"],
+        "effective_date": prices["effective_date"],
+        "fare_edition": prices["edition"],
     }
 
 

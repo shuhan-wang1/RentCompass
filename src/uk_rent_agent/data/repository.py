@@ -4,6 +4,7 @@ import ast
 import csv
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -16,12 +17,18 @@ from uk_rent_agent.domain.schema import RICH_COLUMNS
 class LoadResult:
     properties: list[dict]
     source: str
-    csv_path: Path
+    csv_path: Path | None
     is_stale: bool
+    observed_at: str | None = None
 
 
 class PropertyRepository:
-    """Single loading boundary for fake and scraped property data."""
+    """Single loading boundary with explicit provenance.
+
+    Bundled rows are demo fixtures, not a production fallback.  They are only
+    selected by ``PROPERTY_SOURCE=csv``.  ``auto`` and ``scraper`` therefore
+    return an honest empty snapshot when no scraped dataset exists.
+    """
 
     def __init__(self, config: Config, refresh: Callable[[], object] | None = None):
         self._config = config
@@ -42,12 +49,12 @@ class PropertyRepository:
         age_hours = (time.time() - path.stat().st_mtime) / 3600
         return age_hours > self._config.scraper_cache_ttl_hours
 
-    def active_csv_path(self) -> Path:
+    def active_csv_path(self) -> Path | None:
         if self._config.property_source == "csv":
             return self.fake_path
         if self.scraped_path.exists():
             return self.scraped_path
-        return self.fake_path
+        return None
 
     def load(self, *, force_refresh: bool = False) -> LoadResult:
         if self._cache is not None and not force_refresh:
@@ -55,11 +62,22 @@ class PropertyRepository:
         if force_refresh and self._refresh is not None:
             self._refresh()
         path = self.active_csv_path()
-        source = "scraped" if path == self.scraped_path else "fake"
-        rows = self._read(path)
-        if not rows and path != self.fake_path:
-            path, source, rows = self.fake_path, "fake", self._read(self.fake_path)
-        self._cache = LoadResult(rows, source, path, self._is_stale(path))
+        source = "none" if path is None else ("scraped" if path == self.scraped_path else "fake")
+        rows = self._read(path) if path is not None else []
+        is_stale = True if path is None else self._is_stale(path)
+        observed_at = None
+        if path is not None and path.exists():
+            observed_at = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+        annotated = [
+            {
+                **row,
+                "_data_source": source,
+                "_data_is_stale": is_stale,
+                "_data_observed_at": observed_at,
+            }
+            for row in rows
+        ]
+        self._cache = LoadResult(annotated, source, path, is_stale, observed_at)
         return self._cache
 
     def get_by_address(self, address: str) -> dict | None:

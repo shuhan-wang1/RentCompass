@@ -15,13 +15,25 @@
 
 services:
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey@sha256:cfe71288f087704b06be45e270afa7a2abbf820093d6b11a23762081f5ff321d
     container_name: uk-rent-valkey
     command: valkey-server --save 30 1 --loglevel warning
     restart: unless-stopped
+    user: "999:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 384m
+    cpus: 0.50
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "5"}
     networks: [rentnet]
     volumes:
       - valkey_data:/data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,mode=1777
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
@@ -29,9 +41,19 @@ services:
       retries: 5
 
   searxng:
-    image: searxng/searxng:latest
+    image: searxng/searxng@sha256:a1a04679fe6a4fa6bfe9efb82adfbe7bee4eaef8d77b2392562ca5bfe032c4be
     container_name: uk-rent-searxng
     restart: unless-stopped
+    user: "977:977"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "5"}
     depends_on:
       valkey:
         condition: service_started
@@ -39,12 +61,16 @@ services:
     ports:
       # Published to the host too, so a host-run copy of the app (or curl) can
       # also hit the JSON API at http://localhost:8080.
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
-      - ./searxng:/etc/searxng:rw
+      - ./searxng:/etc/searxng:ro
+      - searxng_cache:/var/cache/searxng
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
     environment:
       # Public URL SearXNG advertises for itself.
       SEARXNG_BASE_URL: "http://localhost:8080/"
+      FORCE_OWNERSHIP: "false"
       # Overrides server.secret_key in settings.yml. Never hardcode this: Compose
       # reads it from the root-level .env (its default env file) or the shell
       # environment at `docker compose` time. `:?` makes the stack refuse to start
@@ -52,11 +78,10 @@ services:
       # Generate one with:  openssl rand -hex 32   (see .env.example)
       SEARXNG_SECRET: "${SEARXNG_SECRET:?SEARXNG_SECRET must be set in .env (openssl rand -hex 32)}"
     healthcheck:
-      # Verifies the instance is up AND that the JSON API (the whole point) is
-      # actually enabled — a default install would 403 here.
+      # Process/readiness only. A healthcheck must not generate real searches.
       test:
         - "CMD-SHELL"
-        - "wget -q -O /dev/null 'http://localhost:8080/search?q=ping&format=json' || exit 1"
+        - "wget -q -O /dev/null 'http://localhost:8080/healthz' || exit 1"
       interval: 15s
       timeout: 10s
       retries: 5
@@ -66,9 +91,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        APP_SOURCE_SHA: "${LEGACY_APP_SHA:-unknown}"
+        PROMPT_VERSION: "${PROMPT_VERSION:-unknown}"
+        PROMPT_SCHEMA_SHA: "${PROMPT_SCHEMA_SHA:-unknown}"
     image: uk-rent-agent:latest
     container_name: uk-rent-app
     restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 512
+    mem_limit: 5g
+    cpus: 3.0
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m,mode=1777
+    logging:
+      driver: json-file
+      options: {max-size: 20m, max-file: "5"}
     # Trust the X-Forwarded-* headers set by the nginx reverse proxy so the app
     # sees the real client IP and https scheme (needed for Secure session cookies).
     # forwarded-allow-ips=* is safe because the port is bound to 127.0.0.1 (see
@@ -86,11 +128,8 @@ services:
       - --proxy-headers
       - --forwarded-allow-ips
       - "*"
-    depends_on:
-      searxng:
-        condition: service_healthy
-      valkey:
-        condition: service_started
+    # No depends_on: SearXNG/Valkey are optional web-search infrastructure.
+    # /ready reports their loss as degraded while core chat remains startable.
     networks: [rentnet]
     ports:
       # Bound to loopback only: reachable via the nginx reverse proxy on this
@@ -136,7 +175,7 @@ services:
       # probe, which returns "unknown" inside the image (.dockerignore excludes
       # .git). i.e. TODAY'S behaviour, byte-for-byte, and no new way to fail.
       # SET → that sha is stamped on X-Agent-Version by BOTH response paths
-      # (Flask after_request in app/app.py and the Starlette-native /health
+      # (Flask after_request in app/app.py and the Starlette-native health
       # route in src/uk_rent_agent/web/asgi.py) and recorded in per-turn
       # telemetry, so deploy/switch_pool.sh --to legacy stops needing
       # --allow-unidentified-target.
@@ -152,11 +191,21 @@ services:
       # part of the next PLANNED public rebuild; "the public pool can
       # self-identify" is a cutover precondition, not a hotfix.
       APP_CANDIDATE_SHA: "${LEGACY_APP_SHA:-}"
+      APP_SOURCE_SHA: "${LEGACY_APP_SHA:-unknown}"
+      APP_IMAGE_DIGEST: "${LEGACY_IMAGE_DIGEST:-unknown}"
+      PROMPT_VERSION: "${PROMPT_VERSION:-unknown}"
+      PROMPT_SCHEMA_SHA: "${PROMPT_SCHEMA_SHA:-unknown}"
+      # Local builds may not yet have an OCI digest/prompt seal. Production
+      # deploy/update.sh writes RELEASE_METADATA_REQUIRED=1 before recreation.
+      RELEASE_METADATA_REQUIRED: "${RELEASE_METADATA_REQUIRED:-0}"
+      READINESS_REQUIRE_LLM: "1"
+      ROUTING_MODE: "blue_green_shared_conversation_store"
       CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints.sqlite3"
       # Conversation store is SHARED between pools (same file as app-fc): the
-      # sticky per-conversation arch assignment and the user-visible message
-      # transcript live here, so on rollback legacy can rebuild any fc
-      # conversation from the shared history. Checkpoints, by contrast, are
+      # user-visible transcript, turn leases, idempotency rows and durable
+      # background-job outbox live here. Nginx activates one whole pool at a
+      # time; this shared DB makes requests safe without sticky load-balancer
+      # routing across a cutover. Checkpoints, by contrast, are
       # SEPARATE per arch (see CHECKPOINT_DB_PATH above / app-fc below): legacy
       # must NEVER read fc's LangGraph checkpoints — that state is treated as
       # untrusted/abandoned after rollback.
@@ -174,7 +223,7 @@ services:
       # Embedding-model cache so it is downloaded only once.
       - hf_cache:/opt/hf-cache
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5001/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/ready', timeout=5)"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -198,6 +247,19 @@ services:
     image: "${FC_CANARY_IMAGE:?FC_CANARY_IMAGE must be set to the immutable canary image, e.g. uk-rent-agent:canary-fc-loop-<sha>}"
     container_name: uk-rent-app-fc
     restart: unless-stopped
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 512
+    mem_limit: 5g
+    cpus: 3.0
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m,mode=1777
+    logging:
+      driver: json-file
+      options: {max-size: 20m, max-file: "5"}
     # Identical entrypoint to `app`: same uvicorn factory, same proxy-header
     # handling. Only the arch/strict flags and DB/telemetry paths differ (below).
     command:
@@ -213,11 +275,8 @@ services:
       - --proxy-headers
       - --forwarded-allow-ips
       - "*"
-    depends_on:
-      searxng:
-        condition: service_healthy
-      valkey:
-        condition: service_started
+    # Same optional-dependency contract as legacy; never hold app startup on
+    # web-search infrastructure.
     networks: [rentnet]
     ports:
       # Loopback only, and deliberately NOT wired into the host nginx: during
@@ -241,13 +300,21 @@ services:
       DEEPSEEK_STRICT: "1"
       # Pinned candidate sha — surfaced in X-Agent-Version and per-turn telemetry.
       APP_CANDIDATE_SHA: "${FC_CANARY_SHA:?FC_CANARY_SHA must be set to the candidate commit sha}"
+      APP_SOURCE_SHA: "${FC_CANARY_SHA:?FC_CANARY_SHA must be set to the candidate commit sha}"
+      APP_IMAGE_DIGEST: "${FC_IMAGE_DIGEST:?FC_IMAGE_DIGEST must identify the immutable canary image}"
+      PROMPT_VERSION: "${PROMPT_VERSION:?PROMPT_VERSION must identify the prompt contract}"
+      PROMPT_SCHEMA_SHA: "${PROMPT_SCHEMA_SHA:?PROMPT_SCHEMA_SHA must be a sha256}"
+      RELEASE_METADATA_REQUIRED: "1"
+      READINESS_REQUIRE_LLM: "1"
+      ROUTING_MODE: "blue_green_shared_conversation_store"
       # SEPARATE checkpoint DB: fc's LangGraph checkpoints live in their own
       # file so legacy never reads them (and vice-versa). This is the state
       # isolation boundary between the two arches.
       CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_fc.sqlite3"
-      # SHARED conversation store: same file as legacy `app`. Sticky arch
-      # assignment + the user-visible transcript live here so either pool can
-      # rebuild a conversation from shared history (critical for rollback).
+      # SHARED conversation store: same file/mount as legacy `app`. Complete
+      # transcripts, turn leases, idempotency and the durable background outbox
+      # survive whole-pool cutovers; no load-balancer session affinity is
+      # assumed. Checkpoints remain architecture-local.
       CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"
       # Per-turn canary telemetry sink (event canary.turn), one bare-JSON line
       # per turn; consumed by scripts/canary_report.py --input .runtime/logs/.
@@ -264,7 +331,7 @@ services:
       - ./.runtime:/app/.runtime
       - hf_cache:/opt/hf-cache
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5001/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/ready', timeout=5)"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -276,4 +343,5 @@ networks:
 
 volumes:
   valkey_data:
+  searxng_cache:
   hf_cache:

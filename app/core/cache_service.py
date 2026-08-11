@@ -6,7 +6,7 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from uk_rent_agent.data.cache import PersistentCache
+from uk_rent_agent.data.cache import CacheEntry, PersistentCache
 
 logger = logging.getLogger(__name__)
 
@@ -54,19 +54,82 @@ def _switch_to_fallback(exc: Exception) -> PersistentCache:
     return _cache
 
 
-def get_from_cache(key: str):
-    """从缓存中获取数据"""
+def get_cache_entry(
+    key: str,
+    *,
+    ttl_seconds: float | None = None,
+    version: str | None = None,
+) -> CacheEntry:
+    """Return a structured cache result (fresh/stale/miss/corrupt)."""
     try:
-        return _cache.get(key)
+        entry = _cache.read(key, ttl_seconds=ttl_seconds, version=version)
     except (OSError, sqlite3.Error) as exc:
-        return _switch_to_fallback(exc).get(key)
+        entry = _switch_to_fallback(exc).read(
+            key, ttl_seconds=ttl_seconds, version=version,
+        )
+    if entry.status == "corrupt":
+        # Parseable message plus structured extra for handlers that retain
+        # arbitrary LogRecord fields. A bad row is a cache miss, not an outage.
+        logger.warning(
+            "cache_read status=corrupt key=%s reason=%s",
+            key,
+            entry.reason,
+            extra={
+                "cache_status": "corrupt",
+                "cache_key": key,
+                "cache_reason": entry.reason,
+            },
+        )
+    return entry
 
-def set_to_cache(key: str, value):
-    """将数据存入缓存"""
+
+def get_from_cache(
+    key: str,
+    *,
+    ttl_seconds: float | None = None,
+    version: str | None = None,
+    allow_stale: bool = False,
+    with_status: bool = False,
+):
+    """Read cached data while preserving the historical value-or-None API.
+
+    New callers can opt into the full CacheEntry contract with with_status.
+    Stale values are returned only when explicitly asked.
+    """
+    entry = get_cache_entry(key, ttl_seconds=ttl_seconds, version=version)
+    if with_status:
+        return entry
+    if entry.is_fresh or (allow_stale and entry.is_stale):
+        return entry.value
+    return None
+
+
+def set_to_cache(
+    key: str,
+    value,
+    *,
+    ttl_seconds: float | None = None,
+    version: str = "1",
+    provenance: dict | None = None,
+):
+    """Store data with an envelope containing TTL, version and provenance."""
     try:
-        _cache.set(key, value)
+        _cache.set(
+            key,
+            value,
+            ttl_seconds=ttl_seconds,
+            version=version,
+            provenance=provenance,
+        )
     except (OSError, sqlite3.Error) as exc:
-        _switch_to_fallback(exc).set(key, value)
+        _switch_to_fallback(exc).set(
+            key,
+            value,
+            ttl_seconds=ttl_seconds,
+            version=version,
+            provenance=provenance,
+        )
+
 
 def create_cache_key(func_name: str, *args, **kwargs) -> str:
     """根据函数名和参数创建一个唯一的缓存键"""

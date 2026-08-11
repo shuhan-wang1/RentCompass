@@ -98,5 +98,23 @@ check "edge vs the EXPECTED pool is silent"     "silent"               "$(edge_v
 check "edge vs the wrong pool would page"       "sev3-edge-mismatch"   "$(edge_ver 200 abc123 unknown)"
 echo
 
+# --- end-to-end exit contract ------------------------------------------------
+# An unreachable public readiness endpoint is an anomaly, so systemd/cron must
+# receive a non-zero exit and can trigger its own alerting policy.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TMP="$(mktemp -d)"
+MON_LOG="$TMP/monitor.log" MON_STATE="$TMP/state" MON_LOCK="$TMP/lock" \
+MON_REPO="$ROOT" MON_RUNTIME="$TMP/runtime" \
+MON_PUBLIC_URL="http://127.0.0.1:9/ready" \
+MON_LEGACY_URL="http://127.0.0.1:9/ready" \
+MON_FC_URL="http://127.0.0.1:9/ready" \
+MON_EXPECTED_PUBLIC_ARCH=legacy MON_EXPECTED_PUBLIC_SHA="$(printf 'a%.0s' {1..40})" \
+MON_PROVIDER_PROBE_EVERY_S=0 \
+bash "$ROOT/deploy/monitoring/rentcompass-monitor.sh" >/dev/null 2>&1
+monitor_rc=$?
+check "an anomalous monitor run exits non-zero" "1" "$monitor_rc"
+rm -rf "$TMP"
+echo
+
 printf 'monitor assertions: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -17,6 +17,7 @@ drop.
 """
 
 import os
+import re
 import shutil
 import subprocess
 
@@ -43,7 +44,9 @@ def test_release_sh_rehearsal_passes():
         + "\n".join(failed or proc.stdout.splitlines()[-40:])
         + ("\n--- stderr ---\n" + proc.stderr if proc.stderr.strip() else "")
     )
-    assert "passed 4" in proc.stdout, f"unexpectedly few assertions ran:\n{proc.stdout[-2000:]}"
+    summary = re.search(r"passed (\d+), failed 0", proc.stdout)
+    assert summary and int(summary.group(1)) >= 46, (
+        f"unexpectedly few assertions ran:\n{proc.stdout[-2000:]}")
 
 
 def test_release_does_not_weaken_the_pin_gate():
@@ -59,7 +62,7 @@ def test_release_does_not_weaken_the_pin_gate():
     gate = _src(os.path.join(_ROOT, "deploy", "update.sh"))
     assert "# >>> PIN GATE START" in gate and "# <<< PIN GATE END" in gate
     for required in ("DEPLOY_PINNED_SHA", "is not the pinned release",
-                     "tracked working tree is DIRTY"):
+                     "working tree is DIRTY", "tracked or untracked"):
         assert required in gate, f"the pin gate lost its {required!r} check"
 
 

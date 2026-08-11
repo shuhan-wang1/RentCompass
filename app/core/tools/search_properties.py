@@ -18,6 +18,7 @@ from core.tool_system import Tool
 from typing import Optional, List, Dict
 import pandas as pd
 import asyncio
+import logging
 import math
 import os
 import sys
@@ -29,6 +30,14 @@ import json
 import re
 from uk_rent_agent.domain import constants as C
 from core.tenancy_reference import monthly_from_weekly
+from core.search_readiness import (
+    SEARCH_TOOL_DESCRIPTION,
+    assess_search_readiness,
+    is_proceed_intent as _is_proceed_intent,
+)
+
+
+logger = logging.getLogger("app.search")
 
 # Sentinel meaning "user set no commute limit" — kept internally so the search can
 # proceed without asking, but must never be shown to the user (see _commute_phrase).
@@ -61,32 +70,6 @@ def _extract_no_commute(text: str) -> bool:
         return False
     t = text.lower()
     return any(p in t for p in _NO_COMMUTE_PHRASES)
-
-
-# Phrases meaning "just run the search with what we have" — used to bypass the soft
-# criteria gate (D1). CJK phrases match the raw text; English phrases match on word
-# boundaries so short tokens ('go on') can't fire mid-word. Kept deliberately small
-# and specific (a proceed signal, not a general affirmation).
-_PROCEED_PHRASES_ZH = (
-    "继续搜索", "继续搜", "继续找", "继续", "就这样吧", "就这样", "直接搜索", "直接搜",
-    "可以了", "没事", "不用了继续", "都行", "先搜", "随便搜",
-)
-_PROCEED_PATTERNS_EN = (
-    r"\bcontinue\b", r"\bgo ahead\b", r"\bsearch anyway\b", r"\bjust search\b",
-    r"\bsearch now\b", r"\bproceed\b", r"\bthat'?s fine\b", r"\bthat is fine\b",
-    r"\bgo on\b", r"\bkeep going\b", r"\bit'?s fine\b",
-)
-
-
-def _is_proceed_intent(text: str) -> bool:
-    """True when the user is telling us to go ahead and search despite missing
-    recommended criteria (soft gate bypass)."""
-    if not text:
-        return False
-    if any(p in text for p in _PROCEED_PHRASES_ZH):
-        return True
-    t = text.lower()
-    return any(re.search(p, t) for p in _PROCEED_PATTERNS_EN)
 
 
 # Room-type synonyms -> canonical value ('studio' | 'ensuite' | 'shared'). Substring
@@ -1351,14 +1334,19 @@ async def search_properties_impl(
             def extract_destination_from_text(_text):
                 return None
 
-        print(f"\n{'='*60}")
-        print(f"🏠 [SEARCH TOOL] 开始执行房源搜索")
-        print(f"   user_query: {user_query}")
-        print(f"   area: {area} | location: {location} | commute_destination: {commute_destination}")
-        print(f"   max_budget: {max_budget} | max_commute_time: {max_commute_time} | no_commute: {no_commute}")
-        print(f"   property_features (累积): {all_property_features}")
-        print(f"   soft_preferences (累积): {all_soft_preferences}")
-        print(f"{'='*60}")
+        logger.info(
+            "property_search.start",
+            extra={
+                "query_chars": len(user_query or ""),
+                "has_area": bool(area or location),
+                "has_commute_destination": bool(commute_destination),
+                "has_budget": max_budget is not None,
+                "has_commute_limit": max_commute_time is not None,
+                "no_commute": bool(no_commute),
+                "property_feature_count": len(all_property_features),
+                "soft_preference_count": len(all_soft_preferences),
+            },
+        )
 
         # ================================================================
         # 步骤 0: 本轮消息里的显式信号优先（预算/通勤/不通勤），但绝不重新引入门槛
@@ -1663,7 +1651,18 @@ async def search_properties_impl(
             print(f"   🏙️ 目的地『{locked_commute_dest}』已锁定但未选居住区 → "
                   f"默认搜索目的地所在区域 '{search_area}'，并生成附近推荐区域")
 
-        if not search_area:
+        hard_readiness = assess_search_readiness(
+            resolved_area=search_area,
+            max_budget=max_budget,
+            room_type=room_type,
+            no_commute=no_commute,
+            commute_destination=commute_target,
+            criteria_gate_shown=criteria_gate_shown,
+            confirmed=confirmed,
+            user_message=msg_for_extraction,
+            move_in_date=move_in_date,
+        )
+        if hard_readiness.status == "missing_hard":
             if locked_commute_dest:
                 # 目的地已锁定但无法派生可搜索 slug（罕见）：仍回退到追问"想住哪"。
                 if is_cjk:
@@ -1685,7 +1684,7 @@ async def search_properties_impl(
                 'status': 'need_clarification',
                 'clarification_kind': 'missing_area',
                 'question': question,
-                'missing_fields': ['area'],
+                'missing_fields': list(hard_readiness.missing_hard),
                 'known_criteria': _known_criteria(),
                 'extracted_so_far': _extracted_so_far(),  # 保留旧 merge 代码期待的形状
             }
@@ -1724,21 +1723,21 @@ async def search_properties_impl(
         # 已知通勤目标即视为满足（仅标注、不强制过滤）：一旦锁定/给出目的地，就绝不再
         # 追问"是否通勤"。真实上限缺失时仍不过滤（commute_annotation_enabled 只标注，
         # commute_filter_enabled 只有在有真实上限时才为 True）。预算/房型软门行为不变。
-        commute_satisfied = bool(no_commute) or (commute_target is not None)
-        soft_missing = []
-        if not has_budget:
-            soft_missing.append('budget')
-        if not room_type:
-            soft_missing.append('room_type')
-        if not commute_satisfied:
-            soft_missing.append('commute')
-        # 期望入住日是"可选"字段：缺失时只搭车提示（不进入 missing_fields、绝不单独触发门），
-        # 单独缺失 move_in 时门不触发（保持既有行为与旧测试）。前端从 missing_optional_fields
-        # 读取该"可选缺失"标记。
-        move_in_missing = not bool(move_in_date)
+        readiness = assess_search_readiness(
+            resolved_area=search_area,
+            max_budget=max_budget,
+            room_type=room_type,
+            no_commute=no_commute,
+            commute_destination=commute_target,
+            criteria_gate_shown=criteria_gate_shown,
+            confirmed=confirmed,
+            user_message=msg_for_extraction,
+            move_in_date=move_in_date,
+        )
+        soft_missing = list(readiness.missing_soft)
+        move_in_missing = "move_in" in readiness.missing_optional
 
-        proceed_confirmed = bool(confirmed) or _is_proceed_intent(msg_for_extraction)
-        if soft_missing and not criteria_gate_shown and not proceed_confirmed:
+        if readiness.status == "ask_soft_once":
             print(f"   🚪 [SOFT GATE] 缺失推荐条件 {soft_missing}"
                   f"{'（+可选 move_in）' if move_in_missing else ''}，先确认再搜索")
             return {
@@ -1750,7 +1749,7 @@ async def search_properties_impl(
                 # OPTIONAL missing fields exposed separately so the REQUIRED-recommended
                 # 'missing_fields' contract (asserted by tests) stays exactly as-is while
                 # the frontend can still surface the optional move-in prompt.
-                'missing_optional_fields': (['move_in'] if move_in_missing else []),
+                'missing_optional_fields': list(readiness.missing_optional),
                 'known_criteria': _known_criteria(),
                 'search_criteria': _criteria(),
                 # 持久化“门已展示”标记（至多触发一次）。
@@ -2778,9 +2777,7 @@ async def search_properties_impl(
 search_properties_tool = Tool(
     name="search_properties",
 
-    description="""Search the UK database for SPECIFIC rental properties to rent. Use ONLY when the user wants to FIND/search listings ("帮我找房", "find me a flat", "search for apartments") or gives search criteria (budget, location, commute time). Do NOT use for general questions about rent prices/averages, living/transport/food costs, or areas/neighbourhoods/safety ("租房价格怎么样"/"介绍租房信息" -> web_search).
-
-Required: only an area to live in (or a commute_destination to derive it from). Budget and commute time are OPTIONAL — the tool degrades gracefully and never loops asking for them (missing budget -> no budget filter; missing commute -> no commute filter). "area" = where they LIVE; "commute_destination" = where they commute TO (distinct). If the user does not commute (e.g. "我不通勤我单纯住着", WFH), set no_commute=true. If no area can be determined the tool returns a clarification question; otherwise it returns recommendations.""",
+    description=SEARCH_TOOL_DESCRIPTION,
 
     func=search_properties_impl,
 

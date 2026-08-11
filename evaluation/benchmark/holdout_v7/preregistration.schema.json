@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rentcompass.eval/eval-preregistration.v7.schema.json",
+  "title": "RentCompass production fc_loop v7 preregistration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "status", "identity", "arch", "image_digest", "prompts",
+    "model_policy", "tool_policy", "evaluator_files", "tracks", "cluster_bootstrap",
+    "release_floors", "zero_tolerance"
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "anyOf": [{"const": "UNBOUND"}, {"pattern": "^[0-9a-f]{64}$"}]
+    },
+    "gitSha": {
+      "type": "string",
+      "anyOf": [{"const": "UNBOUND"}, {"pattern": "^[0-9a-f]{40}$"}]
+    },
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "policyRef": {
+      "allOf": [
+        {"$ref": "#/$defs/fileRef"},
+        {
+          "type": "object",
+          "required": ["policy_id", "version"],
+          "properties": {
+            "policy_id": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data_mode", "repeats", "case_set", "case_schema", "pool_with_other_track"],
+      "properties": {
+        "data_mode": {"enum": ["closed_fixture", "live_capture"]},
+        "repeats": {"type": "integer", "minimum": 3},
+        "case_set": {"$ref": "#/$defs/fileRef"},
+        "case_schema": {"$ref": "#/$defs/fileRef"},
+        "fixture_manifest": {"$ref": "#/$defs/fileRef"},
+        "capture_protocol": {"$ref": "#/$defs/fileRef"},
+        "max_capture_age_hours": {"type": "number", "exclusiveMinimum": 0, "maximum": 24},
+        "pool_with_other_track": {"const": false}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "rentcompass/eval-preregistration/v7"},
+    "status": {"enum": ["template_unbound", "frozen"]},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product_sha", "capture_sha", "evaluator_sha"],
+      "properties": {
+        "product_sha": {"$ref": "#/$defs/gitSha"},
+        "capture_sha": {"$ref": "#/$defs/gitSha"},
+        "evaluator_sha": {"$ref": "#/$defs/gitSha"}
+      }
+    },
+    "arch": {"const": "fc_loop"},
+    "image_digest": {
+      "type": "string",
+      "anyOf": [{"const": "UNBOUND"}, {"pattern": "^sha256:[0-9a-f]{64}$"}]
+    },
+    "prompts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          {"$ref": "#/$defs/fileRef"},
+          {
+            "type": "object",
+            "required": ["prompt_id", "version"],
+            "properties": {
+              "prompt_id": {"type": "string", "minLength": 1},
+              "version": {"type": "string", "minLength": 1}
+            }
+          }
+        ]
+      }
+    },
+    "model_policy": {"$ref": "#/$defs/policyRef"},
+    "tool_policy": {"$ref": "#/$defs/policyRef"},
+    "evaluator_files": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fileRef"}},
+    "tracks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deterministic_fixture", "live_freshness"],
+      "properties": {
+        "deterministic_fixture": {
+          "allOf": [
+            {"$ref": "#/$defs/track"},
+            {"type": "object", "required": ["fixture_manifest"]}
+          ]
+        },
+        "live_freshness": {
+          "allOf": [
+            {"$ref": "#/$defs/track"},
+            {"type": "object", "required": ["capture_protocol", "max_capture_age_hours"]}
+          ]
+        }
+      }
+    },
+    "cluster_bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "semantic_field", "template_field", "n_resamples", "seed", "confidence"],
+      "properties": {
+        "method": {"const": "nested_semantic_template_percentile"},
+        "semantic_field": {"const": "semantic_cluster"},
+        "template_field": {"const": "template_cluster"},
+        "n_resamples": {"type": "integer", "minimum": 2000},
+        "seed": {"type": "integer"},
+        "confidence": {"const": 0.95}
+      }
+    },
+    "release_floors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["track", "metric", "min_point", "min_ci_low", "min_cases", "min_template_clusters", "min_semantic_clusters", "require_every_case_all_repeats"],
+        "properties": {
+          "track": {"enum": ["deterministic_fixture", "live_freshness"]},
+          "metric": {"type": "string", "minLength": 1},
+          "min_point": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "min_ci_low": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "min_cases": {"type": "integer", "minimum": 1},
+          "min_template_clusters": {"type": "integer", "minimum": 1},
+          "min_semantic_clusters": {"type": "integer", "minimum": 1},
+          "require_every_case_all_repeats": {"type": "boolean"}
+        }
+      }
+    },
+    "zero_tolerance": {
+      "type": "object",
+      "minProperties": 4,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["max_count", "min_probe_cases"],
+        "properties": {
+          "max_count": {"const": 0},
+          "min_probe_cases": {"type": "integer", "minimum": 1}
+        }
+      }
+    }
+  }
+}

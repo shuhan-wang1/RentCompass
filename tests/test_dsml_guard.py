@@ -180,14 +180,14 @@ def _install_leaking_graph(monkeypatch, text):
         captured["persisted"] = assistant_text
         return None
 
-    class _Mem:
-        def remember_turn_async(self, user_message, assistant_text, **kw):
-            captured["memory"] = assistant_text
+    def _spy_background_job(job):
+        if job.get("kind") == "memory_turn":
+            captured["memory"] = (job.get("payload") or {}).get("assistant_message")
+        return True
 
-    import rag.agent_memory as am
     monkeypatch.setattr(appmod, "agent_graph", _FakeGraph())
     monkeypatch.setattr(appmod, "_write_back_turn", _spy_write_back)
-    monkeypatch.setattr(am, "get_agent_memory", lambda: _Mem())
+    monkeypatch.setattr(appmod, "_queue_background_job", _spy_background_job)
     return captured
 
 
@@ -202,7 +202,7 @@ def test_markup_never_reaches_the_http_payload_on_either_arch(
         r = client.post("/api/alex", json={"message": "记住这个"},
                         headers={"X-User-Id": "u" + uuid.uuid4().hex[:16]})
 
-    assert r.status_code == 200
+    assert r.status_code == 502
     body = r.get_data(as_text=True)
     assert guard.contains_markup(body) is False, body
     assert "▁" not in body
@@ -223,8 +223,8 @@ def test_markup_never_reaches_the_conversation_store(client, monkeypatch, arch):
 
 
 def test_markup_never_reaches_auto_memory(client, monkeypatch):
-    """remember_turn_async receives the same string. Durable memory is the longest-
-    lived of the three surfaces, and the one whose contents come back as context."""
+    """The durable memory outbox receives the same sanitized string. Memory is the
+    longest-lived surface, and the one whose contents come back as context."""
     monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
     captured = _install_leaking_graph(monkeypatch, "Saved. " + DEEPSEEK)
 
@@ -276,6 +276,7 @@ def test_nested_user_visible_string_cannot_bypass_layer_one(client, monkeypatch,
                         headers={"X-User-Id": "u" + uuid.uuid4().hex[:16]})
 
     body = r.get_data(as_text=True)
+    assert r.status_code == 502
     assert guard.contains_markup(body) is False, body
     rec = _canary_turns(caplog)[0]
     assert rec["dsml_leak"] == 1, rec
@@ -291,6 +292,7 @@ def test_boundary_replacement_drops_unknown_carriers_of_model_text(client, monke
                     headers={"X-User-Id": "u" + uuid.uuid4().hex[:16]})
 
     body = json.loads(r.get_data(as_text=True))
+    assert r.status_code == 502
     assert "tool_data" not in body and "some_new_field" not in body
     assert body["response_type"] == "error"
 

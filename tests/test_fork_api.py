@@ -154,7 +154,7 @@ def test_context_revision_increments_across_turns(client, user, monkeypatch):
 def test_alex_error_turn_is_failed_but_still_tagged(client, user, monkeypatch):
     _install_raising_agent(monkeypatch)
     r = _alex(client, user, "trigger a crash")
-    assert r.status_code == 200  # always-200 contract
+    assert r.status_code == 502  # honest upstream/agent failure contract
     body = r.get_json()
     assert body["response_type"] == "error"
     assert body["turn_id"]

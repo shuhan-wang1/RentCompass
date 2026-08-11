@@ -15,6 +15,7 @@ failing assertion lines in the pytest report.
 """
 
 import os
+import re
 import shutil
 import subprocess
 
@@ -38,7 +39,9 @@ def test_update_sh_rehearsal_passes():
         + ("\n--- stderr ---\n" + proc.stderr if proc.stderr.strip() else "")
     )
     # A rehearsal that silently stopped asserting would also "pass".
-    assert "passed 4" in proc.stdout, f"unexpectedly few assertions ran:\n{proc.stdout[-2000:]}"
+    summary = re.search(r"passed (\d+), failed 0", proc.stdout)
+    assert summary and int(summary.group(1)) >= 54, (
+        f"unexpectedly few assertions ran:\n{proc.stdout[-2000:]}")
 
 
 def test_pin_gate_survived_the_rewrite():
@@ -50,7 +53,8 @@ def test_pin_gate_survived_the_rewrite():
     for required in (
         "DEPLOY_PINNED_SHA",
         "is not the pinned release",
-        "tracked working tree is DIRTY",
+        "working tree is DIRTY",
+        "tracked or untracked",
     ):
         assert required in src, f"pin gate lost its {required!r} check"
 
@@ -61,7 +65,8 @@ def test_fc_pool_is_never_built_from_the_working_tree():
     building from an isolated worktree at the pin, not from `.`."""
     src = open(os.path.join(_ROOT, "deploy", "update.sh"), encoding="utf-8").read()
     assert "worktree add --detach" in src
-    assert '$DOCKER_CMD build -t "$FC_IMAGE" "$tree"' in src
+    assert '-t "$FC_IMAGE" "$tree"' in src
+    assert '--build-arg "PYTHON_IMAGE=$DEPLOY_PYTHON_IMAGE"' in src
     # compose must never be asked to --build the fc service.
     assert "--build app-fc" not in src
 

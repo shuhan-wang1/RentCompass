@@ -1,54 +1,69 @@
-# syntax=docker/dockerfile:1
-#
-# Image for the UK-rent agent web app (ASGI/uvicorn on :5001).
-#
-# The installable package lives under src/ (uk_rent_agent). The domain tools and
-# RAG code live under app/ and are added to sys.path at runtime by
-# uk_rent_agent.web.app — so both trees must be present in the image, but only
-# the src package is pip-installed.
-#
-# Runtime data (chroma indexes, .env, .runtime sqlite, scraped/cache data) is NOT
-# baked in — it is bind-mounted from the host in docker-compose.yml so the
-# container shares the same pre-built indexes and secrets as the host.
+# syntax=docker/dockerfile:1.7
 
-FROM python:3.12-slim AS base
+# Exact patch tag is the reproducible default; production may pass a digest-pinned
+# replacement with --build-arg PYTHON_IMAGE=python@sha256:...
+ARG PYTHON_IMAGE=python:3.12.11-slim-bookworm
+
+FROM ${PYTHON_IMAGE} AS builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /build
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH=/opt/venv/bin:${PATH}
+
+# Install CPU torch first so sentence-transformers cannot pull a CUDA stack.
+RUN python -m pip install 'pip==25.1.1' \
+    && python -m pip install --index-url https://download.pytorch.org/whl/cpu \
+       'torch==2.7.1+cpu'
+
+COPY pyproject.toml ./
+COPY src ./src
+RUN python -m pip install .
+
+
+FROM ${PYTHON_IMAGE} AS runtime
+
+ARG APP_SOURCE_SHA=unknown
+ARG PROMPT_VERSION=unknown
+ARG PROMPT_SCHEMA_SHA=unknown
+
+LABEL org.opencontainers.image.title="RentCompass agent" \
+      org.opencontainers.image.revision="${APP_SOURCE_SHA}" \
+      org.opencontainers.image.source="https://github.com/rentcompass/uk_rent_recommendation" \
+      uk.rentcompass.prompt.version="${PROMPT_VERSION}" \
+      uk.rentcompass.prompt.schema-sha="${PROMPT_SCHEMA_SHA}"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    # HuggingFace / sentence-transformers model cache lands on a named volume.
-    HF_HOME=/opt/hf-cache
+    PATH=/opt/venv/bin:${PATH} \
+    HF_HOME=/opt/hf-cache \
+    XDG_CACHE_HOME=/opt/hf-cache/xdg \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    APP_SOURCE_SHA=${APP_SOURCE_SHA} \
+    PROMPT_VERSION=${PROMPT_VERSION} \
+    PROMPT_SCHEMA_SHA=${PROMPT_SCHEMA_SHA}
 
-WORKDIR /app
-
-# build-essential/gcc cover any dependency that falls back to building from sdist
-# (most wheels are prebuilt manylinux). curl is used by the container healthcheck.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential curl \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 app \
+    && useradd --uid 1000 --gid app --create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app/.runtime /opt/hf-cache/xdg \
+    && chown -R app:app /app /opt/hf-cache
 
-# --- CPU-only PyTorch (pinned first so transitive deps don't pull CUDA) -------
-# sentence-transformers depends on torch; by default pip installs the CUDA build
-# (~5GB of nvidia/* + triton wheels this CPU deployment never uses). Installing
-# the CPU wheel first satisfies that dependency so the package install below
-# won't fetch the GPU stack.
-RUN pip install --upgrade pip \
-    && pip install --index-url https://download.pytorch.org/whl/cpu torch
+COPY --from=builder /opt/venv /opt/venv
+WORKDIR /app
+COPY --chown=app:app app ./app
 
-# --- Dependency layer (cached unless pyproject changes) ----------------------
-# Copy just the metadata + package source needed to resolve and install deps.
-COPY pyproject.toml ./
-COPY src ./src
-RUN pip install -e .
-
-# --- Application code --------------------------------------------------------
-# The domain/RAG code the app imports at runtime via sys.path insertion.
-COPY app ./app
-
+USER app
 EXPOSE 5001
 
-# Uvicorn factory, same entrypoint the host currently runs, bound to all
-# interfaces so the published port is reachable.
 CMD ["python", "-m", "uvicorn", "uk_rent_agent.web.asgi:create_asgi_app", \
      "--factory", "--host", "0.0.0.0", "--port", "5001"]

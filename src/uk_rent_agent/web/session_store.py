@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import threading
 import time
+import weakref
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Callable
@@ -35,6 +36,32 @@ class UserSession:
     touched_at: float = field(default_factory=time.monotonic)
 
 
+class _StableLock:
+    """Weak-referenceable lock whose lifetime follows active callers, not user ids."""
+
+    __slots__ = ("_lock", "__weakref__")
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+
+    def acquire(self, *args, **kwargs):
+        return self._lock.acquire(*args, **kwargs)
+
+    def release(self) -> None:
+        self._lock.release()
+
+    def locked(self) -> bool:
+        return self._lock.locked()
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.release()
+        return False
+
+
 class SessionStore:
     """In-memory hot cache of per-(user_id, conversation_id) conversational state.
 
@@ -56,7 +83,11 @@ class SessionStore:
         self._ttl = ttl_seconds
         self._clock = clock
         self._data: OrderedDict[tuple[str, str], UserSession] = OrderedDict()
-        self._locks: dict[tuple[str, str], threading.Lock] = {}
+        # Weak values solve the otherwise-unbounded unique-user lock table without
+        # ever replacing a lock that an in-flight caller still references.
+        self._locks: weakref.WeakValueDictionary[tuple[str, str], _StableLock] = (
+            weakref.WeakValueDictionary()
+        )
         self._lock = threading.RLock()
 
     @staticmethod
@@ -79,14 +110,14 @@ class SessionStore:
                 self._data.popitem(last=False)
             return value
 
-    def turn_lock(self, user_id, conversation_id="default") -> threading.Lock:
+    def turn_lock(self, user_id, conversation_id="default") -> _StableLock:
         """Return a stable per-(user_id, conversation_id) lock used to make a turn's
         read-modify-write of the conversational state atomic across concurrent requests."""
         key = self._key(user_id, conversation_id)
         with self._lock:
             lock = self._locks.get(key)
             if lock is None:
-                lock = threading.Lock()
+                lock = _StableLock()
                 self._locks[key] = lock
             return lock
 
@@ -98,15 +129,12 @@ class SessionStore:
         key = self._key(user_id, conversation_id)
         with self._lock:
             self._data.pop(key, None)
-            self._locks.pop(key, None)
 
     def clear_user(self, user_id) -> None:
         uid = str(user_id or "default")
         with self._lock:
             for key in [k for k in self._data if k[0] == uid]:
                 self._data.pop(key, None)
-            for key in [k for k in self._locks if k[0] == uid]:
-                self._locks.pop(key, None)
 
     def _expire(self, now: float) -> None:
         expired = [key for key, value in self._data.items() if now - value.touched_at >= self._ttl]
@@ -116,3 +144,16 @@ class SessionStore:
     def snapshot(self, user_id, conversation_id="default") -> UserSession:
         with self._lock:
             return copy.deepcopy(self.get(user_id, conversation_id))
+
+    def privacy_inventory(self, user_id) -> dict[str, int]:
+        """Return non-content hot-cache counts for erasure verification."""
+        uid = str(user_id or "default")
+        with self._lock:
+            slices = sum(1 for key in self._data if key[0] == uid)
+            live_locks = sum(1 for key in self._locks if key[0] == uid)
+        return {"session_slices": slices, "live_lock_refs": live_locks}
+
+    def lock_count(self) -> int:
+        """Test/telemetry helper: live locks only; unused keys disappear automatically."""
+        with self._lock:
+            return len(self._locks)

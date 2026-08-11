@@ -9,7 +9,9 @@ import asyncio
 from dataclasses import dataclass, field
 
 import pytest
+from langchain_core.messages import HumanMessage, SystemMessage
 
+import core.agent_loop as agent_loop
 from core.agent_loop import build_fc_nodes
 
 
@@ -153,6 +155,15 @@ def test_confirm_replays_frozen_content_verbatim(gate):
     note = "\n".join(getattr(m, "content", "") for m in state["messages"]
                      if isinstance(getattr(m, "content", ""), str))
     assert "saved verbatim" in note
+    system_blob = "\n".join(
+        m.content for m in state["messages"] if isinstance(m, SystemMessage))
+    assert "预算上限 £1400/月" not in system_blob
+    assert any(
+        isinstance(m, HumanMessage)
+        and agent_loop._LOW_PRIVILEGE_DATA_HEADER in m.content
+        and "saved verbatim" in m.content
+        for m in state["messages"]
+    )
 
 
 def test_decline_discards_without_executing(gate):

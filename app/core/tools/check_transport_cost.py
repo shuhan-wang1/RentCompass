@@ -1,32 +1,11 @@
 """
 Tool: Check Transport Cost
 查询伦敦交通（TfL）票价的专用工具
-数据源：TfL 2025 官方票价表 (硬编码以确保准确性)
+数据源：TfL 官方 2026 票价表（统一数据模块，含生效日期和来源）
 """
 
 from core.tool_system import Tool
-
-# 2025 TfL 票价表 (基于 TfL 官方数据)
-# 18+ Student Oyster Card 通常享受 Travelcard (周/月票) 的 7 折优惠 (30% off)
-# 注意：Student Oyster 通常不打折 Pay As You Go (单程/日封顶)，只打折 Travelcard
-
-TFL_FARES_2025 = {
-    "adult": {
-        "zone1-2": {"monthly": 164.00, "weekly": 42.70, "daily_cap": 8.50},
-        "zone1-3": {"monthly": 192.60, "weekly": 50.20, "daily_cap": 10.00},
-        "zone1-4": {"monthly": 235.40, "weekly": 61.40, "daily_cap": 12.30},
-        "zone1-5": {"monthly": 280.30, "weekly": 73.00, "daily_cap": 14.60},
-        "zone1-6": {"monthly": 300.70, "weekly": 78.40, "daily_cap": 15.60},
-    },
-    # 学生价通常是成人 Travelcard 的 7 折 (30% off)
-    "student": {
-        "zone1-2": {"monthly": 114.80, "weekly": 29.80, "daily_cap": 8.50},  # Daily Cap 通常无学生优惠
-        "zone1-3": {"monthly": 134.80, "weekly": 35.10, "daily_cap": 10.00},
-        "zone1-4": {"monthly": 164.70, "weekly": 42.90, "daily_cap": 12.30},
-        "zone1-5": {"monthly": 196.20, "weekly": 51.10, "daily_cap": 14.60},
-        "zone1-6": {"monthly": 210.40, "weekly": 54.80, "daily_cap": 15.60},
-    }
-}
+from uk_rent_agent.data.tfl_fares import get_zonal_fare
 
 async def check_transport_cost_impl(
     start_zone: int = 1,
@@ -39,31 +18,36 @@ async def check_transport_cost_impl(
         if start_zone > end_zone:
             start_zone, end_zone = end_zone, start_zone
         
-        # 即使只在 Zone 2-3 活动，通常也会查询 Zone 1-X 的月票，这里简化处理
-        zone_key = f"zone1-{end_zone}"
-        
         user_type = "student" if "student" in travel_type.lower() else "adult"
-        
-        prices = TFL_FARES_2025.get(user_type, {}).get(zone_key)
-        
-        if not prices:
+        try:
+            prices = get_zonal_fare(start_zone, end_zone, user_type)
+        except (TypeError, ValueError) as exc:
             return {
                 "success": False,
-                "error": f"暂无 Zone 1-{end_zone} 的 {user_type} 票价数据，建议访问 tfl.gov.uk 查询。"
+                "error": f"{exc}. Please check tfl.gov.uk/fares."
             }
             
         return {
             "success": True,
             "data": {
-                "zones": f"Zone 1-{end_zone}",
+                "zones": (
+                    f"Zone {start_zone}" if start_zone == end_zone
+                    else f"Zone {start_zone}-{end_zone}"
+                ),
                 "user_type": "18+ Student Oyster" if user_type == "student" else "Adult",
                 "prices": {
                     "monthly_pass": f"£{prices['monthly']:.2f}",
                     "weekly_pass": f"£{prices['weekly']:.2f}",
-                    "daily_cap_payg": f"£{prices['daily_cap']:.2f} (Daily Cap, usually no student discount)"
+                    "daily_cap_payg": (
+                        f"£{prices['daily_cap']:.2f} "
+                        "(standard daily cap; no 18+ Student PAYG discount)"
+                    )
                 },
                 "note": "Student discount (30% off) applies to Travelcards (Weekly/Monthly), NOT Pay As You Go single fares.",
-                "source": "TfL Official Fares 2025"
+                "source": prices["source"],
+                "source_url": prices["source_url"],
+                "effective_date": prices["effective_date"],
+                "fare_edition": prices["edition"],
             }
         }
     except Exception as e:
@@ -71,7 +55,7 @@ async def check_transport_cost_impl(
 
 check_transport_cost_tool = Tool(
     name="check_transport_cost",
-    description="Get OFFICIAL 2025 TfL transport fares (Tube/Train/Bus). Use this for EXACT prices instead of web_search. Returns accurate student (30% off) and adult fares.",
+    description="Get official TfL 2026 zonal PAYG caps and weekly/monthly Travelcard prices, with effective date and official source URL. Student prices require an 18+ Student Oyster photocard.",
     func=check_transport_cost_impl,
     parameters={
         "type": "object",

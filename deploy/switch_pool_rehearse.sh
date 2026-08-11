@@ -76,6 +76,10 @@ export SWITCH_CONF="$CONF"
 export SWITCH_TEST_CMD="nginx -p $PREFIX -c $CONF -t"
 export SWITCH_RELOAD_CMD="nginx -p $PREFIX -c $CONF -s reload"
 export SWITCH_VERIFY_URL="http://127.0.0.1:$PORT/health"
+# The rehearsal deliberately runs against the currently installed pools, which may
+# predate the new /ready endpoint. Inject /health as the identity fixture here; the
+# production default remains fail-closed on /ready.
+export SWITCH_POOL_HEALTH_FMT="http://127.0.0.1:%s/health"
 export SWITCH_CURL_OPTS="-s"
 export SWITCH_WRITE_CMD="tee"
 

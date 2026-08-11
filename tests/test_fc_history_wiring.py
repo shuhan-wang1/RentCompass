@@ -188,10 +188,17 @@ def test_discussed_areas_rendered_into_assembled_context_message():
         context_block={"discussed_areas": ["Camden"]},
         reply_language="zh",
     )
-    # Message #2 is the context block; it must carry the discussed-areas anchor.
-    ctx = "\n".join(m.content for m in msgs if isinstance(m, SystemMessage))
+    # Message #2 is a low-privilege context packet; it must carry the area anchor
+    # without promoting runtime data into the system role.
+    ctx = "\n".join(
+        m.content for m in msgs
+        if isinstance(m, HumanMessage)
+        and loop_prompts.UNTRUSTED_DATA_MARKER in m.content
+    )
     assert DISCUSSED_AREAS_MARKER in ctx
     assert "Camden" in ctx
+    assert (DISCUSSED_AREAS_MARKER + ": Camden") not in "\n".join(
+        m.content for m in msgs if isinstance(m, SystemMessage))
 
 
 def test_build_messages_surfaces_discussed_areas_for_h6():
@@ -207,10 +214,40 @@ def test_build_messages_surfaces_discussed_areas_for_h6():
         },
         "accumulated_search_criteria": {},
     }
-    blob = "\n".join(m.content for m in agent_loop._build_messages(state)
-                     if isinstance(m, SystemMessage))
+    built = agent_loop._build_messages(state)
+    blob = "\n".join(
+        m.content for m in built
+        if isinstance(m, HumanMessage)
+        and loop_prompts.UNTRUSTED_DATA_MARKER in m.content
+    )
     assert DISCUSSED_AREAS_MARKER in blob
     assert "Camden" in blob
+    assert (DISCUSSED_AREAS_MARKER + ": Camden") not in "\n".join(
+        m.content for m in built if isinstance(m, SystemMessage))
+
+
+def test_build_messages_wires_rolling_summary_below_system_role():
+    state = {
+        "user_query": "what did I rule out?",
+        "extracted_context": {
+            "current_message": "what did I rule out?",
+            "reply_language": "en",
+            "history": [],
+            "rolling_summary": "OLD_HARD_CRITERION_CANARY: exclude Camden",
+        },
+        "accumulated_search_criteria": {},
+        "memory_context": "",
+    }
+    msgs = agent_loop._build_messages(state)
+    systems = [m.content for m in msgs if isinstance(m, SystemMessage)]
+    assert len(systems) == 1
+    assert "OLD_HARD_CRITERION_CANARY" not in systems[0]
+    data_rows = [m.content for m in msgs
+                 if isinstance(m, HumanMessage)
+                 and loop_prompts.UNTRUSTED_DATA_MARKER in m.content]
+    assert len(data_rows) == 1
+    assert data_rows[0].count("OLD_HARD_CRITERION_CANARY") == 1
+    assert msgs[-1].content == "what did I rule out?"
 
 
 # ═══════════════════════════════════════════════════════════════════

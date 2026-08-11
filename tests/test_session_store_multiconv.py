@@ -1,4 +1,5 @@
 """Unit tests for the multi-conversation SessionStore (hot cache + turn locks)."""
+import gc
 import threading
 
 from uk_rent_agent.web.session_store import SessionStore
@@ -93,3 +94,31 @@ def test_atomic_history_append_under_lock_no_drop():
 
     # Window keeps the last 10; the point is nothing crashed and the window is exact.
     assert len(store.get("u1", "c1").history) == 10
+
+
+def test_unused_turn_locks_do_not_grow_with_unique_users():
+    store = SessionStore()
+    for index in range(10_000):
+        with store.turn_lock(f"u{index}", "c"):
+            pass
+    gc.collect()
+    assert store.lock_count() == 0
+
+
+def test_clear_does_not_replace_a_lock_still_held_by_a_caller():
+    store = SessionStore()
+    held = store.turn_lock("u1", "c1")
+    with held:
+        store.clear("u1", "c1")
+        assert store.turn_lock("u1", "c1") is held
+
+
+def test_privacy_inventory_has_no_content_and_clears_slices():
+    store = SessionStore()
+    store.get("u1", "c1").history.append({"user": "secret", "assistant": "secret"})
+    before = store.privacy_inventory("u1")
+    store.clear_user("u1")
+    after = store.privacy_inventory("u1")
+    assert before["session_slices"] == 1
+    assert after["session_slices"] == 0
+    assert "secret" not in repr(before)

@@ -241,7 +241,7 @@ def test_schema_400_survives_a_crash(client, monkeypatch, caplog, installed, arc
     with caplog.at_level(logging.INFO, logger="canary"):
         r = client.post("/api/alex", json={"message": "hi"},
                         headers={"X-User-Id": "u" + uuid.uuid4().hex[:16]})
-    assert r.status_code == 200  # always-200 contract
+    assert r.status_code == 502
     turns = _canary_turns(caplog)
     assert len(turns) == 1
     rec = turns[0]
@@ -830,7 +830,7 @@ def test_tainted_write_survives_a_crash_on_both_arches(
     with caplog.at_level(logging.INFO, logger="canary"):
         r = client.post("/api/alex", json={"message": "hi"},
                         headers={"X-User-Id": "u" + uuid.uuid4().hex[:16]})
-    assert r.status_code == 200
+    assert r.status_code == 502
     rec = _canary_turns(caplog)[0]
     assert rec["turn_outcome"] == "crash"
     assert rec["security"]["tainted_write_executed_count"] == 1, rec

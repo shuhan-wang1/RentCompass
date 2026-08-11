@@ -60,7 +60,7 @@ class Config:
     # Cross-thread Store: persist the user's durable structured criteria across conversations.
     # Off by default — the existing Chroma AgentMemory remains the long-term memory of record.
     enable_store: bool = False
-    # Local username/password credential store (JSON, gitignored). See web/auth_store.py.
+    # Local username/password credential store (SQLite, gitignored). See web/auth_store.py.
     auth_db_path: Path | None = None
     # When True, every /api/* route except /api/auth/* requires an authenticated session
     # (401 otherwise). Default False keeps the guest flow working for the local demo.
@@ -72,6 +72,11 @@ class Config:
     allow_legacy_client_user_id: bool = False
     max_request_bytes: int = 256 * 1024
     rate_limit_window_seconds: int = 60
+    rate_limit_db_path: Path | None = None
+    # Cross-process single-flight lease for one conversation turn. A crashed worker's
+    # lease is reclaimed after this interval; normal FC turns are expected to finish
+    # well below the default fifteen minutes.
+    turn_lease_seconds: int = 15 * 60
 
     @property
     def data_dir(self) -> Path:
@@ -109,11 +114,18 @@ class Config:
             enable_hitl=_bool("ENABLE_HITL", False),
             enable_store=_bool("ENABLE_STORE", False),
             auth_db_path=Path(
-                os.getenv("AUTH_DB_PATH", str(root / ".runtime" / "users.json"))
+                os.getenv("AUTH_DB_PATH", str(root / ".runtime" / "auth.sqlite3"))
             ),
             require_auth=_bool("REQUIRE_AUTH", False),
             session_cookie_secure=_bool("SESSION_COOKIE_SECURE", False),
             allow_legacy_client_user_id=_bool("ALLOW_LEGACY_CLIENT_USER_ID", False),
             max_request_bytes=int(os.getenv("MAX_REQUEST_BYTES", str(256 * 1024))),
             rate_limit_window_seconds=int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60")),
+            rate_limit_db_path=Path(
+                os.getenv(
+                    "RATE_LIMIT_DB_PATH",
+                    str(root / ".runtime" / "rate_limits.sqlite3"),
+                )
+            ),
+            turn_lease_seconds=max(1, int(os.getenv("TURN_LEASE_SECONDS", str(15 * 60)))),
         )

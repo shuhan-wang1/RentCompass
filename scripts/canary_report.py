@@ -23,7 +23,7 @@ the value at 0-based index ``ceil(pct*n)-1`` (clamped) of the sorted samples —
 observed latency, never an interpolation.
 
 Exit codes — only 0/2/3 are GATE VERDICTS (see GATE_EXIT_CODES / EXIT_USAGE below):
-    0  proceed / hold-ok        2  stage-pause or instrumentation-hold
+    0  proceed                  2  hold, stage-pause, or instrumentation-hold
     3  zero-tolerance breach    1  input/runtime error (bad --input/--since/--now)
    64  CLI usage error: argparse misuse (unknown flag, option missing its argument)
 
@@ -998,8 +998,9 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
                   expected_turns: Optional[dict] = None) -> dict:
     """Evaluate shuhan's zero-tolerance and stage-pause rules against the fc pool.
 
-    Precedence for the exit code: zero-tolerance (3) beats stage-pause (2) beats proceed (0).
-    A stage evaluated-but-not-eligible is a HOLD (exit 0), not a pause.
+    Precedence for the exit code: zero-tolerance (3) beats stage-pause/HOLD (2) beats
+    proceed (0).  An observation window that has not met its preregistered minima is not
+    permission to advance, so HOLD is deliberately non-zero.
     """
     zt_reasons: List[str] = []
     zt_notes: List[str] = []
@@ -1113,7 +1114,7 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         decision, exit_code = "STAGE-PAUSE", 2
     else:
         if stage_eval is not None and not stage_eval["eligible"]:
-            decision, exit_code = "HOLD", 0
+            decision, exit_code = "HOLD", 2
         elif stage_eval is not None:
             decision, exit_code = "STAGE-PROGRESS-OK", 0
         else:

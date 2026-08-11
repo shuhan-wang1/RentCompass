@@ -35,6 +35,19 @@ def load_mock_properties_from_csv(filename: str = None) -> list[dict]:
         print(f"/!\\ ERROR: Failed to read mock data file: {e} /!\\")
         return []
 
+def _current_repository() -> PropertyRepository:
+    global _repository
+    current = Config.from_env()
+    if current != _repository._config:
+        _repository = PropertyRepository(current)
+    return _repository
+
+
+def get_property_snapshot(force_refresh: bool = False):
+    """Return rows together with their source, age and observation timestamp."""
+    return _current_repository().load(force_refresh=force_refresh)
+
+
 def load_properties(force_refresh: bool = False) -> list[dict]:
     """Smart property loader — the entry point the app should use.
 
@@ -42,21 +55,16 @@ def load_properties(force_refresh: bool = False) -> list[dict]:
       - 'csv'     : always the bundled fake CSV (old demo behaviour).
       - 'scraper' : real scraped data, honouring the hybrid TTL cache; scrapes
                     on startup when the cache is missing/stale (can be slow).
-      - 'auto'    : (default) serve the scraped cache if it has been built,
-                    otherwise the fake CSV. Never blocks startup on a live scrape
-                    unless SCRAPE_ON_STARTUP is truthy. Build/refresh the cache
-                    out-of-band with:  python scripts/build_scraped_dataset.py
+      - 'auto'    : (default) serve a scraped snapshot if one exists, including
+                    an explicitly-labelled stale snapshot; otherwise return no
+                    rows. Build/refresh it out-of-band with:
+                    python scripts/build_scraped_dataset.py
 
-    Always falls back to the fake CSV if the scraping layer is unavailable, so
-    the app can never start with zero properties.
+    Demo rows are never an implicit fallback. They require PROPERTY_SOURCE=csv.
     """
-    global _repository
-    current = Config.from_env()
-    if current != _repository._config:
-        _repository = PropertyRepository(current)
-    return _repository.load(force_refresh=force_refresh).properties
+    return get_property_snapshot(force_refresh=force_refresh).properties
 
 
 def get_property_source() -> str:
     """Return the source label for the same repository snapshot used by search."""
-    return _repository.load().source
+    return _current_repository().load().source

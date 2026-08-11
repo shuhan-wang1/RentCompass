@@ -153,6 +153,7 @@ class ToolResult:
     tool_name: Optional[str] = None
     version: str = "1"
     idempotency_key: Optional[str] = None
+    outcome: Optional[str] = None
     
     def to_dict(self) -> dict:
         """转换为字典格式"""
@@ -164,6 +165,7 @@ class ToolResult:
             'tool_name': self.tool_name,
             'version': self.version,
             'idempotency_key': self.idempotency_key,
+            'outcome': self.outcome,
         }
 
 
@@ -265,16 +267,52 @@ class Tool:
             if not idempotency_key:
                 return ToolResult(False, error="idempotency_key is required for write tools",
                                   tool_name=self.name, version=self.version)
-            previous = idempotency_store.get(idempotency_key) if idempotency_store else None
+            previous = idempotency_store.get_record(idempotency_key) if idempotency_store else None
             if previous is not None:
-                return ToolResult(True, data=previous, tool_name=self.name, version=self.version,
-                                  idempotency_key=idempotency_key)
+                if previous.tool != self.name:
+                    return ToolResult(
+                        False,
+                        error="idempotency key is already bound to a different tool",
+                        tool_name=self.name,
+                        version=self.version,
+                        idempotency_key=idempotency_key,
+                        outcome="conflict",
+                    )
+                if previous.status == "complete":
+                    return ToolResult(
+                        True, data=previous.result, tool_name=self.name,
+                        version=self.version, idempotency_key=idempotency_key,
+                        outcome="replayed",
+                    )
+                if previous.status == "failed":
+                    return ToolResult(
+                        False, data=previous.result,
+                        error=previous.error or "logical invocation previously failed",
+                        tool_name=self.name, version=self.version,
+                        idempotency_key=idempotency_key, outcome="failed",
+                    )
+                return ToolResult(
+                    False,
+                    error=(previous.error or
+                           f"logical invocation is {previous.status}; write outcome is unknown"),
+                    tool_name=self.name,
+                    version=self.version,
+                    idempotency_key=idempotency_key,
+                    outcome=("unknown" if previous.status == "unknown" else "running"),
+                )
             if idempotency_store:
                 claimed = idempotency_store.claim(idempotency_key, self.name)
                 if not claimed:
-                    return ToolResult(False, error="logical invocation is already in progress",
-                                      tool_name=self.name, version=self.version,
-                                      idempotency_key=idempotency_key)
+                    current = idempotency_store.get_record(idempotency_key)
+                    status = current.status if current is not None else "running"
+                    return ToolResult(
+                        False,
+                        error=(getattr(current, "error", None) or
+                               f"logical invocation is {status}; write was not retried"),
+                        tool_name=self.name, version=self.version,
+                        idempotency_key=idempotency_key,
+                        outcome=("unknown" if status == "unknown" else status),
+                    )
 
         attempts = self.max_retries if self.retry_safe else 1
         for attempt in range(attempts):
@@ -323,6 +361,12 @@ class Tool:
                     result = self.output_model.model_validate(result).model_dump()
                 if logical_success and claimed:
                     idempotency_store.complete(idempotency_key, result)
+                elif not logical_success and claimed:
+                    idempotency_store.fail(
+                        idempotency_key,
+                        result.get("error", "write returned an unsuccessful result"),
+                        result,
+                    )
                 return ToolResult(
                     success=logical_success,
                     data=result,
@@ -331,8 +375,16 @@ class Tool:
                     tool_name=self.name,
                     version=self.version,
                     idempotency_key=idempotency_key,
+                    outcome=("complete" if logical_success else "failed"),
                 )
-            
+
+            except asyncio.CancelledError:
+                if claimed:
+                    idempotency_store.mark_unknown(
+                        idempotency_key,
+                        "caller stopped waiting while the write was in flight; outcome is unknown",
+                    )
+                raise
             except Exception as e:
                 execution_time = (time.time() - start_time) * 1000
                 error_msg = f"{type(e).__name__}: {str(e)}"
@@ -350,6 +402,8 @@ class Tool:
                     logger.error("Tool %s exhausted all retries", self.name)
                     if attempt == attempts - 1:
                         traceback.print_exc()
+                    if claimed:
+                        idempotency_store.fail(idempotency_key, error_msg)
                     return ToolResult(
                         success=False,
                         data=None,
@@ -358,6 +412,7 @@ class Tool:
                         tool_name=self.name,
                         version=self.version,
                         idempotency_key=idempotency_key,
+                        outcome="failed",
                     )
     
     def _accepts_kwarg(self, name: str) -> bool:

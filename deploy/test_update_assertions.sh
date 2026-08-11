@@ -40,7 +40,8 @@ setup() {                      # setup <upstream_port> <legacy_sha> <fc_sha>
     git init -q .; git config user.email t@t; git config user.name t
     echo x > f; git add -A; git commit -qm c1 ) >/dev/null 2>&1
   PIN="$(cd "$repo" && git rev-parse HEAD)"
-  printf 'DEPLOY_PINNED_SHA=%s\n' "$PIN" > "$SANDBOX/pin.env"
+  printf 'DEPLOY_PINNED_SHA=%s\nDEPLOY_PYTHON_IMAGE=python@sha256:%064d\n' \
+    "$PIN" 2 > "$SANDBOX/pin.env"
 
   mkdir -p "$SANDBOX/nginx"
   printf 'upstream rentcompass_app {\n    server 127.0.0.1:%s;\n}\n' "$1" > "$SANDBOX/nginx/site.conf"
@@ -50,7 +51,12 @@ setup() {                      # setup <upstream_port> <legacy_sha> <fc_sha>
 #!/usr/bin/env bash
 echo "docker $*" >> "$CALLS"
 case "$1" in
-  image) exit "${FAKE_IMAGE_EXISTS:-1}" ;;   # non-zero = tag absent -> build
+  image)
+    if [ "${3:-}" = "--format" ] || [ "${2:-}" = "inspect" ] && [ "${3:-}" = "--format" ]; then
+      printf 'sha256:%064d\n' 1
+      exit 0
+    fi
+    exit "${FAKE_IMAGE_EXISTS:-1}" ;;   # non-zero = tag absent -> build
   build) exit "${FAKE_BUILD_RC:-0}" ;;
 esac
 exit 0
@@ -72,7 +78,7 @@ case "$port" in
   *) exit 1 ;;
 esac
 grep -q "compose .*up .*app-fc" "$CALLS" 2>/dev/null && [ "$port" = 5002 ] && sha="$PIN"
-grep -q "compose up -d --build app$" "$CALLS" 2>/dev/null && [ "$port" = 5001 ] && sha="$PIN"
+grep -q "compose up -d app$" "$CALLS" 2>/dev/null && [ "$port" = 5001 ] && sha="$PIN"
 [ "$sha" = "DOWN" ] && exit 1
 printf 'HTTP/1.1 200 OK\r\nx-agent-arch: %s\r\nx-agent-version: %s\r\n\r\n' "$arch" "$sha"
 EOF
@@ -121,7 +127,8 @@ teardown
 setup 5001 old-legacy-sha old-fc-sha
 run_update; CALLS_TXT="$(cat "$CALLS")"
 contains "$OUT"       "deploying the 'legacy' pool" "auto resolves to legacy when the upstream is :5001"
-contains "$CALLS_TXT" "compose up -d --build app"   "it rebuilds legacy"
+contains "$CALLS_TXT" "docker build"                "it builds legacy"
+contains "$CALLS_TXT" "compose up -d app"            "it recreates legacy"
 lacks    "$CALLS_TXT" "app-fc"                      "it does NOT touch the fc pool"
 teardown
 echo
@@ -193,15 +200,31 @@ setup 5002 old-legacy-sha old-fc-sha
 echo dirty >> "$REPO/f"
 run_update; CALLS_TXT="$(cat "$CALLS")"
 check   "a dirty tree is refused"                  1 "$RC"
-contains "$OUT"       "tracked working tree is DIRTY" "with the original wording"
+contains "$OUT"       "working tree is DIRTY"         "with the fail-closed wording"
 lacks    "$CALLS_TXT" "compose"                    "and nothing is deployed"
 teardown
 
 setup 5002 old-legacy-sha old-fc-sha
-printf 'DEPLOY_PINNED_SHA=%s\n' "0000000000000000000000000000000000000000" > "$SANDBOX/pin.env"
+echo contamination > "$REPO/untracked-build-input.py"
+run_update; CALLS_TXT="$(cat "$CALLS")"
+check   "an untracked build-context file is refused" 1 "$RC"
+contains "$OUT"       "untracked-build-input.py"       "the contaminating path is named"
+lacks    "$CALLS_TXT" "docker build"                   "and no image is built"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+printf 'DEPLOY_PINNED_SHA=%s\nDEPLOY_PYTHON_IMAGE=python@sha256:%064d\n' \
+  "0000000000000000000000000000000000000000" 2 > "$SANDBOX/pin.env"
 run_update
 check   "an unknown pin is refused"                1 "$RC"
 contains "$OUT" "is not in this repo"               "with the original wording"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+printf 'DEPLOY_PINNED_SHA=%s\nDEPLOY_PYTHON_IMAGE=python:3.12-slim\n' "$PIN" > "$SANDBOX/pin.env"
+run_update
+check   "a mutable Python base tag is refused"     1 "$RC"
+contains "$OUT" "immutable digest reference"        "base image provenance fails closed"
 teardown
 echo
 
@@ -220,6 +243,22 @@ setup 5002 old-legacy-sha old-fc-sha
 ( cd "$REPO" && git checkout -q --detach HEAD && git commit -q --allow-empty -m drift ) >/dev/null 2>&1
 run_update --status
 contains "$OUT" "a deploy would be REFUSED"         "HEAD off the pin is stated plainly, not just implied"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+printf 'DEPLOY_PINNED_SHA=%s\n' "$PIN" > "$SANDBOX/pin.env"
+run_update --status; CALLS_TXT="$(cat "$CALLS")"
+check   "--status survives a missing Python image pin" 0 "$RC"
+contains "$OUT" "invalid/missing"                     "the missing immutable base is reported as a deploy blocker"
+lacks    "$CALLS_TXT" "docker build"                  "diagnosis still performs no build"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+mv "$SANDBOX/pin.env" "$SANDBOX/pin.env.absent"
+run_update --status; CALLS_TXT="$(cat "$CALLS")"
+check   "--status survives a missing pin file"        0 "$RC"
+contains "$OUT" "pin unavailable"                    "the absent pin is reported as a deploy blocker"
+lacks    "$CALLS_TXT" "docker build"                 "missing metadata cannot trigger a build"
 teardown
 echo
 
@@ -263,7 +302,8 @@ teardown
 
 setup 5002 old-legacy-sha old-fc-sha
 run_update --both; CALLS_TXT="$(cat "$CALLS")"
-contains "$CALLS_TXT" "up -d --build app"          "--both deploys legacy"
+contains "$CALLS_TXT" "docker build"                "--both builds legacy"
+contains "$CALLS_TXT" "compose up -d app"            "--both deploys legacy"
 contains "$CALLS_TXT" "app-fc"                     "--both deploys fc"
 lacks    "$OUT"       "It is your rollback target" "and then has no drift to warn about"
 teardown

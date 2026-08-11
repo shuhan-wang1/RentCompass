@@ -1,9 +1,9 @@
-# fc_loop Canary Runbook (2026-07-20 plan)
+# fc_loop Canary Runbook
 
-Operational runbook for rolling the `fc_loop` harness out behind a canary against the
-`legacy` (LangGraph) arch. This encodes shuhan's 2026-07-20 plan verbatim in structure.
+Operational runbook for rolling the `fc_loop` harness out against the
+`legacy` (LangGraph) arch through the two pool-level upstreams.
 The offline gate evaluator is `scripts/canary_report.py`; it reads the `canary.turn`
-telemetry stream and returns an exit code (0 proceed/hold, 2 stage-pause, 3 zero-tolerance).
+telemetry stream and returns an exit code (0 proceed, 2 hold/stage-pause, 3 zero-tolerance).
 
 ---
 
@@ -18,7 +18,7 @@ telemetry stream and returns an exit code (0 proceed/hold, 2 stage-pause, 3 zero
   Rebuilding the branch must not move what canary traffic runs. Cut a **new** tag to advance
   the candidate.
 - **Superseded history:** an earlier draft pinned `canary/fc-loop-7db03e7`. Do **not** deploy
-  it — `7db03e7` predates the canary infrastructure (sticky per-conversation assignment,
+  it — `7db03e7` predates the canary infrastructure (conversation arch provenance,
   per-turn telemetry, and the `X-Agent-*` headers landed later, in `3d215fb`/`14312f0`), so an
   image built from it has no canary support at all. The deployable is the **current candidate
   tag** cut on the commit that includes the canary infra together with the compose/env wiring
@@ -36,7 +36,7 @@ either arch can rebuild a conversation from the shared transcript on rollback.
 |---|---|---|
 | `AGENT_ARCH` | `legacy` | `fc_loop` |
 | `DEEPSEEK_STRICT` | (unset) | `1` |
-| `APP_CANDIDATE_SHA` | `${LEGACY_APP_SHA:-}` — wired 2026-07-26, **still empty in practice** | `${FC_CANARY_SHA}` (candidate sha) |
+| `APP_CANDIDATE_SHA` | `${LEGACY_APP_SHA}` (required production pin) | `${FC_CANARY_SHA}` (candidate sha) |
 | `CHECKPOINT_DB_PATH` | `/app/.runtime/checkpoints.sqlite3` | `/app/.runtime/checkpoints_fc.sqlite3` |
 | `CONVERSATION_DB_PATH` | `/app/.runtime/conversations.sqlite3` | `/app/.runtime/conversations.sqlite3` (**shared**) |
 | `CANARY_LOG_PATH` | `/app/.runtime/logs/canary-legacy.jsonl` | `/app/.runtime/logs/canary-fc_loop.jsonl` |
@@ -51,21 +51,19 @@ either arch can rebuild a conversation from the shared transcript on rollback.
 > `CANARY_LOG_PATH`: unset → default `<checkpoint dir>/logs/canary-<arch>.jsonl`; `off` disables
 > telemetry; any other value is used as the path verbatim.
 
-> **Legacy pool telemetry is not live until recreation.** The pins on the legacy `app` service
-> only make current effective defaults explicit and turn on telemetry; they take effect the next
-> time that container is **recreated**. Ops keeps the running legacy container as-is for now, so
-> the CURRENT legacy prod image predates telemetry and emits nothing — the relative
-> (vs-legacy) gate metrics in §3 read *not instrumented* until the legacy pool is recreated on a
-> telemetry-capable image. Do that recreation **before advancing past `internal`**; the
-> `internal` stage judges fc **absolutes only** and needs no legacy baseline.
+> Before collecting a comparison window, recreate both pools from their declared pins and
+> require `/ready` to report the expected arch, full source SHA, image identity and prompt
+> metadata. A pool without telemetry is *not instrumented* and cannot authorize a relative gate.
 
-### Assignment — sticky, per-conversation
+### Routing and conversation provenance
 
-- Assignment is **sticky per conversation** and **persisted on the conversation record**
-  (a snapshot-whitelisted field, so it survives fork/restart).
-- **No dynamic hash thresholds.** A conversation, once assigned, keeps its arch for its
-  whole life regardless of the current rollout weight. Changing the weight only changes
-  which arch **new** conversations are assigned.
+- Nginx selects one public pool atomically; there is no per-conversation load-balancer
+  stickiness and no dynamic hash-weight router.
+- Each conversation persists the arch/version/strict triple that last served it as
+  provenance. After a pool switch, the serving process reconciles that stamp and rebuilds
+  hot state from the shared durable transcript.
+- The inactive target is refreshed and re-probed before cutover so stale process-local
+  session state is not treated as authoritative.
 
 ### State isolation
 
@@ -155,7 +153,8 @@ fc-turn-count floor. Neither alone is sufficient.
 
 `canary_report.py --stage <name> --since <stage-start-ISO>` reports `turns_ok`, `hours_ok`,
 and `eligible = turns_ok AND hours_ok`. `--since` also **filters the records** (see §5), so
-the turn count is this stage's traffic. Not-yet-eligible is a **HOLD** (exit 0), not a pause.
+the turn count is this stage's traffic. Not-yet-eligible is a **HOLD** (exit 2): it is not
+an SLO regression, but it must still stop an automated promotion.
 
 ---
 
@@ -184,7 +183,7 @@ on fc being no worse than legacy, not on an absolute zero.
 - **no-evidence-numbers rate** > legacy **+ 1pp** — *relative* (base98 family). Same eval-sweep caveat.
 - **5xx rate** > legacy **+ 1pp** — *relative*, if instrumented; else *not instrumented*.
 
-Exit-code precedence: **zero-tolerance (3) > stage-pause (2) > proceed/hold (0)**.
+Exit-code precedence: **zero-tolerance (3) > hold/stage-pause (2) > proceed (0)**.
 
 ---
 
@@ -192,13 +191,13 @@ Exit-code precedence: **zero-tolerance (3) > stage-pause (2) > proceed/hold (0)*
 
 ### Normal rollback
 
-- **Stop assigning fc to new conversations** (set fc weight so no new conversation lands on
-  fc). **In-flight fc conversations finish on fc** — sticky assignment is honoured; we do
-  not yank a live conversation.
+- Run `deploy/switch_pool.sh --to legacy` in the rollout window. The target is refreshed,
+  checked through `/ready`, and cut over atomically; conversation state rehydrates from the
+  shared transcript rather than depending on load-balancer affinity.
 
 ### Emergency rollback
 
-- **fc weight → zero immediately.**
+- Switch the public upstream to legacy immediately.
 - Legacy **rebuilds each affected conversation from the shared message history** into **its
   own checkpoint namespace**. Legacy **never reads fc checkpoints** — the fc checkpoint DB is
   treated as untrusted/abandoned state.
@@ -248,8 +247,8 @@ python scripts/canary_report.py --input .runtime/logs/ --stage flip --window 168
 
   | code | meaning |
   |---|---|
-  | **0** | proceed / hold-ok |
-  | **2** | stage-pause **or** instrumentation-hold |
+  | **0** | proceed / stage-progress-ok |
+  | **2** | hold, stage-pause, **or** instrumentation-hold |
   | **3** | zero-tolerance breach (instant rollback) |
   | **1** | input/runtime error — no `--input`, unparseable `--since`/`--now`, negative `--expect-turns` |
   | **64** | CLI usage error — unknown flag, or an option missing its argument |

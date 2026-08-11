@@ -7,7 +7,7 @@ Two pieces of ops hardening for the frozen production deploy:
    deploys the exact pin and nothing else (no "deploy a later commit" escape).
    The script then deploys **whichever pool the public nginx upstream is actually
    serving** (it reads the `server 127.0.0.1:PORT;` line), and refuses to report
-   success unless that pool answers `/health` with the pinned arch *and* the full
+   success unless that pool answers `/ready` with the pinned arch *and* the full
    40-char sha. `--status` prints the pin and both pools without changing anything;
    `--both` also levels the standby (rollback) pool.
 2. **Health monitor** — a systemd timer runs `rentcompass-monitor.sh` every 5
@@ -20,12 +20,15 @@ with `!sudo …` in the Claude session, or as root directly).
 
 ## 1. Pin file — `/etc/rentcompass/deploy.env`
 
-The gate reads `DEPLOY_PINNED_SHA` (full 40-char sha) from here.
+The gate reads `DEPLOY_PINNED_SHA` (full 40-char sha) and
+`DEPLOY_PYTHON_IMAGE` (an immutable `python@sha256:...` base image) from
+here. Both source and base runtime must be explicit before a production build.
 
 ```bash
 sudo install -d -m 0755 /etc/rentcompass
 # <PINNED_SHA> = the deployed commit's FULL sha (git rev-parse HEAD)
-printf 'DEPLOY_PINNED_SHA=%s\n' "<PINNED_SHA>" | sudo tee /etc/rentcompass/deploy.env
+printf 'DEPLOY_PINNED_SHA=%s\nDEPLOY_PYTHON_IMAGE=%s\n' \
+  "<PINNED_SHA>" "python@sha256:<64-hex-digest>" | sudo tee /etc/rentcompass/deploy.env
 sudo chmod 0644 /etc/rentcompass/deploy.env
 ```
 
@@ -85,6 +88,11 @@ straight from the repo manifest — so the monitor itself pages (sev3, once per 
 change) if it is ever running something other than the declared build. Unset, the
 check is inert; it never invents an alert on a box that was set up by hand.
 
+Before the first non-root app deploy, run
+deploy/preflight_runtime_permissions.sh. It is read-only and fails with a
+scoped one-time chown command if historical root-run containers left a writable
+bind mount (notably agent memory) owned by root.
+
 ### 2b. Verify
 
 ```bash
@@ -115,9 +123,9 @@ bash deploy/monitoring/check_install_drift.sh --write-manifest   # then commit
 | Area | Check | Alert priority |
 |------|-------|----------------|
 | Monitor build | running `src=` matches `MON_EXPECTED_SRC_SHA`, when declared | err (3) |
-| Public `:443/health` | HTTP 200 **and** `x-agent-arch` == `MON_EXPECTED_PUBLIC_ARCH` (default `fc_loop`) | err (3) |
-| Local `:5001/health` | 200 + `x-agent-arch: legacy` (+ version) | err (3) |
-| Local `:5002/health` | 200 + `x-agent-arch: fc_loop` (internal) | warning (4) |
+| Public `:443/ready` | HTTP 200; arch/SHA match the active nginx pool and its compose pin | err (3) |
+| Local `:5001/ready` | 200 + `x-agent-arch: legacy` (+ version) | err (3) |
+| Local `:5002/ready` | 200 + `x-agent-arch: fc_loop` (internal) | warning (4) |
 | Pool identity | fc vs `FC_CANARY_SHA`, legacy vs `LEGACY_APP_SHA`, edge vs expected pool | err (3) / warn (4) |
 | Containers | health status + restart-count delta | err/warn |
 | Host memory | `MemAvailable` ≥ 800 MB (no swap) | err (3) |
@@ -130,11 +138,17 @@ bash deploy/monitoring/check_install_drift.sh --write-manifest   # then commit
 - OK runs are silent in the journal; every run appends one line to
   `/var/log/rentcompass/monitor.log` (rotated daily, 7 kept), led by `src=`.
 - Thresholds/paths are env-overridable (`MON_*`) — see the script header.
-- **`MON_EXPECTED_PUBLIC_ARCH` declares which arch the public edge is meant to
-  serve.** Update it as part of any cutover or rollback (`deploy/switch_pool.sh`
-  moves the upstream; this variable records that the move was on purpose). It was
-  hard-coded to `legacy` until 2026-07-26, when cutting the edge to `fc_loop` made
-  it fire sev3 every five minutes about the intended state.
+- Public intent is derived from the nginx upstream (`:5001` legacy, `:5002`
+  fc_loop) and the matching `LEGACY_APP_SHA`/`FC_CANARY_SHA` in the compose
+  env. `MON_EXPECTED_PUBLIC_ARCH` and `MON_EXPECTED_PUBLIC_SHA` are explicit
+  overrides for rehearsals.
+- Put optional `MON_WEBHOOK_URL`, `MON_EMAIL_TO`, and `MON_HEARTBEAT_URL`
+  in `/etc/rentcompass/monitor.env`. Alerts exit non-zero; the heartbeat is a
+  dead-man signal that detects the monitor itself no longer running.
+- Production pool switches restart the inactive target before nginx changes.
+  Both pools share the durable conversation DB, turn leases and outbox, while
+  the restart clears process-local session caches so no sticky load-balancer
+  routing is assumed across a blue-green cutover.
 - No `/api/*` traffic and no synthetic agent turns: no agent-state pollution and
   nothing written to `.runtime/logs/canary-<arch>.jsonl`, which the eval gate reads.
   Check 10 is the one paid call — `max_tokens=1`, at most hourly, straight to the

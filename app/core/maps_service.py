@@ -15,6 +15,69 @@ import math
 from typing import Optional
 from .cache_service import get_from_cache, set_to_cache, create_cache_key
 
+# Freshness contracts for facts that can change independently of the code.
+GEOCODE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60
+CRIME_CACHE_TTL_SECONDS = 24 * 60 * 60
+_GEOCODE_CACHE_VERSION = "geocode-v3"
+_CRIME_CACHE_VERSION = "crime-radius-v2"
+
+
+def _read_versioned_cache(
+    cache_key: str,
+    *,
+    ttl_seconds: int,
+    version: str,
+) -> tuple[str, object]:
+    """Return (status, value), retaining old one-argument test doubles."""
+    try:
+        entry = get_from_cache(
+            cache_key,
+            ttl_seconds=ttl_seconds,
+            version=version,
+            with_status=True,
+        )
+        if hasattr(entry, "status"):
+            return entry.status, entry.value
+        return ("fresh" if entry is not None else "miss"), entry
+    except TypeError:
+        value = get_from_cache(cache_key)
+        return ("fresh" if value is not None else "miss"), value
+
+
+def _write_versioned_cache(
+    cache_key: str,
+    value,
+    *,
+    ttl_seconds: int,
+    version: str,
+    provenance: dict,
+) -> None:
+    """Write a cache envelope, with compatibility for two-argument fakes."""
+    try:
+        set_to_cache(
+            cache_key,
+            value,
+            ttl_seconds=ttl_seconds,
+            version=version,
+            provenance=provenance,
+        )
+    except TypeError:
+        set_to_cache(cache_key, value)
+
+
+def _label_stale(value: object, warning: str) -> object:
+    """Copy a stale mapping and make its degraded freshness impossible to miss."""
+    if not isinstance(value, dict):
+        return value
+    labelled = dict(value)
+    labelled.update({
+        "cache_status": "stale",
+        "possibly_outdated": True,
+        "warning": warning,
+    })
+    return labelled
+
+
 # Optional free TfL app key (register at api-portal.tfl.gov.uk) to raise rate limits;
 # the Journey Planner also works without a key at low volume.
 TFL_APP_KEY = os.getenv("TFL_APP_KEY", "")
@@ -285,9 +348,13 @@ def _free_geocode(address: str) -> dict | None:
     address = _normalize_address_for_routing(address)
     # v2: entries cached under the old key carry no precision metadata, and silently
     # serving those would make reference_point() report "unknown" forever.
-    cache_key = create_cache_key('_free_geocode_v2', address)
-    cached = get_from_cache(cache_key)
-    if cached is not None:
+    cache_key = create_cache_key('_free_geocode_v3', address)
+    cache_status, cached = _read_versioned_cache(
+        cache_key,
+        ttl_seconds=GEOCODE_CACHE_TTL_SECONDS,
+        version=_GEOCODE_CACHE_VERSION,
+    )
+    if cache_status == "fresh" and cached is not None:
         return cached
 
     result = None
@@ -333,7 +400,20 @@ def _free_geocode(address: str) -> dict | None:
             print(f"  [geocode] Nominatim error: {e}")
 
     if result is not None:
-        set_to_cache(cache_key, result)
+        _write_versioned_cache(
+            cache_key,
+            result,
+            ttl_seconds=GEOCODE_CACHE_TTL_SECONDS,
+            version=_GEOCODE_CACHE_VERSION,
+            provenance={
+                "provider": result.get("geocoder"),
+            },
+        )
+    elif cache_status == "stale" and cached is not None:
+        return _label_stale(
+            cached,
+            "Live geocoding refresh failed; coordinates are from an expired cache entry.",
+        )
     return result
 
 
@@ -590,9 +670,13 @@ MONTHS_OF_CRIME_DATA = 3
 
 def get_crime_data_by_location(address: str) -> dict | None:
     """Get crime data from UK Police API with trend analysis"""
-    cache_key = create_cache_key('get_crime_data_by_location', address)
-    cached_result = get_from_cache(cache_key)
-    if cached_result:
+    cache_key = create_cache_key('get_crime_data_by_location_v2', address)
+    cache_status, cached_result = _read_versioned_cache(
+        cache_key,
+        ttl_seconds=CRIME_CACHE_TTL_SECONDS,
+        version=_CRIME_CACHE_VERSION,
+    )
+    if cache_status == "fresh" and cached_result:
         print(f"  -> [Cache HIT] Crime data for: {address}")
         return cached_result
 
@@ -602,6 +686,12 @@ def get_crime_data_by_location(address: str) -> dict | None:
     if not location:
         # Also deliberately uncached, for the same reason as the empty-result branch below.
         print(f"     ❌ Could not geocode address: {address}")
+        if cache_status == "stale" and cached_result:
+            return _label_stale(
+                cached_result,
+                "Live crime-data refresh could not geocode the address; "
+                "figures are from an expired cache entry.",
+            )
         return {"error": "Could not geocode address.", "total_crimes_6m": "Unknown"}
     
     print(f"     [OK] Coordinates: {location['lat']}, {location['lng']}")
@@ -644,6 +734,12 @@ def get_crime_data_by_location(address: str) -> dict | None:
         # live: Hackney Central held an `error` entry while Richmond, fetched seconds apart,
         # cached fine. Returning without persisting means the next request simply retries.
         print(f"     [WARN]  WARNING: No crime data found for any month (NOT cached — will retry)")
+        if cache_status == "stale" and cached_result:
+            return _label_stale(
+                cached_result,
+                "UK Police API refresh returned no usable data; figures are "
+                "from an expired cache entry.",
+            )
         return {
             "total_crimes_6m": "Unknown",
             "crime_trend": "unknown",
@@ -682,7 +778,18 @@ def get_crime_data_by_location(address: str) -> dict | None:
         "data_months": sorted_months,
         "category_breakdown": dict(category_counts.most_common(3))
     }
-    set_to_cache(cache_key, summary)
+    _write_versioned_cache(
+        cache_key,
+        summary,
+        ttl_seconds=CRIME_CACHE_TTL_SECONDS,
+        version=_CRIME_CACHE_VERSION,
+        provenance={
+            "provider": "UK Police API",
+            "endpoint": "crimes-street/all-crime",
+            "data_months": sorted_months,
+            "radius_miles": 1.0,
+        },
+    )
     return summary
 
 

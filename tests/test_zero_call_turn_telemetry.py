@@ -134,7 +134,7 @@ def test_zero_call_turn_counts_toward_expect_turns(fresh_observer_state):
     assert not verdict["duplicate_request_ids"]
 
 
-def test_building_one_model_is_what_installs_the_observer(fresh_observer_state):
+def test_building_one_model_is_what_installs_the_observer(fresh_observer_state, monkeypatch):
     """The mechanism ``app.py:_wire_canary_llm_observer`` relies on.
 
     It calls ``ModelRouter().create()`` once at startup precisely because that is the only
@@ -148,6 +148,9 @@ def test_building_one_model_is_what_installs_the_observer(fresh_observer_state):
 
     tobs._observer_installed = False
     assert tobs.observer_installed() is False
+    # Newer OpenAI SDKs validate that a credential is present at construction;
+    # this remains offline because no request is invoked.
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "offline-construction-test-key")
 
     ModelRouter().create("intent")
 

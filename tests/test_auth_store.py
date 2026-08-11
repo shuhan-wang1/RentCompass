@@ -1,18 +1,21 @@
 """Unit tests for the local credential store (framework-free; no Flask, no DeepSeek)."""
 import json
+import sqlite3
+import threading
 
 import pytest
+from werkzeug.security import generate_password_hash
 
 from uk_rent_agent.web.auth_store import (
     AuthStore, valid_username, valid_password,
-    InvalidUsername, WeakPassword, UsernameTaken,
+    AuthStoreCorrupt, InvalidUsername, WeakPassword, UsernameTaken,
 )
 from uk_rent_agent.web.identity import valid_user_id
 
 
 @pytest.fixture()
 def store(tmp_path):
-    return AuthStore(tmp_path / "users.json")
+    return AuthStore(tmp_path / "users.sqlite3")
 
 
 # --------------------------------------------------------------------- validators
@@ -98,15 +101,17 @@ def test_verify_non_string_inputs_return_none(store):
 # ---------------------------------------------------------------------- persistence
 def test_password_is_never_stored_in_plaintext(store, tmp_path):
     store.register("ivan", "sup3rSecret", display_name="Ivan")
-    raw = (tmp_path / "users.json").read_text(encoding="utf-8")
-    assert "sup3rSecret" not in raw
-    rec = json.loads(raw)["users"]["ivan"]
-    assert rec["password_hash"] and rec["password_hash"] != "sup3rSecret"
-    assert rec["password_hash"].startswith("pbkdf2:")
+    assert b"sup3rSecret" not in (tmp_path / "users.sqlite3").read_bytes()
+    with sqlite3.connect(tmp_path / "users.sqlite3") as db:
+        password_hash = db.execute(
+            "SELECT password_hash FROM users WHERE username_key='ivan'"
+        ).fetchone()[0]
+    assert password_hash and password_hash != "sup3rSecret"
+    assert password_hash.startswith("pbkdf2:")
 
 
 def test_accounts_survive_reload(tmp_path):
-    path = tmp_path / "users.json"
+    path = tmp_path / "users.sqlite3"
     s1 = AuthStore(path)
     reg = s1.register("judy", "hunter2", display_name="Judy")
     # A fresh instance pointed at the same file re-reads the account.
@@ -125,13 +130,65 @@ def test_user_ids_are_unique_and_stable(store):
     assert store.verify("mallory", "hunter2")["user_id"] == a["user_id"]
 
 
-def test_corrupt_file_does_not_crash(tmp_path):
-    path = tmp_path / "users.json"
+def test_corrupt_file_fails_closed_and_is_not_overwritten(tmp_path):
+    path = tmp_path / "users.sqlite3"
     path.write_text("{ this is not json", encoding="utf-8")
-    s = AuthStore(path)  # must not raise
-    assert s.verify("anyone", "anything") is None
-    # and it can still register new users afterwards
-    assert s.register("newcomer", "hunter2")["user_id"]
+    with pytest.raises(AuthStoreCorrupt):
+        AuthStore(path)
+    assert path.read_text(encoding="utf-8") == "{ this is not json"
+
+
+def test_legacy_json_is_atomically_migrated_in_place(tmp_path):
+    path = tmp_path / "users.json"
+    path.write_text(json.dumps({
+        "version": 1,
+        "users": {
+            "alice": {
+                "username": "Alice",
+                "user_id": "legacy-user-1",
+                "display_name": "Alice",
+                "password_hash": generate_password_hash(
+                    "hunter2", method="pbkdf2:sha256"
+                ),
+                "created_at": 123,
+            }
+        },
+    }), encoding="utf-8")
+
+    migrated = AuthStore(path)
+    assert path.read_bytes().startswith(b"SQLite format 3\x00")
+    assert migrated.verify("alice", "hunter2")["user_id"] == "legacy-user-1"
+
+
+def test_two_process_instances_do_not_lose_concurrent_registrations(tmp_path):
+    path = tmp_path / "users.sqlite3"
+    stores = [AuthStore(path), AuthStore(path)]
+    barrier = threading.Barrier(20)
+    errors = []
+
+    def register(index):
+        try:
+            barrier.wait()
+            stores[index % 2].register(f"user{index:02d}", "hunter2")
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=register, args=(i,)) for i in range(20)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=20)
+    assert errors == []
+    fresh = AuthStore(path)
+    assert all(fresh.exists(f"user{i:02d}") for i in range(20))
+
+
+def test_privacy_erasure_deletes_and_verifies_credentials(store):
+    user = store.register("eraseme", "hunter2")
+    assert store.privacy_inventory(user["user_id"])["total"] == 1
+    assert store.delete_user_id(user["user_id"]) == 1
+    assert store.privacy_inventory(user["user_id"])["total"] == 0
+    assert store.verify("eraseme", "hunter2") is None
 
 
 def test_set_display_name(store):

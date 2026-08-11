@@ -5,10 +5,11 @@ Hybrid cache with TTL:
   - If the scraped-cache CSV exists and is fresh (< TTL), serve it (fast).
   - Otherwise scrape (OnTheMarket + optional Zoopla), normalise, write the cache,
     and serve the fresh results.
-  - On any scrape failure / empty result, fall back to a stale cache if present,
-    else to the bundled fake CSV — so the app always has data.
+  - On any scrape failure / empty result, fall back to a stale cache if present.
+  - Bundled fake rows require the explicit SEARCH_ALLOW_DEMO_FALLBACK flag.
 """
 
+import os
 import time
 
 from .config import (
@@ -29,9 +30,14 @@ from .normalize import read_csv, write_csv
 
 def get_active_property_csv():
     """Path of the CSV currently backing the system (scraped cache if built,
-    else the bundled fake data). Used by get_property_details so the details
-    tool stays consistent with what the list/search served."""
-    return CACHE_CSV if CACHE_CSV.exists() else FAKE_CSV
+    else an explicitly enabled bundled demo dataset)."""
+    if CACHE_CSV.exists():
+        return CACHE_CSV
+    if os.getenv("SEARCH_ALLOW_DEMO_FALLBACK", "").strip().lower() in {
+        "1", "true", "yes", "on",
+    }:
+        return FAKE_CSV
+    return None
 
 
 def _is_fresh(path, ttl_hours: float) -> bool:
@@ -117,13 +123,16 @@ def get_properties(
     allow_scrape: bool = True,
     limit_per_task: int | None = None,
     rightmove_only: bool = False,
+    allow_demo: bool | None = None,
 ) -> list[dict]:
     """Return rich-schema properties, honouring the hybrid cache.
 
     Args:
         force_refresh: ignore cache freshness and re-scrape.
-        allow_scrape: if False, never hit the network — serve cache/fake only
+        allow_scrape: if False, never hit the network — serve cache only
                       (used for fast app startup).
+        allow_demo: explicit offline-development opt-in.  When omitted, reads
+                    SEARCH_ALLOW_DEMO_FALLBACK (default false).
     """
     if not force_refresh and _is_fresh(CACHE_CSV, TTL_HOURS):
         props = read_csv(CACHE_CSV)
@@ -150,11 +159,18 @@ def get_properties(
             return props
         print("[provider] scrape returned nothing; falling back.")
 
-    # Fallbacks: stale cache, then fake data.
+    # Fallback: an explicitly labelled stale real-data cache.
     if CACHE_CSV.exists():
         props = read_csv(CACHE_CSV)
         if props:
             print(f"[provider] serving STALE cache: {len(props)} properties")
             return props
-    print(f"[provider] falling back to bundled fake data: {FAKE_CSV.name}")
-    return read_csv(FAKE_CSV)
+    if allow_demo is None:
+        allow_demo = os.getenv("SEARCH_ALLOW_DEMO_FALLBACK", "").strip().lower() in {
+            "1", "true", "yes", "on",
+        }
+    if allow_demo:
+        print(f"[provider] explicit demo mode: {FAKE_CSV.name}")
+        return read_csv(FAKE_CSV)
+    print("[provider] no real listing dataset is available; returning an honest empty result")
+    return []

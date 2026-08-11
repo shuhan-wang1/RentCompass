@@ -206,7 +206,7 @@ def test_forbidden_write_and_dsml_and_400_zero_tolerance():
 # --------------------------------------------------------------------------- #
 
 def test_stage_enough_turns_not_enough_hours_not_eligible():
-    # c1 needs 200 turns AND 24h. We have 250 turns but only 10h elapsed -> HOLD, exit 0.
+    # c1 needs 200 turns AND 24h. We have 250 turns but only 10h elapsed -> HOLD, exit 2.
     records = [_rec("fc", 5000.0, conv=f"fc{i}") for i in range(250)]
     records += [_rec("legacy", 5000.0, conv=f"lg{i}") for i in range(250)]
     since = NOW - timedelta(hours=10)
@@ -217,7 +217,7 @@ def test_stage_enough_turns_not_enough_hours_not_eligible():
     assert sp["eligible"] is False
     v = report["verdict"]
     assert v["decision"] == "HOLD"
-    assert v["exit_code"] == 0
+    assert v["exit_code"] == 2
 
 
 def test_stage_both_minima_satisfied_eligible():

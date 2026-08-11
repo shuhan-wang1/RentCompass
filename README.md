@@ -45,9 +45,9 @@ behind every number it gives you.
 **Under the hood:** the conversational path is a native **function-calling agent
 loop** on LangGraph — one bound-tools model call per super-step, a batched tool
 executor, and a bounded per-turn time budget that degrades deterministically
-instead of hanging. It ships behind a **two-pool canary** with per-conversation
-sticky assignment, per-turn telemetry, and a deploy gate that refuses to release
-anything but a pinned commit.
+instead of hanging. It ships behind a **two-pool canary** with pool-level atomic
+cutover, durable per-conversation architecture provenance, per-turn telemetry,
+and a deploy gate that refuses to release anything but a pinned commit.
 
 The codebase is two cooperating trees. `src/uk_rent_agent/` is the installable
 package owning the ASGI entry point and shared infrastructure (state, contracts,
@@ -498,8 +498,8 @@ user criteria
   between pools; checkpoints deliberately are not.
 - **Long-term memory** — `app/rag/agent_memory.py` over ChromaDB, namespaced per
   user, erasable via `/api/forget_me`.
-- **Local auth** — JSON credential store with password hashes
-  (`.runtime/users.json`); an authenticated session's identity is authoritative,
+- **Local auth** — transactional SQLite credential store with password hashes
+  (`.runtime/auth.sqlite3`); an authenticated session's identity is authoritative,
   so a client cannot impersonate an account through a header.
 
 ---
@@ -508,7 +508,8 @@ user criteria
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Liveness; served by Starlette, stamps `X-Agent-Arch` / `X-Agent-Version` |
+| `GET` | `/live` (`/health` compatibility alias) | Process liveness; served by Starlette |
+| `GET` | `/ready` | Required dependency and immutable release-identity readiness |
 | `GET` | `/` | The web UI |
 | `POST` | `/api/alex` | Conversational turn (the agent graph) |
 | `POST` | `/api/search_direct` | Deterministic structured search, no LLM router |
@@ -527,9 +528,9 @@ user criteria
 
 Both agent endpoints stamp `X-Request-Id` for log correlation, and every response
 carries `X-Agent-Arch` / `X-Agent-Version`. `/api/alex` echoes `conversation_id`
-and `turn_id` on every outcome including errors, and always answers HTTP 200 for
-an agent-side error so the client can still adopt the freshly created
-conversation instead of orphaning it.
+and `turn_id` on every outcome including errors. Agent/provider failures return
+HTTP 502 and serialization failures return HTTP 500 while retaining those IDs,
+so the client can adopt the transaction without mistaking a failure for success.
 
 ---
 
@@ -593,6 +594,7 @@ SEARXNG_SECRET=<openssl rand -hex 32>
 python -m uk_rent_agent.web     # production-style ASGI shell (requires FLASK_SECRET_KEY)
 python app/app.py               # development Flask entry point (PORT, default 5001)
 curl http://127.0.0.1:5001/health
+curl http://127.0.0.1:5001/ready
 ```
 
 ### Docker (full stack)
@@ -603,7 +605,8 @@ docker compose up -d --build
 docker compose ps
 ```
 
-This starts `app` (:5001), `searxng` (:8080) and `valkey`. The canary `app-fc`
+This starts `app` (loopback :5001), `searxng` (loopback :8080) and `valkey`.
+Neither application nor search ports are directly public. The canary `app-fc`
 pool is behind a compose profile and does not start by default. The image
 pip-installs `src/uk_rent_agent` and copies `app/`; all runtime data (Chroma
 indexes, `.runtime/`, `app/.env`) is bind-mounted from the host, never baked in.
@@ -624,7 +627,7 @@ that own each subsystem. The most important knobs:
 | `LLM_PROVIDER` | `deepseek` | `deepseek` or `ollama` |
 | `DEEPSEEK_MODEL` | `deepseek-v4-flash` | Retired names refused at import |
 | `USE_MCP_TOOLS` | `0` | Execute tools over the MCP subprocess instead of in-process |
-| `PROPERTY_SOURCE` | `auto` | Startup dataset: `auto` / `csv` / `scraper` |
+| `PROPERTY_SOURCE` | `auto` | `auto`/`scraper` use only real scraped snapshots; `csv` explicitly enables bundled demo rows |
 | `SCRAPE_ON_STARTUP` | `0` | Allow scraping at startup |
 | `SCRAPER_CACHE_TTL_HOURS` | `24` | Listing cache freshness window |
 | `CORS_ORIGINS` | localhost | Comma-separated allowed origins |
@@ -644,7 +647,8 @@ that own each subsystem. The most important knobs:
 |---|---|---|
 | `CHECKPOINT_DB_PATH` | `.runtime/checkpoints.sqlite3` | LangGraph checkpoints — **per architecture** (`CHECKPOINT_PATH` is a back-compat fallback) |
 | `CONVERSATION_DB_PATH` | next to the checkpoint DB | Conversation store — **shared between pools** |
-| `AUTH_DB_PATH` | `.runtime/users.json` | Local credential store |
+| `AUTH_DB_PATH` | `.runtime/auth.sqlite3` | Transactional local credential store |
+| `RATE_LIMIT_DB_PATH` | `.runtime/rate_limits.sqlite3` | Shared cross-pool rate-limit ledger (subjects are hashed) |
 | `ENABLE_CHECKPOINTER` | `1` | Enable checkpoints |
 
 **Security / web**
@@ -748,8 +752,8 @@ not trip these.
 
 | Exit | Meaning |
 |---|---|
-| `0` | proceed / hold-ok |
-| `2` | stage-pause **or** instrumentation-hold |
+| `0` | proceed / stage-progress-ok |
+| `2` | hold, stage-pause, **or** instrumentation-hold |
 | `3` | zero-tolerance breach |
 | `1` | input/runtime error — nothing was measured |
 | `64` | CLI usage error — nothing was measured |
@@ -770,8 +774,9 @@ report has an unknown denominator. Read the applied window off the report's own
 
 ### Rollback
 
-- **Normal:** stop assigning fc to new conversations; in-flight fc conversations
-  finish on fc — sticky assignment is honoured.
+- **Normal:** switch during the rollout window with the command below. There is no
+  load-balancer stickiness assumption: the inactive target is refreshed before
+  cutover and rehydrates conversation state from the shared durable store.
 - **Emergency:** point the upstream back at legacy immediately. Legacy rebuilds
   affected conversations from the shared transcript into its own checkpoint
   namespace and never reads fc's checkpoints, which are treated as abandoned.
@@ -781,7 +786,7 @@ bash deploy/switch_pool.sh --status
 bash deploy/switch_pool.sh --to legacy
 ```
 
-`switch_pool.sh` verifies the target pool answers with the expected arch
+`switch_pool.sh` verifies the target pool answers `/ready` with the expected arch
 *before* touching nginx, rewrites only the `server 127.0.0.1:PORT;` line inside
 the upstream block (the live conf has drifted from the repo copy and that drift
 must survive a switch), requires `nginx -t` to pass, re-verifies arch **and** the
@@ -802,9 +807,10 @@ bash deploy/release.sh --ref <sha>  # release a specific commit (rollback, hotfi
 ```
 
 `release.sh` targets the tip of the **remote** mainline (never a local commit,
-never an uncommitted tree), queries that commit's CI conclusion and aborts on a
-failure, requires a clean tracked tree, shows you `old-pin → new-pin` and asks
-for confirmation, and only then advances the pin.
+never an uncommitted tree), requires every predeclared CI check to be present,
+completed and successful, and fails closed when GitHub evidence is unavailable.
+It requires a clean tracked **and untracked** build context, shows
+`old-pin → new-pin`, asks for confirmation, and only then advances the pin.
 
 ### The pin gate
 
@@ -812,13 +818,18 @@ for confirmation, and only then advances the pin.
 `/etc/rentcompass/deploy.env` — a root-owned file **outside version control**, so
 no commit in this repo can change what production runs. It then deploys
 **whichever pool the public nginx upstream is actually serving** (it reads the
-upstream line rather than assuming), and refuses to report success unless that
-pool answers `/health` with the pinned arch *and* the full 40-char sha.
+upstream line rather than assuming), builds both architectures from an isolated
+worktree at that pin, and refuses to report success unless the target answers
+`/ready` with the pinned arch, full 40-char sha and immutable image identity.
 
 ```bash
 bash deploy/update.sh --status      # pin + both pools + which one is public
 bash deploy/update.sh --both        # also level the standby (rollback) pool
 ```
+
+Runtime SQLite/directories are backed up and restored with fail-closed encrypted
+archives; the operator procedure and boundaries are in
+[`docs/runtime_recovery.md`](docs/runtime_recovery.md).
 
 ### Monitoring
 
@@ -848,8 +859,11 @@ Two independent mechanisms, with different jobs:
 
 - **`evaluation/`** — a self-contained, offline-first evaluation framework
   (routing, tool use, grounding, cost, latency, resilience, memory).
-- **`evals/` + `uk-rent-eval-gate`** — golden datasets and a CI threshold gate
-  applied to a generated report.
+- **`uk-rent-eval-gate` + `evaluation/benchmark/holdout_v7/`** — a fail-closed
+  production `fc_loop` evidence gate. It verifies frozen identities/configuration and
+  artifact hashes, then recomputes the dual-track report before applying preregistered
+  floors and zero-tolerance rules. The small `evals/golden_set/` utilities remain local
+  diagnostics; their historical `thresholds.json` is not a release gate.
 
 ### The framework
 
@@ -902,7 +916,8 @@ stubbed memory-extraction figures, any n<15 single-run rate) and why.
 
 ```bash
 python -m pytest -q          # both trees; ~3,355 tests, ~2 minutes
-uk-rent-eval-gate report.json
+uk-rent-eval-gate path/to/PREREGISTRATION.json path/to/manifest.json \
+  --repo-root . --package-root path/to/evidence-package
 ```
 
 | Tree | Targets |
@@ -939,7 +954,7 @@ uk_rent_recommendation/
 │   ├── agent/                  state, contracts, critic, guardrails, persistence
 │   ├── data/                   cache, parsing, repository
 │   ├── domain/                 schema + constants
-│   ├── evals/                  metrics, harness, CI threshold gate
+│   ├── evals/                  metrics plus the sealed v7 production evidence gate
 │   ├── llm/                    model router + retired-name guard
 │   ├── tools/                  idempotency
 │   └── web/                    ASGI shell, Flask wrapper, auth/session/conversation

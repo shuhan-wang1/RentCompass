@@ -35,8 +35,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     context_schema_version INTEGER NOT NULL DEFAULT 1,
     fork_reason            TEXT,
     edited_slot_turn_id    TEXT,
-    -- Canary rollout (2026-07-20): the architecture that SERVES this conversation,
-    -- assigned once at creation from the creating process's env and thereafter sticky
+    -- Architecture provenance for the process that last served this conversation
     -- (see create_conversation / set_agent_assignment). agent_arch is 'legacy'|'fc_loop';
     -- agent_version is the candidate SHA (APP_CANDIDATE_SHA); strict mirrors DEEPSEEK_STRICT.
     agent_arch             TEXT NOT NULL DEFAULT 'legacy',
@@ -76,6 +75,51 @@ CREATE TABLE IF NOT EXISTS turns (
     completed_at         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_turns_conv ON turns (user_id, conversation_id, started_at);
+CREATE TABLE IF NOT EXISTS turn_requests (
+    user_id         TEXT NOT NULL,
+    request_id      TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    turn_id         TEXT NOT NULL UNIQUE,
+    created_at      TEXT NOT NULL,
+    PRIMARY KEY (user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_turn_requests_conv
+    ON turn_requests (user_id, conversation_id, created_at);
+CREATE TABLE IF NOT EXISTS conversation_turn_leases (
+    user_id         TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    turn_id         TEXT NOT NULL UNIQUE,
+    acquired_at     TEXT NOT NULL,
+    expires_at      TEXT NOT NULL,
+    PRIMARY KEY (user_id, conversation_id)
+);
+CREATE TABLE IF NOT EXISTS privacy_erasure_locks (
+    user_id    TEXT PRIMARY KEY,
+    started_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS background_jobs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id         TEXT NOT NULL,
+    conversation_id TEXT NOT NULL,
+    turn_id         TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    dedupe_key      TEXT NOT NULL,
+    payload_json    TEXT NOT NULL,
+    result_json     TEXT,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    available_at    TEXT NOT NULL,
+    claimed_by      TEXT,
+    lease_expires   TEXT,
+    last_error      TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    UNIQUE (user_id, dedupe_key)
+);
+CREATE INDEX IF NOT EXISTS idx_background_jobs_ready
+    ON background_jobs (status, available_at, id);
+CREATE INDEX IF NOT EXISTS idx_background_jobs_conversation
+    ON background_jobs (user_id, conversation_id, status, id);
 CREATE TABLE IF NOT EXISTS turn_snapshots (
     turn_id         TEXT PRIMARY KEY,
     user_id         TEXT NOT NULL,
@@ -92,6 +136,18 @@ CREATE TABLE IF NOT EXISTS fork_requests (
     created_at      TEXT NOT NULL,
     PRIMARY KEY (user_id, idempotency_key)
 );
+CREATE TRIGGER IF NOT EXISTS turns_completed_requires_assistant_insert
+BEFORE INSERT ON turns
+WHEN NEW.status = 'completed' AND NEW.assistant_message_id IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'completed turn requires assistant_message_id');
+END;
+CREATE TRIGGER IF NOT EXISTS turns_completed_requires_assistant_update
+BEFORE UPDATE OF status, assistant_message_id ON turns
+WHEN NEW.status = 'completed' AND NEW.assistant_message_id IS NULL
+BEGIN
+    SELECT RAISE(ABORT, 'completed turn requires assistant_message_id');
+END;
 """
 
 
@@ -117,6 +173,19 @@ class TurnNotInConversation(ForkError):
 
 class TurnNotCompleted(ForkError):
     """The requested turn is not in status 'completed'."""
+
+
+class ConversationBusy(RuntimeError):
+    """A different request currently owns the conversation turn lease."""
+
+    def __init__(self, turn_id: str, retry_after: int):
+        super().__init__("conversation already has a running turn")
+        self.turn_id = turn_id
+        self.retry_after = max(1, int(retry_after))
+
+
+class PrivacyErasureInProgress(RuntimeError):
+    """New turns are blocked while the user's cross-store deletion is running."""
 
 
 _NOW_LOCK = threading.Lock()
@@ -145,7 +214,10 @@ class ConversationStore:
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         with self._lock:
+            self._conn.execute("PRAGMA foreign_keys=ON")
+            self._conn.execute("PRAGMA busy_timeout=5000")
             self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
             self._migrate()
@@ -166,7 +238,7 @@ class ConversationStore:
             ("context_schema_version", "INTEGER NOT NULL DEFAULT 1"),
             ("fork_reason", "TEXT"),
             ("edited_slot_turn_id", "TEXT"),
-            # Canary rollout (2026-07-20): sticky per-conversation architecture assignment.
+            # Durable architecture provenance for rollout/rollback auditing.
             ("agent_arch", "TEXT NOT NULL DEFAULT 'legacy'"),
             ("agent_version", "TEXT NOT NULL DEFAULT 'unknown'"),
             ("strict", "INTEGER NOT NULL DEFAULT 0"),
@@ -192,11 +264,11 @@ class ConversationStore:
     def create_conversation(self, user_id: str, title: str | None = None, *,
                             agent_arch: str = "legacy", agent_version: str = "unknown",
                             strict: bool = False) -> dict:
-        """Create a conversation. The (agent_arch, agent_version, strict) triple is the
-        canary-rollout sticky assignment (2026-07-20): the creating process passes its OWN
-        process-level env constants, they are written ONCE here and never change afterwards
-        (scaling the fc pool must not flip in-flight conversations). set_agent_assignment is
-        the sole exception (emergency-rollback reconciliation)."""
+        """Create a conversation with the serving process's provenance triple.
+
+        ``set_agent_assignment`` retains its historical name for schema/API compatibility;
+        it updates this provenance after an explicit pool switch or rollback.
+        """
         cid = uuid.uuid4().hex
         now = _now_iso()
         title = (title or "").strip() or "New chat"
@@ -222,14 +294,13 @@ class ConversationStore:
 
     def set_agent_assignment(self, user_id: str, cid: str, agent_arch: str,
                              agent_version: str, strict: bool) -> None:
-        """Overwrite the sticky (agent_arch, agent_version, strict) assignment for a
-        conversation. This is the ONLY mutator of the assignment and exists solely for the
-        emergency-rollback reconciliation path (app.py _reconcile_agent_arch): when a
-        rebuilt/rolled-back process serves a conversation whose stored arch differs from its
-        own, it serves with ITS OWN arch and rewrites the stored assignment so subsequent
-        turns are consistent. Steady-state rollout never calls this — assignment stays as
-        written at creation. Does NOT touch updated_at (this is an ops-side reconciliation,
-        not a user-visible edit that should reorder the conversation list)."""
+        """Update the stored (agent_arch, agent_version, strict) provenance triple.
+
+        The historical method name is retained for compatibility. A process calls it when
+        it serves a conversation stamped by the other pool after an explicit cutover. It
+        does not touch ``updated_at`` because reconciliation is operational metadata, not a
+        user-visible edit that should reorder the conversation list.
+        """
         with self._lock:
             self._conn.execute(
                 "UPDATE conversations SET agent_arch=?, agent_version=?, strict=? "
@@ -295,6 +366,17 @@ class ConversationStore:
             self._conn.execute(
                 "DELETE FROM turns WHERE user_id=? AND conversation_id=?", (user_id, cid)
             )
+            self._conn.execute(
+                "DELETE FROM turn_requests WHERE user_id=? AND conversation_id=?", (user_id, cid)
+            )
+            self._conn.execute(
+                "DELETE FROM conversation_turn_leases WHERE user_id=? AND conversation_id=?",
+                (user_id, cid),
+            )
+            self._conn.execute(
+                "DELETE FROM background_jobs WHERE user_id=? AND conversation_id=?",
+                (user_id, cid),
+            )
             self._conn.commit()
             # Children of a deleted parent keep their (now dangling) lineage pointers.
             return cur.rowcount > 0
@@ -310,9 +392,77 @@ class ConversationStore:
             self._conn.execute("DELETE FROM messages WHERE user_id=?", (user_id,))
             self._conn.execute("DELETE FROM turn_snapshots WHERE user_id=?", (user_id,))
             self._conn.execute("DELETE FROM turns WHERE user_id=?", (user_id,))
+            self._conn.execute("DELETE FROM turn_requests WHERE user_id=?", (user_id,))
+            self._conn.execute("DELETE FROM conversation_turn_leases WHERE user_id=?", (user_id,))
+            self._conn.execute("DELETE FROM background_jobs WHERE user_id=?", (user_id,))
             self._conn.execute("DELETE FROM conversations WHERE user_id=?", (user_id,))
             self._conn.commit()
         return cids
+
+    def _privacy_inventory_unlocked(self, user_id: str) -> dict[str, int]:
+        """Count every user-owned row in this database; caller holds self._lock."""
+        tables = (
+            "conversations",
+            "messages",
+            "favorites",
+            "turns",
+            "turn_snapshots",
+            "turn_requests",
+            "conversation_turn_leases",
+            "background_jobs",
+            "fork_requests",
+        )
+        inventory: dict[str, int] = {}
+        for table in tables:
+            row = self._conn.execute(
+                f"SELECT COUNT(*) AS n FROM {table} WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+            inventory[table] = int(row["n"] if row else 0)
+        inventory["total"] = sum(inventory.values())
+        return inventory
+
+    def privacy_inventory(self, user_id: str) -> dict[str, int]:
+        """Return a non-content count of residual user data for erasure verification."""
+        with self._lock:
+            return self._privacy_inventory_unlocked(user_id)
+
+    def delete_all_user_data(self, user_id: str) -> dict:
+        """Transactionally delete all user-owned data in the conversation database.
+
+        The caller still owns external stores (LangGraph checkpoints, AgentMemory and
+        process-local hot state). Returning the conversation ids lets that caller
+        delete and verify those layers without first querying content.
+        """
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                before = self._privacy_inventory_unlocked(user_id)
+                rows = self._conn.execute(
+                    "SELECT id FROM conversations WHERE user_id=?",
+                    (user_id,),
+                ).fetchall()
+                cids = [str(row["id"]) for row in rows]
+                for table in (
+                    "messages",
+                    "turn_snapshots",
+                    "turns",
+                    "turn_requests",
+                    "conversation_turn_leases",
+                    "background_jobs",
+                    "fork_requests",
+                    "favorites",
+                    "conversations",
+                ):
+                    self._conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+                after = self._privacy_inventory_unlocked(user_id)
+                if after["total"] != 0:
+                    raise RuntimeError(f"relational erasure left {after['total']} rows")
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        return {"conversation_ids": cids, "before": before, "after": after}
 
     def clear_conversation_messages(self, user_id: str, cid: str) -> bool:
         """Empty a conversation's transcript but keep the (renamed) row."""
@@ -331,6 +481,17 @@ class ConversationStore:
             )
             self._conn.execute(
                 "DELETE FROM turns WHERE user_id=? AND conversation_id=?", (user_id, cid)
+            )
+            self._conn.execute(
+                "DELETE FROM turn_requests WHERE user_id=? AND conversation_id=?", (user_id, cid)
+            )
+            self._conn.execute(
+                "DELETE FROM conversation_turn_leases WHERE user_id=? AND conversation_id=?",
+                (user_id, cid),
+            )
+            self._conn.execute(
+                "DELETE FROM background_jobs WHERE user_id=? AND conversation_id=?",
+                (user_id, cid),
             )
             self._conn.execute(
                 "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
@@ -414,6 +575,596 @@ class ConversationStore:
         return history
 
     # --------------------------------------------------------------------- turns
+    def start_request_turn(
+        self,
+        user_id: str,
+        cid: str | None,
+        request_id: str,
+        user_content: str,
+        *,
+        lease_seconds: int = 15 * 60,
+        create_title: str | None = None,
+        agent_arch: str = "legacy",
+        agent_version: str = "unknown",
+        strict: bool = False,
+    ) -> dict:
+        """Atomically persist the user message and claim a single-flight turn lease.
+
+        This is the production HTTP boundary. It intentionally co-exists with the
+        lower-level begin_turn method used by import/fork tooling and historical
+        tests. The durable turn_requests row makes retries idempotent across
+        processes; the lease prevents two different requests from executing the same
+        conversation concurrently. Expired leases are reclaimed and their abandoned
+        turns are marked failed.
+        """
+        request_id = str(request_id or "").strip()
+        if not request_id:
+            raise ValueError("request_id is required")
+        if lease_seconds < 1:
+            raise ValueError("lease_seconds must be positive")
+
+        now = _now_iso()
+        expires = (
+            datetime.datetime.fromisoformat(now)
+            + datetime.timedelta(seconds=int(lease_seconds))
+        ).isoformat()
+        tid = uuid.uuid4().hex
+        conversation_created = False
+
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                erasing = self._conn.execute(
+                    "SELECT 1 FROM privacy_erasure_locks WHERE user_id=?",
+                    (user_id,),
+                ).fetchone()
+                if erasing is not None:
+                    raise PrivacyErasureInProgress("privacy erasure in progress")
+
+                replay = self._conn.execute(
+                    """SELECT t.* FROM turn_requests r
+                       JOIN turns t ON t.id=r.turn_id AND t.user_id=r.user_id
+                       WHERE r.user_id=? AND r.request_id=?""",
+                    (user_id, request_id),
+                ).fetchone()
+                if replay is not None:
+                    self._conn.commit()
+                    out = self._turn_dict(replay)
+                    out["replayed"] = True
+                    return out
+
+                if cid:
+                    exists = self._conn.execute(
+                        "SELECT 1 FROM conversations WHERE user_id=? AND id=?",
+                        (user_id, cid),
+                    ).fetchone()
+                    if not exists:
+                        raise ConversationNotFound(cid)
+                else:
+                    cid = uuid.uuid4().hex
+                    title = (create_title or "").strip() or "New chat"
+                    self._conn.execute(
+                        """INSERT INTO conversations
+                           (user_id, id, title, created_at, updated_at,
+                            parent_conversation_id, forked_from_turn_id,
+                            root_conversation_id, branch_depth, context_schema_version,
+                            agent_arch, agent_version, strict)
+                           VALUES(?,?,?,?,?,NULL,NULL,?,0,1,?,?,?)""",
+                        (
+                            user_id,
+                            cid,
+                            title,
+                            now,
+                            now,
+                            cid,
+                            agent_arch,
+                            agent_version,
+                            1 if strict else 0,
+                        ),
+                    )
+                    conversation_created = True
+
+                lease = self._conn.execute(
+                    """SELECT l.turn_id, l.expires_at, t.status
+                       FROM conversation_turn_leases l
+                       LEFT JOIN turns t ON t.id=l.turn_id
+                       WHERE l.user_id=? AND l.conversation_id=?""",
+                    (user_id, cid),
+                ).fetchone()
+                if lease is not None:
+                    active = lease["status"] == "running" and lease["expires_at"] > now
+                    if active:
+                        remaining = (
+                            datetime.datetime.fromisoformat(lease["expires_at"])
+                            - datetime.datetime.fromisoformat(now)
+                        ).total_seconds()
+                        raise ConversationBusy(lease["turn_id"], max(1, int(remaining)))
+                    self._conn.execute(
+                        """UPDATE turns SET status='failed', completed_at=?
+                           WHERE user_id=? AND id=? AND status='running'""",
+                        (now, user_id, lease["turn_id"]),
+                    )
+                    self._conn.execute(
+                        """DELETE FROM conversation_turn_leases
+                           WHERE user_id=? AND conversation_id=?""",
+                        (user_id, cid),
+                    )
+
+                cur = self._conn.execute(
+                    """INSERT INTO messages
+                       (user_id, conversation_id, role, content, response_type,
+                        recommendations_json, timestamp, turn_id)
+                       VALUES(?,?, 'user', ?, NULL, NULL, ?, ?)""",
+                    (user_id, cid, user_content or "", now, tid),
+                )
+                user_message_id = int(cur.lastrowid)
+                self._conn.execute(
+                    """INSERT INTO turns
+                       (id, user_id, conversation_id, request_id, user_message_id,
+                        assistant_message_id, status, started_at, completed_at)
+                       VALUES(?,?,?,?,?,NULL,'running',?,NULL)""",
+                    (tid, user_id, cid, request_id, user_message_id, now),
+                )
+                self._conn.execute(
+                    """INSERT INTO turn_requests
+                       (user_id, request_id, conversation_id, turn_id, created_at)
+                       VALUES(?,?,?,?,?)""",
+                    (user_id, request_id, cid, tid, now),
+                )
+                self._conn.execute(
+                    """INSERT INTO conversation_turn_leases
+                       (user_id, conversation_id, turn_id, acquired_at, expires_at)
+                       VALUES(?,?,?,?,?)""",
+                    (user_id, cid, tid, now, expires),
+                )
+                self._conn.execute(
+                    "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
+                    (now, user_id, cid),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+
+        return {
+            "id": tid,
+            "user_id": user_id,
+            "conversation_id": cid,
+            "request_id": request_id,
+            "user_message_id": user_message_id,
+            "assistant_message_id": None,
+            "status": "running",
+            "started_at": now,
+            "completed_at": None,
+            "replayed": False,
+            "conversation_created": conversation_created,
+        }
+
+    def begin_privacy_erasure(self, user_id: str) -> None:
+        """Block new turns after proving no active conversation turn can write back."""
+        now = _now_iso()
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                existing = self._conn.execute(
+                    "SELECT 1 FROM privacy_erasure_locks WHERE user_id=?",
+                    (user_id,),
+                ).fetchone()
+                if existing:
+                    raise PrivacyErasureInProgress("privacy erasure already in progress")
+
+                leases = self._conn.execute(
+                    """SELECT l.turn_id, l.expires_at, t.status
+                       FROM conversation_turn_leases l
+                       LEFT JOIN turns t ON t.id=l.turn_id
+                       WHERE l.user_id=?""",
+                    (user_id,),
+                ).fetchall()
+                for lease in leases:
+                    if lease["status"] == "running" and lease["expires_at"] > now:
+                        remaining = (
+                            datetime.datetime.fromisoformat(lease["expires_at"])
+                            - datetime.datetime.fromisoformat(now)
+                        ).total_seconds()
+                        raise ConversationBusy(lease["turn_id"], max(1, int(remaining)))
+                    self._conn.execute(
+                        """UPDATE turns SET status='failed', completed_at=?
+                           WHERE user_id=? AND id=? AND status='running'""",
+                        (now, user_id, lease["turn_id"]),
+                    )
+                running_job = self._conn.execute(
+                    """SELECT id, lease_expires FROM background_jobs
+                       WHERE user_id=? AND status='running'
+                       ORDER BY id LIMIT 1""",
+                    (user_id,),
+                ).fetchone()
+                if running_job is not None and (
+                    running_job["lease_expires"] is None
+                    or running_job["lease_expires"] > now
+                ):
+                    retry_after = 1
+                    if running_job["lease_expires"]:
+                        retry_after = max(
+                            1,
+                            int((
+                                datetime.datetime.fromisoformat(running_job["lease_expires"])
+                                - datetime.datetime.fromisoformat(now)
+                            ).total_seconds()),
+                        )
+                    raise ConversationBusy(
+                        f"background-job:{running_job['id']}", retry_after
+                    )
+                self._conn.execute(
+                    """UPDATE background_jobs
+                       SET status='pending', claimed_by=NULL, lease_expires=NULL,
+                           updated_at=?
+                       WHERE user_id=? AND status='running'""",
+                    (now, user_id),
+                )
+                self._conn.execute(
+                    "DELETE FROM conversation_turn_leases WHERE user_id=?",
+                    (user_id,),
+                )
+                self._conn.execute(
+                    "INSERT INTO privacy_erasure_locks(user_id, started_at) VALUES(?,?)",
+                    (user_id, now),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+
+    def end_privacy_erasure(self, user_id: str) -> None:
+        """Release the cross-store erasure barrier; safe and idempotent."""
+        with self._lock:
+            self._conn.execute(
+                "DELETE FROM privacy_erasure_locks WHERE user_id=?",
+                (user_id,),
+            )
+            self._conn.commit()
+
+    def get_request_turn(self, user_id: str, request_id: str) -> dict | None:
+        """Return the turn previously claimed for a request id, if any."""
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT t.* FROM turn_requests r
+                   JOIN turns t ON t.id=r.turn_id AND t.user_id=r.user_id
+                   WHERE r.user_id=? AND r.request_id=?""",
+                (user_id, request_id),
+            ).fetchone()
+        return self._turn_dict(row) if row else None
+
+    def get_turn_response(self, user_id: str, turn_id: str) -> dict | None:
+        """Rebuild the persisted HTTP payload for an idempotent completed retry."""
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT t.status, t.conversation_id, t.id AS turn_id,
+                          m.content, m.response_type, m.recommendations_json
+                   FROM turns t
+                   LEFT JOIN messages m ON m.id=t.assistant_message_id
+                   WHERE t.user_id=? AND t.id=?""",
+                (user_id, turn_id),
+            ).fetchone()
+        if row is None or row["content"] is None:
+            return None
+        payload = {
+            "conversation_id": row["conversation_id"],
+            "turn_id": row["turn_id"],
+            "response_type": row["response_type"] or (
+                "error" if row["status"] == "failed" else "chat"
+            ),
+            "message": row["content"],
+            "replayed": True,
+        }
+        if row["recommendations_json"]:
+            try:
+                payload["recommendations"] = json.loads(row["recommendations_json"])
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+        return payload
+
+    def finalize_request_turn(
+        self,
+        user_id: str,
+        turn_id: str,
+        *,
+        status: str,
+        assistant_content: str,
+        response_type: str | None = None,
+        recommendations=None,
+        snapshot: dict | None = None,
+        snapshot_schema_version: int = 1,
+        background_jobs: list[dict] | None = None,
+    ) -> dict:
+        """Atomically persist the assistant, terminal state, snapshot and outbox jobs."""
+        if status not in {"completed", "failed"}:
+            raise ValueError("status must be completed or failed")
+        if status == "completed" and snapshot is None:
+            raise ValueError("completed request turns require a snapshot")
+
+        now = _now_iso()
+        rec_json = (
+            json.dumps(recommendations, ensure_ascii=False)
+            if recommendations is not None
+            else None
+        )
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                turn = self._conn.execute(
+                    "SELECT * FROM turns WHERE user_id=? AND id=?",
+                    (user_id, turn_id),
+                ).fetchone()
+                if turn is None:
+                    raise TurnNotFound(turn_id)
+                if turn["status"] != "running":
+                    self._conn.commit()
+                    return self.get_turn(user_id, turn_id)
+
+                cur = self._conn.execute(
+                    """INSERT INTO messages
+                       (user_id, conversation_id, role, content, response_type,
+                        recommendations_json, timestamp, turn_id)
+                       VALUES(?,?, 'assistant', ?, ?, ?, ?, ?)""",
+                    (
+                        user_id,
+                        turn["conversation_id"],
+                        assistant_content or "",
+                        response_type,
+                        rec_json,
+                        now,
+                        turn_id,
+                    ),
+                )
+                assistant_id = int(cur.lastrowid)
+                updated = self._conn.execute(
+                    """UPDATE turns SET status=?, completed_at=?, assistant_message_id=?
+                       WHERE user_id=? AND id=? AND status='running'""",
+                    (status, now, assistant_id, user_id, turn_id),
+                )
+                if updated.rowcount != 1:
+                    raise RuntimeError("turn lost its running state during finalize")
+
+                if status == "completed":
+                    payload = json.dumps(snapshot, ensure_ascii=False)
+                    self._conn.execute(
+                        """INSERT OR REPLACE INTO turn_snapshots
+                           (turn_id, user_id, conversation_id, schema_version,
+                            snapshot_json, created_at)
+                           VALUES(?,?,?,?,?,?)""",
+                        (
+                            turn_id,
+                            user_id,
+                            turn["conversation_id"],
+                            int(snapshot_schema_version),
+                            payload,
+                            now,
+                        ),
+                    )
+                    for job in background_jobs or []:
+                        if not isinstance(job, dict):
+                            raise ValueError("background job must be an object")
+                        kind = str(job.get("kind") or "").strip()
+                        if not kind:
+                            raise ValueError("background job kind is required")
+                        job_payload = job.get("payload") or {}
+                        if not isinstance(job_payload, dict):
+                            raise ValueError("background job payload must be an object")
+                        dedupe_key = str(
+                            job.get("dedupe_key") or f"turn:{turn_id}:{kind}"
+                        )
+                        self._conn.execute(
+                            """INSERT OR IGNORE INTO background_jobs
+                               (user_id, conversation_id, turn_id, kind, dedupe_key,
+                                payload_json, result_json, status, attempts,
+                                available_at, claimed_by, lease_expires, last_error,
+                                created_at, updated_at)
+                               VALUES(?,?,?,?,?,?,NULL,'pending',0,?,NULL,NULL,NULL,?,?)""",
+                            (
+                                user_id,
+                                turn["conversation_id"],
+                                turn_id,
+                                kind,
+                                dedupe_key,
+                                json.dumps(job_payload, ensure_ascii=False),
+                                now,
+                                now,
+                                now,
+                            ),
+                        )
+                self._conn.execute(
+                    "DELETE FROM conversation_turn_leases WHERE user_id=? AND turn_id=?",
+                    (user_id, turn_id),
+                )
+                self._conn.execute(
+                    "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
+                    (now, user_id, turn["conversation_id"]),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        return self.get_turn(user_id, turn_id)
+
+    # -------------------------------------------------------- background outbox
+    @staticmethod
+    def _background_job_dict(row) -> dict | None:
+        if row is None:
+            return None
+        job = dict(row)
+        for key in ("payload_json", "result_json"):
+            raw = job.pop(key, None)
+            value = None
+            if raw is not None:
+                try:
+                    value = json.loads(raw)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    value = None
+            job["payload" if key == "payload_json" else "result"] = value
+        return job
+
+    def claim_background_job(
+        self, worker_id: str, *, lease_seconds: int = 5 * 60
+    ) -> dict | None:
+        """Claim one ready job, serialising jobs within each conversation."""
+        now = _now_iso()
+        expires = (
+            datetime.datetime.fromisoformat(now)
+            + datetime.timedelta(seconds=max(1, int(lease_seconds)))
+        ).isoformat()
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                self._conn.execute(
+                    """UPDATE background_jobs
+                       SET status='pending', claimed_by=NULL, lease_expires=NULL,
+                           last_error=COALESCE(last_error, 'worker lease expired'),
+                           updated_at=?
+                       WHERE status='running' AND lease_expires IS NOT NULL
+                         AND lease_expires<=?""",
+                    (now, now),
+                )
+                row = self._conn.execute(
+                    """SELECT j.* FROM background_jobs j
+                       WHERE j.status='pending' AND j.available_at<=?
+                         AND NOT EXISTS (
+                           SELECT 1 FROM privacy_erasure_locks p
+                           WHERE p.user_id=j.user_id
+                         )
+                         AND NOT EXISTS (
+                           SELECT 1 FROM background_jobs active
+                           WHERE active.user_id=j.user_id
+                             AND active.conversation_id=j.conversation_id
+                             AND active.status='running'
+                         )
+                       ORDER BY j.id ASC LIMIT 1""",
+                    (now,),
+                ).fetchone()
+                if row is None:
+                    self._conn.commit()
+                    return None
+                updated = self._conn.execute(
+                    """UPDATE background_jobs
+                       SET status='running', attempts=attempts+1, claimed_by=?,
+                           lease_expires=?, updated_at=?
+                       WHERE id=? AND status='pending'""",
+                    (worker_id, expires, now, row["id"]),
+                )
+                if updated.rowcount != 1:
+                    self._conn.rollback()
+                    return None
+                claimed = self._conn.execute(
+                    "SELECT * FROM background_jobs WHERE id=?", (row["id"],)
+                ).fetchone()
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        return self._background_job_dict(claimed)
+
+    def save_background_job_result(
+        self, job_id: int, worker_id: str, result: dict
+    ) -> None:
+        payload = json.dumps(result, ensure_ascii=False)
+        with self._lock:
+            updated = self._conn.execute(
+                """UPDATE background_jobs SET result_json=?, updated_at=?
+                   WHERE id=? AND status='running' AND claimed_by=?""",
+                (payload, _now_iso(), int(job_id), worker_id),
+            )
+            self._conn.commit()
+        if updated.rowcount != 1:
+            raise RuntimeError("background job lease was lost before saving result")
+
+    def complete_background_job(self, job_id: int, worker_id: str) -> None:
+        """Keep a content-free tombstone so the dedupe key remains durable."""
+        with self._lock:
+            updated = self._conn.execute(
+                """UPDATE background_jobs
+                   SET status='completed', payload_json='{}', result_json=NULL,
+                       claimed_by=NULL, lease_expires=NULL, last_error=NULL, updated_at=?
+                   WHERE id=? AND status='running' AND claimed_by=?""",
+                (_now_iso(), int(job_id), worker_id),
+            )
+            self._conn.commit()
+        if updated.rowcount != 1:
+            raise RuntimeError("background job lease was lost before completion")
+
+    def retry_background_job(
+        self, job_id: int, worker_id: str, error: str, *, max_attempts: int = 5
+    ) -> str:
+        """Retry with bounded backoff, or quarantine as dead after max_attempts."""
+        now = _now_iso()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT attempts FROM background_jobs WHERE id=? AND claimed_by=?",
+                (int(job_id), worker_id),
+            ).fetchone()
+            if row is None:
+                return "lost"
+            attempts = int(row["attempts"] or 0)
+            status = "dead" if attempts >= max(1, int(max_attempts)) else "pending"
+            available = (
+                datetime.datetime.fromisoformat(now)
+                + datetime.timedelta(seconds=min(300, 2 ** max(0, attempts - 1)))
+            ).isoformat()
+            self._conn.execute(
+                """UPDATE background_jobs
+                   SET status=?, available_at=?, claimed_by=NULL, lease_expires=NULL,
+                       last_error=?, updated_at=? WHERE id=? AND claimed_by=?""",
+                (status, available, str(error)[:1000], now, int(job_id), worker_id),
+            )
+            self._conn.commit()
+        return status
+
+    def patch_latest_snapshot_summary(
+        self, user_id: str, cid: str, summary: str, through_turn_id: str
+    ) -> bool:
+        """Idempotently persist an outbox-produced summary into the latest snapshot."""
+        with self._lock:
+            self._conn.execute("BEGIN IMMEDIATE")
+            try:
+                row = self._conn.execute(
+                    """SELECT s.turn_id, s.snapshot_json FROM turn_snapshots s
+                       JOIN turns t ON t.id=s.turn_id AND t.user_id=s.user_id
+                       WHERE s.user_id=? AND s.conversation_id=? AND t.status='completed'
+                       ORDER BY t.started_at DESC LIMIT 1""",
+                    (user_id, cid),
+                ).fetchone()
+                if row is None:
+                    self._conn.commit()
+                    return False
+                snapshot = json.loads(row["snapshot_json"])
+                snapshot["summary"] = str(summary or "") or None
+                snapshot["summary_through_turn_id"] = through_turn_id
+                snapshot["context_revision"] = int(
+                    snapshot.get("context_revision") or 0
+                ) + 1
+                self._conn.execute(
+                    """UPDATE turn_snapshots SET snapshot_json=?, created_at=?
+                       WHERE user_id=? AND turn_id=?""",
+                    (
+                        json.dumps(snapshot, ensure_ascii=False),
+                        _now_iso(),
+                        user_id,
+                        row["turn_id"],
+                    ),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        return True
+
+    def background_job_counts(self) -> dict[str, int]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT status, COUNT(*) AS n FROM background_jobs GROUP BY status"
+            ).fetchall()
+        counts = {str(row["status"]): int(row["n"]) for row in rows}
+        counts["total"] = sum(counts.values())
+        return counts
+
     def begin_turn(self, user_id: str, cid: str, request_id: str | None = None,
                    user_message_id: int | None = None) -> dict:
         """Open a 'running' turn. Returns the turn dict."""
@@ -453,6 +1204,11 @@ class ConversationStore:
             self._conn.commit()
             if cur.rowcount == 0:
                 return None
+            self._conn.execute(
+                "DELETE FROM conversation_turn_leases WHERE user_id=? AND turn_id=?",
+                (user_id, turn_id),
+            )
+            self._conn.commit()
         return self.get_turn(user_id, turn_id)
 
     def fail_turn(self, user_id: str, turn_id: str) -> None:
@@ -462,6 +1218,10 @@ class ConversationStore:
             self._conn.execute(
                 "UPDATE turns SET status='failed', completed_at=? WHERE user_id=? AND id=?",
                 (now, user_id, turn_id),
+            )
+            self._conn.execute(
+                "DELETE FROM conversation_turn_leases WHERE user_id=? AND turn_id=?",
+                (user_id, turn_id),
             )
             self._conn.commit()
 
@@ -658,9 +1418,8 @@ class ConversationStore:
                 child_title = (title or "").strip() or f"{src['title']} (branch)"
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
-                # A branch continues the SAME conversation family, so it inherits the source's
-                # sticky canary assignment (never re-reads env) — sticky routing must keep the
-                # whole family on one arch.
+                # A branch starts with the source conversation's architecture provenance;
+                # the serving pool reconciles it after a later cutover if necessary.
                 self._conn.execute(
                     """INSERT INTO conversations
                        (user_id, id, title, created_at, updated_at,
@@ -945,7 +1704,7 @@ class ConversationStore:
                 child_title = (title or "").strip() or f"{src['title']} (edit)"
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
-                # Edit branches inherit the source's sticky canary assignment too (same family).
+                # Edit branches inherit the source's architecture provenance.
                 self._conn.execute(
                     """INSERT INTO conversations
                        (user_id, id, title, created_at, updated_at,
@@ -1089,7 +1848,7 @@ class ConversationStore:
             "branch_depth": row["branch_depth"],
             "fork_reason": row["fork_reason"],
             "edited_slot_turn_id": row["edited_slot_turn_id"],
-            # Canary sticky assignment (2026-07-20).
+            # Architecture provenance used by rollout telemetry and reconciliation.
             "agent_arch": row["agent_arch"],
             "agent_version": row["agent_version"],
             "strict": bool(row["strict"]),

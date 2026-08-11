@@ -97,6 +97,7 @@ def test_write_timeout_error_body_says_the_outcome_is_unknown(hung_client):
     assert "not retried" in result.error
     assert result.idempotency_key == "idem-1", \
         "the key must survive so a later reconciliation can identify the call"
+    assert result.outcome == "unknown"
 
 
 def test_write_timeout_does_not_fall_back(hung_client):

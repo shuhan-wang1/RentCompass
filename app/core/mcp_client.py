@@ -14,8 +14,9 @@ so a session created at startup cannot be awaited from a request loop. We theref
 own the session in a dedicated background event-loop thread and bridge calls to it
 with ``run_coroutine_threadsafe``.
 
-Resilience: if the server is unavailable or a call fails, the client transparently
-falls back to an in-process ``ToolRegistry`` (when one is supplied).
+Resilience: reads may transparently fall back to an in-process ``ToolRegistry``.
+Writes only fall back before dispatch; once dispatched, transport failure is recorded
+as an unknown outcome and is never automatically re-executed.
 """
 import asyncio
 import json
@@ -230,17 +231,45 @@ class MCPToolClient:
             if cfut is not None:
                 cfut.cancel()
             tool = self.fallback_registry.get(name) if self.fallback_registry is not None else None
-            if tool is not None and not tool.retry_safe:
-                return ToolResult(
-                    success=False,
-                    error=f"MCP call timed out after {self.call_timeout}s; write outcome is unknown and was not retried",
-                    tool_name=name,
-                    version=tool.version,
-                    idempotency_key=kwargs.get("idempotency_key"),
+            if self._is_write_or_non_retryable(tool):
+                return self._unknown_write_result(
+                    name, kwargs,
+                    f"MCP call timed out after {self.call_timeout}s; "
+                    "write outcome is unknown and was not retried",
+                    tool,
                 )
             return await self._fallback(name, kwargs, f"timed out after {self.call_timeout}s")
         except Exception as e:  # noqa: BLE001
+            tool = self.fallback_registry.get(name) if self.fallback_registry is not None else None
+            if cfut is not None and self._is_write_or_non_retryable(tool):
+                return self._unknown_write_result(
+                    name, kwargs,
+                    f"MCP transport failed after dispatch; write outcome is unknown and "
+                    f"was not retried ({type(e).__name__})",
+                    tool,
+                )
             return await self._fallback(name, kwargs, repr(e))
+
+    @staticmethod
+    def _is_write_or_non_retryable(tool) -> bool:
+        if tool is None:
+            return False
+        return (getattr(tool, "side_effect", None) == "write"
+                or not bool(getattr(tool, "retry_safe", True)))
+
+    def _unknown_write_result(self, name: str, kwargs: dict, error: str, tool) -> ToolResult:
+        key = kwargs.get("idempotency_key")
+        store = getattr(self.fallback_registry, "_idempotency_store", None)
+        if key and store is not None:
+            store.mark_unknown(key, error, tool=name)
+        return ToolResult(
+            success=False,
+            error=error,
+            tool_name=name,
+            version=str(getattr(tool, "version", "1")),
+            idempotency_key=key,
+            outcome="unknown",
+        )
 
     async def _call(self, name: str, kwargs: dict) -> ToolResult:
         # Runs INSIDE the background loop that owns the session.
@@ -258,6 +287,7 @@ class MCPToolClient:
             tool_name=name,
             version=str(env.get("version", "1")),
             idempotency_key=env.get("idempotency_key"),
+            outcome=env.get("outcome"),
         )
 
     @staticmethod

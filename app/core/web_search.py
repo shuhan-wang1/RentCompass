@@ -10,6 +10,43 @@ from typing import List, Dict, Optional, Union
 from .cache_service import get_from_cache, set_to_cache, create_cache_key
 
 
+WEB_SEARCH_CACHE_TTL_SECONDS = 6 * 60 * 60
+_WEB_SEARCH_CACHE_VERSION = "web-search-v2"
+
+
+def _read_search_cache(cache_key: str) -> tuple[str, str | None]:
+    """Read the shared cache while tolerating legacy one-argument test doubles."""
+    try:
+        entry = get_from_cache(
+            cache_key,
+            ttl_seconds=WEB_SEARCH_CACHE_TTL_SECONDS,
+            version=_WEB_SEARCH_CACHE_VERSION,
+            with_status=True,
+        )
+        if hasattr(entry, "status"):
+            return entry.status, entry.value
+        return ("fresh" if entry is not None else "miss"), entry
+    except TypeError:
+        value = get_from_cache(cache_key)
+        return ("fresh" if value is not None else "miss"), value
+
+
+def _write_search_cache(cache_key: str, value: str) -> None:
+    try:
+        set_to_cache(
+            cache_key,
+            value,
+            ttl_seconds=WEB_SEARCH_CACHE_TTL_SECONDS,
+            version=_WEB_SEARCH_CACHE_VERSION,
+            provenance={
+                "provider": "searxng",
+            },
+        )
+    except TypeError:
+        # Compatibility for simple two-argument cache fakes in older tests.
+        set_to_cache(cache_key, value)
+
+
 class SearXNGSearch:
     """
     SearXNG 搜索客户端类
@@ -358,8 +395,8 @@ def get_search_snippets(query: str, max_results: int = 5) -> str:
         str: 格式化的搜索结果字符串
     """
     cache_key = create_cache_key('get_search_snippets', query, max_results)
-    cached_result = get_from_cache(cache_key)
-    if cached_result:
+    cache_status, cached_result = _read_search_cache(cache_key)
+    if cache_status == "fresh" and cached_result:
         print(f"  -> [Cache HIT] Web search for: '{query}'")
         return cached_result
     
@@ -370,11 +407,16 @@ def get_search_snippets(query: str, max_results: int = 5) -> str:
     
     if not results:
         print(f"  ⚠️ SearXNG returned no results for: {query}")
+        if cache_status == "stale" and cached_result:
+            return (
+                "Cached web results (possibly outdated; live refresh returned "
+                "no usable results):\n\n" + cached_result
+            )
         return "No search results found for this query."
     
     # 格式化为 LLM 友好的输出
     full_result = _searxng_client.format_for_llm(results)
-    set_to_cache(cache_key, full_result)
+    _write_search_cache(cache_key, full_result)
     
     return full_result
 

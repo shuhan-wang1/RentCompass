@@ -48,8 +48,11 @@ setup() {
 #!/usr/bin/env bash
 echo "gh $*" >> "$CALLS"
 case "$FAKE_CI" in
-  green)   printf 'success\nsuccess\n' ;;
-  red)     printf 'success\nfailure\n' ;;
+  green)   printf 'Tests (Python 3.12)\tcompleted\tsuccess\nCompose smoke\tcompleted\tsuccess\n' ;;
+  red)     printf 'Tests (Python 3.12)\tcompleted\tfailure\nCompose smoke\tcompleted\tsuccess\n' ;;
+  pending) printf 'Tests (Python 3.12)\tin_progress\tunknown\nCompose smoke\tcompleted\tsuccess\n' ;;
+  missing) printf 'Tests (Python 3.12)\tcompleted\tsuccess\n' ;;
+  unknown) printf 'Tests (Python 3.12)\tcompleted\tunknown\nCompose smoke\tcompleted\tsuccess\n' ;;
   none)    : ;;
   apifail) exit 1 ;;
 esac
@@ -81,6 +84,7 @@ run_release() {
     RELEASE_GH_CMD="$SANDBOX/bin/fakegh" \
     RELEASE_SUDO_CMD="$SANDBOX/bin/fakesudo" \
     RELEASE_UPDATE_CMD="$SANDBOX/bin/fakeupdate" \
+    RELEASE_REQUIRED_CHECKS="Tests (Python 3.12),Compose smoke" \
     bash deploy/release.sh --no-fetch "$@" <<<"$stdin_data" ) > "$SANDBOX/out.txt" 2>&1
   RC=$?
   OUT="$(cat "$SANDBOX/out.txt")"
@@ -96,7 +100,7 @@ check    "exit 0"                          0 "$RC"
 check    "HEAD moved to the mainline tip"  "$NEW_SHA" "$(head_now)"
 check    "pin advanced to the same commit" "$NEW_SHA" "$(pin_now)"
 contains "$CALLS_TXT" "update"              "update.sh was invoked"
-contains "$OUT"       "CI on"               "the CI verdict is reported"
+contains "$OUT"       "required CI checks"  "the CI verdict is reported"
 teardown
 echo
 
@@ -106,7 +110,7 @@ run_release --yes; CALLS_TXT="$(cat "$CALLS")"
 check    "red CI aborts"                   1 "$RC"
 check    "pin untouched"                   "$OLD_SHA" "$(pin_now)"
 check    "HEAD untouched"                  "$OLD_SHA" "$(head_now)"
-contains "$OUT"       "failing check"       "and says why"
+contains "$OUT"       "concluded 'failure'" "and says why"
 lacks    "$CALLS_TXT" "update"              "update.sh is never reached"
 teardown
 
@@ -143,17 +147,35 @@ lacks    "$CALLS_TXT" "update"              "and nothing is deployed"
 teardown
 echo
 
-echo "--- 3. unknown CI warns, never blocks (a missing CLI is not an outage) ---"
+echo "--- 3. missing, pending and unknown CI all fail closed ---"
 setup none
 run_release --yes
-check    "no reported checks still releases" 0 "$RC"
-contains "$OUT" "Proceeding UNVERIFIED"      "loudly"
+check    "no reported checks aborts" 1 "$RC"
+contains "$OUT" "No CI checks reported" "the missing evidence is explicit"
 teardown
 
 setup apifail
 run_release --yes
-check    "a gh api failure still releases"   0 "$RC"
-contains "$OUT" "Proceeding UNVERIFIED"      "loudly"
+check    "a gh api failure aborts"   1 "$RC"
+contains "$OUT" "gh api failed"      "the unavailable gate is explicit"
+teardown
+
+setup pending
+run_release --yes
+check    "a pending required check aborts" 1 "$RC"
+contains "$OUT" "not completed" "pending is not treated as green"
+teardown
+
+setup missing
+run_release --yes
+check    "a missing required check aborts" 1 "$RC"
+contains "$OUT" "MISSING" "the required check name is reported"
+teardown
+
+setup unknown
+run_release --yes
+check    "an unknown conclusion aborts" 1 "$RC"
+contains "$OUT" "unknown/non-success" "unknown is not treated as green"
 teardown
 echo
 

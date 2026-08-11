@@ -583,13 +583,13 @@ class AgentMemory:
         user_id = _valid_user_id(user_id)
         if user_id is None:
             print("[memory] remember_turn rejected: missing/shared user_id")
-            return
+            return False
         try:
             if idempotency_key:
                 existing = self.col.get(where={"$and": [
                     {"idempotency_key": idempotency_key}, {"user_id": user_id}]})
                 if existing and existing.get("ids"):
-                    return
+                    return True
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
             if tool_used:
                 ep += f"  [assistant used: {tool_used}]"
@@ -618,8 +618,10 @@ class AgentMemory:
                 extract_assistant = "" if context_tainted else assistant_msg
                 self._consolidate(self._extract_facts(user_msg, extract_assistant), session_id, user_id)
             self.maybe_reflect(session_id, user_id)
+            return True
         except Exception as e:
             print(f"[memory] remember_turn error: {e}")
+            return False
 
     def _enforce_episodic_cap(self, user_id, cap: int = EPISODIC_MAX_PER_USER):
         """Keep only the newest ``cap`` episodic records for one user (by created_at);
@@ -807,6 +809,21 @@ class AgentMemory:
             for key in [key for key in self._accum if key[0] == user_id]:
                 self._accum.pop(key, None)
         return len(ids)
+
+    def privacy_inventory(self, user_id: str) -> dict[str, int]:
+        """Return non-content residual counts for deletion read-back verification."""
+        user_id = (user_id or "").strip()
+        if not user_id:
+            raise ValueError("user_id is required")
+        with self._lock:
+            existing = self.col.get(where={"user_id": user_id})
+            records = len(list(existing.get("ids") or []))
+            pending_buffers = sum(1 for key in self._accum if key[0] == user_id)
+        return {
+            "records": records,
+            "pending_buffers": pending_buffers,
+            "total": records + pending_buffers,
+        }
 
 
 _AGENT_MEMORY = None

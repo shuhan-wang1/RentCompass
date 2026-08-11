@@ -330,7 +330,7 @@ def test_gate_verdict_exit_codes_are_pinned():
     assert (proceed["decision"], proceed["exit_code"]) == ("PROCEED", 0)
 
     hold = vd(clean, stage="c1", since=NOW - timedelta(hours=1))
-    assert (hold["decision"], hold["exit_code"]) == ("HOLD", 0)
+    assert (hold["decision"], hold["exit_code"]) == ("HOLD", 2)
 
     progress = vd(_fc(200, ts=NOW) + [_rec("legacy", ts=NOW) for _ in range(10)],
                   stage="c1", since=NOW - timedelta(hours=30))

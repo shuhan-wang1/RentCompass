@@ -27,15 +27,13 @@
 # ---------------------------------------------------------------------------
 # HOW EACH POOL SHIPS (they are NOT symmetric — compose says so)
 # ---------------------------------------------------------------------------
-#   legacy (:5001)  has `build:` in compose  -> `up -d --build app` builds from
-#                   the working tree, which the pin gate has already proven is
-#                   exactly the pinned commit and clean.
+#   legacy (:5001)  retains `build:` for developer compose use, but this release
+#                   path builds uk-rent-agent:latest from an isolated worktree.
 #   fc     (:5002)  has NO `build:` on purpose ("the working tree can never
 #                   silently become what canary traffic executes"). It runs a
-#                   pre-built, immutably tagged image. So the fc path builds from
-#                   an ISOLATED WORKTREE checked out at the pin — never from the
-#                   working tree, even though the gate says they match — and then
-#                   pins FC_CANARY_IMAGE/FC_CANARY_SHA in the root .env.
+#                   pre-built, immutably tagged image. Both release paths build
+#                   from ISOLATED WORKTREES checked out at the pin — never from
+#                   the operational checkout — then persist their provenance.
 #
 # Both paths finish by asking the deployed pool WHICH COMMIT IT IS RUNNING
 # (X-Agent-Version) and refusing to report success unless it answers with the
@@ -69,7 +67,7 @@ CURL_CMD="${UPDATE_CURL_CMD:-curl}"
 SWITCH_CMD="${UPDATE_SWITCH_CMD:-bash deploy/switch_pool.sh}"
 ENV_FILE="${UPDATE_ENV_FILE:-$REPO_DIR/.env}"
 CONF="${UPDATE_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
-HEALTH_FMT="${UPDATE_HEALTH_FMT:-http://127.0.0.1:%s/health}"
+HEALTH_FMT="${UPDATE_HEALTH_FMT:-http://127.0.0.1:%s/ready}"
 HEALTH_RETRIES="${UPDATE_HEALTH_RETRIES:-30}"
 HEALTH_DELAY="${UPDATE_HEALTH_DELAY:-3}"
 UPSTREAM_BLOCK='upstream rentcompass_app'
@@ -110,7 +108,7 @@ pool_of_port() { case "$1" in 5001) echo legacy ;; 5002) echo fc ;; *) echo "" ;
 
 other_pool() { case "$1" in legacy) echo fc ;; fc) echo legacy ;; esac; }
 
-# "<arch> <sha>" for a pool, or "" when it is not answering /health with a 200.
+# "<arch> <sha>" for a pool, or "" when it is not answering /ready with a 200.
 identity_of() {
   local url hdrs
   url=$(printf "$HEALTH_FMT" "${PORT[$1]}")
@@ -174,18 +172,57 @@ set_env_var() {
 # (no self-reference). Production deploys the EXACT pinned commit and nothing
 # else: there is deliberately no "deploy a later commit" escape hatch.
 #
-#   Pin file (default): /etc/rentcompass/deploy.env   → DEPLOY_PINNED_SHA=<full 40-char sha>
+#   Pin file (default): /etc/rentcompass/deploy.env
+#     DEPLOY_PINNED_SHA=<full 40-char sha>
+#     DEPLOY_PYTHON_IMAGE=python@sha256:<64 hex>
 #   Re-pin procedure  : edit that file AND `git checkout <sha>` to the same commit.
 #   (Override the pin-file path for testing with DEPLOY_PIN_ENV=/path.)
 # >>> PIN GATE START
 PIN_ENV_FILE="${DEPLOY_PIN_ENV:-/etc/rentcompass/deploy.env}"
+DEPLOY_PINNED_SHA=""
+DEPLOY_PYTHON_IMAGE=""
+if [ -r "$PIN_ENV_FILE" ]; then
+  # shellcheck source=/dev/null
+  . "$PIN_ENV_FILE"
+fi
+
+# --status changes nothing and must remain available when deployment metadata is
+# incomplete; otherwise the diagnostic command disappears exactly when an operator
+# needs it. All mutating paths continue through the strict gate below.
+_head_full="$($GIT_CMD rev-parse "HEAD^{commit}")"
+LIVE_PORT="$(upstream_port || true)"
+LIVE_POOL="$(pool_of_port "${LIVE_PORT:-}")"
+if [ "$STATUS_ONLY" -eq 1 ]; then
+  _pin_display="${DEPLOY_PINNED_SHA:-<unset>}"
+  _pin_relation="   (pin unavailable; a deploy would be REFUSED)"
+  if [ -n "${DEPLOY_PINNED_SHA:-}" ] \
+     && $GIT_CMD rev-parse --verify -q "${DEPLOY_PINNED_SHA}^{commit}" >/dev/null 2>&1; then
+    _pin_display="$($GIT_CMD rev-parse "${DEPLOY_PINNED_SHA}^{commit}")"
+    if [ "$_head_full" = "$_pin_display" ]; then
+      _pin_relation="   == pin ✅"
+    else
+      _pin_relation="   != pin (a deploy would be REFUSED)"
+    fi
+  fi
+  printf 'pin           %s  (%s)\n' "$_pin_display" "$PIN_ENV_FILE"
+  printf 'python base   %s%s\n' "${DEPLOY_PYTHON_IMAGE:-<unset>}" \
+    "$([[ "${DEPLOY_PYTHON_IMAGE:-}" =~ @sha256:[0-9a-f]{64}$ ]] \
+       && echo '   immutable ✅' || echo '   invalid/missing (a deploy would be REFUSED)')"
+  printf 'HEAD          %s%s\n' "$_head_full" "$_pin_relation"
+  printf 'upstream      %s\n' "${LIVE_PORT:-<conf unreadable: $CONF>}"
+  for p in legacy fc; do
+    printf 'pool %-6s   :%s  %s%s\n' "$p" "${PORT[$p]}" \
+      "$(identity_of "$p" || echo '<unreachable>')" \
+      "$([ "$p" = "$LIVE_POOL" ] && echo '   <- PUBLIC' || true)"
+  done
+  exit 0
+fi
+
 if [ ! -r "$PIN_ENV_FILE" ]; then
   echo "!! Pin gate: pin file '$PIN_ENV_FILE' is missing or unreadable." >&2
   echo "!! Create it (root) with:  DEPLOY_PINNED_SHA=<full sha>   (see deploy/monitoring/README.md)." >&2
   exit 1
 fi
-# shellcheck source=/dev/null
-DEPLOY_PINNED_SHA=""; . "$PIN_ENV_FILE"
 if [ -z "${DEPLOY_PINNED_SHA:-}" ]; then
   echo "!! Pin gate: DEPLOY_PINNED_SHA is not set in $PIN_ENV_FILE." >&2
   exit 1
@@ -196,25 +233,8 @@ if ! $GIT_CMD rev-parse --verify -q "${DEPLOY_PINNED_SHA}^{commit}" >/dev/null 2
 fi
 PIN_FULL="$($GIT_CMD rev-parse "${DEPLOY_PINNED_SHA}^{commit}")"
 PIN_SHORT="$($GIT_CMD rev-parse --short "$PIN_FULL")"
-_head_full="$($GIT_CMD rev-parse "HEAD^{commit}")"
-
-# --status changes nothing, so it is answered BEFORE the gate enforces anything.
-# Gating it would withhold the deployment picture exactly when an operator is
-# trying to work out why a deploy was refused.
-LIVE_PORT="$(upstream_port || true)"
-LIVE_POOL="$(pool_of_port "${LIVE_PORT:-}")"
-if [ "$STATUS_ONLY" -eq 1 ]; then
-  printf 'pin           %s  (%s)\n' "$PIN_FULL" "$PIN_ENV_FILE"
-  printf 'HEAD          %s%s\n' "$_head_full" \
-    "$([ "$_head_full" = "$PIN_FULL" ] && echo '   == pin ✅' || echo '   != pin (a deploy would be REFUSED)')"
-  printf 'upstream      %s\n' "${LIVE_PORT:-<conf unreadable: $CONF>}"
-  for p in legacy fc; do
-    printf 'pool %-6s   :%s  %s%s\n' "$p" "${PORT[$p]}" \
-      "$(identity_of "$p" || echo '<unreachable>')" \
-      "$([ "$p" = "$LIVE_POOL" ] && echo '   <- PUBLIC' || true)"
-  done
-  exit 0
-fi
+[[ "${DEPLOY_PYTHON_IMAGE:-}" =~ @sha256:[0-9a-f]{64}$ ]] \
+  || die "Pin gate: DEPLOY_PYTHON_IMAGE must be an immutable digest reference (python@sha256:<64 hex>) in $PIN_ENV_FILE"
 
 if [ "$_head_full" != "$PIN_FULL" ]; then
   echo "!! Pin gate FAILED: HEAD $($GIT_CMD rev-parse --short HEAD) is not the pinned release." >&2
@@ -223,14 +243,40 @@ if [ "$_head_full" != "$PIN_FULL" ]; then
   echo "!! Production deploys ONLY the exact pin. Fix:  git checkout ${PIN_FULL}" >&2
   exit 1
 fi
-if ! $GIT_CMD diff --quiet HEAD 2>/dev/null; then
-  echo "!! Pin gate FAILED: tracked working tree is DIRTY — refusing to build uncommitted changes:" >&2
-  $GIT_CMD status --porcelain --untracked-files=no >&2
-  echo "!! Commit or discard the tracked changes above, then redeploy." >&2
+_tree_status="$($GIT_CMD status --porcelain --untracked-files=all)"
+if [ -n "$_tree_status" ]; then
+  echo "!! Pin gate FAILED: working tree is DIRTY (tracked or untracked) — refusing a contaminated build context:" >&2
+  printf '%s\n' "$_tree_status" >&2
+  echo "!! Commit, ignore, or remove the files above, then redeploy." >&2
   exit 1
 fi
-say "Pin gate: HEAD == pinned release $PIN_SHORT, tracked tree clean ✅"
+say "Pin gate: HEAD == pinned release $PIN_SHORT, complete build context clean ✅"
 # <<< PIN GATE END
+
+if [ -x deploy/preflight_runtime_permissions.sh ]; then
+  RUNTIME_PREFLIGHT_REPO="$REPO_DIR" \
+    bash deploy/preflight_runtime_permissions.sh \
+    || die "non-root runtime bind preflight failed; no image/container was changed"
+fi
+
+# Release prompt provenance is calculated from tracked objects at the pin, never
+# from filesystem bytes. This keeps the manifest immune to ignored/untracked files.
+_prompt_tree="$($GIT_CMD ls-tree -r "$PIN_FULL" -- app/app.py app/core/loop_prompts.py app/core/context_assembler.py app/core/prompt_spec.py 2>/dev/null || true)"
+[ -n "$_prompt_tree" ] || _prompt_tree="$PIN_FULL prompt-bundle-v1"
+PROMPT_SCHEMA_SHA_VALUE="$(printf '%s' "$_prompt_tree" | sha256sum | awk '{print $1}')"
+_prompt_source="$($GIT_CMD show "$PIN_FULL:app/core/loop_prompts.py" 2>/dev/null || true)"
+_declared_prompt_version="$(sed -n 's/^FC_LOOP_SYSTEM_PROMPT_VERSION = "\([^"]*\)"/\1/p' \
+  <<<"$_prompt_source" | head -1)"
+PROMPT_VERSION_VALUE="${_declared_prompt_version:-bundle-v1}@$PIN_SHORT"
+
+image_digest() {
+  local image="$1" digest
+  digest="$($DOCKER_CMD image inspect --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{else}}{{.Id}}{{end}}' "$image" 2>/dev/null)" \
+    || die "cannot inspect the built image '$image'"
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || die "image '$image' returned an invalid digest '${digest:-<empty>}'"
+  printf '%s\n' "$digest"
+}
 
 # ---------------------------------------------------------------------------
 # Resolve the deploy target
@@ -273,7 +319,12 @@ build_fc_image() {
     || die "could not check out $PIN_SHORT into $tree"
   # Cleanup is explicit rather than a RETURN trap: the worktree must go away on
   # a failed build too, and leaving one behind would poison the next run.
-  $DOCKER_CMD build -t "$FC_IMAGE" "$tree" || rc=$?
+  $DOCKER_CMD build \
+    --build-arg "PYTHON_IMAGE=$DEPLOY_PYTHON_IMAGE" \
+    --build-arg "APP_SOURCE_SHA=$PIN_FULL" \
+    --build-arg "PROMPT_VERSION=$PROMPT_VERSION_VALUE" \
+    --build-arg "PROMPT_SCHEMA_SHA=$PROMPT_SCHEMA_SHA_VALUE" \
+    -t "$FC_IMAGE" "$tree" || rc=$?
   $GIT_CMD worktree remove --force "$tree" >/dev/null 2>&1 || true
   [ "$rc" -eq 0 ] || die "docker build failed for $FC_IMAGE (exit $rc)"
 }
@@ -284,10 +335,31 @@ deploy_fc() {
   # an ambiguous image or an unpinned sha, so write them BEFORE any compose call.
   set_env_var FC_CANARY_IMAGE "$FC_IMAGE"
   set_env_var FC_CANARY_SHA   "$PIN_FULL"
+  set_env_var FC_IMAGE_DIGEST "$(image_digest "$FC_IMAGE")"
+  set_env_var PROMPT_VERSION "$PROMPT_VERSION_VALUE"
+  set_env_var PROMPT_SCHEMA_SHA "$PROMPT_SCHEMA_SHA_VALUE"
+  set_env_var RELEASE_METADATA_REQUIRED "1"
   say "Pinned FC_CANARY_IMAGE=$FC_IMAGE / FC_CANARY_SHA=$PIN_SHORT in $ENV_FILE"
   say "Recreating the fc pool (:${PORT[fc]})..."
   $COMPOSE_CMD --profile canary up -d app-fc || die "compose failed to bring up app-fc"
   verify_pool fc "$PIN_FULL"
+}
+
+build_legacy_image() {
+  local image="uk-rent-agent:latest" tree rc=0
+  tree="$(mktemp -d -t legacy-build-XXXXXX)"
+  rmdir "$tree"
+  say "Building $image from an isolated worktree at $PIN_SHORT"
+  $GIT_CMD worktree add --detach "$tree" "$PIN_FULL" >/dev/null \
+    || die "could not check out $PIN_SHORT into $tree"
+  $DOCKER_CMD build \
+    --build-arg "PYTHON_IMAGE=$DEPLOY_PYTHON_IMAGE" \
+    --build-arg "APP_SOURCE_SHA=$PIN_FULL" \
+    --build-arg "PROMPT_VERSION=$PROMPT_VERSION_VALUE" \
+    --build-arg "PROMPT_SCHEMA_SHA=$PROMPT_SCHEMA_SHA_VALUE" \
+    -t "$image" "$tree" || rc=$?
+  $GIT_CMD worktree remove --force "$tree" >/dev/null 2>&1 || true
+  [ "$rc" -eq 0 ] || die "docker build failed for $image (exit $rc)"
 }
 
 deploy_legacy() {
@@ -296,9 +368,16 @@ deploy_legacy() {
   # escape hatch NAME its commit — without it, switch_pool.sh needs
   # --allow-unidentified-target to roll back onto it.
   set_env_var LEGACY_APP_SHA "$PIN_FULL"
+  set_env_var PROMPT_VERSION "$PROMPT_VERSION_VALUE"
+  set_env_var PROMPT_SCHEMA_SHA "$PROMPT_SCHEMA_SHA_VALUE"
+  set_env_var RELEASE_METADATA_REQUIRED "1"
   say "Pinned LEGACY_APP_SHA=$PIN_SHORT in $ENV_FILE"
-  say "Rebuilding + recreating the legacy pool (:${PORT[legacy]}); code is baked in, so --build is required..."
-  $COMPOSE_CMD up -d --build app || die "compose failed to bring up app"
+  # Build from the pin's isolated worktree as well: even gitignored files in the
+  # operational checkout can never enter a production build context.
+  build_legacy_image
+  set_env_var LEGACY_IMAGE_DIGEST "$(image_digest uk-rent-agent:latest)"
+  say "Recreating the legacy pool (:${PORT[legacy]}) with its inspected image digest..."
+  $COMPOSE_CMD up -d app || die "compose failed to bring up app"
   verify_pool legacy "$PIN_FULL"
 }
 

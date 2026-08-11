@@ -36,6 +36,7 @@ def test_grounded_citation_rule_names_source():
 def test_new_rules_reach_the_system_directive():
     directive = loop_prompts.build_system_directive("en")
     for marker in (
+        loop_prompts.UNTRUSTED_DATA_MARKER,
         loop_prompts.NO_RECALL_MARKER,
         loop_prompts.WEB_SEARCH_BUDGET_MARKER,
         loop_prompts.POLICE_SOURCE_MARKER,
@@ -44,6 +45,7 @@ def test_new_rules_reach_the_system_directive():
     # Pre-existing rules still present (no regression).
     assert loop_prompts.SOFT_GATE_CONFIRMED_MARKER in directive
     assert loop_prompts.NO_EMOJI_MARKER in directive
+    assert loop_prompts.RUNTIME_CONTEXT_SEMANTICS_RULE in directive
 
 
 # ---------------------------------------------------------------------------

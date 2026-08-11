@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rentcompass.eval/benchmark/case.v7.schema.json",
+  "title": "RentCompass v7 evaluation case",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "case_id", "track", "semantic_cluster", "template_cluster", "metric_eligibility", "zero_tolerance_probes", "user_query"],
+  "properties": {
+    "schema_version": {"const": "rentcompass/benchmark/v7"},
+    "case_id": {"type": "string", "pattern": "^HO7-[A-Z]+-[0-9]{3}$"},
+    "track": {"enum": ["deterministic_fixture", "live_freshness"]},
+    "semantic_cluster": {"type": "string", "minLength": 1},
+    "template_cluster": {"type": "string", "minLength": 1},
+    "metric_eligibility": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "zero_tolerance_probes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "user_query": {"type": "string", "minLength": 1},
+    "fixture": {"type": ["string", "null"]},
+    "freshness_oracle": {"type": ["object", "null"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"track": {"const": "deterministic_fixture"}}},
+      "then": {"required": ["fixture"]}
+    },
+    {
+      "if": {"properties": {"track": {"const": "live_freshness"}}},
+      "then": {"required": ["freshness_oracle"]}
+    }
+  ]
+}

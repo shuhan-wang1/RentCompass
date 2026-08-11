@@ -10,13 +10,16 @@
 #
 # Guarantees, in order:
 #   1. only ports 5001/5002 are ever written;
-#   2. the TARGET pool must answer /health with the expected arch BEFORE anything changes;
-#   3. only the `server 127.0.0.1:PORT;` line inside the upstream block is rewritten —
+#   2. the TARGET pool must answer /ready with the expected arch BEFORE anything changes;
+#   3. on production, the inactive target is restarted and re-probed before cutover;
+#      this clears process-local hot session state so the target rehydrates from the
+#      shared ConversationStore instead of assuming load-balancer stickiness;
+#   4. only the `server 127.0.0.1:PORT;` line inside the upstream block is rewritten —
 #      the rest of the file is byte-identical (the live conf has drifted from the repo
 #      copy, e.g. client_max_body_size, and that drift must survive a switch);
-#   4. `nginx -t` must pass before any reload;
-#   5. after reload the public endpoint is re-verified for arch AND the full 40-char sha;
-#   6. ANY failure after the write restores the backup, reloads, and re-verifies — the
+#   5. `nginx -t` must pass before any reload;
+#   6. after reload the public endpoint is re-verified for arch AND the full 40-char sha;
+#   7. ANY failure after the write restores the backup, reloads, and re-verifies — the
 #      old upstream is what survives a botched switch.
 #
 # Rehearsal: every external command is injectable, so the identical code path runs
@@ -27,14 +30,18 @@ set -uo pipefail
 CONF="${SWITCH_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
 TEST_CMD="${SWITCH_TEST_CMD:-sudo nginx -t}"
 RELOAD_CMD="${SWITCH_RELOAD_CMD:-sudo systemctl reload nginx}"
-VERIFY_URL="${SWITCH_VERIFY_URL:-https://127.0.0.1/health}"
+VERIFY_URL="${SWITCH_VERIFY_URL:-https://127.0.0.1/ready}"
 CURL_OPTS="${SWITCH_CURL_OPTS:--sk}"
 WRITE_CMD="${SWITCH_WRITE_CMD:-sudo tee}"          # reads new conf on stdin, writes to $1
-HEALTH_FMT="${SWITCH_POOL_HEALTH_FMT:-http://127.0.0.1:%s/health}"
+HEALTH_FMT="${SWITCH_POOL_HEALTH_FMT:-http://127.0.0.1:%s/ready}"
+REFRESH_CMD="${SWITCH_REFRESH_CMD:-docker restart}"
+REFRESH_RETRIES="${SWITCH_REFRESH_RETRIES:-30}"
+REFRESH_DELAY="${SWITCH_REFRESH_DELAY:-2}"
 
 UPSTREAM_BLOCK='upstream rentcompass_app'
 declare -A PORT=( [legacy]=5001 [fc]=5002 )
 declare -A ARCH=( [legacy]=legacy [fc]=fc_loop )
+declare -A CONTAINER=( [legacy]=uk-rent-app [fc]=uk-rent-app-fc )
 
 die() { printf '\033[31mFAIL\033[0m %s\n' "$*" >&2; exit 1; }
 ok()  { printf '\033[32m ok \033[0m %s\n' "$*"; }
@@ -130,10 +137,36 @@ fi
 note "switching $(pool_of_port "$FROM_PORT") (:$FROM_PORT) -> $TARGET (:$TO_PORT)"
 
 # --- 2. target must be healthy BEFORE anything is touched --------------------------
-TARGET_ID=$(identity_at "$(printf "$HEALTH_FMT" "$TO_PORT")") \
-  || die "target pool 127.0.0.1:$TO_PORT is not answering /health with 200 — nothing changed"
+TARGET_URL="$(printf "$HEALTH_FMT" "$TO_PORT")"
+TARGET_ID=$(identity_at "$TARGET_URL") \
+  || die "target pool 127.0.0.1:$TO_PORT is not answering /ready with 200 — nothing changed"
 read -r t_arch t_sha <<<"$TARGET_ID"
 [[ "$t_arch" == "$WANT_ARCH" ]] || die "target reports arch '$t_arch', expected '$WANT_ARCH' — nothing changed"
+
+# The durable ConversationStore is shared, but SessionStore is process-local.
+# Restarting the inactive target clears any old hot slice and forces its first
+# post-cutover request to rehydrate from durable snapshots/history. Rehearsal
+# configs outside /etc/nginx skip by default; SWITCH_REFRESH_TARGET=0/1 overrides.
+REFRESH_TARGET="${SWITCH_REFRESH_TARGET:-auto}"
+if [[ "$REFRESH_TARGET" == auto ]]; then
+  [[ "$CONF" == /etc/nginx/* ]] && REFRESH_TARGET=1 || REFRESH_TARGET=0
+fi
+if [[ "$REFRESH_TARGET" == 1 ]]; then
+  note "refreshing inactive target ${CONTAINER[$TARGET]} to clear process-local session state"
+  $REFRESH_CMD "${CONTAINER[$TARGET]}" >/dev/null \
+    || die "target refresh failed — public upstream was not changed"
+  TARGET_ID=""; i=0
+  while [[ "$i" -lt "$REFRESH_RETRIES" ]]; do
+    TARGET_ID="$(identity_at "$TARGET_URL" || true)"
+    [[ -n "$TARGET_ID" ]] && break
+    i=$((i + 1)); sleep "$REFRESH_DELAY"
+  done
+  [[ -n "$TARGET_ID" ]] \
+    || die "target did not become ready after refresh — public upstream was not changed"
+  read -r t_arch t_sha <<<"$TARGET_ID"
+  [[ "$t_arch" == "$WANT_ARCH" ]] \
+    || die "refreshed target reports arch '$t_arch', expected '$WANT_ARCH' — nothing changed"
+fi
 # Provenance is directional. A FORWARD switch onto a pool that cannot name its commit is
 # refused. A ROLLBACK onto one is allowed with --allow-unidentified-target, loudly: being
 # unable to prove what you rolled back to beats staying on something known to be broken.

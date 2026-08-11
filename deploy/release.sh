@@ -29,8 +29,8 @@
 #   1. the target is the tip of the REMOTE mainline (never a local commit, never
 #      an uncommitted tree) — everything there went through a PR with required
 #      CI and branch protection;
-#   2. that commit's CI conclusion is queried; a FAILING one aborts;
-#   3. the tracked working tree must be clean;
+#   2. every declared required check must exist, be completed and be successful;
+#   3. the entire working tree (including untracked build-context files) is clean;
 #   4. you are shown old-pin -> new-pin and must confirm (unless --yes);
 #   5. only then is the pin advanced, and update.sh does the rest — including
 #      refusing to report success unless the pool answers with that exact sha.
@@ -68,6 +68,7 @@ UPDATE_CMD="${RELEASE_UPDATE_CMD:-bash deploy/update.sh}"
 PIN_ENV_FILE="${DEPLOY_PIN_ENV:-/etc/rentcompass/deploy.env}"
 # REMOTE on purpose: a local branch can hold commits that never saw a PR.
 TRACK_REF="${RELEASE_TRACK_REF:-origin/telemetry/v2-layer-b}"
+REQUIRED_CHECKS="${RELEASE_REQUIRED_CHECKS:-Tests (Python 3.12),Compose smoke,Eval smoke,Supply chain gates}"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '\033[33m!!  %s\033[0m\n' "$*" >&2; }
@@ -111,13 +112,13 @@ fi
 # ---------------------------------------------------------------------------
 # 2. Refuse a dirty tree BEFORE anything moves
 # ---------------------------------------------------------------------------
-# The legacy pool builds this very working tree, so an uncommitted edit would be
-# baked into production; and `git checkout` would either refuse or silently carry
-# the edits onto the new commit.
-if ! $GIT_CMD diff --quiet HEAD 2>/dev/null; then
-  echo "!! Tracked working tree is DIRTY — refusing to release uncommitted changes:" >&2
-  $GIT_CMD status --porcelain --untracked-files=no >&2
-  echo "!! Commit or discard the tracked changes above, then re-run." >&2
+# The legacy pool builds this tree. Untracked files are build context too, so a
+# tracked-only diff is insufficient protection.
+tree_status="$($GIT_CMD status --porcelain --untracked-files=all)"
+if [ -n "$tree_status" ]; then
+  echo "!! Working tree is DIRTY (tracked or untracked) — refusing a contaminated build context:" >&2
+  printf '%s\n' "$tree_status" >&2
+  echo "!! Commit, ignore, or remove the files above, then re-run." >&2
   exit 1
 fi
 
@@ -125,28 +126,41 @@ fi
 # 3. CI verdict for the target
 # ---------------------------------------------------------------------------
 # Advancing the pin is the moment this repo's review process becomes production,
-# so "did this commit's checks pass" carries the weight. Three outcomes, kept
-# deliberately distinct: PASSING proceeds; FAILING aborts; UNKNOWN (no gh, not
-# authenticated, no checks reported) warns and proceeds — a missing CLI must not
-# make the site un-releasable during an incident.
+# so "did every required check pass" carries the weight. Missing CLI/API data,
+# missing checks, queued/in-progress checks, and unknown conclusions all fail
+# closed. --allow-failing-ci applies only to an explicit completed failure.
 check_ci() {
-  local sha="$1" out bad
+  local sha="$1" out name row status conclusion
+  local -a required
   command -v "${GH_CMD%% *}" >/dev/null 2>&1 || {
-    warn "'$GH_CMD' not found — cannot verify CI for $TARGET_SHORT. Proceeding UNVERIFIED."; return 0; }
+    die "'$GH_CMD' not found — cannot verify required CI for $TARGET_SHORT."; }
   out=$($GH_CMD api "repos/{owner}/{repo}/commits/$sha/check-runs" \
-          --jq '.check_runs[] | select(.status == "completed") | .conclusion' 2>/dev/null) || {
-    warn "Could not read CI status for $TARGET_SHORT (gh api failed). Proceeding UNVERIFIED."; return 0; }
-  if [ -z "$out" ]; then
-    warn "No completed CI checks reported for $TARGET_SHORT. Proceeding UNVERIFIED."; return 0
-  fi
-  bad=$(grep -cE '^(failure|timed_out|cancelled|action_required|startup_failure)$' <<<"$out" || true)
-  if [ "$bad" -gt 0 ]; then
-    [ "$ALLOW_FAILING_CI" -eq 1 ] \
-      || die "CI on $TARGET_SHORT has $bad failing check(s) — refusing to release it. Pass --allow-failing-ci to override."
-    warn "CI on $TARGET_SHORT has $bad failing check(s) — proceeding under --allow-failing-ci"
-    return 0
-  fi
-  say "CI on $TARGET_SHORT is green ($(grep -c . <<<"$out") completed check(s)) ✅"
+          --jq '.check_runs | sort_by(.started_at) | .[] | [.name,.status,(.conclusion // "unknown")] | @tsv' 2>/dev/null) \
+    || die "Could not read required CI status for $TARGET_SHORT (gh api failed)."
+  [ -n "$out" ] || die "No CI checks reported for $TARGET_SHORT."
+
+  IFS=',' read -r -a required <<<"$REQUIRED_CHECKS"
+  [ "${#required[@]}" -gt 0 ] || die "RELEASE_REQUIRED_CHECKS is empty"
+  for name in "${required[@]}"; do
+    name="${name#"${name%%[![:space:]]*}"}"; name="${name%"${name##*[![:space:]]}"}"
+    [ -n "$name" ] || die "RELEASE_REQUIRED_CHECKS contains an empty name"
+    row="$(awk -F '\t' -v wanted="$name" '$1 == wanted {last=$0} END {print last}' <<<"$out")"
+    [ -n "$row" ] || die "Required CI check '$name' is MISSING for $TARGET_SHORT."
+    IFS=$'\t' read -r _ status conclusion <<<"$row"
+    [ "$status" = "completed" ] \
+      || die "Required CI check '$name' is '$status' (not completed) for $TARGET_SHORT."
+    if [ "$conclusion" != "success" ]; then
+      case "$conclusion" in
+        failure|timed_out|cancelled|action_required|startup_failure)
+          [ "$ALLOW_FAILING_CI" -eq 1 ] \
+            || die "Required CI check '$name' concluded '$conclusion' for $TARGET_SHORT."
+          warn "Required CI check '$name' concluded '$conclusion' — explicit --allow-failing-ci override"
+          ;;
+        *) die "Required CI check '$name' has unknown/non-success conclusion '$conclusion' for $TARGET_SHORT." ;;
+      esac
+    fi
+  done
+  say "All ${#required[@]} required CI checks on $TARGET_SHORT are completed and successful ✅"
 }
 check_ci "$TARGET"
 

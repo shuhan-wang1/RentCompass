@@ -6,6 +6,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+EnvironmentFile=-/etc/rentcompass/monitor.env
 # Runs as root so it can read all runtime files, query docker, and write
 # /var/log/rentcompass. The script itself takes an flock, so an overrun run
 # is skipped rather than stacking.

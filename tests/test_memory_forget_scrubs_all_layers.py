@@ -20,7 +20,7 @@ The contract pinned here:
     role="user" write). A model-initiated ``remember`` (semantic) or an LLM-extracted
     fact can never delete a user's data. No taint/authorization check is relaxed.
 
-Every test runs against a TEMP Chroma dir — never the live store.
+Every test runs against a temporary SQLite AgentMemory directory — never the live store.
 """
 import importlib
 import os

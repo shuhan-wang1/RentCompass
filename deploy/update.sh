@@ -218,6 +218,19 @@ if [ "$STATUS_ONLY" -eq 1 ]; then
   exit 0
 fi
 
+if [ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" != "1" ]; then
+  DEPLOY_LOCK_FILE="${RENTCOMPASS_DEPLOY_LOCK_FILE:-}"
+  if [ -z "$DEPLOY_LOCK_FILE" ]; then
+    GIT_COMMON_DIR="$($GIT_CMD rev-parse --path-format=absolute --git-common-dir)" \
+      || die "cannot resolve the shared git metadata directory"
+    DEPLOY_LOCK_FILE="$GIT_COMMON_DIR/rentcompass-deploy.lock"
+  fi
+  mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"
+  exec 9>"$DEPLOY_LOCK_FILE" || die "cannot open deploy lock: $DEPLOY_LOCK_FILE"
+  flock -n 9 || die "another release/update/switch/retirement operation is running"
+  export RENTCOMPASS_DEPLOY_LOCK_HELD=1
+fi
+
 if [ ! -r "$PIN_ENV_FILE" ]; then
   echo "!! Pin gate: pin file '$PIN_ENV_FILE' is missing or unreadable." >&2
   echo "!! Create it (root) with:  DEPLOY_PINNED_SHA=<full sha>   (see deploy/monitoring/README.md)." >&2

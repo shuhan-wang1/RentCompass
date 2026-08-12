@@ -10,22 +10,22 @@ from uk_rent_agent.web import asgi
 
 
 class _Store:
-    def __init__(self, *, dead: int = 0):
+    def __init__(self, db_path, *, dead: int = 0):
         self._lock = threading.RLock()
-        self._conn = sqlite3.connect(":memory:")
-        self.db_path = ":memory:"
+        self.db_path = str(db_path)
+        self._conn = sqlite3.connect(self.db_path)
         self._dead = dead
 
     def background_job_counts(self):
         return {"pending": 1, "leased": 0, "dead": self._dead}
 
 
-def _install_runtime(monkeypatch, *, dead: int = 0):
+def _install_runtime(monkeypatch, tmp_path, *, dead: int = 0):
     module = SimpleNamespace(
         AGENT_ARCH="fc_loop",
         APP_CANDIDATE_SHA="a" * 40,
         DEEPSEEK_STRICT=True,
-        conversation_store=_Store(dead=dead),
+        conversation_store=_Store(tmp_path / "conversations.sqlite3", dead=dead),
         rag_coordinator=None,
     )
     monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
@@ -38,6 +38,16 @@ def _install_runtime(monkeypatch, *, dead: int = 0):
     # Keep readiness tests hermetic: an operator may have a real SearXNG on
     # localhost, which must not make an offline unit test depend on host state.
     monkeypatch.setenv("SEARXNG_URL", "")
+    monkeypatch.setattr(
+        asgi,
+        "_check_agent_memory",
+        lambda: {
+            "status": "ok",
+            "required": True,
+            "backend": "sqlite",
+            "records": 0,
+        },
+    )
     return module
 
 
@@ -51,13 +61,14 @@ def _config(tmp_path):
 
 
 def test_ready_keeps_optional_rag_and_searx_degradation_non_blocking(monkeypatch, tmp_path):
-    _install_runtime(monkeypatch)
+    _install_runtime(monkeypatch, tmp_path)
 
     body, code = asgi._readiness(_config(tmp_path))
 
-    assert code == 200
+    assert code == 200, body
     assert body["status"] == "ready"
     assert body["checks"]["conversation_db"]["status"] == "ok"
+    assert body["checks"]["agent_memory"]["status"] == "ok"
     assert body["checks"]["rag"] == {
         "status": "degraded",
         "required": False,
@@ -69,7 +80,7 @@ def test_ready_keeps_optional_rag_and_searx_degradation_non_blocking(monkeypatch
 
 
 def test_ready_fails_closed_when_required_release_metadata_is_invalid(monkeypatch, tmp_path):
-    _install_runtime(monkeypatch)
+    _install_runtime(monkeypatch, tmp_path)
     monkeypatch.setenv("APP_IMAGE_DIGEST", "unknown")
 
     body, code = asgi._readiness(_config(tmp_path))
@@ -81,7 +92,7 @@ def test_ready_fails_closed_when_required_release_metadata_is_invalid(monkeypatc
 
 
 def test_ready_fails_closed_when_declared_prompt_version_differs_from_runtime(monkeypatch, tmp_path):
-    _install_runtime(monkeypatch)
+    _install_runtime(monkeypatch, tmp_path)
     monkeypatch.setenv("PROMPT_VERSION", "2.0.0")
 
     body, code = asgi._readiness(_config(tmp_path))
@@ -94,11 +105,11 @@ def test_ready_fails_closed_when_declared_prompt_version_differs_from_runtime(mo
 
 
 def test_dead_durable_background_jobs_are_visible_degradation(monkeypatch, tmp_path):
-    _install_runtime(monkeypatch, dead=2)
+    _install_runtime(monkeypatch, tmp_path, dead=2)
 
     body, code = asgi._readiness(_config(tmp_path))
 
-    assert code == 200
+    assert code == 200, body
     assert body["checks"]["background_jobs"]["status"] == "degraded"
     assert body["checks"]["background_jobs"]["counts"]["dead"] == 2
     assert "background_jobs" in body["degraded"]
@@ -125,3 +136,23 @@ def test_searx_readiness_uses_healthz_not_search(monkeypatch):
 
     assert asgi._check_searx()["status"] == "ok"
     assert seen == [("http://searxng:8080/healthz", 1.5)]
+
+
+def test_agent_memory_failure_is_required_and_fails_readiness(
+    monkeypatch, tmp_path
+):
+    _install_runtime(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        asgi,
+        "_check_agent_memory",
+        lambda: {
+            "status": "fail",
+            "required": True,
+            "detail": "injected migration failure",
+        },
+    )
+
+    body, code = asgi._readiness(_config(tmp_path))
+
+    assert code == 503
+    assert "agent_memory" in body["failed"]

@@ -58,7 +58,7 @@ class Config:
     # checkpointer. Off by default — the graph runs end-to-end without pausing.
     enable_hitl: bool = False
     # Cross-thread Store: persist the user's durable structured criteria across conversations.
-    # Off by default — the existing Chroma AgentMemory remains the long-term memory of record.
+    # Off by default — the durable SQLite AgentMemory remains the long-term memory of record.
     enable_store: bool = False
     # Local username/password credential store (SQLite, gitignored). See web/auth_store.py.
     auth_db_path: Path | None = None

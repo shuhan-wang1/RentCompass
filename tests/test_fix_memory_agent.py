@@ -3,10 +3,10 @@
   - auto-episodic turn logs get a STATIC importance (no per-turn LLM rating call)
   - a triviality gate skips fact-extraction for greetings/acks/bypass/short msgs
   - the per-user episodic layer is capped (newest-N kept, overflow evicted)
-  - maybe_reflect's corpus is the NEWEST-by-created_at records (Chroma .get()
+  - maybe_reflect's corpus is the NEWEST-by-created_at records (collection .get()
     has no ordering guarantee)
 
-All tests run against a TEMP Chroma dir and stub every LLM call.
+All tests run against a temporary SQLite AgentMemory directory and stub every LLM call.
 """
 import importlib
 import os

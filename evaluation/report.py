@@ -170,7 +170,7 @@ def _change(old, new) -> str:
 
 def _env_libs() -> List[Tuple[str, str]]:
     import importlib.metadata as md
-    libs = ["chromadb", "folium", "pydantic", "PyYAML", "openai", "httpx",
+    libs = ["faiss-cpu", "folium", "pydantic", "PyYAML", "openai", "httpx",
             "langgraph", "langchain-core", "sentence-transformers", "numpy",
             "requests", "flask"]
     out = []
@@ -348,7 +348,7 @@ _METRIC_DEFS = [
      "and completion_mismatch."),
     ("memory: identity_gate / user_isolation / forget_delete / restart_recovery / "
      "retrieval_relevance",
-     "deterministic ChromaDB store checks — no model in the loop; these measure real "
+     "deterministic SQLite store checks — no model in the loop; these measure real "
      "store behaviour (per-user filtering, GDPR erasure, on-disk persistence, retrieval)."),
     ("memory: extraction_precision / update_correctness / stale_replacement / "
      "contradiction_handling",
@@ -478,9 +478,14 @@ def build_report_md(results: Path, timestamp: str) -> str:
     a("- Key libraries (from installed metadata):")
     for lib, ver in _env_libs():
         a(f"  - `{lib}`: {ver}")
-    a("- `chromadb` is present in this env, so the memory store eval RAN (not blocked). "
-      "SearXNG is operational, so the live `web_search` tool returns real results and "
-      "web-dependent cases are grounded (see §6 and §12).\n")
+    memory_backend = (
+        memory.get("memory_backend", {}) if isinstance(memory, dict) else {}
+    )
+    a(f"- Long-term-memory backend: "
+      f"`{memory_backend.get('name', 'not reported')}`; available: "
+      f"`{memory_backend.get('available', 'not reported')}`. "
+      "SearXNG availability is reported by the live/readiness evidence rather than "
+      "inferred from installed packages.\n")
 
     # (4) models + pricing/version note
     a("## 4. Models + versions\n")
@@ -759,8 +764,12 @@ def build_report_md(results: Path, timestamp: str) -> str:
     a("### 10.5 Long-term memory eval\n")
     if memory:
         status = memory.get("status")
-        a(f"- status: **{status}**; chromadb_available: "
-          f"**{memory.get('chromadb_available')}**")
+        backend = memory.get("memory_backend") or {
+            "name": "legacy_chromadb",
+            "available": memory.get("chromadb_available"),
+        }
+        a(f"- status: **{status}**; memory_backend: "
+          f"**{backend.get('name')}**; available: **{backend.get('available')}**")
         if str(status).startswith("blocked"):
             a(f"- {memory.get('note', '')}\n")
         else:
@@ -1072,13 +1081,13 @@ def build_cv_md(results: Path, timestamp: str) -> str:
             a,
             title="Long-term memory: REAL store isolation / forget / restart checks",
             safe=True,
-            zh=f"记忆存储的确定性检查（真实 ChromaDB，无模型参与）：用户隔离 "
+            zh=f"记忆存储的确定性检查（真实 SQLite，无模型参与）：用户隔离 "
                f"{_disp(checks.get('user_isolation'))}，遗忘/删除 "
                f"{_disp(checks.get('forget_delete'))}，进程重启恢复 "
                f"{_disp(checks.get('restart_recovery'))}，写入成功 "
                f"{_disp(rates.get('memory_write_success_rate'))}，身份门控 "
                f"{_disp(checks.get('identity_gate'))}。",
-            en=f"Deterministic memory-store checks (real ChromaDB, no model in the loop): "
+            en=f"Deterministic memory-store checks (real SQLite, no model in the loop): "
                f"user isolation {_disp(checks.get('user_isolation'))}, forget/delete "
                f"{_disp(checks.get('forget_delete'))}, process-restart recovery "
                f"{_disp(checks.get('restart_recovery'))}, write success "

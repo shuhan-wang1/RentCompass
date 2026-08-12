@@ -25,12 +25,13 @@ runtime directory, its database file and its -wal, -shm, and -journal companions
 are omitted from the raw directory copy. The consistent online SQLite copy is
 the authoritative backup.
 
-Chroma and similar multi-file stores do not expose a generic cross-file
-transaction through this script. The stable-file checks detect changes to an
-individual file while it is copied, but cannot prove a transactionally
-consistent view across the whole directory. Quiesce writers to that store or
-snapshot its storage volume before running the backup. SQLite writers do not
-need to be stopped for the separately declared databases.
+Legacy Chroma listing/area indexes and similar multi-file stores do not expose a
+generic cross-file transaction through this script. The stable-file checks
+detect changes to an individual file while it is copied, but cannot prove a
+transactionally consistent view across the whole directory. Quiesce writers to
+that store or snapshot its storage volume before running the backup. SQLite
+writers, including the current AgentMemory store, do not need to be stopped when
+their database is declared separately.
 
 ## Encryption is fail-closed
 
@@ -41,7 +42,9 @@ the age executable or recipient is unavailable. Supply the recipient with
     python deploy/runtime_backup.py create \
       --sqlite conversations=/srv/rentcompass/runtime/conversations.sqlite3 \
       --sqlite checkpoints=/srv/rentcompass/runtime/checkpoints.sqlite3 \
-      --directory chroma=/srv/rentcompass/runtime/chroma_db \
+      --sqlite agent_memory=/srv/rentcompass/app/chroma_db_agent_memory/agent_memory.sqlite3 \
+      --directory agent_memory_files=/srv/rentcompass/app/chroma_db_agent_memory \
+      --directory listing_indexes=/srv/rentcompass/runtime/chroma_db \
       --directory runtime_files=/srv/rentcompass/runtime/files \
       --output /secure/backups/runtime-YYYYMMDDTHHMMSSZ.tar.gz.age \
       --age-recipient age1REPLACE_WITH_OPERATIONS_RECIPIENT
@@ -65,8 +68,10 @@ permissions are not a replacement for encryption.
 1. Confirm free space for the staged plaintext plus the final encrypted
    archive. The tool stages data in a mode-0700 directory next to the output so
    publication stays on one filesystem.
-2. Quiesce writers for Chroma or other multi-file directories, or take a
-   storage-level snapshot and point --directory at that snapshot.
+2. Quiesce writers for legacy Chroma/listing indexes or other multi-file
+   directories, or take a storage-level snapshot and point --directory at that
+   snapshot. The separately declared AgentMemory SQLite database uses an online
+   backup and does not require writer downtime.
 3. Run create with every mutable SQLite database and runtime directory assigned
    a stable, non-sensitive label.
 4. Require a zero exit status and retain the JSON success record. A missing age
@@ -108,7 +113,10 @@ After a successful isolated restore:
    counts in addition to the tool's structural quick_check.
 2. Start a disposable application instance against only the restored tree and
    run its readiness and representative retrieval checks.
-3. Confirm Chroma collection counts and a known retrieval sample.
+3. Confirm the AgentMemory SQLite row count, `/ready` memory status, per-user
+   isolation and a known retrieval sample. If legacy AgentMemory files have not
+   yet been retired, also verify their lineage/count/digest. Validate listing and
+   area indexes separately.
 4. Confirm restored ownership and permissions match the service account and
    current deployment policy. Archive modes are retained, but user and group
    ownership are intentionally not trusted from the archive.

@@ -9,9 +9,9 @@ Semantics under test (FORK_CONTRACT.md §3):
   - branch_lineage=None reproduces the pre-fork behaviour exactly;
   - strict per-user isolation (fail-closed) is untouched.
 
-Same stubbing pattern as tests/test_agent_memory_isolation.py: a TEMP Chroma dir
-(never the live store) and call_ollama stubbed so no LLM/network is touched. No
-model downloads beyond Chroma's default local embedder used by the existing suite.
+Same stubbing pattern as tests/test_agent_memory_isolation.py: a temporary SQLite
+AgentMemory directory (never the live store) and call_ollama stubbed so no
+LLM/network calls or model downloads occur.
 """
 import importlib
 import os
@@ -89,7 +89,7 @@ def test_remember_turn_writes_branch_metadata_on_episodic(memory):
 
 
 def test_remember_turn_omits_absent_branch_keys(memory):
-    # Legacy call site: no branch args -> keys must be ABSENT (chroma rejects None).
+    # Legacy call site: absent values must not become metadata keys.
     memory.remember_turn("I want a studio in Leeds by September", "Sure!", user_id="user-A")
     got = memory.col.get(where={"$and": [{"user_id": "user-A"}, {"mtype": "episodic"}]})
     m = (got.get("metadatas") or [{}])[0]

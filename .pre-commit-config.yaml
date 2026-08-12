@@ -8,7 +8,7 @@ repos:
     rev: v8.18.4
     hooks:
       # Scans staged changes for secrets (working tree only, not full history).
-      # This is the local mirror of the `secrets` CI job.
+      # This is the staged-change companion to the supply-chain CI secret scan.
       - id: gitleaks
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

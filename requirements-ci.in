@@ -1,0 +1,5 @@
+# CI-only tools; application/runtime dependencies come from requirements-production.lock.
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-randomly==3.16.0
+import-linter==2.13

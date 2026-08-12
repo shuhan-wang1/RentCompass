@@ -191,8 +191,8 @@ def test_memory_eval_records_the_commit_and_its_provenance(tmp_path, monkeypatch
     from evaluation import memory_eval
     no_git(monkeypatch)
     monkeypatch.setenv("PRODUCT_SHA", "8793c0b17963")
-    # Force the blocked branch: this test is about the identity trailer, not chromadb.
-    monkeypatch.setattr(memory_eval, "_chromadb_available", lambda: False)
+    # Force the blocked branch: this test is about the identity trailer, not storage.
+    monkeypatch.setattr(memory_eval, "_memory_backend_available", lambda: False)
     assert memory_eval.main(["--out", str(tmp_path)]) == 0
     doc = json.loads((tmp_path / "memory_eval.json").read_text(encoding="utf-8"))
     assert doc["git_commit"] == "8793c0b17963" and doc["git_commit"] != "unknown"
@@ -206,7 +206,7 @@ def test_memory_eval_degrades_without_git_or_product_sha(tmp_path, monkeypatch):
     from evaluation import memory_eval
     no_git(monkeypatch)
     monkeypatch.delenv("PRODUCT_SHA", raising=False)
-    monkeypatch.setattr(memory_eval, "_chromadb_available", lambda: False)
+    monkeypatch.setattr(memory_eval, "_memory_backend_available", lambda: False)
     assert memory_eval.main(["--out", str(tmp_path)]) == 0
     doc = json.loads((tmp_path / "memory_eval.json").read_text(encoding="utf-8"))
     assert doc["git_commit"] is None and doc["commit_trust"] == rp.TRUST_UNKNOWN

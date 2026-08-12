@@ -4,8 +4,9 @@ AgentMemory — a layered, LLM-managed long-term memory for the rental assistant
 Synthesis of the 2024-2026 agent-memory SOTA:
   - Generative Agents (Park 2023): retrieval score = relevance + recency + importance,
     each min-max normalised to [0,1]; recency = 0.995^hours_since_last_access;
-    importance = an LLM 1-10 poignancy rating cached at write time; relevance = embedding
-    cosine. Plus periodic REFLECTION that distils higher-level insights from recent memories.
+    importance = an LLM 1-10 poignancy rating cached at write time; relevance =
+    deterministic multilingual lexical cosine. Plus periodic REFLECTION that distils
+    higher-level insights from recent memories.
   - Mem0 (2025): write path = an LLM extracts atomic facts, then an LLM decides
     ADD / UPDATE / DELETE / NOOP for each against the semantically-nearest existing
     memories (dedup + conflict resolution), with an MD5 exact-dup guard.
@@ -19,10 +20,12 @@ Memory types (CoALA taxonomy):
   - reflection : higher-level insights synthesised from episodic memories (semantic subtype)
   (working/short-term memory stays the agent's context window — not stored here.)
 
-Storage: ChromaDB (persistent, cosine) — one collection, mtype in metadata. The same
-on-disk store is shared by the web process and the MCP tool subprocess, so memory written
-in one is visible to the other. LLM calls go through core.llm_interface.call_ollama, which
-(with LLM_PROVIDER=deepseek) uses the DeepSeek API.
+Storage: process-safe SQLite — one collection-compatible table, mtype in metadata. The
+same on-disk store is shared by the web process and the MCP tool subprocess, so memory
+written in one is visible to the other. A legacy Chroma database in the directory is
+read and copied without importing Chroma; tombstones prevent deleted legacy records from
+being re-imported during a rolling deployment. LLM calls go through
+core.llm_interface.call_ollama, which (with LLM_PROVIDER=deepseek) uses the DeepSeek API.
 """
 import os
 import re
@@ -33,13 +36,12 @@ import datetime
 import threading
 import tempfile
 
-import chromadb
-
 from core.llm_interface import call_ollama
+from rag.sqlite_memory_store import SQLiteMemoryCollection
 
 # ---- tunables (Generative Agents) -------------------------------------------
 RECENCY_DECAY = 0.995            # per-hour exponential decay of recency
-RETRIEVE_CANDIDATES = 25         # vector top-K fetched before GA re-ranking
+RETRIEVE_CANDIDATES = 25         # lexical-cosine top-K fetched before GA re-ranking
 REFLECT_IMPORTANCE_THRESHOLD = 30  # accrued importance that triggers a reflection
                                    # (paper uses 150 over game-days; scaled for short chats)
 REFLECT_CORPUS_SIZE = 30         # newest-by-created_at records fed into a reflection
@@ -294,10 +296,7 @@ def _classify_pii(text: str) -> str:
 
 class AgentMemory:
     def __init__(self, db_path: str = _DB_PATH):
-        self.client = chromadb.PersistentClient(path=db_path)
-        self.col = self.client.get_or_create_collection(
-            name="agent_memory", metadata={"hnsw:space": "cosine"},
-        )
+        self.col = SQLiteMemoryCollection(db_path)
         self._lock = threading.Lock()
         self._accum = {}  # (user_id, session_id) -> accrued importance (reflection gate)
         # Report of the most recent targeted erasure — a value that is COMPUTED and
@@ -365,7 +364,7 @@ class AgentMemory:
         """
         empty = {"user_id": None, "fields": (), "deleted": 0, "deleted_ids": (),
                  "by_layer": {}, "retained_mentions": 0, "residual_ids": (),
-                 "complete": True}
+                 "legacy_residual_ids": (), "complete": True}
         uid = _valid_user_id(user_id)
         if uid is None:
             # Same fail-closed identity gate as every other read/write path.
@@ -395,6 +394,7 @@ class AgentMemory:
             return doomed, by_layer, retained
 
         deleted_ids, by_layer, retained, residual = [], {}, 0, []
+        legacy_residual = []
         with self._lock:
             try:
                 deleted_ids, by_layer, retained = _scan()
@@ -402,19 +402,37 @@ class AgentMemory:
                     self.col.delete(ids=deleted_ids)
                 # Verification pass: assert the scrub actually happened.
                 residual, _, retained = _scan()
+                duplicate = self.col.legacy_residual_records(
+                    where={"user_id": uid}
+                )
+                legacy_residual = [
+                    record_id
+                    for record_id, document, meta in zip(
+                        duplicate.get("ids") or [],
+                        duplicate.get("documents") or [],
+                        duplicate.get("metadatas") or [],
+                    )
+                    if any(
+                        _states_field_value(document, field, (meta or {}).get("mtype", ""))
+                        for field in wanted
+                    )
+                ]
             except Exception as e:
                 print(f"[memory] forget_fact error: {e}")
                 residual = residual or ["<unverified>"]
         report = {
             "user_id": uid, "fields": wanted, "deleted": len(deleted_ids),
             "deleted_ids": tuple(deleted_ids), "by_layer": by_layer,
-            "retained_mentions": retained, "residual_ids": tuple(residual),
-            "complete": not residual,
+            "retained_mentions": retained,
+            "residual_ids": tuple(residual),
+            "legacy_residual_ids": tuple(legacy_residual),
+            "complete": not residual and not legacy_residual,
         }
         self.last_erasure_report = report
-        if residual:
+        if residual or legacy_residual:
             print(f"[memory] forget_fact INCOMPLETE for user={uid} fields={wanted}: "
-                  f"{len(residual)} record(s) still state the value — the caller MUST "
+                  f"{len(residual)} active and {len(legacy_residual)} legacy record(s) "
+                  "still state the value — the caller MUST "
                   f"report a partial deletion, not a completed one")
         else:
             print(f"[memory] forget_fact user={uid} fields={wanted} "
@@ -453,7 +471,16 @@ class AgentMemory:
             if importance is None:
                 importance = (self._rate_importance(text) if mtype == "episodic"
                               else _DEFAULT_IMPORTANCE.get(mtype, 5))
-            mem_id = f"{mtype}_{h[:10]}_{int(time.time()*1000)}"
+            # Stable identifiers make the read-then-write idempotency check safe
+            # across the legacy/fc processes. If both pools race, SQLite accepts one
+            # INSERT and the loser reads back the same record below.
+            if idempotency_key:
+                identity = hashlib.sha256(
+                    f"{user_id}|{idempotency_key}".encode("utf-8")
+                ).hexdigest()
+                mem_id = f"idem_{identity}"
+            else:
+                mem_id = f"{mtype}_{h}"
             meta = {
                 "mtype": mtype, "session_id": session_id, "user_id": user_id,
                 "role": role, "importance": int(importance),
@@ -462,7 +489,7 @@ class AgentMemory:
             }
             if idempotency_key:
                 meta["idempotency_key"] = idempotency_key
-            # Optional provenance (e.g. branch scoping). Chroma metadata values must
+            # Optional provenance (e.g. branch scoping). Memory metadata values must
             # be str/int/float/bool — never None — so absent keys are simply omitted.
             if extra_meta:
                 for k, v in extra_meta.items():
@@ -472,6 +499,20 @@ class AgentMemory:
             try:
                 self.col.add(documents=[text], metadatas=[meta], ids=[mem_id])
             except Exception as e:
+                try:
+                    predicate = (
+                        {"$and": [
+                            {"idempotency_key": idempotency_key},
+                            {"user_id": user_id},
+                        ]}
+                        if idempotency_key
+                        else {"$and": [{"hash": h}, {"user_id": user_id}]}
+                    )
+                    winner = self.col.get(where=predicate)
+                    if winner.get("ids"):
+                        return winner["ids"][0]
+                except Exception:
+                    pass
                 print(f"[memory] add error: {e}")
                 return None
             key = (user_id, session_id)
@@ -568,8 +609,8 @@ class AgentMemory:
         the auto-EPISODIC turn log only, so retrieve() can restrict a forked
         conversation to the episodic memories it actually inherited. They are NOT
         attached to the distilled semantic/reflection records, which stay GLOBAL
-        (per-user, all branches). Absent (None) values are omitted from metadata —
-        chroma rejects None — so legacy call sites keep behaving exactly as before.
+        (per-user, all branches). Absent (None) values are omitted from metadata so
+        legacy call sites keep behaving exactly as before.
 
         Taint policy A+ (design §2.8c): when ``context_tainted`` is True this turn
         carried untrusted (e.g. scraped listing) content, so the auto-memory bypass
@@ -664,7 +705,7 @@ class AgentMemory:
             metas = recent.get("metadatas", []) or []
             if len(docs) < 4:
                 return
-            # Chroma .get() has NO ordering guarantee, so "recent" must be derived
+            # Collection .get() has NO ordering guarantee, so "recent" must be derived
             # explicitly: sort by created_at and take the newest REFLECT_CORPUS_SIZE.
             order = sorted(
                 range(len(docs)),
@@ -796,6 +837,10 @@ class AgentMemory:
         except Exception:
             return {"total": 0}
 
+    def health(self) -> dict:
+        """Run the required durable-store and legacy-migration readiness checks."""
+        return self.col.health()
+
     def forget(self, user_id: str) -> int:
         """Delete all memory for one user (UK GDPR erasure boundary)."""
         user_id = (user_id or "").strip()
@@ -819,10 +864,15 @@ class AgentMemory:
             existing = self.col.get(where={"user_id": user_id})
             records = len(list(existing.get("ids") or []))
             pending_buffers = sum(1 for key in self._accum if key[0] == user_id)
+            # During a rolling migration the old Chroma database is a second physical
+            # copy. Tombstoning a row in the new store is not a complete GDPR erasure
+            # until that duplicate source has been explicitly retired.
+            legacy_records = self.col.legacy_residual_count(where={"user_id": user_id})
         return {
             "records": records,
             "pending_buffers": pending_buffers,
-            "total": records + pending_buffers,
+            "legacy_records": legacy_records,
+            "total": records + pending_buffers + legacy_records,
         }
 
 
@@ -835,10 +885,19 @@ def get_agent_memory() -> AgentMemory:
         try:
             _AGENT_MEMORY = AgentMemory()
         except Exception as exc:
-            fallback_path = os.path.join(tempfile.gettempdir(), "uk-rent-agent", "agent_memory")
+            allow_ephemeral = os.getenv(
+                "AGENT_MEMORY_ALLOW_EPHEMERAL_FALLBACK", ""
+            ).strip().lower() in {"1", "true", "yes", "on"}
+            if not allow_ephemeral:
+                raise RuntimeError(
+                    f"durable agent-memory store {_DB_PATH} is unavailable"
+                ) from exc
+            fallback_path = os.path.join(
+                tempfile.gettempdir(), "uk-rent-agent", "agent_memory"
+            )
             print(
-                f"[memory] store {_DB_PATH} is not writable ({exc}); "
-                f"using {fallback_path}"
+                f"[memory] durable store {_DB_PATH} is unavailable ({exc}); "
+                f"explicit ephemeral fallback enabled at {fallback_path}"
             )
             _AGENT_MEMORY = AgentMemory(fallback_path)
     return _AGENT_MEMORY

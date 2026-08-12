@@ -120,6 +120,20 @@ done
 [[ -n "$TARGET" ]] || die "usage: $0 --to <legacy|fc> [--allow-public-fc] | --status"
 [[ -n "${PORT[$TARGET]:-}" ]] || die "target must be 'legacy' or 'fc' (got '$TARGET')"
 
+if [[ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" != 1 ]]; then
+  DEPLOY_LOCK_FILE="${RENTCOMPASS_DEPLOY_LOCK_FILE:-}"
+  if [[ -z "$DEPLOY_LOCK_FILE" ]]; then
+    SWITCH_REPO_DIR="${SWITCH_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+    GIT_COMMON_DIR="$(git -C "$SWITCH_REPO_DIR" rev-parse --path-format=absolute --git-common-dir)" \
+      || die "cannot resolve the shared git metadata directory"
+    DEPLOY_LOCK_FILE="$GIT_COMMON_DIR/rentcompass-deploy.lock"
+  fi
+  mkdir -p "$(dirname "$DEPLOY_LOCK_FILE")"
+  exec 9>"$DEPLOY_LOCK_FILE" || die "cannot open deploy lock: $DEPLOY_LOCK_FILE"
+  flock -n 9 || die "another release/update/switch/retirement operation is running"
+  export RENTCOMPASS_DEPLOY_LOCK_HELD=1
+fi
+
 TO_PORT="${PORT[$TARGET]}"; WANT_ARCH="${ARCH[$TARGET]}"
 [[ "$TO_PORT" == "5001" || "$TO_PORT" == "5002" ]] || die "refusing port $TO_PORT (only 5001/5002)"
 [[ -r "$CONF" ]] || die "conf not readable: $CONF"

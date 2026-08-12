@@ -27,7 +27,7 @@ def get_prefs_store() -> Any | None:
 
     Unlike the checkpointer (per-thread), the Store is shared across ALL of a user's
     conversations — that is the whole point. Uses an in-memory store here (the durable
-    facts are cheap to rebuild from the checkpointer / Chroma memory on restart); swap for
+    facts are cheap to rebuild from the checkpointer / SQLite memory on restart); swap for
     a Postgres/SQLite-backed BaseStore to survive process restarts. None keeps the optional
     langgraph install importable.
     """

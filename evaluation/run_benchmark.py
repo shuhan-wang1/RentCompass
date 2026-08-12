@@ -17,7 +17,7 @@ deterministic ``evaluation.metrics.graders``. Two modes:
   in-process (may hit cache/live network — free but nondeterministic).
 
 Isolation: ALL state (checkpointer, conversation db, listing cache, idempotency,
-ChromaDB agent memory) is redirected to per-run temp dirs. The repo's real
+SQLite agent memory) is redirected to per-run temp dirs. The repo's real
 ``.runtime/`` and ``chroma_db_*`` are never touched.
 
 Cost cap, resume checkpoint, and result writers are all here. Latency uses
@@ -887,12 +887,12 @@ class CaseRunner:
         self.get_sqlite_checkpointer = get_sqlite_checkpointer
         self._events_offset = events_log.stat().st_size if events_log.exists() else 0
 
-    # ---- long-term memory (optional; ChromaDB may live in a separate venv) --- #
+    # ---- long-term memory (optional to offline fixture mechanics) ----------- #
     def _memory_module(self):
-        """Return rag.agent_memory, or None if ChromaDB isn't importable here.
+        """Return rag.agent_memory, or None if the application package is unavailable.
 
         Offline mechanics do NOT require real memory (the recall_memory/remember
-        tools are stubbed/fixture-replayed), so a missing ChromaDB degrades to a
+        tools are stubbed/fixture-replayed), so a missing application package degrades to a
         no-op rather than failing the run.
         """
         try:
@@ -908,7 +908,7 @@ class CaseRunner:
         d.mkdir(parents=True, exist_ok=True)
         os.environ["CHECKPOINT_PATH"] = str(d / "checkpoints.sqlite3")
         os.environ["IDEMPOTENCY_DB"] = str(d / "idempotency.sqlite3")
-        # Fresh ChromaDB agent-memory store per case-run.
+        # Fresh SQLite agent-memory store per case-run.
         #
         # BUG (cross-case memory bleed): the old reset — `am._DB_PATH = <tmp>` plus
         # `am._AGENT_MEMORY = None` — did NOT isolate. `AgentMemory.__init__(self,
@@ -919,24 +919,18 @@ class CaseRunner:
         # case's conversation_history replay accumulated there — so A1 (empty history)
         # recalled "[PAST] Find me a studio near Bloomsbury" etc. from OTHER cases.
         #
-        # Robust fix: (a) drop chromadb's process-global PersistentClient cache, then
-        # (b) instantiate a brand-new AgentMemory bound EXPLICITLY to this run's unique
-        # temp path (bypassing the def-time default). Combined with per-run user_id
+        # Robust fix: instantiate a brand-new AgentMemory bound EXPLICITLY to this
+        # run's unique temp path (bypassing the def-time default). Combined with per-run user_id
         # namespacing (see run()), this makes cross-case recall impossible both
         # physically (separate store) and logically (separate user_id filter).
         am = self._memory_module()
         if am is not None:
-            new_path = str(d / "chroma_agent_memory")
+            new_path = str(d / "sqlite_agent_memory")
             am._DB_PATH = new_path
-            try:
-                from chromadb.api.shared_system_client import SharedSystemClient
-                SharedSystemClient._identifier_to_system.clear()
-            except Exception:
-                pass
             try:
                 am._AGENT_MEMORY = am.AgentMemory(db_path=new_path)
             except Exception:
-                am._AGENT_MEMORY = None   # ChromaDB unavailable: degrade to no-op
+                am._AGENT_MEMORY = None   # application package unavailable: no-op
         return d
 
     # ---- cache protocol (warm restore / cold fresh-namespace per repeat) ---- #
@@ -1046,7 +1040,7 @@ class CaseRunner:
             lines = [f"User: {t['content']}" if t["role"] == "user"
                      else f"Alex: {t['content']}" for t in hist[-3:]]
             base = "Previous conversation:\n" + "\n".join(lines) + f"\n\nCurrent user message: {q}"
-        # Inject long-term memory the way app.py does (offline-safe: temp chroma).
+        # Inject long-term memory the way app.py does (offline-safe: temp SQLite).
         # ``uid`` is the run-namespaced user_id, so retrieval only ever sees THIS
         # case-run's memory — never another case's replayed turns.
         am = self._memory_module()
@@ -1166,7 +1160,7 @@ class CaseRunner:
         # repoint the app at it BEFORE the graph runs, guaranteeing repeat independence.
         self._prepare_cache(run_id)
         # Run-namespaced user_id: isolates memory across cases even under a shared store
-        # (defense-in-depth on top of the fresh per-run ChromaDB path in _isolate_state).
+        # (defense-in-depth on top of the fresh per-run SQLite path in _isolate_state).
         eff_uid = self._ns_uid(run_id, case.get("user_id", "u")) or "u"
         self._seed_memory(case, run_id)
 

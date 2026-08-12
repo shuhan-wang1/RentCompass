@@ -10,7 +10,7 @@ applied, but with a shared identity. These tests pin the fixed contract:
   - records without user_id metadata (legacy/orphans) can never match anyone
   - forget(user-A) erases only user-A
 
-All tests run against a TEMP Chroma dir — never the live store.
+All tests run against a temporary SQLite AgentMemory directory — never the live store.
 """
 import importlib
 import os
@@ -157,7 +157,7 @@ async def test_memory_tools_require_user_id(memory, monkeypatch):
 
     memory.add("Budget 1500 near KCL", "semantic", user_id="user-A")
 
-    # recall_memory_impl / remember_impl are now PLAIN SYNC (blocking ChromaDB offloaded to an
+    # recall_memory_impl / remember_impl are PLAIN SYNC (blocking SQLite work offloaded to an
     # executor thread by Tool.execute) — call them directly, no await.
     ok = mt.recall_memory_impl("budget", user_id="user-A")
     assert ok["success"] and ok["count"] == 1

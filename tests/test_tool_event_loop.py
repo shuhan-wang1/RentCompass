@@ -171,11 +171,11 @@ def test_get_property_details_not_blocking(monkeypatch):
 # ─── recall_memory (converted async->sync) ──────────────────────────────────────
 class _FakeMem:
     def retrieve(self, query, session_id="default", user_id=None, n=6):
-        time.sleep(_BLOCK_S)  # SYNCHRONOUS ChromaDB sqlite query + embedding
+        time.sleep(_BLOCK_S)  # SYNCHRONOUS SQLite memory query
         return [{"text": "Budget 1500 near KCL"}]
 
     def add(self, content, mtype, session_id="default", user_id=None):
-        time.sleep(_BLOCK_S)  # SYNCHRONOUS ChromaDB write + embedding
+        time.sleep(_BLOCK_S)  # SYNCHRONOUS SQLite memory write
         return "mem-id-1"
 
     def format_for_prompt(self, mems):

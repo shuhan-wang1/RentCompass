@@ -2604,7 +2604,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         reply_language=extracted_context.get('reply_language', 'en'),
     )
 
-    # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/Chroma 写入 ──
+    # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
     # 记忆按 user_id 命名空间共享（跨会话）；worker 使用 idempotency_key 做 at-least-once
     # 去重。进程若在响应后退出，租约到期后另一进程会继续，不会静默丢任务。
     _td = final_state.get('tool_decision')
@@ -3231,7 +3231,7 @@ def rename_conversation(cid):
 @app.route('/api/conversations/<cid>', methods=['DELETE'])
 def delete_conversation(cid):
     """Delete a conversation + its messages, hot-cache slice, and checkpointer thread.
-    Does NOT touch long-term (ChromaDB) memory. 404 if not owned."""
+    Does NOT touch long-term (SQLite) memory. 404 if not owned."""
     user_id, _ = _identity_from_request()
     if not conversation_store.delete_conversation(user_id, cid):
         raise ApiError(404, "conversation not found")
@@ -3378,7 +3378,7 @@ def list_conversation_turns(cid):
 
 @app.route('/api/clear_history', methods=['POST'])
 def clear_history():
-    """Conversation-scoped reset (NEVER touches ChromaDB long-term memory).
+    """Conversation-scoped reset (NEVER touches SQLite long-term memory).
     Body {user_id, conversation_id?}: with a conversation_id clears just that conversation;
     without one clears ALL of the user's conversations. The frontend routes clearing through
     DELETE /api/conversations/<cid> instead, but this stays for API completeness."""
@@ -3411,7 +3411,7 @@ def clear_history():
 @app.route('/api/forget_me', methods=['POST'])
 def forget_me():
     """PRIVACY: the ONLY route that wipes long-term memory. Body {user_id}.
-    Erases the user's ChromaDB/Mem0 memory AND all conversations, messages, favorites,
+    Erases the user's durable AgentMemory AND all conversations, messages, favorites,
     checkpointer threads, and hot-cache slices."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)

@@ -40,9 +40,9 @@
 this-turn 值永远优先**，不会把"今天预算 £900"倒回成存档的 £1200）；图出口 `persist_prefs` 把本轮结构化
 criteria 写回 Store（**只覆盖有意义的值**，不用 None/[] 清空存档）。
 
-**和项目已有记忆的分工（一定要主动讲，否则像重复造轮子）**：项目本来有 ChromaDB 的 `AgentMemory` 做
-**语义记忆**（自由文本、按相关度检索）。Store 补的是**结构化 KV 画像**（budget=1000 这种精确字段）。
-两者互补：Store 存"是什么"，Chroma 存"聊过什么"。
+**和项目已有记忆的分工（一定要主动讲，否则像重复造轮子）**：项目已有 SQLite `AgentMemory` 做
+**语义记忆**（自由文本、按多语言词法相关度检索）。Store 补的是**结构化 KV 画像**（budget=1000 这种精确字段）。
+两者互补：Store 存精确字段，AgentMemory 存跨对话的自由文本事实与事件。
 
 ---
 
@@ -83,7 +83,7 @@ criteria 写回 Store（**只覆盖有意义的值**，不用 None/[] 清空存�
 > "我这个租房 Agent 是手搓的 LangGraph：`StateGraph` + `Command` 路由 + `Send` 扇出做多路搜索的 map-reduce，
 > SqliteSaver 按 `user_id:conversation_id` 做 checkpointer。在此之上我补了四个生产能力：抓取前用 `interrupt()`
 > 做人工确认（HITL，支持改计划），注意恢复时节点重跑、interrupt 前要幂等；用 `BaseStore` 存跨对话的结构化用户
-> 画像，和已有的 Chroma 语义记忆分工；用 `update_state` 做时间旅行、改预算重跑；用 invoke 的 `durability=` 在
+> 画像，和已有的 SQLite AgentMemory 分工；用 `update_state` 做时间旅行、改预算重跑；用 invoke 的 `durability=` 在
 > 崩溃安全和延迟间取舍。全部默认关、有拓扑回归测试保证不动主链路。"
 
 **演示**：`python examples/langgraph_advanced_demo.py` · **测试**：`pytest tests/test_langgraph_advanced.py`

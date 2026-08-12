@@ -1,7 +1,64 @@
 # HANDOFF — START HERE
 
 Master index for the fc_loop work. **Every other document is a leaf; this is the only file
-that spans all branches.** Last updated 2026-07-26.
+that spans all branches.** Last updated 2026-08-12.
+
+> ## Current release status — 2026-08-12
+>
+> This block is the operational source of truth for release decisions. The older “Right now”
+> material below is retained as historical evidence and must not be used to identify the
+> current mainline, candidate, CI result, or deploy status.
+>
+> * Canonical release track: **`origin/main`**. The pre-remediation base was
+>   **`93953c847155afc02d285df18390edb4e06212fc`**; the candidate is the commit containing
+>   this status block. Resolve and compare its full identity with
+>   `git rev-parse HEAD origin/main` instead of copying a short or self-referential SHA from
+>   this document. It is releasable only after remote `main` points to that exact commit and
+>   all four required checks succeed. Never deploy the local validation tag.
+> * Production has **not changed**. The public edge and local fc pool report
+>   `X-Agent-Arch: fc_loop` and
+>   `X-Agent-Version: 0952c56e21b9b0dac3fb10fe99ee907c36b3a2d8`; the server pin is the
+>   same SHA. Public `/ready` returns 404 because that old image predates the readiness
+>   contract. `deploy/update.sh --status` therefore cannot prove either pool ready.
+> * The pre-remediation remote-main run,
+>   [31505331850](https://github.com/shuhan-wang1/RentCompass/actions/runs/31505331850),
+>   was **FAIL** on the Chroma supply-chain finding and is not evidence for this candidate.
+>   This remediation removes
+>   `chromadb` entirely and replaces runtime AgentMemory with a process-safe standard-library
+>   SQLite store that reads and verifies the legacy Chroma schema directly. It also adds
+>   stable idempotency, cross-process initialisation locking, tombstones/legacy lineage, a
+>   required memory readiness probe, and fail-closed retirement.
+> * A read-only production snapshot proved an exact **1096/1096** migration with source
+>   SHA-256
+>   `7881af490986dd8a168c59025960ad70984783e7d7c59520cf81a67ae052505f`.
+>   Destructive retirement was exercised only on a `/tmp` copy. The live legacy database is
+>   untouched (`root:root`, `chroma.sqlite3` still present) and must remain so until both new
+>   Chroma-free pools serve the same pinned release.
+> * Local validation on the final hash-locked production image passed both randomized Python
+>   3.12 orders: **3658 passed, 12 skipped, 0 failed** for seed 1009 and again for seed 2027.
+>   Release/update/switch rehearsals passed **46/46**, **60/60**, and **27/27**. The isolated
+>   non-root/read-only fc_loop runtime returned `/live` and `/ready`; required release,
+>   conversation, AgentMemory, and LLM-configuration checks were `ok`. The production and
+>   pinned gate-tool audits found **0 known vulnerabilities**, `pip check` passed, and the
+>   generated CycloneDX SBOM contained 123 components. Offline fc smoke passed 2/2 and memory
+>   checks passed write 4/4, retrieval 5/5, isolation 5/5, forget 3/3, restart 1/1.
+> * Those are local mechanics and safety results, **not production answer-accuracy evidence**.
+>   The v7 production-fc evidence template validates structurally with `--allow-template` and
+>   correctly exits HOLD when treated as release evidence. Bind it to the final commit/image/
+>   prompt policy and execute both deterministic and live-freshness tracks before citing v7.
+> * **Do not run `release.sh` yet and never use `--allow-failing-ci`.** Four gates remain:
+>   (1) obtain all four required green checks on the exact `origin/main` candidate; (2) add
+>   `DEPLOY_PYTHON_IMAGE=python@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7`
+>   to `/etc/rentcompass/deploy.env`; (3) review, then change only
+>   `app/chroma_db_agent_memory` from `root:root` to `1000:1000` and rerun
+>   `deploy/preflight_runtime_permissions.sh`; (4) install the tracked monitor because
+>   `/usr/local/bin/rentcompass-monitor.sh` is still drifted (`678073d06356` installed vs
+>   `bca2c9f7cbb4` tracked).
+> * After those gates are green, deploy **both** pools from `origin/main`, verify `/ready`,
+>   architecture, full SHA, image digest, prompt metadata and alert delivery, then run
+>   `bash deploy/retire_legacy_agent_memory.sh`. That script re-verifies both pools and the
+>   exact row count/digest before touching legacy files. Once retirement succeeds, an old
+>   Chroma-bearing image is no longer a valid rollback target.
 
 > ## Status: fc_loop IS LIVE ON THE PUBLIC EDGE as of 2026-07-26. The p50 gate did NOT pass; the owner overrode it.
 >

@@ -710,7 +710,7 @@ awaited; sync ones are pushed to a thread pool so they never block the event loo
 Table~\ref{tab:tools} is the full catalogue with data sources.
 
 \begin{longtable}{@{}p{0.20\textwidth} p{0.34\textwidth} p{0.38\textwidth}@{}}
-\caption{The twelve registered tools and their real data sources.}\label{tab:tools}\\
+\caption{The fourteen registered tools and their real data sources.}\label{tab:tools}\\
 \toprule
 \textbf{Tool} & \textbf{Purpose} & \textbf{Live data source}\\
 \midrule
@@ -720,17 +720,19 @@ Table~\ref{tab:tools} is the full catalogue with data sources.
 \midrule
 \endhead
 \code{search\_properties} & Find real rental listings (the core tool). & \textbf{OnTheMarket} scraping (on-demand, sqlite-cached) $+$ TfL commute annotation $+$ FAISS/RAG re-rank.\\
+\code{compare\_or\_rank\_areas} & Compare candidate areas. & Cached listing prices $+$ commute evidence; explicit no-data markers.\\
 \code{calculate\_commute} & Travel time and route legs between two addresses. & \textbf{TfL Journey Planner}; straight-line estimate outside London.\\
-\code{calculate\_commute\_cost} & Time $+$ fare $+$ monthly cost. & TfL time; UK-postcode $\to$ zone inference; fares from a bundled TfL CSV.\\
+\code{calculate\_commute\_cost} & Time $+$ fare $+$ monthly cost. & TfL time; UK-postcode $\to$ zone inference; central 2026 TfL fare authority.\\
 \code{check\_safety} & Crime/safety score for an address or area. & \textbf{UK Police API} (\code{police.uk}), last 6 months.\\
-\code{check\_transport\_cost} & Official 2025 Travelcard/PAYG prices by zone. & Hard-coded \code{TFL\_FARES\_2025} table.\\
+\code{check\_transport\_cost} & Zonal Travelcard/PAYG prices. & Central 2026 TfL edition; effective date and official source URLs included.\\
 \code{get\_transport\_info} & Live journeys, fares, travelcards, line status. & \textbf{TfL Unified API}; London-only, honest ``outside London'' outside the bounding box.\\
 \code{get\_weather} & Current weather for a city. & \textbf{Open-Meteo} (no key required).\\
 \code{search\_nearby\_pois} & Nearby amenities (supermarket, gym, station, \dots). & \textbf{OpenStreetMap Overpass} $+$ Nominatim geocoding.\\
-\code{get\_property\_details} & Facts/policies about one already-shown listing. & Local property CSV database.\\
-\code{web\_search} & General web questions; also a sub-query coordinator. & Web snippet provider (DuckDuckGo/SearXNG-style).\\
-\code{recall\_memory} & Read the user's long-term memory. & Local ChromaDB (Section~\ref{sec:memory}).\\
-\code{remember} & Write a durable fact (\emph{the only write tool}). & Local ChromaDB; \code{side\_effect="write"}.\\
+\code{get\_property\_details} & Facts/policies about one already-shown listing. & Listing cache $+$ external description page.\\
+\code{web\_search} & General web questions; also a sub-query coordinator. & Private SearXNG service.\\
+\code{recall\_memory} & Read the user's long-term memory. & Process-safe local SQLite (Section~\ref{sec:memory}).\\
+\code{remember} & Write a durable fact (\emph{the only write tool}). & Process-safe local SQLite; \code{side\_effect="write"}.\\
+\code{ask\_user} & End the turn with one clarification. & No external source; terminal interaction tool.\\
 \bottomrule
 \end{longtable}
 
@@ -848,10 +850,12 @@ architecturally separate memory families plus the graph's own short-term state.
 \end{description}
 
 \subsection{The layered long-term memory}
-\code{AgentMemory} (\code{app/rag/agent\_memory.py}) is a single ChromaDB collection,
-\code{agent\_memory}, holding three kinds of item distinguished by a metadata field
-\code{mtype}. The design follows the \emph{Generative Agents} and \emph{Mem0} lines
-of work, with this codebase's own constants:
+\code{AgentMemory} (\code{app/rag/agent\_memory.py}) is a process-safe SQLite table
+holding three kinds of item distinguished by a metadata field \code{mtype}. During
+the one-time migration it reads the legacy Chroma schema directly without importing
+Chroma, and uses tombstones plus lineage to prevent deleted data from reappearing.
+The design follows the \emph{Generative Agents} and \emph{Mem0} lines of work, with
+this codebase's own constants:
 
 \begin{description}[leftmargin=0pt,itemsep=2pt]
   \item[Episodic] --- individual events (``User asked: \dots\ [assistant used
@@ -881,9 +885,10 @@ the user's last thirty memories and resets the counter. This is the Generative-A
 reflection mechanism, scaled down from the paper's game-day threshold of $150$.
 
 \subsubsection*{Retrieval: the Generative-Agents score}
-Given a query, retrieval fetches the top $K=25$ candidates by vector similarity
-(filtered to this \code{user\_id}), then re-ranks each candidate $m$ by three
-signals:
+Given a query, retrieval fetches the top $K=25$ candidates by deterministic
+multilingual lexical cosine (English tokens, CJK unigrams/bigrams and normalised
+character trigrams), filtered to this \code{user\_id}, then re-ranks each candidate
+$m$ by three signals:
 \begin{align*}
   \text{relevance}(m) &= 1 - \text{cosine\_distance}(q, m),\\
   \text{recency}(m)   &= 0.995^{\,\Delta t_{\text{hours}}(m)}
@@ -898,18 +903,19 @@ and the final score is their \emph{unweighted sum}:
 \]
 The top $n=6$ are returned and their \code{last\_access} is bumped to now --- so
 retrieving a memory makes it more retrievable next time (the paper's reinforcement
-effect). The embedding model is \code{all-MiniLM-L6-v2} (384-dimensional); property
-retrieval additionally uses an explicit FAISS inner-product index over
-L2-normalised vectors (equivalent to cosine).
+effect). Property retrieval remains separate and uses \code{all-MiniLM-L6-v2} with
+an explicit FAISS inner-product index over L2-normalised vectors (equivalent to cosine).
 
 \begin{keybox}[Privacy: fail closed by design]
 Every read and write is gated by \code{\_valid\_user\_id}, which rejects a blank id
 \emph{and the literal ``default''} --- the implicit shared namespace that once let one
 user's budget leak to the next. With no valid id, writes are refused and reads return
-empty; there is never a global fallback. The Chroma query always carries
+empty; there is never a global fallback. Every collection operation carries
 \code{where=\{"user\_id": id\}}; legacy records written before namespacing carry no id
 and so can never match a user-scoped filter (inert, not leaked). \code{forget(user\_id)}
-is the GDPR erasure path, wired to \code{/api/forget\_me}.
+is wired to \code{/api/forget\_me}, which verifies every storage layer and returns
+non-success while a raw legacy duplicate remains. Verified legacy retirement is a
+separate post-deploy operation after both old processes have stopped.
 \end{keybox}
 
 \subsection{Memory as tools}

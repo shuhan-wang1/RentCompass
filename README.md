@@ -107,7 +107,7 @@ the web layer loads at runtime.
 - **Conversation branching.** Fork a conversation from any completed turn, edit
   an earlier user message to create an alternative branch, and compare two
   branches side by side in a split view.
-- **Long-term memory.** Per-user durable facts in ChromaDB, exposed as
+- **Long-term memory.** Per-user durable facts in process-safe SQLite, exposed as
   `recall_memory` / `remember` tools, erasable through `/api/forget_me`.
 - **Bilingual.** Replies follow an explicit language policy (zh/en) driven by the
   message content and the UI language, not by model whim.
@@ -360,13 +360,13 @@ truth; the same registry is exposed in-process and over MCP.
 | `calculate_commute` | none | TfL Journey Planner (transit/cycling/walking) |
 | `calculate_commute_cost` | none | TfL journey + fare, combined time-and-money view |
 | `get_transport_info` | none | TfL Unified API: journeys, single fares, travelcards, line status |
-| `check_transport_cost` | none | Official 2025 TfL fare tables |
+| `check_transport_cost` | none | Central 2026 TfL fare edition (caps frozen at 2025 levels) |
 | `check_safety` | none | data.police.uk, last 6 months |
 | `search_nearby_pois` | none | OpenStreetMap Overpass (paced, multi-mirror) |
 | `get_weather` | none | Open-Meteo (geocoding + forecast) |
 | `web_search` | none | Private SearXNG instance |
-| `recall_memory` | none | Per-user ChromaDB memory |
-| `remember` | **write** | Per-user ChromaDB memory — gated, see [§6](#6-safety-grounding-and-guardrails) |
+| `recall_memory` | none | Per-user SQLite memory |
+| `remember` | **write** | Per-user SQLite memory — gated, see [§6](#6-safety-grounding-and-guardrails) |
 | `ask_user` | none (**terminal**) | Ends the turn with one clarifying question in the user's language |
 
 ### MCP
@@ -476,8 +476,8 @@ user criteria
   live data from them.
 - POI retrieval paces requests across an Overpass mirror pool, caches per type,
   and degrades honestly when the pool is rate-limited.
-- The RAG layer combines FAISS listing embeddings, ChromaDB conversation memory,
-  and ChromaDB area knowledge.
+- The RAG layer combines FAISS listing embeddings, SQLite conversation memory,
+  and persisted area knowledge.
 - Every search-side time budget is configurable (`SEARCH_*`, `POI_*`) so the tool
   can return a smaller honest answer instead of blowing the turn ceiling.
 
@@ -496,7 +496,7 @@ user criteria
 - **Checkpoints** — LangGraph SQLite checkpoints, **one file per architecture**
   (`CHECKPOINT_DB_PATH`). The conversation store is deliberately **shared**
   between pools; checkpoints deliberately are not.
-- **Long-term memory** — `app/rag/agent_memory.py` over ChromaDB, namespaced per
+- **Long-term memory** — `app/rag/agent_memory.py` over process-safe SQLite, namespaced per
   user, erasable via `/api/forget_me`.
 - **Local auth** — transactional SQLite credential store with password hashes
   (`.runtime/auth.sqlite3`); an authenticated session's identity is authoritative,
@@ -545,9 +545,16 @@ so the client can adopt the transaction without mistaking a failure for success.
 ### Install
 
 ```bash
-pip install -e .          # runtime
-pip install -e '.[dev]'   # + pytest, pytest-asyncio, import-linter
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-bootstrap.lock
+.venv/bin/python -m pip install --require-hashes -r requirements-production.lock
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e .   # runtime
+.venv/bin/python -m pip install --require-hashes -r requirements-ci.lock  # tests
 ```
+
+Production and CI registry artifacts are SHA-256 locked. After an intentional
+dependency update, edit the reviewed inputs/constraints and regenerate with
+`scripts/compile_dependency_locks.sh`; never hand-edit generated `*.lock` files.
 
 ### The two env files — both are required, and they are not the same file
 
@@ -608,7 +615,7 @@ docker compose ps
 This starts `app` (loopback :5001), `searxng` (loopback :8080) and `valkey`.
 Neither application nor search ports are directly public. The canary `app-fc`
 pool is behind a compose profile and does not start by default. The image
-pip-installs `src/uk_rent_agent` and copies `app/`; all runtime data (Chroma
+pip-installs `src/uk_rent_agent` and copies `app/`; all runtime data (vector
 indexes, `.runtime/`, `app/.env`) is bind-mounted from the host, never baked in.
 See `docs/DOCKER.md`.
 
@@ -872,7 +879,7 @@ python -m evaluation.run_benchmark --smoke --offline      # 10 smoke cases, mech
 python -m evaluation.run_benchmark --live --config routed_models --max-cost-usd 5
 python -m evaluation.run_ablation --study both --offline --smoke
 python -m evaluation.fault_injection.run                  # 15 injected-fault scenarios
-python -m evaluation.memory_eval                          # needs chromadb
+python -m evaluation.memory_eval                          # standard-library SQLite backend
 python -m evaluation.report --results evaluation/results --out evaluation/results
 ```
 
@@ -905,7 +912,7 @@ attaches the caveat it must be quoted with:
 | Grounding fidelity (98 cases, live) | verifiable claims grounded 152/204 (74.5%), money claims 121/152 (79.6%), contradicted 1 | heuristic grader, single live run; grounding fidelity ≠ answer quality |
 | Retrieval parallelization (16 cases × 3) | retrieval-stage latency mean −57.1%, p95 −42.0%, race anomalies 0/48 | **retrieval-stage** only; end-to-end is synthesis-dominated and ~unchanged |
 | Fault injection (15 scenarios) | faults surfaced 15/15, idempotency 3/3 with 0 duplicate writes, fallback 2/2, post-fault completion 13/15 | only the model is mocked; resilience *mechanics*, not accuracy |
-| Memory store checks (real ChromaDB) | isolation 5/5, forget 3/3, restart recovery 1/1, identity gate 7/7 | small n; keep separate from the stubbed extraction numbers |
+| Memory store checks (real SQLite) | isolation 5/5, forget 3/3, restart recovery 1/1, identity gate 7/7 | small n; keep separate from the stubbed extraction numbers |
 
 The same file lists what must **not** be cited (raw end-to-end pass rate,
 stubbed memory-extraction figures, any n<15 single-run rate) and why.
@@ -931,12 +938,16 @@ A handful of guards deliberately assert against the deployment box itself (for
 example, that the installed monitor script matches the committed one); those
 skip where their subject does not exist.
 
-CI (`.github/workflows/ci.yml`) runs the full suite on Python 3.11 for every push
-to `main` and every PR into `main` or `telemetry/**`, plus a gitleaks secret scan
-of the working tree. `.pre-commit-config.yaml` mirrors that secret scan locally
-and adds hygiene hooks (trailing whitespace, EOF, merge-conflict markers, a 1 MB
-file-size ceiling); hook revisions are pinned deliberately rather than
-auto-updated.
+CI (`.github/workflows/ci.yml`) has four required jobs for every push to `main`
+and every PR into `main` or `telemetry/**`: the full Python 3.12 suite in two
+isolated randomized orders, a production-image Compose/readiness smoke, an
+offline fc_loop evaluation smoke, and supply-chain gates. The supply job scans
+for secrets with full Git history available, installs only SHA-256-locked
+dependencies, audits both product and gate-tool environments, and emits a
+CycloneDX SBOM. `.pre-commit-config.yaml` provides the staged-change gitleaks
+check plus local hygiene hooks (trailing whitespace, EOF, merge-conflict
+markers, a 1 MB file-size ceiling); revisions are pinned deliberately rather
+than auto-updated.
 
 Cross-module contracts are guarded by tests rather than by convention — for
 example, the evaluator's copy of the dimension vocabulary is allowed to exist but
@@ -989,6 +1000,7 @@ uk_rent_recommendation/
 ├── docs/                       see below
 ├── fine_tuning/                optional offline LoRA extraction pipeline (not used at runtime)
 ├── Dockerfile · docker-compose.yml · pyproject.toml
+├── constraints-production.txt · requirements-{bootstrap,production,ci,supply}.lock
 └── .env.example                root-level compose env template
 ```
 

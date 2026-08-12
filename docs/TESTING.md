@@ -15,18 +15,16 @@ external API during a normal run.
 
 ## Running the tests
 
-Use the `uk_rent` conda environment (it has the runtime deps: chromadb,
-sentence-transformers, faiss-cpu, langgraph, etc.):
+Create the same Python 3.12, hash-locked environment used by CI:
 
 ```bash
-conda run -n uk_rent python -m pytest -q
-```
-
-Or, from an activated env / editable install:
-
-```bash
-pip install -e ".[dev]"    # runtime deps + pytest, pytest-asyncio, import-linter
-python -m pytest -q
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-bootstrap.lock
+.venv/bin/python -m pip install --require-hashes -r requirements-production.lock
+.venv/bin/python -m pip install --require-hashes -r requirements-ci.lock
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e .
+.venv/bin/python -m pip check
+.venv/bin/python -m pytest -q
 ```
 
 Do **not** install the `[finetune]` extra (torch/torchvision/transformers/peft/
@@ -55,7 +53,10 @@ smoke-testing the live integrations.
 
 ## CI
 
-`.github/workflows/ci.yml` runs the full suite (both trees) on every push and
-pull request to `main`, on Python 3.11, with `PYTHONIOENCODING=utf-8`. The live
-gates stay unset, so CI touches no network. A second job runs `gitleaks` secret
-scanning against the working tree only (not full git history).
+`.github/workflows/ci.yml` has four required jobs on every push to `main` and
+pull request into `main` or `telemetry/**`: both test trees run twice on Python
+3.12 with isolated state and different random seeds; Compose builds and probes
+the hardened production image; the fc_loop evaluator runs an offline smoke; and
+the supply job runs the pinned secret/dependency/SBOM gates. Normal pytest and
+the evaluator smoke do not call live application providers. Image/dependency
+installation and the vulnerability gate do use their registries/databases.

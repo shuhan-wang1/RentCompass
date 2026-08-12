@@ -28,11 +28,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-production.txt
+            requirements-bootstrap.lock
+            requirements-production.lock
+            requirements-ci.lock
       - name: Install isolated test environment
         run: |
-          python -m pip install "pip==25.1.1"
-          python -m pip install -e ".[dev]" "pytest-randomly==3.16.0"
+          python -m pip install --require-hashes -r requirements-bootstrap.lock
+          python -m pip install --require-hashes -r requirements-production.lock
+          python -m pip install --require-hashes -r requirements-ci.lock
+          python -m pip install --no-deps --no-build-isolation -e .
+          python -m pip check
       - name: Run randomized isolated suite (seed 1009)
         env:
           CHECKPOINT_DB_PATH: ${{ runner.temp }}/tests/seed-1009/checkpoints.sqlite3
@@ -42,6 +50,7 @@ jobs:
           RUNTIME_CACHE_PATH: ${{ runner.temp }}/tests/seed-1009/runtime-cache.sqlite3
           SEARCH_LISTING_CACHE_PATH: ${{ runner.temp }}/tests/seed-1009/listing-cache.sqlite3
           SEARCH_CACHE_DB_PATH: ${{ runner.temp }}/tests/seed-1009/search-cache.sqlite3
+          AGENT_MEMORY_DB_PATH: ${{ runner.temp }}/tests/seed-1009/agent-memory
           ENABLE_CHECKPOINTER: "0"
           BACKGROUND_JOBS_ENABLED: "0"
           CANARY_LOG_PATH: "off"
@@ -57,6 +66,7 @@ jobs:
           RUNTIME_CACHE_PATH: ${{ runner.temp }}/tests/seed-2027/runtime-cache.sqlite3
           SEARCH_LISTING_CACHE_PATH: ${{ runner.temp }}/tests/seed-2027/listing-cache.sqlite3
           SEARCH_CACHE_DB_PATH: ${{ runner.temp }}/tests/seed-2027/search-cache.sqlite3
+          AGENT_MEMORY_DB_PATH: ${{ runner.temp }}/tests/seed-2027/agent-memory
           ENABLE_CHECKPOINTER: "0"
           BACKGROUND_JOBS_ENABLED: "0"
           CANARY_LOG_PATH: "off"
@@ -140,11 +150,19 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-production.txt
+            requirements-bootstrap.lock
+            requirements-production.lock
+            requirements-ci.lock
       - name: Install evaluation runtime
         run: |
-          python -m pip install "pip==25.1.1"
-          python -m pip install -e ".[dev]"
+          python -m pip install --require-hashes -r requirements-bootstrap.lock
+          python -m pip install --require-hashes -r requirements-production.lock
+          python -m pip install --require-hashes -r requirements-ci.lock
+          python -m pip install --no-deps --no-build-isolation -e .
+          python -m pip check
       - name: Validate benchmark corpus
         run: python -m evaluation.benchmark.validate
       - name: Run deterministic offline FC smoke
@@ -163,21 +181,39 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: pyproject.toml
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-production.txt
+            requirements-bootstrap.lock
+            requirements-production.lock
+            requirements-supply.lock
       - name: Secret scan
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install audited environment and pinned gate tooling
+      - name: Install audited production environment
         run: |
-          python -m pip install "pip==25.1.1"
-          python -m pip install -e .
-          python -m pip install "pip-audit==2.9.0" "cyclonedx-bom==7.1.0"
+          python -m pip install --require-hashes -r requirements-bootstrap.lock
+          python -m pip install --require-hashes -r requirements-production.lock
+          python -m pip install --no-deps --no-build-isolation .
+          python -m pip check
+      - name: Install isolated pinned gate tooling
+        run: |
+          python -m venv "${RUNNER_TEMP}/rentcompass-supply-tools"
+          "${RUNNER_TEMP}/rentcompass-supply-tools/bin/python" -m pip install \
+            --require-hashes -r requirements-supply.lock
+          "${RUNNER_TEMP}/rentcompass-supply-tools/bin/python" -m pip_audit \
+            --strict --progress-spinner=off --local \
+            --cache-dir "${RUNNER_TEMP}/rentcompass-supply-audit-cache"
       - name: Dependency vulnerability gate
-        run: pip-audit --strict --progress-spinner=off --skip-editable
+        run: |
+          python scripts/audit_installed_dependencies.py \
+            --audit-python "${RUNNER_TEMP}/rentcompass-supply-tools/bin/python"
       - name: Generate and validate SBOM
         run: |
-          cyclonedx-py environment --output-reproducible --output-format JSON --output-file sbom.json
+          "${RUNNER_TEMP}/rentcompass-supply-tools/bin/cyclonedx-py" environment \
+            "$(command -v python)" --pyproject pyproject.toml \
+            --output-reproducible --output-format JSON --output-file sbom.json
           python - <<'PY'
           import json
           data = json.load(open("sbom.json", encoding="utf-8"))

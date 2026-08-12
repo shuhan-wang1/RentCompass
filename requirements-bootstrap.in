@@ -1,0 +1,3 @@
+# Toolchain installed before the production hash lock.
+pip==26.2.1
+wheel==0.46.2

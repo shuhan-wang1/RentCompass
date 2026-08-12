@@ -155,6 +155,24 @@ def _check_conversation_db() -> dict[str, Any]:
         }
 
 
+def _check_agent_memory() -> dict[str, Any]:
+    """Durable long-term memory and any legacy-copy migration are required."""
+    try:
+        from rag.agent_memory import get_agent_memory
+
+        result = dict(get_agent_memory().health())
+        if result.get("status") != "ok":
+            raise RuntimeError("memory health probe did not return ok")
+        result["required"] = True
+        return result
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "required": True,
+            "detail": f"{type(exc).__name__}: {str(exc)[:120]}",
+        }
+
+
 def _check_background_jobs() -> dict[str, Any]:
     """Durable memory/summary outbox health; dead work degrades but does not drop chat."""
     mod = _legacy_module()
@@ -308,6 +326,7 @@ def _readiness(config: Config) -> tuple[dict[str, Any], int]:
     checks = {
         "release_metadata": _check_release_metadata(manifest),
         "conversation_db": _check_conversation_db(),
+        "agent_memory": _check_agent_memory(),
         "background_jobs": _check_background_jobs(),
         "canary_sink": _check_canary_sink(),
         "checkpoint_store": _check_checkpoint(config),

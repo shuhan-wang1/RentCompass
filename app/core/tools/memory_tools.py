@@ -15,7 +15,7 @@ def _mem():
 def recall_memory_impl(query: str, n: int = 6,
                        session_id: str = "default", user_id: str = None) -> dict:
     # NOTE: PLAIN SYNC on purpose. AgentMemory.retrieve performs SYNCHRONOUS blocking work
-    # (ChromaDB sqlite query + embedding). Registering it as sync means Tool.execute offloads
+    # (SQLite query + lexical scoring). Registering it as sync means Tool.execute offloads
     # it to an executor thread (tool_system.py :279-284), keeping the event loop responsive.
     # PRIVACY: no 'default' fallback — a missing user_id must return NOTHING, not
     # the shared bucket every id-less call site used to read (cross-user leak).
@@ -35,7 +35,7 @@ def recall_memory_impl(query: str, n: int = 6,
 def remember_impl(content: str, kind: str = "semantic",
                   session_id: str = "default", user_id: str = None) -> dict:
     # NOTE: PLAIN SYNC on purpose. AgentMemory.add performs SYNCHRONOUS blocking work
-    # (ChromaDB sqlite write + embedding). Registering it as sync means Tool.execute offloads
+    # (SQLite write). Registering it as sync means Tool.execute offloads
     # it to an executor thread (tool_system.py :279-284), keeping the event loop responsive.
     from rag.agent_memory import _valid_user_id
     if _valid_user_id(user_id) is None:

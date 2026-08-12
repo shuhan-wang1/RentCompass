@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools==84.0.0", "wheel==0.46.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -14,7 +14,7 @@ dependencies = [
   "python-dotenv",
   "requests",
   "waitress",
-  "chromadb", "sentence-transformers", "faiss-cpu", "geopy", "folium", "ddgs",
+  "sentence-transformers", "faiss-cpu", "geopy", "folium", "ddgs",
   "langgraph>=1.2,<2", "langgraph-checkpoint-sqlite", "langchain", "langchain-core", "langchain-ollama",
   # mcp 2.0.0 (2026-07-28) drops the low-level Server decorator API that
   # app/mcp_server.py is built on: `@server.list_tools()` raises AttributeError
@@ -26,7 +26,7 @@ dependencies = [
 
 [project.optional-dependencies]
 finetune = ["torch", "torchvision", "torchaudio", "transformers", "peft", "accelerate"]
-dev = ["pytest", "pytest-asyncio", "import-linter"]
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "import-linter==2.13"]
 
 [project.scripts]
 uk-rent-web = "uk_rent_agent.web.__main__:main"

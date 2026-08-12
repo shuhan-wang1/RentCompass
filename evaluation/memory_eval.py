@@ -2,7 +2,7 @@
 
     python -m evaluation.memory_eval [--out evaluation/results] [--timestamp TS]
 
-Evaluates the agent's ChromaDB-backed long-term memory (``app/rag/agent_memory.py``)
+Evaluates the agent's SQLite-backed long-term memory (``app/rag/agent_memory.py``)
 deterministically wherever possible:
 
 * preference extraction precision      * user A/B isolation
@@ -14,12 +14,10 @@ Reports (all with denominators):
     memory_write_success_rate, memory_retrieval_accuracy, user_isolation_pass_rate,
     forget_request_pass_rate, restart_recovery_pass_rate.
 
-BLOCKER: the store requires ``chromadb``. ``app/rag/agent_memory.py`` imports it at
-module load, so when chromadb is absent EVERY store-dependent check is blocked. This
-script DETECTS that at startup and writes ``results/memory_eval.json`` with status
-``blocked: chromadb not installed`` (never a fabricated number). Install chromadb (or
-run in the app venv) to fill the numbers in. The deterministic isolation/forget/restart
-logic is additionally covered by ``tests/test_agent_memory_isolation.py``.
+The store uses Python's standard-library SQLite runtime. If the application memory
+module cannot be imported, every store-dependent check is reported as blocked rather
+than receiving a fabricated score. The deterministic isolation/forget/restart logic is
+additionally covered by ``tests/test_agent_memory_isolation.py``.
 
 Model calls (importance rating / fact extraction / consolidation / reflection) go
 through ``call_ollama``; this eval stubs it so NOTHING is billed.
@@ -50,9 +48,11 @@ def _commit_identity() -> Dict[str, Any]:
     return resolve_commit_identity(repo_root=REPO_ROOT)
 
 
-def _chromadb_available() -> bool:
+def _memory_backend_available() -> bool:
     try:
-        import chromadb  # noqa: F401
+        import sqlite3  # noqa: F401
+        _pin_app_path()
+        from rag.sqlite_memory_store import SQLiteMemoryCollection  # noqa: F401
         return True
     except Exception:
         return False
@@ -80,7 +80,7 @@ def _ratio(num: int, den: int) -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# The deterministic checks (only run when chromadb is importable)
+# The deterministic checks (only run when the SQLite backend is importable)
 # --------------------------------------------------------------------------- #
 def _run_checks(out_note: list) -> dict:
     import importlib
@@ -253,9 +253,9 @@ def _blocked_result(reason: str) -> dict:
         "status": f"blocked: {reason}",
         "checks": {c: dict(blocked) for c in _BLOCKED_CHECKS},
         "rates": {r: dict(blocked) for r in _BLOCKED_RATES},
-        "note": ("app/rag/agent_memory.py imports chromadb at module load, so every "
-                 "store-dependent check is blocked. Install chromadb (or run in the app "
-                 "venv), then re-run `python -m evaluation.memory_eval`. The deterministic "
+        "note": ("The application memory backend could not be imported, so every "
+                 "store-dependent check is blocked. Run in the application environment "
+                 "and re-run `python -m evaluation.memory_eval`. The deterministic "
                  "isolation/forget/restart/idempotency contracts are additionally covered "
                  "by tests/test_agent_memory_isolation.py (run: pytest -q "
                  "tests/test_agent_memory_isolation.py in the app venv)."),
@@ -271,8 +271,8 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     ts = args.timestamp or time.strftime("%Y-%m-%dT%H:%M:%S")
 
-    if not _chromadb_available():
-        result = _blocked_result("chromadb not installed")
+    if not _memory_backend_available():
+        result = _blocked_result("SQLite memory backend unavailable")
     else:
         notes: list = []
         try:
@@ -282,7 +282,10 @@ def main(argv=None) -> int:
 
     result.update({
         "framework": "memory_eval",
-        "chromadb_available": _chromadb_available(),
+        "memory_backend": {
+            "name": "sqlite",
+            "available": _memory_backend_available(),
+        },
         # COMMIT BINDING + PROVENANCE: git_commit, git_dirty, git_commit_source,
         # git_dirty_source, commit_trust, identity_warnings, self_identifying.
         **_commit_identity(),

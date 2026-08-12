@@ -9,9 +9,10 @@ long-term memory — with a hard cost cap and honest denominators everywhere.
 > given run (e.g. the optional LLM judge was not enabled, or SearXNG was unreachable),
 > the report says so with the reason — **never a fabricated or estimated value.**
 >
-> The live suite HAS been run in the `uk_rent` conda env (valid DeepSeek key, chromadb
-> present). The current `results/REPORT.md` + `results/CV_METRICS.md` are driven purely
-> from the real files listed below.
+> The archived live suite was run in the historical `uk_rent` conda env (valid
+> DeepSeek key and the then-current Chroma backend). That describes those frozen
+> result files only, not the current production runtime. `results/REPORT.md` and
+> `results/CV_METRICS.md` are driven purely from the real files listed below.
 
 ---
 
@@ -45,7 +46,7 @@ evaluation/
 │   ├── injectors.py          fault injectors + ScenarioResult
 │   ├── scenarios.py          the 15 scenarios
 │   └── run.py                entry point
-├── memory_eval.py            Phase-7 long-term-memory eval (needs chromadb)
+├── memory_eval.py            Phase-7 long-term-memory eval (stdlib SQLite)
 ├── report.py                 REPORT.md + CV_METRICS.md generator
 └── results/                  all outputs land here
 ```
@@ -61,7 +62,7 @@ All commands are **offline/unbilled by default**. Run from the repo root.
 | `python -m evaluation.run_benchmark --smoke --offline` | 10 smoke cases, mechanics-only | `results/<out>/summary.json`, `per_case.csv`, `tool_metrics.csv`, `model_usage.csv`, `raw_runs.jsonl` |
 | `python -m evaluation.run_ablation --study both --offline --smoke` | Model + retrieval A/B | `results/ablation_model.{json,csv}`, `results/ablation_retrieval.{json,csv}` |
 | `python -m evaluation.fault_injection.run` | 15 fault scenarios (GENUINE) | `results/fault_injection.csv`, `results/fault_summary.json` |
-| `python -m evaluation.memory_eval` | Memory eval (needs chromadb) | `results/memory_eval.json` |
+| `python -m evaluation.memory_eval` | Memory eval (stdlib SQLite) | `results/memory_eval.json` |
 | `python -m evaluation.report --results evaluation/results --out evaluation/results` | Aggregate everything | `results/REPORT.md`, `results/CV_METRICS.md` |
 
 Common flags (benchmark + ablation): `--smoke`, `--limit N`, `--category A_retrieval`,
@@ -153,9 +154,9 @@ always $0, so the cap never triggers offline.
 
 ---
 
-## Environment (what actually ran)
+## Archived evidence environment (what that historical run actually used)
 
-Everything below was produced in the **`uk_rent` conda env** (Python 3.10, chromadb
+Everything below was produced in the historical **`uk_rent` conda env** (Python 3.10, chromadb
 1.1.0, openai 2.41.0, langgraph 1.2.4). Run Python via
 `conda run --no-capture-output -n uk_rent`, and export
 `PYTHONIOENCODING=utf-8 PYTHONUTF8=1` first (the default Windows console is gbk and
@@ -224,7 +225,7 @@ $CR -m evaluation.run_ablation --study retrieval --live --limit 16 --repeat 3 \
 #    -> results/fault_summary.json + fault_injection.csv
 $CR -m evaluation.fault_injection.run --out evaluation/results
 
-# 5. Memory eval — needs chromadb (present in uk_rent)  -> results/memory_eval.json
+# 5. Memory eval — current standard-library SQLite backend -> results/memory_eval.json
 $CR -m evaluation.memory_eval --out evaluation/results
 
 # 6. Regenerate REPORT.md + CV_METRICS.md purely from the files above

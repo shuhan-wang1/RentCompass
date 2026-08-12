@@ -8,6 +8,53 @@ that spans all branches.** Last updated 2026-08-12.
 > This block is the operational source of truth for release decisions. The older “Right now”
 > material below is retained as historical evidence and must not be used to identify the
 > current mainline, candidate, CI result, or deploy status.
+> ### Immediate production incident update — 2026-08-12 11:49 BST
+>
+> * The second release attempt **did recreate the public fc container** before
+>   verification failed. Read-only public probes show `X-Agent-Arch: fc_loop`,
+>   `X-Agent-Version: 138606d159f5ad2dc125f8a6b593a6b31dcf4108`, image digest
+>   `sha256:84f84edb97bb32538ce641b2e1ddc8c7b9656e0b83f3cb15e089ec76c6f4292f`,
+>   `/health` 200 and `/ready` 503. The process is live and currently receives
+>   public requests; do not repeat the older claim below that `0952c56` still
+>   serves traffic. The operator output reports the external deploy pin advanced
+>   to `138606d`; root `.env` names the same candidate.
+> * The only required readiness failure is `release_metadata`. The deployment
+>   script generated `PROMPT_VERSION=2.1.0@138606d`, while both registered
+>   runtime PromptSpecs correctly report semantic version `2.1.0`; readiness
+>   compared those unlike identifiers byte-for-byte. Conversation SQLite,
+>   AgentMemory (1096/1096 legacy rows), checkpoint storage, LLM configuration,
+>   SearXNG and the canary sink all pass. RAG is independently degraded because
+>   the startup corpus is empty, but is explicitly non-blocking.
+> * The repair in the commit containing this subsection keeps
+>   `PROMPT_VERSION=2.1.0`; full source identity remains in `APP_SOURCE_SHA`, and
+>   exact prompt identity remains in `PROMPT_SCHEMA_SHA` plus the bilingual
+>   runtime hashes. The deployment harness now uses a real PromptSpec fixture so
+>   it cannot silently restore the source-qualified value. Focused evidence:
+>   update **83/83**, release **50/50**, readiness **7/7**.
+>   Full isolated Python 3.12 seed-1009 evidence: **3668 passed, 3 skipped,
+>   0 failed**.
+>   A non-public, non-root/read-only copy of the **exact failed image**
+>   `uk-rent-agent:canary-fc-loop-138606d`, using isolated temporary databases
+>   and semantic `PROMPT_VERSION=2.1.0`, then returned `/ready` HTTP 200 with
+>   `release_metadata=ok`, every required check `ok`, and `failed=[]`.
+>
+> * This incident also proved that the old drain policy was unsafe:
+>   `--drain` silently fell back to replacing the public container when the
+>   standby was unhealthy, and the release error recommended a bare in-place
+>   retry. The repaired `update.sh` drains by default, aborts before any public
+>   mutation when the standby is unavailable, and requires the conspicuous
+>   `--allow-in-place` override for that risk. `release.sh` now defaults to
+>   `--both --drain`, so it refreshes/verifies legacy first, drains to it, then
+>   replaces fc and switches back only after `/ready` and identity pass.
+> * **Current recovery gate:** do not hand-edit `.env` and do not run update from
+>   this dirty repair checkout. Commit/push the repair, require all four CI jobs
+>   green on that exact `origin/main` SHA, then run
+>   `bash deploy/release.sh --yes`. The pre-run backup from this attempt is
+>   `/home/shuhan/.rentcompass-env-backups/root-env.20260812T103532Z.3403517.bak`.
+> * The older bullets below beginning “Production data plane has not changed”
+>   describe the first, pre-container-recreation failure and are retained only
+>   as incident history. They are superseded by this immediate update for all
+>   current production and recovery decisions.
 >
 > * Canonical release track: **`origin/main`**. The pre-remediation base was
 >   **`93953c847155afc02d285df18390edb4e06212fc`**. The first remediation candidate

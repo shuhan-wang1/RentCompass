@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Redeploy the LIVE pool after a code change. NO sudo needed (except --drain).
+# Redeploy the LIVE pool after a code change. Public-pool deploys drain by
+# default and therefore need sudo for the nginx switch.
 #
 #   cd /home/shuhan/uk_rent_recommendation
 #   git fetch && git checkout <the pinned sha>   # pull new code FIRST
-#   bash deploy/update.sh                        # updates whatever the public site serves
+#   bash deploy/update.sh --both                 # refreshes both pools with safe drain
 #
 # nginx / TLS / Xray / searxng / valkey are untouched. User accounts, chat
 # history, .env and chroma indexes persist (they are bind-mounted from the host).
@@ -45,10 +46,11 @@
 #   --pool auto|fc|legacy   which pool to deploy (default: auto = the live one)
 #   --both                  deploy BOTH pools to the pin (keeps the rollback
 #                           target from drifting; recommended after a real fix)
-#   --drain                 avoid the boot-window 502: move the public upstream
-#                           to the standby pool, redeploy, move it back.
-#                           REQUIRES sudo (nginx -t / reload) and a healthy
-#                           standby. Off by default — see the note where it runs.
+#   --drain                 move the public upstream to the healthy standby,
+#                           redeploy, then move it back (the safe default).
+#   --allow-in-place        explicitly accept a public 502 boot window and the
+#                           risk that failed readiness leaves the candidate on
+#                           the public port. Never implied by failed drain.
 #   --rebuild-image         rebuild the fc image even if its tag already exists
 #   --force                 redeploy even when the pool already serves the pin
 #   --status                print pin + both pools' identity, change nothing
@@ -81,12 +83,14 @@ say()  { printf '==> %s\n' "$*"; }
 warn() { printf '\033[33m!!  %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[31m!!  %s\033[0m\n' "$*" >&2; exit 1; }
 
-POOL="auto"; BOTH=0; DRAIN=0; REBUILD_IMAGE=0; FORCE=0; STATUS_ONLY=0
+POOL="auto"; BOTH=0; DRAIN=1; ALLOW_IN_PLACE=0
+REBUILD_IMAGE=0; FORCE=0; STATUS_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --pool)           POOL="${2:-}"; shift 2 ;;
     --both)           BOTH=1; shift ;;
-    --drain)          DRAIN=1; shift ;;
+    --drain)          DRAIN=1; ALLOW_IN_PLACE=0; shift ;;
+    --allow-in-place) DRAIN=0; ALLOW_IN_PLACE=1; shift ;;
     --rebuild-image)  REBUILD_IMAGE=1; shift ;;
     --force)          FORCE=1; shift ;;
     --status)         STATUS_ONLY=1; shift ;;
@@ -287,7 +291,13 @@ PROMPT_SCHEMA_SHA_VALUE="$(printf '%s' "$_prompt_tree" | sha256sum | awk '{print
 _prompt_source="$($GIT_CMD show "$PIN_FULL:app/core/loop_prompts.py" 2>/dev/null || true)"
 _declared_prompt_version="$(sed -n 's/^FC_LOOP_SYSTEM_PROMPT_VERSION = "\([^"]*\)"/\1/p' \
   <<<"$_prompt_source" | head -1)"
-PROMPT_VERSION_VALUE="${_declared_prompt_version:-bundle-v1}@$PIN_SHORT"
+# PROMPT_VERSION is the semantic PromptSpec contract version and is compared
+# byte-for-byte with the runtime PromptSpec by /ready. Do not append the git
+# revision here: APP_SOURCE_SHA already carries the full release commit, while
+# PROMPT_SCHEMA_SHA and the runtime per-language hashes identify the exact
+# prompt bytes. Mixing the commit into this field makes every correctly built
+# production image fail readiness (for example, 2.1.0@138606d != 2.1.0).
+PROMPT_VERSION_VALUE="${_declared_prompt_version:-bundle-v1}"
 
 image_digest() {
   local image="$1" inspected digest
@@ -307,7 +317,10 @@ image_digest() {
 # Resolve the deploy target
 # ---------------------------------------------------------------------------
 if [ "$BOTH" -eq 1 ]; then
-  TARGETS=(legacy fc)
+  [ -n "$LIVE_POOL" ] || die "cannot read the public upstream from '$CONF' (port='${LIVE_PORT:-}'); refusing to guess the safe two-pool order"
+  standby="$(other_pool "$LIVE_POOL")"
+  TARGETS=("$standby" "$LIVE_POOL")
+  say "Two-pool order: refresh standby '$standby', then drain and refresh public '$LIVE_POOL'"
 elif [ "$POOL" != "auto" ]; then
   TARGETS=("$POOL")
 else
@@ -438,12 +451,10 @@ for target in "${TARGETS[@]}"; do
     fi
   fi
 
-  # Recreating a container takes it down for its whole boot window. When that
-  # container IS the public upstream, that window is a public 502. --drain moves
-  # the upstream to the standby pool first. It is OPT-IN and not the default,
-  # because the standby runs the OTHER architecture and may sit on an older
-  # commit: draining trades ~40s of downtime for ~40s of different answers, and
-  # which of those is worse is an operator's call, not a script's.
+  # Recreating the public container takes it down for its whole boot window and
+  # can leave a live-but-not-ready candidate behind. Drain is therefore the
+  # fail-closed default. A requested drain that cannot use the standby NEVER
+  # degrades into an in-place production mutation.
   drained_from=""
   if [ "$DRAIN" -eq 1 ] && [ "$target" = "$LIVE_POOL" ]; then
     standby="$(other_pool "$target")"
@@ -454,11 +465,12 @@ for target in "${TARGETS[@]}"; do
         || die "could not drain to '$standby' — nothing was redeployed"
       drained_from="$target"
     else
-      warn "--drain requested but the '$standby' pool is not healthy; redeploying in place."
-      warn "The public site will 502 for the boot window (~30-40s)."
+      die "cannot drain public '$target': standby '$standby' is not ready; no public container was redeployed. Refresh it first with: bash deploy/update.sh --pool $standby"
     fi
+  elif [ "$target" = "$LIVE_POOL" ] && [ "$ALLOW_IN_PLACE" -eq 1 ]; then
+    warn "EXPLICIT --allow-in-place: '$target' is PUBLIC and will 502 during boot; failed readiness may leave the candidate serving traffic."
   elif [ "$target" = "$LIVE_POOL" ]; then
-    warn "'$target' is the PUBLIC pool: it will 502 for its boot window (~30-40s). Use --drain to avoid this."
+    die "refusing an in-place public deploy without drain; use --drain or explicitly accept the risk with --allow-in-place"
   fi
 
   deploy_pool "$target"

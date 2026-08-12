@@ -104,6 +104,21 @@ def test_ready_fails_closed_when_declared_prompt_version_differs_from_runtime(mo
     assert "prompt.runtime_specs.zh.prompt_version" in problems
 
 
+def test_release_prompt_version_is_semantic_not_a_source_qualified_identifier(
+    monkeypatch, tmp_path
+):
+    """APP_SOURCE_SHA owns revision identity; PROMPT_VERSION must match PromptSpec."""
+    _install_runtime(monkeypatch, tmp_path)
+    monkeypatch.setenv("PROMPT_VERSION", "2.1.0@" + "a" * 7)
+
+    body, code = asgi._readiness(_config(tmp_path))
+
+    assert code == 503
+    problems = body["checks"]["release_metadata"]["missing_or_invalid"]
+    assert "prompt.runtime_specs.en.prompt_version" in problems
+    assert "prompt.runtime_specs.zh.prompt_version" in problems
+
+
 def test_dead_durable_background_jobs_are_visible_degradation(monkeypatch, tmp_path):
     _install_runtime(monkeypatch, tmp_path, dead=2)
 

@@ -29,10 +29,11 @@ lacks()  { if grep -qF -- "$2" <<<"$1"; then printf '\033[31mFAIL\033[0m %s\n   
 SANDBOX=""
 setup() {                      # setup <upstream_port> <legacy_sha> <fc_sha>
   SANDBOX="$(mktemp -d)"
-  local repo="$SANDBOX/repo"; mkdir -p "$repo/deploy" "$repo/searxng" "$SANDBOX/bin"
+  local repo="$SANDBOX/repo"; mkdir -p "$repo/deploy" "$repo/searxng" "$repo/app/core" "$SANDBOX/bin"
   cp "$ROOT/deploy/update.sh" "$repo/deploy/update.sh"
   cp "$ROOT/deploy/searxng-settings.yml.example" "$repo/deploy/" 2>/dev/null || true
   : > "$repo/searxng/settings.yml"
+  printf 'FC_LOOP_SYSTEM_PROMPT_VERSION = "2.1.0"\n' > "$repo/app/core/loop_prompts.py"
   printf 'SEARXNG_SECRET="keep-me"\nFC_CANARY_IMAGE=uk-rent-agent:canary-fc-loop-old\nFC_CANARY_SHA=%s\n' \
     "0000000000000000000000000000000000000000" > "$repo/.env"
 
@@ -136,6 +137,8 @@ check   "exit 0"                                   0 "$RC"
 contains "$OUT"       "deploying the 'fc' pool"      "auto resolves to fc when the upstream is :5002"
 contains "$CALLS_TXT" "compose --profile canary up -d app-fc" "it brings up app-fc"
 lacks    "$CALLS_TXT" "up -d --build app"           "it does NOT rebuild legacy — the rollback escape hatch is left alone"
+contains "$CALLS_TXT" "switch --to legacy"          "a public deploy drains by default"
+contains "$CALLS_TXT" "switch --to fc"              "the default drain returns traffic after verification"
 teardown
 
 setup 5001 old-legacy-sha old-fc-sha
@@ -163,6 +166,8 @@ setup 5002 old-legacy-sha old-fc-sha
 run_update
 contains "$(cat "$REPO/.env")" "FC_CANARY_SHA=$PIN"           "FC_CANARY_SHA is rewritten to the pin"
 contains "$(cat "$REPO/.env")" "FC_IMAGE_DIGEST=sha256:"       "FC_IMAGE_DIGEST is non-empty before compose"
+contains "$(cat "$REPO/.env")" "PROMPT_VERSION=2.1.0"           "PROMPT_VERSION is the runtime PromptSpec version"
+lacks    "$(cat "$REPO/.env")" "PROMPT_VERSION=2.1.0@"          "the source revision is not mixed into PROMPT_VERSION"
 contains "$(cat "$REPO/.env")" "SEARXNG_SECRET=\"keep-me\""   "SEARXNG_SECRET survives untouched"
 BACKUP_FILE="$(find "$SANDBOX/env-backups" -type f -name 'root-env.*.bak' -print -quit)"
 check   "an out-of-tree pre-run backup exists" "present" "$([ -f "$BACKUP_FILE" ] && echo present || echo absent)"
@@ -325,9 +330,18 @@ teardown
 setup 5002 old-legacy-sha old-fc-sha
 LEGACY_SHA=DOWN                                     # standby unhealthy
 run_update --drain; CALLS_TXT="$(cat "$CALLS")"
-contains "$OUT"       "not healthy"                "an unhealthy standby is reported"
+contains "$OUT"       "not ready"                  "an unhealthy standby is reported"
 lacks    "$CALLS_TXT" "switch"                     "and traffic is NOT moved onto it"
-contains "$CALLS_TXT" "app-fc"                     "the redeploy still happens, in place"
+lacks    "$CALLS_TXT" "app-fc"                     "failed drain never mutates the public container"
+contains "$OUT"       "no public container was redeployed" "the fail-closed outcome is explicit"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+LEGACY_SHA=DOWN
+run_update --allow-in-place; CALLS_TXT="$(cat "$CALLS")"
+check    "explicit in-place override exits 0"       0 "$RC"
+contains "$OUT"       "EXPLICIT --allow-in-place"  "the unsafe override is unmistakable"
+contains "$CALLS_TXT" "app-fc"                     "only the explicit override mutates the public pool"
 teardown
 echo
 
@@ -343,7 +357,17 @@ run_update --both; CALLS_TXT="$(cat "$CALLS")"
 contains "$CALLS_TXT" "docker build"                "--both builds legacy"
 contains "$CALLS_TXT" "compose up -d app"            "--both deploys legacy"
 contains "$CALLS_TXT" "app-fc"                     "--both deploys fc"
+DEPLOY_ORDER="$(awk '/^compose / { if ($0 ~ /app-fc/) print "fc"; else if ($0 ~ /up -d app$/) print "legacy" }' "$CALLS" | paste -sd- -)"
+check   "when fc is public, --both deploys standby first" "legacy-fc" "$DEPLOY_ORDER"
 lacks    "$OUT"       "It is your rollback target" "and then has no drift to warn about"
+teardown
+
+setup 5001 old-legacy-sha old-fc-sha
+run_update --both; CALLS_TXT="$(cat "$CALLS")"
+DEPLOY_ORDER="$(awk '/^compose / { if ($0 ~ /app-fc/) print "fc"; else if ($0 ~ /up -d app$/) print "legacy" }' "$CALLS" | paste -sd- -)"
+check   "when legacy is public, --both deploys standby first" "fc-legacy" "$DEPLOY_ORDER"
+contains "$CALLS_TXT" "switch --to fc"              "legacy-public release drains to refreshed fc"
+contains "$CALLS_TXT" "switch --to legacy"          "and returns only after legacy verifies"
 teardown
 echo
 

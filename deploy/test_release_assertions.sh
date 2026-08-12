@@ -100,6 +100,7 @@ check    "exit 0"                          0 "$RC"
 check    "HEAD moved to the mainline tip"  "$NEW_SHA" "$(head_now)"
 check    "pin advanced to the same commit" "$NEW_SHA" "$(pin_now)"
 contains "$CALLS_TXT" "update"              "update.sh was invoked"
+contains "$CALLS_TXT" "update --both --drain" "a release refreshes both pools with safe drain by default"
 contains "$OUT"       "required CI checks"  "the CI verdict is reported"
 teardown
 echo
@@ -185,6 +186,8 @@ FAKE_UPDATE_RC=1 run_release --yes
 check    "the failure propagates"          1 "$RC"
 check    "the pin DID move (the gate needs it before update.sh runs)" "$NEW_SHA" "$(pin_now)"
 contains "$OUT" "DEPLOY FAILED after the pin was advanced" "the divergence is stated, not left silent"
+contains "$OUT" "may be running that commit without passing /ready" "the process/readiness uncertainty is stated accurately"
+contains "$OUT" "update.sh --both --drain" "recovery never recommends an unsafe in-place redeploy"
 contains "$OUT" "$OLD_SHA"                 "and the previous pin is quoted for the restore"
 teardown
 echo
@@ -210,6 +213,11 @@ teardown
 setup green
 run_release --yes -- --both --drain; CALLS_TXT="$(cat "$CALLS")"
 contains "$CALLS_TXT" "update --both --drain" "everything after -- reaches update.sh"
+teardown
+
+setup green
+run_release --yes -- --pool legacy; CALLS_TXT="$(cat "$CALLS")"
+contains "$CALLS_TXT" "update --pool legacy" "explicit update arguments override the safe release defaults"
 teardown
 echo
 

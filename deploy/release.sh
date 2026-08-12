@@ -32,8 +32,9 @@
 #   2. every declared required check must exist, be completed and be successful;
 #   3. the entire working tree (including untracked build-context files) is clean;
 #   4. you are shown old-pin -> new-pin and must confirm (unless --yes);
-#   5. only then is the pin advanced, and update.sh does the rest — including
-#      refusing to report success unless the pool answers with that exact sha.
+#   5. only then is the pin advanced, and update.sh rebuilds both pools with a
+#      safe drain before refusing to report success unless they answer with that
+#      exact sha.
 #
 # If the deploy fails after the pin moved, the script tells you the pin is ahead
 # of what is running and prints the one command that puts it back.
@@ -47,8 +48,8 @@
 #   --no-fetch           use the refs already on disk
 #   --allow-failing-ci   release even though the target's CI checks FAILED
 #   --dry-run            do everything except re-pin and deploy; print the plan
-#   --                   everything after this is passed through to update.sh
-#                        (e.g. `bash deploy/release.sh -- --both --drain`)
+#   --                   override the default --both --drain arguments passed
+#                        to update.sh
 #
 # Every external command is injectable so this can be rehearsed with no docker,
 # no root and no network (see deploy/test_release_assertions.sh).
@@ -87,6 +88,13 @@ while [ $# -gt 0 ]; do
     *)                  die "unknown argument: $1  (try --help; use -- to pass options to update.sh)" ;;
   esac
 done
+
+# A release is safe and rollback-complete by default: refresh the non-public
+# pool first, drain onto it, then replace and restore the public pool. Callers
+# can still pass an explicit update policy after --.
+if [ "${#PASSTHROUGH[@]}" -eq 0 ]; then
+  PASSTHROUGH=(--both --drain)
+fi
 
 if [ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" != "1" ]; then
   DEPLOY_LOCK_FILE="${RENTCOMPASS_DEPLOY_LOCK_FILE:-}"
@@ -260,12 +268,15 @@ rc=0
 $UPDATE_CMD ${PASSTHROUGH[@]+"${PASSTHROUGH[@]}"} || rc=$?
 [ "$rc" -eq 0 ] && exit 0
 
-# The pin now names a commit that is NOT running. Leaving that silent would make
-# the next --status read "in sync" while production is on something else.
+# A failed readiness gate does not prove whether the process started: the
+# candidate can be live on its port while /ready rejects its dependencies or
+# release metadata. State that uncertainty instead of telling the operator the
+# commit is definitely not running.
 echo
 warn "DEPLOY FAILED after the pin was advanced to $TARGET_SHORT."
-warn "The pin now names a commit that is NOT running. Either fix and re-run:"
-warn "    bash deploy/update.sh"
+warn "One or more pools may be running that commit without passing /ready."
+warn "Inspect both pools, then after fixing the cause re-run safely:"
+warn "    bash deploy/update.sh --both --drain"
 if [ -n "$OLD_PIN" ] && [ "$OLD_PIN" != "$TARGET" ]; then
   warn "  ...or put the pin back where it was:"
   warn "    sudo sed -i 's/^DEPLOY_PINNED_SHA=.*/DEPLOY_PINNED_SHA=$OLD_PIN/' $PIN_ENV_FILE"

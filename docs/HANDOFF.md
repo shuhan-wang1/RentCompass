@@ -33,6 +33,8 @@ that spans all branches.** Last updated 2026-08-12.
 >   any metadata write, atomically renames each `.env` replacement, and builds legacy before
 >   writing its metadata too. Incident regressions prove repository-digest acceptance,
 >   non-empty Compose inputs, and byte-identical `.env` on invalid digest.
+>   Because Compose interpolates inactive profiles too, the legacy rollback invocation now
+>   supplies parser-only fc placeholders and is tested with a missing canary digest.
 >   The incident-created plaintext backup is preserved outside the repository at
 >   `/home/shuhan/.rentcompass-env-backups/root-env.pre-ac227b9-failed-20260812.bak` (0600).
 > * The pre-remediation remote-main run,
@@ -51,7 +53,7 @@ that spans all branches.** Last updated 2026-08-12.
 >   `chroma.sqlite3` must remain present until both Chroma-free pools serve the same release.
 > * Local validation on the final hash-locked production image passed both randomized Python
 >   3.12 orders: **3658 passed, 12 skipped, 0 failed** for seed 1009 and again for seed 2027.
->   Release/update/switch rehearsals passed **46/46**, **70/70**, and **27/27**. The isolated
+>   Release/update/switch rehearsals passed **46/46**, **71/71**, and **27/27**. The isolated
 >   non-root/read-only fc_loop runtime returned `/live` and `/ready`; required release,
 >   conversation, AgentMemory, and LLM-configuration checks were `ok`. The production and
 >   pinned gate-tool audits found **0 known vulnerabilities**, `pip check` passed, and the

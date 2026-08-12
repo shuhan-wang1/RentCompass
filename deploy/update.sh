@@ -407,7 +407,13 @@ deploy_legacy() {
   set_env_var LEGACY_IMAGE_DIGEST "$digest"
   say "Pinned LEGACY_APP_SHA=$PIN_SHORT in $ENV_FILE"
   say "Recreating the legacy pool (:${PORT[legacy]}) with its inspected image digest..."
-  $COMPOSE_CMD up -d app || die "compose failed to bring up app"
+  # Compose interpolates every profile before selecting service app. Supply
+  # parser-only fc values in the process environment so a missing/partial
+  # canary pin can never disable the legacy rollback path; app-fc is not started.
+  FC_CANARY_IMAGE="${FC_CANARY_IMAGE:-uk-rent-agent:inactive-fc-profile}" \
+  FC_CANARY_SHA="${FC_CANARY_SHA:-$PIN_FULL}" \
+  FC_IMAGE_DIGEST="${FC_IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}" \
+    $COMPOSE_CMD up -d app || die "compose failed to bring up app"
   verify_pool legacy "$PIN_FULL"
 }
 

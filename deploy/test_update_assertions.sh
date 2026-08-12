@@ -68,14 +68,15 @@ EOF
   cat > "$SANDBOX/bin/fakecompose" <<'EOF'
 #!/usr/bin/env bash
 echo "compose $*" >> "$CALLS"
-if [[ " $* " == *" app-fc "* ]]; then
-  for key in FC_CANARY_IMAGE FC_CANARY_SHA FC_IMAGE_DIGEST PROMPT_VERSION PROMPT_SCHEMA_SHA RELEASE_METADATA_REQUIRED; do
-    grep -Eq "^${key}=.+$" "$UPDATE_ENV_FILE" || {
-      echo "missing required app-fc env: $key" >&2
-      exit 86
-    }
-  done
-fi
+for key in FC_CANARY_IMAGE FC_CANARY_SHA FC_IMAGE_DIGEST PROMPT_VERSION PROMPT_SCHEMA_SHA RELEASE_METADATA_REQUIRED; do
+  if [ -n "${!key:-}" ]; then
+    continue
+  fi
+  grep -Eq "^${key}=.+$" "$UPDATE_ENV_FILE" || {
+    echo "compose interpolation is missing required env: $key" >&2
+    exit 86
+  }
+done
 exit "${FAKE_COMPOSE_RC:-0}"
 EOF
   # Answers /health per port. The sha a pool reports flips to the pin once its
@@ -192,6 +193,7 @@ teardown
 echo "--- 3b. a legacy deploy teaches the escape hatch to name its commit ---"
 setup 5001 old-legacy-sha old-fc-sha
 run_update
+check   "legacy deploy survives missing inactive-fc digest" 0 "$RC"
 contains "$(cat "$REPO/.env")" "LEGACY_APP_SHA=$PIN"          "LEGACY_APP_SHA is set (kills --allow-unidentified-target on rollback)"
 teardown
 echo

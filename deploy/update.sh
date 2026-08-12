@@ -66,6 +66,7 @@ GIT_CMD="${UPDATE_GIT_CMD:-git}"
 CURL_CMD="${UPDATE_CURL_CMD:-curl}"
 SWITCH_CMD="${UPDATE_SWITCH_CMD:-bash deploy/switch_pool.sh}"
 ENV_FILE="${UPDATE_ENV_FILE:-$REPO_DIR/.env}"
+ENV_BACKUP_DIR="${UPDATE_ENV_BACKUP_DIR:-$(dirname "$REPO_DIR")/.rentcompass-env-backups}"
 CONF="${UPDATE_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
 HEALTH_FMT="${UPDATE_HEALTH_FMT:-http://127.0.0.1:%s/ready}"
 HEALTH_RETRIES="${UPDATE_HEALTH_RETRIES:-30}"
@@ -143,25 +144,31 @@ verify_pool() {
 # ---------------------------------------------------------------------------
 # Root .env pin rewriting (idempotent; keeps every other line byte-identical)
 # ---------------------------------------------------------------------------
-# One backup per RUN, taken before the first write — a per-write backup would
-# overwrite the pre-run state with a half-rewritten file on the second call.
-# `.env*` is gitignored (and tests/test_env_files_cannot_be_committed.py keeps it
-# that way), so the copy cannot leak SEARXNG_SECRET into a commit.
+# One backup per RUN, taken before the first write. It lives outside the repo in
+# a 0700 directory and is itself 0600: gitignore is not a secret-storage boundary.
+# A per-write backup would overwrite the pre-run state with a half-rewritten file.
 _ENV_BACKED_UP=0
 set_env_var() {
-  local key="$1" value="$2" tmp
+  local key="$1" value="$2" tmp backup_file
   [ -f "$ENV_FILE" ] || die "root env file '$ENV_FILE' is missing — compose needs it"
   if [ "$_ENV_BACKED_UP" -eq 0 ]; then
-    cp "$ENV_FILE" "${ENV_FILE}.bak"; _ENV_BACKED_UP=1
+    mkdir -p "$ENV_BACKUP_DIR"
+    chmod 700 "$ENV_BACKUP_DIR"
+    backup_file="$ENV_BACKUP_DIR/root-env.$(date -u +%Y%m%dT%H%M%SZ).$$.bak"
+    cp "$ENV_FILE" "$backup_file"
+    chmod 600 "$backup_file"
+    _ENV_BACKED_UP=1
+    say "Secured pre-run root env backup outside the repo: $backup_file"
   fi
-  tmp=$(mktemp)
+  tmp=$(mktemp "${ENV_FILE}.tmp.XXXXXX")
   if grep -q "^${key}=" "$ENV_FILE"; then
     awk -v k="$key" -v v="$value" \
       '$0 ~ "^" k "=" { print k "=" v; next } { print }' "$ENV_FILE" > "$tmp"
   else
     cat "$ENV_FILE" > "$tmp"; printf '%s=%s\n' "$key" "$value" >> "$tmp"
   fi
-  cat "$tmp" > "$ENV_FILE"; rm -f "$tmp"
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$ENV_FILE"
 }
 
 # ---------------------------------------------------------------------------
@@ -283,11 +290,16 @@ _declared_prompt_version="$(sed -n 's/^FC_LOOP_SYSTEM_PROMPT_VERSION = "\([^"]*\
 PROMPT_VERSION_VALUE="${_declared_prompt_version:-bundle-v1}@$PIN_SHORT"
 
 image_digest() {
-  local image="$1" digest
-  digest="$($DOCKER_CMD image inspect --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{else}}{{.Id}}{{end}}' "$image" 2>/dev/null)" \
-    || die "cannot inspect the built image '$image'"
-  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
-    || die "image '$image' returned an invalid digest '${digest:-<empty>}'"
+  local image="$1" inspected digest
+  if ! inspected="$($DOCKER_CMD image inspect --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{else}}{{.Id}}{{end}}' "$image" 2>/dev/null)"; then
+    warn "cannot inspect the built image '$image'"
+    return 1
+  fi
+  digest="${inspected##*@}"
+  if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    warn "image '$image' returned an invalid digest '${inspected:-<empty>}'"
+    return 1
+  fi
   printf '%s\n' "$digest"
 }
 
@@ -343,12 +355,15 @@ build_fc_image() {
 }
 
 deploy_fc() {
+  local digest
   build_fc_image
-  # Both are `:?`-required by the app-fc service: the fc pool refuses to start on
-  # an ambiguous image or an unpinned sha, so write them BEFORE any compose call.
+  # Resolve the fallible image inspection before any .env write. An inline
+  # command substitution can fail in a subshell without stopping set -e.
+  digest="$(image_digest "$FC_IMAGE")" \
+    || die "cannot resolve an immutable digest for '$FC_IMAGE'; .env was not changed"
   set_env_var FC_CANARY_IMAGE "$FC_IMAGE"
   set_env_var FC_CANARY_SHA   "$PIN_FULL"
-  set_env_var FC_IMAGE_DIGEST "$(image_digest "$FC_IMAGE")"
+  set_env_var FC_IMAGE_DIGEST "$digest"
   set_env_var PROMPT_VERSION "$PROMPT_VERSION_VALUE"
   set_env_var PROMPT_SCHEMA_SHA "$PROMPT_SCHEMA_SHA_VALUE"
   set_env_var RELEASE_METADATA_REQUIRED "1"
@@ -376,19 +391,21 @@ build_legacy_image() {
 }
 
 deploy_legacy() {
+  local digest
   # Legacy reads its identity from LEGACY_APP_SHA (`:-` defaulted, so a missing
   # value can never block the rollback path). Setting it here is what lets the
   # escape hatch NAME its commit — without it, switch_pool.sh needs
   # --allow-unidentified-target to roll back onto it.
+  # Build and inspect before mutating .env, for the same fail-closed contract as fc.
+  build_legacy_image
+  digest="$(image_digest uk-rent-agent:latest)" \
+    || die "cannot resolve an immutable digest for 'uk-rent-agent:latest'; .env was not changed"
   set_env_var LEGACY_APP_SHA "$PIN_FULL"
   set_env_var PROMPT_VERSION "$PROMPT_VERSION_VALUE"
   set_env_var PROMPT_SCHEMA_SHA "$PROMPT_SCHEMA_SHA_VALUE"
   set_env_var RELEASE_METADATA_REQUIRED "1"
+  set_env_var LEGACY_IMAGE_DIGEST "$digest"
   say "Pinned LEGACY_APP_SHA=$PIN_SHORT in $ENV_FILE"
-  # Build from the pin's isolated worktree as well: even gitignored files in the
-  # operational checkout can never enter a production build context.
-  build_legacy_image
-  set_env_var LEGACY_IMAGE_DIGEST "$(image_digest uk-rent-agent:latest)"
   say "Recreating the legacy pool (:${PORT[legacy]}) with its inspected image digest..."
   $COMPOSE_CMD up -d app || die "compose failed to bring up app"
   verify_pool legacy "$PIN_FULL"

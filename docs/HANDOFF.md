@@ -10,16 +10,31 @@ that spans all branches.** Last updated 2026-08-12.
 > current mainline, candidate, CI result, or deploy status.
 >
 > * Canonical release track: **`origin/main`**. The pre-remediation base was
->   **`93953c847155afc02d285df18390edb4e06212fc`**; the candidate is the commit containing
->   this status block. Resolve and compare its full identity with
->   `git rev-parse HEAD origin/main` instead of copying a short or self-referential SHA from
->   this document. It is releasable only after remote `main` points to that exact commit and
->   all four required checks succeed. Never deploy the local validation tag.
-> * Production has **not changed**. The public edge and local fc pool report
+>   **`93953c847155afc02d285df18390edb4e06212fc`**. The first remediation candidate
+>   `ac227b986b9f06f5f651756dcd97097a36d88f74` passed all four required jobs in
+>   [CI run 31579877399](https://github.com/shuhan-wang1/RentCompass/actions/runs/31579877399).
+>   The deployment-transaction repair is the commit containing this status block. Before
+>   another release, require `git rev-parse HEAD origin/main` to resolve to that exact commit
+>   and require a new four-job green run on it. Never deploy a local validation tag or a
+>   dirty operational checkout.
+> * Production data plane has **not changed**. The public edge and local fc pool still report
 >   `X-Agent-Arch: fc_loop` and
->   `X-Agent-Version: 0952c56e21b9b0dac3fb10fe99ee907c36b3a2d8`; the server pin is the
->   same SHA. Public `/ready` returns 404 because that old image predates the readiness
->   contract. `deploy/update.sh --status` therefore cannot prove either pool ready.
+>   `X-Agent-Version: 0952c56e21b9b0dac3fb10fe99ee907c36b3a2d8`; public `/ready`
+>   returns 404 because that old image predates the readiness contract. Control-plane state
+>   is divergent after the failed release: HEAD and `DEPLOY_PINNED_SHA` are
+>   `ac227b986b9f06f5f651756dcd97097a36d88f74`, while root `.env` names that candidate
+>   but has an empty `FC_IMAGE_DIGEST`. Compose failed before recreation, so the
+>   still-running eight-day-old fc container remains healthy on port 5002 and serves traffic.
+> * Failed release cause: Docker correctly returned
+>   `uk-rent-agent@sha256:c9c9753d8b34278604835047ab86de97a5d3ff8e8428aff3e8f6021815b0e1fa`.
+>   `deploy/update.sh` accepted only a bare `sha256:...`; its `die` ran inside command
+>   substitution, so Bash did not terminate the outer `set_env_var` call and wrote an empty
+>   digest. The repair normalizes both Docker forms, explicitly checks the substitution before
+>   any metadata write, atomically renames each `.env` replacement, and builds legacy before
+>   writing its metadata too. Incident regressions prove repository-digest acceptance,
+>   non-empty Compose inputs, and byte-identical `.env` on invalid digest.
+>   The incident-created plaintext backup is preserved outside the repository at
+>   `/home/shuhan/.rentcompass-env-backups/root-env.pre-ac227b9-failed-20260812.bak` (0600).
 > * The pre-remediation remote-main run,
 >   [31505331850](https://github.com/shuhan-wang1/RentCompass/actions/runs/31505331850),
 >   was **FAIL** on the Chroma supply-chain finding and is not evidence for this candidate.
@@ -32,11 +47,11 @@ that spans all branches.** Last updated 2026-08-12.
 >   SHA-256
 >   `7881af490986dd8a168c59025960ad70984783e7d7c59520cf81a67ae052505f`.
 >   Destructive retirement was exercised only on a `/tmp` copy. The live legacy database is
->   untouched (`root:root`, `chroma.sqlite3` still present) and must remain so until both new
->   Chroma-free pools serve the same pinned release.
+>   byte-for-byte untouched; ownership is now uid/gid 1000 for the non-root runtime and
+>   `chroma.sqlite3` must remain present until both Chroma-free pools serve the same release.
 > * Local validation on the final hash-locked production image passed both randomized Python
 >   3.12 orders: **3658 passed, 12 skipped, 0 failed** for seed 1009 and again for seed 2027.
->   Release/update/switch rehearsals passed **46/46**, **60/60**, and **27/27**. The isolated
+>   Release/update/switch rehearsals passed **46/46**, **70/70**, and **27/27**. The isolated
 >   non-root/read-only fc_loop runtime returned `/live` and `/ready`; required release,
 >   conversation, AgentMemory, and LLM-configuration checks were `ok`. The production and
 >   pinned gate-tool audits found **0 known vulnerabilities**, `pip check` passed, and the
@@ -46,14 +61,14 @@ that spans all branches.** Last updated 2026-08-12.
 >   The v7 production-fc evidence template validates structurally with `--allow-template` and
 >   correctly exits HOLD when treated as release evidence. Bind it to the final commit/image/
 >   prompt policy and execute both deterministic and live-freshness tracks before citing v7.
-> * **Do not run `release.sh` yet and never use `--allow-failing-ci`.** Four gates remain:
->   (1) obtain all four required green checks on the exact `origin/main` candidate; (2) add
->   `DEPLOY_PYTHON_IMAGE=python@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7`
->   to `/etc/rentcompass/deploy.env`; (3) review, then change only
->   `app/chroma_db_agent_memory` from `root:root` to `1000:1000` and rerun
->   `deploy/preflight_runtime_permissions.sh`; (4) install the tracked monitor because
->   `/usr/local/bin/rentcompass-monitor.sh` is still drifted (`678073d06356` installed vs
->   `bca2c9f7cbb4` tracked).
+> * Host prerequisites are now complete: `DEPLOY_PYTHON_IMAGE` is the reviewed immutable
+>   digest, `deploy/preflight_runtime_permissions.sh` passes for uid/gid 1000, and tracked
+>   plus installed monitor scripts both hash to `bca2c9f7cbb4...`; the timer is active.
+> * **Do not run `release.sh` from this dirty repair tree and never use
+>   `--allow-failing-ci`.** First commit and push the deployment repair, require all four
+>   checks green on that exact new `origin/main` SHA, and restore a clean checkout. A normal
+>   release may then advance the current `ac227b9` control-plane pin to the repair SHA and
+>   reuse no image whose tag does not encode that repair commit.
 > * After those gates are green, deploy **both** pools from `origin/main`, verify `/ready`,
 >   architecture, full SHA, image digest, prompt metadata and alert delivery, then run
 >   `bash deploy/retire_legacy_agent_memory.sh`. That script re-verifies both pools and the

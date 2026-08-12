@@ -53,7 +53,11 @@ echo "docker $*" >> "$CALLS"
 case "$1" in
   image)
     if [ "${3:-}" = "--format" ] || [ "${2:-}" = "inspect" ] && [ "${3:-}" = "--format" ]; then
-      printf 'sha256:%064d\n' 1
+      case "${FAKE_DIGEST_KIND:-bare}" in
+        bare)    printf 'sha256:%064d\n' 1 ;;
+        repo)    printf 'uk-rent-agent@sha256:%064d\n' 1 ;;
+        invalid) printf 'uk-rent-agent:mutable\n' ;;
+      esac
       exit 0
     fi
     exit "${FAKE_IMAGE_EXISTS:-1}" ;;   # non-zero = tag absent -> build
@@ -64,6 +68,14 @@ EOF
   cat > "$SANDBOX/bin/fakecompose" <<'EOF'
 #!/usr/bin/env bash
 echo "compose $*" >> "$CALLS"
+if [[ " $* " == *" app-fc "* ]]; then
+  for key in FC_CANARY_IMAGE FC_CANARY_SHA FC_IMAGE_DIGEST PROMPT_VERSION PROMPT_SCHEMA_SHA RELEASE_METADATA_REQUIRED; do
+    grep -Eq "^${key}=.+$" "$UPDATE_ENV_FILE" || {
+      echo "missing required app-fc env: $key" >&2
+      exit 86
+    }
+  done
+fi
 exit "${FAKE_COMPOSE_RC:-0}"
 EOF
   # Answers /health per port. The sha a pool reports flips to the pin once its
@@ -102,6 +114,7 @@ run_update() {                 # run_update [args...]
     DEPLOY_PIN_ENV="$SANDBOX/pin.env" \
     UPDATE_CONF="$SANDBOX/nginx/site.conf" \
     UPDATE_ENV_FILE="$REPO/.env" \
+    UPDATE_ENV_BACKUP_DIR="$SANDBOX/env-backups" \
     UPDATE_DOCKER_CMD="$SANDBOX/bin/fakedocker" \
     UPDATE_COMPOSE_CMD="$SANDBOX/bin/fakecompose" \
     UPDATE_CURL_CMD="$SANDBOX/bin/fakecurl" \
@@ -148,9 +161,32 @@ echo "--- 3. the pins land in the root .env, and nothing else in it moves ---"
 setup 5002 old-legacy-sha old-fc-sha
 run_update
 contains "$(cat "$REPO/.env")" "FC_CANARY_SHA=$PIN"           "FC_CANARY_SHA is rewritten to the pin"
+contains "$(cat "$REPO/.env")" "FC_IMAGE_DIGEST=sha256:"       "FC_IMAGE_DIGEST is non-empty before compose"
 contains "$(cat "$REPO/.env")" "SEARXNG_SECRET=\"keep-me\""   "SEARXNG_SECRET survives untouched"
-check   "a pre-run backup exists" "0" "$([ -f "$REPO/.env.bak" ] && echo 0 || echo 1)"
-contains "$(cat "$REPO/.env.bak")" "FC_CANARY_SHA=00000000"   "the backup holds the PRE-run value"
+BACKUP_FILE="$(find "$SANDBOX/env-backups" -type f -name 'root-env.*.bak' -print -quit)"
+check   "an out-of-tree pre-run backup exists" "present" "$([ -f "$BACKUP_FILE" ] && echo present || echo absent)"
+contains "$(cat "$BACKUP_FILE")" "FC_CANARY_SHA=00000000" "the backup holds the PRE-run value"
+check   "the secret backup is mode 0600" "600" "$(stat -c %a "$BACKUP_FILE")"
+check   "no plaintext .env backup remains in repo" "absent" "$([ -e "$REPO/.env.bak" ] && echo present || echo absent)"
+check   "the rewritten root .env is mode 0600" "600" "$(stat -c %a "$REPO/.env")"
+teardown
+
+echo "--- 3a. Docker repository digests normalize; invalid digests mutate nothing ---"
+setup 5002 old-legacy-sha old-fc-sha
+FAKE_DIGEST_KIND=repo run_update
+check   "a name@sha256 repository digest is accepted" 0 "$RC"
+contains "$(cat "$REPO/.env")" "FC_IMAGE_DIGEST=sha256:" \
+  "the repository name is stripped from runtime digest metadata"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+ENV_BEFORE="$(sha256sum "$REPO/.env" | awk '{print $1}')"
+FAKE_DIGEST_KIND=invalid run_update; CALLS_TXT="$(cat "$CALLS")"
+check   "an invalid image digest fails closed" 1 "$RC"
+contains "$OUT" ".env was not changed" "the operator sees the transactional guarantee"
+check   "invalid digest leaves .env byte-identical" "$ENV_BEFORE" \
+  "$(sha256sum "$REPO/.env" | awk '{print $1}')"
+lacks   "$CALLS_TXT" "compose" "invalid digest never reaches compose"
 teardown
 
 echo "--- 3b. a legacy deploy teaches the escape hatch to name its commit ---"

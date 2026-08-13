@@ -171,3 +171,54 @@ def test_agent_memory_failure_is_required_and_fails_readiness(
 
     assert code == 503
     assert "agent_memory" in body["failed"]
+
+
+def test_conversation_readiness_rejects_an_existing_nonwritable_database(
+    monkeypatch, tmp_path
+):
+    runtime = _install_runtime(monkeypatch, tmp_path)
+    db_path = runtime.conversation_store.db_path
+    real_access = asgi.os.access
+
+    def _access(path, mode):
+        if str(path) == str(db_path):
+            return False
+        return real_access(path, mode)
+
+    monkeypatch.setattr(asgi.os, "access", _access)
+
+    result = asgi._check_conversation_db()
+
+    assert result["status"] == "fail"
+    assert result["required"] is True
+    assert "database is not readable/writable" in result["detail"]
+
+
+def test_checkpoint_readiness_rejects_an_existing_nonwritable_database(
+    monkeypatch, tmp_path
+):
+    checkpoint = tmp_path / "runtime" / "checkpoints.sqlite3"
+    checkpoint.parent.mkdir()
+    checkpoint.touch()
+    config = Config(
+        project_root=tmp_path,
+        flask_secret_key="test",
+        checkpoint_path=checkpoint,
+        enable_checkpointer=True,
+    )
+    real_access = asgi.os.access
+
+    def _access(path, mode):
+        if str(path) == str(checkpoint):
+            return False
+        return real_access(path, mode)
+
+    monkeypatch.setattr(asgi.os, "access", _access)
+
+    result = asgi._check_checkpoint(config)
+
+    assert result == {
+        "status": "fail",
+        "required": True,
+        "detail": "checkpoint database is not readable/writable",
+    }

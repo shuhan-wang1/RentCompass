@@ -4,8 +4,9 @@
 #   cd /home/shuhan/uk_rent_recommendation
 #   bash deploy/release.sh
 #
-# That is the whole procedure. One sudo password prompt (the pin file is
-# root-owned); everything else is unattended.
+# That is the whole procedure. A cached sudo credential may be used to repair the
+# five persistent bind-mount trees and to write the root-owned pin; everything
+# else is unattended.
 #
 # ---------------------------------------------------------------------------
 # WHY THIS EXISTS INSTEAD OF "just make update.sh deploy the latest commit"
@@ -32,7 +33,9 @@
 #   2. every declared required check must exist, be completed and be successful;
 #   3. the entire working tree (including untracked build-context files) is clean;
 #   4. you are shown old-pin -> new-pin and must confirm (unless --yes);
-#   5. only then is the pin advanced, and update.sh rebuilds both pools with a
+#   5. before source or pin moves, recursively repair and verify the five scoped
+#      persistent bind-mount trees for the image's non-root uid:gid;
+#   6. only then is the pin advanced, and update.sh rebuilds both pools with a
 #      safe drain before refusing to report success unless they answer with that
 #      exact sha.
 #
@@ -66,6 +69,7 @@ GIT_CMD="${RELEASE_GIT_CMD:-git}"
 GH_CMD="${RELEASE_GH_CMD:-gh}"
 SUDO_CMD="${RELEASE_SUDO_CMD:-sudo}"
 UPDATE_CMD="${RELEASE_UPDATE_CMD:-bash deploy/update.sh}"
+RUNTIME_MAINTENANCE_CMD="${RELEASE_RUNTIME_MAINTENANCE_CMD:-bash deploy/preflight_runtime_permissions.sh}"
 PIN_ENV_FILE="${DEPLOY_PIN_ENV:-/etc/rentcompass/deploy.env}"
 # REMOTE on purpose: a local branch can hold commits that never saw a PR.
 TRACK_REF="${RELEASE_TRACK_REF:-origin/main}"
@@ -202,22 +206,37 @@ say "Release plan"
 printf '    source     %s  (%s)\n' "$TARGET_SHORT" "${REF:+--ref $REF}${REF:-$TRACK_REF tip}"
 printf '    HEAD       %s -> %s\n' "$($GIT_CMD rev-parse --short HEAD)" "$TARGET_SHORT"
 printf '    pin        %s -> %s\n' "${OLD_PIN:0:7}${OLD_PIN:+ }${OLD_PIN:-<unset>}" "$TARGET"
+printf '    maintain   %s --repair\n' "$RUNTIME_MAINTENANCE_CMD"
 printf '    then       %s %s\n' "$UPDATE_CMD" "${PASSTHROUGH[*]:-}"
 echo
 
 if [ "$OLD_PIN" = "$TARGET" ] && [ "$HEAD_NOW" = "$TARGET" ]; then
   say "Pin and HEAD are already $TARGET_SHORT — nothing to advance; handing straight to update.sh"
-elif [ "$DRY_RUN" -eq 1 ]; then
+fi
+if [ "$DRY_RUN" -eq 1 ]; then
   say "--dry-run: stopping here. Nothing was checked out, re-pinned or deployed."
   exit 0
-elif [ "$ASSUME_YES" -eq 0 ]; then
+fi
+if { [ "$OLD_PIN" != "$TARGET" ] || [ "$HEAD_NOW" != "$TARGET" ]; } && [ "$ASSUME_YES" -eq 0 ]; then
   printf 'Proceed? [y/N] '
   read -r reply
   case "$reply" in y|Y|yes|YES) ;; *) die "aborted — nothing was changed" ;; esac
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Check out the target
+# 5. Repair and recursively verify persistent runtime state
+# ---------------------------------------------------------------------------
+# This is deliberately before checkout and re-pin. A failed repair therefore
+# cannot leave the source, pin or containers half-advanced. update.sh runs the
+# same script read-only as its final fail-closed gate.
+say "Maintaining persistent runtime bind mounts for the non-root app user..."
+RUNTIME_PREFLIGHT_REPO="$REPO_DIR" \
+RUNTIME_PREFLIGHT_SUDO_CMD="$SUDO_CMD" \
+  $RUNTIME_MAINTENANCE_CMD --repair \
+  || die "persistent runtime maintenance failed; source, pin and containers were not changed"
+
+# ---------------------------------------------------------------------------
+# 6. Check out the target
 # ---------------------------------------------------------------------------
 if [ "$HEAD_NOW" != "$TARGET" ]; then
   say "Checking out $TARGET_SHORT"
@@ -225,7 +244,7 @@ if [ "$HEAD_NOW" != "$TARGET" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Advance the pin (the one privileged step)
+# 7. Advance the pin
 # ---------------------------------------------------------------------------
 # Written through a temp file + `sudo tee` rather than an in-place `sudo sed`, so
 # a half-written pin file cannot survive a failure: the gate reading a truncated
@@ -256,7 +275,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 7. Hand off to update.sh, which enforces the gate and verifies the result
+# 8. Hand off to update.sh, which enforces the gate and verifies the result
 # ---------------------------------------------------------------------------
 echo
 say "Handing off to $UPDATE_CMD"

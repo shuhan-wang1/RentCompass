@@ -117,6 +117,71 @@ def test_commute_claim_without_evidence_is_replaced_by_unverified_text():
     assert "meets" not in safe.lower()
 
 
+def _area_ranking_state():
+    state = _state("Suggest affordable areas within a 30 minute commute")
+    state["accumulated_search_criteria"] = {
+        "commute_destination": "Canary Wharf",
+        "max_travel_time": 30,
+    }
+    state["tool_artifacts"] = [{
+        "tool": "compare_or_rank_areas",
+        "success": True,
+        "raw_data": {
+            "status": "ok",
+            "areas": [
+                {
+                    "name": "Stratford",
+                    "slug": "stratford",
+                    "commute_minutes": 18,
+                    "sources": ["OnTheMarket listing cache", "commute routing"],
+                },
+                {
+                    "name": "Greenwich",
+                    "slug": "greenwich",
+                    "commute_minutes": 24,
+                    "sources": ["OnTheMarket listing cache", "commute routing"],
+                },
+            ],
+        },
+    }]
+    return state
+
+
+def test_area_ranking_commute_evidence_supports_named_area_minutes():
+    state = _area_ranking_state()
+    answer = "Stratford is about 18 minutes away; Greenwich is about 24 minutes away."
+
+    assert validate_commute_response(answer, state) == answer
+
+
+def test_area_ranking_can_prove_named_areas_fit_the_known_cap():
+    state = _area_ranking_state()
+    answer = "Stratford and Greenwich are both within your 30 minute limit."
+
+    assert validate_commute_response(answer, state) == answer
+
+
+def test_area_ranking_does_not_license_an_invented_duration():
+    state = _area_ranking_state()
+    answer = "Stratford takes 12 minutes and Greenwich takes 24 minutes."
+
+    safe = validate_commute_response(answer, state)
+    assert "could not be verified" in safe.lower()
+    assert "12 minutes" not in safe
+
+
+def test_area_without_routing_evidence_cannot_ride_on_a_sibling_area():
+    state = _area_ranking_state()
+    state["tool_artifacts"][0]["raw_data"]["areas"][1]["commute_minutes"] = None
+    state["tool_artifacts"][0]["raw_data"]["areas"][1]["sources"] = [
+        "OnTheMarket listing cache"
+    ]
+    answer = "Stratford takes 18 minutes and Greenwich is within the 30 minute limit."
+
+    safe = validate_commute_response(answer, state)
+    assert "could not be verified" in safe.lower()
+
+
 def test_each_listing_needs_its_own_commute_evidence():
     raw = {
         "status": "found",

@@ -40,6 +40,7 @@ import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
+from core.mcp_runtime import runtime_arguments_from_meta
 from core.tool_system import create_tool_registry
 
 # Build the registry once (single source of truth shared with the in-process agent).
@@ -82,14 +83,35 @@ async def list_tools() -> list[types.Tool]:
     ]
 
 
+def _current_request_meta():
+    """Read MCP request metadata without coupling tests to the SDK context type."""
+    try:
+        context = server.request_context
+        # MCP 1.29 exposes the parsed RequestParams.Meta directly on
+        # RequestContext. Keep the request fallback for compatible SDK variants.
+        meta = getattr(context, "meta", None)
+        if meta is not None:
+            return meta
+        request = getattr(context, "request", None)
+        params = getattr(request, "params", None)
+        return getattr(params, "meta", None)
+    except Exception:
+        return None
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict | None) -> list[types.TextContent]:
     """Dispatch to the in-process registry and return a structured JSON envelope.
 
     The envelope preserves the project's ToolResult shape so the MCP client can
-    reconstruct it losslessly: {success, data, error, tool_name, execution_time_ms}.
+    reconstruct it losslessly, including version, idempotency key and outcome
+    alongside success/data/error/timing.
     """
-    result = await _registry.execute_tool(name, **(arguments or {}))
+    dispatch_arguments = dict(arguments or {})
+    dispatch_arguments.update(
+        runtime_arguments_from_meta(name, _current_request_meta())
+    )
+    result = await _registry.execute_tool(name, **dispatch_arguments)
     envelope = {
         "success": result.success,
         "data": result.data,
@@ -98,6 +120,7 @@ async def call_tool(name: str, arguments: dict | None) -> list[types.TextContent
         "execution_time_ms": result.execution_time_ms,
         "version": result.version,
         "idempotency_key": result.idempotency_key,
+        "outcome": result.outcome,
     }
     text = json.dumps(envelope, ensure_ascii=False, default=str)
     return [types.TextContent(type="text", text=text)]

@@ -178,7 +178,7 @@ class FakeMCPSession:
         self._text = text
         self._is_error = is_error
 
-    async def call_tool(self, name, kwargs):
+    async def call_tool(self, name, kwargs, **_options):
         return _FakeCallResult(self._text, self._is_error)
 
 
@@ -200,7 +200,7 @@ class DelayingMCPSession:
         self._text = text
         self.calls: List[str] = []
 
-    async def call_tool(self, name, kwargs):
+    async def call_tool(self, name, kwargs, **_options):
         self.calls.append(name)
         await asyncio.sleep(self.delay_s)
         return _FakeCallResult(self._text)

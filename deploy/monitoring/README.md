@@ -33,9 +33,13 @@ sudo chmod 0644 /etc/rentcompass/deploy.env
 ```
 
 **`bash deploy/release.sh` performs the whole re-pin procedure for you** against
-the tip of the remote mainline — fetch, CI check, confirm, checkout, re-pin (the
-one sudo prompt), then hand off to `update.sh`. It does **not** weaken the gate:
-`update.sh` still enforces `HEAD == DEPLOY_PINNED_SHA`. On 2026-07-28 a merged fix
+the tip of the remote mainline — fetch, CI check, confirm, recursively repair and
+verify all five persistent bind trees for non-root uid:gid 1000:1000, checkout,
+re-pin, then hand off to `update.sh`. Sudo credentials may be used for the scoped
+bind repair and root-owned pin; they are normally cached within the same run. A
+repair failure happens before checkout/re-pin and aborts without changing source,
+pin or containers. It does **not** weaken the gate: `update.sh` still enforces
+`HEAD == DEPLOY_PINNED_SHA`. On 2026-07-28 a merged fix
 sat unshipped for hours because the manual steps below were skipped, which is why
 they are now scripted. `--dry-run` prints the plan and changes nothing.
 
@@ -88,10 +92,11 @@ straight from the repo manifest — so the monitor itself pages (sev3, once per 
 change) if it is ever running something other than the declared build. Unset, the
 check is inert; it never invents an alert on a box that was set up by hand.
 
-Before the first non-root app deploy, run
-deploy/preflight_runtime_permissions.sh. It is read-only and fails with a
-scoped one-time chown command if historical root-run containers left a writable
-bind mount (notably agent memory) owned by root.
+`release.sh` runs `deploy/preflight_runtime_permissions.sh --repair` automatically.
+The repair is recursively scoped to `.runtime`, both property indexes, agent
+memory and `app/data`; it does not follow symlinked roots or cross filesystem
+boundaries. `update.sh` repeats the same recursive audit read-only and fails closed
+if persistent state drifted after release maintenance.
 
 ### 2b. Verify
 

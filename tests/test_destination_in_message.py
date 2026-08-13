@@ -54,6 +54,7 @@ def _no_network(monkeypatch):
     ("near the Amazon office in Manchester", "workplace", "manchester"),
     ("flat near Barclays HQ", "workplace", "london"),
     ("I study at UCL", "university", "london"),
+    ("I got my job near Canary Wharf", "workplace", "london"),
     ("room near Imperial College", "university", "london"),
     ("place near the University of Warwick", "university", None),
 ])
@@ -84,6 +85,34 @@ def test_helper_ignores_residential(msg):
 def test_helper_empty():
     assert extract_destination_from_text("") is None
     assert extract_destination_from_text(None) is None
+
+
+def test_work_context_does_not_change_canary_wharfs_residential_default():
+    work = extract_destination_from_text("I got my job near Canary Wharf")
+
+    assert work["kind"] == "workplace"
+    assert work["name"] == "Canary Wharf"
+    assert work["address"] == "Canary Wharf"
+    assert classify_place("Canary Wharf")["kind"] == "area"
+    assert extract_destination_from_text("I want to live in Canary Wharf") is None
+
+
+def test_reported_three_answer_sequence_persists_destination_and_commute_limit():
+    from core.langgraph_agent import _apply_explicit_criteria_updates
+
+    first = _apply_explicit_criteria_updates(
+        {}, "I am not sure about it but I got my job near Canary Wharf"
+    )
+    assert first["commute_destination"] == "Canary Wharf"
+    assert first["destination"] == "Canary Wharf"
+    assert first.get("area") is None
+
+    final = _apply_explicit_criteria_updates(
+        first,
+        "Not sure, depends on the budget, but the maximum I would take for commute would be 30 min.",
+    )
+    assert final["commute_destination"] == "Canary Wharf"
+    assert final["max_travel_time"] == 30
 
 
 # --------------------------------------------------------------------------
@@ -142,6 +171,18 @@ def test_impl_previously_working_still_lock(msg, locked):
     assert res["known_criteria"]["no_commute"] is False
     assert res["known_criteria"]["commute_destination"]
     assert res["known_criteria"]["area"]                 # defaulted, not None
+    assert "commute" not in res["missing_fields"]
+
+
+def test_impl_treats_job_near_canary_wharf_as_the_commute_destination():
+    msg = "I am not sure about it but I got my job near Canary Wharf"
+
+    res = _run(msg, max_commute_time=30)
+
+    known = res["known_criteria"]
+    assert known["commute_destination"] == "Canary Wharf"
+    assert known["no_commute"] is False
+    assert known["area"] == "Canary Wharf"
     assert "commute" not in res["missing_fields"]
 
 

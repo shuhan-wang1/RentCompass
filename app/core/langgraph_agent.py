@@ -369,6 +369,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
         _extract_budget, _extract_commute_minutes, _extract_no_commute,
         _extract_room_type, _extract_area, _extract_budget_clear,
     )
+    from core.scraping.on_demand import extract_destination_from_text
     from core.tenancy_reference import monthly_from_weekly
 
     result = dict(accumulated)
@@ -390,12 +391,40 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
             result['max_budget'] = None
             changed = True
 
+    # A place can be residential in general but a workplace in this sentence.
+    # Persist that distinction before the LLM plans tools so all calls see the
+    # same destination (not only search_properties, which also scans raw text).
+    message_destination = extract_destination_from_text(current_message)
+    if message_destination:
+        destination = (
+            message_destination.get('address')
+            or message_destination.get('name')
+        )
+        if destination and (
+            result.get('commute_destination') != destination
+            or result.get('destination') != destination
+        ):
+            result['commute_destination'] = destination
+            result['destination'] = destination
+            changed = True
+
     # 1a: an explicit area/city switch stated THIS turn ("make it Manchester",
     # "switch to Bristol", "actually London", a bare/Chinese city name) overrides the
     # frozen accumulated area even with no search verb. _extract_area returns None for
     # nonsense areas (Mars/火星/Wakanda), so those never clobber the current area.
     new_area = _extract_area(current_message)
-    if new_area and result.get('area') != new_area:
+    # Do not also save the contextual workplace as a chosen home area. A distinct
+    # explicit residence ("work near Canary Wharf, live in Camden") is preserved.
+    def _place_key(value):
+        return re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).strip()
+
+    destination_context = {
+        _place_key(message_destination.get(field))
+        for field in ('name', 'slug', 'city')
+    } if message_destination else set()
+    destination_context.discard('')
+    contextual_work_area = _place_key(new_area) in destination_context
+    if new_area and not contextual_work_area and result.get('area') != new_area:
         result['area'] = new_area
         changed = True
 
@@ -418,7 +447,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # the next search never re-applies a filter the user has disowned.
     ml = current_message.lower()
     names_destination = any(re.search(rf'\b{re.escape(kw)}\b', ml) for kw in _KNOWN_DESTINATIONS)
-    commute_intent = bool(minutes) or names_destination
+    commute_intent = bool(minutes) or names_destination or bool(message_destination)
     if commute_intent:
         if result.get('no_commute'):
             result['no_commute'] = False

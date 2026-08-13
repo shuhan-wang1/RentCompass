@@ -2253,6 +2253,28 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
     return prev_results_context, structured_results
 
 
+_COMPARISON_QUERY_PATTERNS = (
+    r"\bcompare\b",
+    r"\bvs\.?\b",
+    r"\bversus\b",
+    r"\bbetween\b",
+    r"\bor\b",
+    r"\bbetter\b",
+    r"\bwhich\s+one\b",
+    r"\bdeciding\s+between\b",
+)
+
+
+def _is_comparison_query(message: str) -> bool:
+    """Recognise comparison language without matching ``or`` inside ordinary words.
+
+    The old substring check classified "not sure" and "for commute" as property
+    comparisons because both contain the letters ``or``.
+    """
+    return any(re.search(pattern, message or "", re.IGNORECASE)
+               for pattern in _COMPARISON_QUERY_PATTERNS)
+
+
 async def handle_with_react_agent(user_message: str, context: dict, is_continuation: bool,
                                   user_id: str = "default", conversation_id: str = "default",
                                   request_id: str | None = None, ui_language: str = "en",
@@ -2383,8 +2405,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     if viewed_properties_context:
         extracted_context['viewed_properties'] = viewed_properties_context
 
-    comparison_keywords = ['compare', 'vs', 'versus', 'between', 'or', 'better', 'which one', 'deciding between']
-    is_comparison_query = any(kw in user_message.lower() for kw in comparison_keywords)
+    is_comparison_query = _is_comparison_query(user_message)
 
     if is_comparison_query:
         print(f"[LangGraph] 🔄 检测到对比查询，正在加载房产数据...")

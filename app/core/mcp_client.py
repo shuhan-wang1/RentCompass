@@ -25,6 +25,7 @@ import threading
 from contextlib import AsyncExitStack
 from typing import List, Optional
 
+from core.mcp_runtime import split_mcp_arguments
 from core.tool_system import ToolResult, ToolSpec
 
 
@@ -273,14 +274,25 @@ class MCPToolClient:
 
     async def _call(self, name: str, kwargs: dict) -> ToolResult:
         # Runs INSIDE the background loop that owns the session.
-        res = await self._session.call_tool(name, kwargs or {})
+        # Private FC-loop hints are MCP metadata, never public tool arguments.
+        # The MCP SDK validates arguments against additionalProperties:false
+        # before the server handler runs, which is why mixing these namespaces
+        # used to reject otherwise valid search/web/ranking calls.
+        public_args, meta = split_mcp_arguments(kwargs)
+        call_options = {"meta": meta} if meta is not None else {}
+        res = await self._session.call_tool(name, public_args, **call_options)
         text = self._extract_text(res)
+        is_error = bool(getattr(res, "isError", False))
         try:
             env = json.loads(text) if text else {}
         except json.JSONDecodeError:
-            env = {"success": not getattr(res, "isError", False), "data": text}
+            env = {
+                "success": not is_error,
+                "data": None if is_error else text,
+                "error": text if is_error else None,
+            }
         return ToolResult(
-            success=bool(env.get("success", not getattr(res, "isError", False))),
+            success=bool(env.get("success", not is_error)),
             data=env.get("data"),
             error=env.get("error"),
             execution_time_ms=env.get("execution_time_ms"),

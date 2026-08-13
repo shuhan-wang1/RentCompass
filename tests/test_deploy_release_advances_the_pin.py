@@ -76,11 +76,16 @@ def test_release_target_comes_from_a_remote_ref():
     )
 
 
-def test_release_never_invokes_sudo_outside_the_pin_write():
-    """One privileged action, and it is the pin file. A deploy script that
-    escalates anywhere else is a much larger blast radius than it looks."""
+def test_release_scopes_privileged_work_to_runtime_maintenance_and_pin_write():
+    """release.sh may delegate sudo to the five-root maintenance gate; its only
+    direct privileged command remains the atomic pin write."""
     src = _src(_RELEASE)
-    sudo_uses = [ln.strip() for ln in src.splitlines()
-                 if "$SUDO_CMD" in ln and not ln.strip().startswith("#")]
-    assert len(sudo_uses) == 1, f"expected exactly one privileged call, got: {sudo_uses}"
-    assert "tee" in sudo_uses[0] and "PIN_ENV_FILE" in sudo_uses[0], sudo_uses[0]
+    direct_sudo_uses = [
+        ln.strip() for ln in src.splitlines()
+        if re.search(r"^\s*\$SUDO_CMD\s", ln) and not ln.strip().startswith("#")
+    ]
+    assert len(direct_sudo_uses) == 1, direct_sudo_uses
+    assert "tee" in direct_sudo_uses[0] and "PIN_ENV_FILE" in direct_sudo_uses[0]
+    assert 'RUNTIME_PREFLIGHT_SUDO_CMD="$SUDO_CMD"' in src
+    assert "$RUNTIME_MAINTENANCE_CMD --repair" in src
+    assert src.index("$RUNTIME_MAINTENANCE_CMD --repair") < src.index("Checking out $TARGET_SHORT")

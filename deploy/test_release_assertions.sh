@@ -9,8 +9,9 @@
 # release.sh advances the deploy pin, which is the one thing standing between a
 # merge and the public site. So the assertions are mostly about what must NOT
 # happen: no re-pin on a dirty tree, no re-pin on red CI, no re-pin without
-# confirmation, and — when the deploy fails after the pin already moved — no
-# silence about the pin now naming a commit that is not running.
+# confirmation, no source/pin movement when persistent-state maintenance fails,
+# and — when the deploy fails after the pin already moved — no silence about the
+# pin now naming a commit that is not running.
 set -u
 PASS=0; FAIL=0
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -68,9 +69,14 @@ EOF
 echo "update $*" >> "$CALLS"
 exit "${FAKE_UPDATE_RC:-0}"
 EOF
+  cat > "$SANDBOX/bin/fakepreflight" <<'EOF'
+#!/usr/bin/env bash
+echo "preflight $*" >> "$CALLS"
+exit "${FAKE_PREFLIGHT_RC:-0}"
+EOF
   chmod +x "$SANDBOX"/bin/*
   export CALLS="$SANDBOX/calls.log"; : > "$CALLS"
-  export FAKE_CI="${1:-green}" FAKE_UPDATE_RC=0
+  export FAKE_CI="${1:-green}" FAKE_UPDATE_RC=0 FAKE_PREFLIGHT_RC=0
   REPO="$repo"
 }
 teardown() { [ -n "$SANDBOX" ] && rm -rf "$SANDBOX"; SANDBOX=""; }
@@ -84,6 +90,7 @@ run_release() {
     RELEASE_GH_CMD="$SANDBOX/bin/fakegh" \
     RELEASE_SUDO_CMD="$SANDBOX/bin/fakesudo" \
     RELEASE_UPDATE_CMD="$SANDBOX/bin/fakeupdate" \
+    RELEASE_RUNTIME_MAINTENANCE_CMD="$SANDBOX/bin/fakepreflight" \
     RELEASE_REQUIRED_CHECKS="Tests (Python 3.12),Compose smoke" \
     bash deploy/release.sh --no-fetch "$@" <<<"$stdin_data" ) > "$SANDBOX/out.txt" 2>&1
   RC=$?
@@ -101,6 +108,8 @@ check    "HEAD moved to the mainline tip"  "$NEW_SHA" "$(head_now)"
 check    "pin advanced to the same commit" "$NEW_SHA" "$(pin_now)"
 contains "$CALLS_TXT" "update"              "update.sh was invoked"
 contains "$CALLS_TXT" "update --both --drain" "a release refreshes both pools with safe drain by default"
+contains "$CALLS_TXT" "preflight --repair"    "persistent runtime maintenance ran in repair mode"
+contains "$CALLS_TXT" $'preflight --repair\nupdate --both --drain' "maintenance completed before deployment"
 contains "$OUT"       "required CI checks"  "the CI verdict is reported"
 teardown
 echo
@@ -113,6 +122,7 @@ check    "pin untouched"                   "$OLD_SHA" "$(pin_now)"
 check    "HEAD untouched"                  "$OLD_SHA" "$(head_now)"
 contains "$OUT"       "concluded 'failure'" "and says why"
 lacks    "$CALLS_TXT" "update"              "update.sh is never reached"
+lacks    "$CALLS_TXT" "preflight"           "runtime state is not touched after red CI"
 teardown
 
 setup red
@@ -128,6 +138,7 @@ check    "a dirty tree aborts"             1 "$RC"
 check    "pin untouched"                   "$OLD_SHA" "$(pin_now)"
 contains "$OUT"       "DIRTY"               "and says why"
 lacks    "$CALLS_TXT" "update"              "update.sh is never reached"
+lacks    "$CALLS_TXT" "preflight"           "runtime state is not touched for a dirty release"
 teardown
 
 setup green
@@ -136,6 +147,7 @@ check    "answering 'n' aborts"            1 "$RC"
 check    "pin untouched"                   "$OLD_SHA" "$(pin_now)"
 check    "HEAD untouched"                  "$OLD_SHA" "$(head_now)"
 lacks    "$CALLS_TXT" "update"              "nothing is deployed"
+lacks    "$CALLS_TXT" "preflight"           "declining leaves runtime state untouched"
 teardown
 
 setup green
@@ -145,10 +157,23 @@ check    "pin untouched"                   "$OLD_SHA" "$(pin_now)"
 check    "HEAD untouched"                  "$OLD_SHA" "$(head_now)"
 contains "$OUT"       "Release plan"        "but the plan is printed"
 lacks    "$CALLS_TXT" "update"              "and nothing is deployed"
+lacks    "$CALLS_TXT" "preflight"           "dry-run never repairs persistent state"
 teardown
 echo
 
-echo "--- 3. missing, pending and unknown CI all fail closed ---"
+echo "--- 3. persistent-state maintenance fails before source or pin can move ---"
+setup green
+FAKE_PREFLIGHT_RC=42 run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "maintenance failure aborts"        1 "$RC"
+check    "pin untouched"                     "$OLD_SHA" "$(pin_now)"
+check    "HEAD untouched"                    "$OLD_SHA" "$(head_now)"
+contains "$CALLS_TXT" "preflight --repair"  "the repair was attempted"
+lacks    "$CALLS_TXT" "update"              "deployment is never reached"
+contains "$OUT" "source, pin and containers were not changed" "the no-mutation guarantee is explicit"
+teardown
+echo
+
+echo "--- 4. missing, pending and unknown CI all fail closed ---"
 setup none
 run_release --yes
 check    "no reported checks aborts" 1 "$RC"
@@ -180,7 +205,7 @@ contains "$OUT" "unknown/non-success" "unknown is not treated as green"
 teardown
 echo
 
-echo "--- 4. a failed deploy must not leave the pin lying about what runs ---"
+echo "--- 5. a failed deploy must not leave the pin lying about what runs ---"
 setup green
 FAKE_UPDATE_RC=1 run_release --yes
 check    "the failure propagates"          1 "$RC"
@@ -192,7 +217,7 @@ contains "$OUT" "$OLD_SHA"                 "and the previous pin is quoted for t
 teardown
 echo
 
-echo "--- 5. it is idempotent: a second run changes nothing ---"
+echo "--- 6. it is idempotent: a second run changes nothing ---"
 setup green
 run_release --yes
 run_release --yes; CALLS_TXT="$(cat "$CALLS")"
@@ -200,10 +225,11 @@ check    "second run exits 0"              0 "$RC"
 check    "pin still the tip"               "$NEW_SHA" "$(pin_now)"
 contains "$OUT" "nothing to advance"        "and says it had nothing to do"
 contains "$CALLS_TXT" "update"              "while still handing off (update.sh decides if a redeploy is needed)"
+contains "$CALLS_TXT" "preflight --repair"  "idempotent releases still maintain persistent state"
 teardown
 echo
 
-echo "--- 6. --ref off mainline is allowed but flagged; -- passes through ---"
+echo "--- 7. --ref off mainline is allowed but flagged; -- passes through ---"
 setup green
 run_release --yes --ref "$OLD_SHA"
 check    "an explicit --ref releases it"   0 "$RC"

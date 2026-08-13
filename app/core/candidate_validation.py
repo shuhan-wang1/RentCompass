@@ -432,6 +432,101 @@ def validate_search_payload(payload: dict, *, commute_evidence: list[dict] | Non
     return out
 
 
+def _minute_claim_values(text: str) -> list[float]:
+    values = []
+    for match in re.finditer(
+        r"(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|分钟)", str(text or ""), re.IGNORECASE
+    ):
+        try:
+            values.append(float(match.group(1)))
+        except ValueError:
+            continue
+    return values
+
+
+def _known_commute_caps(state: dict) -> set[float]:
+    caps: set[float] = set()
+    accumulated = state.get("accumulated_search_criteria") or {}
+    validation = state.get("candidate_validation") or {}
+    for value in (
+        accumulated.get("max_travel_time"),
+        accumulated.get("max_commute_time"),
+        (validation.get("constraints") or {}).get("max_commute_minutes"),
+    ):
+        if isinstance(value, bool):
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            caps.add(number)
+    return caps
+
+
+def _label_in_text(label: object, normalized_text: str) -> bool:
+    normalized = re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", str(label or "").lower()).strip()
+    return bool(normalized and f" {normalized} " in f" {normalized_text} ")
+
+
+def _area_ranking_commute_supported(text: str, state: dict) -> bool:
+    """Accept commute claims grounded in ``compare_or_rank_areas`` rows.
+
+    Area ranking intentionally owns its commute routing (the loop prompt forbids a
+    redundant per-area ``calculate_commute`` fan-out). The final prose guard must
+    therefore recognise that structured evidence while still rejecting invented
+    durations or a claim about an area whose route was unavailable.
+    """
+    all_rows: list[dict] = []
+    for artifact in state.get("tool_artifacts") or []:
+        if artifact.get("tool") != "compare_or_rank_areas" or artifact.get("success") is not True:
+            continue
+        if any(artifact.get(flag) for flag in (
+            "timed_out", "denied", "abandoned", "outcome_unknown"
+        )):
+            continue
+        raw = artifact.get("raw_data")
+        if isinstance(raw, dict):
+            all_rows.extend(row for row in (raw.get("areas") or []) if isinstance(row, dict))
+    if not all_rows:
+        return False
+
+    normalized_text = re.sub(
+        r"[^a-z0-9\u4e00-\u9fff]+", " ", str(text or "").lower()
+    ).strip()
+    mentioned = [
+        row for row in all_rows
+        if _label_in_text(row.get("name"), normalized_text)
+        or _label_in_text(str(row.get("slug") or "").replace("-", " "), normalized_text)
+    ]
+    if not mentioned:
+        return False
+
+    grounded: list[float] = []
+    for row in mentioned:
+        value = row.get("commute_minutes")
+        sources = {str(source).strip().lower() for source in (row.get("sources") or [])}
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        if "commute routing" not in sources and "通勤路由估算" not in sources:
+            return False
+        grounded.append(float(value))
+
+    claimed = _minute_claim_values(text)
+    if not claimed:
+        return False
+    caps = _known_commute_caps(state)
+    allowed = set(grounded) | caps
+    if any(not any(abs(value - valid) < 1e-9 for valid in allowed) for value in claimed):
+        return False
+
+    # At least one routed duration must be quoted, unless the prose only claims
+    # the named areas fit the user's known cap and every routed row proves that.
+    if any(any(abs(value - duration) < 1e-9 for duration in grounded) for value in claimed):
+        return True
+    return bool(caps and all(any(duration <= cap for cap in caps) for duration in grounded))
+
+
 def validate_commute_response(response: str, state: dict) -> str:
     """Fail closed when prose asserts a commute result without linked evidence.
 
@@ -466,6 +561,9 @@ def validate_commute_response(response: str, state: dict) -> str:
                 and status.get("evidence_status") == "success" for status in targets):
             return text
         return fallback
+
+    if _area_ranking_commute_supported(text, state):
+        return text
 
     successful = [
         artifact for artifact in (state.get("tool_artifacts") or [])

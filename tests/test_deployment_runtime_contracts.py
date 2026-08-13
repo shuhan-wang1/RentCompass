@@ -40,6 +40,30 @@ def test_app_containers_are_non_root_read_only_and_probe_readiness():
     assert compose.count("http://localhost:5001/ready") == 2
 
 
+def test_release_repairs_runtime_state_before_source_or_pin_moves():
+    release = _text("deploy/release.sh")
+    preflight = _text("deploy/preflight_runtime_permissions.sh")
+
+    maintenance = release.index("$RUNTIME_MAINTENANCE_CMD --repair")
+    assert maintenance < release.index("Checking out $TARGET_SHORT")
+    assert maintenance < release.index('repin "$TARGET"')
+    assert "source, pin and containers were not changed" in release
+    assert 'RELEASE_RUNTIME_MAINTENANCE_CMD:-bash deploy/preflight_runtime_permissions.sh' in release
+
+    for root in (
+        ".runtime",
+        "chroma_db",
+        "chroma_db_area",
+        "app/chroma_db_agent_memory",
+        "app/data",
+    ):
+        assert root in preflight
+    assert 'find -P "$root" -xdev' in preflight
+    assert "chown --no-dereference" in preflight
+    assert "chmod u+rwX" in preflight
+    assert "--repair" in preflight
+
+
 def test_nginx_discards_client_supplied_forwarding_chains():
     for path in (
         "deploy/nginx/rentcompass.co.uk.conf",

@@ -1009,6 +1009,19 @@ _DEST_CANDIDATE_RE = re.compile(
     rf"(?:\s+in\s+(?P<city>{_PROPER_TOKEN}(?:\s+{_PROPER_TOKEN})*))?"
 )
 
+# A curated area remains residential by default, but explicit grammar can make
+# that same token a commute destination: "my job near Canary Wharf" is not a
+# request to live in Canary Wharf. Keep the cue and place capture deliberately
+# narrow and proper-noun anchored; resolution below accepts curated places only.
+_WORK_AT_PLACE_RE = re.compile(
+    rf"(?i:\b(?:my\s+)?(?:job|work|workplace|office)\b.{{0,32}}?"
+    rf"\b(?:near|in|at|around)\s+)(?P<place>{_PROPER_TOKEN}(?:\s+{_PROPER_TOKEN})*)"
+)
+_PLACE_IS_WORK_RE = re.compile(
+    rf"(?P<place>{_PROPER_TOKEN}(?:\s+{_PROPER_TOKEN})*)"
+    rf"(?i:\s+(?:is\s+)?where\s+(?:i|we)\s+(?:work|am\s+based|are\s+based)\b)"
+)
+
 
 def _dest_candidate_gate(cand: str) -> bool:
     """True only when ``cand`` carries a TIER-1 destination signal, so the follow-up
@@ -1076,6 +1089,21 @@ def extract_destination_from_text(text: str) -> dict | None:
                     result = dict(place)
                     result["name"] = cand
                     return result
+
+        # Context can disambiguate a curated residential/office district without
+        # changing its global classification. This stays tier-1 and network-free:
+        # unknown proper nouns are ignored rather than sent to OSM/LLM.
+        for pattern in (_WORK_AT_PLACE_RE, _PLACE_IS_WORK_RE):
+            match = pattern.search(text)
+            if not match:
+                continue
+            cand = " ".join((match.group("place") or "").split())
+            slug, city, matched_key, source = _match_location(cand)
+            if not cand or matched_key is None or source not in {"landmark", "city"}:
+                continue
+            result = _dest_result("workplace", slug, city, cand, "context")
+            result["name"] = cand
+            return result
     except Exception as e:  # never let a scan turn a search into a 500
         print(f"  [extract_destination_from_text] scan failed: {e}")
         return None

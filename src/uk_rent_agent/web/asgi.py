@@ -138,9 +138,14 @@ def _check_conversation_db() -> dict[str, Any]:
     if store is None:
         return {"status": "fail", "required": True, "detail": "store unavailable"}
     try:
-        db_parent = Path(store.db_path).parent
+        db_path = Path(store.db_path)
+        db_parent = db_path.parent
         if not db_parent.is_dir() or not os.access(db_parent, os.R_OK | os.W_OK):
             raise PermissionError("conversation runtime directory is not writable")
+        if db_path.exists() and (
+            not db_path.is_file() or not os.access(db_path, os.R_OK | os.W_OK)
+        ):
+            raise PermissionError("conversation database is not readable/writable")
         with store._lock:
             row = store._conn.execute("PRAGMA quick_check(1)").fetchone()
         verdict = row[0] if row else "no result"
@@ -220,9 +225,15 @@ def _check_checkpoint(config: Config) -> dict[str, Any]:
     path = config.checkpoint_path
     if path is None:
         return {"status": "fail", "required": True, "detail": "path is unset"}
-    parent = Path(path).parent
+    checkpoint = Path(path)
+    parent = checkpoint.parent
     if not parent.is_dir() or not os.access(parent, os.R_OK | os.W_OK):
         return {"status": "fail", "required": True, "detail": "runtime directory unavailable"}
+    if checkpoint.exists() and (
+        not checkpoint.is_file() or not os.access(checkpoint, os.R_OK | os.W_OK)
+    ):
+        return {"status": "fail", "required": True,
+                "detail": "checkpoint database is not readable/writable"}
     try:
         from uk_rent_agent.agent.persistence import get_sqlite_checkpointer
 

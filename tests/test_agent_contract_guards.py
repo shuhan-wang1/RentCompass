@@ -396,6 +396,90 @@ def test_legacy_multi_tool_render_preserves_validated_search_card():
     assert rendered["tool_data"]["eligible_recommendations"][0]["eval_listing_id"] == "synthetic-a"
 
 
+def test_legacy_found_unverified_candidate_keeps_status_address_and_price():
+    """An empty eligible set is not an empty search when unknown candidates exist."""
+    from core.langgraph_agent import _make_format_output_node, _route_after_execution
+
+    candidate = {
+        "eval_listing_id": "unknown-a",
+        "address": "7 Evidence Lane, Camden",
+        "price": "£925/month",
+        "candidate_status": "unknown",
+        "candidate_unknown_reasons": ["required features are not verified: lift"],
+    }
+    candidate_state = {
+        "candidate": dict(candidate),
+        "status": "unknown",
+        "reasons": [],
+        "unknown_reasons": ["required features are not verified: lift"],
+        "evidence_status": "not_required",
+    }
+    search = {
+        "status": "found",
+        "recommendations": [],
+        "search_criteria": {"area": "Camden", "property_features": ["lift"]},
+        "candidate_states": [candidate_state],
+        "unverified_candidates": [dict(candidate)],
+    }
+    assert _route_after_execution("search_properties", search) == "format_output"
+
+    state = _state("Find a lift building in Camden")
+    state.update({
+        "tool_decision": {"tool": "search_properties"},
+        "tool_raw_data": search,
+        "final_response": "",
+        "accumulated_search_criteria": {},
+    })
+    rendered = _make_format_output_node()(state)
+
+    assert rendered["tool_data"]["eligible_recommendations"] == []
+    assert rendered["tool_data"]["candidate_states"][0]["status"] == "unknown"
+    assert rendered["tool_data"]["unverified_candidates"][0]["address"] == candidate["address"]
+    panel = rendered["tool_data"]["recommendations"][0]
+    assert panel["candidate_status"] == "unknown"
+    assert panel["address"] == candidate["address"]
+    assert panel["price"] == candidate["price"]
+    assert candidate["address"] in rendered["final_response"]
+
+
+def test_fc_found_unverified_candidate_keeps_status_address_and_price():
+    """The FC formatter mounts the same non-empty unknown-candidate contract."""
+    candidate = {
+        "eval_listing_id": "unknown-fc",
+        "address": "9 Evidence Close, Camden",
+        "price": "£950/month",
+        "candidate_status": "unknown",
+        "candidate_unknown_reasons": ["required features are not verified: lift"],
+    }
+    search = {
+        "status": "found",
+        "recommendations": [],
+        "search_criteria": {"area": "Camden", "property_features": ["lift"]},
+        "candidate_states": [{
+            "candidate": dict(candidate),
+            "status": "unknown",
+            "reasons": [],
+            "unknown_reasons": ["required features are not verified: lift"],
+            "evidence_status": "not_required",
+        }],
+        "unverified_candidates": [dict(candidate)],
+    }
+    state = _state("Find a lift building in Camden")
+    state["tool_artifacts"] = [
+        agent_loop._artifact(0, "search_properties", search, success=True),
+    ]
+    rendered = build_fc_nodes(Provider([]))["format_output_fc"](state)
+
+    assert rendered["response_type"] == "search"
+    assert rendered["tool_data"]["eligible_recommendations"] == []
+    assert rendered["tool_data"]["candidate_states"][0]["status"] == "unknown"
+    panel = rendered["tool_data"]["recommendations"][0]
+    assert panel["candidate_status"] == "unknown"
+    assert panel["address"] == candidate["address"]
+    assert panel["price"] == candidate["price"]
+    assert candidate["address"] in rendered["final_response"]
+
+
 def test_empty_retrieval_cannot_license_market_amount_but_user_amount_is_allowed():
     from uk_rent_agent.agent.critic import unsupported_external_numbers
 

@@ -28,12 +28,12 @@ class RAGCoordinator:
         # the query; fall back to the target location for a meaningful search.
         if user_query and len(user_query) < 30 and ('do not' in user_query.lower() or 'nope' in user_query.lower() or 'nothing' in user_query.lower()):
             search_query = criteria.get('destination', 'London')
-            print(f"    -> [RAG] Detected clarification reply, using location-based search: '{search_query}'")
+            print(f"    -> [RAG] Detected clarification reply; query_chars={len(str(search_query))}")
         else:
             search_query = user_query
 
         # Semantic property search
-        print(f"    -> [RAG] Starting semantic search for: {search_query[:50]}...")
+        print(f"    -> [RAG] Starting semantic search query_chars={len(str(search_query))}")
         semantic_results = self.property_store.search(search_query, top_k=20)
         print(f"    -> [RAG] Got {len(semantic_results)} semantic results")
 
@@ -51,7 +51,7 @@ class RAGCoordinator:
         3. far over budget (reject) - not recommended
         """
         max_budget = criteria.get('max_budget', 999999)
-        print(f"    -> [DEBUG] _hybrid_rank: Input {len(properties)} properties, max_budget: {max_budget}")
+        print(f"    -> [DEBUG] _hybrid_rank input_count={len(properties)} budget_present={max_budget is not None}")
 
         perfect_match = []
         soft_violation = []  # over budget but considerable (up to +15%)
@@ -67,13 +67,13 @@ class RAGCoordinator:
                     prop_price = float(price_str.replace('£', '').replace(',', '').replace(' pcm', '').strip())
                     prop['parsed_price'] = prop_price
                 except (ValueError, AttributeError):
-                    print(f"    ⚠️ Could not parse price for {prop.get('Address', 'Unknown')}: {price_str}")
+                    print("    ⚠️ Could not parse property price")
                     continue  # skip properties whose price can't be parsed
 
             # Hard filter: over budget by > 15% -> exclude
             if prop_price > max_budget * 1.15:
                 rejected += 1
-                print(f"    -> [DEBUG] Prop {i}: {prop.get('Address', 'Unknown')[:40]} REJECTED - Price £{prop_price} > budget limit £{max_budget * 1.15}")
+                print(f"    -> [DEBUG] Prop {i}: REJECTED reason=budget_limit")
                 continue
 
             score = prop.get('similarity_score', 0) * 0.4  # Semantic weight

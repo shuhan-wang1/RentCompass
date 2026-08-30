@@ -62,10 +62,13 @@ from core.langgraph_agent import (
     # cannot answer the same follow-up differently.
     _refinable_previous_results,
     build_refinement_raw_data,
+    _search_payload_has_candidates,
+    _structured_search_tool_data,
     format_refinement_output,
 )
 from core.candidate_validation import (
     render_candidate_status,
+    render_similar_listings,
     validate_commute_response,
     validate_search_payload,
     validate_search_payload_with_provider,
@@ -110,6 +113,11 @@ _CARD_FORMATTERS = {
     "search_nearby_pois": _format_pois,
     "calculate_commute_cost": _format_commute_cost,
 }
+
+# search_properties statuses that carry an actual result set. `found` is the exact-match
+# pool; `no_exact_match_but_similar` is the closest-recall fallback. Both must repaint the
+# listing panel — neither is a plain chat answer.
+_SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar"})
 
 
 # ─── ToolSpec (contract D fallback) ─────────────────────────────────
@@ -178,26 +186,43 @@ def _load_memory_gate():
 
 
 # ─── read-tool dispatch policy (imported defensively) ───────────────
+_POLICY_GOVERNED_READ_TOOLS = frozenset({"search_properties", "web_search"})
+
+
+@dataclass(frozen=True)
+class _PolicyFailureDenial:
+    reason: str = "read policy unavailable"
+    guidance: str = (
+        "This retrieval was not run because its dispatch policy was unavailable. "
+        "Answer only from already verified evidence or ask the user to retry."
+    )
+    reference: None = None
+
+
 def _load_tool_policy():
-    """Return core.tool_policy, or None if it is unavailable. Indirected exactly like
-    _load_memory_gate so tests can inject a stub, and so the loop degrades to the previous
-    dispatch-everything behaviour rather than crashing if the module cannot import."""
+    """Return core.tool_policy, or None if it is unavailable.
+
+    Import failure is represented explicitly. The denial helper then refuses only the
+    retrieval tools owned by this policy; unrelated calculators and local reads remain usable.
+    """
     try:
         from core import tool_policy  # type: ignore
         return tool_policy
-    except Exception:
+    except Exception as exc:
+        logger.error("fc_loop.read_policy_unavailable type=%s", type(exc).__name__)
         return None
 
 
 def _read_tool_denial(policy, name: str, args: dict, current_message: str):
-    """Consult the read policy, swallowing any error. A policy that raises must never take
-    the turn down with it — the fallback is the pre-policy behaviour (dispatch)."""
+    """Consult the retrieval dispatch policy and fail closed for policy-owned tools."""
     if policy is None:
-        return None
+        return _PolicyFailureDenial() if name in _POLICY_GOVERNED_READ_TOOLS else None
     try:
         return policy.read_tool_denial(name, args, current_message=current_message)
-    except Exception:
-        logger.warning("fc_loop.read_policy_error tool=%s", name, exc_info=True)
+    except Exception as exc:
+        logger.warning("fc_loop.read_policy_error tool=%s type=%s", name, type(exc).__name__)
+        if name in _POLICY_GOVERNED_READ_TOOLS:
+            return _PolicyFailureDenial(reason="read policy evaluation failed")
         return None
 
 
@@ -228,8 +253,8 @@ def _statutory_money_answer(current_message: str, reply_language: str):
         from core.tenancy_reference import statutory_answer
         return statutory_answer(kind, amount, period, language=reply_language,
                                 holding_deposit_gbp=holding)
-    except Exception:
-        logger.warning("fc_loop.statutory_answer_error", exc_info=True)
+    except Exception as exc:
+        logger.warning("fc_loop.statutory_answer_error type=%s", type(exc).__name__)
         return None
 
 
@@ -245,8 +270,8 @@ def _rent_conversion_answer(current_message: str, reply_language: str):
         direction, amount = verdict
         from core.tenancy_reference import rent_conversion_answer
         return rent_conversion_answer(direction, amount, language=reply_language)
-    except Exception:
-        logger.warning("fc_loop.rent_conversion_answer_error", exc_info=True)
+    except Exception as exc:
+        logger.warning("fc_loop.rent_conversion_answer_error type=%s", type(exc).__name__)
         return None
 
 
@@ -579,7 +604,7 @@ def _build_messages(state: AgentState) -> list:
     except PromptAssemblyError:
         raise
     except Exception as exc:
-        logger.exception("fc_loop.prompt_assembly_failed")
+        logger.error("fc_loop.prompt_assembly_failed type=%s", type(exc).__name__)
         raise PromptAssemblyError("fc_loop prompt assembly failed") from exc
 
 
@@ -842,6 +867,20 @@ async def _offload_tool_call(coro_factory, *, timing: Optional[dict] = None):
     if isinstance(outcome, BaseException):
         raise outcome
     return outcome
+
+
+class _OffloadedValidationProvider:
+    """Keep post-search fan-out off both the graph loop and its shared default executor."""
+
+    def __init__(self, delegate):
+        self._delegate = delegate
+
+    def list_specs(self):
+        return self._delegate.list_specs()
+
+    async def execute_tool(self, name: str, **params):
+        return await _offload_tool_call(
+            lambda: self._delegate.execute_tool(name, **params))
 
 
 def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str,
@@ -1823,7 +1862,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         # Turn-wide deadline anchor (deliverable 1): capture t0 at the entry node so the whole
         # turn (LLM + tools) is measured, not just tool time. Threaded through state so the
         # agent + execute_tools nodes can compute elapsed and enforce the soft wrap / deadline.
-        return Command(update={"turn_start_monotonic": time.monotonic()}, goto="agent")
+        return Command(update={
+            "turn_start_monotonic": state.get("turn_start_monotonic") or time.monotonic(),
+        }, goto="agent")
 
     # ── agent ──────────────────────────────────────────────────────
     async def _resolve_pending_memory(state: AgentState):
@@ -1876,6 +1917,24 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     + ". Tell the user it has been saved.")
         return ("[memory] The user confirmed, but saving the frozen candidate failed; "
                 "apologize briefly and offer to retry.")
+
+    async def _bounded_llm_invoke(call, prompt_messages, deadline_monotonic: float):
+        """Run one provider call without ever waiting beyond an absolute turn deadline."""
+        remaining = deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise asyncio.TimeoutError("LLM turn deadline exhausted before dispatch")
+        task = asyncio.ensure_future(call.ainvoke(prompt_messages))
+        try:
+            done, _pending = await asyncio.wait([task], timeout=remaining)
+        except BaseException:
+            task.cancel()
+            task.add_done_callback(_swallow_abandoned_task)
+            raise
+        if task not in done:
+            task.cancel()
+            task.add_done_callback(_swallow_abandoned_task)
+            raise asyncio.TimeoutError("LLM call exceeded the turn deadline")
+        return task.result()
 
     async def _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start):
         """Turn-wide soft-wrap answer-now generation (FIX 2 + FIX 3). Runs the tools-disabled
@@ -1944,7 +2003,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     raise ValueError("wrap-up response leaked tool-call markup")
                 return "ok", text, resp
             except Exception as e:  # LLM error / leak
-                logger.warning("fc_loop.wrap_llm_error %s", e)
+                logger.warning("fc_loop.wrap_llm_error type=%s", type(e).__name__)
                 return "error", None, None
 
         if wrap_timeout >= _wrap_min_attempt_s():
@@ -2032,10 +2091,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             for k, (nm, args) in enumerate(added):
                 calls.append({"name": nm, "args": args,
                               "id": f"fanout_{loop_turn}_{k}", "type": "tool_call"})
-        except Exception:
+        except Exception as exc:
             # A message object that will not take extra tool calls must never take the turn
             # down: fall back to exactly the pre-fan-out behaviour.
-            logger.warning("fc_loop.fanout_attach_failed", exc_info=True)
+            logger.warning("fc_loop.fanout_attach_failed type=%s", type(exc).__name__)
             return []
         names = [nm for nm, _a in added]
         logger.info("fc_loop.dimension_fanout added=%s batch_now=%d loop_turn=%d",
@@ -2156,11 +2215,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         specs = list(provider.list_specs())
         if degraded:
-            # Loop cap: one last no-tools call to answer from the observations gathered.
+            # Loop cap: one last no-tools call, still inside the same whole-turn ceiling.
             llm = _llm()
             prompt_msgs = messages + [system_message(_LOOP_LIMIT_PROMPT_SPEC)]
             assert_registered_system_messages(prompt_msgs)
-            resp = await llm.ainvoke(prompt_msgs)
+            cap_turn_start = state.get("turn_start_monotonic") or 0.0
+            cap_deadline = (
+                cap_turn_start + _turn_soft_wrap_s() + _final_reserve_s()
+                - _wrap_critic_reserve_s()
+                if cap_turn_start else time.monotonic() + _final_reserve_s()
+            )
+            try:
+                resp = await _bounded_llm_invoke(llm, prompt_msgs, cap_deadline)
+            except Exception as exc:
+                logger.warning("fc_loop.limit_llm_failed type=%s", type(exc).__name__)
+                elapsed = ((time.monotonic() - cap_turn_start) if cap_turn_start else 0.0)
+                return await _wrap_up(
+                    state, messages, specs, loop_turn, elapsed, cap_turn_start)
             text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
             return Command(update={
                 "messages": messages + [resp], "loop_turn": loop_turn,
@@ -2188,7 +2259,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             return await _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start)
 
         llm = _llm().bind_tools(_specs_to_openai(specs))
-        resp = await llm.ainvoke(messages)
+        planning_deadline = (
+            turn_start + wrap_edge if turn_start else time.monotonic() + max(1.0, wrap_edge)
+        )
+        try:
+            resp = await _bounded_llm_invoke(llm, messages, planning_deadline)
+        except Exception as exc:
+            logger.warning("fc_loop.plan_llm_failed type=%s", type(exc).__name__)
+            elapsed = (time.monotonic() - turn_start) if turn_start else 0.0
+            return await _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start)
         tool_calls = list(getattr(resp, "tool_calls", None) or [])
         if (explicit_memory_required
                 and not any(tc.get("name") == "remember" for tc in tool_calls)):
@@ -2281,6 +2360,19 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         acc = state.get("accumulated_search_criteria") or {}
         if not p.get("current_message"):
             p["current_message"] = ec.get("current_message", "")
+        # A hard filter the model invented (a plausible budget, a bedroom count, "shared")
+        # narrows the search to nothing while staying invisible to the user. Drop anything
+        # not traceable to the accumulated criteria or to this turn's own words, BEFORE the
+        # accumulated fill-in below — after it, model-supplied and harness-supplied values
+        # are indistinguishable.
+        try:
+            from core.tools.search_properties import ground_hard_constraints
+            p, _ungrounded = ground_hard_constraints(p, acc, p.get("current_message") or "")
+            if _ungrounded:
+                logger.info("fc_loop.ungrounded_hard_constraints fields=%s",
+                            ",".join(_ungrounded))
+        except Exception as exc:
+            logger.error("fc_loop.ground_hard_constraints_failed type=%s", type(exc).__name__)
         try:
             from core.tools.search_properties import _extract_area
             switched = _extract_area(p.get("current_message") or "")
@@ -2480,23 +2572,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         context_tainted=_tainted, user_authorized=user_authorized,
                         audit_key=_akey, reason=None)
                 else:
-                    # No gate module yet: fall back to the legacy taint rule (deny writes in a
-                    # tainted turn) so the safety property holds before Agent G lands.
-                    from uk_rent_agent.agent.guardrails import tool_allowed
-                    if not tool_allowed(side_effect="write",
-                                        context_tainted=state.get("context_tainted", False),
-                                        tool_name=name):
-                        _note_write_decision(
-                            tool=name, decision="denied_forbidden", context_tainted=_tainted,
-                            user_authorized=False, audit_key=_akey,
-                            reason="memory gate unavailable: plain guardrail refused")
-                        plan.append((tc, digest, ("deny", ""), args))
-                        continue
-                    # Passed the plain guardrail, which only lets an UNTAINTED write
-                    # through (allow_tainted_memory defaults to False here).
+                    # A missing gate means the authorization/content-provenance contract
+                    # cannot be evaluated. Never reduce that contract to a taint-only check:
+                    # an untainted model hallucination is still not user-authorized.
                     _note_write_decision(
-                        tool=name, decision="allowed", context_tainted=_tainted,
-                        user_authorized=False, audit_key=_akey, reason=None)
+                        tool=name, decision="denied_forbidden", context_tainted=_tainted,
+                        user_authorized=False, audit_key=_akey,
+                        reason="memory gate unavailable: write denied fail-closed")
+                    plan.append((tc, digest, ("deny_unavailable", ""), args))
+                    continue
             else:
                 # READ policy (core.tool_policy). Writes are gated above by memory_gate /
                 # guardrails; until now reads had NO gate at all, which is the whole of the
@@ -2562,9 +2646,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         tool_name=name), el, "write_timeout")
                 return (ToolResult(False, error=f"{name} timed out after {timeout:.0f}s",
                                    tool_name=name), el, "timeout")
-            except Exception as e:  # degrade-don't-crash: one failed tool never kills the batch
+            except Exception:  # degrade-don't-crash: one failed tool never kills the batch
                 el = int((time.monotonic() - t_call) * 1000)
-                return ToolResult(False, error=str(e), tool_name=name), el, "error"
+                return ToolResult(False, error="Tool execution failed", tool_name=name), el, "error"
 
         run_idx = [i for i, (_tc, _d, mode, _a) in enumerate(plan) if mode == "run"]
 
@@ -2786,6 +2870,21 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     }, ensure_ascii=False),
                     tool_call_id=tcid, name=name))
                 continue
+            if isinstance(mode, tuple) and mode[0] == "deny_unavailable":
+                artifacts.append(_artifact(
+                    turn, name, None, digest, success=False,
+                    error="denied: memory authorization gate unavailable",
+                    denied=True, elapsed_ms=0))
+                messages.append(ToolMessage(
+                    content=json.dumps({
+                        "success": False, "data": None,
+                        "error": (
+                            "write blocked: the memory authorization service is unavailable; "
+                            "nothing was saved. Please retry later."
+                        ),
+                    }, ensure_ascii=False),
+                    tool_call_id=tcid, name=name))
+                continue
             if isinstance(mode, tuple) and mode[0] == "deny":
                 frozen = mode[1]
                 # Denied-write artifact contract (Q3 consumes): record a non-executed
@@ -2904,21 +3003,34 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             result = result_by_idx[i]
             if (name == "search_properties" and getattr(result, "success", False)
                     and isinstance(getattr(result, "data", None), dict)):
+                # Candidate-level commute checks are real tool work, not a free post-process.
+                # They share the turn's absolute soft deadline, remaining cumulative tool
+                # budget, fan-out cap and semaphore; their elapsed time is charged below.
+                validation_started = time.monotonic()
+                validation_deadline = min(
+                    _turn_start + _soft_wrap_s,
+                    validation_started + max(0.0, turn_budget - turn_used),
+                )
                 validated, commute_evidence = await validate_search_payload_with_provider(
-                    provider, result.data,
-                    timeout_s=TOOL_TIMEOUTS.get("calculate_commute", TOOL_TIMEOUT_DEFAULT))
+                    _OffloadedValidationProvider(provider), result.data,
+                    timeout_s=TOOL_TIMEOUTS.get("calculate_commute", TOOL_TIMEOUT_DEFAULT),
+                    deadline_monotonic=validation_deadline)
+                turn_used += time.monotonic() - validation_started
                 for evidence in commute_evidence:
                     commute_args = {
                         "from_address": evidence.get("from_address", ""),
                         "to_address": evidence.get("to_address", ""),
                         "mode": evidence.get("mode", "transit"),
                     }
+                    evidence_status = evidence.get("evidence_status")
                     artifacts.append(_artifact(
                         turn, "calculate_commute", evidence.get("raw_data"),
                         _params_digest("calculate_commute", commute_args),
-                        success=evidence.get("evidence_status") == "success",
+                        success=evidence_status == "success",
                         error=evidence.get("error"),
-                        timed_out=evidence.get("evidence_status") == "timeout"))
+                        timed_out=evidence_status == "timeout",
+                        denied=evidence_status in {"budget_exhausted", "skipped"},
+                        elapsed_ms=evidence.get("elapsed_ms")))
                 result.data = validated
             # A SUCCESSFUL call can also have queued behind a saturated pool — that time is
             # indistinguishable from tool latency in elapsed_ms. Recorded only when it is
@@ -3034,18 +3146,19 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             raw = a.get("raw_data")
             if not isinstance(raw, dict):
                 continue
-            if raw.get("candidate_validation") is None:
-                raw = validate_search_payload(
-                    raw, commute_evidence=raw.get("commute_evidence") or [])
-                a["raw_data"] = raw
             # ISSUE #78: an over-budget-ONLY result is still a result. The tool reports
             # `status: found, recommendations: [], over_budget_alternatives: [...]` when
             # nothing lands inside budget but near-misses exist; requiring a non-empty
             # `recommendations` here dropped the whole artifact, so tool_data stayed empty
             # and the panel got nothing — while the model, which sees the alternatives in
             # the tool message, described them in the reply.
-            if (raw.get("status") == "found" and search_found is None
-                    and (raw.get("recommendations") or raw.get("over_budget_alternatives"))):
+            # `no_exact_match_but_similar` is the same class of result one step further out:
+            # the exact-match pool was empty, so the tool recalled the closest listings and
+            # reported them under `similar_properties`. Matching only "found" dropped the
+            # whole artifact, so the panel stayed empty and a real search result shipped as a
+            # plain chat reply — the same failure ISSUE #78 fixed for over-budget-only rows.
+            if (raw.get("status") in _SEARCH_RESULT_STATUSES and search_found is None
+                    and _search_payload_has_candidates(raw)):
                 search_found = raw
             if raw.get("status") == "need_clarification" and search_clarify is None:
                 search_clarify = raw
@@ -3053,36 +3166,34 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 break
 
         if search_found is not None:
-            recs = apply_preference_filter(search_found.get("recommendations") or [], prefs)
-            panel_recs = recs
-            if not panel_recs:
-                # Near-misses remain visible as explicitly excluded alternatives; they are
-                # never placed in the deterministic eligible/recommended collection.
-                panel_recs = apply_preference_filter(
-                    search_found.get("over_budget_alternatives") or [], prefs)
-                for row in panel_recs:
-                    row.setdefault("candidate_status", "excluded")
-                    row.setdefault("status_reason", "over_budget")
-
-            tool_data = {
-                "recommendations": panel_recs,
-                "eligible_recommendations": recs,
-                "search_criteria": search_found.get("search_criteria", {}),
-                "area_recommendations": search_found.get("area_recommendations", []),
-                "candidate_states": search_found.get("candidate_states", []),
-                "excluded_candidates": search_found.get("excluded_candidates", []),
-                "unverified_candidates": search_found.get("unverified_candidates", []),
-                "commute_evidence": search_found.get("commute_evidence", []),
-            }
+            search_found, tool_data = _structured_search_tool_data(
+                search_found, prefs,
+                commute_evidence=search_found.get("commute_evidence") or [],
+            )
+            recs = tool_data["eligible_recommendations"]
+            panel_recs = tool_data["recommendations"]
+            similar_only = bool(not recs and search_found.get("similar_properties")
+                                and not search_found.get("over_budget_alternatives"))
             ec = state.get("extracted_context") or {}
             language = _reply_language_from_ctx(
                 ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
             validation = search_found.get("candidate_validation") or {}
             requires_status = bool(validation.get("excluded") or validation.get("unknown")
                                     or (validation.get("constraints") or {}).get("max_commute_minutes"))
-            response = (render_candidate_status(validation, language=language)
-                        if requires_status else
-                        final_response or search_found.get("summary") or f"I found {len(recs)} properties.")
+            if similar_only and search_found.get("status") == "no_exact_match_but_similar":
+                # A similar-recall result failed no stated constraint — the exact-match pool
+                # was simply empty. render_candidate_status would file every row under
+                # "excluded / does not meet" and drop its price, so this path renders its own
+                # honest lead (why there is no exact match, what to do next) plus the rows.
+                lead = " ".join(part for part in (search_found.get("message"),
+                                                  search_found.get("suggestion")) if part)
+                response = "\n\n".join(part for part in (
+                    lead, render_similar_listings(panel_recs, language=language)) if part)
+            else:
+                response = (render_candidate_status(validation, language=language)
+                            if requires_status else
+                            final_response or search_found.get("summary")
+                            or f"I found {len(recs)} properties.")
             response_type = "search"
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)

@@ -87,7 +87,7 @@ def _tfl_get(path: str, params: dict | None = None, timeout: int = 15):
             data = None
         return resp.status_code, data
     except requests.exceptions.RequestException as e:
-        print(f"  [TfL] request error {path}: {e}")
+        print(f"  [TfL] request error; path_chars={len(str(path))} error_type={type(e).__name__}")
         return None, None
 
 
@@ -124,7 +124,7 @@ def _geocode(location: str):
     try:
         return maps_service.geocode_address(location)
     except Exception as e:
-        print(f"  [TfL] geocode error: {e}")
+        print(f"  [TfL] geocode error; location_chars={len(str(location))} error_type={type(e).__name__}")
         return None
 
 
@@ -607,8 +607,10 @@ def get_transport_info_impl(
     if qt not in ("journey", "fare", "line_status", "travelcard"):
         qt = _infer_query_type(user_query, from_location, to_location, line)
 
-    print(f"   🚇 [TfL] get_transport_info: type={qt} from={from_location!r} "
-          f"to={to_location!r} line={line!r}")
+    print(
+        f"   🚇 [TfL] get_transport_info: type={qt} "
+        f"from_chars={len(from_location)} to_chars={len(to_location)} line_chars={len(line)}"
+    )
 
     try:
         if qt == "line_status":
@@ -617,8 +619,8 @@ def get_transport_info_impl(
             return _do_travelcard(end_zone, from_location, to_location, travel_type)
         return _do_journey(from_location, to_location, want_fare=(qt == "fare"))
     except Exception as e:
-        print(f"   ❌ [TfL] get_transport_info error: {e}")
-        return {"success": False, "error": f"Transport lookup failed: {e}. See tfl.gov.uk."}
+        print(f"   ❌ [TfL] get_transport_info error_type={type(e).__name__}")
+        return {"success": False, "error": "Transport lookup failed. See tfl.gov.uk."}
 
 
 get_transport_info_tool = Tool(
@@ -653,6 +655,8 @@ get_transport_info_tool = Tool(
             "end_zone": {
                 "type": "integer",
                 "description": "Furthest London fare zone for a Travelcard (2-6).",
+                "minimum": 2,
+                "maximum": 6,
             },
             "travel_type": {
                 "type": "string",

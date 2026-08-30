@@ -116,7 +116,7 @@ def aggregate(slugs, budget=None, *, now: float | None = None) -> dict:
     try:
         conn = sqlite3.connect(str(path), timeout=10)
     except sqlite3.Error as exc:
-        print(f"  [area_stats] cache open failed: {exc}")
+        print(f"  [area_stats] cache open failed; error_type={type(exc).__name__}")
         return out
     try:
         for slug in slugs:
@@ -131,7 +131,7 @@ def aggregate(slugs, budget=None, *, now: float | None = None) -> dict:
                     (f"otm|{slug_l}|%",),
                 ).fetchall()
             except sqlite3.Error as exc:
-                print(f"  [area_stats] query failed for '{slug_l}': {exc}")
+                print(f"  [area_stats] query failed; slug_chars={len(slug_l)} error_type={type(exc).__name__}")
                 continue
             for rows_json, fetched in fetched_rows:
                 try:

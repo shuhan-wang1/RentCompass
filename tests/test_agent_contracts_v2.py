@@ -7,6 +7,7 @@ held-out fixture text.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 
 import pytest
@@ -156,6 +157,82 @@ def test_commute_collector_calls_each_listing_and_preserves_failure_timeout():
     ))
     assert provider.calls == ["8 Cedar Lane", "9 Cedar Lane", "10 Cedar Lane"]
     assert {x["evidence_status"] for x in evidence} == {"success", "failed", "timeout"}
+
+
+def test_commute_collector_enforces_one_shared_deadline_and_concurrency_cap():
+    class Provider:
+        def __init__(self):
+            self.calls = []
+            self.active = 0
+            self.peak_active = 0
+
+        async def execute_tool(self, name, **params):
+            self.calls.append(params["from_address"])
+            self.active += 1
+            self.peak_active = max(self.peak_active, self.active)
+            try:
+                await asyncio.sleep(1)
+                return _Result(True, {"duration_minutes": 20})
+            finally:
+                self.active -= 1
+
+    provider = Provider()
+    rows = [_candidate(f"{index} Ash Lane", "£900") for index in range(6)]
+    started = time.monotonic()
+    evidence = asyncio.run(collect_commute_evidence(
+        provider, rows, "North Campus", timeout_s=1,
+        deadline_monotonic=time.monotonic() + 0.08, concurrency=2,
+    ))
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.5
+    assert provider.peak_active <= 2
+    assert len(provider.calls) == 2
+    assert [row["evidence_status"] for row in evidence[:2]] == ["timeout", "timeout"]
+    assert all(row["evidence_status"] in {"budget_exhausted", "skipped"}
+               for row in evidence[2:])
+
+
+def test_commute_timeout_does_not_start_a_second_background_wave():
+    class Provider:
+        def __init__(self):
+            self.calls = 0
+
+        async def execute_tool(self, name, **params):
+            self.calls += 1
+            await asyncio.sleep(0.2)
+            return _Result(True, {"duration_minutes": 20})
+
+    provider = Provider()
+    evidence = asyncio.run(collect_commute_evidence(
+        provider,
+        [_candidate(f"{index} Elm Lane", "£900") for index in range(6)],
+        "North Campus", timeout_s=0.02,
+        deadline_monotonic=time.monotonic() + 1.0, concurrency=2,
+    ))
+
+    assert provider.calls == 2
+
+
+def test_commute_collector_marks_candidates_beyond_fanout_cap_without_dispatch():
+    class Provider:
+        def __init__(self):
+            self.calls = []
+
+        async def execute_tool(self, name, **params):
+            self.calls.append(params["from_address"])
+            return _Result(True, {"duration_minutes": 20})
+
+    provider = Provider()
+    rows = [_candidate(f"{index} Birch Lane", "£900") for index in range(7)]
+    evidence = asyncio.run(collect_commute_evidence(
+        provider, rows, "South Campus", max_candidates=3, concurrency=2,
+    ))
+
+    assert len(provider.calls) == 3
+    assert len(evidence) == len(rows)
+    assert all(row["evidence_status"] == "success" for row in evidence[:3])
+    assert all(row["evidence_status"] == "skipped" for row in evidence[3:])
 
 
 def _memory_state(message):

@@ -23,7 +23,7 @@ def _extract_date_from_detail_page(soup):
             if "available" in tag_text.lower():
                 # 使用正则表达式安全地移除前缀
                 date_text = re.sub(r'Available from', '', tag_text, flags=re.I).strip()
-                print(f" -> Found Date (Tag): {date_text}")
+                print(" -> Found availability date (tag)")
                 return date_text
     # --- 【修改结束】 ---
 
@@ -34,7 +34,7 @@ def _extract_date_from_detail_page(soup):
         letting_details = data.get('props',{}).get('pageProps',{}).get('details',{}).get('lettings')
         if letting_details and letting_details.get('lettingDate'):
             date_text = letting_details['lettingDate']
-            print(f" -> Found Date (JSON): {date_text}")
+            print(" -> Found availability date (JSON)")
             return date_text
 
     # Strategy 3: Find the "Key features" list
@@ -48,7 +48,7 @@ def _extract_date_from_detail_page(soup):
                     full_text = li.get_text(strip=True)
                     date_text = re.sub(r'available from', '', full_text, flags=re.I).strip()
                     date_text = re.sub(r'available', '', date_text, flags=re.I).strip()
-                    print(f" -> Found Date (Features List): {date_text.capitalize()}")
+                    print(" -> Found availability date (features list)")
                     return date_text.capitalize()
 
     # Strategy 4: Search the full description text
@@ -58,7 +58,7 @@ def _extract_date_from_detail_page(soup):
         match = re.search(r"available (from |on |after |now|immediately|[\w\s,./]+?)(?:\.|\n)", description_div.get_text(), re.I)
         if match:
             date_text = match.group(1).strip()
-            print(f" -> Found Date (Description): {date_text}")
+            print(" -> Found availability date (description)")
             return date_text
 
     return None
@@ -72,7 +72,7 @@ def find_properties_zoopla(location_slug, radius, min_price, max_price, min_bedr
     headers = {'Content-Type': 'application/json'}
     session_id = f'zoopla_session_{random.randint(1000, 9999)}'
 
-    print(f"    - Initializing direct communication with FlareSolverr (session: {session_id})...")
+    print("    - Initializing direct communication with FlareSolverr; session_configured=True")
 
     try:
         init_payload = {'cmd': 'sessions.create', 'session': session_id}
@@ -81,7 +81,7 @@ def find_properties_zoopla(location_slug, radius, min_price, max_price, min_bedr
         if response.json().get('status') != 'ok':
             raise Exception("Failed to create a FlareSolverr session.")
     except requests.exceptions.RequestException as e:
-        print(f"    - Connection to FlareSolverr failed. Error: {e}")
+        print(f"    - Connection to FlareSolverr failed; error_type={type(e).__name__}")
         return []
 
     try:
@@ -152,7 +152,7 @@ def find_properties_zoopla(location_slug, radius, min_price, max_price, min_bedr
                     final_properties.append(prop)
                     continue
 
-                print(f"    - ({i+1}/{total}) Checking: {prop['URL']}", end='')
+                print(f"    - ({i+1}/{total}) Checking property; url_present={bool(prop.get('URL'))}", end='')
                 
                 try:
                     time.sleep(random.uniform(2.0, 4.0))
@@ -175,7 +175,7 @@ def find_properties_zoopla(location_slug, radius, min_price, max_price, min_bedr
                         print(f" -> Date not found")
 
                 except Exception as e_detail:
-                    print(f" -> Detail page query failed: {e_detail}")
+                    print(f" -> Detail page query failed; error_type={type(e_detail).__name__}")
                     prop['Available From'] = 'Query Failed'
                 
                 final_properties.append(prop)
@@ -187,6 +187,6 @@ def find_properties_zoopla(location_slug, radius, min_price, max_price, min_bedr
         destroy_payload = {'cmd': 'sessions.destroy', 'session': session_id}
         try:
             session.post(flaresolverr_url, headers=headers, json=destroy_payload, timeout=20)
-            print(f"    - FlareSolverr session '{session_id}' destroyed.")
+            print("    - FlareSolverr session destroyed")
         except Exception as e_destroy:
-            print(f"    - Failed to destroy FlareSolverr session: {e_destroy}")
+            print(f"    - Failed to destroy FlareSolverr session; error_type={type(e_destroy).__name__}")

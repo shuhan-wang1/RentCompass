@@ -554,3 +554,27 @@ def test_the_scan_actually_sees_the_model_var():
     found = _scan_literal_env_defaults()
     assert "DEEPSEEK_MODEL" in found, "the literal-default scan no longer sees DEEPSEEK_MODEL"
     assert len(found) >= 10, f"scan found only {len(found)} env defaults — regex likely broken"
+
+
+def test_all_llm_client_factories_apply_bounded_transport_configuration(monkeypatch):
+    monkeypatch.setenv("LLM_REQUEST_TIMEOUT_SECONDS", "7")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "2")
+
+    from uk_rent_agent.llm.router import ModelRouter
+    routed = ModelRouter().create("intent")
+    assert routed.request_timeout == 7.0
+    assert routed.max_retries == 2
+
+    from core import llm_config
+    monkeypatch.setattr(llm_config, "DEEPSEEK_MODEL", "deepseek-v4-flash")
+    direct = llm_config._deepseek_llm(0.1, 100)
+    assert direct.request_timeout == 7.0
+    assert direct.max_retries == 2
+
+    ollama = llm_config._ollama_llm(0.1, 100, 1024)
+    assert ollama.model_dump()["client_kwargs"]["timeout"] == 7.0
+    assert ollama.model_dump()["async_client_kwargs"]["timeout"] == 7.0
+
+    from core import llm_interface
+    assert llm_interface._effective_request_timeout(360) == 7.0
+    assert llm_interface._effective_request_timeout(3) == 3.0

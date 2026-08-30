@@ -784,7 +784,7 @@ def _osm_classify(name: str):
         import requests
         from core.maps_service import _OSM_HEADERS
     except Exception as e:  # maps_service/requests unavailable -> degrade quietly
-        print(f"  [classify_place] OSM tier unavailable: {e}")
+        print(f"  [classify_place] OSM tier unavailable; error_type={type(e).__name__}")
         return (None, None)
     try:
         resp = requests.get(
@@ -797,7 +797,7 @@ def _osm_classify(name: str):
             return (None, None)
         arr = resp.json()
     except Exception as e:
-        print(f"  [classify_place] OSM lookup failed for '{name}': {e}")
+        print(f"  [classify_place] OSM lookup failed; name_chars={len(str(name))} error_type={type(e).__name__}")
         return (None, None)
     if not arr:
         return (None, None)
@@ -851,7 +851,7 @@ def _llm_classify(name: str):
             "unknown": "unknown",
         }.get(cat)
     except Exception as e:
-        print(f"  [classify_place] LLM tier failed for '{name}': {e}")
+        print(f"  [classify_place] LLM tier failed; name_chars={len(str(name))} error_type={type(e).__name__}")
         return None
 
 
@@ -1105,7 +1105,7 @@ def extract_destination_from_text(text: str) -> dict | None:
             result["name"] = cand
             return result
     except Exception as e:  # never let a scan turn a search into a 500
-        print(f"  [extract_destination_from_text] scan failed: {e}")
+        print(f"  [extract_destination_from_text] scan failed; error_type={type(e).__name__}")
         return None
     return None
 
@@ -1224,8 +1224,8 @@ def _build_cache(path: Path) -> ListingCache:
     except (OSError, sqlite3.Error) as exc:
         fallback_path = Path(tempfile.gettempdir()) / "uk-rent-agent" / "listing_cache.sqlite3"
         print(
-            f"  [on_demand] listing cache {path} is not writable ({exc}); "
-            f"using {fallback_path}"
+            f"  [on_demand] listing cache is not writable; "
+            f"error_type={type(exc).__name__} fallback_enabled=True"
         )
         return ListingCache(fallback_path)
 
@@ -1280,7 +1280,7 @@ def iter_cached_listings() -> list[dict]:
         with cache._lock, cache._connect() as db:
             raw = db.execute("SELECT rows, fetched FROM listings").fetchall()
     except (OSError, sqlite3.Error) as exc:
-        print(f"  [on_demand] listing cache read failed: {exc}")
+        print(f"  [on_demand] listing cache read failed; error_type={type(exc).__name__}")
         return []
     seen: dict[str, dict] = {}
     ordered: list[str] = []
@@ -1321,8 +1321,8 @@ def _fallback_cache(exc: Exception) -> ListingCache:
     fallback_path = Path(tempfile.gettempdir()) / "uk-rent-agent" / "listing_cache.sqlite3"
     with _CACHE_LOCK:
         print(
-            f"  [on_demand] listing cache {_CACHE.path if _CACHE else _CACHE_PATH} failed "
-            f"during use ({exc}); switching to {fallback_path}"
+            f"  [on_demand] listing cache failed during use; "
+            f"error_type={type(exc).__name__} fallback_enabled=True"
         )
         _CACHE = ListingCache(fallback_path)
         return _CACHE
@@ -1445,7 +1445,7 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
     ``MAX_IN_FLIGHT_SCRAPES`` calls can run or queue process-wide. Its result is
     discarded and never cached, so an abandoned area cannot pollute the store."""
     if not _SCRAPE_SLOTS.acquire(blocking=False):
-        print(f"  [on_demand] scrape capacity exhausted for '{slug}'")
+        print(f"  [on_demand] scrape capacity exhausted; slug_chars={len(str(slug))}")
         return None, True
     try:
         fut = _SCRAPE_EXECUTOR.submit(
@@ -1461,10 +1461,10 @@ def _scrape_live(slug, min_beds, max_beds, min_price, max_price, limit, budget_s
         rows = fut.result(timeout=budget_s)
         return rows, False
     except FuturesTimeout:
-        print(f"  [on_demand] scrape budget ({budget_s}s) exceeded for '{slug}'")
+        print(f"  [on_demand] scrape budget exceeded; slug_chars={len(str(slug))}")
         return None, True
     except Exception as e:  # network/parse failure -> stale-if-error
-        print(f"  [on_demand] scrape error for '{slug}': {e}")
+        print(f"  [on_demand] scrape error; slug_chars={len(str(slug))} error_type={type(e).__name__}")
         return None, False
 
 
@@ -1490,8 +1490,8 @@ def _band_rescue(slug, city, min_beds, max_beds, min_price, max_price, limit, bu
         rows = _filter_band(cached[0], min_beds, max_beds, min_price, max_price, limit)
         return (rows, "hit") if rows else (None, None)
 
-    print(f"  [on_demand] canonical pool has nothing in band for '{slug}' "
-          f"(beds {min_beds}-{max_beds}, £{min_price}-{max_price}); re-scraping AT the band")
+    print(f"  [on_demand] canonical pool has nothing in requested band; "
+          f"slug_chars={len(str(slug))}; re-scraping")
     scraped, _timed_out = _scrape_live(slug, min_beds, max_beds, min_price, max_price,
                                        BAND_RESCUE_SCRAPE_LIMIT, budget_s)
     if scraped is None:
@@ -1502,7 +1502,7 @@ def _band_rescue(slug, city, min_beds, max_beds, min_price, max_price, limit, bu
     except (OSError, sqlite3.Error) as exc:
         _fallback_cache(exc).set(key, rows)
     rows = _filter_band(rows, min_beds, max_beds, min_price, max_price, limit)
-    print(f"  [on_demand] band rescue for '{slug}': {len(rows)} row(s)")
+    print(f"  [on_demand] band rescue complete; slug_chars={len(str(slug))} row_count={len(rows)}")
     return (rows, "scraped") if rows else (None, None)
 
 
@@ -1686,7 +1686,7 @@ def _demo_rows(requested_city: str | None) -> list[dict]:
         from .normalize import read_csv
         rows = read_csv(FAKE_CSV)
     except Exception as e:
-        print(f"  [on_demand] demo fallback unavailable: {e}")
+        print(f"  [on_demand] demo fallback unavailable; error_type={type(e).__name__}")
         return []
     if requested_city:
         matched = [r for r in rows if requested_city in str(r.get("Address", "")).lower()]

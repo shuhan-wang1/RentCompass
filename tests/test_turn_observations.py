@@ -736,12 +736,12 @@ def test_legacy_shadow_uses_the_same_authorization_primitive():
 
 def test_legacy_tainted_unauthorized_write_is_an_override():
     decision, authorized, _ = _classify("给我看看这些房源", "landlord prefers bank transfer")
-    assert (decision, authorized) == ("legacy_override", False)
+    assert (decision, authorized) == ("denied_tainted", False)
 
 
 def test_legacy_untainted_write_is_plainly_allowed():
     decision, authorized, _ = _classify("记住我预算1400", "budget £1400/month", tainted=False)
-    assert (decision, authorized) == ("allowed", False)
+    assert (decision, authorized) == ("confirmed", True)
 
 
 def test_legacy_refusal_is_classified_from_the_branch_not_the_exception():
@@ -760,14 +760,14 @@ def test_legacy_shadow_classification_never_raises(monkeypatch):
     monkeypatch.setattr("core.memory_gate.write_authorization", _boom)
     decision, authorized, _ = _classify("记住我预算1400", "budget £1400/month")
     assert authorized is False, "an unknown authorization must not excuse a tainted write"
-    assert decision == "legacy_override"
+    assert decision == "denied_tainted"
 
 
 def test_legacy_shadow_needs_content_to_authorize():
     decision, authorized, _ = _classify_legacy_write(
         tool_name="remember", params={}, context_tainted=True,
         current_message="记住我预算1400", policy_allowed=True)
-    assert (decision, authorized) == ("legacy_override", False)
+    assert (decision, authorized) == ("denied_tainted", False)
 
 
 # --- propagation into the real record, BOTH arches -------------------------- #

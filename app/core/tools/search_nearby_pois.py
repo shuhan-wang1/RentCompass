@@ -471,9 +471,9 @@ def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[
         hit, coords = _geocode_cached(key)
         if hit:
             if coords:
-                print(f"⚡ [Geocode] 缓存命中: {coords[0]:.6f}, {coords[1]:.6f}")
+                print("⚡ [Geocode] 缓存命中 outcome=coordinates")
             else:
-                print(f"⚡ [Geocode] 缓存命中: 已知失败，跳过 ({address[:40]})")
+                print(f"⚡ [Geocode] 缓存命中 outcome=known_failure address_chars={len(address)}")
             return coords
     try:
         geolocator = Nominatim(user_agent="uk_rent_recommender_v1", timeout=10)
@@ -486,13 +486,13 @@ def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[
                 # Not a cacheable verdict: the ladder was cut short, not exhausted.
                 return None
             attempted += 1
-            print(f"🔍 [Geocode] 尝试: {variant[:60]}...")
+            print(f"🔍 [Geocode] 尝试 variant_chars={len(variant)}")
             # country_codes: every listing in this product is in the UK, so a same-name place
             # abroad is never the answer. (It does NOT settle London vs Stratford-upon-Avon —
             # both are GB; address_variants handles that by asking for London first.)
             location = geolocator.geocode(variant, country_codes="gb")
             if location:
-                print(f"✅ [Geocode] 成功! {location.latitude:.6f}, {location.longitude:.6f}")
+                print("✅ [Geocode] 成功 coordinates_resolved=True")
                 coords = (location.latitude, location.longitude)
                 if key:
                     _geocode_store(key, coords)
@@ -504,9 +504,9 @@ def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[
             _geocode_store(key, None)
 
     except GeocoderTimedOut:
-        print(f"⏱️ 地理编码超时: {address}")
-    except Exception as e:
-        print(f"❌ 地理编码失败: {e}")
+        print(f"⏱️ 地理编码超时 address_chars={len(address)}")
+    except Exception as exc:
+        print(f"❌ 地理编码失败 exception_type={type(exc).__name__}")
     return None
 
 
@@ -563,8 +563,10 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
         age = time.time() - float(cached.get("fetched_at") or 0)
         ttl = POI_RESULT_TTL_S if cached["pois"] else POI_EMPTY_RESULT_TTL_S
         if age < ttl:
-            print(f"  ⚡ [OSM POI] 缓存命中 {poi_type} @ {round(lat, 4)},{round(lon, 4)} "
-                  f"({len(cached['pois'])} 个)")
+            print(
+                f"  ⚡ [OSM POI] 缓存命中 type={poi_type} "
+                f"result_count={len(cached['pois'])}"
+            )
             return list(cached["pois"])
 
     # 通过共享的 Overpass 客户端查询：始终带描述性 User-Agent（否则参考服务器返回 406），
@@ -593,10 +595,13 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
         unconfirmed_empty = True
         print(f"  ⚠️ [OSM POI] {poi_type}: 所有可达镜像都返回空结果 —— "
               f"按'确实没有'处理，但不写入缓存")
-    except OverpassError as e:
-        # API 失败（如缺 User-Agent 导致的 406、超时、限流）不能伪装成"附近没有" —— 抛出让上层报错
-        print(f"❌ OSM 查询失败 ({poi_type}): {e}")
-        raise RuntimeError(f"Overpass API request failed for {poi_type}: {e}") from e
+    except OverpassError as exc:
+        # API 失败不能伪装成"附近没有"；异常原文可能包含镜像 URL。
+        print(
+            f"❌ OSM 查询失败 type={poi_type} "
+            f"exception_type={type(exc).__name__}"
+        )
+        raise RuntimeError(f"Overpass API request failed for {poi_type}") from exc
 
     pois = []
     for element in data.get("elements", []):
@@ -657,8 +662,11 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     if not (unconfirmed_empty and not unique_pois):
         try:
             set_to_cache(cache_key, {"fetched_at": time.time(), "pois": unique_pois})
-        except Exception as e:
-            print(f"  [OSM POI] 结果缓存写入失败（忽略）: {e}")
+        except Exception as exc:
+            print(
+                "  [OSM POI] 结果缓存写入失败（忽略） "
+                f"exception_type={type(exc).__name__}"
+            )
 
     return unique_pois
 
@@ -774,8 +782,11 @@ def _resolve_nearest_station(address: str, lat: float, lon: float) -> dict:
     try:
         from core.place_reference import nearest_stations, STATION_SOURCE
         found = nearest_stations(lat, lon)
-    except Exception as e:
-        print(f"  [nearest station] lookup failed: {e}")
+    except Exception as exc:
+        print(
+            "  [nearest station] lookup failed "
+            f"exception_type={type(exc).__name__}"
+        )
         found = None
 
     if found is None:
@@ -863,11 +874,14 @@ def search_nearby_pois_impl(
         if user_query and poi_type == "all":
             inferred_types = _infer_poi_types_from_query(user_query)
             if inferred_types:
-                print(f"🧠 [OSM POI] 根据用户查询推断 POI 类型: {inferred_types}")
+                print(f"🧠 [OSM POI] 推断 POI 类型 inferred_count={len(inferred_types)}")
         else:
             inferred_types = None
 
-        print(f"🗺️ [OSM POI] 搜索: {poi_type} near {address[:50]}...")
+        print(
+            f"🗺️ [OSM POI] 搜索 requested_type_chars={len(poi_type)} "
+            f"address_chars={len(address)} radius_m={radius}"
+        )
 
         # Coordinates the caller already owns beat anything geocoding can recover from a
         # display name. The listing cache carries geo_location per listing; a listing string
@@ -878,8 +892,7 @@ def search_nearby_pois_impl(
         if coords_in_uk(latitude, longitude):
             coords = (float(latitude), float(longitude))
             exact_coords = True
-            print(f"📍 [OSM POI] 使用调用方提供的坐标，跳过地理编码: "
-                  f"{coords[0]:.6f}, {coords[1]:.6f}")
+            print("📍 [OSM POI] 使用调用方提供的坐标 coordinates_supplied=True")
         else:
             # 地理编码（受同一个 deadline 约束，不能超出授权它的预算）
             coords = geocode_address(address, deadline=deadline)
@@ -892,7 +905,7 @@ def search_nearby_pois_impl(
             }
 
         lat, lon = coords
-        print(f"📍 坐标: {lat:.6f}, {lon:.6f}")
+        print("📍 坐标已解析 coordinates_resolved=True")
 
         # What every distance below is measured FROM. This tool geocodes the query string,
         # so for an AREA question ("how is Hackney?") the origin is a borough centroid and
@@ -939,7 +952,7 @@ def search_nearby_pois_impl(
             else:
                 types_to_query = ["restaurant", "supermarket", "convenience"]
 
-        print(f"🔍 [OSM POI] 将查询类型: {types_to_query}")
+        print(f"🔍 [OSM POI] 查询类型 type_count={len(types_to_query)}")
 
         # 查询每种类型（传递原点坐标用于距离计算）。共享一个 monotonic 截止时间：
         # 截止后不再发起任何 per-type 请求，把剩余类型如实标为 skipped。
@@ -949,7 +962,7 @@ def search_nearby_pois_impl(
             if remaining <= 0:
                 # No per-type request may be issued after the deadline.
                 skipped = list(types_to_query[idx:])
-                print(f"  ⏱️ [OSM POI] 预算已用尽，跳过剩余类型: {skipped}")
+                print(f"  ⏱️ [OSM POI] 预算已用尽 skipped_count={len(skipped)}")
                 break
             # Clamp THIS request to what is left, so the last one issued cannot outlive the
             # deadline that let it start and hand the batch window the win.
@@ -1033,9 +1046,15 @@ def search_nearby_pois_impl(
             payload["note"] = note
         return payload
 
-    except Exception as e:
-        print(f"❌ [OSM POI] 错误: {e}")
-        return {"success": False, "error": str(e), "address": address, "pois": {}}
+    except Exception as exc:
+        print(f"❌ [OSM POI] 错误 exception_type={type(exc).__name__}")
+        return {
+            "success": False,
+            "error": "Nearby POI lookup failed",
+            "address": address,
+            "pois": {},
+            "retryable": True,
+        }
 
 
 # 创建工具实例

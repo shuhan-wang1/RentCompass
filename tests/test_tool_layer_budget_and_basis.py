@@ -457,36 +457,21 @@ def test_no_mode_outside_the_sample_is_ever_calibrated_by_the_producer(monkeypat
 
 
 # =========================================================================== #
-# 4. NOT DONE HERE, and the reason, pinned so the decision is not re-litigated #
+# 4. CJK destination aliases share one resolver across criteria and tool routes #
 # =========================================================================== #
 
-def test_the_cjk_destination_gap_is_still_deliberate_and_still_fails_safe():
-    """``_KNOWN_DESTINATIONS`` has 'imperial' but not '帝国理工', so a Chinese destination never
-    resolves and the commute dimension is DROPPED rather than guessed. That is a capability gap,
-    not a correctness bug, and it is not closed in this change. Three reasons, all checkable:
-
-      * the map lives in ``core/langgraph_agent.py``, which this change does not own;
-      * it feeds ``calculate_commute`` and ``calculate_commute_cost`` on the single-tool path as
-        well as the fan-out, so CJK aliases change zh routing graph-wide and need their own
-        round;
-      * the two consumers match differently. ``_resolve_destination_address`` uses a plain
-        substring test, but ``_extract_*``'s ``names_destination`` wraps each key in ``\\b``, and
-        a ``\\b`` before a CJK character does not fire mid-sentence (both neighbours are word
-        characters). A CJK key added today would therefore resolve a destination while the
-        commute-intent flag stayed off — a half-wired feature, which is worse than an absent
-        one. The third point is asserted below rather than asserted in prose.
-    """
-    import re
-
+def test_pure_chinese_imperial_destination_is_canonical_everywhere():
+    """A first-turn CJK destination must not be lost to ASCII ``\\b`` semantics."""
     from core import langgraph_agent as lga
 
-    assert "imperial" in lga._KNOWN_DESTINATIONS
-    assert not any(ord(ch) > 0x2E80 for kw in lga._KNOWN_DESTINATIONS for ch in kw), (
-        "a CJK alias was added without the round this test asks for")
-
     msg = "帮我找伦敦月租不超过1400镑的单间，通勤到帝国理工不超过35分钟"
-    assert lga._resolve_destination_address(msg, {"current_message": msg}, {}) is None
+    expected = "Imperial College London, South Kensington, London SW7 2AZ"
 
-    # The asymmetry that makes a one-line alias unsafe: substring finds it, \b does not.
-    assert "帝国理工" in msg.lower()
-    assert re.search(r"\b帝国理工\b", msg.lower()) is None
+    assert lga._KNOWN_DESTINATIONS["帝国理工"] == expected
+    assert lga._resolve_destination_address(msg, {"current_message": msg}, {}) == expected
+
+    criteria = lga._apply_explicit_criteria_updates({"no_commute": True}, msg)
+    assert criteria["commute_destination"] == expected
+    assert criteria["destination"] == expected
+    assert criteria["max_travel_time"] == 35
+    assert criteria["no_commute"] is False

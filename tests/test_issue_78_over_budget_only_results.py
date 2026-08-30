@@ -108,10 +108,20 @@ def test_legacy_arch_agrees_with_fc_on_over_budget_only():
     architecture difference rather than the bug it is."""
     import inspect
 
-    from core.langgraph_agent import _make_format_output_node
+    from core.langgraph_agent import (
+        _make_format_output_node,
+        _search_payload_has_candidates,
+    )
 
     src = inspect.getsource(_make_format_output_node)
-    # Both of legacy's search_properties formatting seams (the plan-dimension fan-out and
-    # the plain tool branch) must consult the alternatives, not just one of them.
-    assert src.count("over_budget_alternatives") >= 2, \
-        "legacy format_output still drops over-budget-only results (issue #78 B)"
+    candidate_predicate_src = inspect.getsource(_search_payload_has_candidates)
+    # All three legacy search-result seams (artifact-ledger recovery, plan-dimension
+    # fan-out, and the plain tool branch) share one candidate predicate. The old
+    # contract counted direct field accesses inside the formatter, but that became
+    # stale when final-evidence preservation centralized the predicate. Assert the
+    # actual invariant: every seam consults the shared predicate, and that predicate
+    # explicitly includes the over-budget channel.
+    assert src.count("_search_payload_has_candidates") >= 3, \
+        "a legacy search formatting seam bypasses the shared candidate predicate"
+    assert "over_budget_alternatives" in candidate_predicate_src, \
+        "the shared candidate predicate drops over-budget-only results (issue #78 B)"

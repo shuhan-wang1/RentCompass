@@ -72,10 +72,10 @@ def _check_route_uses_transit(route_data: dict, requested_mode: str) -> bool:
 
         # If walking time > 15 minutes, assume they will use transit during peak/bad weather
         if duration_minutes > 15:
-            print(f"   ⚠️ User requested transit but Google suggests {duration_minutes:.0f} min walk - assuming transit needed for practical purposes")
+            print("   ⚠️ User requested transit; walking threshold exceeded")
             return True
         else:
-            print(f"   ℹ️ Very short distance ({duration_minutes:.0f} min walk) - transit not needed")
+            print("   ℹ️ Walking threshold not exceeded; transit not needed")
             return False
 
     # For other modes (walking, bicycling, driving), only return True if there are actual transit steps
@@ -100,7 +100,7 @@ def _get_zone_from_address(address: str) -> Optional[int]:
 
         if match:
             postcode = match.group(1)
-            print(f"   📮 从地址提取到 Postcode: {postcode}")
+            print("   📮 从地址提取到 postcode postcode_present=True")
             zone = _get_zone_from_postcode(postcode)
             if zone:
                 return zone
@@ -110,19 +110,19 @@ def _get_zone_from_address(address: str) -> Optional[int]:
 
         geocode_result = geocode_address(address)
         if not geocode_result:
-            print(f"   ❌ 无法 geocode 地址: {address}")
+            print(f"   ❌ 无法 geocode 地址 address_chars={len(address)}")
             return None
 
         postcode = geocode_result.get('postcode')
         if postcode:
-            print(f"   📮 从地理编码获取 Postcode: {postcode}")
+            print("   📮 从地理编码获取 postcode postcode_present=True")
             return _get_zone_from_postcode(postcode)
 
         print(f"   ⚠️ 无法从 geocode 结果提取 postcode")
         return None
 
     except Exception as e:
-        print(f"   ❌ Zone 判断出错: {e}")
+        print(f"   ❌ Zone 判断出错 exception_type={type(e).__name__}")
         return None
 
 
@@ -288,10 +288,12 @@ def calculate_commute_cost_impl(
         dict: 包含通勤时间、Zone 信息、月度交通费用等
     """
     try:
-        print(f"\n   🚇 计算综合通勤成本:")
-        print(f"      从: {from_address[:60]}...")
-        print(f"      到: {to_address[:60]}...")
-        print(f"      类型: {travel_type}, 方式: {mode}")
+        print(
+            "\n   🚇 计算综合通勤成本 "
+            f"from_chars={len(from_address)} to_chars={len(to_address)} "
+            f"student_request={'student' in travel_type.lower()} "
+            f"mode_supported={mode in {'transit', 'driving', 'walking', 'bicycling'}}"
+        )
 
         # Step 1: 通勤时间 (TfL Journey Planner，免费；非伦敦自动回退直线估算)
         #
@@ -332,10 +334,9 @@ def calculate_commute_cost_impl(
                              else best_estimate_minutes(straight_line_km, mode))
 
         if measured_minutes is not None:
-            print(f"   ✅ Route found: {measured_minutes} mins (TfL journey plan)")
+            print("   ✅ Measured TfL journey route found")
         elif estimated_minutes is not None:
-            print(f"   ⚠️ No journey plan; straight-line estimate {estimated_minutes} mins "
-                  f"({details.get('estimate_low_minutes')}-{details.get('estimate_high_minutes')})")
+            print("   ⚠️ No journey plan; publishable straight-line estimate available")
         else:
             print(f"   ⚠️ No journey plan and no publishable estimate for this pair")
 
@@ -363,14 +364,14 @@ def calculate_commute_cost_impl(
                     prices = get_zonal_fare(min_zone, max_zone, user_type)
                 except (TypeError, ValueError) as exc:
                     transport_cost_info = {
-                        "error": f"{exc}. Please check tfl.gov.uk/fares."
+                        "error": "Fare lookup failed. Please check tfl.gov.uk/fares."
                     }
                 else:
                     zone_label = (
                         f"Zone {min_zone}" if min_zone == max_zone
                         else f"Zone {min_zone}-{max_zone}"
                     )
-                    print(f"   📍 Looking up fares for: {prices['zone_key']} ({zone_label})")
+                    print("   📍 Looking up zonal fares")
                     payg_monthly_estimate = round(prices['daily_cap'] * 22, 2)
                     monthly_travelcard = prices['monthly']
                     recommended_cost = min(payg_monthly_estimate, monthly_travelcard)
@@ -509,13 +510,12 @@ def calculate_commute_cost_impl(
 
         return result
 
-    except Exception as e:
-        print(f"   ❌ 通勤成本计算出错: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception as exc:
+        print(f"   ❌ 通勤成本计算出错 exception_type={type(exc).__name__}")
         return {
-            'success': False,
-            'error': str(e)
+            "success": False,
+            "error": "Commute cost calculation failed",
+            "retryable": True,
         }
 
 

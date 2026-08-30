@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import os
 import re
 import sys
@@ -21,6 +22,23 @@ from uk_rent_agent.web.app import create_app
 
 _FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 _IMAGE_DIGEST = re.compile(r"^(?:[^@\s]+@)?sha256:[0-9a-f]{64}$")
+
+_EXPECTED_TOOL_NAMES = frozenset({
+    "search_properties",
+    "calculate_commute",
+    "calculate_commute_cost",
+    "check_safety",
+    "get_weather",
+    "web_search",
+    "search_nearby_pois",
+    "get_property_details",
+    "check_transport_cost",
+    "get_transport_info",
+    "recall_memory",
+    "remember",
+    "ask_user",
+    "compare_or_rank_areas",
+})
 
 
 def _legacy_module():
@@ -284,36 +302,287 @@ def _check_rag() -> dict[str, Any]:
     return {"status": "ok", "required": False}
 
 
+def _non_null_schema(schema: Any) -> dict[str, Any]:
+    """Return the concrete branch of a Pydantic Optional schema."""
+    if not isinstance(schema, dict):
+        return {}
+    branches = schema.get("anyOf")
+    if isinstance(branches, list):
+        for branch in branches:
+            if isinstance(branch, dict) and branch.get("type") != "null":
+                return branch
+    return schema
+
+
+def _check_tool_registry() -> dict[str, Any]:
+    """Validate the live 14-tool registry and the runtime/schema adapter contract."""
+    mod = _legacy_module()
+    registry = getattr(mod, "tool_registry", None)
+    if registry is None:
+        return {"status": "fail", "required": True, "detail": "registry unavailable"}
+    try:
+        specs = list(registry.list_specs())
+        by_name = {str(spec.name): spec for spec in specs}
+        names = set(by_name)
+        if names != _EXPECTED_TOOL_NAMES or len(specs) != len(_EXPECTED_TOOL_NAMES):
+            missing = sorted(_EXPECTED_TOOL_NAMES - names)
+            extra = sorted(names - _EXPECTED_TOOL_NAMES)
+            raise RuntimeError(
+                f"expected 14 unique tools; missing={missing!r}, extra={extra!r}, "
+                f"spec_count={len(specs)}"
+            )
+
+        from core.strict_schema import to_strict_schema, validate_strict_compliance
+
+        for name, spec in by_name.items():
+            schema = spec.input_schema
+            if not isinstance(schema, dict) or schema.get("type") != "object":
+                raise RuntimeError(f"{name}: input schema is not an object")
+            if not isinstance(schema.get("properties"), dict):
+                raise RuntimeError(f"{name}: input schema properties unavailable")
+            violations = validate_strict_compliance(to_strict_schema(schema))
+            if violations:
+                raise RuntimeError(f"{name}: strict schema violations: {violations[:2]!r}")
+
+        def prop(tool_name: str, field_name: str) -> dict[str, Any]:
+            schema = by_name[tool_name].input_schema
+            return _non_null_schema(schema["properties"][field_name])
+
+        expected_constraints = (
+            ("calculate_commute.mode", prop("calculate_commute", "mode").get("enum"),
+             ["transit", "driving", "walking", "bicycling"]),
+            ("ask_user.clarification_kind",
+             prop("ask_user", "clarification_kind").get("enum"),
+             ["missing_area", "soft_criteria", "other"]),
+            ("check_transport_cost.end_zone",
+             prop("check_transport_cost", "end_zone").get("enum"), [2, 3, 4, 5, 6]),
+            ("get_transport_info.end_zone.minimum",
+             prop("get_transport_info", "end_zone").get("minimum"), 2),
+            ("get_transport_info.end_zone.maximum",
+             prop("get_transport_info", "end_zone").get("maximum"), 6),
+        )
+        for label, actual, expected in expected_constraints:
+            if actual != expected:
+                raise RuntimeError(f"{label}: expected {expected!r}, got {actual!r}")
+
+        sub_queries_schema = prop("web_search", "sub_queries")
+        nested = sub_queries_schema.get("items", {})
+        if nested.get("type") != "object" or not {"tool", "params"}.issubset(
+            set(nested.get("required", []))
+        ):
+            raise RuntimeError("web_search.sub_queries item contract is incomplete")
+        allowed_nested = {
+            "check_safety", "get_weather", "search_nearby_pois", "get_property_details",
+            "calculate_commute", "web_search_only",
+        }
+        nested_tool = nested.get("properties", {}).get("tool", {})
+        if set(nested_tool.get("enum", [])) != allowed_nested:
+            raise RuntimeError("web_search nested-tool allowlist schema is incomplete")
+        if nested.get("additionalProperties") is not False:
+            raise RuntimeError("web_search sub-query objects are not closed")
+        if sub_queries_schema.get("maxItems") != 6:
+            raise RuntimeError("web_search nested fan-out bound is unavailable")
+
+        # Prove the emitted constraints are also installed on the Pydantic runtime models.
+        invalid_examples = {
+            "calculate_commute": {
+                "from_address": "A", "to_address": "B", "mode": "tube",
+            },
+            "ask_user": {"question": "Q?", "clarification_kind": "invalid"},
+            "get_transport_info": {"query_type": "travelcard", "end_zone": 99},
+            "web_search": {"query": "x", "sub_queries": [{"tool": "check_safety"}]},
+        }
+        for tool_name, payload in invalid_examples.items():
+            tool = registry.get(tool_name)
+            model = getattr(tool, "input_model", None)
+            if model is None:
+                raise RuntimeError(f"{tool_name}: runtime input model unavailable")
+            try:
+                model.model_validate(payload)
+            except Exception:
+                pass
+            else:
+                raise RuntimeError(f"{tool_name}: runtime model accepted invalid input")
+
+        return {
+            "status": "ok",
+            "required": True,
+            "tool_count": len(specs),
+            "strict_schemas": "valid",
+            "runtime_constraints": "valid",
+        }
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "required": True,
+            "detail": f"{type(exc).__name__}: {str(exc)[:240]}",
+        }
+
+
+def _check_runtime_configuration(config: Config) -> dict[str, Any]:
+    """Ensure ASGI, Flask, graph selection and model factories share one Config."""
+    mod = _legacy_module()
+    if mod is None:
+        return {"status": "fail", "required": True, "detail": "Flask runtime unavailable"}
+    problems: list[str] = []
+    loaded = getattr(mod, "_runtime_config", None)
+    if loaded is None:
+        problems.append("Flask Config unavailable")
+    else:
+        for field in ("agent_arch", "deepseek_strict", "llm_provider"):
+            if getattr(loaded, field, None) != getattr(config, field):
+                problems.append(f"Config.{field} mismatch")
+    if str(getattr(mod, "AGENT_ARCH", "")) != config.agent_arch:
+        problems.append("AGENT_ARCH mismatch")
+    if bool(getattr(mod, "DEEPSEEK_STRICT", False)) != config.deepseek_strict:
+        problems.append("DEEPSEEK_STRICT mismatch")
+    llm_module = sys.modules.get("core.llm_config")
+    if llm_module is not None and str(getattr(llm_module, "LLM_PROVIDER", "")) != config.llm_provider:
+        problems.append("LLM_PROVIDER factory mismatch")
+    return {
+        "status": "fail" if problems else "ok",
+        "required": True,
+        "agent_arch": config.agent_arch,
+        "llm_provider": config.llm_provider,
+        "deepseek_strict": config.deepseek_strict,
+        **({"detail": "; ".join(problems)} if problems else {}),
+    }
+
+
+def _check_agent_graph(config: Config) -> dict[str, Any]:
+    """Accept an already-compiled graph or validate the complete lazy factory path."""
+    mod = _legacy_module()
+    if mod is None:
+        return {"status": "fail", "required": True, "detail": "Flask runtime unavailable"}
+    try:
+        graph = getattr(mod, "agent_graph", None)
+        initializer = getattr(mod, "_ensure_agent_runtime", None)
+        if graph is None and callable(initializer):
+            # Readiness is the startup gate: compile the real graph here (no model call is
+            # made) instead of declaring an unexecuted factory signature healthy.
+            graph = initializer()
+            if graph is None:
+                raise RuntimeError("runtime initializer returned no graph")
+        if graph is not None:
+            if not any(callable(getattr(graph, name, None)) for name in ("invoke", "ainvoke")):
+                raise RuntimeError("compiled graph has no invoke/ainvoke entry point")
+            return {
+                "status": "ok", "required": True, "state": "compiled",
+                "arch": config.agent_arch,
+            }
+
+        factory = getattr(mod, "build_agent_graph", None)
+        initial_state_factory = getattr(mod, "create_initial_state", None)
+        if not callable(factory) or not callable(initial_state_factory):
+            raise RuntimeError("graph factory or initial-state factory unavailable")
+        parameters = inspect.signature(factory).parameters
+        if "tool_registry" not in parameters or "agent_llm" not in parameters:
+            raise RuntimeError("graph factory signature is incompatible")
+        provider = getattr(mod, "agent_tool_provider", None)
+        if provider is None or not callable(getattr(provider, "list_specs", None)):
+            raise RuntimeError("agent tool provider unavailable")
+        if config.agent_arch == "fc_loop":
+            from core.agent_loop import build_fc_graph
+            if not callable(build_fc_graph):
+                raise RuntimeError("fc_loop graph builder unavailable")
+            # Ollama must be injectable; the default fc driver is DeepSeek-specific.
+            if config.llm_provider == "ollama":
+                from core.llm_config import get_react_llm
+                if not callable(get_react_llm):
+                    raise RuntimeError("configured Ollama model factory unavailable")
+                if not callable(getattr(mod, "_configured_fc_agent_llm", None)):
+                    raise RuntimeError("Flask runtime lacks the Ollama fc_loop injection hook")
+
+        # Compatibility path for isolated factories that do not expose the Flask runtime
+        # initializer. Actually compile and validate the result before declaring readiness.
+        model_factory = getattr(mod, "_configured_fc_agent_llm", None)
+        probe_llm = model_factory() if callable(model_factory) else object()
+        graph = factory(provider, agent_llm=probe_llm)
+        if not any(callable(getattr(graph, name, None)) for name in ("invoke", "ainvoke")):
+            raise RuntimeError("graph factory returned no invoke/ainvoke entry point")
+
+        return {
+            "status": "ok", "required": True, "state": "factory_compiled",
+            "arch": config.agent_arch, "provider": config.llm_provider,
+        }
+    except Exception as exc:
+        return {
+            "status": "fail",
+            "required": True,
+            "detail": f"graph initialization failed ({type(exc).__name__})",
+        }
+
+
 def _check_searx() -> dict[str, Any]:
-    """Probe SearXNG's process health endpoint; never issue a metasearch."""
+    """Probe only SearXNG process health; report result capability as unknown."""
     # Match the web-search client's local-development default. Compose overrides
     # this with the internal service URL.
     base = os.getenv("SEARXNG_URL", "http://localhost:8080").strip()
     if not base:
-        return {"status": "disabled", "required": False}
+        return {
+            "status": "disabled",
+            "required": False,
+            "process_health": "disabled",
+            "search_result_capability": "disabled",
+        }
     try:
         timeout = max(0.1, float(os.getenv("READINESS_SEARX_TIMEOUT_SECONDS", "1.5")))
         with urllib.request.urlopen(base.rstrip("/") + "/healthz", timeout=timeout) as response:
             if response.status != 200:
                 raise RuntimeError(f"HTTP {response.status}")
-        return {"status": "ok", "required": False}
+        return {
+            "status": "degraded",
+            "required": False,
+            "process_health": "ok",
+            "search_result_capability": "unknown",
+            "detail": "healthz responded; upstream engines/results are not exercised by readiness",
+        }
     except (OSError, ValueError, urllib.error.URLError, RuntimeError) as exc:
         return {
             "status": "degraded",
             "required": False,
+            "process_health": "unavailable",
+            "search_result_capability": "unknown",
             "detail": f"{type(exc).__name__}: {str(exc)[:120]}",
         }
 
 
-def _check_llm_configuration() -> dict[str, Any]:
-    provider = os.getenv("LLM_PROVIDER", "deepseek").strip().lower()
-    required = os.getenv("READINESS_REQUIRE_LLM", "0").lower() in {"1", "true", "yes"}
-    if provider not in {"deepseek", "ollama"}:
-        return {
-            "status": "fail" if required else "degraded",
-            "required": required,
-            "detail": f"unsupported provider: {provider or '<empty>'}",
+def _unprobed_provider(provider: str, tools: list[str]) -> dict[str, Any]:
+    return {
+        "status": "degraded",
+        "required": False,
+        "provider": provider,
+        "capability": "unknown",
+        "tools": tools,
+        "detail": "live provider is intentionally not called by readiness",
+    }
+
+
+def _check_onthemarket(config: Config) -> dict[str, Any]:
+    """Live scraping is not a safe readiness dependency; make the unknown explicit."""
+    return {
+        "status": "degraded",
+        "required": False,
+        "provider": "OnTheMarket",
+        "capability": "unknown",
+        "property_source": config.property_source,
+        "detail": "live scrape/schema compatibility is not probed; cached results may still work",
+    }
+
+
+def _check_llm_configuration(config: Config) -> dict[str, Any]:
+    provider = config.llm_provider
+    required = os.getenv("READINESS_REQUIRE_LLM", "1").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+    try:
+        from uk_rent_agent.llm.router import llm_max_retries, llm_request_timeout_seconds
+        transport = {
+            "timeout_seconds": llm_request_timeout_seconds(),
+            "max_retries": llm_max_retries(),
         }
+    except (TypeError, ValueError) as exc:
+        return {"status": "fail", "required": True, "detail": type(exc).__name__}
     missing = provider == "deepseek" and not os.getenv("DEEPSEEK_API_KEY", "").strip()
     if missing:
         return {
@@ -321,7 +590,13 @@ def _check_llm_configuration() -> dict[str, Any]:
             "required": required,
             "detail": "provider credential unavailable",
         }
-    return {"status": "ok", "required": required, "provider": provider}
+    return {
+        "status": "ok",
+        "required": required,
+        "provider": provider,
+        "transport": transport,
+        "connectivity": "not_probed",
+    }
 
 
 async def live(_request):
@@ -336,15 +611,28 @@ def _readiness(config: Config) -> tuple[dict[str, Any], int]:
     manifest = _release_manifest()
     checks = {
         "release_metadata": _check_release_metadata(manifest),
+        "runtime_configuration": _check_runtime_configuration(config),
+        "tool_registry": _check_tool_registry(),
+        "agent_graph": _check_agent_graph(config),
         "conversation_db": _check_conversation_db(),
         "agent_memory": _check_agent_memory(),
         "background_jobs": _check_background_jobs(),
         "canary_sink": _check_canary_sink(),
         "checkpoint_store": _check_checkpoint(config),
         "auth_store": _check_auth_store(config),
-        "llm_configuration": _check_llm_configuration(),
+        "llm_configuration": _check_llm_configuration(config),
         "rag": _check_rag(),
         "searxng": _check_searx(),
+        "onthemarket": _check_onthemarket(config),
+        "tfl": _unprobed_provider(
+            "Transport for London", ["calculate_commute", "calculate_commute_cost",
+                                      "get_transport_info"],
+        ),
+        "police_data": _unprobed_provider("data.police.uk", ["check_safety"]),
+        "openstreetmap": _unprobed_provider(
+            "Nominatim/Overpass", ["search_nearby_pois"],
+        ),
+        "weather": _unprobed_provider("Open-Meteo", ["get_weather"]),
     }
     failed = [
         name

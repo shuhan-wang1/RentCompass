@@ -66,7 +66,7 @@ def _run_source(source: str, task: dict, radius, min_price, max_price,
         return zoopla.find_rich_zoopla(
             slug, radius, min_price, max_price, limit=limit_per_task
         )
-    print(f"  [provider] unknown source '{source}', skipping")
+    print(f"  [provider] unknown source; source_chars={len(str(source))}; skipping")
     return []
 
 
@@ -85,15 +85,15 @@ def scrape_all(
         sources = ["rightmove"]
     sources = sources if sources is not None else DEFAULT_SOURCES
 
-    print(f"[provider] sources: {sources}")
+    print(f"[provider] source_count={len(sources)}")
     collected: list[dict] = []
     for task in tasks:
         name = task.get("name", "?")
         radius = task.get("radius", 1.5)
         min_price = task.get("min_price", DEFAULT_MIN_PRICE)
         max_price = task.get("max_price", DEFAULT_MAX_PRICE)
-        print(f"\n=== Scraping task: {name} (radius {radius}mi, "
-              f"£{min_price}-{max_price}) ===")
+        print(f"\n=== Scraping task: name_chars={len(str(name))} "
+              f"source_count={len(sources)} ===")
 
         for source in sources:
             try:
@@ -101,7 +101,7 @@ def scrape_all(
                                   max_price, limit_per_task)
                 collected.extend(got)
             except Exception as e:
-                print(f"  [provider] {source} task '{name}' failed: {e}")
+                print(f"  [provider] task failed; source={source} name_chars={len(str(name))} error_type={type(e).__name__}")
 
     # De-duplicate by URL (same listing can surface across overlapping tasks).
     seen, unique = set(), []
@@ -137,8 +137,8 @@ def get_properties(
     if not force_refresh and _is_fresh(CACHE_CSV, TTL_HOURS):
         props = read_csv(CACHE_CSV)
         if props:
-            print(f"[provider] cache HIT: {len(props)} properties from "
-                  f"{CACHE_CSV.name} (< {TTL_HOURS}h old)")
+            print(f"[provider] cache HIT: property_count={len(props)} "
+                  "fresh=True")
             return props
 
     if allow_scrape:
@@ -148,14 +148,14 @@ def get_properties(
                 limit_per_task=limit_per_task, rightmove_only=rightmove_only
             )
         except Exception as e:
-            print(f"[provider] scrape failed entirely: {e}")
+            print(f"[provider] scrape failed entirely; error_type={type(e).__name__}")
             props = []
         if props:
             try:
                 write_csv(props, CACHE_CSV)
-                print(f"[provider] wrote cache -> {CACHE_CSV}")
+                print(f"[provider] wrote cache; property_count={len(props)}")
             except Exception as e:
-                print(f"[provider] could not write cache: {e}")
+                print(f"[provider] could not write cache; error_type={type(e).__name__}")
             return props
         print("[provider] scrape returned nothing; falling back.")
 
@@ -170,7 +170,7 @@ def get_properties(
             "1", "true", "yes", "on",
         }
     if allow_demo:
-        print(f"[provider] explicit demo mode: {FAKE_CSV.name}")
+        print("[provider] explicit demo mode enabled")
         return read_csv(FAKE_CSV)
     print("[provider] no real listing dataset is available; returning an honest empty result")
     return []

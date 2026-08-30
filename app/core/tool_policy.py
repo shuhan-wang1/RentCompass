@@ -156,11 +156,11 @@ def _names_a_place(message: str) -> bool:
     try:
         from core.tools.search_properties import _extract_area
     except Exception:
-        return True
+        raise RuntimeError("area recognizer unavailable")
     try:
         return _extract_area(message or "") is not None
     except Exception:
-        return True
+        raise RuntimeError("area recognizer failed")
 
 
 def self_contained_money_question(message: str) -> Optional[tuple[float, str]]:

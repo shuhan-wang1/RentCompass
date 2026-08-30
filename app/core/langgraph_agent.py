@@ -39,6 +39,7 @@ import json
 import re
 import logging
 import datetime
+import time
 from typing import TypedDict, Optional, Dict, List, Any, Annotated, Literal
 from collections import Counter
 
@@ -61,7 +62,8 @@ from uk_rent_agent.agent.critic import (
     enforce_no_evidence_numeric_contract,
 )
 from core.candidate_validation import (
-    render_candidate_status, validate_search_payload, validate_search_payload_with_provider,
+    render_candidate_status, render_similar_listings, validate_search_payload,
+    validate_search_payload_with_provider,
 )
 from core.memory_contract import compose_memory_contract_response
 from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
@@ -70,6 +72,80 @@ from uk_rent_agent.agent.guardrails import sanitize_untrusted, tool_allowed
 from core import refine_results
 
 logger = logging.getLogger(__name__)
+
+# search_properties statuses carrying an actual result set: the exact-match pool (`found`)
+# and the closest-recall fallback (`no_exact_match_but_similar`). Both repaint the panel.
+_SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar"})
+
+
+def _search_candidate_states(payload) -> list[dict]:
+    """Normalized prevalidated candidate states, including legacy side channels.
+
+    Provider validation can legitimately turn every generated recommendation into
+    ``unknown``. In that shape ``recommendations=[]`` while ``candidate_states`` /
+    ``unverified_candidates`` still contain the only real listing evidence. Treating
+    the empty eligible list as an empty search discarded address, price and status at
+    routing/formatting boundaries.
+    """
+    if not isinstance(payload, dict):
+        return []
+    states = []
+    for entry in payload.get("candidate_states") or []:
+        if not isinstance(entry, dict):
+            continue
+        candidate = entry.get("candidate")
+        if not isinstance(candidate, dict) and any(
+                entry.get(key) for key in ("address", "Address", "url", "URL")):
+            # Tolerate older flat state rows while keeping state metadata outside
+            # the candidate shown on the card.
+            candidate = {key: value for key, value in entry.items()
+                         if key not in {"status", "reasons", "unknown_reasons",
+                                        "evidence_status", "candidate_key", "index"}}
+        if not isinstance(candidate, dict):
+            continue
+        normalized = dict(entry)
+        normalized["candidate"] = dict(candidate)
+        status = str(
+            entry.get("status") or candidate.get("candidate_status") or "unknown"
+        ).lower()
+        normalized["status"] = ({"unverified": "unknown", "pending": "unknown",
+                                  "rejected": "excluded"}.get(status, status))
+        states.append(normalized)
+    if states:
+        return states
+
+    channel_status = (
+        ("recommendations", "eligible"),
+        ("unverified_candidates", "unknown"),
+        ("excluded_candidates", "excluded"),
+    )
+    for channel, status in channel_status:
+        for candidate in payload.get(channel) or []:
+            if not isinstance(candidate, dict):
+                continue
+            states.append({
+                "candidate": dict(candidate),
+                "status": status,
+                "reasons": list(candidate.get("candidate_reasons") or []),
+                "unknown_reasons": list(candidate.get("candidate_unknown_reasons") or []),
+            })
+    return states
+
+
+def _search_payload_has_candidates(payload) -> bool:
+    """Whether a result payload carries any structured listing, eligible or not."""
+    if not isinstance(payload, dict):
+        return False
+    if any(payload.get(key) for key in (
+            "recommendations", "over_budget_alternatives", "similar_properties",
+            "unverified_candidates", "excluded_candidates")):
+        return True
+    return bool(_search_candidate_states(payload))
+
+
+def _candidate_rows_with_status(payload, status: str) -> list[dict]:
+    return [dict(entry["candidate"]) for entry in _search_candidate_states(payload)
+            if entry.get("status") == status]
 
 # ═══════════════════════════════════════════════════════════════════
 # BOUNDED AGENT LOOP — module constants
@@ -209,6 +285,102 @@ POI_TYPES = {
 # HELPER FUNCTIONS (ported from react_agent.py)
 # ═══════════════════════════════════════════════════════════════════
 
+_ACCESSIBILITY_HARD_CUE_RE = re.compile(
+    r"\b(?:must(?: have| be)?|need(?:s|ed)?|require(?:s|d|ment)?|essential|"
+    r"non[- ]negotiable|depend(?:s|ent)? on)\b|必须|需要|必需|刚需|不可缺少|离不开|行动不便",
+    re.IGNORECASE,
+)
+_ACCESSIBILITY_SOFT_CUE_RE = re.compile(
+    r"\b(?:would like|prefer(?:red)?|ideally|nice to have|if possible|"
+    r"not essential|optional)\b|希望|最好|偏好|优先|可以的话|可有可无",
+    re.IGNORECASE,
+)
+_ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
+    r"\b(?:do not|don't|dont|does not|doesn't|doesnt) need\b|"
+    r"\b(?:not required|no need for)\b|不需要|不必|无需|不要",
+    re.IGNORECASE,
+)
+_ACCESSIBILITY_PROPERTY_CONTEXT_RE = re.compile(
+    r"\b(?:flat|apartment|property|home|house|room|accommodation|listing|building|"
+    r"entrance|bathroom)\b|房源|房子|住房|住宅|公寓|房间|楼房|大楼|入口|卫生间|浴室",
+    re.IGNORECASE,
+)
+_ACCESSIBILITY_TRANSIT_CONTEXT_RE = re.compile(
+    r"\b(?:route|journey|station|platform|tube|train|bus|travel|commute)\b|"
+    r"路线|车站|地铁|站台|公交|火车|通勤",
+    re.IGNORECASE,
+)
+_ACCESSIBILITY_FACT_QUESTION_RE = re.compile(
+    r"\b(?:does|is|has) (?:this|that|the) (?:flat|apartment|property|listing|building)\b"
+    r"|(?:这个|该)(?:房源|房子|公寓|大楼).*(?:吗|有没有)",
+    re.IGNORECASE,
+)
+_NON_PROPERTY_LIFT_RE = re.compile(
+    r"\b(?:lift|raise|remove) (?:the |my )?(?:budget|cap|limit|restriction)\b"
+    r"|\b(?:give|offer) me a lift\b|\b(?:car|taxi) lift\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
+    """Deterministically classify accessibility mentions as hard or soft.
+
+    Plain housing feature wording is treated as hard: accessibility is often a
+    functional need, and silently weakening "a step-free flat" to a preference can
+    recommend an unusable home. Explicit preference language keeps it soft. Transit
+    accessibility ("is this station step-free?"), property-fact questions and the
+    idiom "lift the budget" do not mutate future property criteria.
+    """
+    source = str(message or "")
+    if not source:
+        return {"required": [], "soft": []}
+    from core.tools.search_properties import _accessibility_feature_mentions
+
+    mentions = _accessibility_feature_mentions(source)
+    if not mentions:
+        return {"required": [], "soft": []}
+    source_lower = source.lower()
+    fact_question = bool(_ACCESSIBILITY_FACT_QUESTION_RE.search(source))
+    search_action = bool(re.search(
+        r"\b(?:find|search|show|want|looking for)\b|找房|找一|搜索|筛选|想要", source,
+        re.IGNORECASE))
+    required: list[str] = []
+    soft: list[str] = []
+
+    for feature, start, end in mentions:
+        left = max(source.rfind(mark, 0, start) for mark in (";", "；", ",", "，", ".", "。", "!", "！", "?", "？"))
+        right_candidates = [source.find(mark, end) for mark in
+                            (";", "；", ",", "，", ".", "。", "!", "！", "?", "？")]
+        right_candidates = [pos for pos in right_candidates if pos >= 0]
+        right = min(right_candidates) if right_candidates else len(source)
+        clause = source[left + 1:right]
+        local = source[max(0, start - 48):min(len(source), end + 48)]
+
+        if feature == "lift" and _NON_PROPERTY_LIFT_RE.search(local):
+            continue
+        if (_ACCESSIBILITY_TRANSIT_CONTEXT_RE.search(clause)
+                and not _ACCESSIBILITY_PROPERTY_CONTEXT_RE.search(clause)):
+            continue
+        if fact_question and not search_action:
+            continue
+
+        # "I don't need a lift" is neither hard nor soft. "Not essential; would
+        # like a lift" remains a genuine soft preference.
+        if (_ACCESSIBILITY_NEGATED_NEED_RE.search(clause)
+                and not _ACCESSIBILITY_SOFT_CUE_RE.search(clause)):
+            continue
+        hard_clause = re.sub(
+            r"\b(?:not essential|not required|no need for)\b|不需要|不必|无需|可有可无",
+            "", clause, flags=re.IGNORECASE)
+        has_hard = bool(_ACCESSIBILITY_HARD_CUE_RE.search(hard_clause))
+        has_soft = bool(_ACCESSIBILITY_SOFT_CUE_RE.search(clause))
+        target = soft if has_soft and not has_hard else required
+        if feature not in target:
+            target.append(feature)
+
+    return {"required": required, "soft": soft}
+
+
 def extract_preferences_from_message(user_message: str, current_prefs: dict) -> dict:
     """Extract user preferences from a message. Returns updated prefs dict."""
     prefs = {k: list(v) for k, v in current_prefs.items()}
@@ -240,6 +412,17 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
                 _add('hard_preferences', f"Must have {amenity}")
             else:
                 _add('soft_preferences', f"Would like {amenity}")
+
+    # Accessibility gets feature-specific strength handling rather than the global
+    # substring test above. A required accessible feature is recorded both as an
+    # amenity requirement (for preference context) and, below in accumulated search
+    # criteria, as a structured property feature that must be evidenced.
+    accessibility = _extract_accessibility_requirements(user_message)
+    for feature in accessibility["required"]:
+        _add('required_amenities', feature)
+        _add('hard_preferences', f"Must have {feature}")
+    for feature in accessibility["soft"]:
+        _add('soft_preferences', f"Would like {feature}")
 
     # Exclusion preferences
     exclude_patterns = ["don't want", 'not interested', 'avoid', 'no thanks', 'without']
@@ -395,10 +578,12 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # Persist that distinction before the LLM plans tools so all calls see the
     # same destination (not only search_properties, which also scans raw text).
     message_destination = extract_destination_from_text(current_message)
-    if message_destination:
+    known_destination = _known_destination_address(current_message)
+    if message_destination or known_destination:
         destination = (
-            message_destination.get('address')
-            or message_destination.get('name')
+            (message_destination or {}).get('address')
+            or (message_destination or {}).get('name')
+            or known_destination
         )
         if destination and (
             result.get('commute_destination') != destination
@@ -446,7 +631,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # I just live there / WFH" sets the flag AND drops any stale travel-time limit so
     # the next search never re-applies a filter the user has disowned.
     ml = current_message.lower()
-    names_destination = any(re.search(rf'\b{re.escape(kw)}\b', ml) for kw in _KNOWN_DESTINATIONS)
+    names_destination = _known_destination_address(ml) is not None
     commute_intent = bool(minutes) or names_destination or bool(message_destination)
     if commute_intent:
         if result.get('no_commute'):
@@ -473,6 +658,22 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
             changed = True
     except ImportError:
         pass
+
+    # Accessibility requirements are structured search constraints only when the
+    # user's wording makes them hard. Explicitly soft wording stays in
+    # soft_preferences and therefore cannot exclude an otherwise suitable listing.
+    accessibility = _extract_accessibility_requirements(current_message)
+    for feature in accessibility["required"]:
+        existing = result.setdefault('property_features', [])
+        if feature not in existing:
+            existing.append(feature)
+            changed = True
+    for feature in accessibility["soft"]:
+        text = f"Would like {feature}"
+        existing = result.setdefault('soft_preferences', [])
+        if text not in existing:
+            existing.append(text)
+            changed = True
 
     return result if changed else accumulated
 
@@ -1226,32 +1427,54 @@ _FH_GROUP_EN = [
     'ethnic minorit', 'ethnic-minorit', 'ethnicity', 'ethnicities', 'ethnic group',
     'ethnic area', 'ethnic neighbou', 'race', 'racial', 'foreigner', 'foreign people',
     'foreign families', 'foreign',
+    'nationality', 'national origin', 'citizenship status',
     'muslim', 'islamic', 'jewish', 'jews', 'christian', 'hindu', 'sikh', 'religion',
     'religious', 'caste',
-    'black people', 'black families', 'black neighbou', 'black area',
-    'asian people', 'asian families', 'brown people',
+    'black people', 'black families', 'black resident', 'black tenant', 'black population',
+    'black neighbou', 'black area',
+    'asian people', 'asian families', 'asian resident', 'asian tenant', 'brown people',
+    'chinese people', 'chinese families', 'chinese resident', 'chinese tenant',
+    'pakistani people', 'pakistani families', 'indian people', 'arab people', 'roma people',
     'white british', 'white people', 'white families', 'white neighbou', 'white area',
     'white part', 'gypsy', 'traveller',
-    'disabled people', 'disability',
-    'gay', 'lesbian', 'lgbt', 'homosexual', 'transgender',
-    'single mother', 'single mum', 'families with kid', 'families with children',
+    'disabled people', 'disabled resident', 'disabled tenant', 'people with disabilities',
+    'wheelchair user',
+    'gay', 'lesbian', 'lgbt', 'homosexual', 'transgender', 'trans people', 'trans person',
+    'trans resident', 'trans tenant', 'non-binary', 'nonbinary',
+    'gender demographic', 'sex demographic',
+    'pregnant women', 'pregnant people', 'pregnancy status', 'maternity status',
+    'elderly people', 'older people', 'older resident', 'older tenant', 'young people',
+    'young resident', 'young tenant', 'pensioner', 'retiree', 'age group', 'age demographic',
+    'single mother', 'single mum', 'single father', 'single parent', 'families with kid',
+    'families with children', 'families', 'households with children', 'tenants with children',
+    'parents with children', 'family status', 'marital status', 'married couple',
+    'unmarried couple', 'civil partner',
 ]
 _FH_GROUP_ZH = [
     '移民', '外国人', '外国移民', '外籍', '外国', '少数族裔', '族裔', '种族', '宗教',
-    '穆斯林', '黑人', '白人', '犹太', '难民', '残疾', '同性恋', '有色人种',
+    '穆斯林', '黑人', '白人', '犹太', '难民', '有色人种', '国籍', '公民身份',
+    '残疾人', '残障人士', '残障人群', '轮椅使用者',
+    '同性恋', '跨性别者', '跨性别人群', '变性人', '非二元性别',
+    '女性租客', '男性租客', '女性居民', '男性居民', '女性人口', '男性人口',
+    '女人', '男人', '性别群体',
+    '老人', '老年人', '年轻人', '退休人士', '退休人员', '年龄群体',
+    '孕妇', '怀孕人士', '单亲家庭', '单身母亲', '单亲妈妈', '单身父亲', '单亲爸爸',
+    '有孩子的家庭', '带孩子的家庭', '家庭状况', '婚姻状况', '已婚人士', '未婚人士',
+    '家庭居民', '家庭租客', '有孩家庭', '带娃家庭',
 ]
 # Avoidance / scarcity / exclusion operators (NOT positive selection). '少数' is kept
 # OUT (it is a substring of '少数族裔' = ethnic minority) so a neutral mention isn't
 # treated as an operator.
 _FH_OP_EN = [
     'without', 'avoid', 'avoiding', 'no more than', 'not too many', 'too many',
-    'not many', 'fewer', 'fewest', 'less', 'least', 'free of', 'free from',
+    'not many', 'fewer', 'fewest', 'least', 'free of', 'free from',
     'away from', 'far from', 'exclude', 'excluding', 'keep out', 'get rid of',
-    'steer clear', 'rather not', "don't want", 'do not want', 'not near', 'no',
+    'steer clear', 'rather not', "don't want", 'do not want', 'not near',
+    'lowest', 'highest',
 ]
 _FH_OP_ZH = [
     '避开', '避免', '远离', '没有', '不要', '最少', '较少', '排除', '不能有',
-    '不想要', '不想住', '人少',
+    '不想要', '不想住', '人少', '最低', '最高',
 ]
 
 
@@ -1266,14 +1489,21 @@ def _fh_group_alt() -> str:
     zh = '|'.join(re.escape(t) for t in _FH_GROUP_ZH)
     # Leading \b for the English terms (no trailing, so 'immigrant' also matches
     # 'immigrants'); Chinese terms need no word boundary.
-    return rf'(?:\b(?:{en})|(?:{zh}))'
+    # Do not treat a possessive POI name ("women's gym") as a demographic group.
+    exact_sex_en = r"\b(?:females?|males?|women|woman|men)\b(?![\'’]s\b)"
+    # Standalone 女性/男性 are common demographic wording, but the same prefix in
+    # 女性健身房/男性健康中心 names a facility rather than an area population.
+    exact_sex_zh = (
+        r'(?:女性|男性)(?!健身房|健身中心|健康中心|诊所|医院|庇护所|更衣室|卫生间|厕所)'
+    )
+    return rf'(?:\b(?:{en})(?![\'’]s\b)|{exact_sex_en}|(?:{zh})|{exact_sex_zh})'
 
 
 # Operator immediately-ish before a protected group (the discriminatory direction:
 # "avoid immigrants", "without ethnic minorities", "fewest Muslims", "避开外国移民").
 # Gap ≤20 non-sentence chars keeps the operator bound to the group so a positive
 # mention with an unrelated later constraint isn't swept in.
-_FH_GAP = r'[^.。!?！？\n]{0,20}?'
+_FH_GAP = r'[^.。!?！？;；\n]{0,36}?'
 _FH_OP_GROUP_RE = re.compile(_fh_op_alt() + _FH_GAP + _fh_group_alt(), re.IGNORECASE)
 # Racial-"purity" selection ("only the white British parts", "predominantly white",
 # "只要白人的区域"). Restricted to the 'white'/'白人' framing to avoid blocking a
@@ -1285,6 +1515,184 @@ _FH_PURITY_RE = re.compile(
     r'|只[要想][^。!?\n]{0,8}?白人',
     re.IGNORECASE)
 
+# Exclusive and demographic-composition selectors apply to every protected group,
+# not just the historical white-purity wording. Positive proximity requests such as
+# "near a Chinese community" contain neither an exclusive nor a quantitative selector.
+_FH_EXCLUSIVE_EN = (
+    'only', 'exclusively', 'strictly', 'predominantly', 'mostly', 'majority',
+    'all', 'restricted to',
+)
+_FH_EXCLUSIVE_ZH = ('只要', '只限', '仅限', '只能有', '全是', '主要是', '大多数是')
+_FH_EXCLUSIVE_ALT = (
+    rf'(?:\b(?:{"|".join(re.escape(v) for v in _FH_EXCLUSIVE_EN)})\b'
+    rf'|(?:{"|".join(re.escape(v) for v in _FH_EXCLUSIVE_ZH)}))'
+)
+_FH_EXCLUSIVE_RE = re.compile(
+    _FH_EXCLUSIVE_ALT + r'[^.。!?！？\n]{0,28}?' + _fh_group_alt()
+    + '|' + _fh_group_alt() + r'[^.。!?！？\n]{0,14}?' + _FH_EXCLUSIVE_ALT,
+    re.IGNORECASE,
+)
+
+_FH_QUANT_EN = (
+    'percentage', 'percent', 'proportion', 'ratio', 'population share',
+    'demographic share', 'lowest', 'highest', 'fewest', 'least',
+    'below', 'under', 'above', 'over', 'less than', 'more than', 'fewer than',
+    'no more than', 'at most', 'at least',
+)
+_FH_QUANT_ZH = (
+    '比例', '占比', '百分比', '人口比例', '低于', '少于', '不超过', '至多',
+    '高于', '超过', '不少于', '至少', '最低', '最高', '最少', '最多',
+)
+_FH_QUANT_ALT = (
+    rf'(?:\b(?:{"|".join(re.escape(v) for v in _FH_QUANT_EN)})\b'
+    rf'|(?:{"|".join(re.escape(v) for v in _FH_QUANT_ZH)}))'
+)
+_FH_QUANT_GAP = r'[^.。!?！？\n]{0,48}?'
+# A lookahead keeps candidate pairs overlapping. Without it, an earlier lawful
+# quantity ("under £1400 ... less than 5% Muslim residents") consumed the whole
+# span and hid the later demographic selector from ``finditer``.
+_FH_QUANT_RE = re.compile(
+    r'(?=(' + _FH_QUANT_ALT + _FH_QUANT_GAP + _fh_group_alt()
+    + '|' + _fh_group_alt() + _FH_QUANT_GAP + _FH_QUANT_ALT + r'))',
+    re.IGNORECASE,
+)
+
+# Numeric composition can omit every selector word above: "90% Muslim" and
+# "Christian residents comprise 40%" are still demographic filters. A percentage
+# is intrinsically population composition here because the other side is a protected
+# people-group, while absolute counts additionally require an area/population context
+# so "a flat for 2 wheelchair users" remains a lawful self-need.
+_FH_PERCENT_COMPOSITION_RE = re.compile(
+    rf'(?:\b\d{{1,3}}(?:\.\d+)?\s*(?:%|percent(?:age)?|per\s+cent)\s*(?:of\s+)?'
+    rf'{_FH_GAP}{_fh_group_alt()}'
+    rf'|{_fh_group_alt()}{_FH_GAP}(?:comprise|constitute|represent|account\s+for|'
+    rf'make\s+up|(?:population|population\s+share|share)\s*(?:of|is|at|[:=])?|'
+    rf'占(?:到|了|为)?|占比(?:为|是)?|比例(?:为|是)?)\s*'
+    rf'\d{{1,3}}(?:\.\d+)?\s*(?:%|percent(?:age)?|per\s+cent|百分之))',
+    re.IGNORECASE,
+)
+_FH_VERB_PERCENT_COMPOSITION_RE = re.compile(
+    rf'(?:{_fh_group_alt()}s?\s+(?:residents?|population)\s+'
+    rf'(?:are|is|form|at)\s+\d{{1,3}}(?:\.\d+)?\s*'
+    rf'(?:%|percent(?:age)?|per\s+cent)'
+    rf'|{_fh_group_alt()}s?\s+(?:are|is|form|at)\s+'
+    rf'\d{{1,3}}(?:\.\d+)?\s*(?:%|percent(?:age)?|per\s+cent)\s+'
+    rf'of\s+(?:residents?|people|the\s+population))',
+    re.IGNORECASE,
+)
+_FH_DIRECT_PERCENT_COMPOSITION_RE = re.compile(
+    rf'(?:{_fh_group_alt()}\s+(?:population|residents?|share)\s*[:=]?\s*'
+    rf'\d{{1,3}}(?:\.\d+)?\s*(?:%|percent(?:age)?|per\s+cent)'
+    rf'|{_fh_group_alt()}(?:人口|居民|占比|比例)\s*[:：=]?\s*'
+    rf'\d{{1,3}}(?:\.\d+)?\s*%)',
+    re.IGNORECASE,
+)
+_FH_FRACTION_COMPOSITION_RE = re.compile(
+    rf'(?:\b\d{{1,7}}\s+(?:of\s+(?:every|each)|out\s+of)\s+\d{{1,7}}'
+    rf'|\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+in\s+'
+    rf'(?:ten|a\s+hundred|one\s+hundred))\s+'
+    rf'(?:residents?|people|households?|tenants?)?\s*(?:are|were|identify\s+as)?'
+    rf'{_FH_GAP}{_fh_group_alt()}',
+    re.IGNORECASE,
+)
+_FH_RELATIVE_COMPOSITION_RE = re.compile(
+    rf'\b(?:twice|half|(?:three|four|five|six|seven|eight|nine|ten)\s+times)\s+'
+    rf'as\s+many\s+{_fh_group_alt()}{_FH_GAP}\bas\s+{_fh_group_alt()}'
+    rf'|\b(?:more|fewer)\s+{_fh_group_alt()}{_FH_GAP}\bthan\s+{_fh_group_alt()}',
+    re.IGNORECASE,
+)
+_FH_QUALITATIVE_COMPOSITION_RE = re.compile(
+    rf'\b(?:high|low|large|small|significant|substantial|minimal)\b\s+'
+    rf'(?:(?:percentage|proportion|share|number|concentration)\s+of\s+)?'
+    rf'{_fh_group_alt()}\s+(?:population|residents?|share|proportion|concentration)\b'
+    rf'|{_fh_group_alt()}\s+(?:population|share|proportion|concentration)\s+'
+    rf'(?:is\s+)?\b(?:high|low|large|small|significant|substantial|minimal)\b'
+    rf'|{_fh_group_alt()}(?:人口|居民)(?:很|较|偏|非常)?(?:高|低|多|少)',
+    re.IGNORECASE,
+)
+_FH_COUNT_COMPOSITION_RE = re.compile(
+    rf'(?:\b(?:areas?|neighbou?rhoods?|districts?|communities|population)\b'
+    rf'|(?:区域|社区|街区|地区|人口))'
+    rf'[^.。!?！？\n]{{0,52}}?(?:with|having|containing|include|包括|有|包含)\s*'
+    rf'\d{{1,7}}\s*(?:名|个|個|位|户|戶)?\s*{_fh_group_alt()}',
+    re.IGNORECASE,
+)
+_FH_AREA_CONTEXT_ALT = (
+    r'(?:\b(?:areas?|neighbou?rhoods?|districts?|communities|population)\b'
+    r'|(?:区域|社区|街区|地区|人口))'
+)
+_FH_AREA_IMPLICIT_COMPOSITION_RE = re.compile(
+    rf'(?:{_FH_AREA_CONTEXT_ALT}[^.。!?！？\n]{{0,58}}?'
+    rf'(?:many|few|lots\s+of|hardly\s+any|(?:almost|virtually)?\s*no)\s+'
+    rf'{_fh_group_alt()}'
+    rf'|{_FH_AREA_CONTEXT_ALT}[^.。!?！？\n]{{0,58}}?'
+    rf'(?:most|the\s+majority\s+of)\s+(?:residents?|people|tenants?)\s+'
+    rf'(?:are|were|identify\s+as)\s+{_fh_group_alt()}'
+    rf'|{_FH_AREA_CONTEXT_ALT}[^.。!?！？\n]{{0,58}}?{_fh_group_alt()}'
+    rf'[^.。!?！？\n]{{0,18}}?(?:number|total)\s*(?:is|at|[:=])?\s*\d{{1,7}}'
+    rf'|{_FH_AREA_CONTEXT_ALT}[^.。!?！？\n]{{0,58}}?{_fh_group_alt()}\s+'
+    rf'(?:number|total)\s+\d{{1,7}})',
+    re.IGNORECASE,
+)
+_FH_ZH_IMPLICIT_COMPOSITION_RE = re.compile(
+    rf'(?:{_fh_group_alt()}(?:人口|居民|人数)?(?:很|较|偏|非常)?(?:多|少|占多数|占少数)'
+    rf'[^。！？\n]{{0,18}}?(?:区域|社区|街区|地区)'
+    rf'|{_fh_group_alt()}(?:人口|居民)?(?:占|约占|达到)?'
+    rf'(?:一半|大半|多数|少数|[一二三四五六七八九十]成)'
+    rf'[^。！？\n]{{0,18}}?(?:区域|社区|街区|地区))',
+    re.IGNORECASE,
+)
+
+# Numeric age bands are protected-characteristic filters only when framed as an
+# area/population/tenant selection. A user's own "I'm 22 and need a flat" does not match.
+_FH_AGE_FILTER_RE = re.compile(
+    r'\b(?:areas?|neighbou?rhoods?|districts?|listings?|tenants?|residents?|population)\b'
+    r'[^.。!?！？\n]{0,45}?\b(?:aged?\s*\d{1,3}|(?:under|over)\s*\d{1,3}\s*'
+    r'(?:years? old|year[- ]olds?|s\b))'
+    r'|(?:区域|社区|街区|房源|租客|居民|人口)[^。！？\n]{0,30}?'
+    r'(?:年龄)?(?:低于|小于|高于|大于|不超过|至少)\s*\d{1,3}\s*岁'
+    r'|\b(?:only|exclusively|restricted\s+to)\s+(?:people|residents?|tenants?)?\s*'
+    r'(?:under|over)\s*[- ]?\d{1,3}(?:\s*(?:years? old|year[- ]olds?))?\b'
+    r'|\b(?:under|over)\s*[- ]?\d{1,3}(?:\s*(?:years? old|year[- ]olds?))?\s*'
+    r'(?:people|residents?|tenants?)\s+(?:only|exclusively)\b'
+    r'|\b(?:for|to)\s+(?:only\s+)?(?:under|over)\s*[- ]?\d{1,3}'
+    r'(?:\s*(?:years? old|year[- ]olds?))?\s*(?:people|residents?|tenants?)\b'
+    r'|(?:只租给|仅租给|只限|仅限|只要)[^。！？\n]{0,18}?\d{1,3}\s*岁\s*'
+    r'(?:以下|以上|以内|以外|以下的|以上的)?(?:租客|居民|人士|人)',
+    re.IGNORECASE,
+)
+
+# Accessibility wording can legitimately place "without/no" before a disability
+# self-description ("a flat without steps for a disabled person"). Ignore only that
+# narrow bridge; "avoid disabled people" contains no accessibility feature and blocks.
+_FH_ACCESSIBILITY_BRIDGE_RE = re.compile(
+    r'\b(?:step[- ]free|without steps?|no steps?|lift|elevator|wheelchair access|'
+    r'accessib(?:le|ility)|adapted bathroom)\b|无台阶|无阶梯|电梯|轮椅通道|无障碍',
+    re.IGNORECASE,
+)
+_FH_DISABLED_GROUP_RE = re.compile(
+    r'\b(?:disabled (?:people|residents?|tenants?)|people with disabilities|'
+    r'wheelchair users?)\b|残疾人|残障人士|残障人群|轮椅使用者',
+    re.IGNORECASE,
+)
+_FH_NON_DEMOGRAPHIC_MEASURE_RE = re.compile(
+    r'\b(?:minutes?|mins?|hours?|miles?|kilomet(?:re|er)s?|km|pcm|per month|per week|'
+    r'bed(?:room)?s?|bathrooms?|rooms?|lifts?|elevators?)\b'
+    r'|分钟|小时|公里|英里|英镑|卧室|房间|卫生间|浴室|电梯|升降机|£',
+    re.IGNORECASE,
+)
+_FH_NON_DEMOGRAPHIC_TAIL_RE = re.compile(
+    r'^\s*(?:'
+    r'£\s*\d|\d[\d,.]*\s*(?:£|pounds?|pcm|per\s+(?:month|week)|'
+    r'minutes?|mins?|hours?|miles?|kilomet(?:re|er)s?|km|bed(?:room)?s?|'
+    r'bathrooms?|rooms?|lifts?|elevators?)\b|'
+    r'(?:one|an?|two|three|four|five)\s+(?:bed(?:room)?s?|bathrooms?|rooms?|'
+    r'lifts?|elevators?)\b|'
+    r'\d[\d,.]*\s*(?:分钟|小时|公里|英里|英镑|卧室|房间|卫生间|浴室|电梯|升降机)'
+    r')',
+    re.IGNORECASE,
+)
+
 
 def _fair_housing_violation(message: str) -> bool:
     """True when the message asks to filter/avoid housing (or gauge area 'safety') by a
@@ -1293,7 +1701,40 @@ def _fair_housing_violation(message: str) -> bool:
     'safety = fewer <group>' proxy. Deterministic; English + Chinese."""
     if not message:
         return False
-    return bool(_FH_OP_GROUP_RE.search(message) or _FH_PURITY_RE.search(message))
+    if (_FH_PERCENT_COMPOSITION_RE.search(message)
+            or _FH_VERB_PERCENT_COMPOSITION_RE.search(message)
+            or _FH_DIRECT_PERCENT_COMPOSITION_RE.search(message)
+            or _FH_FRACTION_COMPOSITION_RE.search(message)
+            or _FH_RELATIVE_COMPOSITION_RE.search(message)
+            or _FH_QUALITATIVE_COMPOSITION_RE.search(message)
+            or _FH_COUNT_COMPOSITION_RE.search(message)
+            or _FH_AREA_IMPLICIT_COMPOSITION_RE.search(message)
+            or _FH_ZH_IMPLICIT_COMPOSITION_RE.search(message)
+            or _FH_PURITY_RE.search(message) or _FH_EXCLUSIVE_RE.search(message)
+            or _FH_AGE_FILTER_RE.search(message)):
+        return True
+    for match in _FH_QUANT_RE.finditer(message):
+        span = match.group(1)
+        if _FH_NON_DEMOGRAPHIC_MEASURE_RE.search(span):
+            continue
+        # For group-before-quantity wording, the numeric housing operand sits just
+        # outside the regex span ("wheelchair user with at least | 2 bedrooms").
+        # Inspect only the immediate tail; a bare number/% remains demographic.
+        if _FH_NON_DEMOGRAPHIC_TAIL_RE.search(message[match.end(1):match.end(1) + 36]):
+            continue
+        if (_FH_ACCESSIBILITY_BRIDGE_RE.search(span)
+                and _FH_DISABLED_GROUP_RE.search(span)):
+            continue
+        return True
+    for match in _FH_OP_GROUP_RE.finditer(message):
+        span = match.group(0)
+        if _FH_NON_DEMOGRAPHIC_MEASURE_RE.search(span):
+            continue
+        if (_FH_ACCESSIBILITY_BRIDGE_RE.search(span)
+                and _FH_DISABLED_GROUP_RE.search(span)):
+            continue
+        return True
+    return False
 
 
 _FAIR_HOUSING_REFUSAL_EN = (
@@ -1746,7 +2187,10 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, accumulate
         text = response.content if hasattr(response, 'content') else str(response)
         intent = _parse_intent(text, valid_names)
     except Exception as e:
-        logger.warning(f"Intent classification failed: {e}")
+        logger.warning(
+            "Intent classification failed",
+            extra={"error_type": type(e).__name__, "message_chars": len(current)},
+        )
         intent = None
 
     if intent is None:
@@ -1771,7 +2215,10 @@ def _majority_vote(user_query, extracted_context, llm, tool_registry, accumulate
     if any(kw in ql for kw in _SEARCH_ACTION_KWS):
         intent = 'search_properties'
 
-    logger.info(f"Intent routed: {current[:60]!r} -> {intent}")
+    logger.info(
+        "Intent routed",
+        extra={"intent": intent, "message_chars": len(current)},
+    )
 
     if intent == 'listing_advice':
         # Opinion/suitability over listings already shown — answer from them, never a
@@ -2323,11 +2770,31 @@ _KNOWN_DESTINATIONS = {
     'lse': 'London School of Economics, Houghton Street, London WC2A 2AE',
     'imperial college': 'Imperial College London, South Kensington, London SW7 2AZ',
     'imperial': 'Imperial College London, South Kensington, London SW7 2AZ',
+    '帝国理工学院': 'Imperial College London, South Kensington, London SW7 2AZ',
+    '帝国理工': 'Imperial College London, South Kensington, London SW7 2AZ',
     "king's college": "King's College London, Strand, London WC2R 2LS",
     'kings college': "King's College London, Strand, London WC2R 2LS",
     'kcl': "King's College London, Strand, London WC2R 2LS",
     'canary wharf': 'Canary Wharf, London E14 5AB',
 }
+
+
+def _known_destination_address(text: str) -> str | None:
+    """Return a canonical address for an explicitly named known destination.
+
+    ASCII aliases use lexical boundaries so short names such as ``ucl`` do not
+    match inside unrelated words. CJK aliases are matched as literal substrings:
+    Python's ``\b`` is not a word boundary between adjacent Chinese characters,
+    so applying the ASCII rule to ``通勤到帝国理工`` silently drops the destination.
+    """
+    query = str(text or '').lower()
+    for keyword, address in _KNOWN_DESTINATIONS.items():
+        if keyword.isascii():
+            if re.search(rf'(?<!\w){re.escape(keyword)}(?!\w)', query):
+                return address
+        elif keyword in query:
+            return address
+    return None
 
 
 def _resolve_destination_address(user_query, extracted_context, accumulated):
@@ -2340,19 +2807,17 @@ def _resolve_destination_address(user_query, extracted_context, accumulated):
     an explicit commute question posed against a no-commute profile)."""
     accumulated = accumulated or {}
     q = (extracted_context.get('current_message') or user_query) or ""
-    ql = q.lower()
-    for kw, addr in _KNOWN_DESTINATIONS.items():
-        if kw in ql:
-            return addr
+    named = _known_destination_address(q)
+    if named:
+        return named
     # No destination named this turn: honour an explicit no-commute profile.
     if accumulated.get('no_commute'):
         return None
     dest = accumulated.get('commute_destination') or accumulated.get('destination')
     if dest:
-        dl = str(dest).lower()
-        for kw, addr in _KNOWN_DESTINATIONS.items():
-            if kw in dl:
-                return addr
+        normalized = _known_destination_address(str(dest))
+        if normalized:
+            return normalized
         return dest
     return None
 
@@ -2623,7 +3088,10 @@ JSON:"""
                 return {"tool": "multi_search", "params": {"searches": searches[:10]},
                         "reason": plan.get('reason', 'LLM planned searches')}
     except Exception as e:
-        logger.warning(f"Search planning failed: {e}")
+        logger.warning(
+            "Search planning failed",
+            extra={"error_type": type(e).__name__},
+        )
 
     # Fallback single search
     return {"tool": "multi_search",
@@ -2774,7 +3242,7 @@ def _make_build_execution_plan_node(tool_registry, search_entry):
             text = resp.content if hasattr(resp, "content") else str(resp)
             raw_tasks = _parse_plan_tasks(text)
         except Exception as e:
-            logger.warning("build_execution_plan: planner failed -> single-tool fallback: %s", e)
+            logger.warning("build_execution_plan: planner failed -> single-tool fallback; error_type=%s", type(e).__name__)
             return _fallback()
         if not raw_tasks:
             return _fallback()
@@ -2921,7 +3389,8 @@ def _shadow_write_authorized(current_message: str, params: dict) -> bool:
 
 
 def _classify_legacy_write(*, tool_name: str, params: dict, context_tainted: bool,
-                           current_message: str, policy_allowed: bool) -> tuple:
+                           current_message: str, policy_allowed: bool,
+                           user_authorized: bool | None = None) -> tuple:
     """(security_decision, user_authorized, reason) for one legacy write call.
 
     Derived from the policy branch that was actually taken plus the shadow
@@ -2929,20 +3398,17 @@ def _classify_legacy_write(*, tool_name: str, params: dict, context_tainted: boo
     PermissionError for its refusal, and PermissionError is also what a filesystem
     denial raises, so error text cannot tell a security event from an ordinary one.
     """
-    authorized = _shadow_write_authorized(current_message, params) if context_tainted else False
-    if not context_tainted:
-        return "allowed", False, None
-    if policy_allowed:
-        if authorized:
-            # A+ rule 2 was satisfied: explicit cue AND the content is the user's own
-            # words. legacy would have allowed it regardless, but it is a legitimate
-            # write either way and must not be scored as a violation.
-            return "confirmed", True, "tainted but user-authorized (A+ rule 2)"
-        return ("legacy_override", False,
-                "tainted and unauthorized; allowed by legacy allow_tainted_memory")
+    authorized = (_shadow_write_authorized(current_message, params)
+                  if user_authorized is None else bool(user_authorized))
+    if policy_allowed and authorized:
+        return "confirmed", True, "explicit user authorization and user-stated content"
     if authorized:
-        return "denied_forbidden", True, "refused despite user authorization"
-    return "denied_tainted", False, "tainted and not user-authorized"
+        return "denied_forbidden", True, "write blocked by the side-effect policy"
+    return (
+        "denied_tainted" if context_tainted else "denied_unauthorized",
+        False,
+        "memory write lacks verified user authorization",
+    )
 
 
 def _note_legacy_write_decision(**kw) -> None:
@@ -3029,7 +3495,9 @@ def _search_anchor_address(raw_data) -> Optional[str]:
     so a fetched dimension can never be attached to a listing that does not exist."""
     if not isinstance(raw_data, dict) or raw_data.get("status") != "found":
         return None
-    recs = raw_data.get("recommendations")
+    recs = (raw_data.get("recommendations")
+            or raw_data.get("unverified_candidates")
+            or _candidate_rows_with_status(raw_data, "unknown"))
     if not isinstance(recs, list) or not recs:
         return None
     top = recs[0]
@@ -3155,6 +3623,22 @@ def _make_execute_tool_node(tool_registry):
                 # THIS message override the accumulated values injected just below.
                 if not params.get('current_message'):
                     params['current_message'] = extracted_context.get('current_message', '')
+                # A hard filter the model invented (a plausible budget, a bedroom count,
+                # "shared") narrows the search to nothing while staying invisible to the
+                # user. Drop anything not traceable to the accumulated criteria or to this
+                # turn's own words, BEFORE the accumulated injection below — after it,
+                # model-supplied and harness-supplied values are indistinguishable.
+                try:
+                    from core.tools.search_properties import ground_hard_constraints
+                    params, _ungrounded = ground_hard_constraints(
+                        params, accumulated, params.get('current_message') or '')
+                    if _ungrounded:
+                        print(f"   🚧 忽略模型自造的硬条件: {', '.join(_ungrounded)}")
+                except Exception as _e:
+                    logger.warning(
+                        "Hard-constraint grounding unavailable",
+                        extra={"error_type": type(_e).__name__},
+                    )
                 # 1a: a city switch stated THIS turn must WIN over the accumulated area
                 # (post-search area freeze). _apply_explicit_criteria_updates has normally
                 # already folded it into accumulated['area'] in the extract_preferences
@@ -3220,16 +3704,23 @@ def _make_execute_tool_node(tool_registry):
                     version=getattr(tool_registry.get(tool_name), "version", "1") if hasattr(tool_registry, "get") else "1",
                 )
                 params["idempotency_key"] = invocation.idempotency_key
-                result = await tool_registry.execute_tool(tool_name, **params)
+                from core.agent_loop import _OffloadedValidationProvider, _offload_tool_call
+                result = await _offload_tool_call(
+                    lambda: tool_registry.execute_tool(tool_name, **dict(params)))
                 tool_success = bool(result.success)
                 # Domain-level outcomes such as ``need_clarification`` deliberately
                 # use success=False but still carry authoritative structured data.
                 # Keep that payload so routing/formatting can handle the outcome.
                 raw_data = result.data
                 if result.success and isinstance(raw_data, dict):
+                    from core.agent_loop import _turn_ceiling_s
+                    _turn_start = state.get("turn_start_monotonic") or time.monotonic()
+                    _turn_deadline = _turn_start + _turn_ceiling_s()
                     raw_data, commute_evidence = await validate_search_payload_with_provider(
-                        tool_registry, raw_data,
-                        timeout_s=TOOL_TIMEOUTS.get("calculate_commute", TOOL_TIMEOUT_DEFAULT))
+                        _OffloadedValidationProvider(tool_registry), raw_data,
+                        timeout_s=TOOL_TIMEOUTS.get("calculate_commute", TOOL_TIMEOUT_DEFAULT),
+                        deadline_monotonic=_turn_deadline,
+                    )
                     update["candidate_validation"] = raw_data.get("candidate_validation", {})
                     update["commute_evidence"] = commute_evidence
                 if result.data is not None:
@@ -3253,11 +3744,14 @@ def _make_execute_tool_node(tool_registry):
                     side_effect=side_effect,
                     context_tainted=_tainted,
                     tool_name=tool_name,
-                    # Legacy arch keeps pre-A+ behaviour (tainted remember allowed) until
-                    # Phase 3; the guardrails default flipped to deny for the fc_loop arch.
+                    # Provenance authorization is enforced separately below for every write.
                     allow_tainted_memory=True,
                 )
                 if side_effect == "write":
+                    _current_write_message = (
+                        extracted_context.get('current_message', '') or '')
+                    _authorized = _shadow_write_authorized(_current_write_message, params)
+                    _policy_allowed = bool(_policy_allowed and _authorized)
                     # Audit key = the idempotency key this call will carry, computed the
                     # same way below. A denial never reaches that line, so the key is
                     # built here from the same invocation identity.
@@ -3268,15 +3762,16 @@ def _make_execute_tool_node(tool_registry):
                     ).idempotency_key
                     _decision, _authorized, _reason = _classify_legacy_write(
                         tool_name=tool_name, params=params, context_tainted=_tainted,
-                        current_message=extracted_context.get('current_message', '') or '',
-                        policy_allowed=bool(_policy_allowed))
+                        current_message=_current_write_message,
+                        policy_allowed=bool(_policy_allowed),
+                        user_authorized=_authorized)
                     _note_legacy_write_decision(
                         tool=tool_name, decision=_decision, context_tainted=_tainted,
                         user_authorized=_authorized, audit_key=_inv_key, reason=_reason)
                 else:
                     _inv_key = None
                 if not _policy_allowed:
-                    raise PermissionError("write tool denied because this turn contains untrusted content")
+                    raise PermissionError("memory write denied by authorization policy")
                 invocation = ToolInvocation.create(
                     run_id=state.get("run_id", "legacy"), node_id="execute_tool",
                     tool=tool_name, params=params, version=getattr(tool, "version", "1"),
@@ -3286,7 +3781,9 @@ def _make_execute_tool_node(tool_registry):
                     # Before the call: the gate has been crossed. Says nothing about
                     # whether the write lands.
                     _note_legacy_write_dispatch(_inv_key)
-                result = await tool_registry.execute_tool(tool_name, **params)
+                from core.agent_loop import _offload_tool_call
+                result = await _offload_tool_call(
+                    lambda: tool_registry.execute_tool(tool_name, **dict(params)))
                 tool_success = bool(result.success)
                 raw_data = result.data if result.success else {"success": False, "error": result.error}
 
@@ -3299,8 +3796,11 @@ def _make_execute_tool_node(tool_registry):
                     observation = f"Error: {result.error}"
 
         except Exception as e:
-            logger.error(f"Tool execution error ({tool_name}): {e}", exc_info=True)
-            observation = f"Error executing {tool_name}: {str(e)}"
+            logger.error(
+                "Tool execution error",
+                extra={"tool": tool_name, "error_type": type(e).__name__},
+            )
+            observation = f"Error executing {tool_name}"
             raw_data = None
 
         # The legacy graph historically kept only the latest tool_raw_data. A later
@@ -3513,7 +4013,10 @@ def _make_generate_response_node():
             text = response.content if hasattr(response, 'content') else str(response)
             return {"final_response": clean_response(text)}
         except Exception as e:
-            logger.error(f"Response generation failed: {e}")
+            logger.error(
+                "Response generation failed",
+                extra={"error_type": type(e).__name__},
+            )
             return {"final_response": "I'm sorry, I couldn't process your request. Please try again."}
 
     return generate_response_node
@@ -3804,7 +4307,7 @@ def _make_reflect_node(tool_registry, reflect_llm):
             text = resp.content if hasattr(resp, "content") else str(resp)
             verdict = _parse_reflect_action(text)
         except Exception as e:
-            logger.warning("reflect controller failed -> answer: %s", e)
+            logger.warning("reflect controller failed -> answer; error_type=%s", type(e).__name__)
             return _answer("controller exception")
 
         if verdict.get("action") != "continue":
@@ -4139,6 +4642,9 @@ def _make_critic_node():
                 if tool_name == "search_properties" and isinstance(raw, dict):
                     retrieved_evidence.extend([
                         raw.get("recommendations") or [],
+                        raw.get("unverified_candidates") or [],
+                        raw.get("excluded_candidates") or [],
+                        raw.get("candidate_states") or [],
                         raw.get("over_budget_alternatives") or [],
                         raw.get("commute_evidence") or [],
                     ])
@@ -4232,18 +4738,65 @@ def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
     passed through untouched, so callers that validate earlier keep their own evidence.
     """
     if search_payload.get("candidate_validation") is None:
-        search_payload = validate_search_payload(
-            search_payload, commute_evidence=commute_evidence or [])
+        carries_partitioned_states = bool(
+            search_payload.get("candidate_states")
+            or search_payload.get("unverified_candidates")
+            or search_payload.get("excluded_candidates")
+        )
+        prevalidated_states = (_search_candidate_states(search_payload)
+                               if carries_partitioned_states else [])
+        if carries_partitioned_states and prevalidated_states:
+            # Do not feed an already-partitioned payload back through
+            # validate_search_payload: it validates only recommendations/alternatives,
+            # so an empty eligible list would overwrite these states with an empty ledger.
+            search_payload = dict(search_payload)
+            validation = {
+                "constraints": {},
+                "statuses": prevalidated_states,
+                "eligible": [s for s in prevalidated_states if s.get("status") == "eligible"],
+                "excluded": [s for s in prevalidated_states if s.get("status") == "excluded"],
+                "unknown": [s for s in prevalidated_states if s.get("status") == "unknown"],
+            }
+            search_payload["candidate_validation"] = validation
+            search_payload["candidate_states"] = prevalidated_states
+        else:
+            search_payload = validate_search_payload(
+                search_payload, commute_evidence=commute_evidence or [])
+    validation = search_payload.get("candidate_validation") or {}
     recs = apply_preference_filter(search_payload.get("recommendations") or [], prefs)
+    if not recs and validation.get("eligible"):
+        recs = apply_preference_filter(
+            [dict(state.get("candidate") or {}) for state in validation["eligible"]], prefs)
+    unverified = list(search_payload.get("unverified_candidates") or
+                      [dict(state.get("candidate") or {})
+                       for state in validation.get("unknown") or []])
+    excluded = list(search_payload.get("excluded_candidates") or
+                    [dict(state.get("candidate") or {})
+                     for state in validation.get("excluded") or []])
     panel_recs = recs
     if not panel_recs:
         # Near-misses stay visible as explicitly excluded alternatives; they never join
-        # the deterministic eligible collection.
+        # the deterministic eligible collection. `similar_properties` is the same class of
+        # row from the closest-recall fallback (status `no_exact_match_but_similar`).
         panel_recs = apply_preference_filter(
-            search_payload.get("over_budget_alternatives") or [], prefs)
+            search_payload.get("over_budget_alternatives")
+            or search_payload.get("similar_properties") or [], prefs)
         for row in panel_recs:
             row.setdefault("candidate_status", "excluded")
-            row.setdefault("status_reason", "over_budget")
+            row.setdefault("status_reason",
+                           "similar_suggestion"
+                           if row.get("match_type") == "similar_suggestion"
+                           else "over_budget")
+    if not panel_recs and unverified:
+        panel_recs = apply_preference_filter([dict(row) for row in unverified], prefs)
+        for row in panel_recs:
+            row.setdefault("candidate_status", "unknown")
+            row.setdefault("status_reason", "required conditions are not fully verified")
+    if not panel_recs and excluded:
+        panel_recs = apply_preference_filter([dict(row) for row in excluded], prefs)
+        for row in panel_recs:
+            row.setdefault("candidate_status", "excluded")
+            row.setdefault("status_reason", "does not meet a declared hard condition")
     tool_data = {
         "recommendations": panel_recs,
         "eligible_recommendations": recs,
@@ -4251,8 +4804,8 @@ def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
         # 🆕 目的地附近推荐居住区，随搜索结果一并回传前端（可点击 chips）。
         "area_recommendations": search_payload.get("area_recommendations", []),
         "candidate_states": search_payload.get("candidate_states", []),
-        "excluded_candidates": search_payload.get("excluded_candidates", []),
-        "unverified_candidates": search_payload.get("unverified_candidates", []),
+        "excluded_candidates": excluded,
+        "unverified_candidates": unverified,
         "commute_evidence": search_payload.get("commute_evidence", []),
     }
     return search_payload, tool_data
@@ -4285,9 +4838,8 @@ def _make_format_output_node():
                               if a.get("tool") == "search_properties"
                               and a.get("success") is not False
                               and isinstance(a.get("raw_data"), dict)
-                              and a["raw_data"].get("status") == "found"
-                              and (a["raw_data"].get("recommendations")
-                                   or a["raw_data"].get("over_budget_alternatives"))), None)
+                              and a["raw_data"].get("status") in _SEARCH_RESULT_STATUSES
+                              and _search_payload_has_candidates(a["raw_data"])), None)
         if is_loop_synthesis and ledger_search is not None:
             ledger_search["raw_data"], tool_data = _structured_search_tool_data(
                 ledger_search["raw_data"], prefs,
@@ -4337,8 +4889,7 @@ def _make_format_output_node():
                     and tool_name == "search_properties"
                     and isinstance(raw_data, dict)
                     and raw_data.get("status") == "found"
-                    and (raw_data.get("recommendations")
-                         or raw_data.get("over_budget_alternatives"))):
+                    and _search_payload_has_candidates(raw_data)):
                 _, tool_data = _structured_search_tool_data(
                     raw_data, prefs,
                     commute_evidence=(state.get("commute_evidence")
@@ -4357,7 +4908,10 @@ def _make_format_output_node():
             if raw_data.get('status') == 'need_clarification':
                 response = raw_data.get('question', 'Could you please provide more details?')
                 response_type = 'question'
-            if isinstance(raw_data, dict) and raw_data.get('candidate_validation') is None:
+            if (isinstance(raw_data, dict) and raw_data.get('candidate_validation') is None
+                    and not (raw_data.get('candidate_states')
+                             or raw_data.get('unverified_candidates')
+                             or raw_data.get('excluded_candidates'))):
                 raw_data = validate_search_payload(
                     raw_data, commute_evidence=state.get("commute_evidence") or [])
             if isinstance(raw_data, dict) and raw_data.get('status') == 'need_clarification':
@@ -4371,9 +4925,8 @@ def _make_format_output_node():
                 # ('missing_area') from the soft recommended-criteria gate ('soft_criteria').
                 if raw_data.get('clarification_kind') is not None:
                     tool_data['clarification_kind'] = raw_data.get('clarification_kind')
-            elif (raw_data.get('status') == 'found'
-                    and (raw_data.get('recommendations')
-                         or raw_data.get('over_budget_alternatives'))):
+            elif (raw_data.get('status') in _SEARCH_RESULT_STATUSES
+                    and _search_payload_has_candidates(raw_data)):
                 raw_data, tool_data = _structured_search_tool_data(
                     raw_data, prefs, commute_evidence=state.get('commute_evidence') or [])
                 recs = tool_data['eligible_recommendations']
@@ -4386,9 +4939,20 @@ def _make_format_output_node():
                 validation = raw_data.get('candidate_validation') or {}
                 requires_status = bool(validation.get('excluded') or validation.get('unknown')
                                         or (validation.get('constraints') or {}).get('max_commute_minutes'))
-                response = (render_candidate_status(validation, language=language)
-                            if requires_status else
-                            raw_data.get('summary') or f"Found {len(recs)} properties.")
+                if (raw_data.get('status') == 'no_exact_match_but_similar'
+                        and not raw_data.get('over_budget_alternatives')):
+                    # A similar-recall row failed no stated constraint (the exact-match pool
+                    # was empty), so render its own honest lead and keep its price rather
+                    # than filing it under "excluded / does not meet".
+                    lead = ' '.join(part for part in (raw_data.get('message'),
+                                                      raw_data.get('suggestion')) if part)
+                    response = '\n\n'.join(part for part in (
+                        lead, render_similar_listings(tool_data['recommendations'],
+                                                      language=language)) if part)
+                else:
+                    response = (render_candidate_status(validation, language=language)
+                                if requires_status else
+                                raw_data.get('summary') or f"Found {len(recs)} properties.")
         if (tool_name == REFINE_TOOL_NAME and isinstance(raw_data, dict)
                 and raw_data.get('recommendations')):
             # Refinement-in-place. Two things happen here and both are load-bearing:
@@ -4510,7 +5074,7 @@ def _route_after_execution(tool: str, raw) -> str:
         status = raw.get("status")
         if status == "need_clarification":
             return "format_output"
-        if status == "found" and raw.get("recommendations"):
+        if status in _SEARCH_RESULT_STATUSES and _search_payload_has_candidates(raw):
             return "format_output"
 
     # Tools with structured direct output
@@ -4598,8 +5162,11 @@ def _make_task_worker_node(tool_registry):
         except Exception:
             pass
         try:
+            from core.agent_loop import _offload_tool_call
             result = await asyncio.wait_for(
-                tool_registry.execute_tool(tool_name, **params), timeout)
+                _offload_tool_call(
+                    lambda: tool_registry.execute_tool(tool_name, **dict(params))),
+                timeout)
             if result.success:
                 obs = (result.data.get('results', json.dumps(result.data, ensure_ascii=False))
                        if isinstance(result.data, dict) else str(result.data))
@@ -4608,8 +5175,8 @@ def _make_task_worker_node(tool_registry):
                 obs, raw = f"Error: {result.error}", None
         except asyncio.TimeoutError:
             obs, raw = f"Error: {tool_name} timed out after {timeout}s", None
-        except Exception as e:
-            obs, raw = f"Error: {e}", None
+        except Exception:
+            obs, raw = f"Error executing {tool_name}", None
         return {"task_results": [{
             "id": tid, "index": idx, "tool": tool_name, "params": params,
             "obs": obs if isinstance(obs, str) else str(obs), "raw": raw, "run_id": run_id,

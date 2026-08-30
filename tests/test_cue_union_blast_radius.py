@@ -513,14 +513,13 @@ def test_the_bare_safe_cue_is_a_strict_superset_of_the_cue_it_replaced():
 
 @needs_shared_table
 def test_the_chinese_gained_cue_matches_the_raw_text_and_needs_no_word_boundary():
-    """``药店`` on the CJK side of the matcher, and the trap that makes a ``\\b`` version wrong.
+    """``药店`` on the CJK side, plus the adjacent CJK commute-cap contract.
 
     ``cues_hit`` matches CJK cues against the RAW text by substring. It has to: Python's ``re``
     treats a CJK character as a word character, so ``\\b`` never fires between two of them, nor
     between one and a digit. The cue path is safe because it uses no ``\\b`` at all — asserted
-    in source below — while ``search_properties._extract_commute_minutes``, which IS anchored
-    that way, silently drops the cap out of 「通勤30 min以内」. Same message, cue understood,
-    limit lost.
+    below. The commute parser likewise uses an ASCII-only lookbehind, so CJK adjacency
+    preserves the explicit cap instead of silently dropping it.
     """
     for message in ("附近有药店吗？", "帮我找卡姆登的房子，附近要有药店", "药店"):
         assert agent_loop._cued_dimensions(message) == ["nearby"], message
@@ -542,5 +541,5 @@ def test_the_chinese_gained_cue_matches_the_raw_text_and_needs_no_word_boundary(
     assert not any("\\b" in s for s in code_strings if len(s) < 200)
 
     from core.tools.search_properties import _extract_commute_minutes as extract
-    assert extract("通勤 30 min") == 30          # a space restores the boundary
-    assert extract("通勤30 min以内") is None      # the trap, pinned as known
+    assert extract("通勤 30 min") == 30
+    assert extract("通勤30 min以内") == 30       # no ASCII spacing required

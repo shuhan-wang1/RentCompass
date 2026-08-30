@@ -248,7 +248,7 @@ def _extract_candidates(snippets: str, destination: str, city: str | None) -> li
                 break
         return out
     except Exception as e:  # LLM/parse failure -> ground nothing
-        print(f"[AREA_RECO] candidate extraction failed: {e}")
+        print(f"[AREA_RECO] candidate extraction failed; error_type={type(e).__name__}")
         return []
 
 
@@ -292,7 +292,7 @@ def _validate_one(
         nlow = _norm_exclude_token(name)
         ccity = _norm_exclude_token(cand_city)
         if slug in excludes or nlow in excludes or (ccity and f"{nlow}|{ccity}" in excludes):
-            print(f"[AREA_RECO] drop '{name}': excluded")
+            print(f"[AREA_RECO] drop candidate; name_chars={len(str(name))} reason=excluded")
             return None
 
         # 3) Contamination guard: a KNOWN city that differs from the destination's.
@@ -308,12 +308,12 @@ def _validate_one(
         # Pinned by tests/test_area_city_contamination_guard.py.
         if (cand_city and dest_city
                 and cand_city.strip().casefold() != dest_city.strip().casefold()):
-            print(f"[AREA_RECO] drop '{name}': wrong city ({cand_city} != {dest_city})")
+            print(f"[AREA_RECO] drop candidate; name_chars={len(str(name))} reason=wrong_city")
             return None
 
         # 4) It must be a place to LIVE, not another commute destination.
         if is_destination(place):
-            print(f"[AREA_RECO] drop '{name}': is a destination ({place.get('kind')})")
+            print(f"[AREA_RECO] drop candidate; name_chars={len(str(name))} reason=destination")
             return None
 
         # 5) Geocode to a real centroid (anchored to the destination city).
@@ -324,7 +324,7 @@ def _validate_one(
             # Commute mode: a geocodable centroid AND a within-cap commute are BOTH
             # required (legacy recommend_areas() semantics, unchanged).
             if not geo:
-                print(f"[AREA_RECO] drop '{name}': not geocodable")
+                print(f"[AREA_RECO] drop candidate; name_chars={len(str(name))} reason=not_geocodable")
                 return None
             centroid = [geo["lat"], geo["lng"]]
             mins = commute_minutes(
@@ -332,7 +332,7 @@ def _validate_one(
                 origin_address=name, origin_geo=geo, london=london,
             )
             if mins is None or mins > max_commute:
-                print(f"[AREA_RECO] drop '{name}': commute {mins} > {max_commute}")
+                print(f"[AREA_RECO] drop candidate; name_chars={len(str(name))} reason=commute_limit")
                 return None
             commute_val = int(mins)
         else:
@@ -351,7 +351,7 @@ def _validate_one(
             "source": "web+validated",
         }
     except Exception as e:  # a single bad candidate must never sink the batch
-        print(f"[AREA_RECO] validation error for '{cand.get('name')}': {e}")
+        print(f"[AREA_RECO] validation error; name_chars={len(str(cand.get('name') or ''))} error_type={type(e).__name__}")
         return None
 
 
@@ -425,7 +425,7 @@ async def generate_candidate_areas(
         if dest_coords is None:
             dest_coords = await _run_blocking(loop, geocode_address, geo_target)
         if not dest_coords:
-            print(f"[AREA_RECO] could not geocode destination '{destination}'")
+            print(f"[AREA_RECO] could not geocode destination; destination_chars={len(str(destination))}")
             return []
         if london is None:
             london = in_london(dest_coords)
@@ -457,7 +457,7 @@ async def generate_candidate_areas(
         )
         snippets = "\n\n---\n\n".join(p for p in snippet_parts if p)
         if _looks_empty(snippets):
-            print(f"[AREA_RECO] no web snippets for '{destination}' -> [] (grounded)")
+            print(f"[AREA_RECO] no web snippets; destination_chars={len(str(destination))} -> [] (grounded)")
             return []
         if budget_s is not None and (time.time() - t0) > budget_s:
             return []
@@ -547,7 +547,7 @@ async def recommend_areas(
     try:
         cached = _cache().get(dest_key)
     except Exception as e:
-        print(f"[AREA_RECO] cache read failed: {e}")
+        print(f"[AREA_RECO] cache read failed; error_type={type(e).__name__}")
         cached = None
     if cached and not force_refresh:
         areas, fetched = cached
@@ -573,7 +573,7 @@ async def recommend_areas(
         if dest_coords is None:
             dest_coords = await _run_blocking(loop, geocode_address, geo_target)
         if not dest_coords:
-            print(f"[AREA_RECO] could not geocode destination '{destination}'")
+            print(f"[AREA_RECO] could not geocode destination; destination_chars={len(str(destination))}")
             _cache().set(dest_key, [])
             return []
         london = in_london(dest_coords)
@@ -598,10 +598,10 @@ async def recommend_areas(
         # 2f) Sort by commute ascending, cap at limit, persist (incl. honest empty).
         final = sorted(validated, key=_commute_key)[:limit]
         _cache().set(dest_key, final)
-        print(f"[AREA_RECO] '{destination}': {len(final)} validated areas "
-              f"in {time.time() - t0:.1f}s")
+        print(f"[AREA_RECO] destination_chars={len(str(destination))}; "
+              f"validated_count={len(final)} elapsed_s={time.time() - t0:.1f}")
         return final
 
     except Exception as e:  # never poison the cache with a hard error
-        print(f"[AREA_RECO] generate failed for '{destination}': {e}")
+        print(f"[AREA_RECO] generate failed; destination_chars={len(str(destination))} error_type={type(e).__name__}")
         return []

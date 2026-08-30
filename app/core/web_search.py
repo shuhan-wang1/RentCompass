@@ -150,85 +150,110 @@ class SearXNGSearch:
         """
         if max_results is None:
             max_results = self.default_max_results
-        
-        # 🆕 根据查询意图选择搜索引擎
-        intent = self._detect_query_intent(query)
-        # POI 和 opinion 查询都允许使用论坛引擎
-        engines = self.forum_engines if intent in ['opinion', 'poi'] else self.authoritative_engines
 
-        print(f"  -> [SearXNG] Query intent: {intent}, using engines: {engines}")
-        
+        intent = self._detect_query_intent(query)
+        engines = (
+            self.forum_engines
+            if intent in ["opinion", "poi"]
+            else self.authoritative_engines
+        )
+        print(
+            f"  -> [SearXNG] Query intent: {intent}, constrained_engine_count: "
+            f"{len(engines.split(','))}"
+        )
+
         params = {
             "q": query,
             "format": "json",
             "categories": categories,
             "language": language,
-            "engines": engines  # 🆕 根据意图选择引擎
+            "engines": engines,
         }
-        
-        try:
-            print(f"  -> [SearXNG] Searching: '{query}'")
-            response = requests.get(
-                self.search_endpoint,
-                params=params,
-                timeout=self.timeout
+
+        # A configured engine can be temporarily blocked while SearXNG itself is healthy.
+        # On an empty/error response, retry exactly once without an engine selector and let
+        # SearXNG choose its enabled defaults. No synthetic result is ever created here.
+        request_variants = [
+            params,
+            {key: value for key, value in params.items() if key != "engines"},
+        ]
+        data: Dict = {}
+        results: List[Dict] = []
+        for attempt, request_params in enumerate(request_variants, 1):
+            constrained = "engines" in request_params
+            print(
+                f"  -> [SearXNG] Searching query_chars={len(query)} "
+                f"attempt={attempt} constrained={constrained}"
             )
-            response.raise_for_status()
-            
-            data = response.json()
-            results = data.get("results", [])
-            
-            # 🆕 诊断日志：显示原始结果
-            print(f"  -> [SearXNG] Raw results: {len(results)} items")
-            if len(results) > 0:
-                engines_used = set(r.get('engine', 'unknown') for r in results)
-                print(f"  -> [SearXNG] Engines returned data: {', '.join(engines_used)}")
-            
-            # 检查是否有不响应的引擎（只记录简要信息）
-            # 这些备选引擎（brave/duckduckgo/startpage）失败不影响结果
-            # 因为我们只使用 Google 作为主引擎
+            try:
+                response = requests.get(
+                    self.search_endpoint,
+                    params=request_params,
+                    timeout=self.timeout,
+                )
+                response.raise_for_status()
+                data = response.json() or {}
+                candidate_results = data.get("results", [])
+                results = (
+                    candidate_results if isinstance(candidate_results, list) else []
+                )
+            except Exception as exc:
+                # HTTP exception strings can include the request URL and raw query.
+                print(
+                    f"  ⚠️ [SearXNG] Backend failure attempt={attempt} "
+                    f"exception_type={type(exc).__name__}"
+                )
+                if attempt == 1:
+                    print("  -> [SearXNG] Retrying with default enabled engines")
+                    continue
+                return []
+
+            print(f"  -> [SearXNG] Raw result count: {len(results)}")
+            if results:
+                responding_engine_count = sum(
+                    1 for result in results
+                    if isinstance(result, dict) and result.get("engine")
+                )
+                print(
+                    f"  -> [SearXNG] Responding engine count: {responding_engine_count}"
+                )
+                break
+            if attempt == 1:
+                print(
+                    "  -> [SearXNG] Empty constrained result; "
+                    "retrying default engines"
+                )
+
+        if not results:
             unresponsive = data.get("unresponsive_engines", [])
-            if unresponsive and len(results) == 0:
-                # 只在主引擎也失败时才警告
-                print(f"  ⚠️ [SearXNG] All engines unresponsive, no results")
-            
-            # 🆕 对于事实性查询，过滤结果，只保留权威来源
-            # POI 和 opinion 查询不过滤
-            pre_filter_count = len(results)
-            if intent == 'factual':
-                results = self._filter_authoritative_sources(results)
-                print(f"  -> [Filter] {pre_filter_count} → {len(results)} (kept authoritative sources)")
-            elif intent in ['opinion', 'poi']:
-                print(f"  -> [Filter] Skipping filter for {intent} query (allowing all sources)")
-            
-            # 提取并格式化结果
-            formatted_results = []
-            for result in results[:max_results]:
-                formatted_results.append({
-                    "title": result.get("title", "No title"),
-                    "url": result.get("url", ""),
-                    "content": result.get("content", "No content available")
-                })
-            
-            print(f"  ✅ Found {len(formatted_results)} results")
-            return formatted_results
-            
-        except requests.exceptions.ConnectionError:
-            print(f"  ❌ Connection Error: Cannot connect to SearXNG at {self.instance_url}")
-            print("     Make sure the SearXNG Docker container is running.")
+            if unresponsive:
+                print(
+                    "  ⚠️ [SearXNG] No results; unresponsive_engine_count="
+                    f"{len(unresponsive)}"
+                )
             return []
-        except requests.exceptions.Timeout:
-            print(f"  ❌ Timeout: SearXNG request timed out after {self.timeout}s")
-            return []
-        except requests.exceptions.HTTPError as e:
-            print(f"  ❌ HTTP Error: {e}")
-            return []
-        except Exception as e:
-            print(f"  ❌ SearXNG search failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
-    
+
+        pre_filter_count = len(results)
+        if intent == "factual":
+            results = self._filter_authoritative_sources(results)
+            print(
+                f"  -> [Filter] {pre_filter_count} → {len(results)} "
+                "(kept authoritative sources)"
+            )
+        elif intent in ["opinion", "poi"]:
+            print(f"  -> [Filter] Skipping filter for {intent} query")
+
+        formatted_results = []
+        for result in results[:max_results]:
+            formatted_results.append({
+                "title": result.get("title", "No title"),
+                "url": result.get("url", ""),
+                "content": result.get("content", "No content available"),
+            })
+
+        print(f"  ✅ Found {len(formatted_results)} results")
+        return formatted_results
+
     def _filter_authoritative_sources(self, results: List[Dict]) -> List[Dict]:
         """
         智能三层过滤系统：
@@ -298,7 +323,7 @@ class SearXNGSearch:
             # 检查域名黑名单
             for ban in banned_domains:
                 if ban in url or ban in title:
-                    print(f"  🗑️ [Filter] HARD BLOCK (domain): {ban} found in {url}")
+                    print("  🗑️ [Filter] HARD BLOCK category=domain")
                     is_banned = True
                     break
             
@@ -306,7 +331,7 @@ class SearXNGSearch:
             if not is_banned:
                 for keyword in investment_keywords:
                     if keyword in snippet or keyword in title:
-                        print(f"  🗑️ [Filter] HARD BLOCK (keyword): '{keyword}' found in content")
+                        print("  🗑️ [Filter] HARD BLOCK category=content")
                         is_banned = True
                         break
             
@@ -316,16 +341,16 @@ class SearXNGSearch:
             # --- ✅ 第二道防线：权威白名单 ---
             if any(domain in url for domain in authoritative_domains):
                 whitelist_results.append(result)
-                print(f"  ✅ [Filter] Found Authoritative: {url}")
+                print("  ✅ [Filter] Found authoritative result")
                 continue
                 
             # --- 🆗 第三道防线：灰色名单（软性过滤） ---
             # 必须包含学生相关内容才能进入灰名单
             if 'student' in title or 'rent' in title or 'guide' in title or 'accommodation' in title:
                 greylist_results.append(result)
-                print(f"  🆗 [Filter] Added to Greylist: {url}")
+                print("  🆗 [Filter] Added result to greylist")
             else:
-                print(f"  ⛔ [Filter] Rejected (not student-relevant): {url}")
+                print("  ⛔ [Filter] Rejected non-student result")
 
         # --- 🔄 最终返回逻辑 ---
         
@@ -397,16 +422,16 @@ def get_search_snippets(query: str, max_results: int = 5) -> str:
     cache_key = create_cache_key('get_search_snippets', query, max_results)
     cache_status, cached_result = _read_search_cache(cache_key)
     if cache_status == "fresh" and cached_result:
-        print(f"  -> [Cache HIT] Web search for: '{query}'")
+        print(f"  -> [Cache HIT] Web search query_chars={len(query)}")
         return cached_result
     
-    print(f"  -> [API Call] Web search for: '{query}'")
+    print(f"  -> [API Call] Web search query_chars={len(query)}")
     
     # 使用 SearXNG 执行搜索
     results = _searxng_client.search(query, max_results=max_results)
     
     if not results:
-        print(f"  ⚠️ SearXNG returned no results for: {query}")
+        print(f"  ⚠️ SearXNG returned no results query_chars={len(query)}")
         if cache_status == "stale" and cached_result:
             return (
                 "Cached web results (possibly outdated; live refresh returned "
@@ -510,6 +535,9 @@ if __name__ == "__main__":
     
     # 测试搜索
     test_query = "London rent prices 2024"
-    print(f"Testing search: '{test_query}'\n")
+    print(f"Testing search query_chars={len(test_query)}\n")
     result = search_web(test_query, max_results=5)
-    print(result)
+    if isinstance(result, list):
+        print(f"Search completed result_count={len(result)}")
+    else:
+        print(f"Search completed result_chars={len(result)}")

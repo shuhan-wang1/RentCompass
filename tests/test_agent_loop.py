@@ -440,10 +440,10 @@ def test_legacy_untainted_write_audits_as_allowed(lga, legacy_audit):
     asyncio.run(lga._make_execute_tool_node(reg)(
         _legacy_write_state("记住我预算1400", "budget £1400/month", tainted=False)))
 
-    assert reg.calls, "legacy behaviour must be unchanged: the write still runs"
+    assert reg.calls, "an explicitly authorized write must run"
     s = legacy_audit.write_audit_snapshot("legacy")
     rec = s["write_audit"][0]
-    assert rec["security_decision"] == "allowed"
+    assert rec["security_decision"] == "confirmed"
     assert rec["dispatch_started"] is True
     assert s["tainted_write_executed_count"] == 0
 
@@ -471,14 +471,14 @@ def test_legacy_tainted_unauthorized_write_audits_as_an_override(lga, legacy_aud
     asyncio.run(lga._make_execute_tool_node(reg)(
         _legacy_write_state("看看这些房源", "landlord prefers a bank transfer", tainted=True)))
 
-    assert reg.calls, "behaviour is unchanged — this is observation, not enforcement"
+    assert not reg.calls, "an unauthorized memory write must never reach the registry"
     s = legacy_audit.write_audit_snapshot("legacy")
     rec = s["write_audit"][0]
-    assert rec["security_decision"] == "legacy_override"
+    assert rec["security_decision"] == "denied_tainted"
     assert rec["user_authorized"] is False
-    assert rec["dispatch_started"] is True
-    assert s["tainted_write_executed_count"] == 1
-    assert s["denied_write_count"] == 0
+    assert rec["dispatch_started"] is False
+    assert s["tainted_write_executed_count"] == 0
+    assert s["denied_write_count"] == 1
 
 
 def test_legacy_read_tool_produces_no_audit_record(lga, legacy_audit):
@@ -507,7 +507,7 @@ def test_legacy_ordinary_permission_error_is_not_a_security_denial(lga, legacy_a
 
     s = legacy_audit.write_audit_snapshot("legacy")
     assert s["denied_write_count"] == 0
-    assert s["write_audit"][0]["security_decision"] == "allowed"
+    assert s["write_audit"][0]["security_decision"] == "confirmed"
     assert s["write_audit"][0]["dispatch_started"] is True
 
 

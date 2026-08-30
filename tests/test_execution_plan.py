@@ -610,15 +610,12 @@ def test_zh_multi_dimension_search_fans_out(lga):
     cmd = _exec_search(lga, msg)
     assert cmd.goto == "dispatch_tasks"
     tools = {t["tool"] for t in cmd.update["task_plan"]}
-    assert {"check_safety", "search_nearby_pois"} <= tools
-    # DOCUMENTED SEPARATE GAP (not this change's to fix): the commute dimension IS cued here
-    # ("通勤"), but _KNOWN_DESTINATIONS is ascii-only — it has 'imperial', not '帝国理工' — so
-    # _resolve_destination_address cannot resolve a Chinese destination and the commute task is
-    # correctly DROPPED rather than guessed. Adding CJK aliases would change calculate_commute /
-    # calculate_commute_cost routing for every zh turn on the single-tool path too, so it needs
-    # its own change. This asserts the drop is deliberate, not silent breakage.
-    assert "calculate_commute" not in tools
-    assert lga._resolve_destination_address(msg, {"current_message": msg}, {}) is None
+    assert tools == {"check_safety", "calculate_commute", "search_nearby_pois"}
+    destination = lga._resolve_destination_address(msg, {"current_message": msg}, {})
+    assert destination == "Imperial College London, South Kensington, London SW7 2AZ"
+    commute = next(t for t in cmd.update["task_plan"]
+                   if t["tool"] == "calculate_commute")
+    assert commute["params"]["to_address"] == destination
     from core import dimensions
     assert "commute" in dimensions.cued_dimensions(msg)          # the cue itself does fire
 

@@ -220,7 +220,78 @@ def test_turn_budget_accumulates_across_batches(monkeypatch):
     assert state["turn_tool_budget_used_s"] >= 0.2  # at least the batch we just ran
 
 
+def test_hidden_commute_validation_shares_turn_deadline_and_budget(monkeypatch):
+    class SearchAndCommuteProvider(FakeProvider):
+        async def execute_tool(self, name, **params):
+            self.calls.append((name, params))
+            if name == "search_properties":
+                return FakeResult(True, {
+                    "status": "found",
+                    "search_criteria": {
+                        "max_commute_time": 30,
+                        "commute_destination": "Synthetic Campus",
+                    },
+                    "recommendations": [
+                        {"address": f"{index} Deadline Road", "price": 900}
+                        for index in range(6)
+                    ],
+                })
+            await asyncio.sleep(5)
+            return FakeResult(True, {"duration_minutes": 20})
+
+    monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "1.2")
+    monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "1.2")
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "1.0")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.01")
+    monkeypatch.setenv("FC_COMMUTE_VALIDATION_CONCURRENCY", "2")
+    monkeypatch.setenv("FC_COMMUTE_VALIDATION_MAX_CANDIDATES", "6")
+    monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "calculate_commute", 5)
+    provider = SearchAndCommuteProvider([
+        FakeSpec("search_properties"), FakeSpec("calculate_commute"),
+    ])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(
+        turn_start_monotonic=time.monotonic(),
+        messages=[AIMessage(content="", tool_calls=[
+            _tc("search_properties", {"area": "Synthetic"}, "c1")
+        ])],
+    )
+
+    started = time.monotonic()
+    state = _exec_once(nodes, state)
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 2.0
+    commute_calls = [call for call in provider.calls if call[0] == "calculate_commute"]
+    assert len(commute_calls) <= 2
+    commute_artifacts = [
+        artifact for artifact in state["tool_artifacts"]
+        if artifact["tool"] == "calculate_commute"
+    ]
+    assert len(commute_artifacts) == 6, (
+        provider.calls, state["tool_artifacts"], state.get("messages"))
+    assert all(artifact.get("timed_out") or artifact.get("denied")
+               for artifact in commute_artifacts)
+    longest_commute_s = max(
+        artifact.get("elapsed_ms", 0) for artifact in commute_artifacts) / 1000.0
+    assert state["turn_tool_budget_used_s"] >= longest_commute_s * 0.8
+
+
 # ─── denied-write artifact ─────────────────────────────────────────
+class _AllowGate:
+    @staticmethod
+    def write_authorization(message, content):
+        return True
+
+    @staticmethod
+    def user_authorizes_memory(message):
+        return True
+
+    @staticmethod
+    def memory_write_allowed(*, context_tainted, user_authorized):
+        return True
+
+
 class _DenyGate:
     frozen = []
 
@@ -236,6 +307,27 @@ class _DenyGate:
     def freeze_pending_write(session_id, content, kind):
         _DenyGate.frozen.append((session_id, content, kind))
         return "digestX"
+
+
+def test_missing_memory_gate_denies_clean_model_write(monkeypatch):
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)
+    provider = FakeProvider([FakeSpec("remember", side_effect="write", retry_safe=False)])
+    nodes = build_fc_nodes(provider, agent_llm=FakeChat())
+    state = _state(
+        context_tainted=False,
+        messages=[AIMessage(content="", tool_calls=[
+            _tc("remember", {"content": "model invented preference", "kind": "semantic"}, "c1")
+        ])],
+    )
+
+    state = _exec_once(nodes, state)
+
+    assert provider.calls == []
+    denied = [artifact for artifact in state["tool_artifacts"] if artifact.get("denied")]
+    assert len(denied) == 1
+    assert denied[0]["error"] == "denied: memory authorization gate unavailable"
+    assert any("nothing was saved" in message.content for message in state["messages"]
+               if isinstance(message, ToolMessage))
 
 
 def test_denied_artifact_shape_and_no_progress(monkeypatch):
@@ -408,7 +500,7 @@ def test_per_call_timeout_capped_by_remaining_window(monkeypatch, caplog):
 def test_write_runs_past_window_while_reads_abandoned(monkeypatch):
     """side_effect=='write' is excluded from the abandon set: the batch AWAITS the write to
     completion even past the batch window, while a sibling read that overruns is abandoned."""
-    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)  # legacy allow path
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _AllowGate)
     monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "0.3")
     monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
     provider = PerToolDelayProvider(
@@ -438,7 +530,7 @@ def test_write_runs_past_window_while_reads_abandoned(monkeypatch):
 def test_write_own_timeout_is_outcome_unknown(monkeypatch):
     """If even the write's own wait_for fires, the artifact says outcome UNKNOWN (the write may
     still complete in the background) — never a clean failure, mirroring MCPToolClient."""
-    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _AllowGate)
     monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 0.3)  # tiny write wait_for
     monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")   # window is not the binding cap
     monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
@@ -675,7 +767,7 @@ def test_turn_and_write_unknown_emit_eval_outcomes(monkeypatch):
 
     # write own wait_for fires -> outcome unknown
     events.clear()
-    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _AllowGate)
     monkeypatch.setitem(agent_loop.TOOL_TIMEOUTS, "save_note", 0.3)
     monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "5")
     monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
@@ -879,6 +971,31 @@ class SleepyChat:
         return self._reply
 
 
+def test_normal_planning_llm_hang_cannot_bypass_whole_turn_deadline(monkeypatch):
+    """The first planning call used to be unbounded, so soft-wrap was never re-checked."""
+    monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "0.20")
+    monkeypatch.setenv("FC_MIN_BATCH_S", "0.05")
+    monkeypatch.setenv("FC_FINAL_RESERVE_S", "0.25")
+    monkeypatch.setenv("FC_WRAP_CRITIC_RESERVE_S", "0.02")
+    monkeypatch.setenv("FC_WRAP_MIN_ATTEMPT_S", "2.0")
+    monkeypatch.setattr(agent_loop, "_record_turn_soft_wrap_event", lambda **kw: None)
+    nodes = build_fc_nodes(
+        FakeProvider([FakeSpec("search_properties")]), agent_llm=SleepyChat(delay=5.0))
+    state = _state(
+        messages=[HumanMessage(content="find a synthetic test listing")],
+        turn_start_monotonic=time.monotonic(),
+    )
+
+    started = time.monotonic()
+    cmd = asyncio.run(nodes["agent"](state))
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.8
+    assert cmd.goto == "critic"
+    assert cmd.update["soft_wrapped"] is True
+    assert cmd.update["wrapped_by"] == "fallback_deadline"
+
+
 # ─── FIX 1(b): the CR4-shape regression — soft fold bounds a dispatched batch ──
 def test_cr4_soft_fold_bounds_read_batch(monkeypatch):
     """CR4 shape (scaled for test speed): a batch dispatched with only a small soft-wrap
@@ -914,7 +1031,7 @@ def test_cr4_soft_fold_bounds_write_wait_for(monkeypatch):
     wait_for (up to 30s) past the soft deadline because only reads folded the remainder. A write
     dispatched with ~1s of soft runway must now have its OWN wait_for bounded to the remainder
     (never abandoned, but never past it) -> its wait_for fires and it is outcome_unknown."""
-    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: None)  # legacy allow path
+    monkeypatch.setattr(agent_loop, "_load_memory_gate", lambda: _AllowGate)
     monkeypatch.setenv("FC_BATCH_TOOL_BUDGET_S", "20")
     monkeypatch.setenv("FC_TURN_TOOL_BUDGET_S", "40")
     monkeypatch.setenv("FC_TURN_SOFT_WRAP_S", "25")

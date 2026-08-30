@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import sys
 import types
 
@@ -169,6 +170,21 @@ def _surfaced(result) -> dict:
     return out
 
 
+def _surfaced_minutes(result) -> dict:
+    """address -> the integer minutes on the card, ignoring how the figure is LABELLED.
+
+    Selection and one-number consistency are about the figure. The label around it carries
+    the figure's basis and is pinned separately by
+    ``test_an_unrouted_figure_is_surfaced_as_an_estimate_not_as_a_measured_time`` — these
+    pairs have no TfL journey, so every figure here is an estimate and says so.
+    """
+    out = {}
+    for address, text in _surfaced(result).items():
+        match = re.search(r"(\d+)\s*min", str(text or ""))
+        out[address] = int(match.group(1)) if match else None
+    return out
+
+
 def _raw_producer(origin_address, destination_address, mode="transit"):
     """``calculate_travel_time`` as it behaved BEFORE PR #53: the raw straight-line formula.
 
@@ -215,16 +231,15 @@ def test_a_thirty_minute_request_no_longer_keeps_a_listing_the_fit_puts_at_thirt
     # monkeypatch.undo(), which would also unwind the fixture's offline patches.
     shipped_producer = ms.calculate_travel_time
     monkeypatch.setattr(ms, "calculate_travel_time", _raw_producer)
-    old = _surfaced(offline_search(rows, names, max_budget=3000, max_commute_time=30))
-    assert old == {"Near St, London": "17 min to Workplace",
-                   "Far St, London": "28 min to Workplace"}, (
+    old = _surfaced_minutes(offline_search(rows, names, max_budget=3000, max_commute_time=30))
+    assert old == {"Near St, London": 17, "Far St, London": 28}, (
         "control failed: the pre-#53 producer must keep the 4.8 km listing at 28 minutes, "
         "otherwise this test is not measuring the change it claims to")
 
     # --- SHIPPED behaviour: the calibrated figure decides selection ---------
     monkeypatch.setattr(ms, "calculate_travel_time", shipped_producer)
-    new = _surfaced(offline_search(rows, names, max_budget=3000, max_commute_time=30))
-    assert new == {"Near St, London": "25 min to Workplace"}, (
+    new = _surfaced_minutes(offline_search(rows, names, max_budget=3000, max_commute_time=30))
+    assert new == {"Near St, London": 25}, (
         "a 30-minute request must not surface a listing the fitted model puts at 32 minutes")
 
 
@@ -236,10 +251,10 @@ def test_the_figure_the_filter_used_is_the_figure_the_listing_is_annotated_with(
     the filter is the half of it that a reader cannot see.
     """
     rows = [_row(_NEAR_KM, "Near St", 1200)]
-    surfaced = _surfaced(offline_search(rows, {"near st": _NEAR_KM},
-                                        max_budget=3000, max_commute_time=30))
+    surfaced = _surfaced_minutes(offline_search(rows, {"near st": _NEAR_KM},
+                                                max_budget=3000, max_commute_time=30))
     expected = cb.best_estimate_minutes(_NEAR_KM, "transit")
-    assert surfaced == {"Near St, London": f"{expected} min to Workplace"}
+    assert surfaced == {"Near St, London": expected}
     assert expected == 25
     # And it is the published figure too, not a third number.
     quoted = cb.describe_estimate(
@@ -258,9 +273,28 @@ def test_a_loosening_pair_is_admitted_too_so_the_change_is_not_only_a_tightening
     assert cb.best_estimate_minutes(12.0, "transit") == 52
 
     rows = [_row(12.0, "Distant Rd", 1200)]
-    surfaced = _surfaced(offline_search(rows, {"distant rd": 12.0},
-                                        max_budget=3000, max_commute_time=55))
-    assert surfaced == {"Distant Rd, London": "52 min to Workplace"}
+    surfaced = _surfaced_minutes(offline_search(rows, {"distant rd": 12.0},
+                                                max_budget=3000, max_commute_time=55))
+    assert surfaced == {"Distant Rd, London": 52}
+
+
+def test_an_unrouted_figure_is_surfaced_as_an_estimate_not_as_a_measured_time(offline_search):
+    """The label has to carry the basis, because this pair HAS no measured journey.
+
+    ``calculate_travel_time`` answers these pairs from its own straight-line fallback (TfL
+    returns no journey), and the annotation stage used to stamp every non-null return
+    "TfL transit: N min" — republishing a haversine guess as a measured itinerary on the card
+    and in the model channel. This is the assertion that keeps the number and its basis
+    together on the way out, the way ``commute_basis`` already keeps them together inside.
+    """
+    rows = [_row(_NEAR_KM, "Near St", 1200)]
+    result = offline_search(rows, {"near st": _NEAR_KM}, max_budget=3000, max_commute_time=30)
+    listing = result["recommendations"][0]
+
+    assert listing["travel_time_source"] == "estimate"
+    assert listing["travel_time"] == "~25 min to Workplace (estimated, unverified)"
+    assert "TfL" not in listing["travel_time"]
+    assert "TfL" not in listing["explanation"]
 
 
 # =========================================================================== #
@@ -557,36 +591,26 @@ def test_the_similar_suggestion_fallback_may_exceed_the_cap_but_never_without_sa
     # The limit that was NOT met is stated, in the same sentence as the budget that was not met.
     assert "within 30 min of Workplace" in res["message"]
 
-    surfaced = _surfaced(res)
-    assert surfaced == {"Far St, London": "32 min to Workplace"}, (
+    surfaced = _surfaced_minutes(res)
+    assert surfaced == {"Far St, London": 32}, (
         "the over-cap candidate must be admitted WITH its figure, and the 52-minute one must "
         "fall outside the 1.5x slack")
+    # ...and the figure states that it is an estimate, since this pair has no TfL journey.
+    assert "estimated" in _surfaced(res)["Far St, London"]
     # It is never dressed up as a match.
     for value in res.values():
         if isinstance(value, list) and value and isinstance(value[0], dict) and "price" in value[0]:
             assert all(p.get("match_type") == "similar_suggestion" for p in value)
 
 
-def test_a_chinese_cap_written_without_a_space_is_dropped_by_the_regex_not_by_the_calibration():
-    """A KNOWN, pre-existing gap that lands on exactly this boundary — recorded, not fixed.
-
-    ``_extract_commute_minutes`` is the "this message updates the cap" path and it is anchored
-    with ``\\b``. Python's ``re`` treats a CJK character as a word character, so there is no
-    word boundary between 勤 and 3: 「通勤30 min以内」 yields None while "通勤 30 min" — one
-    space — yields 30. A dropped cap means ``commute_filter_enabled`` is False, i.e. listings
-    are annotated and NOT filtered, which is the "silently receives a longer commute" shape
-    this file exists to prevent, reached through the extractor rather than through the model.
-
-    It is pinned as-is because the only thing that catches it today is the LLM criteria
-    extraction (E5 and E10 of the benchmark both recover their cap that way), and changing the
-    regex changes cap extraction for every Chinese turn — a measured change of its own, not a
-    side effect of a calibration review.
-    """
+def test_chinese_commute_caps_do_not_require_ascii_spacing():
+    """CJK adjacency and Chinese units both reach the deterministic cap path."""
     from core.tools.search_properties import _extract_commute_minutes as extract
 
     assert extract("under 30 minutes") == 30
     assert extract("within 30 min") == 30
-    assert extract("通勤 30 min") == 30              # a space restores the boundary
-    assert extract("通勤30 min以内") is None          # the trap
-    assert extract("通勤30分钟以内") is None           # 分钟 is not in the unit alternation
-    assert extract("通勤不超过35分钟") is None
+    assert extract("通勤 30 min") == 30
+    assert extract("通勤30 min以内") == 30
+    assert extract("通勤30分钟以内") == 30
+    assert extract("通勤不超过35分钟") == 35
+    assert extract("Imperial 35分钟") == 35

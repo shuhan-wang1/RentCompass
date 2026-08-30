@@ -148,6 +148,56 @@ def test_area_plus_budget_no_commute_applies_budget_filter(stub_env, monkeypatch
     assert res["search_criteria"]["max_budget"] == 1500
 
 
+def test_accessibility_features_are_verified_or_left_unknown(stub_env, monkeypatch):
+    verified = _row("Lift House, Camden", 1200)
+    verified["Detailed_Amenities"] = "Passenger lift, Step-free access, Gym"
+    unknown = _row("Disclosure Missing House, Camden", 1250)
+    unknown["Detailed_Amenities"] = "Gym"
+    _install_listings(monkeypatch, [verified, unknown])
+
+    res = _run(
+        area="Camden",
+        property_features=["elevator", "level access"],
+        current_message="Find a flat with an elevator and level access.",
+    )
+
+    rows = {row["address"]: row for row in res["recommendations"]}
+    assert rows["Lift House, Camden"]["verified_features"] == ["lift", "step-free"]
+    assert rows["Lift House, Camden"]["unverified_features"] == []
+    assert rows["Disclosure Missing House, Camden"]["verified_features"] == []
+    assert rows["Disclosure Missing House, Camden"]["unverified_features"] == [
+        "lift", "step-free",
+    ]
+    assert res["search_criteria"]["property_features"] == ["lift", "step-free"]
+
+
+def test_search_logs_do_not_echo_query_or_listing_address(
+        stub_env, monkeypatch, caplog, capsys):
+    secret_query = "PRIVATE_QUERY_TOKEN_47ac"
+    secret_address = "PRIVATE_ADDRESS_TOKEN_82bd"
+    secret_budget_digits = "9876"
+    listing = _row(secret_address, 1200)
+    listing["Detailed_Amenities"] = "Passenger lift"
+    _install_listings(monkeypatch, [listing])
+
+    caplog.set_level("DEBUG", logger="app.search")
+    result = _run(
+        area="Camden",
+        property_features=["lift"],
+        current_message=(f"Find a lift building {secret_query}; "
+                         f"budget £{secret_budget_digits} per week"),
+    )
+    assert result["recommendations"]
+
+    captured = capsys.readouterr()
+    emitted = "\n".join((caplog.text, captured.out, captured.err))
+    assert secret_query not in emitted
+    assert secret_address not in emitted
+    assert secret_budget_digits not in emitted
+    assert any(record.msg == "property_search.budget_period_converted"
+               for record in caplog.records)
+
+
 def test_commute_destination_only_derives_area_and_annotates(stub_env, monkeypatch):
     _install_listings(monkeypatch, [_row("Flat near UCL, London WC1", 1300)])
     res = _run(commute_destination="UCL")

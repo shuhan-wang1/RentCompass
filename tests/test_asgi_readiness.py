@@ -48,12 +48,25 @@ def _install_runtime(monkeypatch, tmp_path, *, dead: int = 0):
             "records": 0,
         },
     )
+    # The legacy SimpleNamespace in these storage-focused tests intentionally does not import
+    # and initialize the full agent. Dedicated tests below cover the three new required checks.
+    for check_name in (
+        "_check_runtime_configuration", "_check_tool_registry", "_check_agent_graph",
+    ):
+        monkeypatch.setattr(
+            asgi,
+            check_name,
+            (lambda *_args, **_kwargs: {"status": "ok", "required": True}),
+        )
     return module
 
 
 def _config(tmp_path):
     return Config(
         project_root=tmp_path,
+        agent_arch="fc_loop",
+        deepseek_strict=True,
+        llm_provider="ollama",
         flask_secret_key="test",
         checkpoint_path=tmp_path / "runtime" / "checkpoints.sqlite3",
         enable_checkpointer=False,
@@ -149,8 +162,161 @@ def test_searx_readiness_uses_healthz_not_search(monkeypatch):
     monkeypatch.setenv("SEARXNG_URL", "http://searxng:8080")
     monkeypatch.setattr(asgi.urllib.request, "urlopen", _open)
 
-    assert asgi._check_searx()["status"] == "ok"
+    result = asgi._check_searx()
+    assert result["status"] == "degraded"
+    assert result["process_health"] == "ok"
+    assert result["search_result_capability"] == "unknown"
     assert seen == [("http://searxng:8080/healthz", 1.5)]
+
+
+def test_required_registry_failure_makes_readiness_503(monkeypatch, tmp_path):
+    _install_runtime(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        asgi,
+        "_check_tool_registry",
+        lambda: {"status": "fail", "required": True, "detail": "13 tools"},
+    )
+
+    body, code = asgi._readiness(_config(tmp_path))
+    assert code == 503
+    assert "tool_registry" in body["failed"]
+
+
+
+def test_deepseek_credentials_are_required_by_default(monkeypatch, tmp_path):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.delenv("READINESS_REQUIRE_LLM", raising=False)
+    config = Config(
+        project_root=tmp_path,
+        agent_arch="fc_loop",
+        llm_provider="deepseek",
+        flask_secret_key="test",
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+        enable_checkpointer=False,
+    )
+
+    result = asgi._check_llm_configuration(config)
+
+    assert result["status"] == "fail"
+
+
+def test_required_graph_failure_makes_readiness_503(monkeypatch, tmp_path):
+    _install_runtime(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        asgi,
+        "_check_agent_graph",
+        lambda _config: {
+            "status": "fail", "required": True, "detail": "factory unavailable",
+        },
+    )
+
+    body, code = asgi._readiness(_config(tmp_path))
+
+    assert code == 503
+    assert "agent_graph" in body["failed"]
+
+
+def test_external_provider_checks_are_explicitly_unknown_without_network(tmp_path):
+    config = _config(tmp_path)
+    otm = asgi._check_onthemarket(config)
+    tfl = asgi._unprobed_provider("Transport for London", ["calculate_commute"])
+
+    assert otm["status"] == "degraded"
+    assert otm["capability"] == "unknown"
+    assert "not probed" in otm["detail"]
+    assert tfl["capability"] == "unknown"
+    assert tfl["required"] is False
+
+
+def test_real_fourteen_tool_registry_passes_required_readiness(monkeypatch, tmp_path):
+    from core.tool_system import create_tool_registry
+
+    monkeypatch.setenv("IDEMPOTENCY_DB", str(tmp_path / "idempotency.sqlite3"))
+    module = SimpleNamespace(tool_registry=create_tool_registry())
+    monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
+
+    result = asgi._check_tool_registry()
+
+    assert result == {
+        "status": "ok",
+        "required": True,
+        "tool_count": 14,
+        "strict_schemas": "valid",
+        "runtime_constraints": "valid",
+    }
+
+
+def test_graph_factory_validation_is_offline_and_accepts_ollama_injection(
+    monkeypatch, tmp_path
+):
+    class _Provider:
+        def list_specs(self):
+            return []
+
+    class _Graph:
+        async def ainvoke(self, *_args, **_kwargs):
+            return {}
+
+    def _factory(tool_registry, *, agent_llm=None):
+        return _Graph()
+
+    module = SimpleNamespace(
+        agent_graph=None,
+        agent_tool_provider=_Provider(),
+        build_agent_graph=_factory,
+        create_initial_state=lambda **_kwargs: {},
+        _configured_fc_agent_llm=lambda: object(),
+    )
+    monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
+
+    result = asgi._check_agent_graph(_config(tmp_path))
+
+    assert result["status"] == "ok"
+    assert result["state"] == "factory_compiled"
+    assert result["arch"] == "fc_loop"
+    assert result["provider"] == "ollama"
+
+
+
+def test_graph_factory_exception_fails_readiness_without_leaking_error(monkeypatch, tmp_path):
+    sentinel = "PRIVATE-FACTORY-DETAIL"
+
+    class _Provider:
+        def list_specs(self):
+            return []
+
+    def _factory(tool_registry, *, agent_llm=None):
+        raise RuntimeError(sentinel)
+
+    module = SimpleNamespace(
+        agent_graph=None,
+        agent_tool_provider=_Provider(),
+        build_agent_graph=_factory,
+        create_initial_state=lambda **_kwargs: {},
+        _configured_fc_agent_llm=lambda: object(),
+    )
+    monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
+
+    result = asgi._check_agent_graph(_config(tmp_path))
+
+    assert result["status"] == "fail"
+    assert result["required"] is True
+    assert "RuntimeError" in result["detail"]
+
+def test_runtime_configuration_mismatch_fails_closed(monkeypatch, tmp_path):
+    config = _config(tmp_path)
+    module = SimpleNamespace(
+        _runtime_config=config,
+        AGENT_ARCH="legacy",
+        DEEPSEEK_STRICT=config.deepseek_strict,
+    )
+    monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
+
+    result = asgi._check_runtime_configuration(config)
+
+    assert result["status"] == "fail"
+    assert result["required"] is True
+    assert "AGENT_ARCH mismatch" in result["detail"]
 
 
 def test_agent_memory_failure_is_required_and_fails_readiness(

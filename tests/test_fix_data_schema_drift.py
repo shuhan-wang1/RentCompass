@@ -39,6 +39,17 @@ def test_populated_results_returned():
     assert got == [{"address": "1 A St"}]
 
 
+def test_live_next_data_tag_allows_extra_attributes_and_attribute_order():
+    blob = {"props": {"initialReduxState": {"results": {"list": [{"address": "2 B St"}]}}}}
+    html = (
+        "<script crossorigin='anonymous' type='application/json' "
+        "data-runtime='next' id='__NEXT_DATA__'>"
+        + json.dumps(blob)
+        + "</script>"
+    )
+    assert om._extract_listings(html) == [{"address": "2 B St"}]
+
+
 # --------------------------------------------------------------------------
 # drift (missing tag / bad json / missing path) -> OTMSchemaDriftError
 # --------------------------------------------------------------------------
@@ -95,6 +106,26 @@ def test_find_rich_honest_empty_does_not_raise(monkeypatch):
 
     monkeypatch.setattr(om, "_new_session", lambda: _Sess())
     assert om.find_rich_onthemarket("nowhereville", 1.0, 500, 2000) == []
+
+
+def test_search_failure_logs_do_not_echo_slug_or_exception(monkeypatch, caplog, capsys):
+    sentinel = "PRIVATE-AREA-AND-ERROR-9137"
+
+    class _Sess:
+        headers = {}
+
+        def get(self, *args, **kwargs):
+            raise om.requests.RequestException(sentinel)
+
+    monkeypatch.setattr(om, "_new_session", lambda: _Sess())
+    with caplog.at_level("WARNING", logger=om.__name__):
+        assert om.find_rich_onthemarket(sentinel, 1.0, 500, 2000) == []
+
+    rendered_logs = "\n".join(record.getMessage() for record in caplog.records)
+    captured = capsys.readouterr()
+    assert sentinel not in rendered_logs
+    assert sentinel not in captured.out
+    assert sentinel not in captured.err
 
 
 # --------------------------------------------------------------------------

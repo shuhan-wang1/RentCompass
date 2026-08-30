@@ -25,7 +25,6 @@ from flask import Flask, request, jsonify, render_template, session, g
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
 import json
-import traceback
 import re
 from datetime import datetime
 from uk_rent_agent.web.session_store import SessionStore
@@ -63,6 +62,153 @@ from core.llm_interface import call_ollama
 from core.candidate_validation import (
     render_candidate_status, validate_search_payload_with_provider,
 )
+
+
+def _consume_abandoned_graph_task(task) -> None:
+    try:
+        task.exception()
+    except (asyncio.CancelledError, Exception):
+        pass
+
+
+class _GraphLoopRunner:
+    """One loop-local graph/provider generation in a bounded self-healing pool."""
+
+    def __init__(self):
+        self._start_lock = threading.Lock()
+        self._ready = threading.Event()
+        self._loop = None
+        self._thread = None
+        self._quarantined = False
+        self.graph = None
+
+    def _serve(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._loop = loop
+        self._ready.set()
+        loop.run_forever()
+
+    def _ensure_started(self):
+        with self._start_lock:
+            if self._thread is None or not self._thread.is_alive():
+                self._ready.clear()
+                self._thread = threading.Thread(
+                    target=self._serve, name="agent_graph_loop", daemon=True,
+                )
+                self._thread.start()
+        if not self._ready.wait(timeout=5):
+            raise RuntimeError("agent graph loop failed to start")
+        if self._loop is None:
+            raise RuntimeError("agent graph loop unavailable")
+
+    def available(self):
+        with self._start_lock:
+            return not self._quarantined
+
+    def submit(self, coroutine):
+        self._ensure_started()
+        with self._start_lock:
+            if self._quarantined:
+                coroutine.close()
+                raise RuntimeError("agent graph loop is quarantined")
+            loop = self._loop
+        return asyncio.run_coroutine_threadsafe(coroutine, loop)
+
+    def quarantine(self, recovered_callback):
+        """Reject new work until a queued heartbeat proves this loop is responsive."""
+        self._ensure_started()
+        with self._start_lock:
+            if self._quarantined:
+                return False
+            self._quarantined = True
+            loop = self._loop
+
+        async def _heartbeat():
+            return True
+
+        probe = asyncio.run_coroutine_threadsafe(_heartbeat(), loop)
+
+        def _recovered(_future):
+            try:
+                _future.result()
+            except BaseException:
+                return
+            with self._start_lock:
+                self._quarantined = False
+            recovered_callback(self)
+
+        probe.add_done_callback(_recovered)
+        return True
+
+
+_GRAPH_RUNNER_CAPACITY = 2
+_GRAPH_RUNNER_ATTR = "_uk_rent_graph_loop_runner"
+_graph_runtime_lock = threading.Lock()
+_graph_loop_runner = _GraphLoopRunner()
+_graph_loop_runners = [_graph_loop_runner]
+
+
+def _on_graph_runner_recovered(runner):
+    """Restore recovered capacity without moving a graph across event loops."""
+    global _graph_loop_runner, agent_graph
+    with _agent_init_lock:
+        with _graph_runtime_lock:
+            if _graph_loop_runner is None:
+                _graph_loop_runner = runner
+                agent_graph = runner.graph
+
+
+def _quarantine_graph_runner(runner):
+    """Rotate to bounded standby capacity while the timed-out loop proves liveness."""
+    global _graph_loop_runner, agent_graph
+    if not runner.quarantine(_on_graph_runner_recovered):
+        return
+    with _agent_init_lock:
+        with _graph_runtime_lock:
+            if _graph_loop_runner is not runner:
+                return
+            standby = next(
+                (item for item in _graph_loop_runners
+                 if item is not runner and item.available()),
+                None,
+            )
+            if standby is None and len(_graph_loop_runners) < _GRAPH_RUNNER_CAPACITY:
+                standby = _GraphLoopRunner()
+                _graph_loop_runners.append(standby)
+            _graph_loop_runner = standby
+            agent_graph = standby.graph if standby is not None else None
+            if standby is None:
+                logging.getLogger("app").error(
+                    "agent.graph.capacity_unavailable",
+                    extra={"runner_capacity": _GRAPH_RUNNER_CAPACITY},
+                )
+
+
+async def _ainvoke_graph_with_timeout(graph, graph_input, graph_config_value, timeout_s: float):
+    """Run the graph behind a hard HTTP deadline, isolated from event-loop blocking."""
+    if timeout_s <= 0:
+        raise asyncio.TimeoutError("agent turn deadline exhausted before graph dispatch")
+    # The graph and async clients stay on the runner generation that created them.
+    runner = getattr(graph, _GRAPH_RUNNER_ATTR, _graph_loop_runner)
+    if runner is None:
+        raise RuntimeError("agent graph capacity is temporarily unavailable")
+    concurrent_future = runner.submit(
+        graph.ainvoke(graph_input, config=graph_config_value))
+    future = asyncio.wrap_future(concurrent_future)
+    try:
+        return await asyncio.wait_for(asyncio.shield(future), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        concurrent_future.cancel()
+        concurrent_future.add_done_callback(_consume_abandoned_graph_task)
+        _quarantine_graph_runner(runner)
+        raise asyncio.TimeoutError("agent graph exceeded the whole-turn deadline") from None
+    except BaseException:
+        concurrent_future.cancel()
+        concurrent_future.add_done_callback(_consume_abandoned_graph_task)
+        raise
+
+
 def _llm_complete(prompt: str) -> str:
     """Sync completion used by the rolling-summary folder (dependency-injected into
     context_assembler.update_rolling_summary). Never raises — an empty string makes the
@@ -80,7 +226,12 @@ def _bool_env(name: str, default: bool = False) -> bool:
 
 
 app = Flask(__name__, template_folder='.')
-_runtime_config = Config.from_env()
+_runtime_config = globals().get("_BOOTSTRAP_CONFIG") or Config.from_env()
+# Graph selection and strict-schema binding still have a few legacy getenv consumers. Publish
+# the already-normalized Config values once so all of them observe the same runtime identity.
+os.environ["AGENT_ARCH"] = _runtime_config.agent_arch
+os.environ["DEEPSEEK_STRICT"] = "1" if _runtime_config.deepseek_strict else "0"
+os.environ["LLM_PROVIDER"] = _runtime_config.llm_provider
 # supports_credentials=True so the signed session cookie (which now carries the
 # authenticated identity) survives cross-origin requests when the UI is opened over a
 # different origin (e.g. file://). Same-origin (render_template at :5001) works regardless.
@@ -115,7 +266,7 @@ app.config.update(
 # can no longer impersonate an account by spoofing the X-User-Id header/query/body.
 # ============================================================================
 auth_store = AuthStore(str(_runtime_config.auth_db_path))
-print(f"[STARTUP] Auth store: {auth_store.path} "
+print(f"[STARTUP] Auth store configured "
       f"(require_auth={_runtime_config.require_auth})")
 
 # 统一 UI 模式标志
@@ -123,6 +274,59 @@ USE_UNIFIED_UI = True  # 设置为 True 使用新的统一 Alex 界面
 
 # LangGraph Agent — compiled graph (lazy-initialized)
 agent_graph = None
+_agent_init_lock = threading.Lock()
+
+
+def _ensure_agent_runtime():
+    """Return an atomically published, loop-bound graph/provider generation."""
+    global agent_graph, tool_registry, agent_tool_provider
+
+    # The same lock is used by runner rotation, so callers can only observe a
+    # complete (runner, graph) generation. A stale caller still retains the old
+    # binding and can never submit that graph on the replacement loop.
+    with _agent_init_lock:
+        runner = _graph_loop_runner
+        if runner is None or not runner.available():
+            raise RuntimeError("agent graph capacity is temporarily unavailable")
+
+        if (
+            tool_registry is not None
+            and agent_tool_provider is not None
+            and agent_graph is not None
+            and getattr(agent_graph, _GRAPH_RUNNER_ATTR, None) is runner
+        ):
+            return agent_graph
+
+        if tool_registry is None:
+            candidate_registry = create_tool_registry()
+            from core.tools.web_search import set_tool_registry
+            set_tool_registry(candidate_registry)
+            tool_registry = candidate_registry
+
+        if agent_tool_provider is None:
+            agent_tool_provider = tool_registry
+
+        checkpointer = None
+        if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
+            checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+        store = get_prefs_store() if _runtime_config.enable_store else None
+        candidate_graph = build_agent_graph(
+            agent_tool_provider,
+            checkpointer=checkpointer,
+            store=store,
+            enable_hitl=_runtime_config.enable_hitl,
+            agent_llm=_configured_fc_agent_llm(),
+        )
+        # Treat inability to bind as a startup failure: silently falling back to
+        # the current global runner could reuse async clients across event loops.
+        setattr(candidate_graph, _GRAPH_RUNNER_ATTR, runner)
+        runner.graph = candidate_graph
+        agent_graph = candidate_graph
+        logger.info(
+            "agent.graph_initialized",
+            extra={"agent_arch": AGENT_ARCH, "provider": _runtime_config.llm_provider},
+        )
+        return candidate_graph
 
 # ============================================================================
 # Multi-user identity + per-user isolated state (L2 conversational state)
@@ -174,7 +378,7 @@ def _conversation_db_path():
 
 
 conversation_store = ConversationStore(_conversation_db_path())
-print(f"[STARTUP] Conversation store: {conversation_store.db_path}")
+print("[STARTUP] Conversation store configured")
 _turn_background_jobs = contextvars.ContextVar(
     "turn_background_jobs", default=None
 )
@@ -187,17 +391,15 @@ _outbox_worker_lock = threading.Lock()
 # The deployment runs TWO worker pools (legacy vs fc_loop) with pool-level nginx cutover;
 # each conversation durably records the arch/version that last served it for provenance.
 # These three values describe THIS process and are read EXACTLY ONCE at startup — never
-# per-request (hot-path getenv is forbidden). AGENT_ARCH itself is (separately) read once
-# at first graph build in core.langgraph_agent (:3706); we mirror the SAME parse here so the
-# recorded arch always matches the graph that was actually built.
+# per-request (hot-path getenv is forbidden). The normalized Config value is also published to
+# the remaining lazy graph getenv consumer, so recorded identity and the built topology cannot
+# diverge because of whitespace/case or a later ambient-environment read.
 def _read_agent_arch() -> str:
-    # Mirror core.langgraph_agent's selection exactly: only "fc_loop" flips the topology.
-    return "fc_loop" if os.getenv("AGENT_ARCH", "legacy").strip() == "fc_loop" else "legacy"
+    return _runtime_config.agent_arch
 
 
 def _read_strict() -> bool:
-    # Mirror agent_loop._strict_on() exactly (DEEPSEEK_STRICT == "1").
-    return os.getenv("DEEPSEEK_STRICT", "0").strip() == "1"
+    return _runtime_config.deepseek_strict
 
 
 def _startup_git_sha() -> str:
@@ -223,6 +425,14 @@ DEEPSEEK_STRICT = _read_strict()
 APP_CANDIDATE_SHA = (os.getenv("APP_CANDIDATE_SHA") or "").strip() or _startup_git_sha()
 print(f"[STARTUP] Canary: agent_arch={AGENT_ARCH} candidate_sha={APP_CANDIDATE_SHA} "
       f"strict={DEEPSEEK_STRICT}")
+
+
+def _configured_fc_agent_llm():
+    """Return the explicit non-DeepSeek loop driver when fc_loop is configured for Ollama."""
+    if AGENT_ARCH != "fc_loop" or _runtime_config.llm_provider != "ollama":
+        return None
+    from core.llm_config import get_react_llm
+    return get_react_llm(low_latency=True)
 
 # Dedicated structured-telemetry logger. app.py otherwise logs via print(); ops attaches a
 # handler to "canary" to ship these. Each completed turn emits exactly ONE JSON line via
@@ -315,7 +525,7 @@ def _wire_canary_sink() -> None:
         for h in _canary_logger.handlers:
             if isinstance(h, logging.FileHandler) and \
                     str(Path(getattr(h, "baseFilename", "")).resolve()) == resolved:
-                print(f"[STARTUP] Canary telemetry: {resolved}")
+                print("[STARTUP] Canary telemetry configured")
                 return
 
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -329,9 +539,9 @@ def _wire_canary_sink() -> None:
         handler.setFormatter(logging.Formatter("%(message)s"))
         setattr(handler, _CANARY_SINK_MARKER, True)
         _canary_logger.addHandler(handler)
-        print(f"[STARTUP] Canary telemetry: {resolved}")
+        print("[STARTUP] Canary telemetry configured")
     except Exception as e:  # pragma: no cover — telemetry wiring must never break startup
-        print(f"[STARTUP] WARNING: canary telemetry sink wiring failed: {e}")
+        print(f"[STARTUP] WARNING: canary telemetry sink wiring failed; error_type={type(e).__name__}")
 
 
 _wire_canary_sink()
@@ -467,9 +677,9 @@ def _wire_canary_llm_observer() -> None:
         if not turn_observations.observer_installed():
             logger.warning("canary: LLM observer did not install at startup — the gate will "
                            "HOLD on any turn that makes no LLM call")
-    except Exception:
+    except Exception as exc:
         logger.warning("canary: LLM observer startup wiring failed; zero-LLM-call turns "
-                       "will report not_instrumented and HOLD the gate", exc_info=True)
+                       "will report not_instrumented and HOLD the gate; error_type=%s", type(exc).__name__)
 
 
 _load_write_audit_instrumentation()
@@ -516,11 +726,11 @@ def _dsml_boundary_check(response, payload):
                 replaced.headers[k] = v
         replaced.headers["X-Agent-Outcome"] = "error"
         return replaced
-    except Exception:
+    except Exception as exc:
         # The guard must never be the reason a request fails. A scan that raises
         # leaves the original response alone; the counter stays 0 and the turn is
         # reported as it was.
-        logger.exception("canary: dsml boundary check failed")
+        logger.error("canary: dsml boundary check failed error_type=%s", type(exc).__name__)
         return response
 
 
@@ -704,7 +914,7 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
         except Exception:
             pass  # emitted outside a request context (unit tests / sink wiring)
     except Exception as e:  # pragma: no cover — telemetry must never break a turn
-        print(f"[canary] turn record emit failed: {e}")
+        print(f"[canary] turn record emit failed; error_type={type(e).__name__}")
 
 
 def _get_session(user_id, conversation_id):
@@ -814,7 +1024,7 @@ def _handle_uncaught(e: Exception):
         return _handle_api_error(e)
     if isinstance(e, HTTPException):
         return _handle_http_exception(e)
-    traceback.print_exc()
+    print(f"[app] uncaught error_type={type(e).__name__}")
     if _is_api_path():
         # http_status is finalised HERE, at the response boundary. Without this the
         # 5xx would be structurally unobservable: the in-endpoint emit sits INSIDE
@@ -866,7 +1076,7 @@ def _emit_canary_boundary_5xx() -> None:
             # provider errors the accumulator saw, not a blanket null.
             fc_signals=None)
     except Exception as e:  # pragma: no cover — never break the error response
-        print(f"[canary] boundary 5xx record emit failed: {e}")
+        print(f"[canary] boundary 5xx record emit failed; error_type={type(e).__name__}")
 
 
 def _request_body():
@@ -1017,7 +1227,7 @@ try:
     set_tool_registry(tool_registry)
     
 except Exception as e:
-    print(f"⚠️  [STARTUP] Warning: Tool System initialization failed: {e}")
+    print(f"⚠️  [STARTUP] Tool System initialization failed; error_type={type(e).__name__}")
     tool_registry = None
 
 # --- MCP tool client (optional) ---
@@ -1043,26 +1253,27 @@ if _os.environ.get("USE_MCP_TOOLS", "0").lower() not in ("0", "false", "no"):
         else:
             print("⚠️  [STARTUP] MCP not connected; using in-process tool registry")
     except Exception as _e:
-        print(f"⚠️  [STARTUP] MCP init failed ({_e}); using in-process tool registry")
+        print(f"⚠️  [STARTUP] MCP init failed; error_type={type(_e).__name__}; using in-process tool registry")
 
-# --- RAG Setup as per markdown ---
-# Initialize the coordinator and build the index at startup
-print("[STARTUP] Initializing RAG Coordinator...")
+# --- Optional RAG setup ---
+# Embedding-model startup can perform slow network/cache discovery. Keep the
+# deterministic search path immediately available and require an explicit opt-in
+# for eager RAG construction; the search tool can still initialise it lazily.
 rag_coordinator = None
-try:
-    # Import lazily: optional embedding dependencies must not prevent the
-    # deterministic listing search from serving real results.
-    from rag.rag_coordinator import RAGCoordinator
-    rag_coordinator = RAGCoordinator()
-    print("✓ [STARTUP] RAGCoordinator initialized successfully")
-except Exception as e:
-    print(f"❌ FATAL ERROR during RAG initialization:")
-    print(f"   Error type: {type(e).__name__}")
-    print(f"   Error message: {str(e)}")
-    import traceback
-    traceback.print_exc()
-    # RAG is optional. Search falls back to deterministic ranking.
-    rag_coordinator = None
+if _bool_env("RAG_EAGER_INIT", False):
+    print("[STARTUP] Initializing optional RAG Coordinator...")
+    try:
+        # Import lazily: optional embedding dependencies must not prevent the
+        # deterministic listing search from serving real results.
+        from rag.rag_coordinator import RAGCoordinator
+        rag_coordinator = RAGCoordinator()
+        print("✓ [STARTUP] RAGCoordinator initialized successfully")
+    except Exception as e:
+        print(f"❌ RAG initialization failed; error_type={type(e).__name__}")
+        # RAG is optional. Search falls back to deterministic ranking.
+        rag_coordinator = None
+else:
+    print("[STARTUP] Optional RAG eager initialization disabled")
 
 print("[STARTUP] Loading properties (PROPERTY_SOURCE=%s)..." % _os.getenv("PROPERTY_SOURCE", "auto"))
 all_properties = load_properties()
@@ -1075,7 +1286,7 @@ if all_properties and rag_coordinator is not None:
         if 'parsed_price' not in prop:
             prop['parsed_price'] = parse_price(prop.get('Price'))
 
-if all_properties:
+if all_properties and rag_coordinator is not None:
     print("[STARTUP] Building FAISS index for property embeddings... (This may take a moment)")
     try:
         rag_coordinator.property_store.build_index(all_properties)
@@ -1083,11 +1294,9 @@ if all_properties:
         set_rag_coordinator(rag_coordinator)
         print("✓ [STARTUP] FAISS index built successfully. Starting server...")
     except Exception as e:
-        print(f"❌ ERROR building FAISS index: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ ERROR building FAISS index; error_type={type(e).__name__}")
         rag_coordinator = None
-else:
+elif not all_properties:
     print("⚠️  WARNING: No properties loaded from CSV. RAG search may not work properly.")
 # ------------------------------------
 
@@ -2305,38 +2514,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         # extracted_context 里只留 6 条）。在同一把锁内浅拷贝，避免跨慢速 LLM 调用再次加锁。
         last_results_snapshot = list(_sess.last_results or [])
 
-    # 确保 tool_registry 已初始化
-    if tool_registry is None:
-        print("[LangGraph] tool_registry 为空，重新初始化...")
-        tool_registry = create_tool_registry()
-
-    # 选择工具提供方：优先 MCP 客户端，否则进程内 registry
-    if agent_tool_provider is None:
-        agent_tool_provider = tool_registry
-
-    # 懒加载编译 LangGraph
-    if agent_graph is None:
-        print("[LangGraph] 首次请求，编译 LangGraph StateGraph...")
-        checkpointer = None
-        if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
-            # Canary rollout requirement (2026-07-20): the legacy and fc pools MUST use SEPARATE
-            # checkpoint DBs — a legacy process must NEVER read an fc checkpoint (their AgentState
-            # channels diverge; a cross-arch resume would corrupt the run). This is an ops concern:
-            # point each pool's checkpoint_path at its own file via CHECKPOINT_DB_PATH (the
-            # documented primary env var; CHECKPOINT_PATH is the back-compat fallback). The
-            # conversation store (CONVERSATION_DB_PATH) is deliberately SHARED across pools — the
-            # emergency-rollback path rebuilds from that shared MESSAGE history, not from the
-            # other pool's checkpoint.
-            checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
-        # Cross-thread Store + HITL are opt-in (default off): identical topology when disabled.
-        store = get_prefs_store() if _runtime_config.enable_store else None
-        agent_graph = build_agent_graph(
-            agent_tool_provider,
-            checkpointer=checkpointer,
-            store=store,
-            enable_hitl=_runtime_config.enable_hitl,
-        )
-        print("[LangGraph] ✓ LangGraph agent 编译完成")
+    request_graph = _ensure_agent_runtime()
 
     # ── 构建本轮 extracted_context ──────────────────────────────
     extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
@@ -2390,8 +2568,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             focus_items[-1], last_results_snapshot, all_properties,
             registry=_accum_registry, cache_lookup=_memo_cache_lookup)
         extracted_context.update(top_ctx)
-        print(f"[LangGraph] 📍 Ask-AI 聚焦栈 {len(focus_records)} 项，当前聚焦 [{focus_source}]: "
-              f"{extracted_context.get('property_address')}")
+        print(f"[LangGraph] 📍 Ask-AI focus_count={len(focus_records)} "
+              f"focus_source_present={bool(focus_source)}")
 
     # 累计推荐注册表 → 紧凑编号索引块注入上下文（仅摘要；完整信息由 get_property_details 按 URL 取）。
     if _accum_registry:
@@ -2416,7 +2594,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             for word in name_words:
                 if len(word) > 3 and word.lower() in user_message.lower():
                     mentioned_properties.append(prop)
-                    print(f"[LangGraph] ✅ 找到提及的房产: {prop.get('Address', '')[:50]}")
+                    print(f"[LangGraph] ✅ 找到提及的房产 address_chars={len(str(prop.get('Address') or ''))}")
                     break
 
         if mentioned_properties:
@@ -2451,12 +2629,12 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
-        print(f"[Memory] retrieve skipped: {_e}")
+        print(f"[Memory] retrieve skipped; error_type={type(_e).__name__}")
 
     # Assemble the legacy query as before. fc_loop has a dedicated state channel for
     # long-term memory; putting the same block into user_query would show it twice in
     # its message array and makes the raw user turn ambiguous to downstream tools.
-    _is_fc_loop = os.getenv("AGENT_ARCH", "legacy") == "fc_loop"
+    _is_fc_loop = AGENT_ARCH == "fc_loop"
     query_with_history = assemble_context(
         user_message=user_message,
         history=history_snapshot,
@@ -2496,6 +2674,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     print(f"[LangGraph] ▶ 开始执行 graph.ainvoke() ...")
     import time as _eval_time
     _eval_turn_started = _eval_time.perf_counter()
+    initial_state["turn_start_monotonic"] = _eval_turn_started
     # GRAPH_RECURSION_LIMIT 由 core.langgraph_agent 导出（并行 agent 落地，值 80）；防御式取值
     # （getattr 默认 80），即便本文件先落地、常量尚未存在也可用。合并进 graph_config 的现有配置。
     import core.langgraph_agent as _lga_mod
@@ -2508,7 +2687,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     graph_input = initial_state
     if _runtime_config.enable_hitl:
         try:
-            _snap = await agent_graph.aget_state(_graph_cfg)
+            _snap = await request_graph.aget_state(_graph_cfg)
             _pending_confirm = bool(_snap.next) and "confirm_search" in _snap.next
         except Exception:
             _pending_confirm = False
@@ -2521,10 +2700,27 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                     resume=(True if _decision == "proceed" else {"action": "cancel"})
                 )
                 print(f"[LangGraph] ⏯ HITL resume: {_decision}")
-    final_state = await agent_graph.ainvoke(
-        graph_input,
-        config=_graph_cfg,
+    # Last-resort request boundary applies to BOTH architectures. Node-level budgets should
+    # normally finish first, but no provider/tool regression may leave an HTTP turn open forever.
+    from core.agent_loop import _turn_ceiling_s
+    _graph_timeout_s = max(
+        0.001,
+        _turn_ceiling_s() - (_eval_time.perf_counter() - _eval_turn_started),
     )
+    try:
+        final_state = await _ainvoke_graph_with_timeout(
+            request_graph, graph_input, _graph_cfg, _graph_timeout_s)
+    except asyncio.TimeoutError:
+        logger.error(
+            "agent.graph.turn_timeout",
+            extra={
+                "request_id": request_id,
+                "conversation_id": conversation_id,
+                "agent_arch": AGENT_ARCH,
+                "timeout_s": _turn_ceiling_s(),
+            },
+        )
+        raise
     print(f"[LangGraph] ✓ 完成!")
 
     # HITL safety net: if the graph paused at confirm_search (enable_hitl), ainvoke returns
@@ -2609,7 +2805,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
                 response_type = 'search'
                 print(f"[state] 🔁 无工具调用但复述了 {len(_cached)} 条历史房源 → 回填面板")
         except Exception as _e:  # never turn a good turn into an error over a repaint
-            print(f"[state] listing re-attach skipped: {_e}")
+            print(f"[state] listing re-attach skipped; error_type={type(_e).__name__}")
 
     # ── Phase 3: build the results context + atomic write-back of L2 state ──
     # Extracted into _write_back_turn so the deterministic /api/search_direct endpoint
@@ -2986,6 +3182,8 @@ async def api_search_direct():
 
     # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
     try:
+        from core.agent_loop import _turn_ceiling_s
+        _direct_deadline = time.monotonic() + _turn_ceiling_s()
         with request_context(request_id, user_id):
             result = await search_properties_impl(
                 user_query=readable,
@@ -3004,6 +3202,7 @@ async def api_search_direct():
                 confirmed=True,
                 # 表单直搜无消息可推断语言 → 显式透传回复语言，覆盖工具的 is_cjk 推断。
                 reply_language=reply_language,
+                _deadline_monotonic=_direct_deadline,
             )
         if _search_result_failed(result):
             # The tool returns structured failures instead of raising. Do not turn a
@@ -3011,7 +3210,7 @@ async def api_search_direct():
             raise RuntimeError((result or {}).get('error', 'property search failed'))
         result, commute_evidence = await validate_search_payload_with_provider(
             tool_registry, result,
-            timeout_s=20.0)
+            timeout_s=20.0, deadline_monotonic=_direct_deadline)
         result["commute_evidence"] = commute_evidence
         if result.get("candidate_validation") is not None:
             result["candidate_status_text"] = render_candidate_status(
@@ -3650,7 +3849,7 @@ def generate_property_map():
         from core.maps_service import OverpassError
 
         print(f"\n{'='*60}")
-        print(f"[MAP GEN] Generating amenity map for: {data['address']}")
+        print(f"[MAP GEN] Generating amenity map; address_chars={len(str(data['address']))}")
         print(f"{'='*60}\n")
 
         # Initialize map generator
@@ -3685,7 +3884,7 @@ def generate_property_map():
         try:
             amenities_data = generator.fetch_all_amenities(lat, lon)
         except OverpassError as e:
-            print(f"  [WARN] Amenity provider unavailable: {e}")
+            print(f"  [WARN] Amenity provider unavailable; error_type={type(e).__name__}")
             amenities_data = {}
             amenities_unavailable = True
 
@@ -3703,8 +3902,7 @@ def generate_property_map():
             return jsonify({"error": "Failed to generate map"}), 500
 
     except Exception as e:
-        print(f"❌ Error generating map: {e}")
-        traceback.print_exc()
+        print(f"❌ Error generating map; error_type={type(e).__name__}")
         return jsonify({"error": "Map generation is temporarily unavailable"}), 500
 
 

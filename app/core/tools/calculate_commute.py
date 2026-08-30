@@ -28,10 +28,11 @@ def calculate_commute_impl(
             BASIS_MEASURED, is_measured, withdraw_uncalibrated_mode,
         )
 
-        print(f"   🚇 计算通勤:")
-        print(f"      从: {from_address[:50]}...")
-        print(f"      到: {to_address[:50]}...")
-        print(f"      方式: {mode}")
+        print(
+            "   🚇 计算通勤 "
+            f"from_chars={len(from_address)} to_chars={len(to_address)} "
+            f"mode_supported={mode in {'transit', 'driving', 'walking', 'bicycling'}}"
+        )
 
         # 调用地图服务计算通勤时间 + 真实路线（TfL 线路明细）
         details = calculate_travel_details(from_address, to_address, mode)
@@ -118,9 +119,13 @@ def calculate_commute_impl(
                 + (f" Basis to disclose: {note}" if note else ""))
         return base
 
-    except Exception as e:
-        print(f"   ❌ 通勤计算出错: {e}")
-        raise
+    except Exception as exc:
+        print(f"   ❌ 通勤计算出错 exception_type={type(exc).__name__}")
+        return {
+            "success": False,
+            "error": "Commute calculation failed",
+            "retryable": True,
+        }
 
 
 # 创建工具实例

@@ -225,9 +225,14 @@ def test_ordinary_search_turn_is_untouched():
     assert [c[0] for c in provider.calls] == ["search_properties"]
 
 
-def test_non_retrieval_tools_are_never_gated():
-    """The policy governs retrieval only. A calculator on the very same self-contained
-    money turn must still run — refusing it would be routing, not enforcement."""
+def test_non_retrieval_tools_are_never_gated(monkeypatch):
+    """Even a broken retrieval policy must not become a deny-all for local calculators."""
+    class _Boom:
+        @staticmethod
+        def read_tool_denial(*args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(agent_loop, "_load_tool_policy", lambda: _Boom)
     specs = [FakeSpec("calculate_commute_cost")]
     provider = FakeProvider(specs, {"calculate_commute_cost": FakeResult(True, {"cost": 5})})
     chat = FakeChat([
@@ -240,9 +245,8 @@ def test_non_retrieval_tools_are_never_gated():
     assert [c[0] for c in provider.calls] == ["calculate_commute_cost"]
 
 
-def test_policy_failure_falls_open_to_dispatch(monkeypatch):
-    """A policy that raises must not take the turn down, and must not silently become a
-    deny-all. The pre-policy behaviour (dispatch) is the fallback."""
+def test_policy_failure_denies_owned_retrieval_without_becoming_deny_all(monkeypatch):
+    """A broken policy refuses only its retrieval tools; it never dispatches them unchecked."""
     class _Boom:
         @staticmethod
         def read_tool_denial(*a, **kw):
@@ -256,8 +260,11 @@ def test_policy_failure_falls_open_to_dispatch(monkeypatch):
         AIMessage(content="ok"),
     ])
     nodes = agent_loop.build_fc_nodes(provider, agent_llm=chat)
-    _run(_drive(nodes, _money_state(B14_QUERY)))
-    assert [c[0] for c in provider.calls] == ["web_search"]
+    state = _run(_drive(nodes, _money_state(B14_QUERY)))
+    assert provider.calls == []
+    denied = [artifact for artifact in state["tool_artifacts"] if artifact.get("denied")]
+    assert len(denied) == 1
+    assert denied[0]["error"] == "denied: read policy evaluation failed"
 
 
 # ─── the deposit reference itself ───────────────────────────────────

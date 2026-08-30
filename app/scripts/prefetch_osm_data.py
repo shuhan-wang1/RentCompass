@@ -106,7 +106,7 @@ class OSMDataFetcher:
                     self.cache = json.load(f)
                 print(f"✅ 已加载 {len(self.cache)} 个地址的缓存数据")
             except Exception as e:
-                print(f"⚠️ 加载缓存失败: {e}")
+                print(f"⚠️ 加载缓存失败 error_type={type(e).__name__}")
                 self.cache = {}
     
     def _save_cache(self):
@@ -114,7 +114,7 @@ class OSMDataFetcher:
         os.makedirs(os.path.dirname(self.output_file) or '.', exist_ok=True)
         with open(self.output_file, 'w', encoding='utf-8') as f:
             json.dump(self.cache, f, ensure_ascii=False, indent=2)
-        print(f"💾 已保存缓存到 {self.output_file}")
+        print("💾 已保存缓存")
     
     def geocode_address(self, address: str) -> Optional[tuple]:
         """将地址转换为经纬度"""
@@ -123,9 +123,9 @@ class OSMDataFetcher:
             if location:
                 return (location.latitude, location.longitude)
         except GeocoderTimedOut:
-            print(f"⏱️ 地理编码超时: {address}")
+            print(f"⏱️ 地理编码超时 address_chars={len(str(address))}")
         except Exception as e:
-            print(f"❌ 地理编码失败: {address} - {e}")
+            print(f"❌ 地理编码失败 address_chars={len(str(address))} error_type={type(e).__name__}")
         return None
     
     def fetch_pois_for_location(self, lat: float, lon: float, category: str) -> List[Dict]:
@@ -167,9 +167,9 @@ class OSMDataFetcher:
                     pois.append(poi)
                 return pois
             else:
-                print(f"❌ API 错误 {response.status_code}: {category}")
+                print(f"❌ API 错误 status={response.status_code}")
         except Exception as e:
-            print(f"❌ 请求失败 ({category}): {e}")
+            print(f"❌ 请求失败 error_type={type(e).__name__}")
         
         return []
     
@@ -180,17 +180,17 @@ class OSMDataFetcher:
         
         # 检查缓存
         if not force_refresh and cache_key in self.cache:
-            print(f"📋 使用缓存: {address[:50]}...")
+            print(f"📋 使用缓存 address_chars={len(str(address))}")
             return self.cache[cache_key]
         
         # 地理编码
         coords = self.geocode_address(address)
         if not coords:
-            print(f"❌ 无法获取坐标: {address}")
+            print(f"❌ 无法获取坐标 address_chars={len(str(address))}")
             return {"error": "geocoding_failed", "address": address}
         
         lat, lon = coords
-        print(f"📍 坐标: {lat:.6f}, {lon:.6f}")
+        print("📍 坐标已获取")
         
         # 获取各类 POI
         all_pois = {
@@ -203,10 +203,10 @@ class OSMDataFetcher:
         }
         
         for category in POI_CATEGORIES:
-            print(f"  🔍 获取 {category}...")
+            print("  🔍 获取 POI 分类...")
             pois = self.fetch_pois_for_location(lat, lon, category)
             all_pois["pois"][category] = pois
-            print(f"     找到 {len(pois)} 个 {category}")
+            print(f"     找到 POI count={len(pois)}")
             time.sleep(REQUEST_DELAY)  # 限速
         
         # 保存到缓存
@@ -231,7 +231,7 @@ class OSMDataFetcher:
             print(f"⏳ 需要获取 {len(to_fetch)} 个新地址\n")
             
             for i, address in enumerate(to_fetch):
-                print(f"\n[{i+1}/{len(to_fetch)}] 处理: {address[:60]}...")
+                print(f"\n[{i+1}/{len(to_fetch)}] 处理 address_chars={len(str(address))}")
                 self.fetch_all_pois_for_address(address)
                 
                 # 每 5 个地址保存一次
@@ -244,7 +244,7 @@ class OSMDataFetcher:
             print(f"\n✅ 完成！共处理 {len(to_fetch)} 个新地址")
             
         except Exception as e:
-            print(f"❌ 批量处理失败: {e}")
+            print(f"❌ 批量处理失败 error_type={type(e).__name__}")
             self._save_cache()  # 保存已获取的数据
 
 
@@ -263,7 +263,7 @@ def main():
     
     if args.address:
         # 单个地址查询
-        print(f"\n🔍 查询地址: {args.address}")
+        print(f"\n🔍 查询地址 address_chars={len(str(args.address))}")
         result = fetcher.fetch_all_pois_for_address(args.address)
         print(f"\n📊 结果:")
         for category, pois in result.get("pois", {}).items():

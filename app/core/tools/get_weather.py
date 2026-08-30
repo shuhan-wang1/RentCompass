@@ -31,7 +31,10 @@ def get_weather_impl(
     asyncio event loop responsive so the fc-loop's per-tool timeout / batch budget can fire.
     """
     try:
-        print(f"   🌤️  获取天气: {location}")
+        print(
+            f"   🌤️  获取天气 location_chars={len(location)} "
+            f"coordinates_supplied={latitude is not None and longitude is not None}"
+        )
 
         # 无坐标时用 Open-Meteo 的免费地理编码解析地点
         if latitude is None or longitude is None:
@@ -41,7 +44,7 @@ def get_weather_impl(
             )
             results = (g.json() or {}).get("results") if g.status_code == 200 else None
             if not results:
-                return {"success": False, "error": f"无法解析地点: {location}"}
+                return {"success": False, "error": "无法解析地点"}
             latitude = results[0]["latitude"]
             longitude = results[0]["longitude"]
 
@@ -69,9 +72,9 @@ def get_weather_impl(
             "recommendation": "天气良好，适合外出看房" if precip == 0 else "可能有雨，看房记得带伞",
         }
 
-    except Exception as e:
-        print(f"   ❌ 天气获取出错: {e}")
-        return {"success": False, "error": f"天气查询失败: {e}"}
+    except Exception as exc:
+        print(f"   ❌ 天气获取出错 exception_type={type(exc).__name__}")
+        return {"success": False, "error": "天气查询失败", "retryable": True}
 
 
 # 创建工具实例

@@ -64,9 +64,9 @@ def main() -> int:
         for t in tasks:
             t["max_price"] = args.max_price
 
-    print(f"Building scraped dataset -> {CACHE_CSV}")
-    print(f"Tasks: {[t['name'] for t in tasks]}  sources={sources or 'default'}"
-          f"  rightmove_only={args.rightmove_only}")
+    print("Building scraped dataset")
+    print(f"task_count={len(tasks)} source_count={len(sources or [])} "
+          f"rightmove_only={args.rightmove_only}")
 
     props = scrape_all(
         tasks=tasks,
@@ -82,11 +82,11 @@ def main() -> int:
         return 1
 
     write_csv(props, CACHE_CSV)
-    print(f"\n[OK] Wrote {len(props)} properties to {CACHE_CSV}")
+    print(f"\n[OK] Wrote property_count={len(props)}")
     platforms = {}
     for p in props:
         platforms[p.get("Platform", "?")] = platforms.get(p.get("Platform", "?"), 0) + 1
-    print(f"     Breakdown by platform: {platforms}")
+    print(f"     platform_count={len(platforms)}")
     geocoded = sum(1 for p in props if p.get("geo_location"))
     print(f"     With coordinates: {geocoded}/{len(props)}")
     return 0

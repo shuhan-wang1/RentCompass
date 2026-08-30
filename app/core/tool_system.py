@@ -7,22 +7,210 @@ Tool System - Agent框架的核心工具系统
 """
 
 import asyncio
+import datetime as _datetime
+import ipaddress
+import json
+import math
+import re
 import time
+import urllib.parse
+import uuid
 from typing import Callable, Dict, Any, Optional, List
 from dataclasses import dataclass
-import traceback
 import logging
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 from uk_rent_agent.tools.idempotency import IdempotencyStore
 
 logger = logging.getLogger(__name__)
 
 
+def _same_json_scalar(left: Any, right: Any) -> bool:
+    """JSON Schema enum equality without Python's ``True == 1`` surprise."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return isinstance(left, bool) and isinstance(right, bool) and left == right
+    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+        # JSON has one number domain: 1 and 1.0 are equal enum values.
+        return left == right
+    return type(left) is type(right) and left == right
+
+
+def _schema_type_matches(value: Any, expected: str) -> bool:
+    if expected == "null":
+        return value is None
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "object":
+        return isinstance(value, dict)
+    return True
+
+
+def _validate_string_format(value: str, format_name: str, path: str) -> None:
+    """Validate the common assertion formats used by OpenAPI/tool schemas."""
+    try:
+        if format_name == "date":
+            _datetime.date.fromisoformat(value)
+        elif format_name == "date-time":
+            _datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        elif format_name == "time":
+            _datetime.time.fromisoformat(value.replace("Z", "+00:00"))
+        elif format_name == "email":
+            if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value) is None:
+                raise ValueError
+        elif format_name in {"uri", "url"}:
+            parsed = urllib.parse.urlparse(value)
+            if not parsed.scheme or (format_name == "url" and not parsed.netloc):
+                raise ValueError
+        elif format_name == "uuid":
+            uuid.UUID(value)
+        elif format_name == "ipv4":
+            if ipaddress.ip_address(value).version != 4:
+                raise ValueError
+        elif format_name == "ipv6":
+            if ipaddress.ip_address(value).version != 6:
+                raise ValueError
+        elif format_name == "regex":
+            re.compile(value)
+        else:
+            # JSON Schema leaves unknown formats as annotations; do the same rather than making
+            # a new provider-specific label a deployment-breaking runtime constraint.
+            return
+    except (TypeError, ValueError, re.error) as exc:
+        raise ValueError(f"{path}: string is not a valid {format_name}") from exc
+
+
+def _validate_schema_value(value: Any, schema: Dict[str, Any], path: str = "$") -> None:
+    """Validate the JSON-Schema subset used by tool inputs.
+
+    Pydantic still owns parsing, defaults and the public ``ValidationError`` envelope.  This
+    recursive validator is installed *on the generated Pydantic model* below so constraints
+    authored in tool JSON Schema are runtime guarantees too, rather than documentation that is
+    merely copied back into the function-calling schema.
+    """
+    if not isinstance(schema, dict):
+        return
+
+    if "const" in schema and not _same_json_scalar(value, schema["const"]):
+        raise ValueError(f"{path}: value must equal {schema['const']!r}")
+    if "enum" in schema and not any(
+        _same_json_scalar(value, candidate) for candidate in schema.get("enum", [])
+    ):
+        raise ValueError(f"{path}: value is not one of {schema['enum']!r}")
+
+    alternatives = schema.get("anyOf") or schema.get("oneOf")
+    if isinstance(alternatives, list):
+        matches = 0
+        for branch in alternatives:
+            try:
+                _validate_schema_value(value, branch, path)
+                matches += 1
+            except (TypeError, ValueError):
+                pass
+        expected_matches = 1 if "oneOf" in schema else None
+        if matches == 0 or (expected_matches is not None and matches != expected_matches):
+            label = "exactly one" if expected_matches is not None else "at least one"
+            raise ValueError(f"{path}: value must match {label} allowed schema")
+        return
+
+    expected = schema.get("type")
+    if isinstance(expected, list):
+        if not any(_schema_type_matches(value, item) for item in expected):
+            raise ValueError(f"{path}: expected one of the types {expected!r}")
+    elif isinstance(expected, str) and not _schema_type_matches(value, expected):
+        raise ValueError(f"{path}: expected {expected}")
+
+    if value is None:
+        return
+
+    if isinstance(value, str):
+        length = len(value)
+        if "minLength" in schema and length < int(schema["minLength"]):
+            raise ValueError(f"{path}: string is shorter than minLength={schema['minLength']}")
+        if "maxLength" in schema and length > int(schema["maxLength"]):
+            raise ValueError(f"{path}: string is longer than maxLength={schema['maxLength']}")
+        pattern = schema.get("pattern")
+        if pattern is not None and re.search(str(pattern), value) is None:
+            raise ValueError(f"{path}: string does not match pattern {pattern!r}")
+        if schema.get("format"):
+            _validate_string_format(value, str(schema["format"]), path)
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError(f"{path}: number must be finite")
+        if "minimum" in schema and value < schema["minimum"]:
+            raise ValueError(f"{path}: value is below minimum={schema['minimum']}")
+        if "maximum" in schema and value > schema["maximum"]:
+            raise ValueError(f"{path}: value is above maximum={schema['maximum']}")
+        if "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]:
+            raise ValueError(
+                f"{path}: value must be greater than {schema['exclusiveMinimum']}"
+            )
+        if "exclusiveMaximum" in schema and value >= schema["exclusiveMaximum"]:
+            raise ValueError(f"{path}: value must be less than {schema['exclusiveMaximum']}")
+        if "multipleOf" in schema:
+            divisor = schema["multipleOf"]
+            if not divisor or not math.isclose(value / divisor, round(value / divisor)):
+                raise ValueError(f"{path}: value must be a multiple of {divisor}")
+
+    if isinstance(value, list):
+        if "minItems" in schema and len(value) < int(schema["minItems"]):
+            raise ValueError(f"{path}: array has fewer than minItems={schema['minItems']}")
+        if "maxItems" in schema and len(value) > int(schema["maxItems"]):
+            raise ValueError(f"{path}: array has more than maxItems={schema['maxItems']}")
+        if schema.get("uniqueItems"):
+            canonical = [json.dumps(item, sort_keys=True, separators=(",", ":")) for item in value]
+            if len(canonical) != len(set(canonical)):
+                raise ValueError(f"{path}: array items must be unique")
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict):
+            for index, item in enumerate(value):
+                _validate_schema_value(item, item_schema, f"{path}[{index}]")
+
+    if isinstance(value, dict):
+        properties = schema.get("properties")
+        properties = properties if isinstance(properties, dict) else {}
+        required = schema.get("required")
+        required = required if isinstance(required, list) else []
+        missing = [field for field in required if field not in value]
+        if missing:
+            raise ValueError(f"{path}: missing required properties {missing!r}")
+        if "minProperties" in schema and len(value) < int(schema["minProperties"]):
+            raise ValueError(
+                f"{path}: object has fewer than minProperties={schema['minProperties']}"
+            )
+        if "maxProperties" in schema and len(value) > int(schema["maxProperties"]):
+            raise ValueError(
+                f"{path}: object has more than maxProperties={schema['maxProperties']}"
+            )
+        for field_name, field_schema in properties.items():
+            if field_name in value:
+                _validate_schema_value(value[field_name], field_schema, f"{path}.{field_name}")
+        extras = set(value) - set(properties)
+        additional = schema.get("additionalProperties", True)
+        if extras and additional is False:
+            raise ValueError(f"{path}: additional properties are forbidden: {sorted(extras)!r}")
+        if extras and isinstance(additional, dict):
+            for field_name in extras:
+                _validate_schema_value(value[field_name], additional, f"{path}.{field_name}")
+
+
 def _model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel]:
-    """Create the runtime input contract once; JSON schema is then generated from it."""
+    """Create the runtime input contract once; JSON schema is then generated from it.
+
+    The field annotations intentionally remain shallow so the emitted schema retains the
+    established no-``$defs`` contract.  The model-level validator recursively compiles enum,
+    item, bound, string/array and nested-object constraints into runtime validation.
+    """
     type_map = {
         "string": str,
         "integer": int,
@@ -43,7 +231,24 @@ def _model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel]:
             annotation,
             Field(default=default, description=definition.get("description")),
         )
-    return create_model(f"{''.join(part.title() for part in name.split('_'))}Input", __config__=ConfigDict(extra="forbid"), **fields)
+    authored_schema = schema
+
+    @model_validator(mode="after")
+    def _validate_authored_schema(instance: BaseModel) -> BaseModel:
+        # exclude_unset keeps absent optional properties absent.  Authored non-null defaults are
+        # explicitly applied by Tool._apply_defaults before model_validate during execution.
+        _validate_schema_value(instance.model_dump(exclude_unset=True), authored_schema)
+        return instance
+
+    return create_model(
+        f"{''.join(part.title() for part in name.split('_'))}Input",
+        # Function-calling arguments are an external trust boundary. Coercing
+        # ``\"3\"`` to ``3`` (or ``1`` to ``True``) would let malformed MCP/provider
+        # payloads pass a schema they did not actually satisfy.
+        __config__=ConfigDict(extra="forbid", strict=True),
+        __validators__={"_validate_authored_schema": _validate_authored_schema},
+        **fields,
+    )
 
 
 # JSON-schema constraint keywords the pydantic round-trip drops (it only captures
@@ -51,7 +256,8 @@ def _model_from_schema(name: str, schema: Dict[str, Any]) -> type[BaseModel]:
 # the model never sees the legal values, so it guesses parameters it could have read.
 _CONSTRAINT_KEYWORDS = (
     "enum", "items", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
-    "minLength", "maxLength", "pattern", "format", "minItems", "maxItems",
+    "multipleOf", "minLength", "maxLength", "pattern", "format", "minItems", "maxItems",
+    "uniqueItems", "minProperties", "maxProperties", "const",
 )
 
 
@@ -258,8 +464,8 @@ class Tool:
         kwargs = self._apply_defaults(kwargs)
         try:
             kwargs = self.input_model.model_validate(kwargs).model_dump(exclude_none=True)
-        except Exception as exc:
-            return ToolResult(False, error=f"ValidationError: {exc}", tool_name=self.name,
+        except Exception:
+            return ToolResult(False, error="ValidationError: invalid parameters", tool_name=self.name,
                               version=self.version, idempotency_key=idempotency_key)
 
         claimed = False
@@ -314,7 +520,8 @@ class Tool:
                         outcome=("unknown" if status == "unknown" else status),
                     )
 
-        attempts = self.max_retries if self.retry_safe else 1
+        # ``max_retries=0`` means execute once with no retry; it must never mean zero calls.
+        attempts = max(1, int(self.max_retries)) if self.retry_safe else 1
         for attempt in range(attempts):
             try:
                 logger.debug("Executing %s (attempt %s/%s)", self.name, attempt + 1, attempts)
@@ -387,9 +594,10 @@ class Tool:
                 raise
             except Exception as e:
                 execution_time = (time.time() - start_time) * 1000
-                error_msg = f"{type(e).__name__}: {str(e)}"
+                error_type = type(e).__name__
+                error_msg = "Tool execution failed"
                 
-                logger.warning("Tool %s failed: %s", self.name, error_msg)
+                logger.warning("Tool %s failed error_type=%s", self.name, error_type)
                 
                 # 是否重试
                 if attempt < attempts - 1 and self.retry_on_error and self.retry_safe:
@@ -400,8 +608,6 @@ class Tool:
                 else:
                     # 最后一次尝试失败
                     logger.error("Tool %s exhausted all retries", self.name)
-                    if attempt == attempts - 1:
-                        traceback.print_exc()
                     if claimed:
                         idempotency_store.fail(idempotency_key, error_msg)
                     return ToolResult(

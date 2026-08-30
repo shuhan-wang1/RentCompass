@@ -107,7 +107,14 @@ class _FakeGraph:
 
 
 def _run_turn(monkeypatch, reply, cached, *, conversation_id):
-    monkeypatch.setattr(appmod, "agent_graph", _FakeGraph(reply))
+    fake_graph = _FakeGraph(reply)
+    # Production graphs are bound to the long-lived event-loop generation that
+    # created their async clients. Keep this injected graph inside that same
+    # ownership contract; otherwise _ensure_agent_runtime correctly rejects it
+    # as stale and rebuilds the real graph, so this fixture no longer exercises
+    # the intended tool-less final-state path.
+    setattr(fake_graph, appmod._GRAPH_RUNNER_ATTR, appmod._graph_loop_runner)
+    monkeypatch.setattr(appmod, "agent_graph", fake_graph)
     user_id = "issue78-user"
     appmod._get_session(user_id, conversation_id).last_results = list(cached)
     payload = asyncio.run(appmod.handle_with_react_agent(

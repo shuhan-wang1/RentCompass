@@ -10,7 +10,9 @@ structured fields and explicitly linked tool evidence.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import time
 from typing import Any
 
 from core.tenancy_reference import monthly_from_weekly
@@ -212,8 +214,24 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
             else:
                 missing_features = [feature for feature in requested_features
                                     if feature not in available_features]
-                if missing_features:
-                    reasons.append("missing required features: " + ", ".join(missing_features))
+                # search_properties distinguishes an explicit structured denial
+                # from a provider that simply did not disclose an accessibility
+                # fact. Preserve the legacy meaning of verified_features=[] for
+                # all other callers; only an explicit unverified_features entry
+                # changes a missing hard feature from excluded to unknown.
+                unverified = {
+                    _norm(feature) for feature in (candidate.get("unverified_features") or [])
+                    if _norm(feature)
+                }
+                unknown_features = [feature for feature in missing_features
+                                    if feature in unverified]
+                absent_features = [feature for feature in missing_features
+                                   if feature not in unverified]
+                if absent_features:
+                    reasons.append("missing required features: " + ", ".join(absent_features))
+                if unknown_features:
+                    unknown_reasons.append(
+                        "required features are not verified: " + ", ".join(unknown_features))
 
         if constraints["move_in_date"]:
             available = _iso_date(candidate.get("available_from"))
@@ -228,7 +246,9 @@ def validate_candidates(candidates: list[dict], criteria: dict | None,
             evidence_status = _evidence_status(entry)
             if entry is None:
                 unknown_reasons.append("commute evidence is missing")
-            elif evidence_status in {"failed", "timeout", "outcome_unknown"}:
+            elif evidence_status in {
+                "failed", "timeout", "outcome_unknown", "budget_exhausted", "skipped",
+            }:
                 unknown_reasons.append(f"commute tool {evidence_status}")
             else:
                 raw = entry.get("raw_data") if isinstance(entry.get("raw_data"), dict) else entry
@@ -335,36 +355,116 @@ def render_candidate_status(validation: dict, *, language: str = "en") -> str:
     return "\n".join(lines)
 
 
-async def collect_commute_evidence(provider, candidates: list[dict], destination: str,
-                                   *, mode: str = "transit", timeout_s: float = 20.0) -> list[dict]:
+def render_similar_listings(rows: list[dict], *, language: str = "en") -> str:
+    """Render near-miss listings without implying they satisfied every condition.
+
+    ``render_candidate_status`` describes a listing that FAILED a stated hard constraint.
+    A ``no_exact_match_but_similar`` row failed nothing — the exact-match pool was empty and
+    these are the closest recalls — so it needs its own honest heading, and it must keep the
+    price and the provenance-labelled commute string the card also shows.
+    """
+    zh = (language or "").lower().startswith("zh")
+    lines = ["以下房源与您的条件相近，但并未逐条满足，请自行核对："
+             if zh else
+             "These listings are close to your criteria but do not meet every condition:"]
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        parts = [str(row.get("address") or row.get("Address")
+                     or ("未命名房源" if zh else "Unnamed listing"))]
+        for key in ("price", "budget_status", "travel_time"):
+            value = row.get(key) or row.get(key.capitalize())
+            if value:
+                parts.append(str(value))
+        lines.append("- " + ("，".join(parts) if zh else ", ".join(parts)))
+    return "\n".join(lines)
+
+
+def _bounded_positive_int(env_name: str, default: int, *, ceiling: int) -> int:
+    try:
+        value = int(os.getenv(env_name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(value, ceiling))
+
+
+async def collect_commute_evidence(
+        provider, candidates: list[dict], destination: str, *, mode: str = "transit",
+        timeout_s: float = 20.0, deadline_monotonic: float | None = None,
+        max_candidates: int | None = None, concurrency: int | None = None) -> list[dict]:
     """Call ``calculate_commute`` once per listing and preserve failure classes.
 
-    This helper intentionally does not retry or collapse calls.  The tool's own retry policy
+    This helper intentionally does not retry or collapse calls. The tool's own retry policy
     handles retry-safe reads; the per-listing evidence ledger must still show which listing
-    succeeded, failed, or timed out.
+    succeeded, failed, timed out, or was not dispatched because the shared deadline/fan-out
+    cap was exhausted. Every provider call shares one absolute deadline and a bounded
+    semaphore so a large scraper result cannot consume the process-wide default executor.
     """
     destination = str(destination or "").strip()
+    rows = [candidate for candidate in (candidates or []) if isinstance(candidate, dict)]
+    if max_candidates is None:
+        max_candidates = _bounded_positive_int(
+            "FC_COMMUTE_VALIDATION_MAX_CANDIDATES", 10, ceiling=50)
+    else:
+        max_candidates = max(1, min(int(max_candidates), 50))
+    if concurrency is None:
+        concurrency = _bounded_positive_int(
+            "FC_COMMUTE_VALIDATION_CONCURRENCY", 4, ceiling=16)
+    else:
+        concurrency = max(1, min(int(concurrency), 16))
+    semaphore = asyncio.Semaphore(concurrency)
+    dispatch_stopped = asyncio.Event()
 
-    async def _one(candidate: dict) -> dict:
+    def _base(candidate: dict) -> dict:
         address = str(candidate.get("address") or candidate.get("Address") or "").strip()
-        base = {
+        return {
             "candidate_key": candidate_key(candidate),
             "from_address": address,
             "to_address": destination,
             "mode": mode,
         }
+
+    async def _one(candidate: dict) -> dict:
+        base = _base(candidate)
+        address = base["from_address"]
         if not address or not destination:
             return {**base, "success": False, "evidence_status": "missing",
-                    "error": "from_address or to_address is missing"}
-        try:
-            result = await asyncio.wait_for(provider.execute_tool(
-                "calculate_commute", from_address=address, to_address=destination, mode=mode),
-                timeout=timeout_s)
-        except asyncio.TimeoutError:
-            return {**base, "success": False, "evidence_status": "timeout",
-                    "timed_out": True, "error": "calculate_commute timed out"}
-        except Exception as exc:
-            return {**base, "success": False, "evidence_status": "failed", "error": str(exc)}
+                    "error": "from_address or to_address is missing", "elapsed_ms": 0}
+        queued_at = time.monotonic()
+        async with semaphore:
+            started_at = time.monotonic()
+            if dispatch_stopped.is_set():
+                return {
+                    **base, "success": False, "evidence_status": "skipped",
+                    "error": "commute dispatch stopped after an abandoned timed-out call",
+                    "elapsed_ms": int((started_at - queued_at) * 1000),
+                }
+            remaining = float(timeout_s)
+            if deadline_monotonic is not None:
+                remaining = min(remaining, deadline_monotonic - started_at)
+            if remaining <= 0:
+                return {
+                    **base, "success": False, "evidence_status": "budget_exhausted",
+                    "error": "commute validation deadline exhausted before dispatch",
+                    "elapsed_ms": int((started_at - queued_at) * 1000),
+                }
+            try:
+                result = await asyncio.wait_for(provider.execute_tool(
+                    "calculate_commute", from_address=address, to_address=destination,
+                    mode=mode), timeout=remaining)
+            except asyncio.TimeoutError:
+                dispatch_stopped.set()
+                return {
+                    **base, "success": False, "evidence_status": "timeout",
+                    "timed_out": True, "error": "calculate_commute timed out",
+                    "elapsed_ms": int((time.monotonic() - queued_at) * 1000),
+                }
+            except Exception as exc:
+                return {
+                    **base, "success": False, "evidence_status": "failed",
+                    "error": f"calculate_commute failed ({type(exc).__name__})",
+                    "elapsed_ms": int((time.monotonic() - queued_at) * 1000),
+                }
 
         success = bool(getattr(result, "success", False))
         data = getattr(result, "data", None)
@@ -375,13 +475,23 @@ async def collect_commute_evidence(provider, candidates: list[dict], destination
             error = result.get("error")
         raw = data if isinstance(data, dict) else {}
         duration = raw.get("duration_minutes")
+        elapsed_ms = int((time.monotonic() - queued_at) * 1000)
         if not success:
             return {**base, "success": False, "evidence_status": "failed",
-                    "raw_data": raw or None, "error": error or "calculate_commute failed"}
+                    "raw_data": raw or None, "error": error or "calculate_commute failed",
+                    "elapsed_ms": elapsed_ms}
         return {**base, "success": True, "evidence_status": "success",
-                "duration_minutes": duration, "raw_data": raw}
+                "duration_minutes": duration, "raw_data": raw, "elapsed_ms": elapsed_ms}
 
-    return await asyncio.gather(*[_one(c) for c in (candidates or [])])
+    admitted = rows[:max_candidates]
+    evidence = list(await asyncio.gather(*[_one(candidate) for candidate in admitted]))
+    for candidate in rows[max_candidates:]:
+        evidence.append({
+            **_base(candidate), "success": False, "evidence_status": "skipped",
+            "error": f"commute validation fan-out capped at {max_candidates} candidates",
+            "elapsed_ms": 0,
+        })
+    return evidence
 
 
 def validate_search_payload(payload: dict, *, commute_evidence: list[dict] | None = None) -> dict:
@@ -435,7 +545,7 @@ def validate_search_payload(payload: dict, *, commute_evidence: list[dict] | Non
 def _minute_claim_values(text: str) -> list[float]:
     values = []
     for match in re.finditer(
-        r"(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|分钟)", str(text or ""), re.IGNORECASE
+        r"(\d+(?:\.\d+)?)[\s\-–]*(?:minutes?|mins?|分钟)", str(text or ""), re.IGNORECASE
     ):
         try:
             values.append(float(match.group(1)))
@@ -527,6 +637,264 @@ def _area_ranking_commute_supported(text: str, state: dict) -> bool:
     return bool(caps and all(any(duration <= cap for cap in caps) for duration in grounded))
 
 
+# ── Commute redaction ────────────────────────────────────────────────────────
+# What must be removed is an ASSERTED COMMUTE OUTCOME. That is deliberately narrower than
+# the entry gate `_COMMUTE_CLAIM`, which also fires on a bare 符合/满足/超过 anywhere in a
+# Chinese reply — far more often a statement about budget or area than about the commute.
+# Redacting those too would delete exactly the prices and areas this redaction exists to
+# preserve.
+# The separator is optional and may be a hyphen: "45 minutes", "45min" and the attributive
+# "your 45-minute limit" are the same figure. Missing the hyphenated form left a cap quoted
+# inside a verdict invisible to the clause check, so the whole-line guard had to fail closed
+# on answers that were otherwise fine.
+_MINUTE_TOKEN = re.compile(
+    r"\d+(?:\.\d+)?[\s\-–]*(?:minutes?|mins?\b|分钟|分鐘)", re.IGNORECASE)
+_COMMUTE_WORD = re.compile(
+    r"commute|travel\s*time|journey|通勤|路程|车程|車程", re.IGNORECASE)
+# A commute VERDICT needs no number to be a claim: "this one exceeds your commute limit" is
+# exactly as unevidenced as "this one is 58 minutes", and a redactor that removes only the
+# figure leaves the conclusion standing under a note saying unverified figures were removed.
+# Both directions count — passing and failing a limit are equally unsupported without evidence.
+_FIT_WORD = re.compile(
+    r"符合|满足|不满足|未满足|超过|超出|超标|未超过|以内|之内|范围内|达标|未达|"
+    r"更远|更近|太远|够近|不远|"
+    r"\b(?:meets?|met|within|under|over|about|around|takes?|took|"
+    r"exceeds?|exceeded|exceeding|beyond|outside|above|below|longer|shorter|"
+    r"further|farther|closer|nearer|faster|slower|fits?|satisf(?:y|ies|ied)|"
+    r"qualifies|violates?|breaches?|misses|fails?)\b",
+    re.IGNORECASE)
+# A comma between digits is a thousands separator, never a clause boundary — splitting there
+# would cut "£1,733" in half.
+_FRAGMENT_SPLIT = re.compile(
+    r"((?<!\d),(?!\d)|(?<!\d):(?!\d)|[，；;、。！？：]|\.(?=\s|$)|[!?](?=\s|$)"
+    r"|\s+[–—-]\s+)")
+_PARENTHETICAL = re.compile(r"\s*[（(][^()（）]*[)）]")
+_BULLET_PREFIX = re.compile(r"^(\s*(?:[-*•]|\d+\s*[.)、]|[（(]\d+[)）])\s*)")
+_HAS_CONTENT = re.compile(r"[0-9A-Za-z一-鿿]")
+# A trailing clause that leans on the one before it: "…24 minutes, which is well within your
+# limit". It names no subject of its own, so on its own it reads as a claim about nothing —
+# but once the clause it modifies is redacted, leaving it behind restates the same verdict.
+_CONTINUATION = re.compile(
+    r"^\s*(?:(?:which|that|and|so|but|it|this|these|those|both|all)\b"
+    r"|且|而且|并且|所以|因此|但是|但|它|这|那|同样|也|均|都)",
+    re.IGNORECASE)
+_SENTENCE_END = re.compile(r"[.!?。！？]")
+# The DIRECTION a verdict asserts. Evidence of 17 minutes against a 45-minute cap supports
+# "within", and refutes "exceeds" just as firmly — a measured duration is not a licence for
+# whatever conclusion the prose drew from it. Ambiguous comparatives are deliberately in
+# neither set: they fall through to the plain figure check instead of guessing a direction.
+_PASS_VERDICT = re.compile(
+    r"\b(?:within|under|below|inside|meets?|met|fits?|satisf(?:y|ies|ied)|qualifies|"
+    r"shorter|closer|nearer|faster)\b|以内|之内|范围内|符合|满足|达标|够近|不远",
+    re.IGNORECASE)
+_FAIL_VERDICT = re.compile(
+    r"\b(?:exceeds?|exceeded|exceeding|over|beyond|outside|above|longer|further|farther|"
+    r"slower|violates?|breaches?|misses|fails?)\b|超过|超出|超标|不满足|未满足|未达|更远|太远",
+    re.IGNORECASE)
+
+
+def _asserts_commute(fragment: str) -> bool:
+    """True when this fragment states a commute duration or verdict."""
+    text = str(fragment or "")
+    if _MINUTE_TOKEN.search(text):
+        return True
+    return bool(_COMMUTE_WORD.search(text) and _FIT_WORD.search(text))
+
+
+def _listing_bindings(validation: dict) -> list[dict]:
+    """``[{labels, minutes}]`` for EVERY listing in the ledger; ``minutes`` is None unless
+    its commute is positively evidenced.
+
+    ``validate_candidates`` writes ``verified_commute_minutes`` only for a candidate that is
+    ``eligible`` with a linked ``success`` evidence entry, so a non-None ``minutes`` is the
+    exact figure the prose may quote for that listing.
+
+    Unverified listings are here ON PURPOSE. Their labels have to compete for a line, because
+    listing labels nest: with only the verified ones in the running, a line about "Park Drive
+    London E14" (unverified) matches the label "Park Drive" (verified, 9 min) and the wrong
+    listing's evidence licenses the figure. Present but unmeasured, it wins the line on length
+    and licenses nothing.
+    """
+    bindings: list[dict] = []
+    for status in validation.get("statuses") or []:
+        if not isinstance(status, dict):
+            continue
+        candidate = status.get("candidate") or {}
+        labels = [str(label).strip() for label in
+                  (candidate.get("address"), candidate.get("Address"), candidate.get("name"))
+                  if label and str(label).strip()]
+        if not labels:
+            continue
+        minutes = candidate.get("verified_commute_minutes")
+        evidenced = (status.get("status") == "eligible"
+                     and status.get("evidence_status") == "success"
+                     and minutes is not None)
+        bindings.append({"labels": labels,
+                         "minutes": float(minutes) if evidenced else None})
+    return bindings
+
+
+def _line_binding(line: str, bindings: list[dict], default: dict | None = None) -> dict | None:
+    """The verified listing this line is about, if it names exactly one.
+
+    Longest match wins, because listing labels nest: "Park Drive" is a substring of "Park
+    Drive London E14", so first-match binding attributed the long address's line to the short
+    address's evidence and published one listing's minutes for another. When two DIFFERENT
+    listings match equally well the line cannot be attributed at all, and an unattributable
+    line has no evidence — it fails closed rather than borrowing someone else's.
+    """
+    lowered = line.lower()
+    best = None
+    best_len = 0
+    ambiguous = False
+    for binding in bindings:
+        matched = max((len(label) for label in binding["labels"]
+                       if label and label.lower() in lowered), default=0)
+        if not matched:
+            continue
+        if matched > best_len:
+            best, best_len, ambiguous = binding, matched, False
+        elif matched == best_len and binding is not best:
+            ambiguous = True
+    if ambiguous:
+        return None
+    return best if best is not None else default
+
+
+def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set) -> bool:
+    """True when this fragment's commute claim — figure AND conclusion — follows the evidence.
+
+    Three separate things have to hold, and each one was a way through on its own:
+
+    * every minute it quotes is the listing's measured duration or a cap the user stated;
+    * a verdict ("within" / "exceeds") points the way the measurement actually points. A
+      fragment with no figure used to pass vacuously here — ``all([])`` is True — so
+      "this exceeds your 45-minute limit" rode out on evidence of 17 minutes;
+    * a verdict has some cap to be checked against at all.
+    """
+    if binding is None or binding.get("minutes") is None:
+        return False
+    allowed = {binding["minutes"]} | caps
+    values = _minute_claim_values(fragment)
+    if any(not any(abs(value - permitted) < 1e-9 for permitted in allowed)
+           for value in values):
+        return False
+
+    asserts_pass = bool(_PASS_VERDICT.search(fragment))
+    asserts_fail = bool(_FAIL_VERDICT.search(fragment))
+    if asserts_pass and asserts_fail:
+        return False  # both directions in one fragment: nothing coherent to check
+    if asserts_pass or asserts_fail:
+        quoted_caps = [value for value in values
+                       if any(abs(value - cap) < 1e-9 for cap in caps)]
+        against = quoted_caps or sorted(caps)
+        if not against:
+            return False  # a verdict with no limit to measure it against
+        meets = all(binding["minutes"] <= cap + 1e-9 for cap in against)
+        return meets if asserts_pass else not meets
+    # No verdict: the fragment merely carries a figure, and that figure checked out above.
+    return bool(values)
+
+
+def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None = None,
+                           caps: set | None = None,
+                           default_binding: dict | None = None) -> str | None:
+    """Drop the unverifiable commute assertions and keep everything else.
+
+    Price, area, availability and an honest caveat are all still true and still useful when
+    the commute could not be verified; replacing the whole answer with one fixed sentence
+    throws them away. Redaction works clause-by-clause so a listing line keeps its address
+    and price while losing only the minutes.
+
+    Redaction is PER LISTING, not per turn. When one recommendation's commute is evidenced and
+    another's is not, only the unevidenced one loses its figure — deleting every commute
+    number in the answer because one row failed is the same all-or-nothing error one level
+    down. A line is treated as evidenced only when it names a listing in ``bindings`` AND every
+    minute it quotes is either that listing's measured duration or a cap the user themselves
+    stated (``caps``); an unattributed line is never evidenced.
+
+    Returns ``None`` when nothing usable survives, or when an unevidenced assertion is still
+    present after redaction — the caller then falls back to the fixed sentence, so the guard
+    stays fail-closed.
+    """
+    bindings = list(bindings or [])
+    caps = set(caps or ())
+    lines: list[str] = []
+    for line in str(text or "").split("\n"):
+        bullet = _BULLET_PREFIX.match(line)
+        prefix = bullet.group(1) if bullet else ""
+        body = line[len(prefix):]
+        binding = _line_binding(line, bindings, default_binding)
+
+        def _evidenced(fragment: str, _binding=binding) -> bool:
+            """True when this fragment's commute claim is backed for THIS line's listing."""
+            return _claim_is_evidenced(fragment, _binding, caps)
+
+        # A parenthetical commute aside ("(17 min to Canary Wharf)") is an attachment to a
+        # clause, not a clause of its own; remove it before clause splitting.
+        body = _PARENTHETICAL.sub(
+            lambda m: "" if (_asserts_commute(m.group(0)) and not _evidenced(m.group(0)))
+            else m.group(0), body)
+
+        parts = _FRAGMENT_SPLIT.split(body)
+        kept: list[str] = []
+        dropped_in_sentence = False
+        for index in range(0, len(parts), 2):
+            fragment = parts[index]
+            separator = parts[index + 1] if index + 1 < len(parts) else ""
+            drop = fragment.strip() and _asserts_commute(fragment) and not _evidenced(fragment)
+            # A dependent clause after a redacted one restates its verdict without repeating
+            # its subject ("…, which is well within your limit"), so it goes with it.
+            if (not drop and dropped_in_sentence and fragment.strip()
+                    and _CONTINUATION.match(fragment) and _FIT_WORD.search(fragment)
+                    and not _evidenced(fragment)):
+                drop = True
+            if drop:
+                dropped_in_sentence = True
+                continue  # its trailing separator goes with it
+            if _SENTENCE_END.search(separator):
+                dropped_in_sentence = False
+            kept.append(fragment + separator)
+
+        rebuilt = "".join(kept)
+        # Tidy up after removal: no doubled or dangling separators.
+        rebuilt = re.sub(r"([,，；;、:：])\s*(?=[,，；;、:：])", "", rebuilt)
+        rebuilt = re.sub(r"^[\s,，；;、]+", "", rebuilt)
+        rebuilt = re.sub(r"[\s,，；;、:：]+$", "", rebuilt)
+        if rebuilt and _HAS_CONTENT.search(body) and not _HAS_CONTENT.search(rebuilt):
+            rebuilt = ""
+        if rebuilt and re.search(r"[.!?。！？]\s*$", body) and not re.search(
+                r"[.!?。！？]\s*$", rebuilt):
+            rebuilt += "。" if zh else "."
+
+        if not rebuilt.strip():
+            # The line was nothing but a commute claim; drop it, prefix included. A blank
+            # separator line in the original stays blank so paragraphs do not fuse.
+            if not _HAS_CONTENT.search(line):
+                lines.append(line)
+            continue
+        # Fail closed per line: clause splitting is a heuristic, so verify the OUTCOME rather
+        # than trusting the split. Anything still asserting a commute here must be covered by
+        # this line's own evidence, or the whole redaction is abandoned.
+        if _asserts_commute(rebuilt) and not _evidenced(rebuilt):
+            return None
+        lines.append(prefix + rebuilt)
+
+    result = "\n".join(lines)
+    result = re.sub(r"\n{3,}", "\n\n", result).strip()
+    if not _HAS_CONTENT.search(result):
+        return None
+    return result
+
+
+def _commute_unverified_note(zh: bool) -> str:
+    """Says SOME, because redaction is per listing — an evidenced figure is still standing."""
+    return ("注：本轮未能核实其中部分房源的通勤条件，未经核实的通勤数据已从回答中移除。"
+            if zh else
+            "Note: the commute could not be verified for some of these listings, so the "
+            "unverified commute figures have been removed from this answer.")
+
+
 def validate_commute_response(response: str, state: dict) -> str:
     """Fail closed when prose asserts a commute result without linked evidence.
 
@@ -534,17 +902,45 @@ def validate_commute_response(response: str, state: dict) -> str:
     defence for plain-text paths. A single successful commute artifact may support a
     direct one-origin commute answer. Multi-listing recommendations require the
     per-candidate validation ledger, so one successful call cannot license every row.
+
+    Failing closed means the unverified COMMUTE CLAIM does not ship — not that the whole
+    answer does not ship, and not that every commute claim in it goes. Redaction is per
+    listing and per clause (see :func:`_redact_commute_claims`): prices, areas and honest
+    caveats survive, and so does a figure for a listing whose commute IS evidenced. The fixed
+    sentence remains for a reply that is nothing but an unverifiable commute claim, or one
+    where an unevidenced assertion survives redaction.
     """
     text = str(response or "")
     current = ((state.get("extracted_context") or {}).get("current_message")
                or state.get("user_query") or "")
-    if not (_COMMUTE_CLAIM.search(text) and _COMMUTE_CONTEXT.search(current + " " + text)):
+    # A commute VERDICT is a claim even with no figure in it: "this one exceeds your commute
+    # limit" carries no minutes, so `_COMMUTE_CLAIM` alone never saw it and the guard did not
+    # run at all on the one shape that states a conclusion without any evidence to quote.
+    if not ((_COMMUTE_CLAIM.search(text) or _asserts_commute(text))
+            and _COMMUTE_CONTEXT.search(current + " " + text)):
         return text
 
     language = str((state.get("extracted_context") or {}).get("reply_language") or "")
-    fallback = ("本轮无法核实该房源的通勤条件。" if language.lower().startswith("zh")
-                else "The commute condition could not be verified for the listing this round.")
+    zh = language.lower().startswith("zh")
+    fixed = ("本轮无法核实该房源的通勤条件。" if zh
+             else "The commute condition could not be verified for the listing this round.")
+
     validation = state.get("candidate_validation") or {}
+
+    def redact(bindings, default_binding=None) -> str:
+        """Evidenced listings keep their figures; only the unevidenced ones lose theirs."""
+        redacted = _redact_commute_claims(
+            text, zh=zh, bindings=bindings, caps=_known_commute_caps(state),
+            default_binding=default_binding)
+        if redacted is None:
+            return fixed
+        if redacted.strip() == text.strip():
+            return text  # nothing needed removing; do not bolt a note onto a clean answer
+        return f"{redacted}\n\n{_commute_unverified_note(zh)}"
+
+    def fallback() -> str:
+        return redact(_listing_bindings(validation))
+
     statuses = list(validation.get("statuses") or [])
     if statuses:
         lowered = text.lower()
@@ -559,8 +955,19 @@ def validate_commute_response(response: str, state: dict) -> str:
         if commute_required and all(
                 status.get("status") == "eligible"
                 and status.get("evidence_status") == "success" for status in targets):
-            return text
-        return fallback
+            # Every listing named is evidenced — but evidence for a listing is not a licence
+            # to quote ANY duration for it, nor to draw the opposite conclusion from it. Run
+            # the same per-listing check so a figure or verdict that disagrees with what was
+            # measured is still removed; when the prose agrees with the ledger, `redact`
+            # returns it untouched and no note is added.
+            #
+            # A target whose ledger entry carries no duration is NOT a pass: `success` with no
+            # `verified_commute_minutes` leaves nothing to check the prose against, so any
+            # figure quoted for it is unverifiable and goes. Returning the text here was a
+            # fail-OPEN branch — the whole point of this function is that an unbacked figure
+            # does not ship, and "we could not check" is not "we checked".
+            return redact(_listing_bindings(validation))
+        return fallback()
 
     if _area_ranking_commute_supported(text, state):
         return text
@@ -574,11 +981,21 @@ def validate_commute_response(response: str, state: dict) -> str:
         and isinstance(artifact.get("raw_data"), dict)
         and isinstance(artifact["raw_data"].get("duration_minutes"), (int, float))
     ]
-    return text if len(successful) == 1 else fallback
+    if len(successful) != 1:
+        return fallback()
+    # ONE successful call licenses ONE duration — the one it returned. Counting artifacts and
+    # stopping there let a turn that measured 17 minutes answer "it takes 9 minutes": the call
+    # succeeded, so the count was satisfied and nothing ever compared the prose to the result.
+    # Bind the figure the artifact actually produced; the origin is not named in a
+    # single-origin answer, so it applies to every line rather than to a matched address.
+    measured = float(successful[0]["raw_data"]["duration_minutes"])
+    return redact([], default_binding={"labels": [], "minutes": measured})
 
 
-async def validate_search_payload_with_provider(provider, payload: dict, *,
-                                                timeout_s: float = 20.0) -> tuple[dict, list[dict]]:
+async def validate_search_payload_with_provider(
+        provider, payload: dict, *, timeout_s: float = 20.0,
+        deadline_monotonic: float | None = None, max_candidates: int | None = None,
+        concurrency: int | None = None) -> tuple[dict, list[dict]]:
     """Validate a search result and obtain per-listing commute evidence when required."""
     if not isinstance(payload, dict):
         return payload, []
@@ -599,5 +1016,7 @@ async def validate_search_payload_with_provider(provider, payload: dict, *,
             names = set()
         if not names or "calculate_commute" in names:
             evidence = await collect_commute_evidence(
-                provider, rows, destination, timeout_s=timeout_s)
+                provider, rows, destination, timeout_s=timeout_s,
+                deadline_monotonic=deadline_monotonic, max_candidates=max_candidates,
+                concurrency=concurrency)
     return validate_search_payload(payload, commute_evidence=evidence), evidence

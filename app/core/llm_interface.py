@@ -12,12 +12,31 @@ from core.llm_config import (
 # `from ... import DEEPSEEK_MODEL` binds a COPY, so llm_config's import-time check does not
 # cover a later rebinding of the name in this module. _call_deepseek drives the raw openai
 # SDK and is the third and last place in app/ + src/ that hands a model name to a provider.
-from uk_rent_agent.llm.router import reject_retired_model_names
+from uk_rent_agent.llm.router import (
+    llm_max_retries,
+    llm_request_timeout_seconds,
+    reject_retired_model_names,
+)
 from core.tenancy_reference import monthly_from_weekly
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL_NAME = "gemma3:27b-cloud"  # 使用 Ollama 云端模型，更强的推理能力
 
+
+
+
+def _effective_request_timeout(requested: float | None) -> float:
+    """Cap legacy caller overrides at the process-wide transport deadline."""
+    ceiling = llm_request_timeout_seconds()
+    if requested is None:
+        return ceiling
+    try:
+        value = float(requested)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("LLM timeout must be numeric") from exc
+    if value <= 0:
+        raise ValueError("LLM timeout must be positive")
+    return min(value, ceiling)
 
 def _record_deepseek_eval(resp, latency_ms, success, error=None):
     """Emit an offline-eval llm_call event for a raw DeepSeek call.
@@ -79,7 +98,12 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
                                DEEPSEEK_MODEL=DEEPSEEK_MODEL)
     from openai import OpenAI
     import time as _time
-    client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, timeout=timeout)
+    effective_timeout = _effective_request_timeout(timeout)
+    client = OpenAI(
+        api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL,
+        timeout=effective_timeout,
+        max_retries=llm_max_retries(),
+    )
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
@@ -111,7 +135,7 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
     except Exception as e:
         _record_deepseek_eval(None, (_time.perf_counter() - _started) * 1000, False,
                               error=type(e).__name__)
-        print(f"❌ DeepSeek API error: {e}")
+        print(f"❌ DeepSeek API error_type={type(e).__name__}")
         return None
 
 
@@ -120,6 +144,7 @@ def call_ollama(prompt: str, system_prompt: str = None, timeout: int = 360) -> s
     if LLM_PROVIDER == "deepseek":
         return _call_deepseek(prompt, system_prompt, timeout)
     url = f"{OLLAMA_BASE_URL}/api/generate"
+    effective_timeout = _effective_request_timeout(timeout)
     
     payload = {
         "model": MODEL_NAME,
@@ -137,13 +162,13 @@ def call_ollama(prompt: str, system_prompt: str = None, timeout: int = 360) -> s
         payload["system"] = system_prompt
     
     # DEBUG: Print what we're sending
-    print(f"[DEBUG] Ollama URL: {url}")
-    print(f"[DEBUG] Model: {MODEL_NAME}")
+    print(f"[DEBUG] Ollama endpoint_configured={bool(url)}")
+    print(f"[DEBUG] Model configured={bool(MODEL_NAME)}")
     print(f"[DEBUG] Prompt length: {len(prompt)} chars")
     print(f"[DEBUG] Has system prompt: {system_prompt is not None}")
     
     try:
-        response = requests.post(url, json=payload, timeout=timeout)
+        response = requests.post(url, json=payload, timeout=effective_timeout)
         
         # DEBUG: Print response status
         print(f"[DEBUG] Response status: {response.status_code}")
@@ -152,14 +177,14 @@ def call_ollama(prompt: str, system_prompt: str = None, timeout: int = 360) -> s
         result = response.json()
         return result.get("response", "")
     except requests.exceptions.HTTPError as e:
-        print(f"❌ Ollama HTTP error: {e}")
-        print(f"[DEBUG] Response text: {response.text[:500]}")
+        print(f"❌ Ollama HTTP error_type={type(e).__name__}")
+        print(f"[DEBUG] Response chars={len(response.text or '')}")
         return None
     except requests.exceptions.Timeout:
-        print(f"⚠️  Ollama timeout after {timeout}s")
+        print(f"⚠️  Ollama timeout after {effective_timeout}s")
         return None
     except Exception as e:
-        print(f"❌ Ollama API error: {e}")
+        print(f"❌ Ollama API error_type={type(e).__name__}")
         return None
 
 
@@ -176,7 +201,7 @@ def extract_first_json(text: str) -> dict | None:
         print(f"[JSON PARSER] ✅ Method 1: Direct parse successful")
         return result
     except (json.JSONDecodeError, TypeError) as e:
-        print(f"[JSON PARSER] ❌ Method 1 failed: {str(e)[:100]}")
+        print(f"[JSON PARSER] ❌ Method 1 failed; error_type={type(e).__name__}")
     
     # 尝试2: 提取```json...```代码块 (改进正则：使用贪婪匹配来获取完整 JSON)
     match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text, re.DOTALL)
@@ -186,7 +211,7 @@ def extract_first_json(text: str) -> dict | None:
             print(f"[JSON PARSER] ✅ Method 2: Code block parse successful")
             return result
         except json.JSONDecodeError as e:
-            print(f"[JSON PARSER] ❌ Method 2 failed: {str(e)[:100]}")
+            print(f"[JSON PARSER] ❌ Method 2 failed; error_type={type(e).__name__}")
     
     # 尝试3: 提取`{...}`内联代码
     match = re.search(r'`\s*(\{.*?\})\s*`', text, re.DOTALL)
@@ -196,7 +221,7 @@ def extract_first_json(text: str) -> dict | None:
             print(f"[JSON PARSER] ✅ Method 3: Inline code parse successful")
             return result
         except json.JSONDecodeError as e:
-            print(f"[JSON PARSER] ❌ Method 3 failed: {str(e)[:100]}")
+            print(f"[JSON PARSER] ❌ Method 3 failed; error_type={type(e).__name__}")
     
     # 尝试4: 查找第一个完整的JSON对象
     brace_count = 0
@@ -220,7 +245,7 @@ def extract_first_json(text: str) -> dict | None:
                             print(f"[JSON PARSER] ✅ Method 4: Brace matching successful")
                             return parsed
                 except json.JSONDecodeError as e:
-                    print(f"[JSON PARSER] ❌ Method 4 attempt failed: {str(e)[:100]}")
+                    print(f"[JSON PARSER] ❌ Method 4 attempt failed; error_type={type(e).__name__}")
                 finally:
                     start_idx = -1
     
@@ -313,7 +338,7 @@ JSON OUTPUT:"""
         return {"status": "error", "data": {"message": "Ollama timeout"}}
     
     print(f"[DEBUG] Raw Ollama response length: {len(response_text)} chars")
-    print(f"[DEBUG] First 300 chars: {response_text[:300]}")
+    print("[DEBUG] Response content redacted")
     
     parsed_json = extract_first_json(response_text)
     
@@ -367,7 +392,7 @@ def refine_criteria_with_answer(original_criteria: dict, user_answer: str) -> di
     
     print(f"\n{'='*60}")
     print(f"[Refine] Merging clarification answer")
-    print(f"[Refine] User answer: '{user_answer}'")
+    print(f"[Refine] User answer_chars={len(user_answer or '')}")
     print(f"{'='*60}")
     
     # Make a copy to avoid mutation issues
@@ -376,7 +401,7 @@ def refine_criteria_with_answer(original_criteria: dict, user_answer: str) -> di
     # ✅ CRITICAL FIX: Check _original_query first for missing destination
     original_query = result.get('_original_query', '')
     if original_query and not result.get('destination'):
-        print(f"[Refine] 📝 Checking original query for destination: '{original_query}'")
+        print(f"[Refine] 📝 Checking original query_chars={len(original_query)}")
         
         # Try to extract destination from original query
         original_lower = original_query.lower().strip()
@@ -402,7 +427,7 @@ def refine_criteria_with_answer(original_criteria: dict, user_answer: str) -> di
                     location = 'London School of Economics'
                 
                 result['destination'] = location.title() if location.islower() else location
-                print(f"[Refine] ✅ Extracted destination from original query: {result['destination']}")
+                print("[Refine] ✅ Extracted destination from original query")
                 break
     
     # Extract info from the user's clarification answer
@@ -412,14 +437,14 @@ def refine_criteria_with_answer(original_criteria: dict, user_answer: str) -> di
     time_match = re.search(r'(\d+)\s*(?:min|minutes|mins)', answer_lower)
     if time_match and not result.get('max_travel_time'):
         result['max_travel_time'] = int(time_match.group(1))
-        print(f"[Refine] ✓ Extracted commute time: {result['max_travel_time']} min")
+        print("[Refine] ✓ Extracted commute time")
     
     # 2. Extract budget (e.g., "£1400", "1400 pounds")
     budget_match = re.search(r'£?\s*(\d+(?:,\d{3})*)\s*(?:pounds?|per month|pcm)?', answer_lower)
     if budget_match and not result.get('max_budget'):
         budget_str = budget_match.group(1).replace(',', '')
         result['max_budget'] = int(budget_str)
-        print(f"[Refine] ✓ Extracted budget: £{result['max_budget']}")
+        print("[Refine] ✓ Extracted budget")
     
     # 3. Extract destination - only if not already present
     if not result.get('destination'):
@@ -432,7 +457,7 @@ def refine_criteria_with_answer(original_criteria: dict, user_answer: str) -> di
                     # Only extract if it looks like a real location (not a number/time)
                     if not re.match(r'^\d+\s*min', location_text) and len(location_text) > 2:
                         result['destination'] = location_text.title()
-                        print(f"[Refine] ✓ Extracted destination: {result['destination']}")
+                        print("[Refine] ✓ Extracted destination")
                         break
     
     # 4. Handle negative/decline responses
@@ -480,9 +505,9 @@ def refine_criteria_with_answer(original_criteria: dict, user_answer: str) -> di
     
     # 6. Success - all required fields present
     print(f"[Refine] ✅ All required fields complete!")
-    print(f"[Refine]   → Destination: {result.get('destination')}")
-    print(f"[Refine]   → Budget: £{result.get('max_budget')}")
-    print(f"[Refine]   → Max commute: {result.get('max_travel_time')} min")
+    print(f"[Refine]   → Destination present={bool(result.get('destination'))}")
+    print(f"[Refine]   → Budget present={result.get('max_budget') is not None}")
+    print(f"[Refine]   → Max commute present={result.get('max_travel_time') is not None}")
     
     # Set defaults for optional fields
     if not result.get('suggested_search_locations'):
@@ -543,7 +568,7 @@ def _normalize_price_format(price_str: str) -> str:
     if 'pw' in price_lower or 'per week' in price_lower or 'weekly' in price_lower:
         # Convert weekly to monthly: multiply by 52 weeks, divide by 12 months
         price_value = monthly_from_weekly(price_value)
-        print(f"  [Price] Converted weekly price to monthly: {price_str} -> £{int(price_value)} pcm")
+        print("  [Price] Converted weekly price to monthly")
     
     # Return normalized format: £XXXX pcm (no decimals for monthly rent)
     return f"£{int(price_value)} pcm"
@@ -602,7 +627,7 @@ def _validate_and_fix_price_in_explanations(recommendations: dict, properties_da
                 
                 for old_price in prices_in_explanation:
                     explanation_fixed = explanation_fixed.replace(old_price, price_num_only)
-                    print(f"     📝 Replaced '{old_price}' with '{price_num_only}'")
+                    print("     📝 Replaced a price mention")
                 
                 # ✅ FIX CRITICAL: Fix "over budget" errors
                 if max_budget and price_numeric:
@@ -642,7 +667,7 @@ def _validate_and_fix_price_in_explanations(recommendations: dict, properties_da
                             explanation_fixed,
                             flags=re.IGNORECASE
                         )
-                        print(f"     ✅ Fixed: Property is WITHIN budget (£{price_numeric} ≤ £{max_budget})")
+                        print("     ✅ Fixed: Property is within budget")
                     else:
                         # Property is OVER budget - ensure correct overage with EXACT amount
                         overage = int(price_numeric - max_budget)
@@ -674,7 +699,7 @@ def _validate_and_fix_price_in_explanations(recommendations: dict, properties_da
                             explanation_fixed,
                             flags=re.IGNORECASE
                         )
-                        print(f"     ✅ Fixed: Property is £{overage} OVER budget (£{price_numeric} > £{max_budget})")
+                        print("     ✅ Fixed: Property is over budget")
                 
                 rec['explanation'] = explanation_fixed
             else:
@@ -691,8 +716,8 @@ def _validate_and_fix_price_in_explanations(recommendations: dict, properties_da
                 if time_mentions:
                     incorrect_times = [int(t) for t in time_mentions if int(t) != actual_travel_time]
                     if incorrect_times:
-                        print(f"     ⚠️  Found INCORRECT travel time mentions: {incorrect_times}")
-                        print(f"     ✅ Actual travel time: {actual_travel_time} minutes")
+                        print(f"     ⚠️  Found incorrect travel time mention_count={len(incorrect_times)}")
+                        print("     ✅ Actual travel time available")
                         
                         # Replace all incorrect time mentions with correct time
                         explanation_fixed = rec['explanation']
@@ -707,7 +732,7 @@ def _validate_and_fix_price_in_explanations(recommendations: dict, properties_da
                                 )
                         
                         rec['explanation'] = explanation_fixed
-                        print(f"     ✅ Fixed travel time mentions to {actual_travel_time} minutes")
+                        print("     ✅ Fixed travel time mentions")
     
     return recommendations
 
@@ -762,7 +787,7 @@ def generate_recommendations(properties_data: list[dict], user_query: str, soft_
                 simple_prop['crimes_6m'] = crime_data.get('total_crimes_6m', 0)
                 simple_prop['crime_trend'] = crime_data.get('crime_trend', 'unknown')
                 simple_prop['top_crime_types'] = crime_data.get('top_crime_types', [])[:2]
-                print(f"    ✅ Property {i+1} - Including crime data: {simple_prop['crimes_6m']} crimes")
+                print(f"    ✅ Property {i+1} - Including crime data")
             else:
                 print(f"    ⚠️  Property {i+1} - No valid crime data available")
         # ✅ 不添加这些字段，防止模型看到 null 值
@@ -969,10 +994,10 @@ Return ONLY valid JSON, no other text."""
 
     # 🔍 添加调试：查看LLM原始响应
     print(f"\n[DEBUG] LLM Response Length: {len(response_text)} chars")
-    print(f"[DEBUG] First 500 chars of response:")
-    print(response_text[:500])
-    print(f"[DEBUG] Last 300 chars of response:")
-    print(response_text[-300:])
+    print("[DEBUG] Response preview redacted")
+    print("[DEBUG] Response content not logged")
+    print("[DEBUG] Response suffix redacted")
+    print("[DEBUG] Response content not logged")
     
     parsed = extract_first_json(response_text)
 
@@ -997,7 +1022,7 @@ Return ONLY valid JSON, no other text."""
                 seen_addresses.add(addr_normalized)
                 unique_recommendations.append(rec)
             else:
-                print(f"  ⚠️  Skipping duplicate: {rec.get('address', '')[:40]}")
+                print("  ⚠️  Skipping duplicate property")
         
         # Re-rank after deduplication
         for i, rec in enumerate(unique_recommendations, start=1):
@@ -1035,17 +1060,17 @@ Return ONLY valid JSON, no other text."""
                 actual_price_normalized = _normalize_price_format(actual_price_raw)
                 rec['price'] = actual_price_normalized
                 
-                print(f"  ✓ Rank {rank}: {rec['address'][:40]} - {rec['travel_time']} - Price: {actual_price_normalized}")
+                print(f"  ✓ Rank {rank}: property fields normalized")
         
         parsed = _validate_and_fix_price_in_explanations(parsed, properties_data)
         
         return parsed
     else:
         print("[WARN] Could not parse JSON, using fallback")
-        print(f"[DEBUG] Parsed result: {parsed}")
+        print(f"[DEBUG] Parsed result_present={parsed is not None}")
         print(f"[DEBUG] Has 'recommendations' key: {'recommendations' in parsed if parsed else 'N/A (parsed is None)'}")
         if parsed:
-            print(f"[DEBUG] Parsed keys: {list(parsed.keys())}")
+            print(f"[DEBUG] Parsed key_count={len(parsed)}")
         return create_fallback_recommendations(properties_data, soft_preferences)
 
 def create_fallback_recommendations(properties_data: list[dict], soft_preferences: str = "") -> dict:

@@ -101,7 +101,7 @@ class PropertyEmbeddingStore:
         self.index.add(embeddings)
         self.properties = properties
         print(f"    -> [DEBUG] FAISS index created with {len(properties)} properties")
-        print(f"    -> [DEBUG] Property name index: {list(self.property_name_index.keys())}")
+        print(f"    -> [DEBUG] Property name index_count={len(self.property_name_index)}")
     
     def get_property_by_name(self, name: str) -> dict | None:
         """🆕 直接按名称查找房产（用于对比查询）"""
@@ -150,7 +150,7 @@ class PropertyEmbeddingStore:
                     prop_copy['search_query'] = name
                     results.append(prop_copy)
                     seen_addresses.add(address)
-                    print(f"    -> [DEBUG] 精确匹配房产: {address[:50]}...")
+                    print(f"    -> [DEBUG] 精确匹配房产 address_chars={len(str(address))}")
                 continue
             
             # 尝试语义搜索
@@ -172,7 +172,7 @@ class PropertyEmbeddingStore:
                             results.append(prop_copy)
                             seen_addresses.add(address)
                             count += 1
-                            print(f"    -> [DEBUG] 语义匹配房产: {address[:50]}... (score: {score:.3f})")
+                            print(f"    -> [DEBUG] 语义匹配房产 score={score:.3f}")
         
         print(f"    -> [DEBUG] search_by_names 找到 {len(results)} 个房产")
         return results
@@ -187,7 +187,7 @@ class PropertyEmbeddingStore:
             print("    -> [WARNING] Invalid query provided to search.")
             return []
         
-        print(f"    -> [DEBUG] Searching for: {query[:50]}...")
+        print(f"    -> [DEBUG] Searching query_chars={len(str(query))}")
         
         query_embedding = self.model.encode([query])
         faiss.normalize_L2(query_embedding)
@@ -223,7 +223,7 @@ class PropertyEmbeddingStore:
         
         # 标准化搜索词
         search_terms = [a.lower().strip() for a in amenities if a]
-        print(f"    -> [DEBUG] Searching for amenities: {search_terms}")
+        print(f"    -> [DEBUG] Searching amenity_count={len(search_terms or [])}")
         
         for prop in self.properties:
             # 获取可能包含设施信息的所有字段
@@ -260,7 +260,7 @@ class PropertyEmbeddingStore:
                 prop_copy['matched_amenities'] = matched_amenities
                 prop_copy['match_count'] = len(matched_amenities)
                 results.append(prop_copy)
-                print(f"    -> [DEBUG] ✅ Found: {prop.get('Address', '')[:40]} - Matched: {matched_amenities}")
+                print(f"    -> [DEBUG] ✅ Found property matched_amenity_count={len(matched_amenities)}")
         
         # 按匹配数量排序
         results.sort(key=lambda x: x.get('match_count', 0), reverse=True)

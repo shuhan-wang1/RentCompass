@@ -26,6 +26,7 @@ import html
 import json
 import time
 import random
+import logging
 import sqlite3
 import threading
 import requests
@@ -33,6 +34,8 @@ from pathlib import Path
 from datetime import date
 
 from .normalize import normalize_property
+
+logger = logging.getLogger(__name__)
 
 BASE = "https://www.onthemarket.com"
 SEARCH_URL = BASE + "/to-rent/property/{slug}/"
@@ -74,7 +77,9 @@ def _rate_limited_detail_wait() -> None:
         _LAST_DETAIL_TS = now
 
 _NEXT_DATA_RE = re.compile(
-    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S
+    r"""<script\b(?=[^>]*\bid=["']__NEXT_DATA__["'])"""
+    r"""(?=[^>]*\btype=["']application/json["'])[^>]*>(.*?)</script>""",
+    re.S | re.I,
 )
 
 _AMENITY_HINTS = [
@@ -268,17 +273,21 @@ def _extract_listings(html: str) -> list[dict]:
     tag / unparseable JSON / absent results path), which is drift, not empty."""
     m = _NEXT_DATA_RE.search(html)
     if not m:
-        print("  [onthemarket] SCHEMA DRIFT: __NEXT_DATA__ script tag absent on a 200 response")
+        logger.error("onthemarket.schema_drift reason=missing_next_data")
         raise OTMSchemaDriftError("__NEXT_DATA__ script tag not found")
     try:
         data = json.loads(m.group(1))
     except json.JSONDecodeError as e:
-        print(f"  [onthemarket] SCHEMA DRIFT: __NEXT_DATA__ JSON did not parse: {e}")
+        logger.error(
+            "onthemarket.schema_drift reason=invalid_json line=%d column=%d",
+            e.lineno, e.colno)
         raise OTMSchemaDriftError(f"__NEXT_DATA__ JSON parse failed: {e}") from e
     try:
         listings = data["props"]["initialReduxState"]["results"]["list"]
     except (KeyError, TypeError) as e:
-        print(f"  [onthemarket] SCHEMA DRIFT: results.list path missing ({e})")
+        logger.error(
+            "onthemarket.schema_drift reason=missing_results_path error_type=%s",
+            type(e).__name__)
         raise OTMSchemaDriftError(f"results.list path missing: {e}") from e
     # Path present but null/empty -> honest empty (a real 0-result search).
     return listings or []
@@ -410,7 +419,9 @@ def find_rich_onthemarket(
                                timeout=25)
             resp.raise_for_status()
         except requests.RequestException as e:
-            print(f"  [onthemarket] search failed for '{slug}' p{page}: {e}")
+            logger.warning(
+                "onthemarket.search_failed page=%d error_type=%s",
+                page, type(e).__name__)
             break
 
         try:
@@ -422,12 +433,13 @@ def find_rich_onthemarket(
             # from earlier pages, keep those and stop paging.
             if not results:
                 raise
-            print(f"  [onthemarket] schema drift on p{page} for '{slug}'; "
-                  f"returning {len(results)} rows from earlier pages")
+            logger.warning(
+                "onthemarket.schema_drift_partial page=%d retained_count=%d",
+                page, len(results))
             break
         if not listings:
             if page == 1:
-                print(f"  [onthemarket] no listings for '{slug}'")
+                logger.info("onthemarket.empty_first_page")
             break
 
         new_this_page = 0
@@ -449,7 +461,7 @@ def find_rich_onthemarket(
         if len(results) < want and page <= max_pages:
             time.sleep(random.uniform(*_CRAWL_DELAY))
 
-    print(f"  [onthemarket] '{slug}': done, {len(results)} properties.")
+    logger.info("onthemarket.search_complete result_count=%d", len(results))
     return results
 
 
@@ -655,13 +667,15 @@ def fetch_listing_description(
         try:
             hit = cache.get(url)
         except Exception as e:  # a broken cache must never fail a fetch
-            print(f"  [OTM_DESC] cache read failed: {e}")
+            logger.warning(
+                "onthemarket.detail_cache_read_failed error_type=%s", type(e).__name__)
             hit = None
         if hit is not None:
             text, _avail, fetched = hit
             if (time.time() - float(fetched)) < DESC_CACHE_TTL_HOURS * 3600:
                 # Fresh hit; an empty string is a real "known no-description".
-                print(f"  [OTM_DESC] cache hit ({len(text)} chars): {url}")
+                logger.debug(
+                    "onthemarket.detail_cache_hit description_chars=%d", len(text))
                 return text
 
     # --- live fetch (cache miss / stale / forced) -----------------------------
@@ -676,16 +690,18 @@ def fetch_listing_description(
         resp = session.get(url, timeout=timeout)
         resp.raise_for_status()
     except requests.RequestException as e:
-        print(f"  [OTM_DESC] fetch failed: {url}: {e}")
+        logger.warning(
+            "onthemarket.detail_fetch_failed error_type=%s", type(e).__name__)
         return None
     except Exception as e:
-        print(f"  [OTM_DESC] fetch error: {url}: {e}")
+        logger.warning(
+            "onthemarket.detail_fetch_error error_type=%s", type(e).__name__)
         return None
 
     try:
         m = _NEXT_DATA_RE.search(resp.text)
         if not m:
-            print(f"  [OTM_DESC] no __NEXT_DATA__ on page: {url}")
+            logger.warning("onthemarket.detail_missing_next_data")
             return None
         data = json.loads(m.group(1))
         raw = _find_description(data)
@@ -695,13 +711,15 @@ def fetch_listing_description(
         # unknown availability so we don't keep re-fetching it for a week.
         cache.set(url, text, available_from)
         if text:
-            print(f"  [OTM_DESC] fetched {len(text)} chars"
-                  f"{f', avail={available_from}' if available_from else ''}: {url}")
+            logger.info(
+                "onthemarket.detail_fetched description_chars=%d has_availability=%s",
+                len(text), bool(available_from))
         else:
-            print(f"  [OTM_DESC] no description on page (cached empty): {url}")
+            logger.info("onthemarket.detail_empty cached=True")
         return text
     except Exception as e:
-        print(f"  [OTM_DESC] parse error: {url}: {e}")
+        logger.warning(
+            "onthemarket.detail_parse_error error_type=%s", type(e).__name__)
         return None
 
 
@@ -734,5 +752,7 @@ def fetch_listing_details(
         if hit is not None:
             available_from = hit[1] or ""
     except Exception as e:  # a broken cache must never fail the details call
-        print(f"  [OTM_DESC] availability cache read failed: {e}")
+        logger.warning(
+            "onthemarket.availability_cache_read_failed error_type=%s",
+            type(e).__name__)
     return {"description": description or "", "available_from": available_from}

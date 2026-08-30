@@ -3,6 +3,30 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+
+def llm_request_timeout_seconds() -> float:
+    """Per-provider-call ceiling; the outer turn deadline remains the final authority."""
+    raw = os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "20")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("LLM_REQUEST_TIMEOUT_SECONDS must be numeric") from exc
+    if not 0.1 <= value <= 120.0:
+        raise ValueError("LLM_REQUEST_TIMEOUT_SECONDS must be between 0.1 and 120")
+    return value
+
+
+def llm_max_retries() -> int:
+    """Bound SDK retries so backoff cannot silently consume an unbounded agent turn."""
+    raw = os.getenv("LLM_MAX_RETRIES", "1")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("LLM_MAX_RETRIES must be an integer") from exc
+    if not 0 <= value <= 3:
+        raise ValueError("LLM_MAX_RETRIES must be between 0 and 3")
+    return value
+
 # --------------------------------------------------------------------------- #
 # Retired provider model names — the SINGLE SOURCE OF TRUTH.                   #
 # --------------------------------------------------------------------------- #
@@ -184,6 +208,8 @@ class ModelRouter:
             base_url=base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             temperature=route.temperature,
             max_tokens=route.max_tokens,
+            timeout=llm_request_timeout_seconds(),
+            max_retries=llm_max_retries(),
             # v4-flash defaults to thinking ENABLED — every route must pick a mode
             # explicitly or the cheap classification/latency paths silently get
             # chain-of-thought latency and cost.

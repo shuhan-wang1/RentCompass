@@ -19,7 +19,11 @@ from dotenv import load_dotenv
 # inherit it. Import is unconditional and at module scope on purpose: wrapping it in
 # try/except ImportError would turn a hard guarantee into a promise that silently lapses
 # the day the package layout changes.
-from uk_rent_agent.llm.router import reject_retired_model_names
+from uk_rent_agent.llm.router import (
+    llm_max_retries,
+    llm_request_timeout_seconds,
+    reject_retired_model_names,
+)
 
 # Load .env from app/ regardless of the current working directory.
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
@@ -66,6 +70,8 @@ def _deepseek_llm(temperature: float, max_tokens: int):
         base_url=DEEPSEEK_BASE_URL,
         temperature=temperature,
         max_tokens=max_tokens,
+        timeout=llm_request_timeout_seconds(),
+        max_retries=llm_max_retries(),
         # v4-flash defaults to thinking ENABLED; this generic helper serves fast
         # chat-style callers, so pin it off explicitly.
         extra_body={"thinking": {"type": "disabled"}},
@@ -84,6 +90,8 @@ def _ollama_llm(temperature: float, num_predict: int, num_ctx: int,
                 top_p: float = 0.9, top_k=None):
     from langchain_ollama import ChatOllama
     kwargs = dict(
+        client_kwargs={"timeout": llm_request_timeout_seconds()},
+        async_client_kwargs={"timeout": llm_request_timeout_seconds()},
         model=MODEL_NAME, base_url=OLLAMA_BASE_URL, temperature=temperature,
         top_p=top_p, num_predict=num_predict, num_ctx=num_ctx,
     )

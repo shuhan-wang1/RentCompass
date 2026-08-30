@@ -21,10 +21,10 @@ async def check_transport_cost_impl(
         user_type = "student" if "student" in travel_type.lower() else "adult"
         try:
             prices = get_zonal_fare(start_zone, end_zone, user_type)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError):
             return {
                 "success": False,
-                "error": f"{exc}. Please check tfl.gov.uk/fares."
+                "error": "Fare lookup failed. Please check tfl.gov.uk/fares."
             }
             
         return {
@@ -50,8 +50,8 @@ async def check_transport_cost_impl(
                 "fare_edition": prices["edition"],
             }
         }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    except Exception:
+        return {"success": False, "error": "Transport cost lookup failed"}
 
 check_transport_cost_tool = Tool(
     name="check_transport_cost",

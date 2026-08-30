@@ -216,6 +216,31 @@ def test_e5_narration_is_no_longer_the_end_of_the_turn():
         f"E5 narrated 「{E5_NARRATION}」 and stopped; both reads it names must now be in the "
         f"batch. executed={sorted(executed)}")
 
+def test_e5_pure_chinese_first_turn_fc_fans_out_commute():
+    """FC must derive the CJK destination before its plan-time dimension expansion."""
+    from core import langgraph_agent as lga
+
+    initial = _state_for(E5_QUERY)
+    initial.update(lga._make_extract_preferences_node()(initial))
+    expected = "Imperial College London, South Kensington, London SW7 2AZ"
+    assert initial["accumulated_search_criteria"]["commute_destination"] == expected
+
+    provider = _provider()
+    chat = FakeChat([
+        AIMessage(content="", tool_calls=[
+            _tc("search_properties", {"area": "London"}, "c1")]),
+        AIMessage(content="房源、通勤、周边设施与治安数据如下……"),
+    ])
+    state = _run(_drive(build_fc_nodes(provider, agent_llm=chat), initial))
+
+    assert set(_first_batch(state)) == set(_ALL_DIMENSION_TOOLS)
+    commute = [params for name, params in provider.calls
+               if name == "calculate_commute"]
+    assert len(commute) == 1
+    assert commute[0]["to_address"] == expected
+
+
+
 
 def test_cjk_cues_fan_out_too():
     """The cue table is bilingual and so is the fan-out: CJK cues match the raw text."""

@@ -113,7 +113,7 @@ def nearest_stations(lat: float, lng: float, radius_m: int = DEFAULT_STATION_RAD
             return None
         stops = (resp.json() or {}).get("stopPoints") or []
     except Exception as e:  # network/JSON — unknown, not "no stations"
-        print(f"  [TfL StopPoint] error: {e}")
+        print(f"  [TfL StopPoint] error_type={type(e).__name__}")
         return None
 
     out = []

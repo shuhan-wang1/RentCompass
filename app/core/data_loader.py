@@ -26,13 +26,13 @@ def load_mock_properties_from_csv(filename: str = None) -> list[dict]:
         # Convert the string representation of a list into an actual list
         df['Images'] = df['Images'].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) and x.startswith('[') else [])
         properties = df.to_dict('records')
-        print(f"--- Loaded {len(properties)} properties from local file: {filename} ---")
+        print(f"--- Loaded property_count={len(properties)} from local file ---")
         return properties
     except FileNotFoundError:
-        print(f"/!\\ ERROR: Mock data file not found at '{filename}'. Please create it. /!\\")
+        print("/!\\ ERROR: Mock data file not found. /!\\")
         return []
     except Exception as e:
-        print(f"/!\\ ERROR: Failed to read mock data file: {e} /!\\")
+        print(f"/!\\ ERROR: Failed to read mock data file; error_type={type(e).__name__} /!\\")
         return []
 
 def _current_repository() -> PropertyRepository:

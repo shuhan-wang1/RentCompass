@@ -418,7 +418,7 @@ class AgentMemory:
                     )
                 ]
             except Exception as e:
-                print(f"[memory] forget_fact error: {e}")
+                print(f"[memory] forget_fact error_type={type(e).__name__}")
                 residual = residual or ["<unverified>"]
         report = {
             "user_id": uid, "fields": wanted, "deleted": len(deleted_ids),
@@ -430,13 +430,12 @@ class AgentMemory:
         }
         self.last_erasure_report = report
         if residual or legacy_residual:
-            print(f"[memory] forget_fact INCOMPLETE for user={uid} fields={wanted}: "
-                  f"{len(residual)} active and {len(legacy_residual)} legacy record(s) "
-                  "still state the value — the caller MUST "
-                  f"report a partial deletion, not a completed one")
+            print(f"[memory] forget_fact INCOMPLETE user_id_chars={len(uid)} "
+                  f"field_count={len(wanted)} residual_count={len(residual)} "
+                  f"legacy_residual_count={len(legacy_residual)}")
         else:
-            print(f"[memory] forget_fact user={uid} fields={wanted} "
-                  f"deleted={len(deleted_ids)} by_layer={by_layer} "
+            print(f"[memory] forget_fact user_id_chars={len(uid)} field_count={len(wanted)} "
+                  f"deleted={len(deleted_ids)} layer_count={len(by_layer)} "
                   f"retained_value_free_mentions={retained}")
         return report
 
@@ -513,7 +512,7 @@ class AgentMemory:
                         return winner["ids"][0]
                 except Exception:
                     pass
-                print(f"[memory] add error: {e}")
+                print(f"[memory] add error_type={type(e).__name__}")
                 return None
             key = (user_id, session_id)
             self._accum[key] = self._accum.get(key, 0) + int(importance)
@@ -597,7 +596,7 @@ class AgentMemory:
                         except Exception:
                             pass
         except Exception as e:
-            print(f"[memory] consolidate error: {e}")
+            print(f"[memory] consolidate error_type={type(e).__name__}")
 
     def remember_turn(self, user_msg, assistant_msg, session_id="default",
                       user_id=None, tool_used=None, idempotency_key=None,
@@ -661,7 +660,7 @@ class AgentMemory:
             self.maybe_reflect(session_id, user_id)
             return True
         except Exception as e:
-            print(f"[memory] remember_turn error: {e}")
+            print(f"[memory] remember_turn error_type={type(e).__name__}")
             return False
 
     def _enforce_episodic_cap(self, user_id, cap: int = EPISODIC_MAX_PER_USER):
@@ -686,7 +685,7 @@ class AgentMemory:
                 if overflow:
                     self.col.delete(ids=overflow)
         except Exception as e:
-            print(f"[memory] episodic cap error: {e}")
+            print(f"[memory] episodic cap error_type={type(e).__name__}")
 
     def remember_turn_async(self, *args, **kwargs):
         threading.Thread(target=self.remember_turn, args=args, kwargs=kwargs, daemon=True).start()
@@ -724,7 +723,7 @@ class AgentMemory:
                 if isinstance(ins, str) and ins.strip():
                     self.add(ins.strip(), "reflection", session_id, user_id, importance=8)
         except Exception as e:
-            print(f"[memory] reflect error: {e}")
+            print(f"[memory] reflect error_type={type(e).__name__}")
 
     # ---------------------------------------------------------------- retrieval
     @staticmethod
@@ -890,14 +889,14 @@ def get_agent_memory() -> AgentMemory:
             ).strip().lower() in {"1", "true", "yes", "on"}
             if not allow_ephemeral:
                 raise RuntimeError(
-                    f"durable agent-memory store {_DB_PATH} is unavailable"
+                    "durable agent-memory store is unavailable"
                 ) from exc
             fallback_path = os.path.join(
                 tempfile.gettempdir(), "uk-rent-agent", "agent_memory"
             )
             print(
-                f"[memory] durable store {_DB_PATH} is unavailable ({exc}); "
-                f"explicit ephemeral fallback enabled at {fallback_path}"
+                f"[memory] durable store unavailable; error_type={type(exc).__name__}; "
+                "explicit_ephemeral_fallback=True"
             )
             _AGENT_MEMORY = AgentMemory(fallback_path)
     return _AGENT_MEMORY

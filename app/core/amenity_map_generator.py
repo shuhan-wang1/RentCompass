@@ -151,7 +151,7 @@ class PropertyAmenityMapGenerator:
                 if 50.0 <= lat <= 59.0 and -8.0 <= lon <= 2.0:
                     return (lat, lon)
         except (ValueError, AttributeError, TypeError) as e:
-            print(f"    ✗ Failed to parse coordinates: {geo_location_str} - {e}")
+            print(f"    ✗ Failed to parse coordinates; error_type={type(e).__name__}")
             return None
         
         return None
@@ -191,7 +191,7 @@ class PropertyAmenityMapGenerator:
         try:
             data = overpass_request(overpass_query, timeout=25)
         except OverpassError as e:
-            print(f"    Error querying {config['name']}: {e}")
+            print(f"    Amenity query failed; error_type={type(e).__name__}")
             return []
 
         amenities = []
@@ -325,7 +325,7 @@ class PropertyAmenityMapGenerator:
             # has zero across all 8 selectors). Ignore it and re-fetch rather than
             # serve a silently-empty map for the rest of the 7-day TTL.
             if cached_total > 0:
-                print(f"  -> [Cache HIT] amenity POIs for {round(lat, 3)}, {round(lon, 3)}")
+                print("  -> [Cache HIT] amenity POIs; coordinates_present=True")
                 return cached_amenities
 
         query = self._build_combined_query(lat, lon)
@@ -349,9 +349,8 @@ class PropertyAmenityMapGenerator:
         # effectively impossible in practice.)
         if total == 0:
             raise OverpassError(
-                f"Overpass returned 0 amenities across all {len(amenities)} "
-                f"categories for ({lat:.5f}, {lon:.5f}); treating as a provider "
-                f"failure and not caching."
+                f"Overpass returned 0 amenities across {len(amenities)} categories; "
+                "treating as a provider failure and not caching."
             )
         print(f"  -> [Overpass] Batched fetch returned {total} amenities across "
               f"{len(amenities)} categories")
@@ -532,7 +531,7 @@ class PropertyAmenityMapGenerator:
         # Save the map
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         m.save(output_path)
-        print(f"  ✓ Map saved to: {output_path}")
+        print("  ✓ Map saved")
         
         return True
     

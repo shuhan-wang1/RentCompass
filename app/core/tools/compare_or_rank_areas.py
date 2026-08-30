@@ -128,7 +128,7 @@ async def _resolve_candidates(city, destination, max_commute, candidate_areas) -
             no_commute_mode=(destination is None),
         )
     except Exception as exc:  # never let candidate generation 500 the tool
-        print(f"  [compare_or_rank_areas] candidate generation failed: {exc}")
+        print(f"  [compare_or_rank_areas] candidate generation failed; error_type={type(exc).__name__}")
         raw = []
     out: list = []
     seen: set = set()

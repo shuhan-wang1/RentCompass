@@ -42,6 +42,8 @@ from core.tools.search_properties import (
     ("独卫的房间", "ensuite"),
     ("a studio near UCL", "studio"),
     ("单间公寓就行", "studio"),
+    ("单间就行", "shared"),
+    ("我想租单人间", "shared"),
     ("looking for a shared room", "shared"),
     ("flatshare is fine", "shared"),
     ("合租房", "shared"),
@@ -55,6 +57,14 @@ def test_extract_room_type(text, expected):
 def test_studio_wins_over_ensuite_when_both_present():
     # Studio is a distinct property form and is checked first.
     assert _extract_room_type("a studio with en-suite bathroom") == "studio"
+
+
+def test_chinese_single_room_does_not_collapse_into_a_studio_or_one_bed():
+    # In this product's three-value vocabulary, bare 单间 means one room in shared
+    # accommodation. The self-contained form remains the more specific 单间公寓.
+    assert _extract_room_type("单间") == "shared"
+    assert _extract_room_type("单间公寓") == "studio"
+    assert sp._extract_bedrooms("单间") is None
 
 
 def test_normalize_room_type_maps_synonyms_and_rejects_unknown():

@@ -36,9 +36,10 @@ def check_safety_impl(
     is_chinese = _detect_chinese(user_query or location)
     
     try:
-        print(f"   🔒 检查安全性:")
-        print(f"      地址: {location}")
-        print(f"      语言: {'中文' if is_chinese else 'English'}")
+        print(
+            "   🔒 检查安全性 "
+            f"location_chars={len(location)} language={'zh' if is_chinese else 'en'}"
+        )
         
         # 使用地址调用 get_crime_data_by_location
         crime_data = get_crime_data_by_location(location)
@@ -120,8 +121,8 @@ def check_safety_impl(
             'next_action_hint': 'NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations.'
         }
     
-    except Exception as e:
-        print(f"   ❌ 安全检查失败: {e}")
+    except Exception as exc:
+        print(f"   ❌ 安全检查失败 exception_type={type(exc).__name__}")
         return {
             'address': location,
             # An API exception contains no crime observation. A neutral-looking
@@ -130,8 +131,8 @@ def check_safety_impl(
             'safety_score': None,
             'safety_level': 'Unknown',
             'crime_data': {},
-            'error': str(e),
-            'scoring_explanation': f"Error occurred: {e}",
+            'error': "Safety data lookup failed",
+            'scoring_explanation': "Safety data lookup failed; no score is available.",
             'safety_analysis': "Unable to perform safety analysis due to an error.",
             'retryable': True,
         }

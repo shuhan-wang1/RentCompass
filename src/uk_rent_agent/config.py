@@ -14,6 +14,15 @@ def _bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _choice(name: str, default: str, allowed: set[str]) -> str:
+    """Read a normalized finite-choice environment value or fail at startup."""
+    value = os.getenv(name, default).strip().lower()
+    if value not in allowed:
+        choices = ", ".join(sorted(allowed))
+        raise ValueError(f"{name} must be one of: {choices}")
+    return value
+
+
 def _resolve_checkpoint_path(root: Path) -> Path:
     """Resolve the LangGraph checkpoint DB path for this process.
 
@@ -44,6 +53,12 @@ def _resolve_checkpoint_path(root: Path) -> Path:
 @dataclass(frozen=True)
 class Config:
     project_root: Path
+    # Agent/model identity is parsed once and passed through the ASGI -> Flask bootstrap.
+    # Keeping it in Config prevents readiness from validating one environment snapshot while
+    # the lazily-built graph reads a differently-normalized value later.
+    agent_arch: str = "legacy"
+    deepseek_strict: bool = False
+    llm_provider: str = "deepseek"
     property_source: str = "auto"
     scrape_on_startup: bool = False
     scraper_cache_ttl_hours: float = 24.0
@@ -106,6 +121,9 @@ class Config:
         )
         return cls(
             project_root=root,
+            agent_arch=_choice("AGENT_ARCH", "legacy", {"legacy", "fc_loop"}),
+            deepseek_strict=_bool("DEEPSEEK_STRICT", False),
+            llm_provider=_choice("LLM_PROVIDER", "deepseek", {"deepseek", "ollama"}),
             property_source=source,
             scrape_on_startup=_bool("SCRAPE_ON_STARTUP"),
             scraper_cache_ttl_hours=float(os.getenv("SCRAPER_CACHE_TTL_HOURS", "24")),

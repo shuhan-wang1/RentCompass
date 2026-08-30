@@ -53,7 +53,7 @@ def find_rich_zoopla(
     try:
         legacy = load_legacy("scrape_zoopla_listings")
     except ImportError as e:
-        print(f"  [zoopla] scraper unavailable: {e}")
+        print(f"  [zoopla] scraper unavailable; error_type={type(e).__name__}")
         return []
 
     base = legacy.find_properties_zoopla(

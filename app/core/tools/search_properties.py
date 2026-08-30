@@ -79,7 +79,7 @@ _ROOM_TYPE_SYNONYMS = (
     ("studio", ("studio", "单间公寓", "一室户", "开间")),
     ("ensuite", ("ensuite", "en-suite", "en suite", "独立卫浴", "独卫", "套间", "带独卫")),
     ("shared", ("shared room", "flatshare", "flat share", "house share", "houseshare",
-                "shared", "合租房", "合租", "共享房间")),
+                "shared", "合租房", "合租", "共享房间", "单人间", "单间")),
 )
 
 
@@ -138,6 +138,167 @@ def _matches_room_type(prop: dict, room_type: str) -> bool:
     if room_type == 'shared':
         return 'shar' in rt or 'shar' in desc or 'flatshare' in blob or 'flat share' in blob
     return True
+
+
+# Canonical accessibility features shared with the deterministic conversation
+# extractor in langgraph_agent. Keep these as property facts, not demographic
+# labels: asking for an accessible home is a lawful housing requirement.
+_ACCESSIBILITY_FEATURE_PATTERNS = (
+    (
+        "accessible bathroom",
+        re.compile(
+            r"\b(?:(?:wheelchair[- ]accessible|accessible|adapted|disabled)[- ]+"
+            r"(?:bathroom|shower|toilet|wc)|roll[- ]in shower)\b"
+            r"|(?:无障碍|适老|残障)(?:卫生间|洗手间|浴室|淋浴)|轮椅可用(?:卫生间|浴室)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "wheelchair-accessible",
+        re.compile(
+            r"\b(?:wheelchair[- ]accessible(?![- ](?:bathroom|shower|toilet|wc))|"
+            r"wheelchair[- ]friendly|wheelchair access(?:ible)?|accessible (?:flat|apartment|"
+            r"property|home|accommodation|entrance|building))\b"
+            r"|轮椅(?:可进入|可通行|通道|友好|无障碍)(?!(?:卫生间|洗手间|浴室|淋浴))"
+            r"|适合轮椅(?:使用者)?|无障碍(?:房|住宅|公寓|出入|入口|通道)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "step-free",
+        re.compile(
+            r"\b(?:step[- ]free|no[- ]step|level access|without steps?|zero[- ]step)\b"
+            r"|无(?:台阶|阶梯)|零台阶|平层(?:入口|通道|出入)",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "lift",
+        re.compile(r"\b(?:passenger[- ]+)?(?:lifts?|elevators?)\b|电梯|升降机", re.IGNORECASE),
+    ),
+)
+
+_ACCESSIBILITY_FEATURES = frozenset(name for name, _ in _ACCESSIBILITY_FEATURE_PATTERNS)
+
+
+def _accessibility_feature_mentions(text: str) -> list[tuple[str, int, int]]:
+    """Return canonical accessibility mentions and their spans, in source order."""
+    source = str(text or "")
+    found: list[tuple[int, int, str]] = []
+    for canonical, pattern in _ACCESSIBILITY_FEATURE_PATTERNS:
+        for match in pattern.finditer(source):
+            found.append((match.start(), match.end(), canonical))
+    found.sort(key=lambda item: (item[0], -(item[1] - item[0]), item[2]))
+    result: list[tuple[str, int, int]] = []
+    seen = set()
+    for start, end, canonical in found:
+        key = (canonical, start, end)
+        if key not in seen:
+            seen.add(key)
+            result.append((canonical, start, end))
+    return result
+
+
+def _canonical_property_feature(value) -> str:
+    """Canonicalise known feature aliases while preserving other existing tags."""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    mentions = _accessibility_feature_mentions(raw)
+    if mentions:
+        for canonical, start, end in mentions:
+            if not raw[:start].strip(" -_") and not raw[end:].strip(" -_"):
+                return canonical
+        return mentions[0][0]
+    normal = raw.lower()
+    return "en-suite" if normal == "ensuite" else normal
+
+
+def _flatten_structured_amenities(value) -> str:
+    """Render only structured amenity values into searchable text."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple, set)):
+        return " | ".join(part for part in (_flatten_structured_amenities(v) for v in value)
+                          if part)
+    if isinstance(value, dict):
+        parts = []
+        for key, nested in value.items():
+            display_key = str(key).replace("_", " ").replace("-", " ")
+            if nested is True:
+                parts.append(display_key)
+            elif nested is False:
+                # Boolean maps are complete, structured assertions: false is
+                # explicit negative evidence, not a missing disclosure.
+                parts.append(f"no {display_key}")
+            elif nested not in (None, 0, ""):
+                rendered = _flatten_structured_amenities(nested)
+                if rendered:
+                    parts.append(f"{display_key}: {rendered}")
+        return " | ".join(parts)
+    return str(value) if value not in (None, False) else ""
+
+
+_FEATURE_NEGATED_BEFORE_RE = re.compile(
+    r"(?:\b(?:no|without|not|lacks?|missing|unavailable|does(?:n't| not) have)\s+(?:an?\s+)?|"
+    r"(?:没有|不含|不提供|缺少|无)\s*)$",
+    re.IGNORECASE,
+)
+_FEATURE_NEGATED_AFTER_RE = re.compile(
+    r"^\s*(?:is\s+)?(?:not available|unavailable|absent|未提供|不可用|没有)", re.IGNORECASE)
+
+
+def _feature_text_evidence(text: str, canonical: str) -> tuple[bool, bool]:
+    """Return (positive, negative) mentions for one canonical feature."""
+    pattern = dict(_ACCESSIBILITY_FEATURE_PATTERNS).get(canonical)
+    if pattern is None:
+        return False, False
+    source = str(text or "")
+    positive = negative = False
+    for match in pattern.finditer(source):
+        before = source[max(0, match.start() - 36):match.start()]
+        after = source[match.end():match.end() + 28]
+        if _FEATURE_NEGATED_BEFORE_RE.search(before) or _FEATURE_NEGATED_AFTER_RE.search(after):
+            negative = True
+        else:
+            positive = True
+    return positive, negative
+
+
+def _property_feature_evidence(prop: dict, feature: str) -> str:
+    """Tri-state structured evidence: verified / absent / unverified.
+
+    Accessibility is proven only by Detailed_Amenities (or explicitly denied by
+    that field / Excluded_Features). Free-form descriptions are not an
+    authoritative accessibility audit. Missing mention is unknown, not absence.
+    """
+    canonical = _canonical_property_feature(feature)
+    room_type = str(prop.get("Room_Type_Category", "") or "").lower()
+    amenities = _flatten_structured_amenities(prop.get("Detailed_Amenities"))
+
+    if canonical == "studio":
+        return "verified" if "studio" in room_type else ("absent" if room_type else "unverified")
+    if canonical == "private":
+        description = str(prop.get("Description", "") or "").lower()
+        return "verified" if "private" in room_type or "private" in description else "unverified"
+    if canonical == "en-suite":
+        blob = f"{room_type} {amenities}".lower()
+        return ("verified" if any(token in blob for token in ("en-suite", "ensuite", "en suite"))
+                else "unverified")
+    if canonical not in _ACCESSIBILITY_FEATURES:
+        return "unverified"
+
+    positive, negative = _feature_text_evidence(amenities, canonical)
+    excluded = _flatten_structured_amenities(prop.get("Excluded_Features"))
+    excluded_positive, excluded_negative = _feature_text_evidence(excluded, canonical)
+    # Excluded_Features is itself a structured negative field, so either
+    # "Lift" or "No lift" in it denies the feature.
+    negative = negative or excluded_positive or excluded_negative
+    if positive and not negative:
+        return "verified"
+    if negative and not positive:
+        return "absent"
+    return "unverified"
 
 
 def _extract_budget(text: str):
@@ -218,8 +379,10 @@ def _budget_period_near(text: str, lo: int, hi: int) -> str:
 
 def _extract_commute_minutes(text: str):
     """Pull an explicit commute-time limit (in minutes) out of the current message.
-    Returns int minutes or None. Handles '40 min', 'within 30 minutes', 'half an hour',
-    'an hour'."""
+    Returns int minutes or None. Handles '40 min', 'within 30 minutes', '35分钟',
+    'half an hour', and 'an hour'. The ASCII-left-boundary avoids matching an
+    embedded identifier while still allowing CJK text immediately before a number
+    (``通勤35分钟`` has no Unicode ``\\b`` boundary before ``35``)."""
     if not text:
         return None
     t = text.lower()
@@ -227,9 +390,16 @@ def _extract_commute_minutes(text: str):
         return 30
     if re.search(r'\b(?:an?|1)\s+hour\b', t):
         return 60
-    m = re.search(r'\b(\d{1,3})\s*(?:-)?\s*(?:min|mins|minute|minutes)\b', t)
+    m = re.search(
+        r'(?<![a-z0-9])(\d{1,3})\s*(?:-)?\s*'
+        r'(?:(?:min|mins|minute|minutes)(?![a-z])|(?:分钟|分鐘))',
+        t,
+    )
     if not m:
-        m = re.search(r'\b(\d{1,3})\s*hours?\b', t)
+        m = re.search(
+            r'(?<![a-z0-9])(\d{1,3})\s*(?:hours?(?![a-z])|小时|小時)',
+            t,
+        )
         if m:
             v = int(m.group(1)) * 60
             return v if 1 <= v <= 180 else None
@@ -679,6 +849,89 @@ def _extract_budget_clear(text: str) -> bool:
     return any(re.search(p, t) for p in _BUDGET_CLEAR_PATTERNS)
 
 
+# Hard filters a model is NOT allowed to originate. Each maps to the deterministic
+# extractor that can ground it in the user's own words.
+_GROUNDED_HARD_FIELDS = ("max_budget", "bedrooms", "room_type")
+
+
+def ground_hard_constraints(params: dict, accumulated: dict = None,
+                            current_message: str = "") -> tuple[dict, list[str]]:
+    """Strip HARD search filters the model invented rather than heard.
+
+    ``max_budget`` / ``bedrooms`` / ``room_type`` narrow the result set to nothing when
+    they are wrong, and the user never sees them — the reply just says "no matches". A
+    model that fills a gap with a plausible default (£2000, 1 bedroom, a shared room)
+    therefore silently answers a question nobody asked, and every downstream honesty
+    guard then reports a failure against constraints the user never stated.
+
+    A value is legitimate only when it is either already in ``accumulated`` (deterministically
+    extracted on an earlier turn, or set from the form) or extractable from THIS turn's
+    message by the same deterministic extractors the tool itself uses. Anything else is
+    dropped, and a value that CONTRADICTS the accumulated one without appearing in this
+    turn's message is reset to the accumulated value. Soft signals (features, preferences,
+    sort order) are untouched — the model is free to shape those.
+
+    Returns ``(params, dropped)`` where ``dropped`` names each corrected field, for logging.
+    Not applied to ``areas``: an area is visible in the reply, and the tool already treats
+    a bare place name in this turn's message as authoritative. Not applied to the form/direct
+    search path either — that caller passes the user's own input and never goes through an
+    injection point.
+
+    A phrasing neither the extractor nor the upstream preference extraction caught is dropped
+    too, so the failure direction is a BROADER search (more listings, visible to the user) and
+    never a narrower one (an empty result the user cannot account for).
+    """
+    p = dict(params or {})
+    acc = accumulated if isinstance(accumulated, dict) else {}
+    message = str(current_message or "")
+    dropped: list[str] = []
+
+    def _correct(field: str, allowed, fallback):
+        """Keep p[field] when it matches something the user actually said."""
+        if p.get(field) is None or field not in p:
+            return
+        if any(value is not None and value == p[field] for value in allowed):
+            return
+        if fallback is None:
+            p.pop(field, None)
+        else:
+            p[field] = fallback
+        dropped.append(field)
+
+    # Budget: the message wins, then accumulated. A weekly statement legitimately reaches
+    # the tool as either the weekly figure or its monthly conversion, so accept both.
+    fresh_budget, fresh_period = _extract_budget(message)
+    acc_budget = acc.get("max_budget")
+    allowed_budget = [fresh_budget, acc_budget]
+    if fresh_budget and fresh_period in ("week", "weekly", "pw"):
+        allowed_budget.append(int(math.ceil(monthly_from_weekly(fresh_budget))))
+    _correct("max_budget", allowed_budget, fresh_budget or acc_budget)
+
+    # Bedrooms: _extract_bedrooms returns (min, max); an exact count is min == max.
+    fresh_beds = _extract_bedrooms(message)
+    fresh_bedrooms = fresh_beds[0] if fresh_beds and fresh_beds[0] == fresh_beds[1] else None
+    acc_bedrooms = acc.get("bedrooms")
+    _correct("bedrooms", [fresh_bedrooms, acc_bedrooms],
+             fresh_bedrooms if fresh_bedrooms is not None else acc_bedrooms)
+
+    # Room type: compare canonically, so 'en-suite' vs 'ensuite' is not a false mismatch.
+    fresh_rt = _extract_room_type(message)
+    acc_rt = _normalize_room_type(acc.get("room_type"))
+    model_rt = _normalize_room_type(p.get("room_type"))
+    if p.get("room_type") is not None:
+        if model_rt is not None and model_rt in (fresh_rt, acc_rt):
+            p["room_type"] = model_rt
+        else:
+            resolved = fresh_rt or acc_rt
+            if resolved is None:
+                p.pop("room_type", None)
+            else:
+                p["room_type"] = resolved
+            dropped.append("room_type")
+
+    return p, dropped
+
+
 def _strip_memory_block(text: str) -> str:
     """Remove the long-term-memory block (and any conversation-history prefix) that
     the agent PREPENDS to ``user_query`` before calling this tool, leaving only the
@@ -921,22 +1174,97 @@ def _no_results_message(area: str, is_cjk: bool) -> str:
             f"try again (you can also use the search form on the right).")
 
 
-def _clean_explanation(desc, travel_min, location):
+def _clean_explanation(desc, travel_min, location, travel_source=None):
     """Single-source the commute time in the explanation: strip the static CSV
     Bus/Walk/Cycle/Drive minutes (which disagree with the live TfL time) and append
     the real TfL transit time so the card never shows two conflicting commute times.
     When there is no commute data (no target / no computed time) NO suffix is added,
-    so a no-commute search never shows '0 min to None'."""
+    so a no-commute search never shows '0 min to None'.
+
+    The LABEL must match the PROVENANCE of the number (``travel_source``, see
+    ``_TRAVEL_SOURCE_*``). Only a real routing call may be presented as "TfL transit"; a
+    straight-line coordinate estimate is labelled an estimate. Both the card and the model
+    read this string, and an estimate presented as a measured journey time is precisely the
+    claim the final commute guard then has no evidence for."""
     desc = desc or ''
     cleaned = re.sub(r'(Bus|Walk|Cycle|Drive)[ ]*[0-9]+[ ]*min[,. ]*', '', desc, flags=re.IGNORECASE)
     cleaned = ' '.join(cleaned.split()).strip().rstrip('.,').strip()[:120]
     suffix = ''
     if travel_min is not None and location:
         try:
-            suffix = f" (TfL transit: {int(travel_min)} min to {location})"
+            minutes = int(travel_min)
         except (TypeError, ValueError):
-            suffix = ''
+            minutes = None
+        if minutes is not None:
+            # Only a POSITIVELY established itinerary earns the measured label. An unset or
+            # unrecognised source is not evidence of routing, and defaulting it to "TfL"
+            # overstates exactly where the caller knows least.
+            suffix = (f" (TfL transit: {minutes} min to {location})"
+                      if travel_source == _TRAVEL_SOURCE_ROUTING
+                      else f" (estimated from coordinates: ~{minutes} min to {location}, "
+                           f"not a verified journey time)")
     return (cleaned + suffix).strip()
+
+
+# Provenance of a listing's `travel_time`. `routing` = a real TfL itinerary; `estimate` = a
+# straight-line approximation (coord_commute_minutes, or calculate_travel_time's own
+# no-route fallback). Carried on the row as `travel_time_source` so the label, the
+# model-facing payload and any downstream evidence check all read the same fact.
+_TRAVEL_SOURCE_ROUTING = 'routing'
+_TRAVEL_SOURCE_ESTIMATE = 'estimate'
+
+
+def _travel_provenance(origin, destination, minutes, mode: str = 'transit'):
+    """Classify a minutes figure as measured or estimated — from the basis, never by assumption.
+
+    ``calculate_travel_time`` returns a bare int on BOTH of its branches: a real TfL itinerary,
+    and a calibrated straight-line guess when TfL has no route for the pair
+    (``maps_service.calculate_travel_time``). Treating every non-None return as routed is
+    exactly how a haversine guess reaches a card labelled "TfL transit: 17 min".
+
+    ``routing`` is therefore returned only when the cached basis payload for this pair proves a
+    real itinerary. A cache miss, an unrecognised source or a stubbed producer all fall to
+    ``estimate``: the label understates rather than overstates, which is the only safe
+    direction for a figure a user reads.
+    """
+    if minutes is None:
+        return None
+    try:
+        from core.commute_basis import is_measured
+        from core.maps_service import travel_basis_if_known
+        details = travel_basis_if_known(origin, destination, mode)
+    except Exception:
+        return _TRAVEL_SOURCE_ESTIMATE
+    if not isinstance(details, dict) or not is_measured(details.get('source')):
+        return _TRAVEL_SOURCE_ESTIMATE
+    # The basis must vouch for THIS figure, not merely for the pair. A cached itinerary of 17
+    # minutes says nothing about a 9 the caller is holding — different mode, a refit, or a
+    # stubbed producer all produce that mismatch, and labelling it "TfL transit" would attach
+    # a real itinerary's authority to a number that itinerary never produced.
+    measured = details.get('duration_minutes')
+    if measured is None:
+        return _TRAVEL_SOURCE_ESTIMATE
+    try:
+        if int(measured) != int(minutes):
+            return _TRAVEL_SOURCE_ESTIMATE
+    except (TypeError, ValueError):
+        return _TRAVEL_SOURCE_ESTIMATE
+    return _TRAVEL_SOURCE_ROUTING
+
+
+def _travel_time_label(minutes, target, source) -> str:
+    """Card/model text for a listing's commute minutes, marked with its provenance.
+
+    Unknown provenance reads as an estimate, never as a measured journey — same direction as
+    ``commute_basis.is_measured``, which treats anything unrecognised as not measured.
+    """
+    try:
+        value = int(minutes)
+    except (TypeError, ValueError):
+        return ''
+    if source == _TRAVEL_SOURCE_ROUTING:
+        return f"{value} min to {target}"
+    return f"~{value} min to {target} (estimated, unverified)"
 
 
 _RAG_COORDINATOR = None
@@ -972,6 +1300,10 @@ class _DeterministicPropertyStore:
 
     def build_index(self, rows):
         self.rows = list(rows or [])
+
+    def search(self, _query, top_k=10):
+        """Return the deterministic source-order prefix expected by similar recall."""
+        return list(self.rows)[:top_k]
 
 
 class _DeterministicRAGCoordinator:
@@ -1009,7 +1341,7 @@ def _get_rag_coordinator():
                 except Exception as exc:
                     # A missing FAISS/embedding dependency must not turn a valid live
                     # listing response into a false "no results" outcome.
-                    print(f"[search] RAG unavailable; using deterministic ranking: {exc}")
+                    print(f"[search] RAG unavailable; using deterministic ranking error_type={type(exc).__name__}")
                     _RAG_COORDINATOR = _DeterministicRAGCoordinator()
     return _RAG_COORDINATOR
 
@@ -1043,7 +1375,7 @@ def _prewarm_embedding_store():
     try:
         _get_rag_coordinator()
     except Exception as exc:  # defensive: _get_rag_coordinator already swallows, but never raise
-        print(f"[search] embedding-store pre-warm failed (lazy path will retry): {exc}")
+        print(f"[search] embedding-store pre-warm failed; error_type={type(exc).__name__}")
 
 
 def start_embedding_prewarm() -> bool:
@@ -1062,7 +1394,7 @@ def start_embedding_prewarm() -> bool:
         threading.Thread(target=_prewarm_embedding_store,
                          name="embed-store-prewarm", daemon=True).start()
     except Exception as exc:
-        print(f"[search] could not start embedding pre-warm thread: {exc}")
+        print(f"[search] could not start embedding pre-warm thread; error_type={type(exc).__name__}")
         return False
     return True
 
@@ -1152,8 +1484,12 @@ class PropertyFilter:
                     })
                 # else: 超过软过滤阈值，完全排除
 
-            except (ValueError, TypeError):
-                print(f"   ⚠️ 跳过房源 {prop.get('address', 'Unknown')}: 数据格式错误")
+            except (ValueError, TypeError) as exc:
+                logger.warning(
+                    "property_filter.invalid_row",
+                    extra={"error_type": type(exc).__name__,
+                           "has_address": bool(prop.get("address") or prop.get("Address"))},
+                )
                 continue
 
         return perfect_match, soft_violation
@@ -1290,11 +1626,23 @@ async def search_properties_impl(
     # 🆕 初始化累积的特征和偏好
     # 修复：确保输入是列表，不是字符串
     if isinstance(property_features, list):
-        all_property_features = list(property_features)
+        _raw_property_features = list(property_features)
     elif isinstance(property_features, str):
-        all_property_features = [property_features] if property_features else []
+        _raw_property_features = [property_features] if property_features else []
     else:
-        all_property_features = []
+        _raw_property_features = []
+    all_property_features = []
+    for _feature in _raw_property_features:
+        _raw_feature = str(_feature or "").strip()
+        if not _raw_feature:
+            continue
+        _canonical_feature = _canonical_property_feature(_raw_feature)
+        # Canonicalise accessibility aliases so the request and evidence use the
+        # same vocabulary. Preserve every unrelated legacy tag byte-for-byte.
+        _stored_feature = (_canonical_feature if _canonical_feature in _ACCESSIBILITY_FEATURES
+                           else _raw_feature)
+        if _stored_feature not in all_property_features:
+            all_property_features.append(_stored_feature)
 
     # 🔧 修复：正确处理 accumulated_preferences，避免 list(string) 变成字符列表
     if isinstance(accumulated_preferences, list):
@@ -1310,7 +1658,10 @@ async def search_properties_impl(
         all_soft_preferences = []
 
     if kwargs:
-        print(f"   ℹ️ 收到额外参数: {kwargs}")
+        logger.info(
+            "property_search.extra_params",
+            extra={"param_keys": sorted(str(key) for key in kwargs), "param_count": len(kwargs)},
+        )
 
     try:
         from core.scraping.on_demand import classify_place, get_listings
@@ -1363,21 +1714,32 @@ async def search_properties_impl(
         move_in_date = _valid_iso_date(move_in_date)
         _fresh_move_in = _extract_move_in_date(msg_for_extraction)
         if _fresh_move_in and _fresh_move_in != move_in_date:
-            if move_in_date:
-                print(f"   🔄 当前消息更新期望入住日: {move_in_date} → {_fresh_move_in}")
+            logger.info(
+                "property_search.move_in_updated",
+                extra={"had_previous_value": bool(move_in_date)},
+            )
             move_in_date = _fresh_move_in
         if not no_commute and _extract_no_commute(msg_for_extraction):
             no_commute = True
-            print(f"   🔕 本轮消息判定为『不通勤』，禁用全部通勤逻辑")
+            logger.info("property_search.no_commute_detected")
         if msg_for_extraction:
             fresh_budget, fresh_period = _extract_budget(msg_for_extraction)
             if fresh_budget and fresh_budget != max_budget:
-                print(f"   🔄 当前消息更新预算: £{max_budget} → £{fresh_budget}/{fresh_period}")
+                logger.info(
+                    "property_search.budget_updated",
+                    extra={
+                        "had_previous_value": max_budget is not None,
+                        "budget_period": fresh_period or budget_period,
+                    },
+                )
                 max_budget = fresh_budget
                 budget_period = fresh_period or budget_period
             fresh_commute = _extract_commute_minutes(msg_for_extraction)
             if fresh_commute and fresh_commute != max_commute_time:
-                print(f"   🔄 当前消息更新通勤上限: {max_commute_time} → {fresh_commute} min")
+                logger.info(
+                    "property_search.commute_limit_updated",
+                    extra={"had_previous_value": max_commute_time is not None},
+                )
                 max_commute_time = fresh_commute
 
         # ================================================================
@@ -1414,7 +1776,10 @@ async def search_properties_impl(
             _area_guess = _extract_area(msg_for_extraction)
             if _area_guess:
                 search_area = _area_guess
-                print(f"   🧭 确定性区域识别: {search_area}")
+                logger.info(
+                    "property_search.area_extracted",
+                    extra={"area_chars": len(str(search_area)), "source": "deterministic"},
+                )
 
         # 仅当仍无法确定区域，且有自由文本时，才回退到 NL 抽取来"找回一个区域"。
         # （零先验：预算/通勤缺失不触发抽取；抽取只为补齐区域，顺带带回预算/通勤/特征。）
@@ -1428,9 +1793,19 @@ async def search_properties_impl(
                 from core.llm_interface import clarify_and_extract_criteria
                 criteria_response = clarify_and_extract_criteria(enhanced_query) or {}
             except Exception as _e:
-                print(f"   ⚠️ NL 抽取不可用: {_e}")
+                logger.warning(
+                    "property_search.nl_extract_failed",
+                    extra={"error_type": type(_e).__name__},
+                )
                 criteria_response = {}
-            print(f"   NL 返回: {json.dumps(criteria_response, ensure_ascii=False)[:400]}")
+            logger.info(
+                "property_search.nl_extract_completed",
+                extra={
+                    "field_names": sorted(str(key) for key in criteria_response),
+                    "field_count": len(criteria_response),
+                    "has_destination": bool(criteria_response.get("destination")),
+                },
+            )
 
             new_features = criteria_response.get('property_tags', []) or []
             if isinstance(new_features, str):
@@ -1525,9 +1900,14 @@ async def search_properties_impl(
                                 _residential = _cand
                                 break
                         search_area = _residential
-                print(f"   🎯 消息命名目的地：锁定通勤目标『{locked_commute_dest}』"
-                      f"(commute_destination={commute_destination})，改问住哪 "
-                      f"(residential={search_area})")
+                logger.info(
+                    "property_search.destination_locked",
+                    extra={
+                        "source": "message",
+                        "destination_chars": len(str(commute_destination or "")),
+                        "has_residential_area": bool(search_area),
+                    },
+                )
 
         # 步骤 1.4b: 若"想住的区域"其实是一个目的地 token（用户把 UCL/某公司当住哪说），
         # 且上面 1.4a 尚未锁定，则在此重分类为通勤目标。
@@ -1549,9 +1929,14 @@ async def search_properties_impl(
                         _residential = _cand
                         break
                 search_area = _residential
-                print(f"   🎯 区域即目的地：锁定通勤目标『{locked_commute_dest}』"
-                      f"(commute_destination={commute_destination})，改问住哪 "
-                      f"(residential={search_area})")
+                logger.info(
+                    "property_search.destination_locked",
+                    extra={
+                        "source": "area_reclassified",
+                        "destination_chars": len(str(commute_destination or "")),
+                        "has_residential_area": bool(search_area),
+                    },
+                )
 
         # 通勤标注目标（no_commute 覆盖一切）
         commute_target = None
@@ -1648,8 +2033,13 @@ async def search_properties_impl(
         if not search_area and locked_commute_dest and locked_dest_slug:
             search_area = locked_dest_slug
             default_area_from_dest = True
-            print(f"   🏙️ 目的地『{locked_commute_dest}』已锁定但未选居住区 → "
-                  f"默认搜索目的地所在区域 '{search_area}'，并生成附近推荐区域")
+            logger.info(
+                "property_search.destination_default_area",
+                extra={
+                    "destination_chars": len(str(locked_commute_dest or "")),
+                    "area_chars": len(str(search_area or "")),
+                },
+            )
 
         hard_readiness = assess_search_readiness(
             resolved_area=search_area,
@@ -1694,11 +2084,13 @@ async def search_properties_impl(
         # ================================================================
         has_budget = bool(max_budget) and int(max_budget) > 0
         if has_budget and budget_period and budget_period.lower() == 'week':
-            original_budget = max_budget
             # Preserve the full weekly budget at the monthly filter boundary; the
             # formula and penny rounding live in one shared helper.
             max_budget = int(math.ceil(monthly_from_weekly(max_budget)))
-            print(f"\n💱 [BUDGET] 周租转月租: £{original_budget}/week → £{max_budget}/month")
+            logger.info(
+                "property_search.budget_period_converted",
+                extra={"conversion_applied": True, "from_period": "week", "to_period": "month"},
+            )
 
         # 通勤开关：有目标才标注；有目标且有真实上限才过滤。
         def _real_commute_limit(mct):
@@ -1791,7 +2183,10 @@ async def search_properties_impl(
             try:
                 from core.recommend_areas import recommend_areas as _recommend_areas
             except Exception as _e:
-                print(f"   ⚠️ 区域推荐器不可用: {_e}")
+                logger.warning(
+                    "property_search.area_recommender_unavailable",
+                    extra={"error_type": type(_e).__name__},
+                )
                 _recommend_areas = None
             if _recommend_areas:
                 _reco_city = locked_dest_city
@@ -1845,7 +2240,10 @@ async def search_properties_impl(
                     try:
                         _city_expanded_to = _reco_task.result() or []
                     except Exception as _e:
-                        print(f"   ⚠️ 城市展开失败（退回裸城市搜索）: {_e}")
+                        logger.warning(
+                            "property_search.city_expansion_failed",
+                            extra={"error_type": type(_e).__name__},
+                        )
                         _city_expanded_to = []
             if _city_expanded_to:
                 _expanded = []
@@ -1854,8 +2252,13 @@ async def search_properties_impl(
                     if _name and _name.lower() not in {x.lower() for x in _expanded}:
                         _expanded.append(_name)
                 if _expanded:
-                    print(f"   🗺️ 裸城市 '{search_areas[0]}' + 通勤目标『{commute_target}』"
-                          f" → 改搜邻近居住区 {_expanded[:MAX_SEARCH_AREAS]}")
+                    logger.info(
+                        "property_search.city_expanded",
+                        extra={
+                            "expanded_area_count": min(len(_expanded), MAX_SEARCH_AREAS),
+                            "destination_chars": len(str(commute_target or "")),
+                        },
+                    )
                     search_areas = _expanded[:MAX_SEARCH_AREAS]
                     # _criteria() closes over BOTH names and is what the frontend writes
                     # back into the search form, so the primary area has to move too —
@@ -1869,8 +2272,15 @@ async def search_properties_impl(
         #   Phase 2（有界）：仅在"截止时间(减去排序余量)仍能容纳一次保守的 per-area 估算"时才对
         #                    未命中的区域发起抓取，且每次抓取自身有界（min(SCRAPE_BUDGET_S, 剩余)），
         #                    使一个慢区域吃不掉整个窗口；来不及抓的区域标记为 incomplete（≠ empty）。
-        print(f"\n🌐 [SEARCH] 抓取实时房源: areas={search_areas}, beds={min_beds}-{max_beds}, "
-              f"£{scrape_min}-{scrape_max}/month")
+        logger.info(
+            "property_search.scrape_start",
+            extra={
+                "area_count": len(search_areas),
+                "min_bedrooms": min_beds,
+                "max_bedrooms": max_beds,
+                "has_budget": has_budget,
+            },
+        )
 
         def _tag(_a, res):
             for _r in res.get('rows', []):
@@ -1917,7 +2327,13 @@ async def search_properties_impl(
                     try:
                         _sres = _task.result()
                     except Exception as _se:
-                        print(f"   ⚠️ 区域 '{_a}' 抓取失败: {_se}")
+                        logger.warning(
+                            "property_search.area_scrape_failed",
+                            extra={
+                                "area_chars": len(str(_a or "")),
+                                "error_type": type(_se).__name__,
+                            },
+                        )
                         incomplete_areas.append(_a)
                         _res_by_area[_a] = _incomplete_result()
                         continue
@@ -1938,8 +2354,14 @@ async def search_properties_impl(
         elif _missed_areas:
             # Deadline can't fit even one scrape: every missed area is incomplete (served
             # nothing) — NEVER scraped, so we reserve the remaining time for ranking/format.
-            print(f"   ⏱️ 剩余时间不足以抓取（{_scrape_left:.1f}s < {PER_AREA_EST_S:.1f}s）；"
-                  f"未命中区域标记为 incomplete: {_missed_areas}")
+            logger.info(
+                "property_search.scrape_skipped_deadline",
+                extra={
+                    "remaining_seconds": round(_scrape_left, 3),
+                    "required_seconds": PER_AREA_EST_S,
+                    "incomplete_area_count": len(_missed_areas),
+                },
+            )
             for _a in _missed_areas:
                 incomplete_areas.append(_a)
                 _res_by_area[_a] = _incomplete_result()
@@ -1987,7 +2409,10 @@ async def search_properties_impl(
                     _reco_task, timeout=_reco_cap
                 ) or []
             except Exception as _e:
-                print(f"   ⚠️ 区域推荐超时/失败（不阻塞搜索）: {_e}")
+                logger.warning(
+                    "property_search.area_recommendation_failed",
+                    extra={"error_type": type(_e).__name__},
+                )
                 area_recommendations = []
 
         # 到达此处若截止时间余量已不足以跑完（语义排序 + 通勤标注 + 详情丰富）这些 post-scrape 段，
@@ -2084,7 +2509,13 @@ async def search_properties_impl(
                     try:
                         _geo = await loop.run_in_executor(None, geocode_address, _query)
                     except Exception as _geo_exc:
-                        print(f"   [GEO] Could not resolve search area '{_a}': {_geo_exc}")
+                        logger.warning(
+                            "property_search.geocode_failed",
+                            extra={
+                                "area_chars": len(str(_a or "")),
+                                "error_type": type(_geo_exc).__name__,
+                            },
+                        )
                         _geo = None
                     _centre = parse_coordinates(_geo)
                 area_centres[_a] = _centre
@@ -2114,8 +2545,14 @@ async def search_properties_impl(
             _area_radii = {_a: _city_radius for _a in search_areas
                            if is_city_level_area(_a) and _city_radius > _geo_radius}
             if _area_radii:
-                print(f"   [GEO] city-level areas use a {_city_radius:g}-mile radius, not "
-                      f"{_geo_radius:g}: {sorted(_area_radii)}")
+                logger.info(
+                    "property_search.city_radius_applied",
+                    extra={
+                        "city_area_count": len(_area_radii),
+                        "city_radius_miles": _city_radius,
+                        "default_radius_miles": _geo_radius,
+                    },
+                )
 
             _before_geo = len(live_rows)
             # Haversine over every fetched listing is pure CPU that scales with the
@@ -2216,8 +2653,15 @@ async def search_properties_impl(
                         for _q in _queues:
                             if _q:
                                 _ranked.append(_q.popleft())
-                    print("   ✅ 多区域召回: " +
-                          ", ".join(f"{_a}={len(_per_area.get(_a.lower(), []))}" for _a in search_areas))
+                    logger.info(
+                        "property_search.multi_area_recall",
+                        extra={
+                            "area_count": len(search_areas),
+                            "result_counts": [
+                                len(_per_area.get(_a.lower(), [])) for _a in search_areas
+                            ],
+                        },
+                    )
                     return _ranked, [], []
                 return _coord.enhanced_search(search_query, criteria)
 
@@ -2253,25 +2697,27 @@ async def search_properties_impl(
 
         # 🆕 根据房产特征过滤结果（注意：不要遮蔽函数级的 room_type 参数）
         if all_property_features:
-            print(f"\n🔍 [SEARCH] 根据房产特征过滤: {all_property_features}")
+            logger.info(
+                "property_search.feature_filter",
+                extra={"feature_count": len(all_property_features)},
+            )
             filtered_by_features = []
             for prop in ranked_properties:
-                prop_rt = prop.get('Room_Type_Category', '').lower()
-                description = prop.get('Description', '').lower()
-                amenities = prop.get('Detailed_Amenities', '').lower()
                 matches = True
                 for feature in all_property_features:
-                    feature_lower = feature.lower()
-                    if feature_lower in ['studio', 'private', 'en-suite', 'ensuite']:
-                        if feature_lower == 'studio' and 'studio' not in prop_rt:
+                    canonical = _canonical_property_feature(feature)
+                    evidence = _property_feature_evidence(prop, canonical)
+                    if canonical in _ACCESSIBILITY_FEATURES:
+                        # Missing disclosure is not proof that an accessibility
+                        # feature is absent. Keep unknown rows visible and let the
+                        # candidate contract label them unverified; only an explicit
+                        # structured denial removes a row here.
+                        if evidence == "absent":
                             matches = False
                             break
-                        if feature_lower == 'private' and 'private' not in prop_rt and 'private' not in description:
-                            matches = False
-                            break
-                        if feature_lower in ['en-suite', 'ensuite'] and 'en-suite' not in prop_rt and 'en-suite' not in amenities:
-                            matches = False
-                            break
+                    elif canonical in {"studio", "private", "en-suite"} and evidence != "verified":
+                        matches = False
+                        break
                 if matches:
                     filtered_by_features.append(prop)
             if filtered_by_features:
@@ -2282,7 +2728,7 @@ async def search_properties_impl(
 
         # 🆕 根据房型过滤（studio / ensuite / shared）—— 复用 _matches_room_type
         if room_type:
-            print(f"\n🔍 [SEARCH] 根据房型过滤: {room_type}")
+            print(f"\n🔍 [SEARCH] 根据房型过滤 room_type_chars={len(str(room_type))}")
             rt_matched = [p for p in ranked_properties if _matches_room_type(p, room_type)]
             if rt_matched:
                 print(f"   ✅ 房型过滤后剩余 {len(rt_matched)} 个房源")
@@ -2328,8 +2774,13 @@ async def search_properties_impl(
             commute_filter_enabled = False
 
         if commute_annotation_enabled and not degraded:
-            print(f"\n⏱️ [SEARCH] 计算通勤时间到 {commute_target} "
-                  f"(过滤={'开' if commute_filter_enabled else '关'})...")
+            logger.info(
+                "property_search.commute_annotation",
+                extra={
+                    "destination_chars": len(str(commute_target or "")),
+                    "filter_enabled": commute_filter_enabled,
+                },
+            )
             from core.maps_service import calculate_travel_time, geocode_address
             loop = asyncio.get_event_loop()
             dest_coords = await loop.run_in_executor(None, geocode_address, commute_target)
@@ -2354,18 +2805,27 @@ async def search_properties_impl(
                     if isinstance(tfl, Exception):
                         tfl = None
                     travel_time = tfl if (isinstance(tfl, (int, float)) and 0 < tfl <= _COMMUTE_SANITY_CAP) else None
+                    # The bare producer answers from a TfL itinerary OR from its own
+                    # straight-line fallback; only the basis payload can tell them apart.
+                    travel_source = _travel_provenance(
+                        prop.get('Address', ''), commute_target, travel_time)
                     if travel_time is None:
                         travel_time = _coord_commute_minutes(
                             prop.get('geo_location') or prop.get('Geo_Location'), dest_coords
                         )
+                        if travel_time is not None:
+                            travel_source = _TRAVEL_SOURCE_ESTIMATE
                     if travel_time is None and not london_dest:
                         try:
                             travel_time = calculate_travel_time(prop.get('Address', ''), commute_target)
                         except Exception:
                             travel_time = None
+                        travel_source = _travel_provenance(
+                            prop.get('Address', ''), commute_target, travel_time)
                     if travel_time is not None:
                         prop['travel_time_minutes'] = travel_time
                         prop['travel_time'] = travel_time
+                        prop['travel_time_source'] = travel_source
                     if commute_filter_enabled:
                         if travel_time is not None and travel_time <= max_commute_time:
                             annotated.append(prop)
@@ -2449,21 +2909,27 @@ async def search_properties_impl(
                     for prop in (sims or [])[:6]:
                         try:
                             travel_time = None
+                            travel_source = None
                             if commute_annotation_enabled:
                                 from core.maps_service import calculate_travel_time
                                 if london_dest:
                                     _tt = calculate_travel_time(prop.get('Address', ''), commute_target)
                                     travel_time = _tt if (isinstance(_tt, (int, float)) and 0 < _tt <= _COMMUTE_SANITY_CAP) else None
+                                    travel_source = _travel_provenance(
+                                        prop.get('Address', ''), commute_target, travel_time)
                                 if travel_time is None:
                                     travel_time = _coord_commute_minutes(
                                         prop.get('geo_location') or prop.get('Geo_Location'), dest_coords
                                     )
+                                    if travel_time is not None:
+                                        travel_source = _TRAVEL_SOURCE_ESTIMATE
                             keep = True
                             if commute_filter_enabled:
                                 keep = travel_time is not None and travel_time <= max_commute_time * C.SIMILAR_COMMUTE_SLACK
                             if keep:
                                 if travel_time is not None:
                                     prop['travel_time'] = travel_time
+                                    prop['travel_time_source'] = travel_source
                                 prop['price'] = prop.get('parsed_price', parse_price(prop.get('Price', '')))
                                 out.append(prop)
                         except Exception:
@@ -2477,12 +2943,33 @@ async def search_properties_impl(
                         min_price_needed = min(p.get('price', 0) for p in closest_3)
                         suggested_budget = int(min_price_needed * C.SUGGESTED_BUDGET_MARGIN)
                         budget_increase = suggested_budget - max_budget
+                        # This fallback recalls SIMILAR listings, not over-budget ones: the
+                        # embedding recall is not budget-filtered and the exact-match pool can
+                        # be empty for reasons that have nothing to do with price (room type,
+                        # area, commute, a scrape that fell back to cache). So a recalled row
+                        # is frequently UNDER budget, and the old unconditional
+                        # `price - max_budget` then rendered "Over budget by £-267".
+                        #
+                        # The headline is decided PER ROW, never from the cheapest row or from
+                        # `suggested_budget` (which is min_price x a margin, so it can exceed a
+                        # budget every row is already under: £1,900 cheapest vs a £1,950 budget
+                        # suggests £1,995 and would have claimed a raise was needed). Three
+                        # distinct cases, because a mixed set is neither "raise your budget"
+                        # nor "all within budget" — with prices £1,900/£2,100/£2,200 against
+                        # £2,000, both of those sentences contradict the per-row badges.
+                        n_over = sum(1 for p in closest_3
+                                     if int(p.get('price', 0)) > max_budget)
+                        needs_more_budget = n_over == len(closest_3)
+                        all_within_budget = n_over == 0
 
                         similar_formatted = []
                         for i, prop in enumerate(closest_3, 1):
                             price = int(prop.get('price', 0))
-                            over_budget = price - max_budget
-                            over_percentage = round((over_budget / max_budget) * 100, 1) if max_budget else 0.0
+                            over_budget = max(0, price - max_budget)
+                            over_percentage = (round((over_budget / max_budget) * 100, 1)
+                                               if max_budget and over_budget else 0.0)
+                            budget_status = (f"⚠️ Over budget by £{over_budget} ({over_percentage}%)"
+                                             if over_budget else "✅ Within budget")
                             images = prop.get('Images', prop.get('images', []))
                             if isinstance(images, str):
                                 images = [images] if images else []
@@ -2491,7 +2978,7 @@ async def search_properties_impl(
                                 'rank': i,
                                 'address': prop.get('Address', prop.get('address', 'Unknown')),
                                 'price': f"£{price}/month",
-                                'budget_status': f"⚠️ Over budget by £{over_budget} ({over_percentage}%)",
+                                'budget_status': budget_status,
                                 'price_raw': price,
                                 'over_budget': over_budget,
                                 'similarity_score': round(prop.get('similarity_score', 0) * 100, 1),
@@ -2507,6 +2994,7 @@ async def search_properties_impl(
                                     prop.get('Description', ''),
                                     prop.get('travel_time') if commute_annotation_enabled else None,
                                     commute_target,
+                                    prop.get('travel_time_source'),
                                 ),
                                 'area': prop.get('_search_area'),
                             }
@@ -2517,22 +3005,64 @@ async def search_properties_impl(
                             row['availability_status'] = _availability_status(_sim_avail, move_in_date)
                             _tt = prop.get('travel_time')
                             if commute_annotation_enabled and _tt is not None:
-                                row['travel_time'] = f"{int(_tt)} min to {commute_target}"
+                                _tsrc = prop.get('travel_time_source')
+                                row['travel_time'] = _travel_time_label(_tt, commute_target, _tsrc)
+                                row['travel_time_source'] = _tsrc
                             similar_formatted.append(row)
 
                         _cp = _commute_phrase(max_commute_time, commute_target) if commute_target else ""
+                        # The headline must describe the ACTUAL miss. Claiming "nothing within
+                        # your budget" while listing three cheaper flats is the same defect as
+                        # the negative over-budget figure, one layer up.
+                        _cheapest = int(closest_3[0].get('price', 0))
+                        if needs_more_budget and is_cjk:
+                            _msg = (f"在 £{max_budget}/月的预算内"
+                                    f"{f'（{_cp.strip()}）' if _cp else f'、{search_area} 附近'}"
+                                    f"没有找到房源。")
+                            _suggestion = (f"不过找到了 {len(closest_3)} 套相近的房源，"
+                                           f"最接近的一套是 £{_cheapest}/月。"
+                                           f"是否考虑把预算提高约 £{budget_increase}"
+                                           f"（到 £{suggested_budget}/月）？")
+                        elif needs_more_budget:
+                            _msg = (f"No properties were found within your budget of £{max_budget}/month"
+                                    f"{_cp or f' near {search_area}'}.")
+                            _suggestion = (f"However, I found {len(closest_3)} similar properties. "
+                                           f"The closest match is £{_cheapest}/month. "
+                                           f"Would you consider increasing your budget by approximately "
+                                           f"£{budget_increase} (to £{suggested_budget}/month)?")
+                        elif is_cjk:
+                            _msg = (f"没有找到同时满足全部条件的房源"
+                                    f"{f'（{_cp.strip()}）' if _cp else f'（{search_area} 附近）'}。")
+                            _budget_note = (f"且都在 £{max_budget}/月的预算之内"
+                                            f"（最低 £{_cheapest}/月）"
+                                            if all_within_budget else
+                                            f"其中 {len(closest_3) - n_over} 套在 £{max_budget}/月"
+                                            f"的预算之内、{n_over} 套超出预算"
+                                            f"（最低 £{_cheapest}/月）")
+                            _suggestion = (f"不过找到了 {len(closest_3)} 套相近的房源，"
+                                           f"{_budget_note}。"
+                                           f"它们在另一项条件上与搜索不一致，请逐套对照您最在意的条件。")
+                        else:
+                            _msg = (f"No listing matched every condition"
+                                    f"{_cp or f' near {search_area}'}.")
+                            _budget_note = (f"all within your £{max_budget}/month budget "
+                                            f"(from £{_cheapest}/month)"
+                                            if all_within_budget else
+                                            f"{len(closest_3) - n_over} within your "
+                                            f"£{max_budget}/month budget and {n_over} over it "
+                                            f"(from £{_cheapest}/month)")
+                            _suggestion = (f"However, I found {len(closest_3)} similar properties, "
+                                           f"{_budget_note}. "
+                                           f"They differ from the search on another condition, so "
+                                           f"please check each one against what matters to you.")
                         return _augment({
                             'success': True,
                             'status': 'no_exact_match_but_similar',
-                            'message': (f"No properties were found within your budget of £{max_budget}/month"
-                                        f"{_cp or f' near {search_area}'}."),
-                            'suggestion': (f"However, I found {len(closest_3)} similar properties. "
-                                           f"The closest match is £{int(closest_3[0].get('price', 0))}/month. "
-                                           f"Would you consider increasing your budget by approximately "
-                                           f"£{budget_increase} (to £{suggested_budget}/month)?"),
+                            'message': _msg,
+                            'suggestion': _suggestion,
                             'similar_properties': similar_formatted,
-                            'suggested_budget': suggested_budget,
-                            'budget_increase_needed': budget_increase,
+                            'suggested_budget': suggested_budget if needs_more_budget else max_budget,
+                            'budget_increase_needed': budget_increase if needs_more_budget else 0,
                             'search_criteria': _criteria(),
                             'known_criteria': _known_criteria(),
                             'recommendations': similar_formatted,
@@ -2635,22 +3165,20 @@ async def search_properties_impl(
                     images = [images] if images else []
                 geo_location = prop.get('Geo_Location', prop.get('geo_location', ''))
                 _avail_from = prop.get('_resolved_available_from', '')
-                _prop_rt = str(prop.get('Room_Type_Category', '') or '').lower()
-                _prop_amenities = str(prop.get('Detailed_Amenities', '') or '').lower()
                 _verified_room_type = (room_type if room_type and _matches_room_type(prop, room_type)
                                        else None)
                 _verified_features = []
+                _unverified_features = []
+                _absent_features = []
                 for _feature in all_property_features:
-                    _normal = str(_feature or '').strip().lower()
-                    _matched = (
-                        (_normal == 'studio' and 'studio' in _prop_rt)
-                        or (_normal == 'private' and 'private' in _prop_rt)
-                        or (_normal in {'en-suite', 'ensuite'}
-                            and ('en-suite' in _prop_rt or 'ensuite' in _prop_rt
-                                 or 'en-suite' in _prop_amenities or 'ensuite' in _prop_amenities))
-                    )
-                    if _matched:
+                    _normal = _canonical_property_feature(_feature)
+                    _evidence = _property_feature_evidence(prop, _normal)
+                    if _evidence == 'verified':
                         _verified_features.append(_normal)
+                    elif _normal in _ACCESSIBILITY_FEATURES and _evidence == 'unverified':
+                        _unverified_features.append(_normal)
+                    elif _normal in _ACCESSIBILITY_FEATURES and _evidence == 'absent':
+                        _absent_features.append(_normal)
                 row = {
                     'rank': i,
                     'address': prop.get('Address', prop.get('address', 'Unknown')),
@@ -2672,6 +3200,7 @@ async def search_properties_impl(
                         prop.get('Description', prop.get('description', '')),
                         prop.get('travel_time') if commute_annotation_enabled else None,
                         commute_target,
+                        prop.get('travel_time_source'),
                     ),
                     # 🆕 多区域：该房源来自哪个搜索区域（前端卡片徽标）。
                     'area': prop.get('_search_area'),
@@ -2684,11 +3213,21 @@ async def search_properties_impl(
                     # Only exact structured fields enter the hard-constraint contract;
                     # free-text descriptions never prove that a feature is present.
                     'verified_features': _verified_features,
+                    # Accessibility disclosure is commonly incomplete. These two
+                    # explicit states prevent missing text from becoming either a
+                    # false pass or a false hard failure downstream.
+                    'unverified_features': _unverified_features,
+                    'absent_features': _absent_features,
                 }
                 # 无通勤目标/无通勤时间时，完全省略 travel_time 字段（不出现 "0 min to None"）。
                 _tt = prop.get('travel_time')
                 if commute_annotation_enabled and _tt is not None:
-                    row['travel_time'] = f"{int(_tt)} min to {commute_target}"
+                    _tsrc = prop.get('travel_time_source')
+                    row['travel_time'] = _travel_time_label(_tt, commute_target, _tsrc)
+                    # Structured provenance beside the display string: a coordinate estimate
+                    # must never be consumed (by the model or by a downstream check) as a
+                    # measured journey time.
+                    row['travel_time_source'] = _tsrc
                 rows.append(row)
             return rows
 
@@ -2763,13 +3302,14 @@ async def search_properties_impl(
         })
 
     except Exception as e:
-        print(f"   ❌ 搜索房源出错: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(
+            "property_search.failed",
+            extra={"error_type": type(e).__name__},
+        )
         return {
             'success': False,
             'status': 'error',
-            'error': str(e)
+            'error': 'Property search failed'
         }
 
 
@@ -2902,12 +3442,12 @@ search_properties_tool = Tool(
 )
 
 
-# Tool-registration-time pre-warm: kick the ~18-20s sentence-transformer model load onto a
-# background daemon thread NOW, so the first search in a fresh process (always several
-# seconds into any process lifetime) finds the embedding store warm or warming instead of
-# paying that cold load inside its deadline (the H2 abandon / the slow-first-search prod
-# defect). Skipped under pytest — a real background model load would add CPU jitter to the
-# timing-sensitive tests; the dedicated pre-warm test drives start_embedding_prewarm()
-# explicitly. Disable in production with SEARCH_EMBED_PREWARM=0.
-if "pytest" not in sys.modules:
+# Import-time pre-warm is opt-in because constructing the embedding model may
+# perform network/cache discovery. Deployments with a pre-populated model cache
+# can explicitly enable it without slowing or destabilising offline startup.
+if (
+    "pytest" not in sys.modules
+    and os.getenv("SEARCH_EMBED_PREWARM_ON_IMPORT", "0").strip().lower()
+    in {"1", "true", "yes", "on"}
+):
     start_embedding_prewarm()

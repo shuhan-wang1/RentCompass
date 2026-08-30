@@ -498,7 +498,7 @@ def _store() -> _PendingWriteStore:
                     _STORE = _PendingWriteStore(path)
                 except (OSError, sqlite3.Error) as exc:
                     fallback = Path(tempfile.gettempdir()) / "uk-rent-agent" / "memory_gate.sqlite3"
-                    print(f"[memory_gate] store {path} not writable ({exc}); using {fallback}")
+                    print(f"[memory_gate] store not writable; error_type={type(exc).__name__}; fallback_enabled=True")
                     _STORE = _PendingWriteStore(fallback)
     return _STORE
 

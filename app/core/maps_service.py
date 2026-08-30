@@ -179,8 +179,10 @@ def _penalise_mirror(url: str, reason: str) -> None:
         _mirror_penalty[url] = time.monotonic() + OVERPASS_MIRROR_COOLDOWN_S
         if url in _mirror_preferred:
             _mirror_preferred.remove(url)
-    print(f"  [Overpass] mirror sidelined {OVERPASS_MIRROR_COOLDOWN_S:.0f}s: "
-          f"{url.split('/')[2]} ({reason[:60]})")
+    print(
+        f"  [Overpass] mirror sidelined cooldown_s="
+        f"{OVERPASS_MIRROR_COOLDOWN_S:.0f} reason_chars={len(reason)}"
+    )
 
 
 def _reward_mirror(url: str) -> None:
@@ -303,8 +305,8 @@ def overpass_request(query: str, timeout: int = 30, max_rounds: int = 2,
             time.sleep(1.0 * (2 ** round_idx))
     if clean_empty is not None:
         raise OverpassEmpty(
-            f"Every reachable Overpass mirror answered an empty 200: {last_err}", clean_empty)
-    raise OverpassError(f"All Overpass mirrors failed: {last_err}")
+            "Every reachable Overpass mirror answered an empty 200", clean_empty)
+    raise OverpassError("All Overpass mirrors failed")
 
 # Map common landmarks to specific addresses that Google Maps API can route to
 LANDMARK_TO_ADDRESS = {
@@ -327,7 +329,10 @@ def _normalize_address_for_routing(address: str) -> str:
     # Check if it's a known landmark
     for landmark, specific_address in LANDMARK_TO_ADDRESS.items():
         if landmark in address_lower:
-            print(f"  -> Converted '{address}' to '{specific_address}'")
+            print(
+                f"  -> Converted landmark address_chars={len(address)} "
+                f"resolved_chars={len(specific_address)}"
+            )
             return specific_address
     
     return address
@@ -374,7 +379,7 @@ def _free_geocode(address: str) -> dict | None:
                               'match_type': 'postcode',
                               'place_rank': None}
         except Exception as e:
-            print(f"  [geocode] Postcodes.io error: {e}")
+            print(f"  [geocode] Postcodes.io error exception_type={type(e).__name__}")
 
     # 2) Fall back to Nominatim (free, no key)
     if result is None:
@@ -397,7 +402,7 @@ def _free_geocode(address: str) -> dict | None:
                                              or top.get('class')),
                               'place_rank': top.get('place_rank')}
         except Exception as e:
-            print(f"  [geocode] Nominatim error: {e}")
+            print(f"  [geocode] Nominatim error exception_type={type(e).__name__}")
 
     if result is not None:
         _write_versioned_cache(
@@ -453,7 +458,7 @@ def _tfl_travel_time(origin: dict, dest: dict, mode: str = "transit") -> int | N
         durations = [int(j['duration']) for j in journeys if j.get('duration') is not None]
         return min(durations) if durations else None
     except Exception as e:
-        print(f"  [TfL] error: {e}")
+        print(f"  [TfL] error exception_type={type(e).__name__}")
         return None
 
 
@@ -478,7 +483,7 @@ def _tfl_journey(origin: dict, dest: dict, mode: str = "transit") -> dict | None
             return None
         return min(journeys, key=lambda j: j['duration'])
     except Exception as e:
-        print(f"  [TfL] journey error: {e}")
+        print(f"  [TfL] journey error exception_type={type(e).__name__}")
         return None
 
 
@@ -589,7 +594,10 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
     cache_key = create_cache_key('calculate_travel_basis_v1', origin_n, dest_n, mode)
     cached_result = get_from_cache(cache_key)
     if cached_result is not None:
-        print(f"  -> [Cache HIT] Travel basis for: {origin_address} ({mode})")
+        print(
+            f"  -> [Cache HIT] Travel basis origin_chars={len(origin_address)} "
+            f"destination_chars={len(destination_address)}"
+        )
         return cached_result
 
     out = calculate_travel_details(origin_address, destination_address, mode)
@@ -597,6 +605,33 @@ def calculate_travel_basis(origin_address: str, destination_address: str,
         return None
     set_to_cache(cache_key, out)
     return out
+
+
+def travel_basis_if_known(origin_address: str, destination_address: str,
+                          mode: str = "transit") -> dict | None:
+    """The basis payload for a pair IF it is already cached. Never routes, never geocodes.
+
+    ``calculate_travel_time`` is a thresholding view: it returns a TfL itinerary on one branch
+    and a calibrated straight-line guess on the other, as a bare int, so a caller holding only
+    that int cannot tell whether the figure may be SHOWN as a measured journey time. Labelling
+    it "TfL transit" regardless is how an estimate gets published as a fact.
+
+    A caller that already has the number (from the filter path, where the latency budget was
+    spent) can ask this what the number's basis was: ``calculate_travel_time`` populates the
+    same cache entry on its way through, so the answer is normally free. This function performs
+    NO network work of its own — that is the point; it must be safe to call per listing inside
+    an already-tight annotation stage.
+
+    Returns None on a cache miss, and the caller must then treat the figure as UNMEASURED. An
+    unknown basis is not a measured one (see ``commute_basis.is_measured``).
+    """
+    if not origin_address or not destination_address:
+        return None
+    origin_n = _normalize_address_for_routing(origin_address)
+    dest_n = _normalize_address_for_routing(destination_address)
+    cached = get_from_cache(create_cache_key(
+        'calculate_travel_basis_v1', origin_n, dest_n, mode))
+    return cached if isinstance(cached, dict) else None
 
 
 def calculate_travel_time(origin_address: str, destination_address: str, mode: str = "transit") -> int | None:
@@ -626,13 +661,21 @@ def calculate_travel_time(origin_address: str, destination_address: str, mode: s
 
     measured = details.get('duration_minutes')
     if measured is not None and is_measured(details.get('source')):
-        print(f"  [OK] [TfL] {origin_address} -> {destination_address}: {measured} mins ({mode})")
+        print(
+            f"  [OK] [TfL] measured_minutes={measured} "
+            f"origin_chars={len(origin_address)} "
+            f"destination_chars={len(destination_address)}"
+        )
         return int(measured)
 
     minutes = best_estimate_minutes(details.get('straight_line_km'), mode)
     if minutes is not None:
-        print(f"  [OK] [estimate] {origin_address} -> {destination_address}: {minutes} mins "
-              f"(TfL had no route; thresholding figure, not a quotable journey time)")
+        print(
+            f"  [OK] [estimate] threshold_minutes={minutes} "
+            f"origin_chars={len(origin_address)} "
+            f"destination_chars={len(destination_address)} "
+            "(TfL had no route; thresholding figure, not a quotable journey time)"
+        )
     return minutes
 
 def find_nearby_places(address: str, amenities_of_interest: list[str], radius: int = 1500) -> dict:
@@ -640,10 +683,10 @@ def find_nearby_places(address: str, amenities_of_interest: list[str], radius: i
     cache_key = create_cache_key('find_nearby_places', address, tuple(sorted(amenities_of_interest)), radius)
     cached_result = get_from_cache(cache_key)
     if cached_result:
-        print(f"  -> [Cache HIT] Nearby places for: {address}")
+        print(f"  -> [Cache HIT] Nearby places address_chars={len(address)}")
         return cached_result
 
-    print(f"  -> [Overpass] Getting nearby places for: {address}")
+    print(f"  -> [Overpass] Getting nearby places address_chars={len(address)}")
 
     # Map common Google place types to our OSM amenity types.
     type_map = {
@@ -677,15 +720,15 @@ def get_crime_data_by_location(address: str) -> dict | None:
         version=_CRIME_CACHE_VERSION,
     )
     if cache_status == "fresh" and cached_result:
-        print(f"  -> [Cache HIT] Crime data for: {address}")
+        print(f"  -> [Cache HIT] Crime data address_chars={len(address)}")
         return cached_result
 
-    print(f"  -> [API Call] Getting official crime data for: {address}")
+    print(f"  -> [API Call] Getting official crime data address_chars={len(address)}")
     location = _get_coordinates(address)
     
     if not location:
         # Also deliberately uncached, for the same reason as the empty-result branch below.
-        print(f"     ❌ Could not geocode address: {address}")
+        print(f"     ❌ Could not geocode address address_chars={len(address)}")
         if cache_status == "stale" and cached_result:
             return _label_stale(
                 cached_result,
@@ -694,7 +737,7 @@ def get_crime_data_by_location(address: str) -> dict | None:
             )
         return {"error": "Could not geocode address.", "total_crimes_6m": "Unknown"}
     
-    print(f"     [OK] Coordinates: {location['lat']}, {location['lng']}")
+    print("     [OK] Coordinates resolved=True")
 
     # ENDPOINT, not a detail. `crimes-at-location` returns crimes at ONE pre-defined street
     # anchor -- it answers "what happened at this exact spot". Using it to describe an area
@@ -724,7 +767,10 @@ def get_crime_data_by_location(address: str) -> dict | None:
             print(f"       [WARN]  Timeout for {date_str}")
             continue
         except requests.exceptions.RequestException as e:
-            print(f"       ❌ API error for {date_str}: {e}")
+            print(
+                f"       ❌ API error for month={date_str} "
+                f"exception_type={type(e).__name__}"
+            )
             continue
 
     if not all_crimes:
@@ -798,10 +844,10 @@ def get_environmental_data(address: str) -> dict:
     cache_key = create_cache_key('get_environmental_data', address)
     cached_result = get_from_cache(cache_key)
     if cached_result:
-        print(f"  -> [Cache HIT] Environmental data for: {address}")
+        print(f"  -> [Cache HIT] Environmental data address_chars={len(address)}")
         return cached_result
     
-    print(f"  -> [Overpass] Getting environmental data for: {address}")
+    print(f"  -> [Overpass] Getting environmental data address_chars={len(address)}")
 
     parks = get_nearby_places_osm(address, 'park', radius_m=1000)
     parks_in_1km = len(parks)
@@ -923,14 +969,17 @@ def get_nearby_supermarkets_detailed(address: str, radius: int = 2000,
     cache_key = create_cache_key('supermarkets_detailed_v2_multi', address, radius, tuple(chains))
     cached_result = get_from_cache(cache_key)
     if cached_result:
-        print(f"    -> [缓存] 找到超市缓存: {address}")
+        print(f"    -> [缓存] 找到超市缓存 address_chars={len(address)}")
         return cached_result
     
-    print(f"    [SEARCH] [多源搜索] 搜索超市: {chains} near {address}")
+    print(
+        f"    [SEARCH] [多源搜索] 搜索超市 chain_count={len(chains)} "
+        f"address_chars={len(address)} radius_m={radius}"
+    )
     
     location = _get_coordinates(address)
     if not location:
-        print(f"    -> [多源搜索] 无法地理编码: {address}")
+        print(f"    -> [多源搜索] 无法地理编码 address_chars={len(address)}")
         return []
     
     results = []
@@ -954,9 +1003,12 @@ def get_nearby_supermarkets_detailed(address: str, radius: int = 2000,
             data = overpass_request(query, timeout=15)
             brand_results = _parse_osm_elements(data.get('elements', []), location, chain)
             results.extend(brand_results)
-            print(f"        [OK] {chain}: 找到 {len(brand_results)} 家")
+            print(f"        [OK] brand search result_count={len(brand_results)}")
         except Exception as e:
-            print(f"        [WARN]  {chain} 搜索出错: {e}")
+            print(
+                "        [WARN] brand search failed "
+                f"exception_type={type(e).__name__}"
+            )
     
     # ===== 方法2：通用超市搜索 =====
     if len(results) < 3:
@@ -982,7 +1034,7 @@ def get_nearby_supermarkets_detailed(address: str, radius: int = 2000,
             results.extend(new_results)
             print(f"        [OK] 通用搜索: 找到 {len(new_results)} 家新超市")
         except Exception as e:
-            print(f"        [WARN]  通用搜索出错: {e}")
+            print(f"        [WARN] 通用搜索出错 exception_type={type(e).__name__}")
     
     # ===== 方法3：网页搜索回退 =====
     if not results:
@@ -1008,9 +1060,15 @@ def get_nearby_supermarkets_detailed(address: str, radius: int = 2000,
                             }
                             results.append(web_result)
                 except Exception as e:
-                    print(f"        [WARN]  {chain} 网页搜索出错: {e}")
+                    print(
+                        "        [WARN] 网页搜索出错 "
+                        f"exception_type={type(e).__name__}"
+                    )
         except Exception as e:
-            print(f"        [WARN]  网页搜索模块不可用: {e}")
+            print(
+                "        [WARN] 网页搜索模块不可用 "
+                f"exception_type={type(e).__name__}"
+            )
     
     # ===== 最终处理 =====
     # 去重、排序和限制数量
@@ -1124,22 +1182,28 @@ def get_nearby_places_osm(address: str, amenity_type: str, radius_m: int = 1500)
     cache_key = create_cache_key('get_nearby_places_osm_v2', address, amenity_type, radius_m)
     cached_result = get_from_cache(cache_key)
     if cached_result:
-        print(f"  -> [Cache HIT] OSM {amenity_type} data for: {address}")
+        print(
+            f"  -> [Cache HIT] OSM data amenity_chars={len(amenity_type)} "
+            f"address_chars={len(address)}"
+        )
         return cached_result
 
-    print(f"  -> [Overpass API] Getting {amenity_type} locations near: {address}")
+    print(
+        f"  -> [Overpass API] Getting locations amenity_chars={len(amenity_type)} "
+        f"address_chars={len(address)} radius_m={radius_m}"
+    )
 
     # Get coordinates for the property, together with what the geocoder actually matched.
     from core.place_reference import reference_point
     ref = reference_point(address)
     if ref.get("error") or ref.get("lat") is None:
-        print(f"     ❌ Could not geocode address: {address}")
+        print(f"     ❌ Could not geocode address address_chars={len(address)}")
         return []
 
     lat, lng = ref['lat'], ref['lng']
     measured_from = ref.get('measured_from')
     ref_precision = ref.get('precision')
-    print(f"     [OK] Coordinates: {lat:.4f}, {lng:.4f} ({ref_precision})")
+    print("     [OK] Coordinates resolved=True")
     
     # Map amenity types to OSM tags
     osm_amenity_map = {
@@ -1155,7 +1219,7 @@ def get_nearby_places_osm(address: str, amenity_type: str, radius_m: int = 1500)
     
     osm_tags = osm_amenity_map.get(amenity_type, [])
     if not osm_tags:
-        print(f"     ERROR: Unknown amenity type: {amenity_type}")
+        print(f"     ERROR: Unknown amenity type chars={len(amenity_type)}")
         return []
     
     # Calculate bounding box (approximate)
@@ -1183,7 +1247,7 @@ def get_nearby_places_osm(address: str, amenity_type: str, radius_m: int = 1500)
 );
 out center;"""
     
-    print(f"     [OK] Using Overpass API for {amenity_type} search")
+    print(f"     [OK] Using Overpass API tag_count={len(osm_tags)}")
 
     try:
         data = overpass_request(overpass_query, timeout=25)
@@ -1249,7 +1313,10 @@ out center;"""
         # Sort by distance
         places.sort(key=lambda x: x['distance_m'])
         
-        print(f"     [OK] Found {len(places)} {amenity_type} locations within {radius_m}m")
+        print(
+            f"     [OK] Found location_count={len(places)} "
+            f"within_radius_m={radius_m}"
+        )
         set_to_cache(cache_key, places)
         return places
 
@@ -1258,10 +1325,16 @@ out center;"""
         # expect a list, so we preserve that contract and return [] here; the
         # map pipeline (fetch_all_amenities) propagates OverpassError instead so
         # the user gets an honest "data unavailable" banner.
-        print(f"     [WARN] Overpass unavailable for {amenity_type}: {e}")
+        print(
+            "     [WARN] Overpass unavailable "
+            f"exception_type={type(e).__name__}"
+        )
         return []
     except Exception as e:
-        print(f"     [WARN] Error processing Overpass data: {e}")
+        print(
+            "     [WARN] Error processing Overpass data "
+            f"exception_type={type(e).__name__}"
+        )
         return []
 
 

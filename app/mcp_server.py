@@ -51,7 +51,7 @@ try:
     from core.tools.web_search import set_tool_registry
     set_tool_registry(_registry)
 except Exception as _e:  # pragma: no cover - non-fatal
-    print(f"[mcp_server] warning: could not wire web_search registry: {_e}")
+    print(f"[mcp_server] warning: could not wire web_search registry; error_type={type(_e).__name__}")
 
 server = Server("uk-rent-tools")
 

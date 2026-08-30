@@ -32,8 +32,8 @@ def load_property_database() -> pd.DataFrame:
     try:
         from core.scraping.on_demand import iter_cached_listings
         rows = iter_cached_listings()
-    except Exception as e:
-        print(f"❌ 加载房产数据失败: {e}")
+    except Exception as exc:
+        print(f"❌ 加载房产数据失败 exception_type={type(exc).__name__}")
         return pd.DataFrame()
     if not rows:
         return pd.DataFrame()
@@ -545,13 +545,12 @@ def get_property_details_impl(
     Returns:
         包含房产详细信息的字典；`match` 字段给出 requested vs resolved 与判定结论。
     """
-    print(f"\n{'='*60}")
-    print(f"🏠 [PROPERTY DETAILS] 查询房产详情")
-    print(f"   property_name: {property_name}")
-    print(f"   property_address: {property_address}")
-    print(f"   property_url: {property_url}")
-    print(f"   question: {question}")
-    print(f"{'='*60}")
+    print(
+        "\n🏠 [PROPERTY DETAILS] 查询房产详情 "
+        f"name_chars={len(property_name or '')} "
+        f"address_chars={len(property_address or '')} "
+        f"url_supplied={bool(property_url)} question_chars={len(question or '')}"
+    )
 
     # 加载数据库
     df = load_property_database()
@@ -595,8 +594,11 @@ def get_property_details_impl(
                         primary, verdict = hit, "exact_url"
                         corroborated = ["listing_url"]
                         break
-        except Exception as e:
-            print(f"  [PROPERTY DETAILS] URL 直查失败: {e}")
+        except Exception as exc:
+            print(
+                "  [PROPERTY DETAILS] URL 直查失败 "
+                f"exception_type={type(exc).__name__}"
+            )
 
     requested = parse_property_reference(search_query)
 
@@ -751,11 +753,10 @@ def get_property_details_impl(
             for m in others
         ]
 
-    print(f"\n✅ [PROPERTY DETAILS] 身份核对通过 ({verdict})")
-    print(f"   requested: {match_block['requested']}")
-    print(f"   resolved:  {resolved['raw']}")
-    print(f"   corroborated_by: {corroborated}")
-    print(f"   房型: {room_type} / 是否Studio: {is_studio}")
+    print(
+        f"\n✅ [PROPERTY DETAILS] 身份核对通过 verdict={verdict} "
+        f"corroboration_count={len(corroborated)} is_studio={is_studio}"
+    )
 
     return result
 

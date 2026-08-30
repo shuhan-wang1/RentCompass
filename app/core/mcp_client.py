@@ -74,7 +74,7 @@ class MCPToolClient:
         if not self._ready.wait(timeout=self.connect_timeout):
             self._connect_error = TimeoutError("MCP connect timed out")
         if self._connect_error is not None:
-            print(f"[MCP] connect failed: {self._connect_error!r}; using fallback tools")
+            print(f"[MCP] connect failed; error_type={type(self._connect_error).__name__}; using fallback tools")
         return self
 
     def _run_loop(self) -> None:
@@ -111,7 +111,7 @@ class MCPToolClient:
         # loop can bind tools and gate taint/HITL (design §2.8a). Missing annotation
         # fields fall back to the in-process registry spec (single source of truth).
         self._tool_specs = [self._spec_from_mcp_tool(t) for t in resp.tools]
-        print(f"[MCP] connected; {len(self._tool_names)} tools: {', '.join(self._tool_names)}")
+        print(f"[MCP] connected; tool_count={len(self._tool_names)}")
 
     def _spec_from_mcp_tool(self, t) -> ToolSpec:
         """Build a ToolSpec from an MCP Tool, reading ToolSpec metadata off the
@@ -249,7 +249,7 @@ class MCPToolClient:
                     f"was not retried ({type(e).__name__})",
                     tool,
                 )
-            return await self._fallback(name, kwargs, repr(e))
+            return await self._fallback(name, kwargs, f"transport_error_type={type(e).__name__}")
 
     @staticmethod
     def _is_write_or_non_retryable(tool) -> bool:
@@ -313,11 +313,11 @@ class MCPToolClient:
 
     async def _fallback(self, name: str, kwargs: dict, why: str) -> ToolResult:
         if self.fallback_registry is not None:
-            print(f"[MCP] '{name}' -> in-process fallback ({why})")
+            print(f"[MCP] in-process fallback; tool_name={name} reason_chars={len(str(why))}")
             return await self.fallback_registry.execute_tool(name, **kwargs)
         return ToolResult(
             success=False,
             data=None,
-            error=f"MCP unavailable ({why}) and no fallback registry",
+            error="MCP unavailable and no fallback registry",
             tool_name=name,
         )

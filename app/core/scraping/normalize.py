@@ -65,7 +65,7 @@ def _geocode_fill(prop: dict) -> None:
         if geo and geo.get("lat") is not None and geo.get("lng") is not None:
             prop["geo_location"] = f"{geo['lat']}, {geo['lng']}"
     except Exception as e:  # geocoding is best-effort; never fatal
-        print(f"  [normalize] geocode failed for {str(address)[:40]}: {e}")
+        print(f"  [normalize] geocode failed; address_chars={len(str(address))} error_type={type(e).__name__}")
 
 
 def compose_enhanced_description(prop: dict) -> str:

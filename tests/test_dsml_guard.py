@@ -185,7 +185,13 @@ def _install_leaking_graph(monkeypatch, text):
             captured["memory"] = (job.get("payload") or {}).get("assistant_message")
         return True
 
-    monkeypatch.setattr(appmod, "agent_graph", _FakeGraph())
+    fake_graph = _FakeGraph()
+    # Production deliberately rejects a graph built for another event-loop
+    # generation. This test double must therefore carry the same ownership tag
+    # as a graph returned by _ensure_agent_runtime; otherwise the runtime
+    # correctly replaces it with a real graph and this ceases to be a boundary test.
+    setattr(fake_graph, appmod._GRAPH_RUNNER_ATTR, appmod._graph_loop_runner)
+    monkeypatch.setattr(appmod, "agent_graph", fake_graph)
     monkeypatch.setattr(appmod, "_write_back_turn", _spy_write_back)
     monkeypatch.setattr(appmod, "_queue_background_job", _spy_background_job)
     return captured

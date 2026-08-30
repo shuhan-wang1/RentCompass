@@ -559,6 +559,7 @@ def test_the_scan_actually_sees_the_model_var():
 def test_all_llm_client_factories_apply_bounded_transport_configuration(monkeypatch):
     monkeypatch.setenv("LLM_REQUEST_TIMEOUT_SECONDS", "7")
     monkeypatch.setenv("LLM_MAX_RETRIES", "2")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-transport-key")
 
     from uk_rent_agent.llm.router import ModelRouter
     routed = ModelRouter().create("intent")
@@ -567,6 +568,7 @@ def test_all_llm_client_factories_apply_bounded_transport_configuration(monkeypa
 
     from core import llm_config
     monkeypatch.setattr(llm_config, "DEEPSEEK_MODEL", "deepseek-v4-flash")
+    monkeypatch.setattr(llm_config, "DEEPSEEK_API_KEY", "test-transport-key")
     direct = llm_config._deepseek_llm(0.1, 100)
     assert direct.request_timeout == 7.0
     assert direct.max_retries == 2

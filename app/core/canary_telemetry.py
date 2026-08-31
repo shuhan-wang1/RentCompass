@@ -41,8 +41,15 @@ Schema v2 changes vs v1
 * ``eval_only`` self-declares metrics that prod telemetry cannot determine, so
   the report can distinguish "eval-only" from "missing instrumentation".
 * Experimental ``manager_v1`` turns identify whether specialist dispatch was
-  configured and may carry a content-free ``multi_agent`` lifecycle diagnostic.
-  Legacy/fc records retain their old shape.
+  configured and may carry a content-free ``specialist`` lifecycle diagnostic.
+  The block is named for what it counts — specialist tasks — and deliberately NOT
+  for an architecture: a specialist makes no model call of its own and shares the
+  manager's context. An early v3 draft named it after that architecture; it was
+  renamed in place on 2026-08-31 while v3 still had no production records, so
+  there is no compatibility burden. This producer emits ``specialist`` ONLY; the
+  consumer keeps reading the draft key as an alias
+  (``canary_report.specialist_block``) so a stray pre-rename row is interpreted
+  rather than convicted. Legacy/fc records retain their old shape.
 
 Schema v3 changes vs v2
 -----------------------
@@ -62,7 +69,7 @@ window spanning the change silently averages two different measurements:
   observed ``0`` for both counters instead of ``null``.
 * Additive in v3 and safe to ignore: ``variant_id``, the rollout identity block,
   ``root_agent_context``/``agent_role``/``task_id``/``parent_task_id``,
-  ``tool_latency``, and the ``multi_agent``
+  ``tool_latency``, and the ``specialist``
   ``partial``/``denied_calls``/``dropped_error_codes`` counters.
 * ``tool_ledger_status`` states whether ``tool_batches`` COULD be counted at all.
   ``tool_batches`` is derived from ``final_state``, and a crashed turn has no
@@ -154,10 +161,10 @@ _SPECIALIST_DENIED_EVENT_FIELDS = ("status", "tool", "error_code")
 # the consumer: a record written by an earlier manager_v1 build has neither, and
 # defaulting them to 0 there is correct (nothing was counted) where defaulting a
 # core counter would be a fabrication.
-_MULTI_AGENT_COUNTER_FIELDS = (
+_SPECIALIST_COUNTER_FIELDS = (
     "planned", "started", "completed", "failed", "skipped", "max_in_flight",
 )
-_MULTI_AGENT_OPTIONAL_COUNTER_FIELDS = (
+_SPECIALIST_OPTIONAL_COUNTER_FIELDS = (
     "partial", "denied_calls", "dropped_error_codes",
 )
 _MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
@@ -303,14 +310,14 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
     for field in ("agent_role", "task_id", "parent_task_id"):
         if observed and observed.get(field) is not None:
             sig[field] = observed[field]
-    if observed and isinstance(observed.get("multi_agent"), dict):
+    if observed and isinstance(observed.get("specialist"), dict):
         # The record builder applies the content-free whitelist and emits this only
         # for manager_v1. Keeping it here lets a crash retain lifecycle progress.
-        sig["multi_agent"] = observed["multi_agent"]
+        sig["specialist"] = observed["specialist"]
     return sig
 
 
-def _multi_agent_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
+def _specialist_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
     """Sanitise the optional manager_v1 specialist trace.
 
     This deliberately accepts no objectives, args, outputs or error strings. A
@@ -320,14 +327,14 @@ def _multi_agent_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
         return None
     try:
         out: Dict[str, Any] = {}
-        for field in _MULTI_AGENT_COUNTER_FIELDS:
+        for field in _SPECIALIST_COUNTER_FIELDS:
             raw = value.get(field)
             if isinstance(raw, bool) or not isinstance(raw, int):
                 return None
             if raw < 0 or raw > 1_000_000:
                 return None
             out[field] = raw
-        for field in _MULTI_AGENT_OPTIONAL_COUNTER_FIELDS:
+        for field in _SPECIALIST_OPTIONAL_COUNTER_FIELDS:
             raw = value.get(field, 0)
             if isinstance(raw, bool) or not isinstance(raw, int):
                 return None
@@ -715,9 +722,9 @@ def build_canary_turn_record(
             if isinstance(manager_v1_specialists, bool)
             else None
         )
-        multi_agent = _multi_agent_diagnostics(sig.get("multi_agent"))
-        if multi_agent is not None:
-            record["multi_agent"] = multi_agent
+        specialist = _specialist_diagnostics(sig.get("specialist"))
+        if specialist is not None:
+            record["specialist"] = specialist
     if not isinstance(root_context, dict):
         root_context = {}
     for field in ("agent_role", "task_id", "parent_task_id"):

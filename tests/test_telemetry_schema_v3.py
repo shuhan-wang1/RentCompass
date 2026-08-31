@@ -32,6 +32,7 @@ if str(_ROOT / "app") not in sys.path:
     sys.path.insert(0, str(_ROOT / "app"))
 
 from core import canary_telemetry as ct  # noqa: E402
+from core import turn_observations as tobs  # noqa: E402
 
 os.environ.setdefault("CANARY_USER_HASH_KEY", "schema-v3-test-key")
 
@@ -274,3 +275,71 @@ def test_tool_latency_never_carries_a_per_call_vector_or_arguments():
     })
     assert set(summary["search_properties"]) == {
         "count", "p50_ms", "max_ms", "timed_out", "abandoned"}
+
+
+# --------------------------------------------------------------------------- #
+# The specialist lifecycle block is named `specialist`, end to end.            #
+#                                                                              #
+# Earlier v3 drafts called it `multi_agent`. Specialists make no model call of  #
+# their own and share the manager's context, so that name claimed an           #
+# architecture this code does not have; it was renamed on 2026-08-31 while v3   #
+# carried no production records, so there is no compatibility burden — only a   #
+# read-side alias in the consumer for any stray pre-rename row.                 #
+# --------------------------------------------------------------------------- #
+
+def _observe_one_specialist_task() -> dict:
+    """Drive the REAL turn accumulators through one complete task and return the
+    observation dict the request path would hand to the record builder."""
+    tobs.begin_turn()
+    try:
+        common = {"plan_id": "plan-1", "task_id": "task-1",
+                  "parent_task_id": "root-1", "role": "listings"}
+        assert tobs.note_specialist_plan(**common)
+        assert tobs.note_specialist_start(**common)
+        assert tobs.note_specialist_complete(duration_ms=12.5, call_count=1, **common)
+        return tobs.snapshot()
+    finally:
+        tobs.end_turn()
+
+
+def _manager_v1_record(observed: dict) -> dict:
+    """Mirror app.py::_build_fc_signals for the one key under test."""
+    signals = {
+        "soft_wrapped": False, "partial": False, "tool_budget_timeout": False,
+        "security": {"denied_write_count": 0, "tainted_write_executed_count": 0,
+                     "forbidden_write_executed_count": 0},
+        "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0,
+        "llm_calls": 1, "tool_batches": 1,
+        "llm_usage": {"calls": 1, "input_tokens": 10, "output_tokens": 5,
+                      "cache_read_tokens": 0,
+                      "models": {"m": {"calls": 1, "input_tokens": 10,
+                                       "output_tokens": 5, "cache_read_tokens": 0}}},
+        "llm_usage_status": "complete",
+    }
+    if isinstance(observed.get("specialist"), dict):
+        signals["specialist"] = dict(observed["specialist"])
+    return ct.build_canary_turn_record(
+        endpoint=ct.ENDPOINT_ALEX, agent_arch="manager_v1", candidate_sha="deadbee",
+        strict=True, request_id="req-spec-1", conversation_id="conv-spec-1",
+        user_id="u1", http_status=200, turn_outcome=ct.OUTCOME_OK,
+        turn_latency_ms=900.0, manager_v1_specialists=True, signals=signals,
+    )
+
+
+def test_the_accumulators_name_the_block_specialist():
+    observed = _observe_one_specialist_task()
+    assert "multi_agent" not in observed
+    assert observed["specialist"]["planned"] == 1
+    assert observed["specialist"]["completed"] == 1
+
+
+def test_a_real_specialist_turn_reaches_the_consumer_under_the_new_key():
+    """Accumulators -> record builder -> validator, with no hand-written block."""
+    rec = _manager_v1_record(_observe_one_specialist_task())
+
+    assert rec["telemetry_schema_version"] == 3
+    assert "multi_agent" not in rec, "the producer must never emit the old key"
+    assert rec["specialist"]["planned"] == 1
+    assert rec["specialist"]["started"] == 1
+    assert rec["specialist"]["completed"] == 1
+    assert cr.validate_record(rec) == []

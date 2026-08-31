@@ -62,8 +62,8 @@ def _labels(index: int = 1, *, role: str = "listings") -> dict:
     }
 
 
-def _record(*, multi_agent: dict) -> dict:
-    """A fully conformant manager_v1 record carrying ``multi_agent``.
+def _record(*, specialist: dict) -> dict:
+    """A fully conformant manager_v1 record carrying ``specialist``.
 
     The point of routing the snapshot through the real builder and the real
     consumer is that a producer-side "we recorded it" claim means nothing unless
@@ -73,7 +73,7 @@ def _record(*, multi_agent: dict) -> dict:
         "llm_calls": 0,
         "tool_batches": 0,
         "tool_ledger_status": TOOL_LEDGER_COMPLETE,
-        "multi_agent": multi_agent,
+        "specialist": specialist,
     })
     record["manager_v1_specialists"] = True
     record["variant_id"] = "manager_v1:strict-1:specialists-1"
@@ -142,7 +142,7 @@ def test_lifecycle_counts_deduplicate_and_expose_only_safe_fields():
     assert len(trace["events"]) == 6
     assert all(set(event) == _EVENT_FIELDS for event in trace["events"])
     assert "private" not in json.dumps(trace)
-    assert tobs.snapshot()["multi_agent"] == trace
+    assert tobs.snapshot()["specialist"] == trace
 
 
 def test_begin_turn_resets_specialist_trace_and_detail_is_bounded():
@@ -172,7 +172,7 @@ def test_begin_turn_resets_specialist_trace_and_detail_is_bounded():
         "events": [],
     }
     # Unused legacy/fc windows retain the old additive snapshot shape.
-    assert "multi_agent" not in tobs.snapshot()
+    assert "specialist" not in tobs.snapshot()
 
 
 def test_lifecycle_is_thread_safe_across_copied_contexts():
@@ -274,7 +274,7 @@ def test_eval_collector_receives_only_the_sanitised_lifecycle_event(tmp_path):
     assert "private" not in json.dumps(event)
 
 
-def test_canary_projects_multi_agent_only_for_manager_v1():
+def test_canary_projects_specialist_only_for_manager_v1():
     tobs.begin_turn()
     labels = _labels()
     tobs.note_specialist_plan(**labels, call_count=1)
@@ -282,10 +282,10 @@ def test_canary_projects_multi_agent_only_for_manager_v1():
     tobs.note_specialist_complete(**labels, duration_ms=4.25)
     trace = tobs.specialist_snapshot()
 
-    manager = _canary("manager_v1", {"multi_agent": trace})
-    assert manager["multi_agent"] == trace
-    assert "multi_agent" not in _canary("fc_loop", {"multi_agent": trace})
-    assert "multi_agent" not in _canary("legacy", {"multi_agent": trace})
+    manager = _canary("manager_v1", {"specialist": trace})
+    assert manager["specialist"] == trace
+    assert "specialist" not in _canary("fc_loop", {"specialist": trace})
+    assert "specialist" not in _canary("legacy", {"specialist": trace})
 
 
 def test_canary_filters_unsafe_event_fields_and_crash_projection_survives():
@@ -314,11 +314,11 @@ def test_canary_filters_unsafe_event_fields_and_crash_projection_survives():
             },
         ],
     }
-    crashed = unknown_turn_signals({"multi_agent": trace})
+    crashed = unknown_turn_signals({"specialist": trace})
     record = _canary("manager_v1", crashed)
-    assert len(record["multi_agent"]["events"]) == 1
-    assert set(record["multi_agent"]["events"][0]) == _EVENT_FIELDS
-    assert "objective" not in json.dumps(record["multi_agent"])
+    assert len(record["specialist"]["events"]) == 1
+    assert set(record["specialist"]["events"][0]) == _EVENT_FIELDS
+    assert "objective" not in json.dumps(record["specialist"])
 
 
 # --------------------------------------------------------------------------- #
@@ -422,7 +422,7 @@ def test_a_free_text_error_reason_can_never_enter_the_record(turn_window, code):
     assert "error_code" not in snap["events"][-1]
     if str(code):
         assert str(code) not in json.dumps(snap)
-    record = _record(multi_agent=snap)
+    record = _record(specialist=snap)
     assert canary_report.validate_record(record) == []
 
 
@@ -506,7 +506,7 @@ def test_a_denial_storm_is_bounded_without_evicting_the_lifecycle(turn_window):
     assert [e["status"] for e in lifecycle] == ["planned", "started", "completed"]
     assert len(denied) == tobs._MAX_DENIED_EVENTS
     assert snap["events_truncated"] is True
-    assert canary_report.validate_record(_record(multi_agent=snap)) == []
+    assert canary_report.validate_record(_record(specialist=snap)) == []
 
 
 def test_a_denied_dispatch_never_records_a_model_chosen_tool_name(turn_window):

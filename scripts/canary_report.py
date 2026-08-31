@@ -226,18 +226,54 @@ _SPECIALIST_EVENT_FIELDS = frozenset({
 })
 _SPECIALIST_EVENT_FIELDS_WITH_CODE = _SPECIALIST_EVENT_FIELDS | {"error_code"}
 _SPECIALIST_DENIED_EVENT_FIELDS = frozenset({"status", "tool", "error_code"})
-_MULTI_AGENT_COUNTER_FIELDS = (
+_SPECIALIST_COUNTER_FIELDS = (
     "planned", "started", "completed", "failed", "skipped", "max_in_flight",
 )
 # Optional for the CONSUMER only: a record from a manager_v1 build that predates
 # these counters has neither, and 0 is the correct reading there (nothing was
 # counted) where defaulting a core counter would be a fabrication.
-_MULTI_AGENT_OPTIONAL_COUNTER_FIELDS = (
+_SPECIALIST_OPTIONAL_COUNTER_FIELDS = (
     "partial", "denied_calls", "dropped_error_codes",
 )
-_ALL_MULTI_AGENT_COUNTER_FIELDS = (
-    _MULTI_AGENT_COUNTER_FIELDS + _MULTI_AGENT_OPTIONAL_COUNTER_FIELDS
+_ALL_SPECIALIST_COUNTER_FIELDS = (
+    _SPECIALIST_COUNTER_FIELDS + _SPECIALIST_OPTIONAL_COUNTER_FIELDS
 )
+
+#: The per-turn specialist lifecycle block.  Earlier schema-v3 drafts named this
+#: block ``multi_agent``; it was renamed on 2026-08-31 because specialists make no
+#: model call of their own and share the manager's context, so the old name
+#: overclaimed the architecture.  Producers emit ``specialist`` ONLY.  The legacy
+#: key is still READ here so a stray row written by a pre-rename build is
+#: interpreted rather than convicted as a contract violation.
+SPECIALIST_BLOCK_KEY = "specialist"
+LEGACY_SPECIALIST_BLOCK_KEY = "multi_agent"
+
+#: Sentinel for "the record carries no lifecycle block at all", which is legal and
+#: must not be confused with a block whose value is literally ``None`` (which is
+#: a malformed block and IS a violation).
+_NO_SPECIALIST_BLOCK = object()
+
+
+def specialist_block(rec: dict) -> tuple:
+    """``(block, problems)`` for a record's specialist lifecycle diagnostic.
+
+    ``block`` is ``_NO_SPECIALIST_BLOCK`` when the record carries neither key.
+    Carrying BOTH is a violation: there is no defined precedence between two
+    lifecycle blocks, and silently preferring one would let a mismatched pair
+    through the gate reporting whichever half happened to be well formed.
+    """
+    has_new = SPECIALIST_BLOCK_KEY in rec
+    has_old = LEGACY_SPECIALIST_BLOCK_KEY in rec
+    if has_new and has_old:
+        return rec[SPECIALIST_BLOCK_KEY], [
+            f"record carries both {SPECIALIST_BLOCK_KEY!r} and legacy "
+            f"{LEGACY_SPECIALIST_BLOCK_KEY!r} lifecycle blocks; exactly one is allowed"
+        ]
+    if has_new:
+        return rec[SPECIALIST_BLOCK_KEY], []
+    if has_old:
+        return rec[LEGACY_SPECIALIST_BLOCK_KEY], []
+    return _NO_SPECIALIST_BLOCK, []
 _MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 _ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
@@ -255,7 +291,7 @@ def _check_count(name: str, v) -> List[str]:
     return []
 
 
-def _validate_multi_agent(value: object, *, crashed: bool = False) -> List[str]:
+def _validate_specialist(value: object, *, crashed: bool = False) -> List[str]:
     """Validate the content-free specialist lifecycle projection.
 
     Counters are authoritative even when the bounded event ring truncates.  When
@@ -288,18 +324,18 @@ def _validate_multi_agent(value: object, *, crashed: bool = False) -> List[str]:
     reports "broken instrumentation" about working instrumentation observing a
     crash. Every event is still validated for shape and safety.
     """
-    prefix = "multi_agent"
+    prefix = "specialist"
     if not isinstance(value, dict):
         return [f"{prefix} is not an object"]
     problems: List[str] = []
     counts: Dict[str, int] = {}
-    for field in _MULTI_AGENT_COUNTER_FIELDS:
+    for field in _SPECIALIST_COUNTER_FIELDS:
         raw = value.get(field)
         field_problems = _check_count(f"{prefix}.{field}", raw)
         problems.extend(field_problems)
         if not field_problems:
             counts[field] = raw
-    for field in _MULTI_AGENT_OPTIONAL_COUNTER_FIELDS:
+    for field in _SPECIALIST_OPTIONAL_COUNTER_FIELDS:
         if field not in value:
             counts[field] = 0
             continue
@@ -316,7 +352,7 @@ def _validate_multi_agent(value: object, *, crashed: bool = False) -> List[str]:
         problems.append(f"{prefix}.events is not a list")
         events = []
 
-    if len(counts) == len(_ALL_MULTI_AGENT_COUNTER_FIELDS) and not crashed:
+    if len(counts) == len(_ALL_SPECIALIST_COUNTER_FIELDS) and not crashed:
         planned = counts["planned"]
         started = counts["started"]
         started_terminal = counts["completed"] + counts["partial"] + counts["failed"]
@@ -324,36 +360,36 @@ def _validate_multi_agent(value: object, *, crashed: bool = False) -> List[str]:
         max_flight = counts["max_in_flight"]
         if planned < started:
             problems.append(
-                f"multi_agent lifecycle incomplete: started={started} exceeds "
+                f"specialist lifecycle incomplete: started={started} exceeds "
                 f"planned={planned}"
             )
         if started != started_terminal:
             problems.append(
-                f"multi_agent lifecycle must be balanced: started={started} but "
+                f"specialist lifecycle must be balanced: started={started} but "
                 f"completed+partial+failed={started_terminal}"
             )
         if accounted != planned:
             problems.append(
-                f"multi_agent lifecycle must account for every planned task: "
+                f"specialist lifecycle must account for every planned task: "
                 f"planned={planned} but completed+partial+failed+skipped={accounted}"
             )
         if counts["skipped"] > planned - started:
             problems.append(
-                f"multi_agent lifecycle must be balanced: skipped={counts['skipped']} "
+                f"specialist lifecycle must be balanced: skipped={counts['skipped']} "
                 f"exceeds planned-started={planned - started}"
             )
         if max_flight > started:
             problems.append(
-                f"multi_agent.max_in_flight={max_flight} exceeds started={started}"
+                f"specialist.max_in_flight={max_flight} exceeds started={started}"
             )
         if started > 0 and max_flight < 1:
-            problems.append("multi_agent.max_in_flight must be >= 1 when tasks started")
+            problems.append("specialist.max_in_flight must be >= 1 when tasks started")
 
     status_counts = {status: 0 for status in _SPECIALIST_STATUSES}
     denied_events = 0
     task_states: Dict[tuple, dict] = {}
     for index, event in enumerate(events):
-        label = f"multi_agent.events[{index}]"
+        label = f"specialist.events[{index}]"
         if not isinstance(event, dict):
             problems.append(f"{label} is not an object")
             continue
@@ -437,16 +473,16 @@ def _validate_multi_agent(value: object, *, crashed: bool = False) -> List[str]:
             seen.add(status)
 
     if (truncated is False and not crashed
-            and len(counts) == len(_ALL_MULTI_AGENT_COUNTER_FIELDS)):
+            and len(counts) == len(_ALL_SPECIALIST_COUNTER_FIELDS)):
         for status in _SPECIALIST_STATUSES:
             if status_counts[status] != counts[status]:
                 problems.append(
-                    f"multi_agent.{status}={counts[status]} but events contain "
+                    f"specialist.{status}={counts[status]} but events contain "
                     f"{status_counts[status]}"
                 )
         if denied_events != counts["denied_calls"]:
             problems.append(
-                f"multi_agent.denied_calls={counts['denied_calls']} but events "
+                f"specialist.denied_calls={counts['denied_calls']} but events "
                 f"contain {denied_events}"
             )
     return problems
@@ -621,13 +657,13 @@ def validate_record(rec: dict) -> List[str]:
         specialists = rec.get("manager_v1_specialists")
         if not isinstance(specialists, bool):
             problems.append("manager_v1_specialists is missing/null or not a boolean")
-        if "multi_agent" in rec:
-            problems.extend(
-                _validate_multi_agent(rec.get("multi_agent"), crashed=crashed)
-            )
+        lifecycle, lifecycle_problems = specialist_block(rec)
+        problems.extend(lifecycle_problems)
+        if lifecycle is not _NO_SPECIALIST_BLOCK:
+            problems.extend(_validate_specialist(lifecycle, crashed=crashed))
             if specialists is False:
                 problems.append(
-                    "multi_agent lifecycle present while manager_v1_specialists is false"
+                    "specialist lifecycle present while manager_v1_specialists is false"
                 )
 
     # Additive rollout identity. Historical/direct records may omit it, but any
@@ -1236,10 +1272,13 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
 
     fr = _eval_only_count("forbidden_read")
     nen = _eval_only_count("no_evidence_numbers")
-    multi = [r["multi_agent"] for r in records if isinstance(r.get("multi_agent"), dict)]
+    # Reads the legacy ``multi_agent`` key as an alias so a pre-rename row still
+    # contributes its counters instead of silently dropping out of the denominator.
+    multi = [block for block in (specialist_block(r)[0] for r in records)
+             if isinstance(block, dict)]
     specialist_totals = {
         field: sum(_to_int(item.get(field)) for item in multi)
-        for field in _ALL_MULTI_AGENT_COUNTER_FIELDS
+        for field in _ALL_SPECIALIST_COUNTER_FIELDS
     }
     specialist_planned = specialist_totals["planned"]
 
@@ -1296,7 +1335,7 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
             r.get("manager_v1_specialists") for r in records
             if isinstance(r.get("manager_v1_specialists"), bool)
         }),
-        "multi_agent_turns": len(multi),
+        "specialist_turns": len(multi),
         "specialist": {
             **specialist_totals,
             # `partial` is deliberately NOT in this numerator. A partial task

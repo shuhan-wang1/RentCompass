@@ -101,7 +101,14 @@ _更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026
 （`rollout_id`/`rollout_stage`/`configured_candidate_percent`/`traffic_source`/`assigned_pool`）、
 `root_agent_context`/`agent_role`/`task_id`/`parent_task_id`、`tool_latency`（每工具
 `count`/`p50_ms`/`max_ms`/`timed_out`/`abandoned`，content-free、不参与门禁）、
-以及 `multi_agent` 的 `partial` / `denied_calls` / `dropped_error_codes` 计数器。
+以及 `specialist` 块的 `partial` / `denied_calls` / `dropped_error_codes` 计数器。
+
+**命名说明（2026-08-31，v3 内部改名）：** v3 的 specialist 生命周期诊断块名为
+`specialist`。早期 v3 草稿用的是一个宣称多智能体架构的旧名——specialist 不发起自己的
+模型调用、共享 manager 的上下文，该名字名不副实，故在 v3 尚无生产记录时就地改名，不留
+兼容负担。生产端只写 `specialist`；消费端（`canary_report.specialist_block`）仍把旧键
+当别名读取（旧键名见 `canary_report.LEGACY_SPECIALIST_BLOCK_KEY`），使改名前遗留的零星
+记录被解读而非判为违规，同时携带两个键属违规。报告字段相应为 `specialist_turns`。
 
 4. **崩溃回合按可观测性豁免（2026-08-31 二轮修）。** `tool_batches` 派生自 `final_state`，
    而崩溃回合按定义没有 `final_state`，也没有任何带外累加器能补上它——于是 v3 一旦要求它非空，

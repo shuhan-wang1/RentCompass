@@ -731,7 +731,7 @@ def snapshot() -> Dict[str, Any]:
         if obs is not None and obs.get("root_agent_context"):
             result["root_agent_context"] = dict(obs["root_agent_context"])
         if _specialist_was_observed():
-            result["multi_agent"] = specialist_snapshot()
+            result["specialist"] = specialist_snapshot()
         return result
     calls = list(obs.get("llm_usage_calls") or [])
     missing = int(obs.get("llm_usage_missing", 0))
@@ -757,7 +757,7 @@ def snapshot() -> Dict[str, Any]:
     if obs.get("root_agent_context"):
         result["root_agent_context"] = dict(obs["root_agent_context"])
     if _specialist_was_observed():
-        result["multi_agent"] = specialist_snapshot()
+        result["specialist"] = specialist_snapshot()
     return result
 
 

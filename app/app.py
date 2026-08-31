@@ -1002,11 +1002,11 @@ def _build_fc_signals(final_state) -> dict:
             value = root_agent_context.get(field)
             if value is not None:
                 signals[field] = value
-    multi_agent = _obs.get("multi_agent")
-    if AGENT_ARCH == MANAGER_V1_ARCH and isinstance(multi_agent, dict):
+    specialist = _obs.get("specialist")
+    if AGENT_ARCH == MANAGER_V1_ARCH and isinstance(specialist, dict):
         # Optional, non-gating diagnostics. The telemetry layer already strips
         # objectives, arguments, data, errors and any other user-derived content.
-        signals["multi_agent"] = dict(multi_agent)
+        signals["specialist"] = dict(specialist)
     return signals
 
 

@@ -33,7 +33,7 @@ _REQUEST_SEQUENCE = 0
 def _turn(arch: str, *, lifecycle: bool = False) -> dict:
     """Return one independently attributable, schema-v3 agent turn.
 
-    manager_v1 telemetry exists only from v3, and the multi_agent lifecycle rules
+    manager_v1 telemetry exists only from v3, and the specialist lifecycle rules
     are v3 rules — a v2 record is validated under the contract that was in force
     when it was written, which knows nothing about specialists.
     """
@@ -89,7 +89,7 @@ def _turn(arch: str, *, lifecycle: bool = False) -> dict:
     if arch == "manager_v1":
         record["manager_v1_specialists"] = True
         if lifecycle:
-            record["multi_agent"] = _complete_lifecycle()
+            record["specialist"] = _complete_lifecycle()
     return record
 
 
@@ -163,11 +163,11 @@ def test_missing_manager_specialist_identity_holds_exit2():
 
 def test_broken_specialist_lifecycle_identity_holds_exit2():
     candidate = _turn("manager_v1", lifecycle=True)
-    broken = copy.deepcopy(candidate["multi_agent"])
+    broken = copy.deepcopy(candidate["specialist"])
     broken["completed"] = 0
     # Counter invariants remain authoritative when the bounded event ring truncates.
     broken["events_truncated"] = True
-    candidate["multi_agent"] = broken
+    candidate["specialist"] = broken
     report = _report(candidate)
 
     assert report["verdict"]["decision"] == "INSTRUMENTATION-HOLD"
@@ -260,7 +260,7 @@ def test_a_balanced_turn_containing_partial_and_denied_proceeds():
     `started == completed+failed`) were arithmetically unsatisfiable the moment a
     task ended `partial`: a perfectly healthy turn read as "lifecycle incomplete"."""
     candidate = _turn("manager_v1", lifecycle=True)
-    candidate["multi_agent"] = _lifecycle_with_partial()
+    candidate["specialist"] = _lifecycle_with_partial()
     report = _report(candidate)
 
     assert report["verdict"]["decision"] == "PROCEED", _instrumentation_text(report)
@@ -291,7 +291,7 @@ def test_an_unbalanced_lifecycle_holds_exit2(mutation, expected):
     # The counters are authoritative on their own; truncation only disables the
     # event-stream reconciliation, so this isolates the invariant under test.
     broken["events_truncated"] = True
-    candidate["multi_agent"] = broken
+    candidate["specialist"] = broken
     report = _report(candidate)
 
     assert report["verdict"]["exit_code"] == 2
@@ -303,10 +303,10 @@ def test_a_record_predating_partial_and_denied_still_validates():
     consumer. A record from an earlier manager_v1 build has neither, and 0 is the
     correct reading there — the same reason the schema branches by version."""
     candidate = _turn("manager_v1", lifecycle=True)
-    old = copy.deepcopy(candidate["multi_agent"])
+    old = copy.deepcopy(candidate["specialist"])
     old.pop("partial")
     old.pop("denied_calls")
-    candidate["multi_agent"] = old
+    candidate["specialist"] = old
     report = _report(candidate)
 
     assert report["verdict"]["decision"] == "PROCEED", _instrumentation_text(report)
@@ -319,7 +319,7 @@ def test_a_denied_event_carrying_free_text_holds_exit2():
     broken = _lifecycle_with_partial()
     broken["events"][4] = {"status": "denied", "tool": "remember",
                            "error_code": "refused: 我想找 Camden 的房子"}
-    candidate["multi_agent"] = broken
+    candidate["specialist"] = broken
     report = _report(candidate)
 
     assert report["verdict"]["exit_code"] == 2
@@ -333,7 +333,7 @@ def test_a_denied_event_with_a_task_identity_holds_exit2():
     broken = _lifecycle_with_partial()
     broken["events"][4] = {"status": "denied", "tool": "remember",
                            "error_code": "dispatch_denied", "task_id": "task-1"}
-    candidate["multi_agent"] = broken
+    candidate["specialist"] = broken
     report = _report(candidate)
 
     assert report["verdict"]["exit_code"] == 2
@@ -344,7 +344,7 @@ def test_denied_calls_must_reconcile_with_the_untruncated_event_stream():
     candidate = _turn("manager_v1", lifecycle=True)
     broken = _lifecycle_with_partial()
     broken["denied_calls"] = 3
-    candidate["multi_agent"] = broken
+    candidate["specialist"] = broken
     report = _report(candidate)
 
     assert report["verdict"]["exit_code"] == 2
@@ -355,7 +355,7 @@ def test_an_error_code_on_a_non_outcome_status_holds_exit2():
     candidate = _turn("manager_v1", lifecycle=True)
     broken = _lifecycle_with_partial()
     broken["events"][2] = {**broken["events"][2], "error_code": "timeout"}
-    candidate["multi_agent"] = broken
+    candidate["specialist"] = broken
     report = _report(candidate)
 
     assert report["verdict"]["exit_code"] == 2
@@ -371,7 +371,7 @@ def test_partial_before_started_holds_exit2():
     broken["started"] = 1
     broken["completed"] = 1
     broken["max_in_flight"] = 1
-    candidate["multi_agent"] = broken
+    candidate["specialist"] = broken
     report = _report(candidate)
 
     assert report["verdict"]["exit_code"] == 2
@@ -394,9 +394,9 @@ def test_planned_tasks_that_simply_vanish_hold_exit2():
     `skipped`, so every planned task must land in exactly one terminal bucket.
     """
     candidate = _turn("manager_v1", lifecycle=True)
-    lost = copy.deepcopy(candidate["multi_agent"])
+    lost = copy.deepcopy(candidate["specialist"])
     lost.update({"planned": 10, "events_truncated": True})
-    candidate["multi_agent"] = lost
+    candidate["specialist"] = lost
 
     report = _report(candidate)
 
@@ -410,7 +410,7 @@ def test_planned_tasks_that_were_all_skipped_are_legal():
     candidate = _turn("manager_v1", lifecycle=True)
     common = {"plan_id": "plan-1", "task_id": "task-1", "parent_task_id": "root-1",
               "role": "listings"}
-    candidate["multi_agent"] = {
+    candidate["specialist"] = {
         "planned": 1, "started": 0, "completed": 0, "partial": 0, "failed": 0,
         "skipped": 1, "denied_calls": 0, "max_in_flight": 0,
         "events_truncated": False,
@@ -433,9 +433,9 @@ def test_a_crashed_turn_is_not_charged_with_an_unbalanced_lifecycle():
     every event is still validated."""
     candidate = _turn("manager_v1", lifecycle=True)
     candidate["turn_outcome"] = "crash"
-    mid_flight = copy.deepcopy(candidate["multi_agent"])
+    mid_flight = copy.deepcopy(candidate["specialist"])
     mid_flight.update({"completed": 0, "events": mid_flight["events"][:2]})
-    candidate["multi_agent"] = mid_flight
+    candidate["specialist"] = mid_flight
 
     assert not [p for p in cr.validate_record(candidate)
                 if "lifecycle" in p], cr.validate_record(candidate)
@@ -450,10 +450,68 @@ def test_dropped_error_codes_is_an_accepted_optional_counter():
     closed vocabulary. It is additive: a record from a build that predates it reads
     as 0, and one that carries it must not be rejected as an unknown field."""
     candidate = _turn("manager_v1", lifecycle=True)
-    candidate["multi_agent"]["dropped_error_codes"] = 3
+    candidate["specialist"]["dropped_error_codes"] = 3
 
     assert cr.validate_record(candidate) == []
-    assert "dropped_error_codes" in cr._MULTI_AGENT_OPTIONAL_COUNTER_FIELDS
+    assert "dropped_error_codes" in cr._SPECIALIST_OPTIONAL_COUNTER_FIELDS
 
-    candidate["multi_agent"]["dropped_error_codes"] = -1
+    candidate["specialist"]["dropped_error_codes"] = -1
     assert any("dropped_error_codes" in p for p in cr.validate_record(candidate))
+
+
+# --------------------------------------------------------------------------- #
+# Pre-rename alias.  The block was called `multi_agent` in early schema-v3      #
+# drafts.  Producers now emit `specialist` only, but the CONSUMER keeps reading #
+# the old key: a stray row from a pre-rename build must be interpreted, not     #
+# convicted of a contract violation it could not have known about.              #
+# --------------------------------------------------------------------------- #
+
+def _rename_to_legacy_key(record: dict) -> dict:
+    record["multi_agent"] = record.pop("specialist")
+    return record
+
+
+def test_a_pre_rename_record_is_read_through_the_legacy_alias():
+    candidate = _rename_to_legacy_key(_turn("manager_v1", lifecycle=True))
+
+    assert "specialist" not in candidate
+    assert cr.validate_record(candidate) == []
+
+
+def test_the_legacy_key_is_really_validated_not_merely_ignored():
+    """An alias that skipped validation would silently launder a broken block."""
+    candidate = _rename_to_legacy_key(_turn("manager_v1", lifecycle=True))
+    candidate["multi_agent"]["started"] = 2
+
+    problems = cr.validate_record(candidate)
+    assert any("lifecycle" in p for p in problems), problems
+    assert all("multi_agent" not in p for p in problems), (
+        "violations are reported under the current name", problems)
+
+
+def test_a_legacy_key_record_still_counts_in_the_aggregate():
+    report = _report(_rename_to_legacy_key(_turn("manager_v1", lifecycle=True)))
+    candidate = report["arches"]["candidate"]
+
+    assert candidate["specialist_turns"] == 1
+    assert candidate["specialist"]["planned"] == 1
+    assert candidate["specialist"]["completed"] == 1
+
+
+def test_carrying_both_keys_is_a_violation():
+    """There is no defined precedence between two lifecycle blocks, so a producer
+    emitting both is broken instrumentation rather than a record to interpret."""
+    candidate = _turn("manager_v1", lifecycle=True)
+    candidate["multi_agent"] = copy.deepcopy(candidate["specialist"])
+
+    problems = cr.validate_record(candidate)
+    assert any("exactly one is allowed" in p for p in problems), problems
+
+
+def test_the_block_accessor_reports_absence_distinctly_from_a_null_block():
+    absent, problems = cr.specialist_block(_turn("manager_v1"))
+    assert absent is cr._NO_SPECIALIST_BLOCK and problems == []
+
+    null_block, problems = cr.specialist_block({"specialist": None})
+    assert null_block is None and problems == []
+    assert cr._validate_specialist(null_block) == ["specialist is not an object"]

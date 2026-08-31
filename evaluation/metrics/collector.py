@@ -68,7 +68,7 @@ _SPECIALIST_OUTCOME_STATUSES = frozenset({"partial", "failed", "skipped"})
 # Not a task transition: it carries a tool name and a code, no task identity — which
 # is why it is deliberately OUTSIDE _SPECIALIST_STATUSES above rather than added to
 # it. Putting it there would let a caller emit a task-shaped event with
-# status="denied", and `canary_report._validate_multi_agent` rejects exactly that
+# status="denied", and `canary_report._validate_specialist` rejects exactly that
 # (a denied event must be {status, tool, error_code} and nothing else). The union
 # below is the full set this function accepts and is what `record_specialist_lifecycle`
 # validates against, so the two shapes' vocabularies live in exactly one place.

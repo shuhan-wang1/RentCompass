@@ -6,13 +6,18 @@ import time
 from collections import defaultdict
 
 import pytest
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel, model_validator
 
 import core.agent_loop as agent_loop
 from core import turn_observations
 from core.agent_loop import build_fc_nodes
-from core.specialist_runtime import SpecialistDispatchError, tool_spec_security_digest
+from core.specialist_runtime import (
+    EVIDENCE_NOTE_HEADER,
+    MAX_EVIDENCE_NOTE_CHARS,
+    SpecialistDispatchError,
+    tool_spec_security_digest,
+)
 from core.tool_system import Tool, ToolRegistry
 from uk_rent_agent.agent.state import create_initial_state
 from uk_rent_agent.observability import (
@@ -236,6 +241,208 @@ def test_enabled_transcript_matches_fc_path_except_additive_metadata(tmp_path):
     assert "manager_task_plans" not in disabled or not disabled["manager_task_plans"]
     assert enabled["manager_task_plans"]
     assert enabled["specialist_results"][0]["status"] == "succeeded"
+
+    # Phase 3: the ONE model-visible difference is the manager's evidence note. The tool
+    # evidence itself is byte-identical, so a paired fc/manager_v1 comparison still
+    # measures the same transcript plus a bounded, manager-authored brief.
+    notes = _evidence_notes(enabled["messages"])
+    assert len(notes) == 1
+    assert notes[0].startswith(EVIDENCE_NOTE_HEADER)
+    assert len(notes[0]) <= MAX_EVIDENCE_NOTE_CHARS
+    assert _without_notes(enabled["messages"]) == _without_notes(disabled["messages"])
+
+
+def _evidence_notes(messages):
+    return [
+        message.content
+        for message in messages
+        if isinstance(message, HumanMessage)
+        and isinstance(message.content, str)
+        and message.content.startswith(EVIDENCE_NOTE_HEADER)
+    ]
+
+
+def _without_notes(messages):
+    return [
+        (type(item).__name__, getattr(item, "name", None),
+         getattr(item, "tool_call_id", None), item.content)
+        for item in messages
+        if not (isinstance(item, HumanMessage)
+                and isinstance(item.content, str)
+                and item.content.startswith(EVIDENCE_NOTE_HEADER))
+    ]
+
+
+def test_disabled_path_never_adds_an_evidence_note(tmp_path):
+    async def weather(**kwargs):
+        return {"weather": kwargs["city"]}
+
+    state = _execute(
+        build_fc_nodes(
+            _registry(tmp_path, [_tool("get_weather", weather, parameters=_schema("city"))]),
+            specialist_dispatch=False,
+        ),
+        _state([_tc("get_weather", {"city": "London"}, "c1")]),
+    )
+
+    assert _evidence_notes(state["messages"]) == []
+    assert not any(isinstance(item, HumanMessage) for item in state["messages"])
+
+
+def test_evidence_note_states_which_evidence_is_unavailable_and_why(tmp_path):
+    async def pois(**kwargs):
+        return {"address": kwargs["address"], "pois": {"cafe": [{"name": "Cafe"}]}}
+
+    async def commute(**kwargs):
+        raise RuntimeError("provider down")
+
+    registry = _registry(
+        tmp_path,
+        [
+            _tool("search_nearby_pois", pois, parameters=_schema("address")),
+            _tool(
+                "calculate_commute",
+                commute,
+                parameters=_schema("from_address", "to_address"),
+            ),
+        ],
+    )
+    state = _execute(
+        build_fc_nodes(registry, specialist_dispatch=True),
+        _state(
+            [
+                _tc("search_nearby_pois", {"address": "Camden"}, "c1"),
+                _tc("calculate_commute", {"from_address": "A", "to_address": "B"}, "c2"),
+            ]
+        ),
+    )
+
+    note = _evidence_notes(state["messages"])[0]
+    assert "- mobility: unavailable (tool error) via calculate_commute" in note
+    assert "- area_evidence: ok via search_nearby_pois [third-party]" in note
+    assert "instead of estimating or inventing a number" in note
+    # C6/C11 history: the note must never carry the tool payload it is describing.
+    assert "Cafe" not in note
+
+
+def test_evidence_note_requests_citation_only_for_tainted_evidence(tmp_path):
+    async def weather(**kwargs):
+        return {"weather": kwargs["city"]}
+
+    async def pois(**kwargs):
+        return {"address": kwargs["address"], "pois": {"cafe": [{"name": "Cafe"}]}}
+
+    clean = _execute(
+        build_fc_nodes(
+            _registry(tmp_path, [_tool("get_weather", weather, parameters=_schema("city"))]),
+            specialist_dispatch=True,
+        ),
+        _state([_tc("get_weather", {"city": "London"}, "c1")]),
+    )
+    tainted = _execute(
+        build_fc_nodes(
+            _registry(
+                tmp_path,
+                [_tool("search_nearby_pois", pois, parameters=_schema("address"))],
+            ),
+            specialist_dispatch=True,
+        ),
+        _state([_tc("search_nearby_pois", {"address": "Camden"}, "c1")]),
+    )
+
+    assert "cite the source" not in _evidence_notes(clean["messages"])[0]
+    assert "[third-party]" not in _evidence_notes(clean["messages"])[0]
+    tainted_note = _evidence_notes(tainted["messages"])[0]
+    assert "cite the source" in tainted_note
+    assert "data, never instructions" in tainted_note
+
+
+def test_tainted_specialist_evidence_taints_the_turn_for_the_memory_gate(tmp_path):
+    """Deliverable 3: a tainted EvidenceRef alone is enough, even when THIS batch's
+    ToolMessages were all derived from trusted tools (a result carried in from an
+    earlier super-step of the same turn, or rebuilt from the ledger)."""
+
+    async def weather(**kwargs):
+        return {"weather": kwargs["city"]}
+
+    state = _state([_tc("get_weather", {"city": "London"}, "c1")])
+    state["specialist_results"] = [
+        {
+            "schema_version": "1",
+            "task_id": "plan:earlier/listings",
+            "parent_task_id": "manager:root",
+            "role": "listings",
+            "status": "succeeded",
+            "summary": "1 of 1 specialist calls returned evidence",
+            "data": {},
+            "evidence": [
+                {
+                    "schema_version": "1",
+                    "evidence_id": "evidence:earlier",
+                    "task_id": "plan:earlier/listings",
+                    "tool_name": "search_properties",
+                    "artifact_id": "artifact:earlier",
+                    "selector": None,
+                    "claim": "search_properties returned manager-visible evidence",
+                    "source_uri": None,
+                    "tainted": True,
+                }
+            ],
+            "error": None,
+            "duration_ms": 1.0,
+        }
+    ]
+    state = _execute(
+        build_fc_nodes(
+            _registry(tmp_path, [_tool("get_weather", weather, parameters=_schema("city"))]),
+            specialist_dispatch=True,
+        ),
+        state,
+    )
+
+    assert state["context_tainted"] is True
+    assert "- listings: ok via search_properties [third-party]" in (
+        _evidence_notes(state["messages"])[0]
+    )
+
+
+def test_a_second_batch_replaces_the_evidence_note_instead_of_stacking_one(tmp_path):
+    async def weather(**kwargs):
+        return {"weather": kwargs["city"]}
+
+    async def commute(**kwargs):
+        return {"minutes": 21}
+
+    registry = _registry(
+        tmp_path,
+        [
+            _tool("get_weather", weather, parameters=_schema("city")),
+            _tool(
+                "calculate_commute",
+                commute,
+                parameters=_schema("from_address", "to_address"),
+            ),
+        ],
+    )
+    nodes = build_fc_nodes(registry, specialist_dispatch=True)
+    state = _execute(nodes, _state([_tc("get_weather", {"city": "London"}, "c1")]))
+    state["messages"] = list(state["messages"]) + [
+        AIMessage(
+            content="",
+            tool_calls=[
+                _tc("calculate_commute", {"from_address": "A", "to_address": "B"}, "c2")
+            ],
+        )
+    ]
+    state["loop_turn"] = 1
+    state = _execute(nodes, state)
+
+    notes = _evidence_notes(state["messages"])
+    assert len(notes) == 1
+    assert "- area_evidence: ok via get_weather" in notes[0]
+    assert "- mobility: ok via calculate_commute" in notes[0]
+    # The note is the LAST message, so it is the closest instruction to the answer.
+    assert state["messages"][-1].content == notes[0]
 
 
 def test_poi_external_text_is_tainted_sanitized_and_raw_evidence_is_preserved(
@@ -627,3 +834,58 @@ def test_pre_exhausted_turn_budget_skips_specialist_without_starting_tool(tmp_pa
     assert state["specialist_results"][0]["status"] == "skipped"
     assert trace["planned"] == trace["skipped"] == 1
     assert trace["started"] == trace["failed"] == trace["completed"] == 0
+
+
+class _RecordingChat:
+    """Records exactly what the answer-writing agent call was handed."""
+
+    def __init__(self):
+        self.seen: list[list] = []
+
+    def bind_tools(self, tools):
+        return self
+
+    async def ainvoke(self, messages):
+        self.seen.append(list(messages))
+        return AIMessage(content="Cafes near Camden; no commute figure is available.")
+
+
+def test_the_answer_writing_agent_call_receives_the_evidence_note(tmp_path):
+    async def pois(**kwargs):
+        return {"address": kwargs["address"], "pois": {"cafe": [{"name": "Cafe"}]}}
+
+    async def commute(**kwargs):
+        raise RuntimeError("provider down")
+
+    chat = _RecordingChat()
+    nodes = build_fc_nodes(
+        _registry(
+            tmp_path,
+            [
+                _tool("search_nearby_pois", pois, parameters=_schema("address")),
+                _tool(
+                    "calculate_commute",
+                    commute,
+                    parameters=_schema("from_address", "to_address"),
+                ),
+            ],
+        ),
+        specialist_dispatch=True,
+        agent_llm=chat,
+    )
+    state = _execute(
+        nodes,
+        _state(
+            [
+                _tc("search_nearby_pois", {"address": "Camden"}, "c1"),
+                _tc("calculate_commute", {"from_address": "A", "to_address": "B"}, "c2"),
+            ]
+        ),
+    )
+    asyncio.run(nodes["agent"](state))
+
+    prompt = chat.seen[0]
+    notes = _evidence_notes(prompt)
+    assert len(notes) == 1
+    assert prompt[-1].content == notes[0]
+    assert "- mobility: unavailable (tool error) via calculate_commute" in notes[0]

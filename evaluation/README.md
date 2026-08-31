@@ -179,8 +179,10 @@ and marks `task_completion`, `constraint_quality`, `paired_pass_quality`,
 
 **This is the expected result of the current offline round, not a bug.** On the 98-case
 round both arms emit identical answers on 98/98 pairs, because offline the answer text
-comes from `run_benchmark._offline_fake_answer` and the specialist adapter changes
-*capability plumbing*, not text. A quality comparison on that data is arithmetic on the
+comes from `run_benchmark._offline_fake_answer`, which ignores the transcript. Phase 3
+(2026-08-31) does put a manager evidence note in front of the answer-writing call, so with
+a real model the arms *can* now differ — but the offline test double cannot show it, so
+offline the two arms stay identical by construction. A quality comparison on that data is arithmetic on the
 same numbers twice. `final_answer` is therefore a required measurement: a run missing it
 HOLDs rather than silently skipping the check.
 

@@ -783,18 +783,58 @@ def _note_specialist_lifecycle(status: str, *, plan_id: str, task, call_count: i
 
 
 def _specialist_result_error_code(result) -> Optional[str]:
-    """Map a SpecialistResult onto the closed lifecycle error-code set."""
-    status = getattr(result, "status", "")
-    if status == "succeeded":
-        return None
-    if status == "partial":
-        return "incomplete"
-    error = str(getattr(result, "error", "") or "").lower()
-    if "artifact validation failed" in error:
-        return "ledger_invalid"
-    if status == "skipped" or "budget was exhausted" in error:
-        return "budget_exhausted"
-    return "tool_error"
+    """Map a SpecialistResult onto the closed lifecycle error-code set.
+
+    Delegates to ``specialist_runtime.specialist_result_reason`` so the lifecycle
+    telemetry, the model-facing evidence note and the AnswerContract limitation lines
+    can never disagree about WHY a specialist task produced no evidence.
+    """
+    from core.specialist_runtime import specialist_result_reason
+
+    return specialist_result_reason(
+        getattr(result, "status", ""), getattr(result, "error", None))
+
+
+def _specialist_evidence_note(results: list, plans: list) -> str:
+    """Phase 3 / deliverable 1: the synthesiser's brief for this turn.
+
+    Bounded, manager-authored, and derived ONLY from the specialist ledgers — role,
+    status, granted tool name, taint flag and reason category, each re-checked against a
+    compile-time constant in ``summarize_specialist_results`` before it is rendered. No
+    tool payload, user text or identifier reaches this string, which is what makes it
+    safe to carry instructions. Never fatal: no note is strictly better than a broken one.
+    """
+    try:
+        from core.specialist_runtime import (
+            build_evidence_digest,
+            summarize_specialist_results,
+        )
+
+        return build_evidence_digest(summarize_specialist_results(results, plans))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("manager_v1.evidence_note_failed type=%s", type(exc).__name__)
+        return ""
+
+
+def _apply_evidence_note(messages: list, results: list, plans: list) -> list:
+    """Replace any earlier evidence note with the current one, at the end of the turn.
+
+    Rebuilt rather than appended: the note describes the WHOLE turn's evidence, so a
+    second batch must not leave a stale first note in the transcript, and the model must
+    never see the same brief twice.
+    """
+    from core.specialist_runtime import EVIDENCE_NOTE_HEADER
+
+    kept = [
+        message for message in messages
+        if not (isinstance(message, HumanMessage)
+                and isinstance(getattr(message, "content", None), str)
+                and message.content.startswith(EVIDENCE_NOTE_HEADER))
+    ]
+    note = _specialist_evidence_note(results, plans)
+    if not note:
+        return kept
+    return kept + [HumanMessage(content=note)]
 
 
 def _note_specialist_call_denied(tool: str, error_code: str) -> None:
@@ -4060,6 +4100,22 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     error_code=_specialist_result_error_code(result),
                 )
 
+        if specialist_dispatch and specialist_result_payloads:
+            # Deliverable 3 — taint consumption. An EvidenceRef is tainted exactly when its
+            # tool returned third-party text, so a tainted ref must make the TURN tainted for
+            # the memory-write gate. `_derived_toolmsg` already sets this for every call it
+            # rendered; this closes the seam for a result whose ToolMessage this node never
+            # produced (a ledger-rebuilt result, or a payload carried in from an earlier
+            # super-step of the same turn).
+            from core.specialist_runtime import evidence_is_tainted
+
+            tainted_any = tainted_any or evidence_is_tainted(specialist_result_payloads)
+            # Deliverable 1 — the manager's evidence note for the NEXT agent call (the one
+            # that writes the answer). Rebuilt from the full turn ledger each batch, so
+            # exactly one note is ever in the transcript.
+            messages = _apply_evidence_note(
+                messages, specialist_result_payloads, manager_task_plans)
+
         latest_search = next((a for a in reversed(artifacts)
                               if a.get("tool") == "search_properties"
                               and isinstance(a.get("raw_data"), dict)), None)
@@ -4241,11 +4297,66 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
 
+    # ── answer contract (manager_v1 only) ──────────────────────────
+    def _answer_contract_payload(state: AgentState, result: dict) -> dict:
+        """Deliverable 2: the manager's answer boundary, recorded as plain JSON.
+
+        Built from the FINAL text and response type — after every card formatter and the
+        memory-contract composer have run — so the contract records the answer that
+        actually shipped. A broken contract is an observability defect, never a failed
+        user turn: the limitation lines still survive on the invalid payload, because they
+        are the half the response layer will want.
+        """
+        from core.specialist_runtime import (
+            build_answer_contract,
+            build_answer_limitations,
+            safe_turn_root_id,
+            summarize_specialist_results,
+        )
+
+        plans = [item for item in (state.get("manager_task_plans") or [])
+                 if isinstance(item, dict)]
+        results = [item for item in (state.get("specialist_results") or [])
+                   if isinstance(item, dict)]
+        root_task_id = next(
+            (plan["root_task_id"] for plan in reversed(plans)
+             if isinstance(plan.get("root_task_id"), str) and plan["root_task_id"]),
+            "",
+        ) or safe_turn_root_id(
+            state.get("request_id") or state.get("run_id")) or "manager"
+        try:
+            limitations = list(
+                build_answer_limitations(summarize_specialist_results(results, plans)))
+        except Exception:  # pragma: no cover - defensive
+            limitations = []
+        try:
+            contract = build_answer_contract(
+                root_task_id=root_task_id,
+                response_type=result.get("response_type") or state.get("response_type"),
+                final_response=result.get("final_response") or "",
+                results=results,
+                plans=plans,
+            )
+        except Exception as exc:
+            error_code = str(getattr(exc, "error_code", None) or "answer_contract_invalid")
+            logger.warning(
+                "manager_v1.answer_contract_invalid error_code=%s error_type=%s",
+                error_code, type(exc).__name__)
+            return {"valid": False, "error_code": error_code, "limitations": limitations}
+        return contract.model_dump(mode="json")
+
+    def format_output_fc_with_contract(state: AgentState) -> dict:
+        """manager_v1 wrapper: the fc formatter, plus the validated answer contract."""
+        payload = dict(format_output_fc_node(state) or {})
+        payload["answer_contract"] = _answer_contract_payload(state, payload)
+        return payload
+
     return {
         "guard": guard_node,
         "agent": agent_node,
         "execute_tools": execute_tools_node,
-        "format_output_fc": format_output_fc_node,
+        "format_output_fc": (format_output_fc_with_contract if specialist_dispatch
+                             else format_output_fc_node),
     }
 
 

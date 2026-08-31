@@ -5,9 +5,15 @@ that spans all branches.** Last updated 2026-08-31.
 
 > ## `manager_v1` + specialists — 2026-08-31
 >
-> An uncommitted working-tree feature on top of `4171d84`, reviewed by four independent
-> reviewers. Read this before citing it as multi-agent work, and before planning on top
-> of it.
+> A feature branch on top of `4171d84` — `manager-v1/audit-fixes-20260831` — reviewed by
+> four independent reviewers. Read this before citing it as agent-to-agent orchestration,
+> and before planning on top of it. Commits so far: **`b96bcca`** (framework snapshot —
+> capability-scoped specialist runtime over `fc_loop`) and **`1150333`** (the 2026-08-31
+> audit fixes + review-round-2 defects). **Phase 3 + the telemetry rename: see the next
+> commits on this branch** — that work is finished but still in the working tree at the
+> time of writing. Nothing here is merged to mainline and nothing is deployed. The word
+> the reviewers rejected has been retired from the code as well: the per-turn telemetry
+> block is named `specialist`, not for an architecture, but for the thing it counts.
 >
 > **What exists.** A **capability sandbox plus telemetry layer over `fc_loop`**, gated
 > behind `AGENT_ARCH=manager_v1` + `MANAGER_V1_SPECIALISTS=1` + `USE_MCP_TOOLS=0`. The
@@ -29,7 +35,7 @@ that spans all branches.** Last updated 2026-08-31.
 > in flight in this same round; until it lands, any per-layer latency number quoted from
 > before it is an undercount, exactly as §3.11 records.
 >
-> **Four-reviewer verdict: 5/10 — this is not multi-agent.** The reviewers' unanimous
+> **Four-reviewer verdict: 5/10 — this is not agent-to-agent orchestration.** The unanimous
 > reading is that the honest technical name is a **tool capability broker**. The security
 > and pinning work is genuine and worth keeping; the framing is not.
 >
@@ -44,12 +50,42 @@ that spans all branches.** Last updated 2026-08-31.
 > `LOW_POWER` at `--repeat 1`. The honest outcome of an offline round is **HOLD**. See
 > `evaluation/README.md`.
 >
-> **Open owner decision.** Either (a) implement Phase 3 — a final agent that consumes
-> `specialist_results` under `AnswerContract` — which would make the contracts load-bearing
-> and the "specialist" framing true; or (b) **delete the unused contracts**
-> (`AnswerContract` is consumed by no runtime path and `depends_on` is always empty) and
-> keep the capability broker under its honest name. Do not leave unused contract
-> scaffolding in the tree as implied roadmap.
+> **Owner decision, taken 2026-08-31: option (a), minimal.** The choice was between
+> implementing Phase 3 so the contracts become load-bearing, and deleting the unused
+> contracts. **Phase 3 (minimal) was implemented**, and the telemetry block was renamed.
+> Concretely:
+>
+> * The manager now **consumes** `specialist_results` / `manager_task_plans`. On a
+>   dispatching turn that actually produced specialist results, `execute_tools` appends one
+>   bounded (**≤700 char**) manager-authored evidence note to the transcript, so the
+>   answer-writing `agent` call receives it. It carries only derived metadata — role,
+>   outcome word, reason category, granted tool names, a `[third-party]` taint marker —
+>   each re-checked against a compile-time constant, never tool payload, user text or an
+>   id, plus the honesty rules (cite third-party sources; state what is unavailable rather
+>   than estimating; answer only from what the tools returned). **No extra model call**,
+>   and specialists still make **zero** model calls.
+> * `format_output_fc` builds and validates an `AnswerContract` from the text that actually
+>   shipped, into a new per-turn `answer_contract` state channel. **An invalid contract
+>   never fails a turn** — the answer ships unchanged and the channel records
+>   `{"valid": false, "error_code": …, "limitations": [...]}` with a
+>   `manager_v1.answer_contract_invalid` warning.
+> * A tainted `EvidenceRef` carried in from an earlier super-step now sets
+>   `context_tainted` for the memory-write gate.
+> * **Telemetry rename**: the per-turn canary block is now `specialist` end to end —
+>   `turn_observations.snapshot()["specialist"]` -> the `specialist` block of a `canary.turn`
+>   record -> the report's `specialist_turns`. The pre-rename key claimed an architecture
+>   the layer does not have; it survives only as
+>   `scripts/canary_report.py::LEGACY_SPECIALIST_BLOCK_KEY`, a tolerant reader so a
+>   pre-rename row is still interpreted rather than convicted. Carrying both keys is itself
+>   a violation. Producers emit only `specialist`.
+> * **Identifiers were kept**, not renamed: `SpecialistTask`, `specialist_runtime`,
+>   `MANAGER_V1_SPECIALISTS`, and the eval arm's `specialist_lifecycle` are unchanged.
+>
+> `AnswerContract` is therefore **load-bearing**; any earlier note calling it "consumed by
+> no runtime path" is superseded by this entry. `depends_on` is **still always empty** —
+> Phase 3 did not touch it, and it remains scaffolding, not roadmap. The honest name is
+> unchanged: this is a **tool capability broker** whose manager now reads its own
+> specialists' output; it is still not agent-to-agent orchestration.
 >
 > **fc_loop behaviour change riding in this diff.** `search_nearby_pois` was added to the
 > untrusted/taint sets (`app/core/agent_loop.py::_UNTRUSTED_TOOLS` and
@@ -331,7 +367,7 @@ one sentence.
 | `perf/parallel-tool-batch` | — | **MERGED** (PR #26 → `814fc4a`) | the batch was already parallel; pins it, fixes worker-starvation misattribution |
 | `fix/grounded-derived-numbers` | — | **MERGED** (PR #28 → `59a2b08`) | commute estimate / nearest station / POI reference point |
 | `feat/incremental-listing-panel` | — | **MERGED** (PR #27 → `1e509f6`) | refinement in place, both arches, `core/refine_results.py` |
-| `design/layered-agent-architecture` | — | **MERGED** (PR #29 → `1022e0d`) | the multi-agent proposal, docs only |
+| `design/layered-agent-architecture` | — | **MERGED** (PR #29 → `1022e0d`) | the layered-agent proposal, docs only |
 | `docs/agent-round-findings` | — | **MERGED** (PR #31 → `36488f4`) | §3.11 withdrawals + §3.12 findings |
 | `docs/cutover-2026-07-26` | — | **MERGED** (PR #20 → `c9e60c2`) | §3.10, the cutover recorded as an override |
 | `design/round-variance-preregistration` | `96c8ec3` | **PR #19 OPEN — awaiting the owner's FREEZE** | σ(p50); D1–D4 applied. Not runnable until frozen. |
@@ -365,7 +401,7 @@ earlier notes that named it as the shippable SHA were wrong.
 | `docs/eval_infrastructure.md` | `eval/measurement-infrastructure` | what the shippable branch adds, and why items 5–6 exist (both are scars). |
 | `docs/canary_runbook.md` | all branches | canary/rollout operations: image build out of band, stage table, gate metrics, rollback. **Read §1 "Image build" before building any candidate.** |
 | `docs/output_length_latency_preregistration.md` | `docs/output-length-latency-prereg` (PR #15) | the surviving latency lever, as a design. **Every threshold is `<TO BE FILLED>` and §3.5 constrains how they may be filled.** |
-| `docs/layered_agent_architecture_proposal.md` | mainline (PR #29) | **read before proposing any multi-agent work.** Simulated per-turn on the warm n=64 round: layering bought ~308ms of a 1,402ms gap and moved ZERO turns under the bar as a **p50 latency lever**. That is the only claim the simulation supports. It is **not** a ruling on layering as a security/capability boundary, and it is quantified with the `llm_calls` instrument that §3.11 later WITHDREW as undercounting. Its Stage 1 (observer coverage of nested `_call_deepseek`, per-tool latency) remains a prerequisite for any staged layering claim, and is the work in flight in the 2026-08-31 `manager_v1` round above. |
+| `docs/layered_agent_architecture_proposal.md` | mainline (PR #29) | **read before proposing any layered or agent-to-agent work.** Simulated per-turn on the warm n=64 round: layering bought ~308ms of a 1,402ms gap and moved ZERO turns under the bar as a **p50 latency lever**. That is the only claim the simulation supports. It is **not** a ruling on layering as a security/capability boundary, and it is quantified with the `llm_calls` instrument that §3.11 later WITHDREW as undercounting. Its Stage 1 (observer coverage of nested `_call_deepseek`, per-tool latency) remains a prerequisite for any staged layering claim, and is the work in flight in the 2026-08-31 `manager_v1` round above. |
 | `docs/round_variance_preregistration.md` | mainline (PR #19, **unfrozen**) | σ(p50). Threshold **126ms** derived from α=0.05/power=0.80/δ=500ms, `k = ceil(2·(2.8016·σ̂/500)²)`. Read §0 first: the estimand is round-level p50, NOT per-case. |
 | `.runtime/round-8793c0b-internal-2026-07-25/README.txt` | deploy tree, not committed | procedure and caveats for the round of record (§3.8/§3.9). Authoritative on how that round was actually run. |
 
@@ -536,7 +572,7 @@ On (1), the lever ledger, **as amended on 2026-07-26**:
 | output length | surviving, and the only one with a fitted relationship |
 | serving-path overhead | surviving; +599ms paired median vs the in-process harness |
 | **intra-batch tool parallelism** | **NOT A LEVER — it was already parallel.** 16 concurrent 1.0s reads finish in 1.010s. An earlier draft of this section asserted the opposite without reading the code. |
-| **layered / multi-agent** | **as a p50 latency lever: quantified and insufficient** — ~308ms of a 1,402ms gap, **zero** turns moved under the bar; a p95 lever at best. Scope that verdict to latency only: it says nothing about layering as a capability/security boundary, which is what the 2026-08-31 `manager_v1` work actually builds (and which the four-reviewer round scored 5/10 *as multi-agent*, while keeping the pinning/revalidation). The 308ms figure also rests on the `llm_calls` instrument WITHDRAWN in §3.11. See `docs/layered_agent_architecture_proposal.md`. |
+| **layered agents** | **as a p50 latency lever: quantified and insufficient** — ~308ms of a 1,402ms gap, **zero** turns moved under the bar; a p95 lever at best. Scope that verdict to latency only: it says nothing about layering as a capability/security boundary, which is what the 2026-08-31 `manager_v1` work actually builds (and which the four-reviewer round scored 5/10 *as agent-to-agent orchestration*, while keeping the pinning/revalidation). The 308ms figure also rests on the `llm_calls` instrument WITHDRAWN in §3.11. See `docs/layered_agent_architecture_proposal.md`. |
 
 §3.8 shows the two surviving levers are **not yet separable**, so neither may be planned
 against yet. And per §3.12, ~740ms of round-to-round p50 drift on identical code means no

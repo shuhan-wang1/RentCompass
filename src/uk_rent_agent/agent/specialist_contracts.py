@@ -1,8 +1,13 @@
-"""Typed manager/specialist boundaries for the experimental multi-agent runtime.
+"""Typed manager/specialist boundary for capability-scoped read execution.
 
-These contracts are deliberately independent from the legacy ``AgentState`` task-plan
-dictionaries.  They define the data that may cross the manager/specialist boundary without
-changing existing checkpoints or graph behaviour.
+A "specialist" here is a role-scoped batch of already-approved read calls, not an agent:
+it makes no model call and takes no decision.  These contracts type the three things that
+cross that boundary — the manager's plan going out, evidence references coming back, and
+the answer contract the manager owns on the way to the user.
+
+They are deliberately independent from the legacy ``AgentState`` task-plan dictionaries.
+They define the data that may cross the manager/specialist boundary without changing
+existing checkpoints or graph behaviour.
 
 The models are frozen and reject unknown fields because this boundary is also a capability
 boundary: specialists may return evidence, but they may not smuggle manager-owned state such
@@ -45,6 +50,14 @@ ToolName = Annotated[
 ShortText = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=2_000),
+]
+# A rendered answer (a search card, a multi-area comparison) routinely runs past the
+# ShortText cap, and the AnswerContract records the text that actually shipped. It gets
+# its own bound rather than widening ShortText, which guards short manager-authored
+# strings such as objectives and limitation lines.
+AnswerText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=8_000),
 ]
 Sha256Digest = Annotated[
     str,
@@ -369,7 +382,7 @@ class AnswerContract(_StrictContract):
     owner: Literal["manager"] = "manager"
     root_task_id: Identifier
     response_type: AnswerResponseType
-    final_response: ShortText
+    final_response: AnswerText
     used_task_ids: tuple[Identifier, ...] = ()
     evidence: tuple[EvidenceRef, ...] = ()
     limitations: tuple[ShortText, ...] = ()
@@ -533,6 +546,7 @@ def validate_read_only_dispatch_for_role(
 __all__ = [
     "AnswerContract",
     "AnswerResponseType",
+    "AnswerText",
     "EvidenceRef",
     "MANAGER_ONLY_TOOLS",
     "MAX_SPECIALIST_TASKS",

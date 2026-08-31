@@ -13,6 +13,7 @@ offline. Uses asyncio.run (never get_event_loop().run_until_complete).
 import asyncio
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -28,7 +29,8 @@ for _m in [m for m in sys.modules if m == "core" or m.startswith("core.")]:
 
 import pytest
 
-from core.scraping import on_demand
+import core.recommend_areas as ram
+from core.scraping import on_demand, onthemarket
 import core.tools.search_properties as sp_mod
 from core.tools.search_properties import search_properties_impl
 
@@ -244,6 +246,232 @@ def test_return_margin_returns_before_the_axe(offline, monkeypatch):
     # It still produced useful output rather than crashing/relying on the axe.
     assert res["status"] in ("found", "no_results")
     assert res["incomplete_areas"] == ["Islington"]   # slow area bounded out, not the tool
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5bb. Optional detail enrichment obeys the SAME absolute search deadline.
+# ══════════════════════════════════════════════════════════════════════════
+def test_detail_enrichment_times_out_to_existing_results_and_gets_remaining_budget(
+        offline, monkeypatch):
+    """A slow detail page must never hold the whole search beyond its deadline.
+
+    The pre-enrichment listing is still useful, so timeout returns it unchanged.  The
+    synchronous worker also receives the *remaining* deadline budget, instead of falling
+    back to its 25-second request timeout.
+    """
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "1")
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "0")
+    monkeypatch.setenv("SEARCH_DESC_ENRICH_EST_S", "0")
+    monkeypatch.setattr(
+        sp_mod, "_RAG_COORDINATOR", sp_mod._DeterministicRAGCoordinator())
+    monkeypatch.setattr(
+        on_demand, "get_listings",
+        _make_fake_get_listings(cached={
+            "Camden": [_row("1 Camden Rd", 1500, "Camden", url="https://x/slow")]
+        }),
+    )
+
+    received_budgets = []
+
+    def _slow_details(url, *, budget_s=None, force_refresh=False):
+        received_budgets.append(budget_s)
+        time.sleep(0.50)  # deliberately ignores its budget: the async caller must still bound await
+        return {"description": "TOO LATE", "available_from": "2030-01-01"}
+
+    monkeypatch.setattr(onthemarket, "fetch_listing_details", _slow_details)
+
+    async def _scenario():
+        deadline = time.monotonic() + 0.16
+        started = time.monotonic()
+        result = await search_properties_impl(
+            area="Camden", no_commute=True, confirmed=True, max_budget=3000,
+            bedrooms=1, reply_language="en", _deadline_monotonic=deadline,
+        )
+        return result, time.monotonic() - started
+
+    res, search_elapsed = asyncio.run(_scenario())
+
+    assert res["status"] == "found"
+    assert res["recommendations"]                    # partial/pre-detail result survives
+    assert res["recommendations"][0]["description"] != "TOO LATE"
+    assert search_elapsed < 0.35, f"detail enrichment held search for {search_elapsed:.2f}s"
+    assert received_budgets and received_budgets[0] is not None
+    assert 0 < received_budgets[0] <= 0.16
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 5bc. Area-recommendation timeout detaches the wait; it does not cancel work.
+# ══════════════════════════════════════════════════════════════════════════
+def test_area_recommendation_timeout_keeps_task_running_to_fill_cache(offline, monkeypatch):
+    monkeypatch.setenv("AREA_RECOS_ENABLED", "1")
+    monkeypatch.setenv("AREA_RECO_INLINE_TIMEOUT", "0.01")
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "0")
+    monkeypatch.setenv("SEARCH_COMMUTE_ANNOTATE_EST_S", "999")
+    monkeypatch.setattr(
+        sp_mod, "_RAG_COORDINATOR", sp_mod._DeterministicRAGCoordinator())
+    monkeypatch.setattr(
+        on_demand, "get_listings",
+        _make_fake_get_listings(cached={
+            "Camden": [_row("1 Camden Rd", 1500, "Camden")]
+        }),
+    )
+
+    async def _scenario():
+        release = asyncio.Event()
+        finished = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        async def _slow_recommend(*args, **kwargs):
+            try:
+                await release.wait()
+                finished.set()  # stands in for the real recommender's cache write completing
+                return [{"name": "Islington", "slug": "islington"}]
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+        monkeypatch.setattr(ram, "recommend_areas", _slow_recommend)
+        result = await search_properties_impl(
+            area="Camden", commute_destination="UCL", max_commute_time=40,
+            confirmed=True, max_budget=3000, bedrooms=1, reply_language="en",
+            _deadline_monotonic=time.monotonic() + 2.0,
+        )
+        # The foreground wait has timed out. Let the detached task finish while this
+        # long-lived-loop simulation remains alive (asyncio.run cancels leftovers on exit).
+        release.set()
+        await asyncio.sleep(0.02)
+        return result, finished.is_set(), cancelled.is_set()
+
+    res, finished, cancelled = asyncio.run(_scenario())
+
+    assert res["status"] == "found"
+    assert res["area_recommendations"] == []          # not ready inside the inline window
+    assert finished is True                            # background work/cache fill completed
+    assert cancelled is False
+
+
+def test_external_search_cancellation_cleans_up_detail_enrichment_tasks(offline, monkeypatch):
+    """Cancelling the parent search while it awaits enrichment must not orphan the
+    child asyncio tasks that wrap executor work."""
+    monkeypatch.setenv("DESC_ENRICH_ENABLED", "1")
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "0")
+    monkeypatch.setenv("SEARCH_DESC_ENRICH_EST_S", "0")
+    monkeypatch.setattr(
+        sp_mod, "_RAG_COORDINATOR", sp_mod._DeterministicRAGCoordinator())
+    monkeypatch.setattr(
+        on_demand, "get_listings",
+        _make_fake_get_listings(cached={
+            "Camden": [_row("1 Camden Rd", 1500, "Camden", url="https://x/cancel")]
+        }),
+    )
+
+    worker_started = threading.Event()
+    release_worker = threading.Event()
+    enrichment_tasks = []
+    real_create_task = asyncio.create_task
+
+    def _tracking_create_task(coro, *args, **kwargs):
+        task = real_create_task(coro, *args, **kwargs)
+        if "_enrich_one" in getattr(coro, "__qualname__", ""):
+            enrichment_tasks.append(task)
+        return task
+
+    def _blocking_details(url, *, budget_s=None, force_refresh=False):
+        worker_started.set()
+        release_worker.wait(timeout=1.0)
+        return {"description": "late", "available_from": ""}
+
+    monkeypatch.setattr(sp_mod.asyncio, "create_task", _tracking_create_task)
+    monkeypatch.setattr(onthemarket, "fetch_listing_details", _blocking_details)
+
+    async def _scenario():
+        search_task = real_create_task(search_properties_impl(
+            area="Camden", no_commute=True, confirmed=True, max_budget=3000,
+            bedrooms=1, reply_language="en",
+            _deadline_monotonic=time.monotonic() + 5.0,
+        ))
+        while not worker_started.is_set():
+            await asyncio.sleep(0.001)
+        search_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await search_task
+        await asyncio.sleep(0)  # deliver cancellation to every enrichment wrapper
+        cleaned = bool(enrichment_tasks) and all(t.done() for t in enrichment_tasks)
+        release_worker.set()
+        return cleaned
+
+    assert asyncio.run(_scenario()) is True
+
+
+def test_external_search_cancellation_detaches_area_recommendation(offline, monkeypatch):
+    """shield protects the recommender from parent cancellation; the parent must also
+    retain it and consume its eventual outcome just like the inline-timeout path."""
+    monkeypatch.setenv("AREA_RECOS_ENABLED", "1")
+    monkeypatch.setenv("AREA_RECO_INLINE_TIMEOUT", "30")
+    monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+    monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "0")
+    monkeypatch.setattr(
+        sp_mod, "_RAG_COORDINATOR", sp_mod._DeterministicRAGCoordinator())
+    monkeypatch.setattr(
+        on_demand, "get_listings",
+        _make_fake_get_listings(cached={
+            "Camden": [_row("1 Camden Rd", 1500, "Camden")]
+        }),
+    )
+
+    shield_entered = asyncio.Event()
+    release_recommender = asyncio.Event()
+    finished = asyncio.Event()
+    recommender_tasks = []
+    real_create_task = asyncio.create_task
+    real_shield = asyncio.shield
+
+    async def _slow_recommend(*args, **kwargs):
+        await release_recommender.wait()
+        finished.set()
+        return [{"name": "Islington", "slug": "islington"}]
+
+    def _tracking_create_task(coro, *args, **kwargs):
+        task = real_create_task(coro, *args, **kwargs)
+        if "_slow_recommend" in getattr(coro, "__qualname__", ""):
+            recommender_tasks.append(task)
+        return task
+
+    def _tracking_shield(awaitable, *args, **kwargs):
+        shield_entered.set()
+        return real_shield(awaitable, *args, **kwargs)
+
+    monkeypatch.setattr(ram, "recommend_areas", _slow_recommend)
+    monkeypatch.setattr(sp_mod.asyncio, "create_task", _tracking_create_task)
+    monkeypatch.setattr(sp_mod.asyncio, "shield", _tracking_shield)
+    sp_mod._BACKGROUND_AREA_RECO_TASKS.clear()
+
+    async def _scenario():
+        search_task = real_create_task(search_properties_impl(
+            area="Camden", commute_destination="UCL", max_commute_time=40,
+            confirmed=True, max_budget=3000, bedrooms=1, reply_language="en",
+            _deadline_monotonic=time.monotonic() + 5.0,
+        ))
+        await shield_entered.wait()  # cancellation now lands inside the shielded collector
+        search_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await search_task
+        assert len(recommender_tasks) == 1
+        recommender_task = recommender_tasks[0]
+        retained_while_pending = recommender_task in sp_mod._BACKGROUND_AREA_RECO_TASKS
+        release_recommender.set()
+        await recommender_task
+        await asyncio.sleep(0)  # run the outcome-consuming/discard callback
+        return retained_while_pending, finished.is_set(), (
+            recommender_task not in sp_mod._BACKGROUND_AREA_RECO_TASKS)
+
+    retained, completed, released = asyncio.run(_scenario())
+    assert retained is True
+    assert completed is True
+    assert released is True
 
 
 # ══════════════════════════════════════════════════════════════════════════

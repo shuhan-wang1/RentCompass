@@ -1,7 +1,8 @@
-# fc_loop Canary Runbook
+# Configurable Candidate Canary Runbook
 
-Operational runbook for rolling the `fc_loop` harness out against the
-`legacy` (LangGraph) arch through the two pool-level upstreams.
+Operational runbook for evaluating and gradually exposing a configurable
+candidate (`fc_loop` by default, or `manager_v1` with specialists explicitly
+enabled) against the standing `legacy` rollback pool.
 The offline gate evaluator is `scripts/canary_report.py`; it reads the `canary.turn`
 telemetry stream and returns an exit code (0 proceed, 2 hold/stage-pause, 3 zero-tolerance).
 
@@ -12,9 +13,9 @@ telemetry stream and returns an exit code (0 proceed, 2 hold/stage-pause, 3 zero
 | Pool | Config | Image |
 |---|---|---|
 | **legacy** | prod-config (unchanged) | current prod image |
-| **fc** | `AGENT_ARCH=fc_loop`, `DEEPSEEK_STRICT=1` | built from the **current candidate tag** `canary/fc-loop-<sha>` — an immutable tag cut on the commit that carries the canary infra + these deployment fixes, **never the branch tip** |
+| **candidate** (`app-fc`, :5002) | default `fc_loop` / specialists off; optional `manager_v1` / specialists on | immutable `uk-rent-agent:canary-<arch>-<sha>` image |
 
-- The fc image is **pinned to an immutable tag**, not to `feat/harness-fc-loop`'s HEAD.
+- The candidate image is **pinned to an immutable tag**, not to a branch HEAD.
   Rebuilding the branch must not move what canary traffic runs. Cut a **new** tag to advance
   the candidate.
 - **Superseded history:** an earlier draft pinned `canary/fc-loop-7db03e7`. Do **not** deploy
@@ -23,23 +24,45 @@ telemetry stream and returns an exit code (0 proceed, 2 hold/stage-pause, 3 zero
   image built from it has no canary support at all. The deployable is the **current candidate
   tag** cut on the commit that includes the canary infra together with the compose/env wiring
   in this round.
-- Both pools run the **same** application; only the arch flag, strict flag, image, and the
-  DB-path / telemetry env pins differ.
+- Both pools run the **same** application. `app-fc` is retained as a service name
+  for deploy compatibility; it means “candidate”, not “always fc_loop”.
+- Production routing starts at **0% candidate**. The only accepted public weights
+  are 0, 5, 20, 50 and 100.
 
 ### Env wiring
 
-Per-pool environment, as set in `docker-compose.yml`. `CHECKPOINT_DB_PATH` (separate per arch)
+Per-pool environment, as set in `docker-compose.yml`. `CHECKPOINT_DB_PATH` (separate per arch and specialist mode)
 is the state-isolation boundary; `CONVERSATION_DB_PATH` is **the same file for both pools** so
 either arch can rebuild a conversation from the shared transcript on rollback.
 
-| Env | legacy (`app`) | fc (`app-fc`) |
+| Env | legacy (`app`) | candidate (`app-fc`) |
 |---|---|---|
-| `AGENT_ARCH` | `legacy` | `fc_loop` |
+| `AGENT_ARCH` | `legacy` | `${CANARY_AGENT_ARCH:-fc_loop}` |
+| `MANAGER_V1_SPECIALISTS` | off | `${CANARY_MANAGER_V1_SPECIALISTS:-0}` |
+| `USE_MCP_TOOLS` | app setting | `${CANARY_USE_MCP_TOOLS:-0}` |
 | `DEEPSEEK_STRICT` | (unset) | `1` |
 | `APP_CANDIDATE_SHA` | `${LEGACY_APP_SHA}` (required production pin) | `${FC_CANARY_SHA}` (candidate sha) |
-| `CHECKPOINT_DB_PATH` | `/app/.runtime/checkpoints.sqlite3` | `/app/.runtime/checkpoints_fc.sqlite3` |
+| `CHECKPOINT_DB_PATH` | `/app/.runtime/checkpoints.sqlite3` | `/app/.runtime/checkpoints_<arch>_specialists-<0|1>.sqlite3` |
 | `CONVERSATION_DB_PATH` | `/app/.runtime/conversations.sqlite3` | `/app/.runtime/conversations.sqlite3` (**shared**) |
-| `CANARY_LOG_PATH` | `/app/.runtime/logs/canary-legacy.jsonl` | `/app/.runtime/logs/canary-fc_loop.jsonl` |
+| `CANARY_LOG_PATH` | `/app/.runtime/logs/canary-legacy.jsonl` | `/app/.runtime/logs/canary-<arch>.jsonl` |
+
+Safe candidate selections are exactly:
+
+```dotenv
+# Existing/default candidate
+CANARY_AGENT_ARCH=fc_loop
+CANARY_MANAGER_V1_SPECIALISTS=0
+CANARY_USE_MCP_TOOLS=0
+
+# Phase-2 manager candidate
+CANARY_AGENT_ARCH=manager_v1
+CANARY_MANAGER_V1_SPECIALISTS=1
+CANARY_USE_MCP_TOOLS=0
+```
+
+`manager_v1 + specialists + MCP` is rejected by `Config` at startup. The
+weight controller additionally refuses to expose manager_v1 unless `/ready`
+reports `X-Agent-Arch: manager_v1` and `X-Agent-Specialists: 1`.
 
 > **⚠ `CHECKPOINT_DB_PATH` was previously mis-documented.** Earlier notes told ops to set the
 > checkpoint path via `CHECKPOINT_PATH`, but the code read a different variable — so the pin
@@ -55,72 +78,97 @@ either arch can rebuild a conversation from the shared transcript on rollback.
 > require `/ready` to report the expected arch, full source SHA, image identity and prompt
 > metadata. A pool without telemetry is *not instrumented* and cannot authorize a relative gate.
 
-### Routing and conversation provenance
+### Routing, cohorts and conversation provenance
 
-- Nginx selects one public pool atomically; there is no per-conversation load-balancer
-  stickiness and no dynamic hash-weight router.
+- Nginx performs real 0/5/20/50/100 splitting with `split_clients`.
+- This requires the generated include at
+  `/etc/nginx/snippets/rentcompass-canary-routing.conf`. A host that has not yet
+  installed it still has only the legacy single-upstream 0/100 switch and **must
+  not** attempt 5/20/50 staging. `setup_nginx_http.sh` or `setup_tls.sh` installs
+  the committed 0% fail-safe include; verify it before the first stage.
+- The cohort key is the opaque Flask `session` cookie first, an explicit
+  `X-Conversation-ID` second, then remote address + user-agent as bootstrap
+  fallback. Nginx hashes but does not signature-validate the cookie (cohorting is
+  not an authorization boundary). Cookie-less API clients must send
+  `X-Conversation-ID`; nginx never tries to parse a JSON body.
+- A first request with neither cookie nor header uses the fallback. After the
+  response establishes a signed session cookie, that browser can move cohort
+  once; subsequent requests stay on the cookie cohort. Do not claim absolute
+  first-request stickiness for anonymous clients.
+- Keep `CANARY_COHORT_SALT` unchanged while advancing stages. Because candidate
+  is always the first hash bucket, 5% is a subset of 20%, and 20% a subset of 50%.
+- Nginx overwrites all `X-RentCompass-Rollout-*` and assigned-pool/source headers;
+  client-supplied copies are never trusted. A JSON access log records request ID,
+  rollout ID, assigned pool and configured weight as the external denominator.
+  It also overwrites `X-Request-ID` with that same Nginx `$request_id`, so edge and
+  application records share a directly reconcilable identifier.
+- Direct loopback requests that do not carry the edge-injected headers are emitted
+  as `traffic_source=direct`, with no rollout ID, and are excluded when the report
+  selects an exact public rollout ID.
 - Each conversation persists the arch/version/strict triple that last served it as
   provenance. After a pool switch, the serving process reconciles that stamp and rebuilds
   hot state from the shared durable transcript.
-- The inactive target is refreshed and re-probed before cutover so stale process-local
-  session state is not treated as authoritative.
+- Shared durable conversation history preserves continuity if a cohort assignment
+  changes; process-local hot state is never the rollback source of truth.
 
 ### State isolation
 
-- **Separate checkpoint DBs per arch.** fc writes only to the fc checkpoint namespace;
-  legacy writes only to the legacy namespace. Neither reads the other's checkpoints.
+- **Separate checkpoint DBs per architecture and specialist mode.** Legacy,
+  fc_loop, manager_v1-off and manager_v1-on never resume each other's graph state.
 - **Shared message history.** Both arches see the same user-visible message transcript, so
   a conversation reads coherently and either arch can rebuild context from it.
 
-### Image build (immutable fc image)
+### Image build (immutable candidate image)
 
 > `bash deploy/update.sh` now performs this whole section automatically for the pool the
-> public upstream is serving — worktree checkout at the pin, immutable tag, `.env` pins,
+> public route is serving — worktree checkout at the pin, immutable tag, `.env` pins,
 > bring-up, and an arch+sha verification of what is actually answering. The manual
 > procedure below remains the reference for building a candidate that is *not* the
 > current deploy pin.
 
-The fc pool has **no `build:`** in compose — it runs a fixed, pre-built image, so the working
+The candidate pool has **no `build:`** in compose — it runs a fixed, pre-built image, so the working
 tree can never silently become what canary traffic executes. Build the image out of band from
-the current candidate tag and reference it by an immutable tag:
+the current candidate ref and reference it by an immutable tag:
 
 ```
 # 1. Check the candidate commit out into an isolated tree (does not touch your branch):
-git worktree add /tmp/fc-<sha> canary/fc-loop-<sha>
-#    (or: git archive canary/fc-loop-<sha> | tar -x -C /tmp/fc-<sha>)
+git worktree add /tmp/candidate-<sha> <candidate-git-ref>
+#    (or: git archive <candidate-git-ref> | tar -x -C /tmp/candidate-<sha>)
 
 # 2. Build a uniquely, immutably tagged image from it:
-docker build -t uk-rent-agent:canary-fc-loop-<sha> /tmp/fc-<sha>
+#    Use canary-fc-loop-... or canary-manager-v1-... to match CANARY_AGENT_ARCH.
+docker build -t uk-rent-agent:canary-<arch-with-hyphens>-<sha> /tmp/candidate-<sha>
 
 # 3. Clean up the worktree when done:
-git worktree remove /tmp/fc-<sha>
+git worktree remove /tmp/candidate-<sha>
 ```
 
-- **Never** retag or reuse `:latest` for the fc pool, and never rebuild the tag in place — a
+- **Never** retag or reuse `:latest` for the candidate pool, and never rebuild the tag in place — a
   new candidate gets a **new** `<sha>` tag.
 - Wire it into the compose `.env` (root-level, next to `docker-compose.yml`):
 
   ```
-  FC_CANARY_IMAGE=uk-rent-agent:canary-fc-loop-<sha>
+  FC_CANARY_IMAGE=uk-rent-agent:canary-<arch-with-hyphens>-<sha>
   FC_CANARY_SHA=<sha>
   ```
 
-  Both are `:?`-required by the `app-fc` service — the fc pool refuses to start if either is
+  Both are `:?`-required by the `app-fc` service — the candidate pool refuses to start if either is
   unset, so it can never come up on an ambiguous image or with an unpinned sha.
 
 ### Bring-up (internal stage)
 
 The default `docker compose up -d` is **unchanged** — it brings up the legacy stack only. The
-fc pool is behind the `canary` profile:
+candidate pool is behind the `canary` profile:
 
 ```
-# Start the internal fc pool (loopback :5002, not routed by nginx):
+# Start the internal candidate pool (loopback :5002, not routed by nginx at weight 0):
 docker compose --profile canary up -d app-fc
 
 # Verify: expect 200 plus the canary response headers.
 curl -s -D- http://127.0.0.1:5002/health
-#   → X-Agent-Arch: fc_loop
+#   → X-Agent-Arch: fc_loop (default) or manager_v1
 #   → X-Agent-Version: <sha>          (== FC_CANARY_SHA)
+#   → X-Agent-Specialists: 0 (fc_loop) or 1 (manager_v1 rollout)
 ```
 
 - `/health` is served by Starlette directly (it bypasses Flask's `after_request` hook); it
@@ -128,9 +176,12 @@ curl -s -D- http://127.0.0.1:5002/health
   an older commit `/health` returns 200 **without** the headers — verify against a
   Flask-served path instead (`curl -s -D- -o /dev/null http://127.0.0.1:5002/`).
 
-- Per-turn telemetry lands on the host at `./.runtime/logs/*.jsonl` (fc →
-  `canary-fc_loop.jsonl`) via the shared `./.runtime` bind mount.
-- Report on the internal stage (fc absolutes only — see the legacy-telemetry note in §1):
+- Per-turn telemetry lands on the host at `./.runtime/logs/*.jsonl`
+  (`canary-fc_loop.jsonl` or `canary-manager_v1.jsonl`) via the shared
+  `./.runtime` bind mount.
+- Report on the internal stage together with concurrent contract-valid legacy
+  telemetry. If the control arm is absent, the report HOLDs; an empty control must
+  never become a false-green comparison:
 
   ```
   python scripts/canary_report.py --input .runtime/logs/ --stage internal --since <stage-start-ISO>
@@ -140,10 +191,12 @@ curl -s -D- http://127.0.0.1:5002/health
 
 ## 2. Stage table
 
-Each stage advances **only when BOTH minima clear** — the elapsed-time floor **and** the
-fc-turn-count floor. Neither alone is sufficient.
+Each stage advances **only when BOTH minima clear** — the elapsed-time floor and
+the candidate-turn-count floor. Neither alone is sufficient. Use one unique,
+content-free rollout ID per stage so direct :5002 smoke traffic cannot enter the
+public cohort denominator.
 
-| Stage | fc traffic | Min hold | Min fc turns |
+| Stage | Candidate traffic | Min hold | Min candidate turns |
 |---|---|---|---|
 | `internal` | internal only | 24h | 50 |
 | `c1` | 5% | 24h | 200 |
@@ -151,10 +204,54 @@ fc-turn-count floor. Neither alone is sufficient.
 | `c3` | 50% | 72h | 1000 |
 | `flip` | 100% | 7d (168h) | 2000 |
 
+Apply a stage only after its offline evaluation gate passes:
+
+```bash
+# Examples; use a new immutable rollout id for every stage window.
+sudo bash deploy/set_canary_weight.sh --weight 5 \
+  --rollout-id manager-v1-20260830-c1 --stage c1 --allow-public-candidate
+sudo bash deploy/set_canary_weight.sh --weight 20 \
+  --rollout-id manager-v1-20260831-c2 --stage c2 --allow-public-candidate
+sudo bash deploy/set_canary_weight.sh --weight 50 \
+  --rollout-id manager-v1-20260902-c3 --stage c3 --allow-public-candidate
+
+bash deploy/set_canary_weight.sh --status
+```
+
+Do not execute the 100% command from this runbook yet. At 100%, there are no live
+legacy turns in the rollout window, while the comparative report deliberately
+requires a non-empty control arm. It therefore HOLDs rather than treating an empty
+control as a clean baseline. A flip requires a separately implemented, immutable
+frozen-control artifact (or a shadow control stream) bound to the same candidate;
+until that gate exists, 50% is the maximum authorized stage. The controller retains
+the 100% primitive for a future gated cutover, not as evidence that flip is eligible.
+
+The controller preflights pool identity, writes the include with a same-directory
+rename, runs `nginx -t`, reloads, and probes both cohorts. Any failure restores the
+previous include and reloads it.
+
 `canary_report.py --stage <name> --since <stage-start-ISO>` reports `turns_ok`, `hours_ok`,
 and `eligible = turns_ok AND hours_ok`. `--since` also **filters the records** (see §5), so
 the turn count is this stage's traffic. Not-yet-eligible is a **HOLD** (exit 2): it is not
 an SLO regression, but it must still stop an automated promotion.
+
+Run production gates through the rollback-coupled wrapper:
+
+```bash
+# N is the exact count of agent-turn requests for this rollout ID in the trusted
+# nginx access log, after filtering out health/static/direct traffic.
+EDGE_AGENT_TURNS=200
+bash deploy/run_canary_gate.sh --input .runtime/logs/ \
+  --stage c1 --since <stage-start-ISO> \
+  --candidate-arch manager_v1 --require-specialists \
+  --rollout-id <exact-rollout-id> --rollout-stage c1 \
+  --configured-weight 5 --expect-rollout-turns "$EDGE_AGENT_TURNS"
+```
+
+It forwards every argument to `canary_report.py`. Exit 3 alone invokes
+`set_canary_weight.sh --weight 0`; exit 0 never promotes automatically, while
+2/1/64 leave routing untouched. If rollback itself fails the wrapper exits 70
+and prints `ROLLBACK_FAILED` for immediate operator escalation.
 
 ---
 
@@ -163,7 +260,7 @@ an SLO regression, but it must still stop an automated promotion.
 Two classes. **Zero-tolerance** metrics are absolute (any occurrence rolls back). Two
 **stage-pause** metrics are graded **relative to legacy** (+1pp tolerance) because the
 known **base98 family** of eval findings gives legacy a non-zero baseline on them — we gate
-on fc being no worse than legacy, not on an absolute zero.
+on the candidate being no worse than legacy, not on an absolute zero.
 
 ### Zero-tolerance (instant rollback → exit 3)
 
@@ -176,7 +273,7 @@ on fc being no worse than legacy, not on an absolute zero.
 
 ### Stage-pause (pause rollout → exit 2)
 
-- fc **p50 > 6000ms** or **p95 > 30000ms** (absolute; nearest-rank percentile).
+- candidate **p50 > 6000ms** or **p95 > 30000ms** (absolute; nearest-rank percentile).
 - **partial + soft_wrapped rate > 10%** (absolute; union of the two degraded-turn flags).
 - **forbidden-read rate** > legacy **+ 1pp** — *relative* (base98 family). Eval-sweep metric;
   if absent from prod telemetry the report prints *requires eval sweep — not in prod telemetry*.
@@ -191,25 +288,39 @@ Exit-code precedence: **zero-tolerance (3) > hold/stage-pause (2) > proceed (0)*
 
 ### Normal rollback
 
-- Run `deploy/switch_pool.sh --to legacy` in the rollout window. The target is refreshed,
-  checked through `/ready`, and cut over atomically; conversation state rehydrates from the
-  shared transcript rather than depending on load-balancer affinity.
+- Set candidate weight to zero immediately:
+
+  ```bash
+  sudo bash deploy/set_canary_weight.sh --weight 0
+  # Compatibility alias (also maps to weight 0 on weighted installs):
+  sudo bash deploy/switch_pool.sh --to legacy
+  ```
+
+  Weight 0 requires only a ready pool reporting `legacy`; an old rollback image
+  without a full SHA may proceed with a loud warning so missing provenance cannot
+  strand traffic on a broken candidate.
 
 ### Emergency rollback
 
-- Switch the public upstream to legacy immediately.
+- Run the weight-0 command above. It is the emergency rollback verb.
 - Legacy **rebuilds each affected conversation from the shared message history** into **its
-  own checkpoint namespace**. Legacy **never reads fc checkpoints** — the fc checkpoint DB is
+  own checkpoint namespace**. Legacy **never reads candidate checkpoints** — the candidate checkpoint DB is
   treated as untrusted/abandoned state.
-- Triggered automatically on any **zero-tolerance** breach (exit 3).
+- When the report is run through `deploy/run_canary_gate.sh`, a
+  **zero-tolerance** breach (exit 3) automatically invokes the weight-0 command.
+  Running `canary_report.py` directly never mutates routing.
 
 ---
 
 ## 5. `canary_report.py` usage
 
 ```
-# Whole stream, plain verdict:
+# Whole stream, plain verdict (default candidate is fc_loop):
 python scripts/canary_report.py --input .runtime/logs/canary-fc_loop.jsonl
+
+# manager_v1 specialist candidate:
+python scripts/canary_report.py --input .runtime/logs/canary-manager_v1.jsonl \
+  --candidate-arch manager_v1 --require-specialists
 
 # Windowed to the last 24h, machine-readable copy for CI:
 python scripts/canary_report.py --input .runtime/logs/ --window 24 --json out/canary.json
@@ -219,7 +330,8 @@ python scripts/canary_report.py --input .runtime/logs/ --stage internal --since 
 python scripts/canary_report.py --input .runtime/logs/ --stage c1 --window 24  --since 2026-07-20T09:00:00Z
 python scripts/canary_report.py --input .runtime/logs/ --stage c2 --window 48  --since 2026-07-21T09:00:00Z
 python scripts/canary_report.py --input .runtime/logs/ --stage c3 --window 72  --since 2026-07-23T09:00:00Z
-python scripts/canary_report.py --input .runtime/logs/ --stage flip --window 168 --since 2026-07-26T09:00:00Z
+# Reserved until an immutable frozen-control/shadow-control gate is implemented:
+# python scripts/canary_report.py --input .runtime/logs/ --stage flip ...
 ```
 
 - `--input` is repeatable and accepts a file, a directory (searched recursively for
@@ -260,13 +372,13 @@ python scripts/canary_report.py --input .runtime/logs/ --stage flip --window 168
 
 ### Rotating telemetry before a stage window
 
-Start every stage window on a **new** telemetry file, so a previous build's records
+Start every internal/pre-public stage window on a **new** telemetry file, so a previous build's records
 cannot land inside the window being judged.
 
 ```
 # CORRECT — stop first, then move, then start.
 docker compose --profile canary stop app-fc
-mv .runtime/logs/canary-fc_loop.jsonl .runtime/logs/canary-fc_loop.<old-sha>.jsonl
+mv .runtime/logs/canary-<arch>.jsonl .runtime/logs/canary-<arch>.<old-sha>.jsonl
 docker compose --profile canary up -d app-fc
 ```
 
@@ -294,7 +406,7 @@ python scripts/canary_report.py --input .runtime/logs/canary-fc_loop.jsonl \
 ```
 
 Counts only records that are, all at once: inside the **applied** window (the `--window` /
-`--since` cutoff the report prints — see §5), `agent_arch=fc_loop`,
+`--since` cutoff the report prints — see §5), the exact `--candidate-arch`,
 `endpoint=alex`, one single `candidate_sha`, and v2 contract-valid. legacy turns,
 `search_direct` turns, v1 records from a rotated log and malformed records are each
 reported as ineligible and can never make up the count. Request IDs are reconciled
@@ -313,10 +425,11 @@ still exits **3**.
 
 ## 6. Phase 3 — legacy deletion criteria
 
-Delete the legacy arch **only when both hold**:
+Legacy deletion is not authorized by the current gate. After frozen/shadow control
+support is implemented, delete the legacy arch **only when both hold**:
 
-- fc has been at **100% (flip) stable for ≥ 7 days**, **AND**
-- **≥ 2000 fc turns** accumulated at 100%.
+- the selected candidate has been at **100% (flip) stable for ≥ 7 days**, **AND**
+- **≥ 2000 candidate turns** accumulated at 100%.
 
 Keep the **last legacy image for one more release cycle** after deletion (fast rebuild path
 if a regression surfaces post-cutover).
@@ -330,12 +443,17 @@ and takes effect at the next planned public rebuild** — per HANDOFF §3.10, th
 is deliberately NOT rebuilt just to populate it, because rebuilding the only escape hatch right
 after moving traffic onto an unproven candidate is the worst possible timing.
 
-Until it is populated the legacy pool still answers `x-agent-version: unknown`, so a rollback
-still needs `--allow-unidentified-target`:
+Until it is populated the legacy pool may answer `x-agent-version: unknown`. On a
+weighted install the emergency weight-0 controller accepts that condition only for
+legacy, after validating readiness, architecture and `X-Agent-Specialists: 0`:
 
 ```
-bash deploy/switch_pool.sh --to legacy --allow-unidentified-target
+sudo bash deploy/set_canary_weight.sh --weight 0
 ```
+
+On a pre-weighted, single-upstream host only, the compatibility fallback still
+requires `--allow-unidentified-target` for such an image. Install the weighted
+include before beginning staged rollout.
 
 **Set it to the FULL 40-character sha**, matching the `FC_CANARY_SHA` convention.
 `switch_pool.sh` length-checks at 40, so a 7-char value populates the header, *looks* fixed, and

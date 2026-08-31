@@ -70,18 +70,41 @@ SWITCH_CMD="${UPDATE_SWITCH_CMD:-bash deploy/switch_pool.sh}"
 ENV_FILE="${UPDATE_ENV_FILE:-$REPO_DIR/.env}"
 ENV_BACKUP_DIR="${UPDATE_ENV_BACKUP_DIR:-$(dirname "$REPO_DIR")/.rentcompass-env-backups}"
 CONF="${UPDATE_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
+ROUTE_CONF="${UPDATE_ROUTE_CONF:-/etc/nginx/snippets/rentcompass-canary-routing.conf}"
 HEALTH_FMT="${UPDATE_HEALTH_FMT:-http://127.0.0.1:%s/ready}"
 HEALTH_RETRIES="${UPDATE_HEALTH_RETRIES:-30}"
 HEALTH_DELAY="${UPDATE_HEALTH_DELAY:-3}"
 UPSTREAM_BLOCK='upstream rentcompass_app'
 
-declare -A PORT=( [legacy]=5001 [fc]=5002 )
-declare -A ARCH=( [legacy]=legacy [fc]=fc_loop )
-declare -A SERVICE=( [legacy]=app [fc]=app-fc )
-
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '\033[33m!!  %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[31m!!  %s\033[0m\n' "$*" >&2; exit 1; }
+
+read_root_env() { # key default; explicit process env wins
+  local key="$1" fallback="$2" value=""
+  if [ -n "${!key+x}" ]; then value="${!key}"
+  elif [ -r "$ENV_FILE" ]; then
+    value="$(sed -n "s/^${key}=//p" "$ENV_FILE" | tail -1 | tr -d '\r')"
+    value="${value#\"}"; value="${value%\"}"
+    value="${value#\'}"; value="${value%\'}"
+  fi
+  printf '%s' "${value:-$fallback}"
+}
+
+CANDIDATE_ARCH="$(read_root_env CANARY_AGENT_ARCH fc_loop)"
+CANDIDATE_SPECIALISTS="$(read_root_env CANARY_MANAGER_V1_SPECIALISTS 0)"
+CANDIDATE_MCP="$(read_root_env CANARY_USE_MCP_TOOLS 0)"
+case "$CANDIDATE_ARCH:$CANDIDATE_SPECIALISTS:$CANDIDATE_MCP" in
+  fc_loop:0:0|manager_v1:1:0) ;;
+  manager_v1:*) die "manager_v1 candidate requires CANARY_MANAGER_V1_SPECIALISTS=1 and CANARY_USE_MCP_TOOLS=0" ;;
+  fc_loop:*) die "fc_loop candidate requires CANARY_MANAGER_V1_SPECIALISTS=0 and CANARY_USE_MCP_TOOLS=0" ;;
+  *) die "CANARY_AGENT_ARCH must be fc_loop or manager_v1" ;;
+esac
+
+declare -A PORT=( [legacy]=5001 [fc]=5002 )
+declare -A ARCH=( [legacy]=legacy [fc]="$CANDIDATE_ARCH" )
+declare -A SPECIALISTS=( [legacy]=0 [fc]="$CANDIDATE_SPECIALISTS" )
+declare -A SERVICE=( [legacy]=app [fc]=app-fc )
 
 POOL="auto"; BOTH=0; DRAIN=1; ALLOW_IN_PLACE=0
 REBUILD_IMAGE=0; FORCE=0; STATUS_ONLY=0
@@ -111,22 +134,27 @@ upstream_port() {
 
 pool_of_port() { case "$1" in 5001) echo legacy ;; 5002) echo fc ;; *) echo "" ;; esac; }
 
+routing_weight() {
+  sed -n 's/^# rentcompass-canary-weight: \([0-9][0-9]*\)$/\1/p' "$ROUTE_CONF" 2>/dev/null | head -1
+}
+
 other_pool() { case "$1" in legacy) echo fc ;; fc) echo legacy ;; esac; }
 
-# "<arch> <sha>" for a pool, or "" when it is not answering /ready with a 200.
+# "<arch> <sha> <specialists>" for a pool, or "" when readiness/identity fails.
 identity_of() {
   local url hdrs
   url=$(printf "$HEALTH_FMT" "${PORT[$1]}")
   hdrs=$($CURL_CMD -sS -D- -o /dev/null --max-time 10 "$url" 2>/dev/null) || return 1
   grep -qi '^HTTP/[0-9.]* 200' <<<"$hdrs" || return 1
-  printf '%s %s\n' \
+  printf '%s %s %s\n' \
     "$(grep -i '^x-agent-arch:'    <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
-    "$(grep -i '^x-agent-version:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
+    "$(grep -i '^x-agent-version:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
+    "$(grep -i '^x-agent-specialists:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
 }
 
 # Block until the pool answers 200, then hold the caller to arch AND full sha.
 verify_pool() {
-  local pool="$1" want_sha="$2" i=0 got arch sha
+  local pool="$1" want_sha="$2" i=0 got arch sha specialists
   local url; url=$(printf "$HEALTH_FMT" "${PORT[$pool]}")
   say "Waiting for $pool health (the app reloads RAG/FAISS, ~30-40s)..."
   while [ "$i" -lt "$HEALTH_RETRIES" ]; do
@@ -134,15 +162,17 @@ verify_pool() {
     i=$((i + 1)); sleep "$HEALTH_DELAY"
   done
   [ -n "${got:-}" ] || die "$pool is not answering 200 at $url. Inspect: $COMPOSE_CMD logs --tail=60 ${SERVICE[$pool]}"
-  read -r arch sha <<<"$got"
+  read -r arch sha specialists <<<"$got"
   [ "$arch" = "${ARCH[$pool]}" ] \
     || die "$pool answered as arch '$arch', expected '${ARCH[$pool]}' — the wrong image is on :${PORT[$pool]}"
+  [ "$specialists" = "${SPECIALISTS[$pool]}" ] \
+    || die "$pool answered with specialists='${specialists:-<absent>}', expected '${SPECIALISTS[$pool]}' — release identity is incomplete"
   # The whole point of the deploy is that the NEW commit is live. A pool that
   # cannot name its commit, or names the old one, is a failed deploy however
   # healthy it looks.
   [ "$sha" = "$want_sha" ] \
     || die "$pool answered with commit '${sha:-<absent>}', expected the pin $want_sha — the new code is NOT live"
-  say "$pool is live and self-identifies as $arch $sha ✅"
+  say "$pool is live and self-identifies as $arch $sha specialists=$specialists ✅"
 }
 
 # ---------------------------------------------------------------------------
@@ -201,8 +231,20 @@ fi
 # incomplete; otherwise the diagnostic command disappears exactly when an operator
 # needs it. All mutating paths continue through the strict gate below.
 _head_full="$($GIT_CMD rev-parse "HEAD^{commit}")"
-LIVE_PORT="$(upstream_port || true)"
-LIVE_POOL="$(pool_of_port "${LIVE_PORT:-}")"
+ROUTE_WEIGHT="$(routing_weight || true)"
+ROUTE_ROLLOUT_ID="$(sed -n 's/^# rentcompass-rollout-id: //p' "$ROUTE_CONF" 2>/dev/null | head -1 || true)"
+ROUTE_ROLLOUT_STAGE="$(sed -n 's/^# rentcompass-rollout-stage: //p' "$ROUTE_CONF" 2>/dev/null | head -1 || true)"
+if [ -n "$ROUTE_WEIGHT" ]; then
+  case "$ROUTE_WEIGHT" in
+    0) LIVE_PORT=5001; LIVE_POOL=legacy ;;
+    100) LIVE_PORT=5002; LIVE_POOL=fc ;;
+    5|20|50) LIVE_PORT="weighted:${ROUTE_WEIGHT}%"; LIVE_POOL=mixed ;;
+    *) LIVE_PORT="invalid:${ROUTE_WEIGHT}"; LIVE_POOL="" ;;
+  esac
+else
+  LIVE_PORT="$(upstream_port || true)"
+  LIVE_POOL="$(pool_of_port "${LIVE_PORT:-}")"
+fi
 if [ "$STATUS_ONLY" -eq 1 ]; then
   _pin_display="${DEPLOY_PINNED_SHA:-<unset>}"
   _pin_relation="   (pin unavailable; a deploy would be REFUSED)"
@@ -221,6 +263,8 @@ if [ "$STATUS_ONLY" -eq 1 ]; then
        && echo '   immutable ✅' || echo '   invalid/missing (a deploy would be REFUSED)')"
   printf 'HEAD          %s%s\n' "$_head_full" "$_pin_relation"
   printf 'upstream      %s\n' "${LIVE_PORT:-<conf unreadable: $CONF>}"
+  printf 'candidate     arch=%s specialists=%s mcp=%s\n' \
+    "$CANDIDATE_ARCH" "$CANDIDATE_SPECIALISTS" "$CANDIDATE_MCP"
   for p in legacy fc; do
     printf 'pool %-6s   :%s  %s%s\n' "$p" "${PORT[$p]}" \
       "$(identity_of "$p" || echo '<unreachable>')" \
@@ -316,6 +360,9 @@ image_digest() {
 # ---------------------------------------------------------------------------
 # Resolve the deploy target
 # ---------------------------------------------------------------------------
+if [ "$LIVE_POOL" = mixed ]; then
+  die "both pools currently serve ${ROUTE_WEIGHT}% weighted public traffic; roll back to weight 0 before any image/container redeploy"
+fi
 if [ "$BOTH" -eq 1 ]; then
   [ -n "$LIVE_POOL" ] || die "cannot read the public upstream from '$CONF' (port='${LIVE_PORT:-}'); refusing to guess the safe two-pool order"
   standby="$(other_pool "$LIVE_POOL")"
@@ -341,7 +388,8 @@ fi
 # ---------------------------------------------------------------------------
 # fc: build the immutable image from an ISOLATED worktree at the pin
 # ---------------------------------------------------------------------------
-FC_IMAGE="uk-rent-agent:canary-fc-loop-${PIN_SHORT}"
+CANDIDATE_IMAGE_TAG="${CANDIDATE_ARCH//_/-}"
+FC_IMAGE="uk-rent-agent:canary-${CANDIDATE_IMAGE_TAG}-${PIN_SHORT}"
 
 build_fc_image() {
   if [ "$REBUILD_IMAGE" -eq 0 ] && $DOCKER_CMD image inspect "$FC_IMAGE" >/dev/null 2>&1; then
@@ -445,8 +493,8 @@ for target in "${TARGETS[@]}"; do
   # where "already current" is most confidently wrong.
   if [ "$FORCE" -eq 0 ]; then
     cur="$(identity_of "$target" || true)"
-    if [ "$cur" = "${ARCH[$target]} $PIN_FULL" ]; then
-      say "$target already serves ${ARCH[$target]} $PIN_SHORT — nothing to do (--force to redeploy)"
+    if [ "$cur" = "${ARCH[$target]} $PIN_FULL ${SPECIALISTS[$target]}" ]; then
+      say "$target already serves ${ARCH[$target]} $PIN_SHORT specialists=${SPECIALISTS[$target]} — nothing to do (--force to redeploy)"
       continue
     fi
   fi
@@ -460,8 +508,9 @@ for target in "${TARGETS[@]}"; do
     standby="$(other_pool "$target")"
     if identity_of "$standby" >/dev/null 2>&1; then
       say "Draining public traffic to '$standby' for the redeploy (needs sudo for nginx)"
-      $SWITCH_CMD --to "$standby" --allow-unidentified-target \
-        $([ "$standby" = "fc" ] && echo --allow-public-fc) \
+      $SWITCH_CMD --to "$standby" \
+        $([ "$standby" = "legacy" ] && echo "--allow-unidentified-target") \
+        $([ "$standby" = "fc" ] && echo "--allow-public-fc --rollout-id deploy-maintenance-$PIN_SHORT --stage maintenance") \
         || die "could not drain to '$standby' — nothing was redeployed"
       drained_from="$target"
     else
@@ -478,7 +527,7 @@ for target in "${TARGETS[@]}"; do
   if [ -n "$drained_from" ]; then
     say "Returning public traffic to '$drained_from'"
     $SWITCH_CMD --to "$drained_from" --expect-sha "$PIN_FULL" \
-      $([ "$drained_from" = "fc" ] && echo --allow-public-fc) \
+      $([ "$drained_from" = "fc" ] && echo "--allow-public-fc --rollout-id ${ROUTE_ROLLOUT_ID:-deploy-return-$PIN_SHORT} --stage ${ROUTE_ROLLOUT_STAGE:-flip}") \
       || die "REDEPLOY SUCCEEDED BUT THE UPSTREAM IS STILL ON '$(other_pool "$drained_from")'. Fix by hand: $SWITCH_CMD --to $drained_from"
   fi
 done
@@ -489,7 +538,8 @@ done
 echo
 if [ "$BOTH" -eq 0 ] && [ -n "$LIVE_POOL" ]; then
   standby="$(other_pool "$LIVE_POOL")"
-  standby_sha="$(identity_of "$standby" 2>/dev/null || true)"; standby_sha="${standby_sha#* }"
+  standby_id="$(identity_of "$standby" 2>/dev/null || true)"
+  read -r _standby_arch standby_sha _standby_specialists <<<"$standby_id"
   if [ "$standby_sha" != "$PIN_FULL" ]; then
     warn "Standby pool '$standby' is on '${standby_sha:-<unreachable>}', not the pin $PIN_SHORT."
     warn "It is your rollback target — rolling back would also roll back this fix."

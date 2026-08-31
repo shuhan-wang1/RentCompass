@@ -26,6 +26,7 @@ Example
 from __future__ import annotations
 
 import contextlib
+import sys
 from typing import Any, Dict, List, Optional
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -116,8 +117,6 @@ def patch_call_ollama(responses: Dict[str, str], *, tag: str = "default"):
     """
     from core import llm_interface as _iface
 
-    original = _iface.call_ollama
-
     def _fake_call_ollama(prompt, system_prompt=None, timeout=360):  # noqa: ANN001
         text = responses.get(tag, responses.get("default", "{}"))
         collector.record_llm_call(
@@ -132,8 +131,32 @@ def patch_call_ollama(responses: Dict[str, str], *, tag: str = "default"):
         )
         return text
 
-    _iface.call_ollama = _fake_call_ollama
+    def _fake_call_deepseek(
+        prompt, system_prompt=None, timeout=360, temperature=0.1, max_tokens=4000,
+    ):  # noqa: ANN001
+        return _fake_call_ollama(prompt, system_prompt, timeout)
+
+    # Several older modules imported these functions directly at module load time. Merely
+    # rebinding ``core.llm_interface.call_ollama`` does not change those aliases, which
+    # allowed offline memory seeding / area recommendation to reach DeepSeek. Patch only
+    # the known aliases and restore their exact previous objects on exit.
+    targets = [
+        (_iface, "call_ollama", _fake_call_ollama),
+        (_iface, "_call_deepseek", _fake_call_deepseek),
+    ]
+    for module_name, attr, replacement in (
+        ("rag.agent_memory", "call_ollama", _fake_call_ollama),
+        ("core.recommend_areas", "_call_deepseek", _fake_call_deepseek),
+        ("app", "call_ollama", _fake_call_ollama),
+    ):
+        module = sys.modules.get(module_name)
+        if module is not None and hasattr(module, attr):
+            targets.append((module, attr, replacement))
+    previous = [(module, attr, getattr(module, attr)) for module, attr, _ in targets]
+    for module, attr, replacement in targets:
+        setattr(module, attr, replacement)
     try:
         yield
     finally:
-        _iface.call_ollama = original
+        for module, attr, value in reversed(previous):
+            setattr(module, attr, value)

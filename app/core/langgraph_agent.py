@@ -77,6 +77,18 @@ logger = logging.getLogger(__name__)
 # and the closest-recall fallback (`no_exact_match_but_similar`). Both repaint the panel.
 _SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar"})
 
+# Tool outputs that can contain provider-, publisher-, owner-, or public-editable
+# text.  They are data, never instructions; every legacy path must taint them so
+# generation passes the observation through sanitize_untrusted().
+_UNTRUSTED_TOOL_OUTPUTS = frozenset({
+    "web_search",
+    "search_properties",
+    "reasoning_property",
+    "multi_search",
+    "get_property_details",
+    "search_nearby_pois",
+})
+
 
 def _search_candidate_states(payload) -> list[dict]:
     """Normalized prevalidated candidate states, including legacy side channels.
@@ -3818,9 +3830,10 @@ def _make_execute_tool_node(tool_registry):
 
         update["tool_observation"] = observation
         update["tool_raw_data"] = raw_data
-        update["context_tainted"] = state.get("context_tainted", False) or tool_name in {
-            "web_search", "search_properties", "reasoning_property", "multi_search"
-        }
+        update["context_tainted"] = (
+            state.get("context_tainted", False)
+            or tool_name in _UNTRUSTED_TOOL_OUTPUTS
+        )
         # Bounded agent loop: a LOOPABLE tool that did NOT error hands off to `reflect`,
         # which decides answer-now vs one-more-tool. Everything else keeps today's
         # single-pass route (structured card -> format_output, else -> generate_response),
@@ -5231,9 +5244,12 @@ def _make_gather_wave_node():
                          + "\n".join(f"- {n}" for n in notes))
         combined += f"\n\nTotal: {len(items)} tools executed.\n"
 
-        # Taint only when the PLAN contains web content; a structured-tool-only plan does not.
-        web_in_plan = any(t.get("tool") == "web_search" for t in plan)
-        tainted = state.get("context_tainted", False) or web_in_plan
+        # Public/provider-authored strings are untrusted even when their transport
+        # is structured (for example OSM POI names or listing descriptions).
+        untrusted_in_plan = any(
+            t.get("tool") in _UNTRUSTED_TOOL_OUTPUTS for t in plan
+        )
+        tainted = state.get("context_tainted", False) or untrusted_in_plan
 
         origin = state.get("plan_origin") or "multi_search"
 
@@ -5300,7 +5316,8 @@ def _make_gather_wave_node():
 # ═══════════════════════════════════════════════════════════════════
 
 def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_llm=None,
-                      enable_hitl=False, agent_llm=None):
+                      enable_hitl=False, agent_llm=None,
+                      manager_v1_specialists=False):
     """Build and compile the LangGraph StateGraph.
 
     Args:
@@ -5313,6 +5330,8 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
             the (cheap) classification LLM. Injectable for tests.
         enable_hitl: when True (and a checkpointer is present) a ``confirm_search`` node
             pauses the graph with interrupt() before the expensive task-wave fan-out.
+        manager_v1_specialists: activate the default-off deterministic read-only
+            specialist adapter when (and only when) ``AGENT_ARCH=manager_v1``.
 
     Returns:
         Compiled LangGraph that can be invoked with AgentState.
@@ -5321,16 +5340,20 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
     from core.graph_advanced import (
         make_confirm_search_node, make_hydrate_prefs_node, make_persist_prefs_node,
     )
+    from uk_rent_agent.agent.architecture import MANAGER_V1_ARCH, normalize_agent_arch
     import os
 
-    # Architecture selection (design Phase 1). AGENT_ARCH=fc_loop swaps the classify-then-
-    # execute topology for the native function-calling tool loop; anything else (default)
-    # keeps the legacy graph byte-identical. agent_loop is imported LAZILY here because it
-    # imports langgraph_agent helpers at module level — a top-level import would be circular.
-    if os.getenv("AGENT_ARCH", "legacy") == "fc_loop":
-        from core.agent_loop import build_fc_graph
+    # Architecture selection. fc_loop and the manager_v1 compatibility shell share the
+    # native function-calling topology; legacy remains the byte-identical default. Both
+    # builders are imported LAZILY because agent_loop imports helpers from this module.
+    arch = normalize_agent_arch(os.getenv("AGENT_ARCH", "legacy"))
+    if arch in {"fc_loop", MANAGER_V1_ARCH}:
+        if arch == MANAGER_V1_ARCH:
+            from core.manager_v1 import build_manager_v1_graph as loop_graph_builder
+        else:
+            from core.agent_loop import build_fc_graph as loop_graph_builder
 
-        def _n_fc(node_name, fn):
+        def _n_loop(node_name, fn):
             try:
                 from evaluation.metrics.collector import instrument_node, is_active
                 if is_active():
@@ -5340,7 +5363,7 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
             return fn
 
         use_store = store is not None
-        return build_fc_graph(
+        return loop_graph_builder(
             tool_registry,
             extract_preferences_node=_make_extract_preferences_node(),
             critic_node=_make_critic_node(),
@@ -5348,10 +5371,12 @@ def build_agent_graph(tool_registry, *, checkpointer=None, store=None, reflect_l
             enable_hitl=bool(enable_hitl and checkpointer is not None),
             hydrate_prefs_node=(make_hydrate_prefs_node() if use_store else None),
             persist_prefs_node=(make_persist_prefs_node() if use_store else None),
-            instrument=_n_fc,
+            instrument=_n_loop,
             # Eval override: the offline fake-FC model (a scripted, bound-tools stand-in)
             # is injected here so the loop mechanics run unbilled. None => live driver.
             agent_llm=agent_llm,
+            **({"specialists_enabled": bool(manager_v1_specialists)}
+               if arch == MANAGER_V1_ARCH else {}),
         )
 
     classification_llm = get_classification_llm()

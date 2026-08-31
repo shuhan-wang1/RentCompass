@@ -487,19 +487,30 @@ def test_search_direct_emits_canary_turn(client, user, monkeypatch, caplog):
     rec = turns[0]
     assert _REQUIRED_TURN_KEYS.issubset(rec.keys())
     assert rec["agent_arch"] == "legacy"
-    # Deterministic path: no fc graph, so fc fields default.
-    assert rec["llm_calls"] is None and rec["tool_batches"] is None
+    # Deterministic path: zero calls/batches are facts, not missing telemetry.
+    assert rec["llm_calls"] == 0 and rec["tool_batches"] == 0
+    assert rec["llm_usage_status"] == "no_llm_calls"
 
 
 # ---------------------------------------------------------------------------
 # _build_fc_signals unit derivation
 # ---------------------------------------------------------------------------
 
-def test_build_fc_signals_legacy_arch_nulls(monkeypatch):
+def test_build_fc_signals_legacy_arch_uses_observed_calls_and_shared_artifacts(monkeypatch):
     monkeypatch.setattr(appmod, "AGENT_ARCH", "legacy")
-    sig = appmod._build_fc_signals({"loop_turn": 5, "tool_artifacts": [{"turn": 0}]})
-    assert sig["llm_calls"] is None
-    assert sig["tool_batches"] is None
+    monkeypatch.setattr(appmod.turn_observations, "snapshot", lambda: {
+        "provider_schema_400_count": 0,
+        "llm_usage_calls": [],
+        "llm_calls": 2,
+        "llm_usage_status": "partial",
+    })
+    sig = appmod._build_fc_signals({
+        "loop_turn": 5,
+        "tool_artifacts": [{"turn": 0}],
+        "task_results": [{"id": "wave-1"}],
+    })
+    assert sig["llm_calls"] == 2
+    assert sig["tool_batches"] == 2
     assert sig["soft_wrapped"] is False
 
 
@@ -655,9 +666,14 @@ def test_asgi_health_identity_headers(monkeypatch):
     fake = types.ModuleType("uk_rent_agent._legacy_web_app")
     fake.AGENT_ARCH = "fc_loop"
     fake.APP_CANDIDATE_SHA = "abc1234"
+    fake.MANAGER_V1_SPECIALISTS = False
     monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", fake)
     headers = asgi._canary_identity()
-    assert headers == {"X-Agent-Arch": "fc_loop", "X-Agent-Version": "abc1234"}
+    assert headers == {
+        "X-Agent-Arch": "fc_loop",
+        "X-Agent-Version": "abc1234",
+        "X-Agent-Specialists": "0",
+    }
 
 
 def test_asgi_health_identity_degrades_when_app_not_loaded(monkeypatch):

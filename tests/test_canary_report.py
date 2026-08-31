@@ -82,7 +82,14 @@ def _rec(arch, latency_ms, *, ts=None, soft=False, partial=False, tbt=False,
         "turn_latency_ms": latency_ms,
         "llm_calls": 2,
         "tool_batches": 1,
-        "llm_usage": None,
+        "llm_usage": {
+            "calls": 2, "input_tokens": 20, "output_tokens": 10,
+            "cache_read_tokens": 0,
+            "models": {"fixture-model": {
+                "calls": 2, "input_tokens": 20, "output_tokens": 10,
+                "cache_read_tokens": 0,
+            }},
+        },
         # Layer B: required, because "cost us nothing" and "we did not measure the
         # cost" must not render as the same record.
         "llm_usage_status": "complete",
@@ -513,15 +520,17 @@ def test_report_prints_filters_expected_observed_and_unique_ids():
 
 
 def test_anchor_absent_when_flag_not_passed():
-    """Default behaviour is unchanged: no flag, no anchor, no new hold."""
+    """No anchor stays optional, but a missing control arm can never pass."""
     rep = cr.build_report(_fc_turns(50))
     assert rep["verdict"]["expected_turns"] is None
-    assert rep["verdict"]["exit_code"] == 0
+    assert rep["verdict"]["decision"] == "INSTRUMENTATION-HOLD"
+    assert rep["verdict"]["exit_code"] == 2
 
 
 def test_cli_flag_is_wired_and_returns_two_on_mismatch(tmp_path):
     p = tmp_path / "canary.jsonl"
-    p.write_text("\n".join(json.dumps(r) for r in _fc_turns(49)) + "\n",
+    recs = _fc_turns(49) + [_rec("legacy", 1000) for _ in range(49)]
+    p.write_text("\n".join(json.dumps(r) for r in recs) + "\n",
                  encoding="utf-8")
     assert cr.run(["-i", str(p), "--expect-turns", "50", "--quiet"]) == 2
     assert cr.run(["-i", str(p), "--expect-turns", "49", "--quiet"]) == 0

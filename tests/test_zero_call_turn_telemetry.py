@@ -178,6 +178,18 @@ def test_mixed_population_keeps_zero_call_turns_in_the_denominator(fresh_observe
     expensive = _zero_call_record(snap, i=99)
     expensive["turn_latency_ms"] = 8000.0
     expensive["llm_calls"] = 2
+    expensive["llm_usage"] = {
+        "calls": 2,
+        "input_tokens": 20,
+        "output_tokens": 4,
+        "cache_read_tokens": 0,
+        "models": {"fixture": {
+            "calls": 2,
+            "input_tokens": 20,
+            "output_tokens": 4,
+            "cache_read_tokens": 0,
+        }},
+    }
     expensive["llm_usage_status"] = "complete"
     tobs.end_turn()
     recs.append(expensive)

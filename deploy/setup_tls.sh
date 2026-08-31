@@ -8,15 +8,16 @@
 # deploy/migrate_ports_443.sh swapped them — Xray is on 8443 now. On a host where Xray
 # still holds 443, run that migration first or step [4/5] here cannot bind.
 #
-# WARNING: step [2/5] overwrites the live vhost with the template, which resets the
-# upstream to the legacy pool (5001) — switch_pool.sh is what normally owns that line,
-# and client_max_body_size has drifted live too. After re-running this on a host
-# serving fc, re-assert the pool with:  bash deploy/switch_pool.sh fc
+# WARNING: step [2/5] overwrites the live vhost and weighted include with the
+# committed fail-safe templates. That intentionally resets candidate traffic to 0%.
+# Re-advance only through set_canary_weight.sh after the rollout gate passes again.
 set -euo pipefail
 
 REPO=/home/shuhan/uk_rent_recommendation
 CONF=rentcompass.co.uk.conf
 SSL_SRC="$REPO/deploy/nginx/rentcompass.co.uk.ssl.conf"
+ROUTE_SRC="$REPO/deploy/nginx/rentcompass-canary-routing.conf"
+ROUTE_DST=/etc/nginx/snippets/rentcompass-canary-routing.conf
 EMAIL=a980026243@gmail.com
 DOMAINS="-d rentcompass.co.uk -d www.rentcompass.co.uk"
 
@@ -34,6 +35,10 @@ certbot certonly --webroot -w /var/www/certbot $DOMAINS \
 
 echo "===== [2/5] Install the HTTPS(:443) vhost ====="
 [ -f "$SSL_SRC" ] || { echo "ERROR: $SSL_SRC missing"; exit 1; }
+[ -f "$ROUTE_SRC" ] || { echo "ERROR: $ROUTE_SRC missing"; exit 1; }
+install -d -m 0755 /etc/nginx/snippets
+# Re-installing the vhost is an explicit fail-safe reset to 0% candidate.
+install -m 0644 "$ROUTE_SRC" "$ROUTE_DST"
 install -m 0644 "$SSL_SRC" "/etc/nginx/sites-available/$CONF"
 ln -sf "/etc/nginx/sites-available/$CONF" "/etc/nginx/sites-enabled/$CONF"
 

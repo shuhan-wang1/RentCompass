@@ -320,6 +320,19 @@ def test_gather_wave_taint_web_vs_structured(lga):
            "plan_origin": "multi_search", "observations": [],
            "task_results": [done("w", "web_search")]}
     assert node(web).update["context_tainted"] is True
+    for tool_name in (
+        "search_properties",
+        "get_property_details",
+        "search_nearby_pois",
+    ):
+        external = {
+            "task_plan": [_t("external", tool=tool_name)],
+            "run_id": "r1",
+            "plan_origin": "multi_search",
+            "observations": [],
+            "task_results": [done("external", tool_name)],
+        }
+        assert node(external).update["context_tainted"] is True
     structured = {"task_plan": [_t("g", tool="get_weather")], "run_id": "r1",
                   "plan_origin": "multi_search", "observations": [], "context_tainted": False,
                   "task_results": [done("g", "get_weather")]}

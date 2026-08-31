@@ -196,6 +196,7 @@ def test_identity_header_is_stamped_on_the_starlette_health_route():
     fake = types.ModuleType("uk_rent_agent._legacy_web_app")
     fake.AGENT_ARCH = "legacy"
     fake.APP_CANDIDATE_SHA = sha
+    fake.MANAGER_V1_SPECIALISTS = False
     sys.modules["uk_rent_agent._legacy_web_app"] = fake
     try:
         headers = asgi._canary_identity()
@@ -203,6 +204,7 @@ def test_identity_header_is_stamped_on_the_starlette_health_route():
         sys.modules.pop("uk_rent_agent._legacy_web_app", None)
     assert headers.get("X-Agent-Version") == sha
     assert headers.get("X-Agent-Arch") == "legacy"
+    assert headers.get("X-Agent-Specialists") == "0"
     # ...and the length switch_pool.sh's provenance check demands.
     assert len(headers["X-Agent-Version"]) == 40
 

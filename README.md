@@ -189,7 +189,7 @@ pool stays warm as the rollback target ([Appendix A](#appendix-a--the-legacy-arc
 ```
 
 `AGENT_ARCH` is the single switch that selects the conversational architecture.
-Both architectures share the same tool layer, the same `extract_preferences` and
+The runtime architectures share the same tool layer, the same `extract_preferences` and
 `critic` nodes, the same state type, and the same output contract — only the
 orchestration between them differs.
 
@@ -200,6 +200,28 @@ orchestration between them differs.
 `AGENT_ARCH=fc_loop` builds the graph in `app/core/agent_loop.py`
 (`build_fc_graph`). It replaces classify-then-execute routing with a bounded
 tool-use loop driven by the model's own function calls.
+
+`AGENT_ARCH=manager_v1` is an **experimental, opt-in manager architecture**. Its
+Phase-1 compatibility path builds the same FC graph and adds manager/task telemetry
+without another model call. Phase 2 can dispatch allowlisted read-only work to typed
+specialists, but remains **off by default**: enable it explicitly with
+`MANAGER_V1_SPECIALISTS=1`. The switch is effective only with `manager_v1` and only
+with the trusted in-process registry (`USE_MCP_TOOLS=0`); startup fails closed if
+specialists and MCP are both requested. It is not a third production canary arm.
+Use an architecture-specific `CHECKPOINT_DB_PATH` when exercising it locally.
+
+The enabled adapter groups the manager-approved read batch into at most one task
+per role: `listings`, `mobility`, and `area_evidence`. Specialists receive
+only an exact, immutable read-only tool grant and detached JSON arguments.
+`remember`, `recall_memory`, `ask_user`, checkpoint/state mutation, and the
+final answer remain manager-only. External evidence is tainted and sanitized on
+the model-facing channel while the raw artifact remains in the manager-owned
+ledger.
+
+```bash
+AGENT_ARCH=manager_v1 MANAGER_V1_SPECIALISTS=1 USE_MCP_TOOLS=0 \
+  uk-rent-asgi
+```
 
 ```mermaid
 flowchart TD
@@ -643,7 +665,8 @@ that own each subsystem. The most important knobs:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `AGENT_ARCH` | `legacy` | `fc_loop` selects the function-calling loop |
+| `AGENT_ARCH` | `legacy` | `legacy`, `fc_loop`, or experimental `manager_v1` architecture |
+| `MANAGER_V1_SPECIALISTS` | `0` | Phase-2 typed read-only specialist dispatch; effective only with `AGENT_ARCH=manager_v1` and `USE_MCP_TOOLS=0` |
 | `DEEPSEEK_STRICT` | `0` | Strict function calling for the fc loop |
 | `APP_CANDIDATE_SHA` | git sha / `unknown` | Stamped on `X-Agent-Version` and every telemetry record |
 | `CANARY_LOG_PATH` | `<runtime>/logs/canary-<arch>.jsonl` | Per-turn telemetry sink; `off` disables |
@@ -746,7 +769,7 @@ code. Stages advance only when **both** minima clear:
 | `c1` | 5% | 24h | 200 |
 | `c2` | 20% | 48h | 500 |
 | `c3` | 50% | 72h | 1000 |
-| `flip` | 100% | 7d | 2000 |
+| `flip` | 100% | 7d | 2000 (reserved: requires frozen/shadow control gate) |
 
 **Zero-tolerance (exit 3, immediate rollback):** a tainted/unauthorised memory
 write **executed**; a forbidden write **executed**; a DSML/tool-markup leak; a
@@ -978,6 +1001,7 @@ uk_rent_recommendation/
 │   ├── unified-ui.html         web UI (split-compare, branch stacking, criteria panel)
 │   ├── core/
 │   │   ├── agent_loop.py       fc_loop graph — the production architecture
+│   │   ├── manager_v1.py       experimental manager + gated specialist runtime over fc_loop
 │   │   ├── langgraph_agent.py  legacy graph (Appendix A) + shared helpers
 │   │   ├── loop_prompts.py     system directive + behaviour rules
 │   │   ├── context_assembler.py  context budget, summary, snapshots, conflicts

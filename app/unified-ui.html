@@ -1512,6 +1512,16 @@
             let url = resolveUrl(endpoint);
 
             const headers = Object.assign({}, options.headers || {});
+            // Nginx cannot inspect a JSON request body when assigning a canary
+            // cohort. Cookie-less API clients therefore publish the already-known
+            // conversation id as an explicit routing header. The signed `session`
+            // cookie remains nginx's first-priority key when present.
+            const cohortConversationId = options.conversationId;
+            if (typeof cohortConversationId === 'string'
+                    && /^[A-Za-z0-9_-]{1,128}$/.test(cohortConversationId)
+                    && !headers['X-Conversation-ID']) {
+                headers['X-Conversation-ID'] = cohortConversationId;
+            }
 
             const controller = new AbortController();
             const timeoutId = setTimeout(function () {
@@ -1533,6 +1543,7 @@
                 credentials: 'include',
                 signal: controller.signal
             });
+            delete finalOptions.conversationId;
 
             try {
                 return await fetch(url, finalOptions);
@@ -2590,6 +2601,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
+                    conversationId: pane.conversationId,
                     signal: pane.activeController.signal
                 });
 
@@ -2864,7 +2876,8 @@
                 const response = await apiFetch('/api/conversations/' + encodeURIComponent(sourceCid) + '/edit_turn', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': uuidHex() },
-                    body: JSON.stringify({ turn_id: turnId })
+                    body: JSON.stringify({ turn_id: turnId }),
+                    conversationId: sourceCid
                 });
                 if (!response.ok) { showToast(t('error_edit_turn'), 'error'); return; }
                 const data = await response.json();
@@ -4089,7 +4102,8 @@
                         'Content-Type': 'application/json',
                         'Idempotency-Key': idempotencyKey
                     },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify(body),
+                    conversationId: sourceCid
                 });
                 if (!response.ok) { showToast(t('error_fork'), 'error'); return; }
                 const data = await response.json();
@@ -5200,7 +5214,8 @@
                 const response = await apiFetch('/api/search_direct', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify(body),
+                    conversationId: pane.conversationId
                 });
                 removeTypingIndicator(pane);
 

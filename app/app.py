@@ -21,7 +21,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import subprocess
 import contextvars
-from flask import Flask, request, jsonify, render_template, session, g
+from flask import Flask, request, jsonify, render_template, session, g, has_request_context
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
 import json
@@ -41,9 +41,14 @@ from uk_rent_agent.web.auth_store import (
     AuthStore, AuthError, InvalidUsername, WeakPassword, UsernameTaken,
 )
 from uk_rent_agent.config import Config
+from uk_rent_agent.agent.architecture import MANAGER_V1_ARCH, uses_fc_runtime
 from uk_rent_agent.web.rate_limit import SlidingWindowRateLimiter
 from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, get_prefs_store, graph_config
-from uk_rent_agent.observability import new_request_id, request_context
+from uk_rent_agent.observability import (
+    agent_execution_context,
+    new_request_id,
+    request_context,
+)
 from core.data_loader import load_mock_properties_from_csv, load_properties
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
@@ -230,6 +235,9 @@ _runtime_config = globals().get("_BOOTSTRAP_CONFIG") or Config.from_env()
 # Graph selection and strict-schema binding still have a few legacy getenv consumers. Publish
 # the already-normalized Config values once so all of them observe the same runtime identity.
 os.environ["AGENT_ARCH"] = _runtime_config.agent_arch
+os.environ["MANAGER_V1_SPECIALISTS"] = (
+    "1" if _runtime_config.manager_v1_specialists_effective else "0"
+)
 os.environ["DEEPSEEK_STRICT"] = "1" if _runtime_config.deepseek_strict else "0"
 os.environ["LLM_PROVIDER"] = _runtime_config.llm_provider
 # supports_credentials=True so the signed session cookie (which now carries the
@@ -316,6 +324,7 @@ def _ensure_agent_runtime():
             store=store,
             enable_hitl=_runtime_config.enable_hitl,
             agent_llm=_configured_fc_agent_llm(),
+            manager_v1_specialists=MANAGER_V1_SPECIALISTS,
         )
         # Treat inability to bind as a startup failure: silently falling back to
         # the current global runner could reuse async clients across event loops.
@@ -402,6 +411,10 @@ def _read_strict() -> bool:
     return _runtime_config.deepseek_strict
 
 
+def _read_manager_v1_specialists() -> bool:
+    return _runtime_config.manager_v1_specialists_effective
+
+
 def _startup_git_sha() -> str:
     """Short git SHA if cheaply available at startup, else 'unknown'. Called ONCE."""
     try:
@@ -419,17 +432,18 @@ def _startup_git_sha() -> str:
 
 
 AGENT_ARCH = _read_agent_arch()
+MANAGER_V1_SPECIALISTS = _read_manager_v1_specialists()
 DEEPSEEK_STRICT = _read_strict()
 # APP_CANDIDATE_SHA is the image tag the fc pool is pinned to; fall back to the local git
 # SHA (dev), else "unknown". Read once — a process-level constant, NOT a per-request value.
 APP_CANDIDATE_SHA = (os.getenv("APP_CANDIDATE_SHA") or "").strip() or _startup_git_sha()
 print(f"[STARTUP] Canary: agent_arch={AGENT_ARCH} candidate_sha={APP_CANDIDATE_SHA} "
-      f"strict={DEEPSEEK_STRICT}")
+      f"strict={DEEPSEEK_STRICT} manager_v1_specialists={MANAGER_V1_SPECIALISTS}")
 
 
 def _configured_fc_agent_llm():
-    """Return the explicit non-DeepSeek loop driver when fc_loop is configured for Ollama."""
-    if AGENT_ARCH != "fc_loop" or _runtime_config.llm_provider != "ollama":
+    """Return the explicit Ollama driver for every FC-compatible architecture."""
+    if not uses_fc_runtime(AGENT_ARCH) or _runtime_config.llm_provider != "ollama":
         return None
     from core.llm_config import get_react_llm
     return get_react_llm(low_latency=True)
@@ -582,6 +596,7 @@ def _canary_headers(response):
     turn endpoints themselves (it is per-request)."""
     response.headers["X-Agent-Arch"] = AGENT_ARCH
     response.headers["X-Agent-Version"] = APP_CANDIDATE_SHA
+    response.headers["X-Agent-Specialists"] = "1" if MANAGER_V1_SPECIALISTS else "0"
     return response
 
 
@@ -631,14 +646,23 @@ def _load_write_audit_instrumentation() -> None:
     than by anything about the turn. Importing it here makes registration a property
     of the process instead of of request ordering.
     """
-    if AGENT_ARCH != "fc_loop":
+    if not uses_fc_runtime(AGENT_ARCH):
         return
     try:
-        import core.agent_loop  # noqa: F401
+        if AGENT_ARCH == MANAGER_V1_ARCH:
+            # Imports the FC executor and registers manager_v1 as an alias of its
+            # write-audited dispatch path.
+            import core.manager_v1  # noqa: F401
+        else:
+            import core.agent_loop  # noqa: F401
     except Exception:
         # Left unregistered deliberately: the counters stay null and the gate HOLDs,
         # which is the right outcome when the instrumented module will not load.
-        logger.warning("canary: fc_loop write-audit instrumentation failed to import")
+        logger.warning(
+            "canary: FC-compatible write-audit instrumentation failed to import "
+            "(arch=%s)",
+            AGENT_ARCH,
+        )
 
 
 def _wire_canary_llm_observer() -> None:
@@ -796,9 +820,13 @@ def _crashed_turn_observations() -> dict:
 
 def _build_fc_signals(final_state) -> dict:
     """Derive the per-turn canary signals from the graph's final_state. Robust to the legacy
-    arch (whose final_state may lack the fc channels): everything defaults safely. llm_calls /
-    tool_batches are only meaningful on the fc loop (loop_turn == one bound-tools call per
-    super-step; batches == distinct tool_artifacts turns) — null on legacy, as designed."""
+    arch (whose final_state may lack the fc channels): everything defaults safely.
+
+    ``llm_calls`` comes from the arch-agnostic callback observer, because legacy
+    classifier/responder calls are billed too. ``loop_turn`` is retained only as a
+    fail-closed lower bound for FC runtimes: if the graph proves more model steps
+    than the observer saw, usage is partial. ``tool_batches`` is derived from the
+    shared artifact ledger plus an optional legacy execution-plan wave."""
     if not isinstance(final_state, dict):
         final_state = {}
     artifacts = final_state.get("tool_artifacts") or []
@@ -821,11 +849,34 @@ def _build_fc_signals(final_state) -> dict:
     _obs = turn_observations.snapshot()
     _audit = turn_observations.write_audit_snapshot(AGENT_ARCH)
     _dsml = turn_observations.dsml_snapshot()
-    is_fc = AGENT_ARCH == "fc_loop"
-    llm_calls = final_state.get("loop_turn") if is_fc else None
-    tool_batches = (len({a.get("turn") for a in artifacts if isinstance(a, dict)})
-                    if is_fc else None)
-    return {
+    is_fc = uses_fc_runtime(AGENT_ARCH)
+    observed_llm_calls = _obs.get("llm_calls")
+    llm_calls = (
+        observed_llm_calls
+        if isinstance(observed_llm_calls, int)
+        and not isinstance(observed_llm_calls, bool)
+        else None
+    )
+    loop_turn = final_state.get("loop_turn")
+    if (
+        is_fc
+        and isinstance(loop_turn, int)
+        and not isinstance(loop_turn, bool)
+        and loop_turn >= 0
+        and (llm_calls is None or loop_turn > llm_calls)
+    ):
+        llm_calls = loop_turn
+        # The graph observed a provider step whose terminal usage callback did not
+        # arrive. Never label the remaining usage complete or zero-call.
+        _obs["llm_usage_status"] = "partial"
+    artifact_turns = {
+        a.get("turn")
+        for a in artifacts
+        if isinstance(a, dict) and a.get("turn") is not None
+    }
+    wave_batches = 1 if final_state.get("task_results") else 0
+    tool_batches = len(artifact_turns) + wave_batches
+    signals = {
         "soft_wrapped": bool(final_state.get("soft_wrapped")),
         # HOW a wrapped turn closed ("llm"/"llm_retry" vs a fallback_* canned renderer).
         # None on a turn that never wrapped; the KEY's absence means the producing build
@@ -865,6 +916,22 @@ def _build_fc_signals(final_state) -> dict:
         "llm_calls": llm_calls,
         "tool_batches": tool_batches,
     }
+    # manager_v1 installs a root context at the graph invocation boundary.  Keep
+    # legacy/fc_loop records byte-for-byte compatible by adding these labels only
+    # when that root context was explicitly observed.
+    root_agent_context = _obs.get("root_agent_context")
+    if isinstance(root_agent_context, dict):
+        signals["root_agent_context"] = dict(root_agent_context)
+        for field in ("agent_role", "task_id", "parent_task_id"):
+            value = root_agent_context.get(field)
+            if value is not None:
+                signals[field] = value
+    multi_agent = _obs.get("multi_agent")
+    if AGENT_ARCH == MANAGER_V1_ARCH and isinstance(multi_agent, dict):
+        # Optional, non-gating diagnostics. The telemetry layer already strips
+        # objectives, arguments, data, errors and any other user-derived content.
+        signals["multi_agent"] = dict(multi_agent)
+    return signals
 
 
 
@@ -883,6 +950,34 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
     instrumentation blocks promotion instead of silently reading as clean.
     """
     try:
+        def _rollout_identity() -> dict:
+            if not has_request_context():
+                return {
+                    "rollout_id": None,
+                    "rollout_stage": None,
+                    "configured_candidate_percent": None,
+                    "traffic_source": "direct",
+                    "assigned_pool": "direct",
+                }
+            source = (request.headers.get("X-RentCompass-Traffic-Source") or "direct").strip()
+            rollout_id = request.headers.get("X-RentCompass-Rollout-ID")
+            stage = request.headers.get("X-RentCompass-Rollout-Stage")
+            pool = request.headers.get("X-RentCompass-Assigned-Pool")
+            weight_raw = request.headers.get("X-RentCompass-Rollout-Weight")
+            try:
+                weight = int(weight_raw) if weight_raw is not None else None
+            except (TypeError, ValueError):
+                weight = None
+            safe_id = re.compile(r"^[A-Za-z0-9._:-]{1,96}$")
+            safe_stage = re.compile(r"^[A-Za-z0-9._:-]{1,32}$")
+            return {
+                "rollout_id": rollout_id if isinstance(rollout_id, str) and safe_id.fullmatch(rollout_id) else None,
+                "rollout_stage": stage if isinstance(stage, str) and safe_stage.fullmatch(stage) else None,
+                "configured_candidate_percent": weight if weight in {0, 5, 20, 50, 100} else None,
+                "traffic_source": source if source in {"edge", "direct"} else "invalid",
+                "assigned_pool": pool if pool in {"legacy", "candidate"} else "direct",
+            }
+
         signals = (unknown_turn_signals(_crashed_turn_observations())
                    if fc_signals is None else dict(fc_signals))
         # Re-read the tool-markup counters HERE rather than trusting the snapshot
@@ -905,6 +1000,10 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
             turn_outcome=turn_outcome,
             turn_latency_ms=turn_latency_ms,
             signals=signals,
+            manager_v1_specialists=(
+                MANAGER_V1_SPECIALISTS if AGENT_ARCH == MANAGER_V1_ARCH else None
+            ),
+            rollout=_rollout_identity(),
         )
         _canary_logger.info(json.dumps(record, ensure_ascii=False, default=str))
         # One record per request. Mark it so a later failure at the response
@@ -2631,14 +2730,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     except Exception as _e:
         print(f"[Memory] retrieve skipped; error_type={type(_e).__name__}")
 
-    # Assemble the legacy query as before. fc_loop has a dedicated state channel for
+    # Assemble the legacy query as before. FC-compatible arches have a dedicated channel for
     # long-term memory; putting the same block into user_query would show it twice in
     # its message array and makes the raw user turn ambiguous to downstream tools.
-    _is_fc_loop = AGENT_ARCH == "fc_loop"
+    _uses_fc_runtime = uses_fc_runtime(AGENT_ARCH)
     query_with_history = assemble_context(
         user_message=user_message,
         history=history_snapshot,
-        memory_block="" if _is_fc_loop else _mem_block,
+        memory_block="" if _uses_fc_runtime else _mem_block,
         has_property_context=has_property_context,
         rolling_summary=(persistent_snapshot.get('extracted_context') or {}).get('rolling_summary'),
     )
@@ -2667,7 +2766,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         user_id=user_id,
         session_id=conversation_id,
         request_id=request_id,
-        memory_context=_mem_block if _is_fc_loop else "",
+        memory_context=_mem_block if _uses_fc_runtime else "",
     )
 
     # ── Phase 2: the slow LLM call — NO turn lock held here ──────
@@ -2708,8 +2807,25 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         _turn_ceiling_s() - (_eval_time.perf_counter() - _eval_turn_started),
     )
     try:
-        final_state = await _ainvoke_graph_with_timeout(
-            request_graph, graph_input, _graph_cfg, _graph_timeout_s)
+        if AGENT_ARCH == MANAGER_V1_ARCH:
+            root_task_id = f"turn:{request_id}"
+            turn_observations.note_root_agent_context(
+                agent_role="manager",
+                task_id=root_task_id,
+                parent_task_id=None,
+            )
+            with agent_execution_context(
+                agent_role="manager",
+                task_id=root_task_id,
+                parent_task_id=None,
+            ):
+                final_state = await _ainvoke_graph_with_timeout(
+                    request_graph, graph_input, _graph_cfg, _graph_timeout_s
+                )
+        else:
+            final_state = await _ainvoke_graph_with_timeout(
+                request_graph, graph_input, _graph_cfg, _graph_timeout_s
+            )
     except asyncio.TimeoutError:
         logger.error(
             "agent.graph.turn_timeout",

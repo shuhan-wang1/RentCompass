@@ -26,6 +26,8 @@ Event types & their type-specific fields
 * ``turn``         : route, response_type, critic_attempts, verdict, latency_ms
 * ``tool_budget_timeout``: tool, phase, budget_s, elapsed_ms, outcome
 * ``turn_soft_wrap``: elapsed_ms, llm_calls, tool_batches
+* ``specialist_task``: plan_id, task_id, parent_task_id, role, status,
+                       duration_ms, call_count
 
 Every event additionally carries ``type``, ``ts_monotonic`` (``perf_counter``),
 ``ts_wall`` (epoch seconds) and the ``run_id``/``case_id``/``config`` tags.
@@ -36,7 +38,9 @@ import contextlib
 import contextvars
 import hashlib
 import json
+import math
 import os
+import re
 import threading
 import time
 from typing import Any, Iterator, Optional
@@ -53,6 +57,13 @@ run_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("rc_eval_run_id
 case_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("rc_eval_case_id", default="-")
 config_var: contextvars.ContextVar[str] = contextvars.ContextVar("rc_eval_config", default="-")
 _log_path_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("rc_eval_log_path", default=None)
+
+_AGENT_CONTEXT_FIELDS = ("agent_role", "task_id", "parent_task_id")
+_SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
+_SPECIALIST_STATUSES = frozenset(
+    {"planned", "started", "completed", "failed", "skipped"}
+)
+_MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 
 DEFAULT_LOG_PATH = os.path.join("evaluation", "results", "events.jsonl")
 
@@ -150,7 +161,27 @@ def capture_run(
 # --------------------------------------------------------------------------- #
 # Emission
 # --------------------------------------------------------------------------- #
-def _emit(event_type: str, fields: dict) -> None:
+def _current_agent_context() -> dict[str, str]:
+    """Read the shared manager/specialist trace context without making capture brittle."""
+    try:
+        from uk_rent_agent.observability import current_agent_context
+
+        return current_agent_context()
+    except Exception:
+        return {}
+
+
+def _normalise_agent_context(value: Optional[dict]) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        key: str(value[key])
+        for key in _AGENT_CONTEXT_FIELDS
+        if value.get(key) is not None
+    }
+
+
+def _emit(event_type: str, fields: dict, *, agent_context: Optional[dict] = None) -> None:
     if not is_active():
         return
     event = {
@@ -162,6 +193,14 @@ def _emit(event_type: str, fields: dict) -> None:
         "config": config_var.get(),
     }
     event.update(fields)
+    # ``None`` means capture the context at emission time.  An explicit empty
+    # dict means a callback started outside an agent scope and must not be
+    # misattributed to whichever scope happens to be active when it ends.
+    event.update(
+        _current_agent_context()
+        if agent_context is None
+        else _normalise_agent_context(agent_context)
+    )
     try:
         _get_sink().emit(event)
     except Exception:
@@ -181,6 +220,7 @@ def record_llm_call(
     success: bool = True,
     retry_count: int = 0,
     error: Optional[str] = None,
+    agent_context: Optional[dict] = None,
 ) -> None:
     _emit(
         "llm_call",
@@ -196,7 +236,69 @@ def record_llm_call(
             "retry_count": retry_count,
             "error": error,
         },
+        agent_context=agent_context,
     )
+
+
+def record_specialist_lifecycle(
+    *,
+    plan_id: Any = None,
+    task_id: Any = None,
+    parent_task_id: Any = None,
+    role: Any = None,
+    status: Any = None,
+    duration_ms: Any = None,
+    call_count: Any = None,
+    **_ignored: Any,
+) -> None:
+    """Emit a content-free specialist lifecycle event when eval capture is active.
+
+    This public boundary validates the whitelist independently of the turn
+    accumulator.  Direct callers therefore cannot smuggle task objectives, args,
+    result data or arbitrary error text into the JSONL event stream.
+    """
+    if not is_active():
+        return
+    try:
+        ids = []
+        for value in (plan_id, task_id, parent_task_id):
+            candidate = value.strip() if isinstance(value, str) else ""
+            if not _MACHINE_ID_RE.fullmatch(candidate):
+                return
+            ids.append(candidate)
+        safe_role = role.strip() if isinstance(role, str) else ""
+        if safe_role not in _SPECIALIST_ROLES or status not in _SPECIALIST_STATUSES:
+            return
+        if (
+            isinstance(call_count, bool)
+            or not isinstance(call_count, int)
+            or call_count < 0
+            or call_count > 10_000
+        ):
+            return
+        if duration_ms is None:
+            safe_duration = None
+        else:
+            if isinstance(duration_ms, bool) or not isinstance(duration_ms, (int, float)):
+                return
+            safe_duration = float(duration_ms)
+            if not math.isfinite(safe_duration) or safe_duration < 0:
+                return
+            safe_duration = round(safe_duration, 3)
+        fields = {
+            "plan_id": ids[0],
+            "task_id": ids[1],
+            "parent_task_id": ids[2],
+            "role": safe_role,
+            "status": status,
+            "duration_ms": safe_duration,
+            "call_count": call_count,
+        }
+    except Exception:
+        return
+    # Explicit empty context: the event already carries its immutable task labels,
+    # and must not acquire a later manager/specialist ContextVar by accident.
+    _emit("specialist_task", fields, agent_context={})
 
 
 def _hash_args(kwargs: dict) -> str:
@@ -378,9 +480,13 @@ def _get_llm_callback_cls():
             self.purpose = purpose
             self._starts: dict = {}
             self._retries: dict = {}
+            self._agent_contexts: dict = {}
 
         def _start(self, run_id):
             self._starts[run_id] = time.perf_counter()
+            # Capture at START.  LangChain may deliver the terminal callback
+            # after the specialist scope has unwound or from another context.
+            self._agent_contexts[run_id] = _current_agent_context()
 
         def on_llm_start(self, serialized, prompts, *, run_id=None, **kwargs):  # noqa: D401
             self._start(run_id)
@@ -397,6 +503,7 @@ def _get_llm_callback_cls():
 
         def on_llm_end(self, response, *, run_id=None, **kwargs):
             it, ot, cached = _usage_from_llm_result(response)
+            agent_context = self._agent_contexts.pop(run_id, {})
             record_llm_call(
                 provider=self.provider,
                 model=self.model,
@@ -407,9 +514,11 @@ def _get_llm_callback_cls():
                 latency_ms=self._latency(run_id),
                 success=True,
                 retry_count=self._retries.pop(run_id, 0),
+                agent_context=agent_context,
             )
 
         def on_llm_error(self, error, *, run_id=None, **kwargs):
+            agent_context = self._agent_contexts.pop(run_id, {})
             record_llm_call(
                 provider=self.provider,
                 model=self.model,
@@ -418,6 +527,7 @@ def _get_llm_callback_cls():
                 success=False,
                 retry_count=self._retries.pop(run_id, 0),
                 error=type(error).__name__,
+                agent_context=agent_context,
             )
 
     _llm_callback_cls = _EvalLLMCallback

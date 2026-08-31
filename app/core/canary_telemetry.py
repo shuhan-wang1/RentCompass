@@ -40,12 +40,17 @@ Schema v2 changes vs v1
 * ``user_id_hash`` (HMAC) replaces the raw user id.
 * ``eval_only`` self-declares metrics that prod telemetry cannot determine, so
   the report can distinguish "eval-only" from "missing instrumentation".
+* Experimental ``manager_v1`` turns identify whether specialist dispatch was
+  configured and may carry a content-free ``multi_agent`` lifecycle diagnostic.
+  Legacy/fc records retain their old shape.
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional
@@ -88,6 +93,18 @@ USAGE_NO_CALLS = "no_llm_calls"
 USAGE_NOT_INSTRUMENTED = "not_instrumented"
 VALID_USAGE_STATUSES = (USAGE_COMPLETE, USAGE_PARTIAL, USAGE_NO_CALLS,
                         USAGE_NOT_INSTRUMENTED)
+_SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
+_SPECIALIST_STATUSES = frozenset(
+    {"planned", "started", "completed", "failed", "skipped"}
+)
+_SPECIALIST_EVENT_FIELDS = (
+    "plan_id", "task_id", "parent_task_id", "role", "status",
+    "duration_ms", "call_count",
+)
+_MULTI_AGENT_COUNTER_FIELDS = (
+    "planned", "started", "completed", "failed", "skipped", "max_in_flight",
+)
+_MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 REQUIRED_SECURITY_FIELDS = (
     "denied_write_count", "tainted_write_executed_count", "forbidden_write_executed_count",
 )
@@ -150,7 +167,10 @@ def search_direct_signals() -> Dict[str, Any]:
         # there is no spend to miss. That is why the status enum has a value for it
         # instead of overloading null.
         "llm_usage": None, "llm_usage_status": USAGE_NO_CALLS,
-        "llm_calls": None, "tool_batches": None,
+        # These are genuine observed zeros, not FC-only fields. Keeping them null
+        # contradicts no_llm_calls and makes the strict consumer HOLD every window
+        # containing deterministic search traffic.
+        "llm_calls": 0, "tool_batches": 0,
     }
 
 
@@ -204,7 +224,102 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
     # observed rather than dropping the turn out of the cost denominator.
     if observed and observed.get("llm_usage_calls"):
         sig["llm_usage"] = aggregate_llm_usage(observed["llm_usage_calls"])
+    root_context = observed.get("root_agent_context") if observed else None
+    if isinstance(root_context, dict) and root_context:
+        sig["root_agent_context"] = dict(root_context)
+    for field in ("agent_role", "task_id", "parent_task_id"):
+        if observed and observed.get(field) is not None:
+            sig[field] = observed[field]
+    if observed and isinstance(observed.get("multi_agent"), dict):
+        # The record builder applies the content-free whitelist and emits this only
+        # for manager_v1. Keeping it here lets a crash retain lifecycle progress.
+        sig["multi_agent"] = observed["multi_agent"]
     return sig
+
+
+def _multi_agent_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
+    """Sanitise the optional manager_v1 specialist trace.
+
+    This deliberately accepts no objectives, args, outputs or error strings. A
+    malformed projection is omitted rather than allowed to break canary emission.
+    """
+    if not isinstance(value, dict):
+        return None
+    try:
+        out: Dict[str, Any] = {}
+        for field in _MULTI_AGENT_COUNTER_FIELDS:
+            raw = value.get(field)
+            if isinstance(raw, bool) or not isinstance(raw, int):
+                return None
+            if raw < 0 or raw > 1_000_000:
+                return None
+            out[field] = raw
+
+        truncated = value.get("events_truncated")
+        if not isinstance(truncated, bool):
+            return None
+        out["events_truncated"] = truncated
+
+        safe_events = []
+        events = value.get("events", [])
+        if not isinstance(events, list):
+            return None
+        for raw_event in events[:64]:
+            if not isinstance(raw_event, dict):
+                continue
+            identifiers = []
+            invalid = False
+            for field in ("plan_id", "task_id", "parent_task_id"):
+                candidate = raw_event.get(field)
+                candidate = candidate.strip() if isinstance(candidate, str) else ""
+                if not _MACHINE_ID_RE.fullmatch(candidate):
+                    invalid = True
+                    break
+                identifiers.append(candidate)
+            if invalid:
+                continue
+            role = raw_event.get("role")
+            status = raw_event.get("status")
+            if role not in _SPECIALIST_ROLES or status not in _SPECIALIST_STATUSES:
+                continue
+            calls = raw_event.get("call_count")
+            if (
+                isinstance(calls, bool)
+                or not isinstance(calls, int)
+                or calls < 0
+                or calls > 10_000
+            ):
+                continue
+            raw_duration = raw_event.get("duration_ms")
+            if raw_duration is None:
+                duration = None
+            else:
+                if (
+                    isinstance(raw_duration, bool)
+                    or not isinstance(raw_duration, (int, float))
+                ):
+                    continue
+                duration = float(raw_duration)
+                if not math.isfinite(duration) or duration < 0:
+                    continue
+                duration = round(duration, 3)
+            event = {
+                "plan_id": identifiers[0],
+                "task_id": identifiers[1],
+                "parent_task_id": identifiers[2],
+                "role": role,
+                "status": status,
+                "duration_ms": duration,
+                "call_count": calls,
+            }
+            # A local assertion makes future edits fail safe if an unsafe field is
+            # ever accidentally added to the diagnostic shape.
+            if tuple(event.keys()) == _SPECIALIST_EVENT_FIELDS:
+                safe_events.append(event)
+        out["events"] = safe_events
+        return out
+    except Exception:
+        return None
 
 
 def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
@@ -218,6 +333,7 @@ def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[D
     if not calls:
         return None
     per_model: Dict[str, Dict[str, int]] = {}
+    per_role: Dict[str, Dict[str, int]] = {}
     totals = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0}
     saw_any = False
     for c in calls:
@@ -236,9 +352,35 @@ def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[D
             totals[field] += v
         slot["calls"] += 1
         totals["calls"] += 1
+        role = c.get("agent_role")
+        if role is not None:
+            role_slot = per_role.setdefault(
+                str(role),
+                {"calls": 0, "input_tokens": 0, "output_tokens": 0,
+                 "cache_read_tokens": 0, "models": {}},
+            )
+            role_slot["calls"] += 1
+            role_model_slot = role_slot["models"].setdefault(
+                model,
+                {"calls": 0, "input_tokens": 0, "output_tokens": 0,
+                 "cache_read_tokens": 0},
+            )
+            role_model_slot["calls"] += 1
+            for field in ("input_tokens", "output_tokens", "cache_read_tokens"):
+                try:
+                    value = int(c.get(field) or 0)
+                except (TypeError, ValueError):
+                    value = 0
+                role_slot[field] += value
+                role_model_slot[field] += value
     if not saw_any:
         return None
-    return {**totals, "models": per_model}
+    result = {**totals, "models": per_model}
+    # Optional and additive: legacy/fc calls without an execution context retain
+    # the exact historical llm_usage object shape.
+    if per_role:
+        result["roles"] = per_role
+    return result
 
 
 def build_canary_turn_record(
@@ -255,6 +397,8 @@ def build_canary_turn_record(
     turn_latency_ms: float,
     signals: Optional[Dict[str, Any]] = None,
     ts: Optional[datetime] = None,
+    manager_v1_specialists: Optional[bool] = None,
+    rollout: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build ONE schema-v2 ``canary.turn`` record. Pure: no I/O, no globals beyond
     the HMAC key lookup. ``signals`` carries the arch-specific per-turn observations
@@ -262,6 +406,7 @@ def build_canary_turn_record(
     field we could not observe is emitted as ``null`` rather than a fabricated 0/False.
     """
     sig = signals or {}
+    rollout_in = rollout if isinstance(rollout, dict) else {}
     sec_in = sig.get("security") or {}
     uid_hash, hash_status = hash_user_id(user_id)
     stamp = (ts or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -297,7 +442,7 @@ def build_canary_turn_record(
         for r in v[:20]:  # bounded: a retry storm must not grow the record unboundedly
             if not isinstance(r, dict):
                 continue
-            out.append({
+            record = {
                 "tool": r.get("tool"),
                 "security_decision": r.get("security_decision"),
                 "context_tainted": bool(r.get("context_tainted")),
@@ -305,10 +450,14 @@ def build_canary_turn_record(
                 "dispatch_started": bool(r.get("dispatch_started")),
                 "gate_bypassed": bool(r.get("gate_bypassed")),
                 "reason": r.get("reason"),
-            })
+            }
+            for field in ("agent_role", "task_id", "parent_task_id"):
+                if r.get(field) is not None:
+                    record[field] = str(r[field])
+            out.append(record)
         return out
 
-    return {
+    record = {
         "event": EVENT_NAME,
         "telemetry_schema_version": SCHEMA_VERSION,
         "ts": stamp.isoformat(),
@@ -316,6 +465,20 @@ def build_canary_turn_record(
         "agent_arch": agent_arch,
         "candidate_sha": candidate_sha,
         "strict": bool(strict),
+        "variant_id": (
+            f"{agent_arch}:strict-{1 if strict else 0}:specialists-"
+            f"{1 if manager_v1_specialists is True else 0}"
+        ),
+        # Trusted edge provenance is injected by nginx after overwriting any
+        # client copies. Direct :5001/:5002 smoke traffic is explicitly labelled
+        # and can therefore never satisfy a public rollout window by accident.
+        "rollout_id": rollout_in.get("rollout_id"),
+        "rollout_stage": rollout_in.get("rollout_stage"),
+        "configured_candidate_percent": rollout_in.get(
+            "configured_candidate_percent"
+        ),
+        "traffic_source": rollout_in.get("traffic_source", "direct"),
+        "assigned_pool": rollout_in.get("assigned_pool", "direct"),
         "request_id": request_id,
         "conversation_id": conversation_id,
         "user_id_hash": uid_hash,
@@ -362,3 +525,27 @@ def build_canary_turn_record(
         "no_evidence_numbers": None,
         "eval_only": list(EVAL_ONLY_FIELDS),
     }
+    root_context = sig.get("root_agent_context")
+    if agent_arch == "manager_v1":
+        # Configuration identity is distinct from lifecycle activity: a perfectly
+        # valid turn may need no specialist tool at all.  Emitting the switch lets
+        # the release gate distinguish that case from a candidate that silently
+        # started with specialist dispatch disabled.  ``None`` is intentional and
+        # fail-closed for older/miswired producers.
+        record["manager_v1_specialists"] = (
+            manager_v1_specialists
+            if isinstance(manager_v1_specialists, bool)
+            else None
+        )
+        multi_agent = _multi_agent_diagnostics(sig.get("multi_agent"))
+        if multi_agent is not None:
+            record["multi_agent"] = multi_agent
+    if not isinstance(root_context, dict):
+        root_context = {}
+    for field in ("agent_role", "task_id", "parent_task_id"):
+        value = sig.get(field)
+        if value is None:
+            value = root_context.get(field)
+        if value is not None:
+            record[field] = str(value)
+    return record

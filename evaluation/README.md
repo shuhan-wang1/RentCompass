@@ -41,6 +41,8 @@ evaluation/
 │   ├── fake_llm.py           deterministic unbilled model seam
 │   └── graders.py            deterministic grader + optional LLM judge
 ├── run_benchmark.py          the benchmark runner (CaseRunner + writers)
+├── run_paired_manager_eval.py process-isolated fc_loop/manager_v1 paired runner
+├── paired_gate.py            fail-closed PROMOTE/HOLD/BLOCK comparison
 ├── run_ablation.py           Phase-4 model A/B + Phase-5 retrieval A/B
 ├── fault_injection/          resilience harness (15 injected-fault scenarios)
 │   ├── injectors.py          fault injectors + ScenarioResult
@@ -60,6 +62,7 @@ All commands are **offline/unbilled by default**. Run from the repo root.
 | Command | What it does | Key outputs |
 |---|---|---|
 | `python -m evaluation.run_benchmark --smoke --offline` | 10 smoke cases, mechanics-only | `results/<out>/summary.json`, `per_case.csv`, `tool_metrics.csv`, `model_usage.csv`, `raw_runs.jsonl` |
+| `python -m evaluation.run_paired_manager_eval --out evaluation/results/manager_v1_pair` | Same-case/repeat `fc_loop` vs `manager_v1+specialists`, offline only | `fc_loop/`, `manager_v1/`, `paired_report.json`, `paired_cases.jsonl`, `paired_commands.json` |
 | `python -m evaluation.run_ablation --study both --offline --smoke` | Model + retrieval A/B | `results/ablation_model.{json,csv}`, `results/ablation_retrieval.{json,csv}` |
 | `python -m evaluation.fault_injection.run` | 15 fault scenarios (GENUINE) | `results/fault_injection.csv`, `results/fault_summary.json` |
 | `python -m evaluation.memory_eval` | Memory eval (stdlib SQLite) | `results/memory_eval.json` |
@@ -68,6 +71,34 @@ All commands are **offline/unbilled by default**. Run from the repo root.
 Common flags (benchmark + ablation): `--smoke`, `--limit N`, `--category A_retrieval`,
 `--repeat K`, `--offline` / `--live`, `--max-cost-usd F`, `--resume`, `--out DIR`,
 `--timestamp TS`.
+
+### manager_v1 paired promotion gate
+
+Run the complete frozen set from a **new, empty** output directory:
+
+```bash
+python -m evaluation.run_paired_manager_eval \
+  --out evaluation/results/manager_v1_pair
+```
+
+The two arms run in separate processes with identical case/repeat selectors,
+`PYTHONHASHSEED=0`, fake FC model, in-process tools, and fixture/canned replay. The
+candidate explicitly enables `--arch manager_v1 --manager-v1-specialists`; the baseline
+is `--arch fc_loop`. No live/model/network mode is exposed by this command.
+
+`paired_report.json` returns `PROMOTE`, `HOLD`, or `BLOCK` (exit codes 0, 2, 3): missing
+metrics and ordinary regressions HOLD; an observed zero-tolerance, cross-user memory,
+prompt-injection, tainted-write, forbidden-tool, or specialist manager-only capability
+violation BLOCKS. Promotion also requires exact case/repeat pairing, a git-clean shared
+commit, the existing guard/SLO gates, task and constraint non-inferiority, evidence
+completeness, p95/call/cost budgets, and balanced specialist lifecycle events.
+Balanced terminal failures/skips remain visible and must not exceed the paired baseline's
+tool-failure signal; they are not mistaken for missing lifecycle telemetry.
+
+Use `--smoke` only to verify wiring. The 10-case smoke shard lacks the full required
+memory/security coverage and therefore correctly returns `HOLD`. Offline grounded/source
+scores prove deterministic evidence plumbing only; they do **not** establish live answer
+quality, provider latency, availability, or cost.
 
 ---
 

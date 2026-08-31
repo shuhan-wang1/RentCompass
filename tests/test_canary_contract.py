@@ -52,7 +52,15 @@ def make(i=0, *, arch="fc_loop", endpoint=ENDPOINT_ALEX, latency=1000.0,
         "dsml_blocked": dsml_blocked,
         "dsml_leak": dsml_leak,
         "provider_schema_400_count": provider_400,
-        "llm_calls": 1, "tool_batches": 0, "llm_usage": None,
+        "llm_calls": 1, "tool_batches": 0,
+        "llm_usage": {
+            "calls": 1, "input_tokens": 10, "output_tokens": 5,
+            "cache_read_tokens": 0,
+            "models": {"fixture-model": {
+                "calls": 1, "input_tokens": 10, "output_tokens": 5,
+                "cache_read_tokens": 0,
+            }},
+        },
         # Layer B: token accounting is trusted only when every call reported usage.
         "llm_usage_status": usage_status,
     }
@@ -83,6 +91,30 @@ def test_producer_output_is_contract_conformant():
     """The producer's own output must satisfy the consumer's required-field contract."""
     v = canary_report.validate_records([make(0)])
     assert v["ok"], f"producer emits a non-conformant record: {v['violations']}"
+
+
+def test_search_direct_producer_output_is_contract_conformant():
+    """A deterministic turn has provable zero denominators, never null ones."""
+    rec = build_canary_turn_record(
+        endpoint=ENDPOINT_SEARCH_DIRECT,
+        agent_arch="legacy",
+        candidate_sha="d62628c",
+        strict=False,
+        request_id="req-direct",
+        conversation_id="conv-direct",
+        user_id="user-direct",
+        http_status=200,
+        turn_outcome=OUTCOME_OK,
+        turn_latency_ms=5.0,
+        signals=search_direct_signals(),
+        ts=_T0,
+    )
+
+    assert rec["llm_calls"] == 0
+    assert rec["tool_batches"] == 0
+    assert rec["llm_usage"] is None
+    assert rec["llm_usage_status"] == "no_llm_calls"
+    assert canary_report.validate_record(rec) == []
 
 
 def test_clean_population_proceeds():

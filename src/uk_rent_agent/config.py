@@ -6,6 +6,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from uk_rent_agent.agent.architecture import (
+    SUPPORTED_AGENT_ARCHES,
+    manager_v1_specialists_enabled,
+)
+
 
 def _bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -57,6 +62,10 @@ class Config:
     # Keeping it in Config prevents readiness from validating one environment snapshot while
     # the lazily-built graph reads a differently-normalized value later.
     agent_arch: str = "legacy"
+    # Phase-2 manager specialist dispatch. The requested value is retained for
+    # diagnostics; ``manager_v1_specialists_effective`` also binds it to the
+    # manager_v1 architecture so another pool cannot activate it accidentally.
+    manager_v1_specialists: bool = False
     deepseek_strict: bool = False
     llm_provider: str = "deepseek"
     property_source: str = "auto"
@@ -93,9 +102,26 @@ class Config:
     # well below the default fifteen minutes.
     turn_lease_seconds: int = 15 * 60
 
+    def __post_init__(self) -> None:
+        # Phase 2 deliberately grants specialists only the trusted, in-process
+        # ToolRegistry. MCP is a wider execution boundary and must fail closed.
+        if self.manager_v1_specialists_effective and self.use_mcp_tools:
+            raise ValueError(
+                "MANAGER_V1_SPECIALISTS requires USE_MCP_TOOLS=0 "
+                "(trusted in-process ToolRegistry only)"
+            )
+
     @property
     def data_dir(self) -> Path:
         return self.project_root / "app" / "data"
+
+    @property
+    def manager_v1_specialists_effective(self) -> bool:
+        """Whether specialist execution is enabled for this exact runtime."""
+        return manager_v1_specialists_enabled(
+            self.agent_arch,
+            self.manager_v1_specialists,
+        )
 
     @classmethod
     def from_env(cls, *, require_secret: bool = False) -> "Config":
@@ -121,7 +147,8 @@ class Config:
         )
         return cls(
             project_root=root,
-            agent_arch=_choice("AGENT_ARCH", "legacy", {"legacy", "fc_loop"}),
+            agent_arch=_choice("AGENT_ARCH", "legacy", set(SUPPORTED_AGENT_ARCHES)),
+            manager_v1_specialists=_bool("MANAGER_V1_SPECIALISTS", False),
             deepseek_strict=_bool("DEEPSEEK_STRICT", False),
             llm_provider=_choice("LLM_PROVIDER", "deepseek", {"deepseek", "ollama"}),
             property_source=source,

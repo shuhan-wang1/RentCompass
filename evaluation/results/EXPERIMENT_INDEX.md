@@ -45,7 +45,7 @@ _更新于 2026-08-06，HEAD `d74561b`。_
 | held-out v2 §2B.7 | **fc_loop** | 6 条真实缺陷：①声称按通勤筛选却没调工具 4/16 ②记忆写入未持久化 3/10 ③无结果回合凭空补市场价 3 例 ④不合规房源列在"符合全部条件"下 3 例 ⑤给出被禁的 ÷4.33 口径 ⑥内部对账过程写进用户答案 | ①②③④ 已由契约加固修复（`962b2b5` / `1c4e42b` / `523745d`）；⑤ 已修；**修复后未在 fc_loop 上复测** |
 | held-out v6 | legacy | 3 例结构化契约失败（HO6-198/208/238）：`is_loop_synthesis` 分支绕过契约挂载 | **已修** `d7a7702`，回归测试 `tests/test_holdout_v6_dimension_contract_mount.py` |
 | held-out v6 | — | 13 例 task_completion 假阴性：冻结 marker 列表过窄 | 评测器缺陷，marker 已修（16 tests），**未重跑** |
-| 实验 D 副产物 | fc_loop | fan-out 提出的 179 次添加有 36 次（20%）被 execute-time 门禁拒绝，E7/E10 是 100% | **未修**。plan-time 与 execute-time 调的是同一个 `_read_tool_denial` + 同一 policy，却给出不同答案——一致性缺口，值得一查 |
+| 实验 D 副产物 | fc_loop | fan-out 提出的 179 次添加有 36 次（20%）在 E7/E10 被 closed-fixture 拒绝 | **非生产 policy 缺陷**。原始拒绝均为 `fixture denied unbound tool`：评测 harness 保留完整 `list_specs()`，但为维持冻结证据边界会在 execute-time 拒绝 fixture 未绑定的 commute/POI 工具；生产 `_read_tool_denial` 仅管辖 `search_properties` / `web_search`，没有拒绝这些 fan-out 调用。后续指标应拆分 `policy_denied` 与 `fixture_unbound`，避免再次误归因。 |
 
 ## 四、已知的空缺
 

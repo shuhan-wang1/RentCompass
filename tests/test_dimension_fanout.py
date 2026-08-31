@@ -634,7 +634,7 @@ def test_sweep_does_not_fire_when_the_turn_tool_budget_is_spent():
     chat = FakeChat([AIMessage(content="Partial answer.")])
     nodes = build_fc_nodes(provider, agent_llm=chat)
     st = _answered_search_state(E11_QUERY, turn_start_monotonic=time.monotonic() - 2.0,
-                                turn_tool_budget_used_s=40.0)
+                                turn_tool_budget_used_s=agent_loop._turn_tool_budget_s())
 
     cmd, st = _agent_once(nodes, st)
     assert cmd.goto == "critic" and provider.calls == []

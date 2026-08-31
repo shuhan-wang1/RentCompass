@@ -110,6 +110,11 @@ def offline_search(monkeypatch):
     ``best_estimate_minutes``) is what the filter now reads. Only the geocoder and TfL are
     faked, and TfL is faked to "no journey" because that is the branch the estimator serves.
     """
+    # ``run`` installs a per-test coordinator below.  Preserve whatever coordinator the
+    # process had before this fixture so randomized module order cannot leak our special
+    # store (whose ``build_index`` is intentionally a no-op) into later search tests.
+    saved_coordinator = sp._RAG_COORDINATOR
+
     monkeypatch.setenv("DESC_ENRICH_ENABLED", "0")
     monkeypatch.setenv("AREA_RECOS_ENABLED", "0")
     monkeypatch.setenv("SEARCH_GEO_VALIDATION_ENABLED", "0")
@@ -157,7 +162,10 @@ def offline_search(monkeypatch):
         params.update(kwargs)
         return asyncio.run(sp.search_properties_impl(**params))
 
-    return run
+    try:
+        yield run
+    finally:
+        sp.set_rag_coordinator(saved_coordinator)
 
 
 def _surfaced(result) -> dict:

@@ -13,6 +13,9 @@ from uk_rent_agent.config import Config
 def _install_runtime_environment(config: Config) -> None:
     """Normalize the few process-wide switches consumed by legacy module imports."""
     os.environ["AGENT_ARCH"] = config.agent_arch
+    os.environ["MANAGER_V1_SPECIALISTS"] = (
+        "1" if config.manager_v1_specialists_effective else "0"
+    )
     os.environ["DEEPSEEK_STRICT"] = "1" if config.deepseek_strict else "0"
     os.environ["LLM_PROVIDER"] = config.llm_provider
     os.environ["USE_MCP_TOOLS"] = "1" if config.use_mcp_tools else "0"

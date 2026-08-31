@@ -94,7 +94,7 @@ esac
 grep -q "compose .*up .*app-fc" "$CALLS" 2>/dev/null && [ "$port" = 5002 ] && sha="$PIN"
 grep -q "compose up -d app$" "$CALLS" 2>/dev/null && [ "$port" = 5001 ] && sha="$PIN"
 [ "$sha" = "DOWN" ] && exit 1
-printf 'HTTP/1.1 200 OK\r\nx-agent-arch: %s\r\nx-agent-version: %s\r\n\r\n' "$arch" "$sha"
+printf 'HTTP/1.1 200 OK\r\nx-agent-arch: %s\r\nx-agent-version: %s\r\nx-agent-specialists: 0\r\n\r\n' "$arch" "$sha"
 EOF
   cat > "$SANDBOX/bin/fakeswitch" <<'EOF'
 #!/usr/bin/env bash
@@ -210,8 +210,8 @@ cat > "$SANDBOX/bin/fakecurl" <<'EOF'
 #!/usr/bin/env bash
 url="${@: -1}"; port="${url##*:}"; port="${port%%/*}"
 case "$port" in
-  5001) printf 'HTTP/1.1 200 OK\r\nx-agent-arch: legacy\r\nx-agent-version: %s\r\n\r\n' "$LEGACY_SHA" ;;
-  5002) printf 'HTTP/1.1 200 OK\r\nx-agent-arch: fc_loop\r\nx-agent-version: %s\r\n\r\n' "$FC_SHA" ;;
+  5001) printf 'HTTP/1.1 200 OK\r\nx-agent-arch: legacy\r\nx-agent-version: %s\r\nx-agent-specialists: 0\r\n\r\n' "$LEGACY_SHA" ;;
+  5002) printf 'HTTP/1.1 200 OK\r\nx-agent-arch: fc_loop\r\nx-agent-version: %s\r\nx-agent-specialists: 0\r\n\r\n' "$FC_SHA" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -229,7 +229,7 @@ setup 5002 old-legacy-sha old-fc-sha
 cat > "$SANDBOX/bin/fakecurl" <<'EOF'
 #!/usr/bin/env bash
 url="${@: -1}"; port="${url##*:}"; port="${port%%/*}"
-printf 'HTTP/1.1 200 OK\r\nx-agent-arch: legacy\r\nx-agent-version: %s\r\n\r\n' "$PIN"
+printf 'HTTP/1.1 200 OK\r\nx-agent-arch: legacy\r\nx-agent-version: %s\r\nx-agent-specialists: 0\r\n\r\n' "$PIN"
 EOF
 chmod +x "$SANDBOX/bin/fakecurl"
 run_update

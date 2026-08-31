@@ -15,6 +15,11 @@ from starlette.middleware.wsgi import WSGIMiddleware
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
+from uk_rent_agent.agent.architecture import (
+    MANAGER_V1_ARCH,
+    SUPPORTED_AGENT_ARCHES,
+    uses_fc_runtime,
+)
 from uk_rent_agent.config import Config
 from uk_rent_agent.logging_setup import configure_logging
 from uk_rent_agent.web.app import create_app
@@ -54,6 +59,9 @@ def _canary_identity() -> dict[str, str]:
         return {
             "X-Agent-Arch": str(getattr(mod, "AGENT_ARCH", "")),
             "X-Agent-Version": str(getattr(mod, "APP_CANDIDATE_SHA", "")),
+            "X-Agent-Specialists": (
+                "1" if bool(getattr(mod, "MANAGER_V1_SPECIALISTS", False)) else "0"
+            ),
         }
     except Exception:
         return {}
@@ -87,6 +95,9 @@ def _release_manifest() -> dict[str, Any]:
         },
         "routing_mode": os.getenv("ROUTING_MODE", "single_pool"),
         "strict": bool(getattr(mod, "DEEPSEEK_STRICT", False)),
+        "manager_v1_specialists": bool(
+            getattr(mod, "MANAGER_V1_SPECIALISTS", False)
+        ),
     }
 
 
@@ -96,6 +107,9 @@ def _identity_headers(manifest: dict[str, Any] | None = None) -> dict[str, str]:
     return {
         "X-Agent-Arch": str(release["arch"]),
         "X-Agent-Version": str(release["source_sha"]),
+        "X-Agent-Specialists": (
+            "1" if bool(release.get("manager_v1_specialists", False)) else "0"
+        ),
         "X-Image-Digest": str(release["image_digest"]),
         "X-Prompt-Version": str(prompt["version"]),
         "X-Prompt-Schema-Sha": str(prompt["schema_sha"]),
@@ -105,7 +119,7 @@ def _identity_headers(manifest: dict[str, Any] | None = None) -> dict[str, str]:
 def _check_release_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
     prompt = manifest["prompt"]
     problems: list[str] = []
-    if manifest["arch"] not in {"legacy", "fc_loop"}:
+    if manifest["arch"] not in SUPPORTED_AGENT_ARCHES:
         problems.append("arch")
     if not _FULL_SHA.fullmatch(str(manifest["source_sha"])):
         problems.append("source_sha")
@@ -429,13 +443,23 @@ def _check_runtime_configuration(config: Config) -> dict[str, Any]:
     if loaded is None:
         problems.append("Flask Config unavailable")
     else:
-        for field in ("agent_arch", "deepseek_strict", "llm_provider"):
-            if getattr(loaded, field, None) != getattr(config, field):
+        for field in (
+            "agent_arch",
+            "manager_v1_specialists",
+            "deepseek_strict",
+            "llm_provider",
+        ):
+            default = False if field == "manager_v1_specialists" else None
+            if getattr(loaded, field, default) != getattr(config, field):
                 problems.append(f"Config.{field} mismatch")
     if str(getattr(mod, "AGENT_ARCH", "")) != config.agent_arch:
         problems.append("AGENT_ARCH mismatch")
     if bool(getattr(mod, "DEEPSEEK_STRICT", False)) != config.deepseek_strict:
         problems.append("DEEPSEEK_STRICT mismatch")
+    if bool(getattr(mod, "MANAGER_V1_SPECIALISTS", False)) != (
+        config.manager_v1_specialists_effective
+    ):
+        problems.append("MANAGER_V1_SPECIALISTS mismatch")
     llm_module = sys.modules.get("core.llm_config")
     if llm_module is not None and str(getattr(llm_module, "LLM_PROVIDER", "")) != config.llm_provider:
         problems.append("LLM_PROVIDER factory mismatch")
@@ -443,6 +467,7 @@ def _check_runtime_configuration(config: Config) -> dict[str, Any]:
         "status": "fail" if problems else "ok",
         "required": True,
         "agent_arch": config.agent_arch,
+        "manager_v1_specialists": config.manager_v1_specialists_effective,
         "llm_provider": config.llm_provider,
         "deepseek_strict": config.deepseek_strict,
         **({"detail": "; ".join(problems)} if problems else {}),
@@ -481,23 +506,46 @@ def _check_agent_graph(config: Config) -> dict[str, Any]:
         provider = getattr(mod, "agent_tool_provider", None)
         if provider is None or not callable(getattr(provider, "list_specs", None)):
             raise RuntimeError("agent tool provider unavailable")
-        if config.agent_arch == "fc_loop":
-            from core.agent_loop import build_fc_graph
-            if not callable(build_fc_graph):
-                raise RuntimeError("fc_loop graph builder unavailable")
+        if uses_fc_runtime(config.agent_arch):
+            if config.agent_arch == MANAGER_V1_ARCH:
+                from core.manager_v1 import build_manager_v1_graph as loop_graph_builder
+            else:
+                from core.agent_loop import build_fc_graph as loop_graph_builder
+            if not callable(loop_graph_builder):
+                raise RuntimeError(
+                    f"{config.agent_arch} graph builder unavailable"
+                )
             # Ollama must be injectable; the default fc driver is DeepSeek-specific.
             if config.llm_provider == "ollama":
                 from core.llm_config import get_react_llm
                 if not callable(get_react_llm):
                     raise RuntimeError("configured Ollama model factory unavailable")
                 if not callable(getattr(mod, "_configured_fc_agent_llm", None)):
-                    raise RuntimeError("Flask runtime lacks the Ollama fc_loop injection hook")
+                    raise RuntimeError(
+                        "Flask runtime lacks the Ollama FC-runtime injection hook"
+                    )
 
         # Compatibility path for isolated factories that do not expose the Flask runtime
         # initializer. Actually compile and validate the result before declaring readiness.
         model_factory = getattr(mod, "_configured_fc_agent_llm", None)
         probe_llm = model_factory() if callable(model_factory) else object()
-        graph = factory(provider, agent_llm=probe_llm)
+        accepts_extra_kwargs = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters.values()
+        )
+        accepts_specialist_flag = (
+            "manager_v1_specialists" in parameters or accepts_extra_kwargs
+        )
+        if config.manager_v1_specialists_effective and not accepts_specialist_flag:
+            raise RuntimeError(
+                "graph factory cannot receive the enabled manager_v1 specialist flag"
+            )
+        factory_kwargs = {"agent_llm": probe_llm}
+        if accepts_specialist_flag:
+            factory_kwargs["manager_v1_specialists"] = (
+                config.manager_v1_specialists_effective
+            )
+        graph = factory(provider, **factory_kwargs)
         if not any(callable(getattr(graph, name, None)) for name in ("invoke", "ainvoke")):
             raise RuntimeError("graph factory returned no invoke/ainvoke entry point")
 

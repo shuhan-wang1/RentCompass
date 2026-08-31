@@ -28,7 +28,10 @@ def test_blue_green_contract_shares_conversations_but_not_checkpoints():
     compose = _text("docker-compose.yml")
     assert compose.count('CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"') == 2
     assert 'CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints.sqlite3"' in compose
-    assert 'CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_fc.sqlite3"' in compose
+    assert (
+        'CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_${CANARY_AGENT_ARCH:-fc_loop}'
+        '_specialists-${CANARY_MANAGER_V1_SPECIALISTS:-0}.sqlite3"'
+    ) in compose
     assert compose.count('ROUTING_MODE: "blue_green_shared_conversation_store"') == 2
 
 
@@ -72,6 +75,18 @@ def test_nginx_discards_client_supplied_forwarding_chains():
         nginx = _text(path)
         assert "proxy_set_header X-Forwarded-For   $remote_addr;" in nginx
         assert "$proxy_add_x_forwarded_for" not in nginx
+
+
+def test_nginx_canary_metadata_is_overwritten_at_the_trusted_edge():
+    for path in (
+        "deploy/nginx/rentcompass.co.uk.conf",
+        "deploy/nginx/rentcompass.co.uk.ssl.conf",
+    ):
+        nginx = _text(path)
+        assert "include /etc/nginx/snippets/rentcompass-canary-routing.conf;" in nginx
+        assert "proxy_set_header X-Request-ID      $request_id;" in nginx
+        assert "X-RentCompass-Traffic-Source edge;" in nginx
+        assert "X-RentCompass-Assigned-Pool  $rentcompass_pool;" in nginx
 
 
 def test_local_release_metadata_can_degrade_but_production_enables_strict_gate():

@@ -446,6 +446,20 @@ class Tool:
         """
         执行工具（带重试和错误处理）
         """
+        return await self._execute_with_callable(None, **kwargs)
+
+    async def _execute_with_callable(
+        self,
+        pinned_callable: Optional[Callable],
+        **kwargs,
+    ) -> ToolResult:
+        """Run the normal Tool pipeline, optionally against one fixed callable.
+
+        Ordinary callers pass through :meth:`execute` and resolve ``self.func`` at the start
+        of each attempt. Specialist capabilities pass the callable captured at capability
+        resolution, so a later mutation of the otherwise same ``Tool`` object cannot redirect
+        an already-authorised dispatch.
+        """
         start_time = time.time()
         
         idempotency_key = kwargs.pop("idempotency_key", None)
@@ -525,6 +539,12 @@ class Tool:
         for attempt in range(attempts):
             try:
                 logger.debug("Executing %s (attempt %s/%s)", self.name, attempt + 1, attempts)
+
+                execution_callable = (
+                    pinned_callable if pinned_callable is not None else self.func
+                )
+                if not callable(execution_callable):
+                    raise TypeError("tool callable is not callable")
                 
                 # 验证输入参数
                 self._validate_input(kwargs)
@@ -532,17 +552,28 @@ class Tool:
                 # Re-attach injected runtime params (see above) only for funcs that accept them.
                 call_kwargs = kwargs
                 if injected:
-                    accepted = {k: v for k, v in injected.items() if self._accepts_kwarg(k)}
+                    if pinned_callable is None:
+                        accepted = {
+                            k: v for k, v in injected.items() if self._accepts_kwarg(k)
+                        }
+                    else:
+                        accepted = {
+                            k: v
+                            for k, v in injected.items()
+                            if self._callable_accepts_kwarg(execution_callable, k)
+                        }
                     if accepted:
                         call_kwargs = {**kwargs, **accepted}
 
                 # 执行函数（支持同步和异步）
-                if asyncio.iscoroutinefunction(self.func):
-                    result = await self.func(**call_kwargs)
+                if asyncio.iscoroutinefunction(execution_callable):
+                    result = await execution_callable(**call_kwargs)
                 else:
                     # 同步函数在 executor 中运行（避免阻塞）
                     loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(None, lambda: self.func(**call_kwargs))
+                    result = await loop.run_in_executor(
+                        None, lambda: execution_callable(**call_kwargs)
+                    )
                 
                 execution_time = (time.time() - start_time) * 1000
                 
@@ -641,6 +672,28 @@ class Tool:
                 cache["varkw"] = True  # uninspectable callable -> be permissive
             self._accepts_cache = cache
         return cache["varkw"] or name in cache["names"]
+
+    @staticmethod
+    def _callable_accepts_kwarg(func: Callable, name: str) -> bool:
+        """Check a capability-pinned callable without consulting ``self.func``."""
+        import inspect
+
+        try:
+            parameters = inspect.signature(func).parameters.values()
+        except (TypeError, ValueError):
+            return True
+        return any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            or (
+                parameter.name == name
+                and parameter.kind
+                in (
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.KEYWORD_ONLY,
+                )
+            )
+            for parameter in parameters
+        )
 
     def _validate_input(self, kwargs: Dict):
         """验证是否满足 required 的参数"""
@@ -796,6 +849,116 @@ class ToolRegistry:
     def list_specs(self) -> List[ToolSpec]:
         """列出所有已注册工具的 ToolSpec 契约（design §2.8a）。"""
         return [tool.to_spec() for tool in self.tools.values()]
+
+    def resolve_specialist_capability(self, name: str, expected_spec_digest: str):
+        """Pin one trusted in-process tool for read-only specialist execution.
+
+        A normal registry dispatch intentionally resolves by name.  That is convenient for
+        hot replacement, but it is the wrong primitive for a capability boundary: a tool
+        could be replaced after the manager validated its metadata and before execution.
+        This method snapshots the exact ``Tool`` object plus a canonical security digest;
+        :meth:`execute_resolved_specialist_capability` executes that same object only after
+        rechecking that the registry entry and metadata are unchanged.
+
+        The digest implementation lives with the specialist runtime so the grant factory,
+        dispatch validator and registry cannot silently disagree about which fields matter.
+        Importing it lazily keeps the ordinary tool registry independent of manager_v1.
+        """
+        from core.specialist_runtime import (
+            ResolvedSpecialistCapability,
+            SpecialistDispatchError,
+            tool_spec_security_digest,
+        )
+
+        tool = self.get(name)
+        if tool is None:
+            raise SpecialistDispatchError("specialist_capability_missing")
+        spec = tool.to_spec()
+        digest = tool_spec_security_digest(spec)
+        if digest != expected_spec_digest:
+            raise SpecialistDispatchError("specialist_capability_metadata_drift")
+        if spec.side_effect != "none" or spec.terminal is not False:
+            raise SpecialistDispatchError("specialist_capability_not_read_only")
+        tool_callable = getattr(tool, "func", None)
+        if not callable(tool_callable):
+            raise SpecialistDispatchError("specialist_capability_callable_invalid")
+        return ResolvedSpecialistCapability(
+            provider_identity=id(self),
+            tool_name=name,
+            tool_identity=id(tool),
+            tool=tool,
+            tool_callable_identity=id(tool_callable),
+            tool_callable=tool_callable,
+            spec_digest=digest,
+        )
+
+    async def execute_resolved_specialist_capability(
+        self,
+        capability,
+        *,
+        expected_spec_digest: str,
+        **kwargs,
+    ) -> ToolResult:
+        """Execute an already-resolved specialist capability without a name re-lookup race."""
+        from core.specialist_runtime import (
+            SpecialistDispatchError,
+            tool_spec_security_digest,
+        )
+
+        if getattr(capability, "provider_identity", None) != id(self):
+            raise SpecialistDispatchError("specialist_capability_provider_mismatch")
+        name = getattr(capability, "tool_name", "")
+        tool = getattr(capability, "tool", None)
+        if not name or tool is None or getattr(capability, "tool_identity", None) != id(tool):
+            raise SpecialistDispatchError("specialist_capability_invalid")
+        if self.get(name) is not tool:
+            raise SpecialistDispatchError("specialist_capability_replaced")
+        tool_callable = getattr(capability, "tool_callable", None)
+        if (
+            not callable(tool_callable)
+            or getattr(capability, "tool_callable_identity", None) != id(tool_callable)
+        ):
+            raise SpecialistDispatchError("specialist_capability_callable_invalid")
+        if getattr(tool, "func", None) is not tool_callable:
+            raise SpecialistDispatchError("specialist_capability_callable_replaced")
+
+        live_spec = tool.to_spec()
+        live_digest = tool_spec_security_digest(live_spec)
+        if live_digest != expected_spec_digest or live_digest != getattr(
+            capability, "spec_digest", None
+        ):
+            raise SpecialistDispatchError("specialist_capability_metadata_drift")
+        if live_spec.side_effect != "none" or live_spec.terminal is not False:
+            raise SpecialistDispatchError("specialist_capability_not_read_only")
+
+        # Execute both the pinned Tool object and its pinned callable. No await occurs before
+        # entering the Tool execution pipeline; if another thread mutates ``tool.func`` after
+        # the check above, the already-authorised call still invokes only this captured object.
+        result = await tool._execute_with_callable(
+            tool_callable,
+            _idempotency_store=self._idempotency_store,
+            **kwargs,
+        )
+        if result.tool_name != name or result.version != live_spec.version:
+            raise SpecialistDispatchError("specialist_result_identity_mismatch")
+
+        stats = self._stats.get(name)
+        if stats is not None:
+            stats["total_calls"] += 1
+            if result.success:
+                stats["successful_calls"] += 1
+            else:
+                stats["failed_calls"] += 1
+            if result.execution_time_ms:
+                stats["total_time_ms"] += result.execution_time_ms
+
+        try:
+            from evaluation.metrics import collector
+            if collector.is_active():
+                collector.record_tool_call(name, result, kwargs, mcp=False)
+        except Exception:
+            pass
+        return result
     
     def list_tools_for_llm(self) -> str:
         """

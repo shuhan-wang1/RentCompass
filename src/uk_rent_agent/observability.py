@@ -14,6 +14,17 @@ from typing import Any
 
 request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="-")
 user_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("user_id", default="-")
+agent_role_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "agent_role", default=None
+)
+task_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "agent_task_id", default=None
+)
+parent_task_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "agent_parent_task_id", default=None
+)
+
+_AGENT_CONTEXT_FIELDS = ("agent_role", "task_id", "parent_task_id")
 
 
 def new_request_id(value: str | None = None) -> str:
@@ -50,6 +61,49 @@ def request_context(request_id: str, user_id: str) -> Iterator[None]:
         user_id_var.reset(user_token)
 
 
+def current_agent_context() -> dict[str, str]:
+    """Return the active agent/task trace labels.
+
+    Unset values are omitted rather than returned as ``None``.  That makes this
+    context additive: telemetry emitted outside a manager/specialist scope keeps
+    exactly its historical shape.
+    """
+    values = {
+        "agent_role": agent_role_var.get(),
+        "task_id": task_id_var.get(),
+        "parent_task_id": parent_task_id_var.get(),
+    }
+    return {key: value for key, value in values.items() if value is not None}
+
+
+@contextlib.contextmanager
+def agent_execution_context(
+    *,
+    agent_role: str,
+    task_id: str,
+    parent_task_id: str | None = None,
+) -> Iterator[None]:
+    """Scope telemetry to one manager or specialist task.
+
+    ContextVars isolate sibling asyncio tasks while still propagating through
+    normal awaits.  The tool offload boundary explicitly copies the current
+    context, so the same labels also reach worker-thread tool observations.
+    The identifiers are generated trace labels; callers must never place user
+    text, task descriptions, prompts, or other PII in them.
+    """
+    role_token = agent_role_var.set(str(agent_role))
+    task_token = task_id_var.set(str(task_id))
+    parent_token = parent_task_id_var.set(
+        str(parent_task_id) if parent_task_id is not None else None
+    )
+    try:
+        yield
+    finally:
+        parent_task_id_var.reset(parent_token)
+        task_id_var.reset(task_token)
+        agent_role_var.reset(role_token)
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         data: dict[str, Any] = {
@@ -65,6 +119,11 @@ class JsonFormatter(logging.Formatter):
         for key in ("node", "tool", "latency_ms", "cache_hit", "input_tokens", "output_tokens"):
             if hasattr(record, key):
                 data[key] = getattr(record, key)
+        active_agent_context = current_agent_context()
+        for key in _AGENT_CONTEXT_FIELDS:
+            value = getattr(record, key, active_agent_context.get(key))
+            if value is not None:
+                data[key] = value
         if record.exc_info:
             data["exception"] = self.formatException(record.exc_info)
         return json.dumps(data, ensure_ascii=False, default=str)
@@ -83,23 +142,24 @@ except Exception:  # pragma: no cover — keeps this module importable without l
 def node_span(logger: logging.Logger, node: str, **attributes: Any) -> Iterator[None]:
     """Local structured span; upgrades to OTel without changing node call sites."""
     started = time.perf_counter()
-    logger.info("node.start", extra={"node": node, **attributes})
+    span_attributes = {**current_agent_context(), **attributes}
+    logger.info("node.start", extra={"node": node, **span_attributes})
     try:
         yield
     except _GraphInterrupt:
         logger.info(
             "node.interrupt",
-            extra={"node": node, "latency_ms": (time.perf_counter() - started) * 1000, **attributes},
+            extra={"node": node, "latency_ms": (time.perf_counter() - started) * 1000, **span_attributes},
         )
         raise
     except Exception:
         logger.exception(
             "node.error",
-            extra={"node": node, "latency_ms": (time.perf_counter() - started) * 1000, **attributes},
+            extra={"node": node, "latency_ms": (time.perf_counter() - started) * 1000, **span_attributes},
         )
         raise
     else:
         logger.info(
             "node.end",
-            extra={"node": node, "latency_ms": (time.perf_counter() - started) * 1000, **attributes},
+            extra={"node": node, "latency_ms": (time.perf_counter() - started) * 1000, **span_attributes},
         )

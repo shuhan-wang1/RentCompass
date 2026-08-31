@@ -396,8 +396,10 @@ def test_registry_reports_stable_error_for_same_tool_callable_replacement(tmp_pa
         asyncio.run(
             registry.execute_resolved_specialist_capability(
                 capability,
+                # UPDATED (audit F9): tool args travel as one explicit mapping so they can
+                # never collide with the boundary's own keyword parameters.
+                args={"city": "London"},
                 expected_spec_digest=digest,
-                city="London",
             )
         )
 
@@ -452,9 +454,8 @@ def test_capability_pins_callable_across_final_check_and_retries(tmp_path, monke
     result = asyncio.run(
         registry.execute_resolved_specialist_capability(
             capability,
+            args={"city": "London", "_deadline_monotonic": 123.0},
             expected_spec_digest=digest,
-            city="London",
-            _deadline_monotonic=123.0,
         )
     )
 
@@ -469,7 +470,16 @@ def test_capability_pins_callable_across_final_check_and_retries(tmp_path, monke
     assert calls == {"original": 2, "replacement": 1}
 
 
-def test_web_search_with_nested_subqueries_stays_on_manager_path(tmp_path):
+def test_web_search_with_nested_subqueries_runs_inside_the_boundary(tmp_path):
+    """UPDATED (audit K1/F2).
+
+    This test previously PINNED the escape hatch: a ``web_search`` whose ``sub_queries``
+    the model chose to populate left the capability boundary and ran through unrestricted
+    ``provider.execute_tool`` with a null ``plan_id``.  The same predicate also disagreed
+    with the caller's denial set, so the identical call was exempt on the happy path and
+    denied on the failure path.  There is one predicate now, and no model-controlled way
+    out of the boundary: the fan-out web search is ordinary ``area_evidence`` work.
+    """
     observed = []
 
     async def web_search(**kwargs):
@@ -507,10 +517,11 @@ def test_web_search_with_nested_subqueries_stays_on_manager_path(tmp_path):
         ),
     )
 
-    assert observed[0]["agent_role"] == "manager"
-    assert "agent_role" not in state["tool_artifacts"][0]
-    assert state["manager_task_plans"] == []
-    assert state["specialist_results"] == []
+    assert observed[0]["agent_role"] == "area_evidence"
+    assert state["tool_artifacts"][0]["agent_role"] == "area_evidence"
+    assert state["manager_task_plans"]
+    assert state["specialist_results"][0]["role"] == "area_evidence"
+    assert state["specialist_results"][0]["status"] == "succeeded"
 
 
 def test_specialist_adapter_adds_no_agent_model_round_trip(tmp_path, monkeypatch):

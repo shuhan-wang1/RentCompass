@@ -251,3 +251,74 @@ def test_env_example_does_not_make_the_legacy_var_look_mandatory():
         assert line.lstrip().startswith("#"), (
             f"uncommented {line.strip()!r} in .env.example implies it is required"
         )
+
+
+# ---------------------------------------------------------------------------
+# 6. ONE source of candidate identity across the whole deploy path
+# ---------------------------------------------------------------------------
+
+_UPDATE = os.path.join(_ROOT, "deploy", "update.sh")
+_SET_WEIGHT = os.path.join(_ROOT, "deploy", "set_canary_weight.sh")
+
+
+def test_every_deploy_component_reads_the_same_candidate_identity_variables():
+    """switch_pool.sh used to read undocumented SWITCH_CANDIDATE_ARCH /
+    SWITCH_CANDIDATE_SPECIALISTS, which nothing else in the repo sets, while
+    update.sh, set_canary_weight.sh and the monitor all read CANARY_AGENT_ARCH /
+    CANARY_MANAGER_V1_SPECIALISTS from the root .env. On a manager_v1 host that
+    disagreement made `switch_pool.sh --to fc` fail on an arch mismatch against a
+    pool that was correct."""
+    for path in (_SWITCH_POOL, _UPDATE, _SET_WEIGHT, _MONITOR):
+        source = _read(path)
+        assert "CANARY_AGENT_ARCH" in source, f"{path} stops reading CANARY_AGENT_ARCH"
+        assert "CANARY_MANAGER_V1_SPECIALISTS" in source, (
+            f"{path} stops reading CANARY_MANAGER_V1_SPECIALISTS"
+        )
+
+
+def test_switch_pool_keeps_the_legacy_override_explicit_and_documented():
+    """SWITCH_CANDIDATE_* survives as an override for rehearsals, but only as a
+    fallback ON TOP of the shared variables — never as the sole source."""
+    source = _read(_SWITCH_POOL)
+    assert 'CANDIDATE_ARCH="${SWITCH_CANDIDATE_ARCH:-$(env_value CANARY_AGENT_ARCH fc_loop)}"' in source
+    assert (
+        'CANDIDATE_SPECIALISTS_RAW="${SWITCH_CANDIDATE_SPECIALISTS:-'
+        '$(env_value CANARY_MANAGER_V1_SPECIALISTS 0)}"'
+    ) in source
+    assert "SWITCH_CANDIDATE_ARCH / SWITCH_CANDIDATE_SPECIALISTS" in source
+
+
+def test_both_routing_modes_gate_the_maintenance_stage_identically():
+    """`--stage maintenance` is the one route to 100% candidate traffic that never
+    meets CANARY_ALLOW_FLIP, so it must be provably a DRAIN in BOTH routing modes.
+    set_canary_weight.sh owns the weighted host; switch_pool.sh's single-upstream
+    branch owns the pre-weighted one, and it is the branch no harness can exercise
+    (it only fires for a CONF under /etc/nginx). Divergence here would mean
+    migrating a host between routing modes changes what a release may do — the
+    exact class of hole this pairing exists to close. Pinned by source, then, and
+    deliberately: the alternative is no coverage at all."""
+    for path in (_SET_WEIGHT, _SWITCH_POOL):
+        source = _read(path)
+        gate = source[source.index("maintenance)"):]
+        gate = gate[: gate.index("note ")]
+        assert 'RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" == 1' in gate, path
+        assert "^deploy-maintenance-[0-9a-f]{7,}$" in gate, path
+        assert 'MAINTENANCE_MARKER="$(maintenance_marker_path)"' in gate, path
+        assert '-r "$MAINTENANCE_MARKER"' in gate, path
+        assert '"$ROLLOUT_ID"' in gate, path
+    # ...and deploy/update.sh is the only thing that can satisfy the marker gate,
+    # because it is the only writer.
+    update = _read(_UPDATE)
+    assert "open_maintenance_window" in update
+    assert "close_maintenance_window" in update
+    assert "rentcompass-maintenance-drain" in update
+    for path in (_SET_WEIGHT, _SWITCH_POOL):
+        assert "rentcompass-maintenance-drain" in _read(path), path
+
+
+def test_the_candidate_identity_whitelist_is_intact_everywhere_it_appears():
+    """fc_loop:0(:0) and manager_v1:1(:0) are the only accepted pairs; a
+    compatibility-shell manager_v1 canary must stay refusable at every entry point."""
+    assert "fc_loop:0|manager_v1:1" in _read(_SWITCH_POOL)
+    for path in (_UPDATE, os.path.join(_ROOT, "deploy", "release.sh")):
+        assert "fc_loop:0:0|manager_v1:1:0" in _read(path), path

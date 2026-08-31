@@ -226,10 +226,12 @@ def test_cancel_while_directly_awaiting_write_still_marks_write_outcome_unknown(
     assert [(event["tool"], event["phase"], event["outcome"]) for event in events] == [
         ("remember", "turn", "outcome_unknown")
     ]
-    # The specialist produced a tool value, but the parent turn was cancelled before
-    # accepting/building its result contract, so its lifecycle is failed, not completed.
-    assert trace["planned"] == trace["started"] == trace["failed"] == 1
-    assert trace["completed"] == 0
+    # The specialist call itself RAN and returned before the cancellation, so its lifecycle
+    # is completed. The turn is lost, but a cancelled turn is not a specialist failure —
+    # counting it as one is what overstated the specialist failure rate (review R1/R4).
+    assert trace["planned"] == trace["started"] == trace["completed"] == 1
+    assert trace["failed"] == 0
+    assert trace["started"] == trace["completed"] + trace["partial"] + trace["failed"]
 
 
 def test_arbitrary_base_exception_cleans_started_specialist_child(
@@ -359,6 +361,8 @@ def test_parent_cancel_during_post_search_validation_accounts_worker_and_termina
         (event["tool"], event["phase"], event["outcome"])
         for event in events
     ] == [("calculate_commute", "turn", "abandoned")]
-    assert trace["planned"] == trace["started"] == trace["failed"] == 1
-    assert trace["completed"] == trace["skipped"] == 0
+    # search_properties returned before the fan-out blocked, so the listings task completed;
+    # only the off-plan commute fan-out was lost with the turn (review R1/R4).
+    assert trace["planned"] == trace["started"] == trace["completed"] == 1
+    assert trace["failed"] == trace["skipped"] == 0
     assert trace["failed"] + trace["completed"] + trace["skipped"] == 1

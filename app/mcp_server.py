@@ -65,7 +65,21 @@ async def list_tools() -> list[types.Tool]:
     These are carried on the MCP ``annotations`` field. ``ToolAnnotations`` in the
     installed mcp version is ``extra='allow'``, so the non-standard keys round-trip
     intact; ``MCPToolClient.list_specs()`` reads them back (falling back to the
-    in-process registry spec when any are absent)."""
+    in-process registry spec when any are absent).
+
+    DELIBERATELY NOT ADVERTISED — the four capability-boundary fields
+    (``max_retries``/``retry_on_error``/``input_model_ref``/``output_model_ref``) that
+    ``specialist_runtime.tool_spec_security_digest`` pins. They describe an execution
+    surface that lives in THIS process: the pinned callable, the pydantic models that
+    validate and re-shape its kwargs, and how many times it runs. A remote peer cannot
+    hold that surface, so publishing the fields would let an MCP-sourced spec look like the
+    same signed contract as the in-process one while pinning nothing. A specialist grant is
+    therefore never minted over MCP, and this is enforced twice: ``Config.__post_init__``
+    refuses ``MANAGER_V1_SPECIALISTS`` together with ``USE_MCP_TOOLS``, and
+    ``manager_v1.build_manager_v1_graph`` requires a registry that exposes the in-process
+    capability API. The digests of an MCP spec and an in-process spec for the same tool do
+    differ; that divergence is the intended fail-closed signal, not a defect to paper over
+    (review R1/R9)."""
     return [
         types.Tool(
             name=tool.name,

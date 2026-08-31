@@ -316,7 +316,10 @@ def _ensure_agent_runtime():
 
         checkpointer = None
         if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
-            checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+            checkpointer = get_sqlite_checkpointer(
+                _runtime_config.checkpoint_path,
+                identity=_runtime_config.checkpoint_identity,
+            )
         store = get_prefs_store() if _runtime_config.enable_store else None
         candidate_graph = build_agent_graph(
             agent_tool_provider,
@@ -629,8 +632,9 @@ def _reconcile_agent_arch(user_id: str, conversation_id: str, conv: dict) -> Non
 
 from core.canary_telemetry import (  # noqa: E402
     ENDPOINT_ALEX, ENDPOINT_SEARCH_DIRECT, OUTCOME_AGENT_ERROR, OUTCOME_CRASH,
-    OUTCOME_OK, OUTCOME_SERVER_ERROR, aggregate_llm_usage, build_canary_turn_record,
-    hash_user_id, search_direct_signals, unknown_turn_signals,
+    OUTCOME_OK, OUTCOME_SERVER_ERROR, TOOL_LEDGER_COMPLETE, aggregate_llm_usage,
+    build_canary_turn_record, hash_user_id, search_direct_signals,
+    unknown_turn_signals,
 )
 from core import turn_observations  # noqa: E402
 from core import dsml_guard  # noqa: E402
@@ -874,6 +878,66 @@ def _build_fc_signals(final_state) -> dict:
         for a in artifacts
         if isinstance(a, dict) and a.get("turn") is not None
     }
+    _CANARY_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
+
+    def _tool_latency_from_artifacts(artifacts) -> dict:
+        """Per-tool latency, derived from the artifact ledger both arches already write.
+
+        ``elapsed_ms`` is set on EVERY artifact (see ``agent_loop._artifact``), so this
+        needs no new instrumentation on the hot path — only a fold at the end of the
+        turn. p50 uses the repo's NEAREST-RANK convention (``ceil(p*n)-1``), i.e. an
+        observed sample, never an interpolation, so a two-call tool reports a number
+        that actually happened.
+
+        Deliberately no per-call vector and no arguments: the counters answer "which
+        tool ate the budget" without letting one user's session be reconstructed from
+        an ops log. Timed-out/abandoned calls are counted but kept OUT of the latency
+        samples — a budget kill measures the budget, not the tool.
+        """
+        import math as _math
+
+        samples: dict = {}
+        for a in artifacts:
+            if not isinstance(a, dict):
+                continue
+            name = a.get("tool")
+            name = name.strip() if isinstance(name, str) else ""
+            if not _CANARY_TOOL_NAME_RE.fullmatch(name):
+                continue
+            slot = samples.setdefault(
+                name, {"count": 0, "timed_out": 0, "abandoned": 0, "samples": []})
+            slot["count"] += 1
+            timed_out = bool(a.get("timed_out"))
+            abandoned = bool(a.get("abandoned"))
+            if timed_out:
+                slot["timed_out"] += 1
+            if abandoned:
+                slot["abandoned"] += 1
+            elapsed = a.get("elapsed_ms")
+            if (
+                not timed_out and not abandoned
+                and not isinstance(elapsed, bool)
+                and isinstance(elapsed, (int, float))
+                and _math.isfinite(float(elapsed))
+                and float(elapsed) >= 0
+            ):
+                slot["samples"].append(float(elapsed))
+        out: dict = {}
+        for name, slot in samples.items():
+            ordered = sorted(slot["samples"])
+            if ordered:
+                index = min(len(ordered) - 1, max(0, _math.ceil(0.50 * len(ordered)) - 1))
+                p50 = round(ordered[index], 1)
+                max_ms = round(ordered[-1], 1)
+            else:
+                # Every call of this tool was killed: there is no observed duration, and
+                # a 0 here would read as "instant" rather than "never finished".
+                p50 = max_ms = None
+            out[name] = {"count": slot["count"], "p50_ms": p50, "max_ms": max_ms,
+                         "timed_out": slot["timed_out"], "abandoned": slot["abandoned"]}
+        return out
+
+    tool_latency = _tool_latency_from_artifacts(artifacts)
     wave_batches = 1 if final_state.get("task_results") else 0
     tool_batches = len(artifact_turns) + wave_batches
     signals = {
@@ -915,7 +979,19 @@ def _build_fc_signals(final_state) -> dict:
         "llm_usage_status": _obs["llm_usage_status"],
         "llm_calls": llm_calls,
         "tool_batches": tool_batches,
+        # The graph returned, so the artifact ledger this count is folded from
+        # exists. The crash path has no final_state and reports "unavailable"
+        # instead (see canary_telemetry.unknown_turn_signals) — that distinction is
+        # what stops a crashed turn being convicted for a field it cannot have.
+        "tool_ledger_status": TOOL_LEDGER_COMPLETE,
     }
+    if tool_latency:
+        # Stage-1 instrument (K9): WHICH tool spent the turn's latency budget.
+        # `tool_batches` counts rounds and `turn_latency_ms` measures the whole
+        # turn, so between them a slow tool and a chatty loop are the same number.
+        # Additive, content-free and non-gating — the telemetry layer re-applies
+        # the whitelist, so an unexpected key here cannot reach the record.
+        signals["tool_latency"] = tool_latency
     # manager_v1 installs a root context at the graph invocation boundary.  Keep
     # legacy/fc_loop records byte-for-byte compatible by adding these labels only
     # when that root context was explicitly observed.
@@ -1299,7 +1375,10 @@ def _delete_checkpoint_thread(user_id: str, conversation_id: str) -> dict:
     try:
         if not (_runtime_config.enable_checkpointer and _runtime_config.checkpoint_path):
             return {"status": "disabled", "residual": False}
-        cp = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+        cp = get_sqlite_checkpointer(
+            _runtime_config.checkpoint_path,
+            identity=_runtime_config.checkpoint_identity,
+        )
         if cp is None:
             return {"status": "failed", "residual": None, "error_type": "Unavailable"}
         thread = f"{user_id}:{conversation_id}"

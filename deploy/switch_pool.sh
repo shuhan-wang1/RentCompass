@@ -6,8 +6,16 @@
 # still works while a host is being migrated to the weighted include.
 #
 #   switch_pool.sh --to legacy            # 127.0.0.1:5001
-#   switch_pool.sh --to fc                # candidate 100% (needs --allow-public-fc)
+#   switch_pool.sh --to fc                # candidate 100% (needs --allow-public-fc,
+#                                         #   plus --stage maintenance for a deploy
+#                                         #   drain or CANARY_ALLOW_FLIP=1 for a
+#                                         #   gated flip — see docs/canary_runbook.md)
 #   switch_pool.sh --status
+#
+# Candidate identity comes from the root .env's CANARY_AGENT_ARCH /
+# CANARY_MANAGER_V1_SPECIALISTS — the same pair update.sh, set_canary_weight.sh
+# and the monitor read. SWITCH_CANDIDATE_ARCH / SWITCH_CANDIDATE_SPECIALISTS
+# remain as an explicit override for rehearsals.
 #
 # Guarantees, in order:
 #   1. only ports 5001/5002 are ever written;
@@ -41,12 +49,50 @@ REFRESH_RETRIES="${SWITCH_REFRESH_RETRIES:-30}"
 REFRESH_DELAY="${SWITCH_REFRESH_DELAY:-2}"
 ROUTE_CONF="${SWITCH_ROUTE_CONF:-/etc/nginx/snippets/rentcompass-canary-routing.conf}"
 WEIGHT_SCRIPT="${SWITCH_WEIGHT_SCRIPT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/set_canary_weight.sh}"
-CANDIDATE_ARCH="${SWITCH_CANDIDATE_ARCH:-fc_loop}"
-CANDIDATE_SPECIALISTS="${SWITCH_CANDIDATE_SPECIALISTS:-0}"
+SWITCH_REPO_DIR="${SWITCH_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SWITCH_ENV_FILE="${SWITCH_ENV_FILE:-$SWITCH_REPO_DIR/.env}"
+
+# --- candidate identity: ONE source, shared with the rest of the deploy path ---
+# This used to read only SWITCH_CANDIDATE_ARCH / SWITCH_CANDIDATE_SPECIALISTS,
+# variables nothing else in the repo sets or documents, while update.sh,
+# set_canary_weight.sh and deploy/monitoring/rentcompass-monitor.sh all read
+# CANARY_AGENT_ARCH / CANARY_MANAGER_V1_SPECIALISTS from the root .env. On a host
+# whose .env selects manager_v1 that disagreement made `switch_pool.sh --to fc`
+# fail on an arch mismatch against a pool that was in fact correct.
+#
+# The CANARY_* variables are now the source of truth. SWITCH_CANDIDATE_* remain
+# as an explicit, documented override (rehearsals against a private nginx, and
+# ad-hoc probes of a pool that is deliberately not what .env selects).
+env_value() { # key default; process env wins, then root .env, then default
+  local key="$1" fallback="$2" value=""
+  if [[ -n "${!key+x}" ]]; then
+    value="${!key}"
+  elif [[ -r "$SWITCH_ENV_FILE" ]]; then
+    value="$(sed -n "s/^${key}=//p" "$SWITCH_ENV_FILE" | tail -1 | tr -d '\r')"
+    value="${value#\"}"; value="${value%\"}"
+    value="${value#\'}"; value="${value%\'}"
+  fi
+  printf '%s' "${value:-$fallback}"
+}
+
+bool01() {
+  case "${1,,}" in
+    1|true|yes|on) printf 1 ;;
+    0|false|no|off|'') printf 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+CANDIDATE_ARCH="${SWITCH_CANDIDATE_ARCH:-$(env_value CANARY_AGENT_ARCH fc_loop)}"
+CANDIDATE_SPECIALISTS_RAW="${SWITCH_CANDIDATE_SPECIALISTS:-$(env_value CANARY_MANAGER_V1_SPECIALISTS 0)}"
+if ! CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS_RAW")"; then
+  die_early="candidate specialists switch must be a boolean (got '$CANDIDATE_SPECIALISTS_RAW')"
+  CANDIDATE_SPECIALISTS=0
+fi
 
 case "$CANDIDATE_ARCH:$CANDIDATE_SPECIALISTS" in
   fc_loop:0|manager_v1:1) ;;
-  *) die_early="candidate identity must be fc_loop/specialists=0 or manager_v1/specialists=1" ;;
+  *) die_early="${die_early:-candidate identity must be fc_loop/specialists=0 or manager_v1/specialists=1}" ;;
 esac
 
 UPSTREAM_BLOCK='upstream rentcompass_app'
@@ -67,6 +113,20 @@ current_port() {
 }
 
 pool_of_port() { case "$1" in 5001) echo legacy ;; 5002) echo fc ;; *) echo "unknown:$1" ;; esac; }
+
+# The active-drain marker deploy/update.sh writes before it drains and removes
+# after it restores; resolved exactly as set_canary_weight.sh resolves it, so both
+# routing modes read one file.
+maintenance_marker_path() {
+  if [[ -n "${RENTCOMPASS_MAINTENANCE_MARKER:-}" ]]; then
+    printf '%s' "$RENTCOMPASS_MAINTENANCE_MARKER"; return 0
+  fi
+  local common
+  common="$(git -C "$SWITCH_REPO_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+    || return 1
+  [[ -n "$common" ]] || return 1
+  printf '%s/rentcompass-maintenance-drain' "$common"
+}
 
 # Identity of whatever is answering a URL: "<arch> <sha> <specialists>", or
 # empty on failure.  A missing specialist header is deliberately not guessed.
@@ -186,6 +246,40 @@ if [[ "$FROM_PORT" == "$TO_PORT" ]]; then ok "already on $TARGET (127.0.0.1:$TO_
 # not a mechanical one, so it takes an explicit flag even when everything else is green.
 if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* && "$ALLOW_PUBLIC_FC" -ne 1 ]]; then
   die "refusing to put candidate on the PUBLIC upstream without --allow-public-fc (candidate is at STAGE-PAUSE)"
+fi
+
+# --to fc on a single-upstream host is 100% of public traffic, i.e. the same
+# decision set_canary_weight.sh gates on a weighted host. Keep one policy: a
+# deploy drain says --stage maintenance and restores afterwards; a real cutover
+# sets CANARY_ALLOW_FLIP=1 deliberately. Anything else is refused here too, so
+# migrating a host between routing modes cannot change what a release may do.
+if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* ]]; then
+  case "${ROLLOUT_STAGE:-flip}" in
+    maintenance)
+      # Identical and-gates to set_canary_weight.sh's maintenance branch: the
+      # deploy lock, update.sh's machine rollout-id shape, and the active-drain
+      # marker update.sh writes before the drain and removes after the restore.
+      # Without them `--stage maintenance` is a permanent, unlogged 100% flip that
+      # never has to meet CANARY_ALLOW_FLIP, on the one host shape where nothing
+      # else gates it either.
+      [[ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" == 1 ]] \
+        || die "stage 'maintenance' is machine-only: it is the drain deploy/update.sh takes, and this caller does not hold the deploy lock (docs/canary_runbook.md section 2)"
+      [[ "$ROLLOUT_ID" =~ ^deploy-maintenance-[0-9a-f]{7,}$ ]] \
+        || die "stage 'maintenance' requires --rollout-id deploy-maintenance-<sha> (got '${ROLLOUT_ID:-<none>}')"
+      MAINTENANCE_MARKER="$(maintenance_marker_path)" \
+        || die "stage 'maintenance' cannot resolve its marker path; set RENTCOMPASS_MAINTENANCE_MARKER"
+      [[ -r "$MAINTENANCE_MARKER" ]] \
+        || die "stage 'maintenance' requires an active drain marker at $MAINTENANCE_MARKER; deploy/update.sh writes it before the drain and removes it after the restore. A 100% cutover is '--stage flip' with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)"
+      [[ "$(cat "$MAINTENANCE_MARKER" 2>/dev/null || true)" == "$ROLLOUT_ID" ]] \
+        || die "the drain marker at $MAINTENANCE_MARKER names a different rollout id than '$ROLLOUT_ID'; refusing a 100% exposure no running deploy asked for"
+      note "stage 'maintenance': temporary drain onto the candidate; the caller must restore the previous upstream"
+      ;;
+    flip)
+      [[ "${CANARY_ALLOW_FLIP:-0}" == 1 ]] \
+        || die "refusing 100% public candidate traffic without CANARY_ALLOW_FLIP=1; 50% is the highest authorised rollout stage (docs/canary_runbook.md section 2)"
+      ;;
+    *) die "refusing 100% public candidate traffic at stage '$ROLLOUT_STAGE'; use --stage maintenance (deploy drain) or --stage flip with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)" ;;
+  esac
 fi
 
 if [[ "$TARGET" == fc && "$CANDIDATE_ARCH" != fc_loop ]]; then

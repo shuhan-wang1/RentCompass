@@ -4054,7 +4054,11 @@ def _params_digest(tool_name: str, params: dict) -> str:
     import hashlib
     stable = {k: v for k, v in (params or {}).items() if k not in _DIGEST_VOLATILE_KEYS}
     payload = tool_name + "|" + json.dumps(stable, sort_keys=True, ensure_ascii=False, default=str)
-    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+    # "surrogatepass": a lone surrogate in a model-authored argument (e.g. "Lon\ud800don")
+    # survives json.dumps(ensure_ascii=False) and only fails at encode time. A strict
+    # encode here raised UnicodeEncodeError through execute_tools on BOTH arches before
+    # any tool ran. Digests of every non-surrogate payload are byte-identical to before.
+    return hashlib.sha1(payload.encode("utf-8", "surrogatepass")).hexdigest()[:16]
 
 
 def _legacy_tool_artifact(turn: int, tool: str, raw_data: Any,

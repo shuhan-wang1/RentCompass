@@ -1,6 +1,6 @@
 # 实验总索引
 
-_更新于 2026-08-06，HEAD `d74561b`。_
+_更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026-08-06，HEAD `d74561b`。_
 
 这份索引回答三个问题：**每个实验测了什么、跑在哪条架构上、结论能不能引用。**
 可引用的措辞与 caveat 一律以 `CV_METRICS.md` 为准，本文件只做导航与状态。
@@ -54,10 +54,100 @@ _更新于 2026-08-06，HEAD `d74561b`。_
 3. **实验 D 只测到 plan-time 一半机制**，answer-time 的 `_completion_sweep_into_batch` 在 192 次运行中触发 0 次。
 4. **线上跑的是 `uk-rent-agent:canary-fc-loop-0952c56`**，早于全部契约加固与 Phase 1 修复。合并 ≠ 部署。
 
-## 五、复现须知（踩过的坑）
+## 五、遥测口径变更（引用跨期数字前必读）
+
+### 2026-08-31 — canary telemetry schema **v2 → v3**：`llm_calls` / `tool_batches` 语义已改
+
+`app/core/canary_telemetry.py::SCHEMA_VERSION` 由 `2` 升到 `3`。升版本的原因不是加了字段，
+而是**两个既有字段被就地改了含义**——加字段不需要版本，改含义必须有版本，否则跨越变更点的
+窗口会把两种不同的测量平均成一个谁也不描述的数。
+
+| 字段 | v2 口径 | v3 口径 |
+|---|---|---|
+| `llm_calls` | fc 上 = `final_state["loop_turn"]`（agent 超步数），**legacy 上恒为 `null`** | 所有架构上 = observer 统计的**计费 provider 调用数**；`loop_turn` 仅作为 FC 的 fail-closed 下界。**并且从 v3 起包含 `llm_interface._call_deepseek` 发起的嵌套工具内部调用**（一次 `search_properties` 回合约多 1 次），这些调用一直在计费、一直没被计数 |
+| `tool_batches` | legacy 上 `null`，fc 上 = 不同 artifact turn 数 | artifact turn 数 + legacy execution-plan wave；两条臂上都是真实数字。`search_direct` 同样报观测到的 `0` 而不是 `null` |
+
+**因此：**
+
+1. **v2 与 v3 的 `llm_calls`／`tool_batches` 不可比。**
+   跨 2026-08-31 变更点的窗口不能对这两个字段做均值、差值或 A/B 比较。
+   `scripts/canary_report.py::validate_records` 现在会对混版本窗口直接 HOLD
+   （`window mixes telemetry_schema_version [2, 3]`），并在
+   `aggregate_arch` 输出 `schema_versions` 供人工确认。
+2. **v3 的 `llm_calls` 会比 v2 的同类数字大**，尤其在会调用 `search_properties` 的回合上。
+   这是口径修正而不是回归，任何"每回合 LLM 调用数上升"的结论必须先分版本再比。
+   历史基线（例如 #1 的 07-25 对照、#3 实验 D 的 `llm_calls −0.45`）都是 **v2 口径**。
+3. **历史记录不会被追溯判违规。** `scripts/canary_report.py::validate_record` 按记录**自身**的
+   `telemetry_schema_version` 选规则：v≤2 用当时生效的契约，v3 才要求
+   `llm_calls`/`tool_batches` 非空并与 `llm_usage.calls` 对账。
+   用旧/新校验器回放真实日志的结果见下表。`OLD` = `git show HEAD:scripts/canary_report.py`
+   （`SUPPORTED_SCHEMA_VERSIONS = (2,)`），`NEW` = 当前树。
+   **快照时刻 2026-08-31T11:52 UTC**——这两个是活日志，条数会涨，复算前先记条数。
+   复算脚本：`<scratchpad>/fixB2/replay.py`。
+
+   | 日志 | records | violating_OLD | violating_NEW | newly_broken |
+   |---|---|---|---|---|
+   | `.runtime/logs/canary-fc_loop.jsonl` | 231 | 0 | 0 | 0 |
+   | `.runtime/logs/canary-legacy.jsonl` | 2973 | 726 | 682 | 0 |
+
+   **`OLD == NEW` 在算术上不可能**，此前表里写的 `654 / 654` 是错的：旧校验器把泄漏进来的
+   69 条 v3 记录一律判成 unknown-schema 违规，新校验器只判其中一部分，所以 OLD 必然多出
+   那 42 条差额。这一节的全部说服力就在这张表上，所以它必须是实测数。
+
+   修复前同一回放为 fc `0 → 81`、legacy `2840 → 684`（审计当时是 `590 → 2643`／2748 条），
+   即消费端曾在给一份写入时并不存在的契约追溯定罪。
+
+**v3 新增（纯增量，旧消费者可忽略）：** `variant_id`、rollout 身份块
+（`rollout_id`/`rollout_stage`/`configured_candidate_percent`/`traffic_source`/`assigned_pool`）、
+`root_agent_context`/`agent_role`/`task_id`/`parent_task_id`、`tool_latency`（每工具
+`count`/`p50_ms`/`max_ms`/`timed_out`/`abandoned`，content-free、不参与门禁）、
+以及 `multi_agent` 的 `partial` / `denied_calls` / `dropped_error_codes` 计数器。
+
+4. **崩溃回合按可观测性豁免（2026-08-31 二轮修）。** `tool_batches` 派生自 `final_state`，
+   而崩溃回合按定义没有 `final_state`，也没有任何带外累加器能补上它——于是 v3 一旦要求它非空，
+   **每一条 crash/5xx 记录都必然违规**：真实 `canary-legacy.jsonl` 里 v3 崩溃记录 11/11 全违规，
+   而 crash+server_error 占该日志历史的约 14%，等于给任何含崩溃回合的窗口一个永久
+   INSTRUMENTATION-HOLD，且 HOLD 的理由与候选质量无关。现在：
+
+   - `validate_record` 的 v3 必填只对 `turn_outcome ∉ {crash, server_error}` 生效；
+   - 生产端新增 `tool_ledger_status`（`complete` / `unavailable`），**双向校验**：
+     `unavailable` 只允许出现在崩溃类 outcome 上（否则健康回合可以自行豁免工具开销统计），
+     且必须伴随 `tool_batches: null`（否则标记与数值自相矛盾）；
+   - 该字段**缺省时整个 key 不写**，所以既有的 69 条 v3 记录不会被一条它们写入时不存在的
+     规则追溯定罪，消费端退回按 outcome 判定；
+   - `aggregate_arch` 增加 `tool_batches_observed_turns` 作为 `tool_batches_total` 的分母，
+     崩溃回合不再以 0 混进"每回合工具开销"。
+
+   崩溃回合**仍然 HOLD**，理由是它真正没观测到的东西（`security.*` 为 null、
+   `llm_usage_status=not_instrumented`），不再是一个它永远不可能有的字段。
+
+### 2026-08-31 — 离线配对门全量 98 例：**HOLD，不可作为质量证据引用**
+
+产物：会话级临时目录下的 `paired_report.json`（`--out <dir>/paired_report.json`）。
+**这份产物没有进仓库，对其他人不存在**；要复现请自行重跑
+`python -m evaluation.run_paired_manager_eval --out <new-empty-dir>` 并读它自己的报告。
+
+结论是 **HOLD**，原因不是两臂打平，而是**这一轮根本没有测到差异**：
+`final_answer` 在 **98/98 对上逐字节相同**，因此 5 项质量 check 全部判为 **VACUOUS**
+（判据恒为真，不携带信息）。一个恒真的 check 通过率是 100%，但那个 100% 不是证据。
+
+**引用规则：** 本轮**不能**用于支持任何"候选臂质量不劣于/优于对照臂"的说法，
+也不能用来反驳。字节相同的两臂说明两侧跑的是同一条产出路径（或同一份缓存），
+先修复配对装置本身，再重跑，才谈得上结论。
+
+## 六、复现须知（踩过的坑）
 
 - **Python**：`/tmp/rentcompass-venv/bin/python`（3.12.3）。**本机没有 conda**。
 - **凭证**：`app/.env` 的 `DEEPSEEK_API_KEY`。从别处的干净检出跑时该文件不在，会静默降级成占位 key 然后 HTTP 401——v6 首次运行就是这么中止的。**开批前先用一次廉价调用断言认证**。
 - **测试**：`.runtime/logs/canary-*.jsonl` 是 root 属主（容器写的），不导 `CANARY_LOG_PATH` 会有约 29 个测试假红。当前基线 **29 failed / 3364 passed**，其中真实产品失败 **0** 个：22 个 canary/dsml（全量下的顺序污染，单独跑全绿）、3 个 POI 缓存脏、2 个测试间 env 泄漏（单独跑过）、1 个 `.env.bak` 在树里、1 个 monitor 安装漂移。
+- **测试曾污染生产遥测（2026-08-31 已修）**：`tests/test_canary_rollout.py::_restore_canary_sink`
+  teardown 里做的是 `delenv("CANARY_LOG_PATH")` 再 `_wire_canary_sink()`。变量**未设**时
+  `_wire_canary_sink` 走的是「默认启用」分支，把 handler 指向真实的
+  `.runtime/logs/canary-<arch>.jsonl`——于是同一 pytest 进程里此后每个会发 canary 记录的测试
+  都在往生产遥测里追加。`canary-legacy.jsonl` 里因此混入了 **69 条 `telemetry_schema_version: 3`、
+  `candidate_sha=7db03e7` 的测试记录**（ts 2026-08-31T04:2x–04:3x，`agent_arch` 甚至是 fc_loop）。
+  已改为恢复 conftest 的会话默认值 `off`，并加了守卫测试
+  `test_the_sink_never_defaults_onto_the_production_log_during_tests`。
+  **凡是用这两个日志算历史数字的，先按 `telemetry_schema_version <= 2` 过滤掉这些注入记录。**
 - **一手来源**：所有结论对着源码与原始 run 记录核，**不要对着摘要或更早的报告核**。引用按符号名，不要按行号。
 - **禁 `git stash`**：`refs/stash` 在本机是跨 worktree 的单一全局栈，历史上因此丢过工作。

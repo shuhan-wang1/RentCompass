@@ -96,7 +96,15 @@ class SpecialistContractError(ValueError):
 
 
 class ToolSpecLike(Protocol):
-    """Structural subset of ``core.tool_system.ToolSpec`` used at the src boundary."""
+    """Structural subset of ``core.tool_system.ToolSpec`` used at the src boundary.
+
+    ``max_retries``/``retry_on_error``/``input_model_ref``/``output_model_ref`` are part of
+    the security digest computed by ``core.specialist_runtime.tool_spec_security_digest``:
+    the model-visible ``input_schema`` is snapshotted at Tool construction time and so
+    cannot see a later ``input_model`` swap, and the retry policy decides how many times a
+    pinned callable actually runs.  They are read with ``getattr(..., None)`` so a legacy
+    spec object stays usable — it just digests as "unset" consistently on both sides.
+    """
 
     name: str
     side_effect: str
@@ -104,6 +112,10 @@ class ToolSpecLike(Protocol):
     version: str
     terminal: bool
     input_schema: dict
+    max_retries: int
+    retry_on_error: bool
+    input_model_ref: str
+    output_model_ref: str
 
 
 class _StrictContract(BaseModel):

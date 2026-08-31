@@ -17,6 +17,7 @@ from uk_rent_agent.agent.architecture import MANAGER_V1_ARCH
 from uk_rent_agent.observability import agent_execution_context, current_agent_context
 
 from core.agent_loop import build_fc_graph
+from core.specialist_runtime import safe_turn_root_id
 
 
 # The delegated FC executor records the same write decisions for manager_v1.  Register
@@ -45,11 +46,16 @@ def _node_task_id(
     ``loop_turn`` distinguishes repeated agent/executor super-steps without adding
     mutable global counters.  The request/run fallback keeps direct graph tests and
     offline evaluation attributable even when no HTTP root context is installed.
+
+    The request id can be client-supplied (``observability.new_request_id`` accepts one),
+    so it is never interpolated raw: an id whose shape we do not recognise is replaced by
+    an opaque digest, keeping arbitrary text — newlines, ``/node:`` lookalikes, kilobytes
+    of it — out of every execution context and log line built from this id (audit K8).
     """
     root = parent_task_id
     if not root:
-        request_id = state.get("request_id") or state.get("run_id")
-        root = f"turn:{request_id}" if request_id else "manager"
+        root = safe_turn_root_id(
+            state.get("request_id") or state.get("run_id")) or "manager"
     loop_turn = state.get("loop_turn")
     iteration = loop_turn if isinstance(loop_turn, int) and not isinstance(loop_turn, bool) else 0
     return f"{root}/node:{node_name}:{iteration}"

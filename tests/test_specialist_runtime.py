@@ -10,6 +10,9 @@ from core.specialist_runtime import (
     build_specialist_results,
     prepare_specialist_batch,
     revalidate_specialist_call,
+    safe_turn_root_id,
+    seal_specialist_args,
+    specialist_eligible_role,
     tool_spec_security_digest,
 )
 
@@ -70,6 +73,9 @@ def artifact(batch, index, **extra):
 
 
 def test_one_task_per_role_and_manager_owned_calls_are_not_delegated():
+    # UPDATED (audit K1/F2): ``web_search`` carrying ``sub_queries`` used to be exempt from
+    # the boundary and dispatched unrestricted. A model-controlled argument must never be a
+    # way OUT of the capability boundary, so it is now an ordinary area_evidence call.
     calls = [
         call(0, "search_properties", {"address": "private"}),
         call(1, "get_property_details"),
@@ -79,14 +85,23 @@ def test_one_task_per_role_and_manager_owned_calls_are_not_delegated():
         call(5, "web_search", {"sub_queries": ["a"]}),
     ]
     batch = prepare(calls, [Spec(item.tool_name) for item in calls])
-    assert batch.eligible_indices == (0, 1, 2, 3)
+    assert batch.eligible_indices == (0, 1, 2, 3, 5)
     assert [task.role for task in batch.plan.tasks] == [
         "listings",
         "mobility",
         "area_evidence",
     ]
     assert batch.call(4) is None
-    assert batch.call(5) is None
+    assert batch.call(5).role == "area_evidence"
+    assert batch.rejected == {}
+
+
+def test_eligibility_predicate_is_shared_and_argument_independent():
+    assert specialist_eligible_role("web_search", {"sub_queries": ["a"]}) == "area_evidence"
+    assert specialist_eligible_role("web_search", None) == "area_evidence"
+    assert specialist_eligible_role("remember", {}) is None
+    assert specialist_eligible_role("recall_memory", {}) is None
+    assert specialist_eligible_role("not_a_tool", {}) is None
 
 
 def test_checkpoint_plan_contains_no_raw_args_or_source_ids():
@@ -141,14 +156,20 @@ def test_argument_snapshot_is_deep_detached_and_returned_fresh():
 
 @pytest.mark.parametrize("number", [float("nan"), float("inf"), float("-inf")])
 def test_non_finite_args_are_rejected(number):
-    with pytest.raises(SpecialistDispatchError):
-        prepare([call(0, "get_weather", {"x": number})], [Spec("get_weather")])
+    # UPDATED (audit K1): a per-call defect is now recorded as a per-call rejection instead
+    # of aborting the batch. The call is still refused — it is simply not planned.
+    batch = prepare([call(0, "get_weather", {"x": number})], [Spec("get_weather")])
+    assert batch.call(0) is None
+    assert batch.rejected[0] == "specialist_call_args_not_finite_json"
+    assert batch.plan.tasks == ()
 
 
 def test_reserved_runtime_or_memory_args_are_rejected():
+    # UPDATED (audit K1): same defect, per-call radius.
     for key in ("_deadline_monotonic", "idempotency_key", "user_id", "final_response"):
-        with pytest.raises(SpecialistDispatchError, match="reserved"):
-            prepare([call(0, "get_weather", {key: "x"})], [Spec("get_weather")])
+        batch = prepare([call(0, "get_weather", {key: "x"})], [Spec("get_weather")])
+        assert batch.call(0) is None
+        assert batch.rejection_for_index(0) == "specialist_reserved_argument"
 
 
 def test_security_digest_is_canonical_and_tracks_schema():
@@ -174,6 +195,49 @@ def test_dispatch_fails_closed_on_all_security_drift(drift):
     batch = prepare([call(0, "get_weather")], [Spec("get_weather")])
     with pytest.raises(SpecialistDispatchError):
         revalidate_specialist_call(batch, 0, [drift])
+
+
+class _HostileRepr:
+    """A spec attribute whose own ``__repr__`` is attacker-controlled code."""
+
+    def __repr__(self):
+        raise SystemError("repr boom")
+
+
+@pytest.mark.parametrize(
+    "field", ["max_retries", "retry_on_error", "input_model_ref", "output_model_ref"]
+)
+def test_hostile_spec_attribute_cannot_escape_as_a_bare_exception(field):
+    """Review R1/R3: the digest guard must not be the thing that crashes execute_tools.
+
+    ``_digest_scalar`` reprs any non-scalar attribute, and a duck-typed spec (MCP wrapper,
+    registry fallback, test fake) can put ANY object there.  The exception used to travel
+    out of ``prepare_specialist_batch`` — which does not wrap this call — straight past the
+    caller's ``except SpecialistDispatchError``.
+    """
+
+    class HostileSpec:
+        name = "get_weather"
+        side_effect = "none"
+        retry_safe = True
+        version = "1"
+        terminal = False
+        input_schema = {"type": "object", "properties": {}}
+        max_retries = 1
+        retry_on_error = False
+        input_model_ref = "fixture"
+        output_model_ref = "none"
+
+    setattr(HostileSpec, field, _HostileRepr())
+    spec = HostileSpec()
+
+    with pytest.raises(SpecialistDispatchError) as digest_error:
+        tool_spec_security_digest(spec)
+    assert digest_error.value.error_code == "specialist_tool_spec_invalid"
+
+    with pytest.raises(SpecialistDispatchError) as batch_error:
+        prepare([call(0, "get_weather")], [spec])
+    assert batch_error.value.error_code == "specialist_tool_spec_invalid"
 
 
 def test_dispatch_accepts_exact_live_capability():

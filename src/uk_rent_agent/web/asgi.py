@@ -266,17 +266,33 @@ def _check_checkpoint(config: Config) -> dict[str, Any]:
     ):
         return {"status": "fail", "required": True,
                 "detail": "checkpoint database is not readable/writable"}
+    identity = config.checkpoint_identity
     try:
         from uk_rent_agent.agent.persistence import get_sqlite_checkpointer
 
-        if get_sqlite_checkpointer(path) is None:
+        # Passing the identity explicitly is what makes the per-arch checkpoint
+        # separation enforced rather than conventional: opening a file that another
+        # architecture already stamped raises here, so readiness fails instead of the
+        # pool quietly resuming foreign LangGraph state.
+        if get_sqlite_checkpointer(path, identity=identity) is None:
             raise RuntimeError("sqlite checkpoint backend unavailable")
-        return {"status": "ok", "required": True}
+        return {"status": "ok", "required": True, "identity": identity}
     except Exception as exc:
+        # `CheckpointIdentityError` is the one exception here whose TAIL is the
+        # useful part: it ends with the path and "Point CHECKPOINT_DB_PATH at this
+        # runtime's own file ...". The message runs to ~450 characters, so a 200
+        # cap cut the path in half and dropped the remediation entirely, leaving
+        # `/ready` showing a diagnosis with no fix. It keeps its full message; the
+        # generic cap still bounds every other (unbounded) exception string.
+        limit = 200
+        if type(exc).__name__ == "CheckpointIdentityError":
+            limit = 600
         return {
             "status": "fail",
             "required": True,
-            "detail": f"{type(exc).__name__}: {str(exc)[:120]}",
+            "identity": identity,
+            "path": str(path),
+            "detail": f"{type(exc).__name__}: {str(exc)[:limit]}",
         }
 
 

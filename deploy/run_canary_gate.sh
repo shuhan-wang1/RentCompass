@@ -7,6 +7,29 @@
 #   1/2/64 (or any non-3 code) report status is returned unchanged; no mutation
 #   3   zero-tolerance breach; rollback succeeded; breach status remains 3
 #   70  zero-tolerance breach, but rollback itself FAILED (operator emergency)
+#
+# 70 CAN ALSO MEAN "A DEPLOY IS RUNNING RIGHT NOW"
+# ---------------------------------------------------------------------------
+# `set_canary_weight.sh --weight 0` takes the deploy lock with `flock -n`, and a
+# `release.sh`/`update.sh` drain holds that lock for minutes. An automated rollback
+# that lands inside one therefore dies with "another release/update/switch/
+# retirement operation is running" and this wrapper exits 70. That is fail-loud and
+# correct — two processes must not rewrite the route at once — but 70 does NOT by
+# itself prove the rollback verb is broken. Check for a running deploy first, then
+# re-run `sudo bash deploy/set_canary_weight.sh --weight 0` by hand.
+#
+# MIXED TELEMETRY SCHEMA VERSIONS -> exit 2 (INSTRUMENTATION-HOLD)
+# ---------------------------------------------------------------------------
+# canary_report.py refuses a window that mixes telemetry_schema_version 2 and 3
+# records: the two contracts are not comparable, so every rate in the report would
+# have an unknown denominator. On the day a pool is rolled forward this is the
+# normal state for a while — legacy still emitting v2 while the candidate already
+# emits v3 — and the window HOLDs immediately.
+#
+# The correct handling is to move `--since` to AFTER both pools finished deploying,
+# so the window contains one schema only. Do NOT relax the check, and do not read
+# the HOLD as an SLO regression: it means the measurement is invalid, not that the
+# candidate is bad. See docs/canary_runbook.md section 5.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

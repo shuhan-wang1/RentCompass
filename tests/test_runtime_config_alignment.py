@@ -135,6 +135,12 @@ def test_flask_bootstrap_receives_the_exact_config_object(monkeypatch, tmp_path)
     )
     module_name = "uk_rent_agent._legacy_web_app"
     prior = sys.modules.pop(module_name, None)
+    # create_app puts <project_root> and <project_root>/app at sys.path[0]. Leaving
+    # this tmp tree there makes a LATER `import app` in another test file resolve to
+    # THIS stub instead of the repo's app/app.py, which then fails on the
+    # _BOOTSTRAP_CONFIG the real loader would have injected. Restore sys.path so the
+    # stub cannot escape this test.
+    path_before = list(sys.path)
     try:
         flask_app = create_app(config)
         loaded = sys.modules[module_name]
@@ -160,6 +166,7 @@ def test_flask_bootstrap_receives_the_exact_config_object(monkeypatch, tmp_path)
             for name in before
         } == before
     finally:
+        sys.path[:] = path_before
         sys.modules.pop(module_name, None)
         if prior is not None:
             sys.modules[module_name] = prior
@@ -176,11 +183,19 @@ def test_failed_flask_bootstrap_does_not_cache_partial_module(monkeypatch, tmp_p
     (legacy_dir / "app.py").write_text("raise RuntimeError('injected boot failure')\n")
     module_name = "uk_rent_agent._legacy_web_app"
     prior = sys.modules.pop(module_name, None)
+    # create_app inserts <project_root> and <project_root>/app at sys.path[0] BEFORE
+    # it execs the module, and a failed bootstrap leaves them there. This tmp tree
+    # contains an `app/app.py` that does nothing but raise, so leaking it onto
+    # sys.path makes a LATER, unrelated `import app` in another test file explode
+    # with "injected boot failure". Snapshot and restore sys.path so the failure this
+    # test injects stays inside this test.
+    path_before = list(sys.path)
     try:
         with pytest.raises(RuntimeError, match="injected boot failure"):
             create_app(Config(project_root=tmp_path))
         assert module_name not in sys.modules
     finally:
+        sys.path[:] = path_before
         sys.modules.pop(module_name, None)
         if prior is not None:
             sys.modules[module_name] = prior

@@ -1,4 +1,4 @@
-"""Canary turn telemetry — schema v2 record builder.
+"""Canary turn telemetry — schema v3 record builder.
 
 Deliberately dependency-light (stdlib only) so the canary CONTRACT can be tested
 end-to-end without importing the Flask app: the closed-loop test imports
@@ -43,6 +43,41 @@ Schema v2 changes vs v1
 * Experimental ``manager_v1`` turns identify whether specialist dispatch was
   configured and may carry a content-free ``multi_agent`` lifecycle diagnostic.
   Legacy/fc records retain their old shape.
+
+Schema v3 changes vs v2
+-----------------------
+v3 exists because two v2 fields were REDEFINED, not because new ones were added.
+Additive fields do not need a version; a field whose meaning changed does, or a
+window spanning the change silently averages two different measurements:
+
+* ``llm_calls`` was ``final_state["loop_turn"]`` on fc (agent super-steps, and
+  ``null`` on legacy). It is now the OBSERVER's count of billed provider calls on
+  every arch, with ``loop_turn`` retained only as a fail-closed lower bound. From
+  v3 it therefore also includes the nested tool-internal DeepSeek calls that
+  ``llm_interface._call_deepseek`` makes — the ones that were always billed and
+  never counted. v2 and v3 ``llm_calls`` are NOT comparable.
+* ``tool_batches`` was ``null`` on legacy and "distinct fc artifact turns"
+  otherwise; it is now artifact turns plus a legacy execution-plan wave, so it is
+  a real number on both arches. ``search_direct_signals`` likewise reports an
+  observed ``0`` for both counters instead of ``null``.
+* Additive in v3 and safe to ignore: ``variant_id``, the rollout identity block,
+  ``root_agent_context``/``agent_role``/``task_id``/``parent_task_id``,
+  ``tool_latency``, and the ``multi_agent``
+  ``partial``/``denied_calls``/``dropped_error_codes`` counters.
+* ``tool_ledger_status`` states whether ``tool_batches`` COULD be counted at all.
+  ``tool_batches`` is derived from ``final_state``, and a crashed turn has no
+  ``final_state`` — so requiring it unconditionally at v3 made every crash/5xx
+  record a guaranteed contract violation, i.e. a permanent INSTRUMENTATION-HOLD on
+  any window containing one (14% of legacy history). The marker makes the gap
+  explicit and checkable instead: ``"complete"`` promises a real count,
+  ``"unavailable"`` states that the ledger died with the turn and REQUIRES
+  ``tool_batches`` to be null, and it is only legal on a crash/server_error
+  outcome, so it cannot be used to opt a healthy turn out of the requirement.
+
+The consumer (``scripts/canary_report.py``) validates each record under the rules
+that applied WHEN IT WAS WRITTEN, keyed off this field. That is the whole point of
+bumping it: 2748 historical legacy records and 230 fc records would otherwise have
+started failing a contract that did not exist when they were emitted.
 """
 from __future__ import annotations
 
@@ -55,7 +90,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 EVENT_NAME = "canary.turn"
 
 ENDPOINT_ALEX = "alex"
@@ -66,6 +101,14 @@ OUTCOME_OK = "ok"                    # agent produced a normal answer
 OUTCOME_AGENT_ERROR = "agent_error"  # response_type == "error" (handled, HTTP 200)
 OUTCOME_CRASH = "crash"              # exception caught by the endpoint (HTTP 200 by design)
 OUTCOME_SERVER_ERROR = "server_error"  # escaped to the 500 handler
+# Outcomes on which the turn's own bookkeeping (final_state) does not exist. The
+# consumer keys the tool-ledger exemption off exactly this set.
+UNOBSERVABLE_OUTCOMES = (OUTCOME_CRASH, OUTCOME_SERVER_ERROR)
+
+# tool_ledger_status values.
+TOOL_LEDGER_COMPLETE = "complete"        # tool_batches is a real, observed count
+TOOL_LEDGER_UNAVAILABLE = "unavailable"  # the ledger died with the turn -> null
+VALID_TOOL_LEDGER_STATUSES = (TOOL_LEDGER_COMPLETE, TOOL_LEDGER_UNAVAILABLE)
 
 # Metrics prod telemetry genuinely cannot determine. Emitted as null and declared
 # here so the report treats them as EVAL-ONLY rather than missing instrumentation.
@@ -95,16 +138,31 @@ VALID_USAGE_STATUSES = (USAGE_COMPLETE, USAGE_PARTIAL, USAGE_NO_CALLS,
                         USAGE_NOT_INSTRUMENTED)
 _SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
 _SPECIALIST_STATUSES = frozenset(
-    {"planned", "started", "completed", "failed", "skipped"}
+    {"planned", "started", "completed", "partial", "failed", "skipped"}
 )
+_SPECIALIST_OUTCOME_STATUSES = frozenset({"partial", "failed", "skipped"})
+_SPECIALIST_DENIED_STATUS = "denied"
 _SPECIALIST_EVENT_FIELDS = (
     "plan_id", "task_id", "parent_task_id", "role", "status",
     "duration_ms", "call_count",
 )
+# The one optional lifecycle field. Kept out of the tuple above so the exact-shape
+# assertion at the bottom of the event builder still fails safe for anything else.
+_SPECIALIST_EVENT_OPTIONAL_FIELDS = ("error_code",)
+_SPECIALIST_DENIED_EVENT_FIELDS = ("status", "tool", "error_code")
+# ``partial`` and ``denied_calls`` are REQUIRED of this producer but OPTIONAL of
+# the consumer: a record written by an earlier manager_v1 build has neither, and
+# defaulting them to 0 there is correct (nothing was counted) where defaulting a
+# core counter would be a fabrication.
 _MULTI_AGENT_COUNTER_FIELDS = (
     "planned", "started", "completed", "failed", "skipped", "max_in_flight",
 )
+_MULTI_AGENT_OPTIONAL_COUNTER_FIELDS = (
+    "partial", "denied_calls", "dropped_error_codes",
+)
 _MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 REQUIRED_SECURITY_FIELDS = (
     "denied_write_count", "tainted_write_executed_count", "forbidden_write_executed_count",
 )
@@ -171,6 +229,9 @@ def search_direct_signals() -> Dict[str, Any]:
         # contradicts no_llm_calls and makes the strict consumer HOLD every window
         # containing deterministic search traffic.
         "llm_calls": 0, "tool_batches": 0,
+        # This endpoint dispatches no tools at all, so 0 is an observed count and
+        # the ledger is trivially complete.
+        "tool_ledger_status": TOOL_LEDGER_COMPLETE,
     }
 
 
@@ -207,9 +268,21 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
         "provider_schema_400_count": None,
         "llm_usage": None, "llm_usage_status": USAGE_NOT_INSTRUMENTED,
         "llm_calls": None, "tool_batches": None,
+        # tool_batches is derived from final_state, and a crashed turn HAS no
+        # final_state. There is no out-of-band accumulator for it, so no overlay
+        # below can ever fill it: saying so explicitly is the only honest option.
+        # Fabricating a 0 here would report "this turn ran no tools" about a turn
+        # that may have run several before dying.
+        "tool_ledger_status": TOOL_LEDGER_UNAVAILABLE,
     }
     for field in ("provider_schema_400_count", "llm_usage_status",
-                  "dsml_blocked", "dsml_leak"):
+                  "dsml_blocked", "dsml_leak",
+                  # Same argument as llm_usage below: the observer counts a call at
+                  # its completion callback, so the calls that finished BEFORE the
+                  # crash are observed facts. Leaving this null while llm_usage
+                  # reports their tokens would also make the record internally
+                  # inconsistent from v3, where the two are cross-checked.
+                  "llm_calls"):
         if observed and observed.get(field) is not None:
             sig[field] = observed[field]
     # The write audit is accumulated at the policy decision point, so a turn that
@@ -254,6 +327,13 @@ def _multi_agent_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
             if raw < 0 or raw > 1_000_000:
                 return None
             out[field] = raw
+        for field in _MULTI_AGENT_OPTIONAL_COUNTER_FIELDS:
+            raw = value.get(field, 0)
+            if isinstance(raw, bool) or not isinstance(raw, int):
+                return None
+            if raw < 0 or raw > 1_000_000:
+                return None
+            out[field] = raw
 
         truncated = value.get("events_truncated")
         if not isinstance(truncated, bool):
@@ -266,6 +346,24 @@ def _multi_agent_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
             return None
         for raw_event in events[:64]:
             if not isinstance(raw_event, dict):
+                continue
+            if raw_event.get("status") == _SPECIALIST_DENIED_STATUS:
+                # A refused dispatch carries no task identity — only which tool was
+                # refused and why. Validated against the same closed grammars as the
+                # lifecycle fields so it cannot become a channel for tool arguments.
+                tool = raw_event.get("tool")
+                tool = tool.strip() if isinstance(tool, str) else ""
+                code = raw_event.get("error_code")
+                code = code.strip() if isinstance(code, str) else ""
+                if not _TOOL_NAME_RE.fullmatch(tool) or not _ERROR_CODE_RE.fullmatch(code):
+                    continue
+                denied_event = {
+                    "status": _SPECIALIST_DENIED_STATUS,
+                    "tool": tool,
+                    "error_code": code,
+                }
+                if tuple(denied_event.keys()) == _SPECIALIST_DENIED_EVENT_FIELDS:
+                    safe_events.append(denied_event)
                 continue
             identifiers = []
             invalid = False
@@ -312,14 +410,80 @@ def _multi_agent_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
                 "duration_ms": duration,
                 "call_count": calls,
             }
+            error_code = raw_event.get("error_code")
+            if error_code is not None:
+                error_code = error_code.strip() if isinstance(error_code, str) else ""
+                if (
+                    not _ERROR_CODE_RE.fullmatch(error_code)
+                    or status not in _SPECIALIST_OUTCOME_STATUSES
+                ):
+                    continue
+                event["error_code"] = error_code
             # A local assertion makes future edits fail safe if an unsafe field is
             # ever accidentally added to the diagnostic shape.
-            if tuple(event.keys()) == _SPECIALIST_EVENT_FIELDS:
+            if tuple(event.keys()) in (
+                _SPECIALIST_EVENT_FIELDS,
+                _SPECIALIST_EVENT_FIELDS + _SPECIALIST_EVENT_OPTIONAL_FIELDS,
+            ):
                 safe_events.append(event)
         out["events"] = safe_events
         return out
     except Exception:
         return None
+
+
+_TOOL_LATENCY_FIELDS = ("count", "p50_ms", "max_ms", "timed_out", "abandoned")
+_MAX_TOOL_LATENCY_ENTRIES = 32
+
+
+def _tool_latency_summary(value: Any) -> Optional[Dict[str, Any]]:
+    """Sanitise the per-tool latency summary. Content-free by construction.
+
+    Only a TOOL NAME (registry identifier grammar) and five numbers per tool.
+    No arguments, no results, no error text and no per-call vector — a vector
+    would let the shape of one user's session be reconstructed from an ops log,
+    and p50/max answer the question ("which tool is eating the budget") just as
+    well. Non-gating: this is a Stage-1 instrument, not a threshold.
+    """
+    if not isinstance(value, dict):
+        return None
+    out: Dict[str, Any] = {}
+    try:
+        for raw_name, raw_stats in list(value.items())[:_MAX_TOOL_LATENCY_ENTRIES]:
+            name = raw_name.strip() if isinstance(raw_name, str) else ""
+            if not _TOOL_NAME_RE.fullmatch(name) or not isinstance(raw_stats, dict):
+                continue
+            entry: Dict[str, Any] = {}
+            ok = True
+            for field in ("count", "timed_out", "abandoned"):
+                raw = raw_stats.get(field)
+                if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0 or raw > 100_000:
+                    ok = False
+                    break
+                entry[field] = raw
+            if not ok:
+                continue
+            for field in ("p50_ms", "max_ms"):
+                raw = raw_stats.get(field)
+                if raw is None:
+                    entry[field] = None
+                    continue
+                if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                    ok = False
+                    break
+                number = float(raw)
+                if not math.isfinite(number) or number < 0:
+                    ok = False
+                    break
+                entry[field] = round(number, 1)
+            if not ok:
+                continue
+            ordered = {field: entry[field] for field in _TOOL_LATENCY_FIELDS}
+            if tuple(ordered.keys()) == _TOOL_LATENCY_FIELDS:
+                out[name] = ordered
+    except Exception:
+        return None
+    return out or None
 
 
 def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
@@ -525,6 +689,20 @@ def build_canary_turn_record(
         "no_evidence_numbers": None,
         "eval_only": list(EVAL_ONLY_FIELDS),
     }
+    # ADDITIVE and omitted when the caller did not state it. Emitting a default
+    # would be worse than emitting nothing: "unavailable" next to a real
+    # `tool_batches` count is a self-contradicting record, and "complete" next to a
+    # null is a claim we did not make. Absent, the consumer falls back to the
+    # outcome-based rule (a crash/5xx turn had no ledger), which is exactly how it
+    # already has to read the v3 records written before this field existed.
+    ledger_status = sig.get("tool_ledger_status")
+    if ledger_status in VALID_TOOL_LEDGER_STATUSES:
+        record["tool_ledger_status"] = ledger_status
+    tool_latency = _tool_latency_summary(sig.get("tool_latency"))
+    if tool_latency is not None:
+        # Additive and arch-agnostic: absent on any turn that dispatched no tool,
+        # so legacy/fc records without it keep exactly their historical shape.
+        record["tool_latency"] = tool_latency
     root_context = sig.get("root_agent_context")
     if agent_arch == "manager_v1":
         # Configuration identity is distinct from lifecycle activity: a perfectly

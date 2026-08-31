@@ -30,6 +30,25 @@ EXIT_PROCEED = 0
 EXIT_HOLD = 2
 MISSING_DIMENSION = "<missing>"
 INVALID_DIMENSION = "<invalid>"
+# A record with no rollout_id is not a broken record. Every historical turn and
+# every direct :5001/:5002 smoke turn has none — the field only exists on traffic
+# the trusted edge labelled. Treating its absence as a malformed identity put
+# `decision=HOLD, total_cost=None` on all of them permanently, so the entire cost
+# history could never be costed by the script written to cost it. It gets its own
+# named bucket and an INFORMATIONAL issue instead: attribution is coarser, but the
+# usage is fully measured and the arithmetic is sound.
+UNLABELLED_ROLLOUT = "<none>"
+# ...but only for traffic that was never supposed to carry one. `canary_report`
+# already treats a `traffic_source="edge"` record without a `rollout_id` as a
+# contract violation ("edge record has missing/invalid rollout_id"), because the
+# trusted edge is the thing that stamps the label. Folding such a record into the
+# historical bucket silently moved this rollout's spend into "pre-rollout" — one
+# mislabelled edge turn with 999k input tokens read as `r-1: $0.00076` next to
+# `<none>: $0.399`, and the report said PROCEED. It gets its own bucket and, unlike
+# `<none>`, it BLOCKS: an unlabelled edge record means the edge is misconfigured,
+# and cost attribution for the rollout cannot be trusted until it is fixed.
+UNLABELLED_EDGE_ROLLOUT = "<unlabelled-edge>"
+EDGE_TRAFFIC_SOURCE = "edge"
 KNOWN_AGENT_ARCHES = frozenset({"legacy", "fc_loop", "manager_v1"})
 VALID_USAGE_STATUSES = frozenset(
     {"complete", "partial", "no_llm_calls", "not_instrumented"}
@@ -356,21 +375,64 @@ def group_records(
 ) -> Tuple[
     Dict[Tuple[str, str], List[dict]],
     Dict[Tuple[str, str], List[str]],
+    Dict[Tuple[str, str], List[str]],
 ]:
-    """Group without canonicalisation; malformed identities get explicit buckets."""
+    """Group without canonicalisation; malformed identities get explicit buckets.
+
+    Returns ``(groups, blocking_issues, informational_notes)``. The third value is
+    the fix for the permanent-HOLD defect: a MISSING rollout_id is a fact about
+    when the record was written, not a defect in it, so it is reported and costed
+    rather than refused. A MALFORMED one is still a defect and still HOLDs — the
+    two were previously collapsed into the same ``<missing>`` bucket, which is how
+    "we cannot parse this id" and "this predates ids" ended up with one verdict.
+
+    A missing id is only "a fact about when it was written" for traffic that never
+    had one to lose. ``traffic_source`` is what separates the two: ``direct`` (and
+    records predating the field) go to ``<none>`` informationally, while an
+    ``edge`` record with no ``rollout_id`` is a LABELLING DEFECT — the trusted edge
+    is what stamps it — so it gets ``<unlabelled-edge>`` and blocks. Without that
+    split, this rollout's own spend could hide inside the historical bucket while
+    the report printed a reassuring, and much smaller, per-rollout total.
+    """
     groups: Dict[Tuple[str, str], List[dict]] = {}
     attribution_issues: Dict[Tuple[str, str], List[str]] = {}
+    attribution_notes: Dict[Tuple[str, str], List[str]] = {}
     for record in records:
         obj = record if isinstance(record, dict) else {}
         arch, arch_issue = _dimension(
             obj.get("agent_arch"), name="agent_arch"
         )
-        rollout_id, rollout_issue = _dimension(
-            obj.get("rollout_id"), name="rollout_id"
-        )
+        if obj.get("rollout_id") is None:
+            rollout_note = None
+            if obj.get("traffic_source") == EDGE_TRAFFIC_SOURCE:
+                # The edge stamps this label. Missing it is a live misconfiguration,
+                # not history, and its spend belongs to a rollout we cannot name.
+                rollout_id = UNLABELLED_EDGE_ROLLOUT
+                rollout_issue = (
+                    "traffic_source='edge' with no rollout_id: the trusted edge "
+                    "failed to label these records, so their spend cannot be "
+                    "attributed to the rollout that incurred it"
+                )
+            else:
+                # Absent, not malformed. `notes` never becomes a HOLD; `issues` does.
+                rollout_id, rollout_issue = UNLABELLED_ROLLOUT, None
+                # DESCRIPTIVE, not assertive: this says what is true of the records
+                # (no id) rather than asserting a provenance nobody verified.
+                rollout_note = (
+                    "no rollout_id on these records (traffic_source is not 'edge'), "
+                    f"costed together under {UNLABELLED_ROLLOUT!r}"
+                )
+        else:
+            rollout_id, rollout_issue = _dimension(
+                obj.get("rollout_id"), name="rollout_id"
+            )
+            rollout_note = None
         key = (arch, rollout_id)
         groups.setdefault(key, []).append(obj)
         bucket_issues = attribution_issues.setdefault(key, [])
+        bucket_notes = attribution_notes.setdefault(key, [])
+        if rollout_note and rollout_note not in bucket_notes:
+            bucket_notes.append(rollout_note)
         for issue in (arch_issue, rollout_issue):
             if issue and issue not in bucket_issues:
                 bucket_issues.append(issue)
@@ -384,7 +446,7 @@ def group_records(
             )
             if message not in bucket_issues:
                 bucket_issues.append(message)
-    return groups, attribution_issues
+    return groups, attribution_issues, attribution_notes
 
 
 def build_cost_report(
@@ -398,14 +460,24 @@ def build_cost_report(
     records_list = list(records)
     overall_usage = sum_usage(records_list)
     overall = compute_cost(overall_usage, prices, allow_unverified)
-    groups, attribution = group_records(records_list)
+    groups, attribution, attribution_note_map = group_records(records_list)
 
     rendered_groups = []
     attribution_issues: List[str] = []
+    attribution_notes: List[str] = []
     for (arch, rollout_id), group in sorted(groups.items()):
         usage = sum_usage(group)
         cost = compute_cost(usage, prices, allow_unverified)
         identity_issues = attribution.get((arch, rollout_id), [])
+        identity_notes = attribution_note_map.get((arch, rollout_id), [])
+        if identity_notes:
+            # Reported on the group and in the top-level `notes`, and deliberately
+            # NOT merged into `issues`: `issues` is what forces HOLD, and this
+            # group's usage is fully measured.
+            cost["notes"] = list(cost.get("notes") or []) + identity_notes
+            attribution_notes.extend(
+                f"group ({arch}, {rollout_id}): {note}" for note in identity_notes
+            )
         if identity_issues:
             attribution_issues.extend(
                 f"group ({arch}, {rollout_id}): {issue}"
@@ -444,6 +516,8 @@ def build_cost_report(
         "usage": overall_usage,
         "groups": rendered_groups,
     }
+    if attribution_notes:
+        result["notes"] = list(result.get("notes") or []) + attribution_notes
     if extra_issues:
         issues = list(result.get("issues") or []) + extra_issues
         result.update(

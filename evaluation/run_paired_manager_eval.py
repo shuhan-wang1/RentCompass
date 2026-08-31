@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import List, Optional, Sequence
 
 from evaluation.paired_gate import (
+    BLOCK,
+    HOLD_REGRESSION,
     GateThresholds,
     evaluate_result_dirs,
     exit_code,
@@ -57,6 +59,39 @@ def build_arm_commands(args, out: Path) -> tuple[List[str], List[str]]:
     candidate = _common_benchmark_args(args, out=out / "manager_v1")
     candidate.extend(("--arch", "manager_v1", "--manager-v1-specialists"))
     return baseline, candidate
+
+
+def resolved_arm_flags(command: Sequence[str]) -> str:
+    """Echo exactly which architecture/specialist flags an arm command resolved to.
+
+    The two arms are only comparable if they differ in the architecture and nothing
+    else; printing the resolved flags makes a mis-built arm visible in the log
+    instead of only in the report's ``arm_contract`` row.
+    """
+    command = list(command)
+    arch = (command[command.index("--arch") + 1] if "--arch" in command else "<unset>")
+    specialists = "--manager-v1-specialists" in command
+    return f"--arch {arch} --manager-v1-specialists={'on' if specialists else 'off'}"
+
+
+def _prepare_output_dir(out: Path) -> None:
+    """Create ``out``; refuse an existing directory with an actionable message.
+
+    ``guard_output_dir`` already refuses a NON-EMPTY dir.  An existing but EMPTY dir
+    used to fall through to ``mkdir(exist_ok=False)`` and surface as a bare
+    ``FileExistsError`` traceback, which reads like a harness crash rather than the
+    deliberate "one round, one fresh directory" rule that it is.
+    """
+    guard_output_dir(out)
+    try:
+        out.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        raise SystemExit(
+            f"refusing to write this paired round into the existing directory {out}. "
+            f"A paired round owns its output directory: reusing one mixes two rounds' "
+            f"arm artifacts and makes the report's identity binding unverifiable. "
+            f"Pass a --out path that does not exist yet (e.g. {out}-2)."
+        ) from None
 
 
 def _offline_env(arch: str) -> dict:
@@ -104,18 +139,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args.timestamp = args.timestamp or time.strftime("%Y-%m-%dT%H:%M:%S")
 
     out = Path(args.out).resolve()
-    guard_output_dir(out)
-    out.mkdir(parents=True, exist_ok=False)
+    _prepare_output_dir(out)
     baseline_cmd, candidate_cmd = build_arm_commands(args, out)
 
-    print("[paired] baseline=fc_loop (offline)", flush=True)
+    print(f"[paired] baseline=fc_loop (offline) {resolved_arm_flags(baseline_cmd)}",
+          flush=True)
     baseline_rc = subprocess.run(
         baseline_cmd,
         cwd=REPO_ROOT,
         env=_offline_env("fc_loop"),
         check=False,
     ).returncode
-    print("[paired] candidate=manager_v1+specialists (offline)", flush=True)
+    print(f"[paired] candidate=manager_v1+specialists (offline) "
+          f"{resolved_arm_flags(candidate_cmd)}", flush=True)
     candidate_rc = subprocess.run(
         candidate_cmd,
         cwd=REPO_ROOT,
@@ -127,6 +163,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         out / "fc_loop",
         out / "manager_v1",
         thresholds=GateThresholds(min_pairs=args.min_pairs),
+        # This command has no --live mode by construction, so the arms are offline
+        # regardless of what the arm summaries claim.
+        offline_execution=True,
     )
     report["execution"] = {
         "baseline_return_code": baseline_rc,
@@ -140,9 +179,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     }
     if baseline_rc != 0 or candidate_rc != 0:
         # A subprocess failure is missing measurement, never evidence of safety.  Preserve
-        # a possible BLOCK already found in partial candidate artifacts; otherwise HOLD.
-        if report["outcome"] != "BLOCK":
-            report["outcome"] = "HOLD"
+        # a possible BLOCK already found in partial candidate artifacts; otherwise this is
+        # a MEASURED failure of the round itself, so it is HOLD_REGRESSION (exit 4) rather
+        # than the "offline cannot prove it" code -- a crashed arm is something to act on.
+        if report["outcome"] != BLOCK:
+            report["outcome"] = HOLD_REGRESSION
+        report["promotable_modulo_offline_limits"] = False
         report["checks"].append({
             "name": "arm_processes",
             "outcome": "HOLD",
@@ -157,11 +199,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         json.dumps({"baseline": baseline_cmd, "candidate": candidate_cmd}, indent=2),
         encoding="utf-8",
     )
+    # ``evaluate_result_dirs`` already printed the distinctiveness headline (it is the
+    # gate's single source for that line); do not echo it a second time.
     print(
-        f"[paired] outcome={report['outcome']} paired_runs={report['paired_runs']} "
+        f"[paired] outcome={report['outcome']} "
+        f"exit={exit_code(report['outcome'])} paired_runs={report['paired_runs']} "
+        f"promotable_modulo_offline_limits="
+        f"{report.get('promotable_modulo_offline_limits')} "
+        f"hold_reasons={report.get('hold_reasons')} "
+        f"unsatisfied_prerequisites={report.get('unsatisfied_promotion_prerequisites')} "
         f"report={out / 'paired_report.json'}",
         flush=True,
     )
+    # PROMOTE is structurally unreachable here and that is deliberate: this command
+    # has no --live mode, so three security prerequisites can never be satisfied and
+    # an exit 0 would read as "cleared for release". The distinction automation
+    # needs is instead exit 2 (nothing measurable regressed; live evidence still
+    # owed) vs exit 4 (something measurable regressed; act on it) vs exit 3 (BLOCK).
     return exit_code(report["outcome"])
 
 

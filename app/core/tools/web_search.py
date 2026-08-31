@@ -5,6 +5,14 @@ Web Search Tool - intelligent search coordinator.
 Only the documented set of read-only tools below may be dispatched from here. Registry
 metadata is checked at runtime so registration changes cannot silently expose a write,
 terminal, or memory tool through this nested dispatcher.
+
+When this tool itself runs INSIDE a specialist capability grant (manager_v1), the nested
+dispatcher is additionally bounded by that specialist's role allowlist and every nested call
+goes through the capability path — resolve + execute against a live spec digest, with sealed
+arguments — instead of the module-global registry. Without that, an ``area_evidence`` grant
+whose only authorised tool is ``web_search`` could drive ``calculate_commute`` (mobility) and
+``get_property_details`` (listings) with model-authored arguments, producing no artifacts and
+a deliberately WRONG ``agent_role`` on the ones it did produce (review R1/R1).
 """
 
 from __future__ import annotations
@@ -45,12 +53,126 @@ _MAX_QUERY_CHARS = 4096
 
 _tool_registry = None
 
+# Roles the ambient execution context can carry that are NOT a specialist grant. Everything
+# else — including a role this module does not recognise — is treated as a specialist context
+# and therefore restricted; an unknown role simply gets an empty nested allowlist.
+_NON_SPECIALIST_AGENT_ROLES = frozenset({"manager"})
+# Used when the ambient context cannot be read at all: unresolvable authority is not manager
+# authority, so nested dispatch is denied outright.
+_UNRESOLVED_AGENT_ROLE = "\x00unresolved"
+
+try:  # pragma: no cover - import shape only fails in a broken deployment
+    from uk_rent_agent.observability import current_agent_context as _current_agent_context
+except Exception:  # pragma: no cover
+    _current_agent_context = None
+
+
+class _NestedDispatchDenied(Exception):
+    """A nested call was refused by the capability boundary; carries the payload reason."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
 
 def set_tool_registry(registry):
     """Set the registry used for safe sibling-tool dispatch."""
     global _tool_registry
     _tool_registry = registry
     logger.info("Web-search tool registry configured")
+
+
+def _current_specialist_role() -> Optional[str]:
+    """The specialist role this web_search is executing under, or None for the manager.
+
+    ``None`` means "no specialist grant is in force" (the fc path, or a manager-owned call)
+    and preserves the historical nested behaviour exactly.
+    """
+    if _current_agent_context is None:
+        return _UNRESOLVED_AGENT_ROLE
+    try:
+        role = _current_agent_context().get("agent_role")
+    except Exception as exc:
+        logger.warning(
+            "Nested-tool agent context unreadable exception_type=%s", type(exc).__name__
+        )
+        return _UNRESOLVED_AGENT_ROLE
+    if role is None or str(role) in _NON_SPECIALIST_AGENT_ROLES:
+        return None
+    return str(role)
+
+
+def _nested_allowlist_for_role(role: str) -> frozenset:
+    """Nested tools reachable from a web_search running under `role`.
+
+    The intersection of this module's static nested allowlist with the manager-owned
+    capability catalog for that role: a grant can only ever narrow the nested surface, never
+    widen it, and an unrecognised role reaches nothing.
+    """
+    try:
+        from uk_rent_agent.agent.specialist_contracts import SPECIALIST_TOOL_ALLOWLISTS
+    except Exception as exc:  # pragma: no cover - broken deployment
+        logger.warning(
+            "Nested-tool role allowlist unavailable exception_type=%s", type(exc).__name__
+        )
+        return frozenset()
+    role_tools = SPECIALIST_TOOL_ALLOWLISTS.get(role) or frozenset()
+    allowed = set(_ALLOWED_NESTED_TOOLS) & set(role_tools)
+    if _SELF_TOOL_NAME in role_tools:
+        # `web_search_only` is this tool's OWN capability (a plain search), not a registry
+        # dispatch, so a role that may call web_search may also call it.
+        allowed.add("web_search_only")
+    return frozenset(allowed)
+
+
+async def _dispatch_nested_under_capability(registry, role: str, tool_name: str, params: Dict):
+    """Run one nested call through the read-only capability boundary.
+
+    Mirrors the planned specialist path in ``agent_loop``: live spec, role grant, dispatch
+    validation, security digest, canonical-JSON-sealed arguments, and execution through the
+    registry's pinned capability API rather than a name lookup. ``params`` is entirely
+    model-authored, so NO harness-injected (``_``-prefixed) key is accepted — ``seal_specialist_args``
+    refuses them.
+    """
+    from core.specialist_runtime import (
+        SpecialistDispatchError,
+        seal_specialist_args,
+        specialist_eligible_role,
+        tool_spec_security_digest,
+    )
+    from uk_rent_agent.agent.specialist_contracts import (
+        grant_read_only_tools_for_role,
+        validate_read_only_dispatch_for_role,
+    )
+
+    try:
+        if specialist_eligible_role(tool_name, params) != role:
+            raise SpecialistDispatchError("specialist_capability_role_mismatch")
+        resolver = getattr(registry, "resolve_specialist_capability", None)
+        dispatch = getattr(registry, "execute_resolved_specialist_capability", None)
+        if not callable(resolver) or not callable(dispatch):
+            raise SpecialistDispatchError("specialist_capability_resolver_unavailable")
+        specs = tuple(registry.list_specs())
+        spec = next(
+            (item for item in specs if _metadata_value(item, "name") == tool_name), None
+        )
+        if spec is None:
+            raise SpecialistDispatchError("specialist_live_spec_missing")
+        grants = grant_read_only_tools_for_role(role, (tool_name,), live_specs=specs)
+        validate_read_only_dispatch_for_role(role, grants[0], spec)
+        digest = tool_spec_security_digest(spec)
+        sealed = seal_specialist_args(params)
+        capability = resolver(tool_name, digest)
+    except Exception as exc:
+        error_code = getattr(exc, "error_code", type(exc).__name__)
+        logger.warning(
+            "Nested specialist dispatch denied tool=%s role=%s error_code=%s",
+            tool_name,
+            role,
+            error_code,
+        )
+        raise _NestedDispatchDenied("nested_specialist_dispatch_denied") from exc
+    return await dispatch(capability, args=sealed, expected_spec_digest=digest)
 
 
 def _query_metadata(query: Any) -> Dict[str, int]:
@@ -236,8 +358,16 @@ def _preflight_sub_queries(
     query: Any,
     sub_queries: Any,
     registry: Any,
+    role: Optional[str] = None,
 ) -> Tuple[Optional[List[Tuple[str, Dict[str, Any]]]], Optional[dict]]:
-    """Validate the complete batch before dispatching any member."""
+    """Validate the complete batch before dispatching any member.
+
+    ``role`` is the specialist role this web_search is executing under, or None for the
+    manager/fc path. Under a role, the nested surface is narrowed to that role's own
+    capability allowlist BEFORE anything is dispatched, so a cross-role nested call is
+    refused with the whole batch rather than escalating privilege (review R1/R1).
+    """
+    role_allowlist = None if role is None else _nested_allowlist_for_role(role)
     if not isinstance(query, str) or len(query) > _MAX_QUERY_CHARS:
         return None, _failure("invalid_query", query)
     if not isinstance(sub_queries, list):
@@ -280,6 +410,12 @@ def _preflight_sub_queries(
             return None, _failure(
                 "nested_tool_not_allowed", query, subquery_count=len(sub_queries)
             )
+        if role_allowlist is not None and tool_name not in role_allowlist:
+            # The grant in force does not include this tool. Denied fail-closed, and
+            # VISIBLY: the model sees the refusal in the returned payload.
+            return None, _failure(
+                "nested_tool_role_forbidden", query, subquery_count=len(sub_queries)
+            )
 
         params_error = _validate_param_shape(params)
         if params_error:
@@ -312,6 +448,10 @@ def _preflight_sub_queries(
 async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) -> dict:
     """Run a plain web search or a bounded batch of safe, read-only sibling tools."""
     registry = _tool_registry
+    # The authority THIS call is running under. None on the manager/fc path (unchanged
+    # behaviour); a specialist role narrows the nested surface and forces every nested call
+    # through the capability API (review R1/R1).
+    role = _current_specialist_role()
     query_meta = _query_metadata(query)
     logger.info(
         "Web-search request started query_chars=%d nested=%s subquery_count=%d",
@@ -328,7 +468,9 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
         all_data = {}
 
         if sub_queries:
-            prepared, rejected = _preflight_sub_queries(query, sub_queries, registry)
+            prepared, rejected = _preflight_sub_queries(
+                query, sub_queries, registry, role
+            )
             if rejected is not None:
                 return rejected
             assert prepared is not None
@@ -362,7 +504,18 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                         )
 
                     try:
-                        tool_result = await registry.execute_tool(tool_name, **params)
+                        if role is None:
+                            tool_result = await registry.execute_tool(tool_name, **params)
+                        else:
+                            tool_result = await _dispatch_nested_under_capability(
+                                registry, role, tool_name, params
+                            )
+                    except _NestedDispatchDenied as denial:
+                        # Fail closed and VISIBLY: a nested call the boundary refused is
+                        # never silently skipped or silently run.
+                        return _failure(
+                            denial.reason, query, subquery_count=len(prepared)
+                        )
                     except Exception as exc:
                         logger.warning(
                             "Nested tool raised tool=%s exception_type=%s",
@@ -389,7 +542,7 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
             # An explicit empty list has the same semantics as omitting sub_queries.
             if sub_queries is not None:
                 prepared, rejected = _preflight_sub_queries(
-                    query, sub_queries, registry
+                    query, sub_queries, registry, role
                 )
                 if rejected is not None:
                     return rejected

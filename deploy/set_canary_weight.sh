@@ -9,7 +9,13 @@
 # Safety contract:
 #   * 0 is the production default and emergency rollback;
 #   * both required pools pass /ready identity checks before exposure;
+#   * both required pools also ANSWER a real turn before exposure (see
+#     deploy/probe_pool_answer.py); --skip-answer-probe opts out explicitly;
 #   * manager_v1 candidates require specialists=1 and MCP=0;
+#   * 100 is NOT a routine weight.  docs/canary_runbook.md authorises 50 as the
+#     highest rollout stage, so 100 is accepted only for `--stage maintenance`
+#     (the temporary drain a pool update takes, and restores afterwards) or for
+#     `--stage flip` with CANARY_ALLOW_FLIP=1 explicitly set;
 #   * the route file is replaced with a same-directory atomic rename;
 #   * nginx -t runs before reload; every later failure restores the old file.
 set -euo pipefail
@@ -28,10 +34,29 @@ PUBLIC_URL="${CANARY_PUBLIC_URL:-https://127.0.0.1/ready}"
 LEGACY_URL="${CANARY_LEGACY_URL:-http://127.0.0.1:5001/ready}"
 CANDIDATE_URL="${CANARY_CANDIDATE_URL:-http://127.0.0.1:5002/ready}"
 PROBE_COUNT="${CANARY_PROBE_COUNT:-256}"
+# `-`, NOT `:-`: an explicitly EMPTY override must stay empty and be refused
+# below. Falling back to the real probe there would silently drive a live turn
+# against a real pool from a caller that meant to inject a stub.
+ANSWER_PROBE_CMD="${CANARY_ANSWER_PROBE_CMD-python3 $HERE/probe_pool_answer.py}"
+# Injecting the probe is how the harnesses rehearse this path without a pool.  It
+# is also the only way to disable the gate without saying so, so the injection is
+# remembered and announced on every use.
+ANSWER_PROBE_INJECTED=0
+if [[ -n "${CANARY_ANSWER_PROBE_CMD+x}" ]]; then
+  ANSWER_PROBE_INJECTED=1
+fi
+LEGACY_ANSWER_URL="${CANARY_LEGACY_ANSWER_URL:-http://127.0.0.1:5001}"
+CANDIDATE_ANSWER_URL="${CANARY_CANDIDATE_ANSWER_URL:-http://127.0.0.1:5002}"
+ANSWER_PROBE_TIMEOUT="${CANARY_ANSWER_PROBE_TIMEOUT:-120}"
 
 die()  { printf '\033[31mFAIL\033[0m %s\n' "$*" >&2; exit 1; }
 ok()   { printf '\033[32m ok \033[0m %s\n' "$*"; }
 note() { printf '     %s\n' "$*"; }
+
+# An empty override would make `$ANSWER_PROBE_CMD --url ...` run `--url` as a
+# command: a failure, but an incomprehensible one. Refuse it where it is set.
+[[ "$ANSWER_PROBE_INJECTED" == 0 || -n "${ANSWER_PROBE_CMD// /}" ]] \
+  || die "CANARY_ANSWER_PROBE_CMD is set but empty; unset it to use deploy/probe_pool_answer.py, or pass --skip-answer-probe to opt out explicitly"
 
 env_value() { # key default; process env wins, then root .env, then default
   local key="$1" fallback="$2" value=""
@@ -84,6 +109,7 @@ esac
 [[ "$PROBE_COUNT" =~ ^[1-9][0-9]*$ ]] || die "CANARY_PROBE_COUNT must be positive"
 
 WEIGHT=""; STATUS_ONLY=0; ALLOW_PUBLIC=0; ALLOW_UNIDENTIFIED=0; EXPECT_SHA=""
+SKIP_ANSWER_PROBE=0
 ROLLOUT_ID="${CANARY_ROLLOUT_ID:-}"; ROLLOUT_STAGE="${CANARY_ROLLOUT_STAGE:-}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -94,6 +120,7 @@ while [[ $# -gt 0 ]]; do
     --stage) ROLLOUT_STAGE="${2:-}"; shift 2 ;;
     --allow-public-candidate|--allow-public-fc) ALLOW_PUBLIC=1; shift ;;
     --allow-unidentified-target) ALLOW_UNIDENTIFIED=1; shift ;;
+    --skip-answer-probe) SKIP_ANSWER_PROBE=1; shift ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -101,6 +128,21 @@ done
 
 current_weight() {
   sed -n 's/^# rentcompass-canary-weight: \([0-9][0-9]*\)$/\1/p' "$ROUTE_CONF" 2>/dev/null | head -1
+}
+
+# The active-drain marker deploy/update.sh writes before it drains and removes
+# after it restores.  It lives beside the deploy lock in the SHARED git metadata
+# directory, so every worktree of this repo — and the sudo'd controller — resolve
+# the same path without a second configuration knob.
+maintenance_marker_path() {
+  if [[ -n "${RENTCOMPASS_MAINTENANCE_MARKER:-}" ]]; then
+    printf '%s' "$RENTCOMPASS_MAINTENANCE_MARKER"; return 0
+  fi
+  local common
+  common="$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+    || return 1
+  [[ -n "$common" ]] || return 1
+  printf '%s/rentcompass-maintenance-drain' "$common"
 }
 
 identity_at() { # URL [synthetic-session-cookie] -> "arch sha specialists pool"
@@ -133,6 +175,14 @@ if [[ "$STATUS_ONLY" == 1 ]]; then status; exit 0; fi
 case "$WEIGHT" in 0|5|20|50|100) ;; *) die "usage: $0 --weight <0|5|20|50|100> | --status" ;; esac
 [[ -r "$ROUTE_CONF" ]] || die "route include is missing/unreadable: $ROUTE_CONF"
 
+# The weight the route is on right now.  Read once, before anything is written,
+# because whether this change RAISES or LOWERS exposure decides which gates apply.
+CURRENT_WEIGHT="$(current_weight || true)"
+DE_ESCALATION=0
+if [[ "$WEIGHT" != 0 && "$CURRENT_WEIGHT" =~ ^[0-9]+$ && "$WEIGHT" -lt "$CURRENT_WEIGHT" ]]; then
+  DE_ESCALATION=1
+fi
+
 case "$WEIGHT" in
   0) _default_stage=rollback ;;
   5) _default_stage=c1 ;;
@@ -151,6 +201,58 @@ fi
   || die "rollout id must use 1-96 safe characters [A-Za-z0-9._:-]"
 [[ "$ROLLOUT_STAGE" =~ ^[A-Za-z0-9._:-]{1,32}$ ]] \
   || die "rollout stage must use 1-32 safe characters [A-Za-z0-9._:-]"
+
+# ---------------------------------------------------------------------------
+# 100% policy stop
+# ---------------------------------------------------------------------------
+# docs/canary_runbook.md authorises 50% as the highest ROLLOUT stage: at 100%
+# there are no live legacy turns, so the comparative gate has no control arm and
+# HOLDs rather than clearing.  100 therefore has exactly two legitimate callers:
+#
+#   * `--stage maintenance` — the temporary drain deploy/update.sh takes while it
+#     recreates the other pool.  update.sh records the pre-drain weight/stage from
+#     the route include's own markers and restores them on success AND on failure.
+#   * `--stage flip` with CANARY_ALLOW_FLIP=1 — the deliberate, separately gated
+#     cutover, which a routine `deploy/release.sh` must never reach on its own.
+#
+# Every other stage keeps the documented {0,5,20,50} set.
+if [[ "$WEIGHT" == 100 ]]; then
+  case "$ROLLOUT_STAGE" in
+    maintenance)
+      # `maintenance` used to be an unconditional 100% with no TTL and no marker:
+      # a human could type `--stage maintenance --rollout-id anything` and park the
+      # candidate on all public traffic permanently, bypassing CANARY_ALLOW_FLIP.
+      # Three and-gates make it what it claims to be — a drain a running deploy takes:
+      #   1. the caller holds the deploy lock (only update/release/switch export it);
+      #   2. the rollout id has update.sh's machine shape, so the drain's turns are
+      #      filterable and can never be mistaken for a stage window;
+      #   3. a marker file update.sh creates before the drain and deletes after the
+      #      restore exists and names this exact rollout id.  It is the part a bare
+      #      human invocation cannot fake from the environment alone, and it makes
+      #      the authorisation expire with the deploy that opened it.
+      [[ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" == 1 ]] \
+        || die "stage 'maintenance' is machine-only: it is the drain deploy/update.sh takes while it recreates a pool, and this caller does not hold the deploy lock (docs/canary_runbook.md section 2)"
+      [[ "$ROLLOUT_ID" =~ ^deploy-maintenance-[0-9a-f]{7,}$ ]] \
+        || die "stage 'maintenance' requires --rollout-id deploy-maintenance-<sha> (got '$ROLLOUT_ID'); the drain's turns must be filterable out of every stage window"
+      MAINTENANCE_MARKER="$(maintenance_marker_path)" \
+        || die "stage 'maintenance' cannot resolve its marker path; set RENTCOMPASS_MAINTENANCE_MARKER"
+      [[ -r "$MAINTENANCE_MARKER" ]] \
+        || die "stage 'maintenance' requires an active drain marker at $MAINTENANCE_MARKER; deploy/update.sh writes it before the drain and removes it after the restore. A 100% cutover is '--stage flip' with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)"
+      [[ "$(cat "$MAINTENANCE_MARKER" 2>/dev/null || true)" == "$ROLLOUT_ID" ]] \
+        || die "the drain marker at $MAINTENANCE_MARKER names a different rollout id than '$ROLLOUT_ID'; refusing a 100% exposure no running deploy asked for"
+      note "stage 'maintenance': 100% is a temporary drain; the caller must restore the recorded weight/stage"
+      ;;
+    flip)
+      [[ "${CANARY_ALLOW_FLIP:-0}" == 1 ]] \
+        || die "refusing candidate weight 100 at stage 'flip' without CANARY_ALLOW_FLIP=1; 50% is the highest authorised rollout stage (docs/canary_runbook.md section 2)"
+      note "CANARY_ALLOW_FLIP=1: performing the explicitly gated 100% flip"
+      ;;
+    *)
+      die "refusing candidate weight 100 at stage '$ROLLOUT_STAGE'; only '--stage maintenance' (deploy drain) or '--stage flip' with CANARY_ALLOW_FLIP=1 may reach 100% (docs/canary_runbook.md section 2)"
+      ;;
+  esac
+fi
+
 if [[ "$WEIGHT" != 0 && "$ALLOW_UNIDENTIFIED" == 1 ]]; then
   die "--allow-unidentified-target is restricted to the weight-0 emergency rollback"
 fi
@@ -195,6 +297,50 @@ verify_local() { # label url want_arch want_specialists configured_sha allow_unk
   ok "$label ready: arch=$arch sha=$sha specialists=${specialists/none/0}"
 }
 
+run_answer_probe() { # base_url want_arch want_specialists -> stdout, probe rc
+  # `--expect-specialists 0` is passed for legacy exactly as verify_local does:
+  # the DEPLOYED legacy pool predates X-Agent-Specialists (it is the standing
+  # rollback escape hatch and must not be recreated), so it sends no such header.
+  # probe_pool_answer.py::specialists_match mirrors verify_local's `none` branch —
+  # an absent header counts as 0 only when the pool answers as arch 'legacy'.
+  $ANSWER_PROBE_CMD --url "$1" --expect-arch "$2" \
+    --expect-specialists "$3" --timeout "$ANSWER_PROBE_TIMEOUT" 2>&1
+}
+
+verify_answer() { # label base_url want_arch want_specialists
+  local label="$1" base="$2" want_arch="$3" want_specialists="$4" out rc=0
+  if [[ "$SKIP_ANSWER_PROBE" == 1 ]]; then
+    note "WARNING: --skip-answer-probe: $label was NOT proven able to answer a turn"
+    return 0
+  fi
+  # An injected probe is a legitimate rehearsal hook, but it is also the one way
+  # to turn this gate off without saying so (CANARY_ANSWER_PROBE_CMD=true exits 0
+  # in silence). Name it every time so an injected run can never read as a real one.
+  if [[ "$ANSWER_PROBE_INJECTED" == 1 ]]; then
+    note "WARNING: the answer probe is INJECTED via CANARY_ANSWER_PROBE_CMD='$ANSWER_PROBE_CMD'"
+    note "WARNING: this is NOT deploy/probe_pool_answer.py; $label is being proven by a substitute"
+  fi
+  # /ready proves identity and dependency wiring; it cannot prove the pool can
+  # ANSWER. A stale model name kept both pools green on /ready for a day on
+  # 2026-07-25, so one real turn is driven before any cohort is exposed.
+  out="$(run_answer_probe "$base" "$want_arch" "$want_specialists")" || rc=$?
+  printf '     %s\n' "$out"
+  # Exit 2 = the pool asked a clarifying question: a real reply that can carry no
+  # tool grounding. Retry once rather than either failing a healthy pool or
+  # accepting a turn that proved nothing.
+  if [[ "$rc" -eq 2 ]]; then
+    note "the probe was INCONCLUSIVE (a clarification); retrying once"
+    rc=0
+    out="$(run_answer_probe "$base" "$want_arch" "$want_specialists")" || rc=$?
+    printf '     %s\n' "$out"
+    [[ "$rc" -ne 2 ]] \
+      || die "$label pool asked for clarification twice and never produced a grounded answer; routing unchanged (pass a different --query to deploy/probe_pool_answer.py by hand, or --skip-answer-probe if you have another proof)"
+  fi
+  [[ "$rc" -eq 0 ]] \
+    || die "$label pool cannot answer a real turn; routing unchanged. To reduce exposure NOW: sudo bash deploy/set_canary_weight.sh --weight 0 (weight 0 and any weight DECREASE skip this probe). --skip-answer-probe only if you have another proof."
+  ok "$label answered a real turn"
+}
+
 # 0% is the emergency path: only the rollback pool is required.  Any non-zero
 # exposure requires both pools so a rollback remains immediately available.
 _legacy_allow_unknown="$ALLOW_UNIDENTIFIED"
@@ -203,6 +349,22 @@ verify_local legacy "$LEGACY_URL" legacy 0 "$LEGACY_SHA" "$_legacy_allow_unknown
 if [[ "$WEIGHT" != 0 ]]; then
   verify_local candidate "$CANDIDATE_URL" "$CANDIDATE_ARCH" \
     "$CANDIDATE_SPECIALISTS" "$CANDIDATE_SHA" 0
+  # DE-ESCALATION EXEMPTION.  A candidate that cannot answer is the exact reason
+  # to lower its exposure, so requiring it to answer first would strand traffic
+  # at the HIGHER weight: 50 -> 5 would die on the probe while 50% of the public
+  # kept hitting the broken pool, leaving weight 0 as the only reachable move.
+  # Any decrease is therefore treated like weight 0 and skips the probe; the
+  # identity/readiness checks above still apply, because the candidate keeps
+  # serving the smaller cohort.
+  if [[ "$DE_ESCALATION" == 1 ]]; then
+    note "WARNING: lowering candidate exposure ${CURRENT_WEIGHT}% -> ${WEIGHT}%: the answer probe is SKIPPED"
+    note "         (a pool that cannot answer must stay de-escalatable; --weight 0 removes the cohort entirely)"
+  else
+    # Exposure means BOTH pools carry public traffic (the cohort split, and the
+    # rollback that must remain available), so both must prove they can answer.
+    verify_answer legacy "$LEGACY_ANSWER_URL" legacy 0
+    verify_answer candidate "$CANDIDATE_ANSWER_URL" "$CANDIDATE_ARCH" "$CANDIDATE_SPECIALISTS"
+  fi
 fi
 
 render_route() {

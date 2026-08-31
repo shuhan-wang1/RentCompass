@@ -307,7 +307,7 @@ def test_usage_roles_are_optional_and_do_not_change_model_totals():
     assert traced["roles"]["listings"]["models"]["m"]["calls"] == 1
 
 
-def test_canary_v2_optionally_projects_root_and_write_context(monkeypatch):
+def test_canary_v3_optionally_projects_root_and_write_context(monkeypatch):
     monkeypatch.setenv("CANARY_USER_HASH_KEY", "test-key")
     record = build_canary_turn_record(
         endpoint="alex",
@@ -350,7 +350,7 @@ def test_canary_v2_optionally_projects_root_and_write_context(monkeypatch):
         },
     )
 
-    assert record["telemetry_schema_version"] == 2
+    assert record["telemetry_schema_version"] == 3
     assert record["agent_role"] == "manager"
     assert record["task_id"] == "root"
     assert "parent_task_id" not in record

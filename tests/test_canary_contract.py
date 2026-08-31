@@ -423,14 +423,21 @@ _MALFORMED_CASES = [
     ("eval-only value shipped without the declaration",
      lambda recs: [_mutate(recs[0], no_evidence_numbers=False, eval_only=[])] + recs[1:],
      "eval_only", 2),
-    # A ">= 2" floor was fail-open forwards: a v3 that re-means a field would be
-    # scored by a consumer that cannot read it.
+    # A ">= 2" floor was fail-open forwards: a version that re-means a field would
+    # be scored by a consumer that cannot read it. v3 is now KNOWN (it is what the
+    # producer emits), so the unknown-future case has to move up with it.
     ("unknown FUTURE schema version",
-     lambda recs: [_mutate(recs[0], telemetry_schema_version=3)] + recs[1:],
+     lambda recs: [_mutate(recs[0], telemetry_schema_version=4)] + recs[1:],
      "newer than this consumer knows", 2),
     ("schema version as a float",
-     lambda recs: [_mutate(recs[0], telemetry_schema_version=2.0)] + recs[1:],
+     lambda recs: [_mutate(recs[0], telemetry_schema_version=3.0)] + recs[1:],
      "telemetry_schema_version", 2),
+    # v3 redefined llm_calls/tool_batches. A window straddling the change averages
+    # two different measurements, so it must hold rather than produce a mean that
+    # describes neither build.
+    ("window mixes schema v2 and v3",
+     lambda recs: [_mutate(recs[0], telemetry_schema_version=2)] + recs[1:],
+     "mixes telemetry_schema_version", 2),
     # `strict` decides whether a record is the configuration under test, so the
     # CONTROL arm has to carry it too — not just fc_loop.
     ("legacy record missing strict",

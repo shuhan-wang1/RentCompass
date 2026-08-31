@@ -61,9 +61,25 @@ _log_path_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("r
 _AGENT_CONTEXT_FIELDS = ("agent_role", "task_id", "parent_task_id")
 _SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
 _SPECIALIST_STATUSES = frozenset(
-    {"planned", "started", "completed", "failed", "skipped"}
+    {"planned", "started", "completed", "partial", "failed", "skipped"}
 )
+_SPECIALIST_OUTCOME_STATUSES = frozenset({"partial", "failed", "skipped"})
+# A refused dispatch, mirrored from ``turn_observations.note_specialist_call_denied``.
+# Not a task transition: it carries a tool name and a code, no task identity — which
+# is why it is deliberately OUTSIDE _SPECIALIST_STATUSES above rather than added to
+# it. Putting it there would let a caller emit a task-shaped event with
+# status="denied", and `canary_report._validate_multi_agent` rejects exactly that
+# (a denied event must be {status, tool, error_code} and nothing else). The union
+# below is the full set this function accepts and is what `record_specialist_lifecycle`
+# validates against, so the two shapes' vocabularies live in exactly one place.
+_SPECIALIST_DENIED_STATUS = "denied"
+_SPECIALIST_EVENT_STATUSES = _SPECIALIST_STATUSES | {_SPECIALIST_DENIED_STATUS}
 _MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+# Same closed grammars as the turn accumulator, re-checked here rather than
+# trusted: this is a PUBLIC boundary, so a direct caller must not be able to
+# smuggle an error message or a tool argument past it.
+_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 
 DEFAULT_LOG_PATH = os.path.join("evaluation", "results", "events.jsonl")
 
@@ -249,6 +265,8 @@ def record_specialist_lifecycle(
     status: Any = None,
     duration_ms: Any = None,
     call_count: Any = None,
+    error_code: Any = None,
+    tool: Any = None,
     **_ignored: Any,
 ) -> None:
     """Emit a content-free specialist lifecycle event when eval capture is active.
@@ -256,8 +274,32 @@ def record_specialist_lifecycle(
     This public boundary validates the whitelist independently of the turn
     accumulator.  Direct callers therefore cannot smuggle task objectives, args,
     result data or arbitrary error text into the JSONL event stream.
+
+    Two shapes are accepted, mirroring ``core.turn_observations``:
+
+    * a task transition — ``planned/started/completed/partial/failed/skipped``,
+      with an optional ``error_code`` on the three unsuccessful outcomes;
+    * a refused dispatch — ``status="denied"`` carrying ``tool`` + ``error_code``
+      and no task identity, because the task it happened inside is still running.
     """
     if not is_active():
+        return
+    if status == _SPECIALIST_DENIED_STATUS:
+        try:
+            safe_tool = tool.strip() if isinstance(tool, str) else ""
+            safe_code = error_code.strip() if isinstance(error_code, str) else ""
+            if not _TOOL_NAME_RE.fullmatch(safe_tool):
+                return
+            if not _ERROR_CODE_RE.fullmatch(safe_code):
+                return
+        except Exception:
+            return
+        _emit(
+            "specialist_task",
+            {"status": _SPECIALIST_DENIED_STATUS, "tool": safe_tool,
+             "error_code": safe_code},
+            agent_context={},
+        )
         return
     try:
         ids = []
@@ -267,7 +309,14 @@ def record_specialist_lifecycle(
                 return
             ids.append(candidate)
         safe_role = role.strip() if isinstance(role, str) else ""
-        if safe_role not in _SPECIALIST_ROLES or status not in _SPECIALIST_STATUSES:
+        # _SPECIALIST_EVENT_STATUSES is the full accepted set; the denied shape was
+        # already handled and returned above, so anything left that is not a task
+        # transition is rejected here. Checking against the union rather than a
+        # second literal keeps the two shapes' vocabularies in one place -- and
+        # gives the constant a caller, which it did not have.
+        if safe_role not in _SPECIALIST_ROLES or status not in (
+            _SPECIALIST_EVENT_STATUSES - {_SPECIALIST_DENIED_STATUS}
+        ):
             return
         if (
             isinstance(call_count, bool)
@@ -285,6 +334,15 @@ def record_specialist_lifecycle(
             if not math.isfinite(safe_duration) or safe_duration < 0:
                 return
             safe_duration = round(safe_duration, 3)
+        if error_code is None:
+            safe_error_code = None
+        else:
+            safe_error_code = error_code.strip() if isinstance(error_code, str) else ""
+            if (
+                not _ERROR_CODE_RE.fullmatch(safe_error_code)
+                or status not in _SPECIALIST_OUTCOME_STATUSES
+            ):
+                return
         fields = {
             "plan_id": ids[0],
             "task_id": ids[1],
@@ -294,6 +352,8 @@ def record_specialist_lifecycle(
             "duration_ms": safe_duration,
             "call_count": call_count,
         }
+        if safe_error_code is not None:
+            fields["error_code"] = safe_error_code
     except Exception:
         return
     # Explicit empty context: the event already carries its immutable task labels,

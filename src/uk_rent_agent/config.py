@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -9,14 +10,32 @@ from dotenv import load_dotenv
 from uk_rent_agent.agent.architecture import (
     SUPPORTED_AGENT_ARCHES,
     manager_v1_specialists_enabled,
+    normalize_agent_arch,
 )
+
+_TRUE_TOKENS = frozenset({"1", "true", "yes", "on"})
+_FALSE_TOKENS = frozenset({"0", "false", "no", "off", ""})
+
+
+def _bool_token(value: str | None) -> str | None:
+    """Normalize one boolean spelling to the canonical ``"0"``/``"1"`` token.
+
+    Returns ``None`` for a value that is neither a true nor a false spelling, so
+    callers can fail closed instead of inventing a third interpretation.
+    """
+    lowered = str(value or "").strip().lower()
+    if lowered in _TRUE_TOKENS:
+        return "1"
+    if lowered in _FALSE_TOKENS:
+        return "0"
+    return None
 
 
 def _bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return value.strip().lower() in _TRUE_TOKENS
 
 
 def _choice(name: str, default: str, allowed: set[str]) -> str:
@@ -26,6 +45,68 @@ def _choice(name: str, default: str, allowed: set[str]) -> str:
         choices = ", ".join(sorted(allowed))
         raise ValueError(f"{name} must be one of: {choices}")
     return value
+
+
+# `docker-compose.yml` builds the candidate checkpoint path by interpolating the
+# RAW root-.env value:
+#
+#   CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_${CANARY_AGENT_ARCH:-fc_loop}"
+#                       "_specialists-${CANARY_MANAGER_V1_SPECIALISTS:-0}.sqlite3"
+#
+# Compose interpolation cannot normalize, so an operator writing `true` instead of
+# `1` silently produces a THIRD database (`…_specialists-true.sqlite3`) that shares
+# no state with the `…_specialists-1.sqlite3` the same pool used yesterday. The
+# token is normalized back to `0`/`1` here so every boolean spelling of the same
+# runtime resolves to the same file, and an unrecognised spelling fails closed.
+_SPECIALIST_TOKEN = re.compile(
+    r"(?P<prefix>_specialists-)(?P<value>[^/]*?)(?P<suffix>\.sqlite3)\Z"
+)
+
+
+def _normalize_specialist_token(path: str) -> str:
+    match = _SPECIALIST_TOKEN.search(path)
+    if match is None:
+        return path
+    canonical = _bool_token(match.group("value"))
+    if canonical is None:
+        raise ValueError(
+            "CHECKPOINT_DB_PATH names a specialist mode that is neither true nor "
+            f"false: {match.group('value')!r} in {path!r}. Set "
+            "CANARY_MANAGER_V1_SPECIALISTS to 0 or 1."
+        )
+    if canonical == match.group("value"):
+        return path
+    normalized = (
+        path[: match.start()]
+        + match.group("prefix")
+        + canonical
+        + match.group("suffix")
+    )
+    # Normalizing is the right answer for a path that does not exist yet: every
+    # boolean spelling of one runtime then lands on one file. It is the WRONG
+    # answer for a host that has already been running with the non-canonical
+    # spelling, because "use a different file" silently ORPHANS that pool's live
+    # checkpoints — a data loss dressed up as a warning, and one nothing here
+    # migrates. So an existing database keeps its own path; only the name it would
+    # have had is reported, with the one-line rename that adopts it.
+    if Path(path).exists():
+        print(
+            "[STARTUP] WARNING: CHECKPOINT_DB_PATH specialist token "
+            f"{match.group('value')!r} is a non-canonical spelling of {canonical!r}, "
+            f"but {path!r} already exists and holds this pool's checkpoints, so it is "
+            f"used AS IS (nothing is migrated). To adopt the canonical name, stop the "
+            f"pool and `mv {path} {normalized}`, then set "
+            "CANARY_MANAGER_V1_SPECIALISTS to 0 or 1."
+        )
+        return path
+    print(
+        "[STARTUP] WARNING: CHECKPOINT_DB_PATH specialist token "
+        f"{match.group('value')!r} normalized to {canonical!r}; using "
+        f"{normalized!r} so a non-canonical boolean spelling cannot fork a third "
+        "checkpoint database. (No database exists at the non-canonical path, so "
+        "nothing is orphaned.)"
+    )
+    return normalized
 
 
 def _resolve_checkpoint_path(root: Path) -> Path:
@@ -52,7 +133,7 @@ def _resolve_checkpoint_path(root: Path) -> Path:
             f"({legacy_path!r})."
         )
     chosen = db_path or legacy_path or str(root / ".runtime" / "checkpoints.sqlite3")
-    return Path(chosen)
+    return Path(_normalize_specialist_token(chosen))
 
 
 @dataclass(frozen=True)
@@ -123,6 +204,21 @@ class Config:
             self.manager_v1_specialists,
         )
 
+    @property
+    def checkpoint_identity(self) -> dict[str, str]:
+        """The runtime identity a checkpoint database is allowed to belong to.
+
+        `docker-compose.yml` gives each pool its own `CHECKPOINT_DB_PATH`, but that
+        separation is a naming convention: any override, fallback or typo lets one
+        architecture resume another's LangGraph state. `persistence.get_sqlite_checkpointer`
+        stamps this pair into the SQLite file and refuses a file that already carries
+        a different one, so the isolation is enforced by the database itself.
+        """
+        return {
+            "agent_arch": normalize_agent_arch(self.agent_arch),
+            "manager_v1_specialists": "1" if self.manager_v1_specialists_effective else "0",
+        }
+
     @classmethod
     def from_env(cls, *, require_secret: bool = False) -> "Config":
         root_override = os.getenv("APP_PROJECT_ROOT", "").strip()
@@ -179,3 +275,21 @@ class Config:
             ),
             turn_lease_seconds=max(1, int(os.getenv("TURN_LEASE_SECONDS", str(15 * 60)))),
         )
+
+
+def runtime_checkpoint_identity() -> dict[str, str]:
+    """Checkpoint identity for the current process environment.
+
+    Used only when a caller of `get_sqlite_checkpointer` cannot hand over its own
+    `Config`. It reads the same two switches `Config.from_env` reads and applies the
+    same architecture binding, so the ambient answer can never disagree with the
+    explicit one for the same environment.
+    """
+    arch = normalize_agent_arch(os.getenv("AGENT_ARCH", "legacy"))
+    requested = _bool_token(os.getenv("MANAGER_V1_SPECIALISTS", "0")) == "1"
+    return {
+        "agent_arch": arch,
+        "manager_v1_specialists": (
+            "1" if manager_v1_specialists_enabled(arch, requested) else "0"
+        ),
+    }

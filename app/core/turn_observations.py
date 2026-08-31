@@ -51,12 +51,61 @@ _AGENT_CONTEXT_FIELDS = ("agent_role", "task_id", "parent_task_id")
 # become operations telemetry.  Identifiers follow the same machine-id grammar as
 # ``specialist_contracts.Identifier``.
 _SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
+# ``partial`` is a TERMINAL outcome, not a degraded ``completed``: the task
+# produced usable output AND left some of its objective unmet. Folding it into
+# either neighbour is the mistake this set exists to prevent — scored as
+# completed it hides a systematic shortfall, scored as failed it would trip the
+# specialist failure-rate gate on turns that answered the user perfectly well.
 _SPECIALIST_STATUSES = frozenset(
-    {"planned", "started", "completed", "failed", "skipped"}
+    {"planned", "started", "completed", "partial", "failed", "skipped"}
 )
-_SPECIALIST_TERMINAL_STATUSES = frozenset({"completed", "failed", "skipped"})
+_SPECIALIST_TERMINAL_STATUSES = frozenset(
+    {"completed", "partial", "failed", "skipped"}
+)
+# Statuses that may carry an ``error_code``. ``planned``/``started`` cannot: there
+# is no outcome yet to explain, and accepting one there would let a producer
+# attach a reason to a transition that has not happened.
+_SPECIALIST_OUTCOME_STATUSES = frozenset({"partial", "failed", "skipped"})
+# THE canonical closed vocabulary for a specialist lifecycle outcome code.
+#
+# It lives here, and only here, because it used to live in TWO places that never
+# referenced each other: ``agent_loop._SPECIALIST_ERROR_CODES`` (the producer's
+# filter) and ``turn_observations._ERROR_CODE_RE`` (the grammar). They agreed by
+# coincidence, and the day someone added ``"tool-error"`` / ``"TIMEOUT"`` to the
+# producer's copy the grammar would have rejected it — silently, and (before this
+# revision) by dropping the whole terminal transition. Import THIS name; do not
+# re-declare the set.
+SPECIALIST_ERROR_CODES = frozenset({
+    "dispatch_denied", "tool_error", "timeout", "abandoned",
+    "budget_exhausted", "cancelled", "ledger_invalid", "incomplete",
+})
+# A denied CALL is not a task transition — it is one dispatch the policy refused
+# inside an already-started task — so it lives in its own bounded event ring
+# under its own status and never enters the lifecycle arithmetic.
+_SPECIALIST_DENIED_STATUS = "denied"
 _MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+# Deliberately NARROWER than _MACHINE_ID_RE: an error code is a closed vocabulary
+# chosen by the dispatcher, so lowercase snake_case is the whole grammar. Anything
+# else is either a typo or free text, and free text is exactly what this module
+# refuses to carry.
+_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+# Tool names are python identifiers in the registry; no separators, no user text.
+# Shape only — membership in the LIVE registry is checked separately, because the
+# only producer of a denied event derives the name from the MODEL's plan, so a
+# shape check alone would let a 128-character model-chosen identifier into ops
+# telemetry. See ``_registered_tool_names``.
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
+# The stand-in recorded when a denied dispatch names a tool that is not in the
+# registry or the specialist allowlist. It is a FIXED string, so the denial is
+# still counted and still visible without the model choosing the label.
+UNREGISTERED_TOOL = "unregistered"
 _MAX_SPECIALIST_EVENTS = 64
+# Denied dispatches get their OWN small ring. They used to share the 64-slot
+# lifecycle ring, so 64 refusals inside one turn evicted every plan/start/finish
+# event — deleting exactly the detail ("which specialist task broke?") that the
+# record exists to answer, while the denial storm itself is already summarised by
+# the ``denied_calls`` counter.
+_MAX_DENIED_EVENTS = 8
 _MAX_SPECIALIST_TASKS_PER_TURN = 128
 _MAX_SPECIALIST_CALLS_PER_TASK = 10_000
 
@@ -158,12 +207,26 @@ def begin_turn() -> Dict[str, Any]:
             "lock": threading.RLock(),
             "events": deque(maxlen=_MAX_SPECIALIST_EVENTS),
             "events_total": 0,
+            # Separate ring + separate total: a denial storm must not be able to
+            # push the lifecycle events out of the record (see _MAX_DENIED_EVENTS).
+            "denied_events": deque(maxlen=_MAX_DENIED_EVENTS),
+            "denied_events_total": 0,
             "tasks": {},
             "planned": 0,
             "started": 0,
             "completed": 0,
+            "partial": 0,
             "failed": 0,
             "skipped": 0,
+            # Dispatches the specialist policy refused. Non-gating diagnostics:
+            # a denial is the control WORKING, so it must never be summed into
+            # the failure counters the release gate reads.
+            "denied_calls": 0,
+            # Terminal transitions whose ``error_code`` was outside the closed
+            # vocabulary and was therefore DROPPED. The transition itself is still
+            # recorded (see note_specialist_event); this counter is what keeps that
+            # from being a silent loss of diagnosis.
+            "dropped_error_codes": 0,
             "in_flight": 0,
             "max_in_flight": 0,
             "observed": False,
@@ -190,13 +253,33 @@ def note_root_agent_context(
     task_id: str,
     parent_task_id: Optional[str] = None,
 ) -> bool:
-    """Attach the manager/root identity once; generated IDs must contain no user text."""
+    """Attach the manager/root identity once; generated IDs must contain no user text.
+
+    "Must contain no user text" used to be a comment. It is now a CHECK, because
+    the only caller derives ``task_id`` from the request id, and the request id
+    came from a client header — so the rule the docstring stated was enforced
+    nowhere and the label landed verbatim in the canary record and in every
+    JsonFormatter line. Each id is validated against the same machine-id grammar
+    the specialist events use; a value that fails is not sanitised or truncated,
+    it is REFUSED (returns False, records nothing), so a caller cannot end up
+    shipping a half-scrubbed copy of whatever it was given.
+    """
     obs = _turn_obs.get()
     if obs is None or obs.get("root_agent_context") is not None:
         return False
-    root = {"agent_role": str(agent_role), "task_id": str(task_id)}
-    if parent_task_id is not None:
-        root["parent_task_id"] = str(parent_task_id)
+    safe_role = _machine_identifier(agent_role)
+    safe_task_id = _machine_identifier(task_id)
+    if not safe_role or not safe_task_id:
+        return False
+    if parent_task_id is None:
+        safe_parent_id = None
+    else:
+        safe_parent_id = _machine_identifier(parent_task_id)
+        if not safe_parent_id:
+            return False
+    root = {"agent_role": safe_role, "task_id": safe_task_id}
+    if safe_parent_id is not None:
+        root["parent_task_id"] = safe_parent_id
     obs["root_agent_context"] = root
     return True
 
@@ -229,6 +312,84 @@ def _call_count(value: Any, *, default: Optional[int] = None) -> Optional[int]:
     if value < 0 or value > _MAX_SPECIALIST_CALLS_PER_TASK:
         return None
     return value
+
+
+def _error_code(value: Any, *, closed_set: Optional[frozenset] = None) -> Optional[str]:
+    """A closed-vocabulary outcome code, or None when it is not one.
+
+    The dispatcher's own error TEXT is never accepted here: a provider message or
+    an exception's str() can carry the user's query verbatim, and this record ends
+    up in ops telemetry. A code is a label the dispatcher chose, so it is safe by
+    construction — provided the vocabulary is actually enforced, which is what this
+    is.
+
+    ``closed_set`` (normally :data:`SPECIALIST_ERROR_CODES`) is the primary check;
+    the regex stays as a SECOND guard so that a future addition to the set which
+    does not fit the snake_case grammar is caught here rather than at the consumer.
+    Passing ``None`` checks the grammar only — used by the DENIAL path, whose codes
+    come from the dispatch policy (a wider vocabulary than the lifecycle outcome
+    set) and are non-gating diagnostics.
+    """
+    try:
+        candidate = value.strip() if isinstance(value, str) else ""
+        if not _ERROR_CODE_RE.fullmatch(candidate):
+            return None
+        if closed_set is not None and candidate not in closed_set:
+            return None
+        return candidate
+    except Exception:
+        return None
+
+
+_dispatchable_tool_names: Optional[frozenset] = None
+
+
+def _registered_tool_names() -> frozenset:
+    """Names a specialist dispatch can legitimately be about, or an empty set.
+
+    The source is the DECLARED contract — the union of every specialist role
+    allowlist and the manager-only tools — rather than the live registry object,
+    because this must work identically in the web process, in an eval process and
+    in a unit test, none of which agree on whether a registry has been built. An
+    empty result means "cannot check here", and the caller then falls back to the
+    shape check alone rather than discarding a denial it has no way to verify.
+    """
+    global _dispatchable_tool_names
+    if _dispatchable_tool_names is not None:
+        return _dispatchable_tool_names
+    try:
+        from uk_rent_agent.agent.specialist_contracts import (
+            MANAGER_ONLY_TOOLS,
+            SPECIALIST_TOOL_ALLOWLISTS,
+        )
+
+        names = set(MANAGER_ONLY_TOOLS)
+        for allowed in SPECIALIST_TOOL_ALLOWLISTS.values():
+            names.update(allowed)
+        _dispatchable_tool_names = frozenset(str(n) for n in names)
+    except Exception:
+        _dispatchable_tool_names = frozenset()
+    return _dispatchable_tool_names
+
+
+def _tool_name(value: Any, *, allowlist: Optional[frozenset] = None) -> Optional[str]:
+    """Validate a tool identifier for shape and, when known, for EXISTENCE.
+
+    ``allowlist`` is the union of names the process will actually dispatch. When
+    it is non-empty a name outside it is not returned verbatim — the caller
+    substitutes :data:`UNREGISTERED_TOOL` — because the only producer of this
+    value reads it out of the MODEL's plan, and a 128-character model-chosen
+    identifier is model output, not a registry identifier.
+    """
+    try:
+        candidate = value.strip() if isinstance(value, str) else ""
+        if not _TOOL_NAME_RE.fullmatch(candidate):
+            return None
+        if allowlist and candidate not in allowlist:
+            return None
+        return candidate
+    except Exception:
+        return None
 
 
 def _duration_ms(value: Any) -> Optional[float]:
@@ -264,6 +425,7 @@ def note_specialist_event(
     role: Any = None,
     duration_ms: Any = None,
     call_count: Any = None,
+    error_code: Any = None,
     **_ignored: Any,
 ) -> bool:
     """Record one content-free specialist lifecycle transition.
@@ -271,8 +433,20 @@ def note_specialist_event(
     This is an instrumentation boundary, so malformed values, out-of-order or
     duplicate transitions, and unexpected keyword arguments are silent no-ops.
     It must never become a reason a user turn fails.
+
+    ``error_code`` is optional and only meaningful on an unsuccessful outcome
+    (``partial`` / ``failed`` / ``skipped``). It is a code from
+    :data:`SPECIALIST_ERROR_CODES`, never an error message — see ``_error_code``.
+    An unusable code DEGRADES the event (the code is dropped, the transition is
+    still recorded, ``dropped_error_codes`` is incremented). It used to reject the
+    whole call: the counters then stopped at ``started`` while the producer
+    believed the task had finished, and the consumer's turn-end invariant
+    ``started == completed + partial + failed`` failed — a spurious
+    INSTRUMENTATION-HOLD caused by a diagnostics typo. Losing the reason for one
+    failure is a diagnostic gap; losing the failure itself is a wrong gate verdict.
     """
     event: Optional[Dict[str, Any]] = None
+    dropped_code = False
     try:
         obs = _turn_obs.get()
         trace = obs.get("_specialist_trace") if isinstance(obs, dict) else None
@@ -286,14 +460,27 @@ def note_specialist_event(
         if not all((safe_plan_id, safe_task_id, safe_parent_id, safe_role)):
             return False
 
-        # A supplied malformed count/duration is rejected instead of coerced.  This
-        # prevents surprising objects or non-finite floats from reaching JSON logs.
+        # A supplied malformed count/duration is DROPPED, never coerced: surprising
+        # objects and non-finite floats must not reach JSON logs. Dropping the value
+        # rather than the event is the same rule as ``error_code`` below — a bad
+        # measurement is a diagnostics bug, and refusing the transition over it turns
+        # that into a lifecycle-imbalance HOLD. ``call_count`` then falls back to the
+        # task's running count and ``duration_ms`` to null, both of which the record
+        # already allows.
         safe_calls = _call_count(call_count)
-        if call_count is not None and safe_calls is None:
-            return False
         safe_duration = _duration_ms(duration_ms)
-        if duration_ms is not None and safe_duration is None:
-            return False
+        safe_error_code = _error_code(error_code, closed_set=SPECIALIST_ERROR_CODES)
+        if error_code is not None and (
+            safe_error_code is None or status not in _SPECIALIST_OUTCOME_STATUSES
+        ):
+            # Degrade, never reject. An out-of-vocabulary code, or a code attached
+            # to a status that has no outcome to explain, is a producer bug in the
+            # DIAGNOSTIC — it says nothing about whether the transition happened.
+            # The transition is therefore recorded without the code and the loss is
+            # counted, so "we dropped a code" is visible in the record instead of
+            # being indistinguishable from "the task never finished".
+            safe_error_code = None
+            dropped_code = True
 
         lock = trace.get("lock")
         if lock is None:
@@ -369,6 +556,14 @@ def note_specialist_event(
                 ),
                 "call_count": safe_calls,
             }
+            # Additive: an event without a code keeps the exact historical shape,
+            # so a consumer that predates this key is unaffected.
+            if safe_error_code is not None:
+                event["error_code"] = safe_error_code
+            if dropped_code:
+                trace["dropped_error_codes"] = (
+                    int(trace.get("dropped_error_codes", 0)) + 1
+                )
             trace["events_total"] = int(trace.get("events_total", 0)) + 1
             trace["events"].append(event)
     except Exception:
@@ -396,8 +591,71 @@ def note_specialist_fail(**fields: Any) -> bool:
     return note_specialist_event("failed", **fields)
 
 
+def note_specialist_partial(**fields: Any) -> bool:
+    return note_specialist_event("partial", **fields)
+
+
 def note_specialist_skip(**fields: Any) -> bool:
     return note_specialist_event("skipped", **fields)
+
+
+def note_specialist_call_denied(*, tool: Any, error_code: Any) -> bool:
+    """Record one specialist tool dispatch the policy refused. Returns True if stored.
+
+    Deliberately NOT a lifecycle transition. The task it happened inside is still
+    running and will still reach its own terminal status, so counting a denial as
+    a task outcome would double-count the task and unbalance the turn-end
+    invariants the gate checks. It is also never summed into ``failed``: a denial
+    is the control working as designed, and a release gate that treats "we blocked
+    a forbidden call" as a regression teaches operators to disable the control.
+
+    Both arguments are validated against closed grammars so no argument value,
+    objective or provider message can reach the record through this door. ``tool``
+    additionally has to EXIST: the only producer reads the name out of the model's
+    own plan (``agent_loop``: ``plan[i][0].get("name")``), so a shape check alone
+    let a 128-character model-chosen identifier into ops telemetry. A name outside
+    the dispatchable set is replaced by the fixed :data:`UNREGISTERED_TOOL` — the
+    denial is still counted and still visible, but the label is ours.
+
+    ``error_code`` here is the DISPATCH POLICY's refusal code, a wider vocabulary
+    than the lifecycle outcome set (:data:`SPECIALIST_ERROR_CODES`), so only the
+    grammar is enforced. It is non-gating diagnostics either way.
+    """
+    try:
+        obs = _turn_obs.get()
+        trace = obs.get("_specialist_trace") if isinstance(obs, dict) else None
+        if not isinstance(trace, dict):
+            return False
+        allowlist = _registered_tool_names()
+        safe_tool = _tool_name(tool, allowlist=allowlist)
+        if safe_tool is None and _tool_name(tool) is not None:
+            # Correct shape, unknown name: record THAT, not the model's string.
+            safe_tool = UNREGISTERED_TOOL
+        safe_code = _error_code(error_code)
+        if not safe_tool or not safe_code:
+            return False
+        lock = trace.get("lock")
+        if lock is None:
+            return False
+        with lock:
+            trace["denied_calls"] = int(trace.get("denied_calls", 0)) + 1
+            trace["observed"] = True
+            trace["denied_events_total"] = (
+                int(trace.get("denied_events_total", 0)) + 1
+            )
+            # Its OWN bounded ring, not the lifecycle one: a denial storm must
+            # neither grow the record without limit nor evict the plan/start/finish
+            # events that say which specialist task broke.
+            event = {
+                "status": _SPECIALIST_DENIED_STATUS,
+                "tool": safe_tool,
+                "error_code": safe_code,
+            }
+            trace["denied_events"].append(event)
+    except Exception:
+        return False
+    _emit_specialist_eval_event(dict(event))
+    return True
 
 
 def specialist_snapshot() -> Optional[Dict[str, Any]]:
@@ -408,15 +666,33 @@ def specialist_snapshot() -> Optional[Dict[str, Any]]:
         if not isinstance(trace, dict) or trace.get("lock") is None:
             return None
         with trace["lock"]:
+            lifecycle = list(trace.get("events", ()))
+            denied = list(trace.get("denied_events", ()))
+            truncated = (
+                int(trace.get("events_total", 0)) > len(lifecycle)
+                or int(trace.get("denied_events_total", 0)) > len(denied)
+            )
             return {
                 "planned": int(trace.get("planned", 0)),
                 "started": int(trace.get("started", 0)),
                 "completed": int(trace.get("completed", 0)),
+                "partial": int(trace.get("partial", 0)),
                 "failed": int(trace.get("failed", 0)),
                 "skipped": int(trace.get("skipped", 0)),
+                "denied_calls": int(trace.get("denied_calls", 0)),
+                "dropped_error_codes": int(trace.get("dropped_error_codes", 0)),
                 "max_in_flight": int(trace.get("max_in_flight", 0)),
-                "events_truncated": int(trace.get("events_total", 0)) > len(trace.get("events", ())),
-                "events": [dict(item) for item in trace.get("events", ())],
+                # ONE flag for two rings. Either ring overflowing disables the
+                # consumer's events-vs-counters reconciliation, which is the
+                # conservative reading: the counters stay authoritative.
+                "events_truncated": truncated,
+                # Lifecycle first, then denials. The two streams are validated by
+                # different rules and never reconciled against each other, so the
+                # concatenation order carries no meaning the consumer relies on.
+                "events": (
+                    [dict(item) for item in lifecycle]
+                    + [dict(item) for item in denied]
+                ),
             }
     except Exception:
         return None

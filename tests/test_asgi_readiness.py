@@ -473,3 +473,59 @@ def test_checkpoint_readiness_rejects_an_existing_nonwritable_database(
         "required": True,
         "detail": "checkpoint database is not readable/writable",
     }
+
+
+def test_checkpoint_readiness_refuses_another_architectures_database(tmp_path):
+    """F8: `/ready` must fail rather than let manager_v1 resume fc_loop checkpoints.
+
+    Compose gives each pool a differently NAMED file, but a name is a convention:
+    the `CHECKPOINT_PATH` fallback, an override, or the shared default all point two
+    architectures at one file. Readiness now hands the runtime identity down, so the
+    stamped file itself refuses the open."""
+    from uk_rent_agent.agent import persistence
+
+    checkpoint = tmp_path / "runtime" / "checkpoints.sqlite3"
+    checkpoint.parent.mkdir()
+    fc = Config(
+        project_root=tmp_path,
+        flask_secret_key="test",
+        agent_arch="fc_loop",
+        checkpoint_path=checkpoint,
+        enable_checkpointer=True,
+    )
+    manager = Config(
+        project_root=tmp_path,
+        flask_secret_key="test",
+        agent_arch="manager_v1",
+        manager_v1_specialists=True,
+        checkpoint_path=checkpoint,
+        enable_checkpointer=True,
+    )
+    saved = dict(persistence._CHECKPOINTERS)
+    persistence._CHECKPOINTERS.clear()
+    try:
+        first = asgi._check_checkpoint(fc)
+        assert first["status"] == "ok"
+        assert first["identity"] == {"agent_arch": "fc_loop",
+                                     "manager_v1_specialists": "0"}
+
+        second = asgi._check_checkpoint(manager)
+    finally:
+        persistence._CHECKPOINTERS.clear()
+        persistence._CHECKPOINTERS.update(saved)
+
+    assert second["status"] == "fail"
+    assert second["required"] is True
+    assert second["identity"] == {"agent_arch": "manager_v1",
+                                  "manager_v1_specialists": "1"}
+    assert "CheckpointIdentityError" in second["detail"]
+    assert "different runtime" in second["detail"]
+    # The USEFUL half of this message is its tail: the full path and the
+    # remediation. A 200-character cap cut the path in half and dropped
+    # "Point CHECKPOINT_DB_PATH at this runtime's own file ..." entirely, leaving
+    # /ready showing a diagnosis with no fix — while the runbook quoted the whole
+    # message, so readers had no idea it was truncated.
+    assert str(checkpoint) in second["detail"]
+    assert "Point CHECKPOINT_DB_PATH at" in second["detail"]
+    assert second["detail"].rstrip().endswith("checkpoints.")
+    assert second["path"] == str(checkpoint)

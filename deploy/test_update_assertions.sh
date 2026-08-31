@@ -46,6 +46,8 @@ setup() {                      # setup <upstream_port> <legacy_sha> <fc_sha>
 
   mkdir -p "$SANDBOX/nginx"
   printf 'upstream rentcompass_app {\n    server 127.0.0.1:%s;\n}\n' "$1" > "$SANDBOX/nginx/site.conf"
+  # Absent by default: the pre-weighted single-upstream shape most scenarios use.
+  ROUTE_CONF_PATH="$SANDBOX/nginx/no-weighted-include.conf"
 
   # Fakes. Each logs its argv to $SANDBOX/calls.log so assertions can read it.
   cat > "$SANDBOX/bin/fakedocker" <<'EOF'
@@ -96,8 +98,16 @@ grep -q "compose up -d app$" "$CALLS" 2>/dev/null && [ "$port" = 5001 ] && sha="
 [ "$sha" = "DOWN" ] && exit 1
 printf 'HTTP/1.1 200 OK\r\nx-agent-arch: %s\r\nx-agent-version: %s\r\nx-agent-specialists: 0\r\n\r\n' "$arch" "$sha"
 EOF
+  # Logs the scoped flip authorisation separately from argv, so the existing
+  # `switch --to <pool>` assertions keep matching a bare argv line.
   cat > "$SANDBOX/bin/fakeswitch" <<'EOF'
 #!/usr/bin/env bash
+echo "switchenv CANARY_ALLOW_FLIP=${CANARY_ALLOW_FLIP:-0}" >> "$CALLS"
+# The route file update.sh READ the pre-drain state from must be the one
+# switch_pool.sh WRITES, and `--stage maintenance` is only accepted while the
+# active-drain marker update.sh owns exists and names this run's rollout id.
+echo "switchroute ${SWITCH_ROUTE_CONF:-<unset>}" >> "$CALLS"
+echo "switchmarker $(cat "${RENTCOMPASS_MAINTENANCE_MARKER:-/nonexistent}" 2>/dev/null || echo '<absent>')" >> "$CALLS"
 echo "switch $*" >> "$CALLS"
 exit "${FAKE_SWITCH_RC:-0}"
 EOF
@@ -108,6 +118,15 @@ EOF
 }
 teardown() { [ -n "$SANDBOX" ] && rm -rf "$SANDBOX"; SANDBOX=""; }
 
+# install_route <weight> <rollout-id> <stage> — the weighted include IS the rollout
+# state file; update.sh reads the pre-drain weight/id/stage out of these markers and
+# must put the SAME values back when the drain ends.
+install_route() {
+  ROUTE_CONF_PATH="$SANDBOX/nginx/canary-routing.conf"
+  printf '# rentcompass-canary-weight: %s\n# rentcompass-canary-salt: t\n# rentcompass-rollout-id: %s\n# rentcompass-rollout-stage: %s\n' \
+    "$1" "$2" "$3" > "$ROUTE_CONF_PATH"
+}
+
 # Sets the globals OUT and RC. Deliberately NOT a command substitution at the
 # call site: that runs in a subshell, so RC would never reach the assertions.
 run_update() {                 # run_update [args...]
@@ -115,12 +134,14 @@ run_update() {                 # run_update [args...]
     UPDATE_REPO_DIR="$REPO" \
     DEPLOY_PIN_ENV="$SANDBOX/pin.env" \
     UPDATE_CONF="$SANDBOX/nginx/site.conf" \
+    UPDATE_ROUTE_CONF="$ROUTE_CONF_PATH" \
     UPDATE_ENV_FILE="$REPO/.env" \
     UPDATE_ENV_BACKUP_DIR="$SANDBOX/env-backups" \
     UPDATE_DOCKER_CMD="$SANDBOX/bin/fakedocker" \
     UPDATE_COMPOSE_CMD="$SANDBOX/bin/fakecompose" \
     UPDATE_CURL_CMD="$SANDBOX/bin/fakecurl" \
     UPDATE_SWITCH_CMD="$SANDBOX/bin/fakeswitch" \
+    RENTCOMPASS_MAINTENANCE_MARKER="$SANDBOX/maintenance-marker" \
     UPDATE_HEALTH_RETRIES=2 UPDATE_HEALTH_DELAY=0 \
     bash deploy/update.sh "$@" ) > "$SANDBOX/out.txt" 2>&1
   RC=$?
@@ -342,6 +363,138 @@ run_update --allow-in-place; CALLS_TXT="$(cat "$CALLS")"
 check    "explicit in-place override exits 0"       0 "$RC"
 contains "$OUT"       "EXPLICIT --allow-in-place"  "the unsafe override is unmistakable"
 contains "$CALLS_TXT" "app-fc"                     "only the explicit override mutates the public pool"
+teardown
+echo
+
+echo "--- 7b. the drain is a MAINTENANCE stage and its pre-drain state is restored ---"
+# K4: `release.sh` -> `update.sh --both --drain` -> `switch_pool.sh --to fc` used to
+# reach `set_canary_weight.sh --weight 100 --stage flip`, i.e. a routine release could
+# leave the candidate serving 100% of the public. The drain now declares
+# `--stage maintenance` (the only non-flip stage the controller accepts at 100%) and
+# restores the weight/rollout-id/stage it recorded from the routing include.
+setup 5001 old-legacy-sha old-fc-sha
+install_route 0 rollback rollback
+run_update --both; CALLS_TXT="$(cat "$CALLS")"
+check    "weighted host at weight 0 deploys cleanly"  0 "$RC"
+contains "$CALLS_TXT" "--stage maintenance"            "the drain declares the maintenance stage"
+contains "$CALLS_TXT" "--rollout-id deploy-maintenance-" "the drain uses its own maintenance rollout id"
+contains "$OUT"       "restored when this pool finishes OR fails" "the operator is told the drain is temporary"
+RESTORE_LINE="$(grep -- '^switch --to legacy' "$CALLS" | tail -1)"
+contains "$RESTORE_LINE" "--rollout-id rollback"       "the restore replays the RECORDED rollout id"
+contains "$RESTORE_LINE" "--stage rollback"            "the restore replays the RECORDED stage"
+contains "$RESTORE_LINE" "--expect-sha $PIN"           "a successful restore still demands the pin"
+lacks    "$CALLS_TXT" "CANARY_ALLOW_FLIP=1"            "returning to legacy never authorises a flip"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+install_route 100 r-flip flip
+run_update --both; CALLS_TXT="$(cat "$CALLS")"
+check    "a host already at 100% is restored to 100%"  0 "$RC"
+DRAIN_LINE="$(grep -- '^switch --to legacy' "$CALLS" | head -1)"
+contains "$DRAIN_LINE"   "--stage maintenance"         "draining OFF the candidate is also a maintenance stage"
+RESTORE_LINE="$(grep -- '^switch --to fc' "$CALLS" | tail -1)"
+contains "$RESTORE_LINE" "--rollout-id r-flip"         "the recorded rollout id comes back"
+contains "$RESTORE_LINE" "--stage flip"                "the recorded stage comes back"
+contains "$CALLS_TXT"    "CANARY_ALLOW_FLIP=1"         "restoring a pre-existing 100% needs the scoped allow-flip"
+check    "the allow-flip is scoped to the restore ONLY (drain=0, restore=1)" "0-1" \
+         "$(grep -oE 'CANARY_ALLOW_FLIP=[01]' "$CALLS" | sed 's/.*=//' | paste -sd- -)"
+contains "$OUT" "scoped to this restore only"          "and the scoping is stated to the operator"
+teardown
+
+setup 5001 old-legacy-sha old-fc-sha
+install_route 0 rollback rollback
+FAKE_COMPOSE_RC=1 run_update --pool legacy; CALLS_TXT="$(cat "$CALLS")"
+check    "a failed redeploy still fails"               1 "$RC"
+check    "the drain is unwound even when the deploy dies" "fc-legacy" \
+         "$(grep -oE '^switch --to (fc|legacy)' "$CALLS" | sed 's/^switch --to //' | paste -sd- -)"
+FAILED_RESTORE="$(grep -- '^switch --to legacy' "$CALLS" | tail -1)"
+lacks    "$FAILED_RESTORE" "--expect-sha"              "a restore after a failure never demands the undeployed pin"
+teardown
+echo
+
+echo "--- 7c. the drain carries a marker that expires with the deploy ---"
+# R3/M2: `--stage maintenance` was the one route to 100% candidate traffic that
+# never had to meet CANARY_ALLOW_FLIP, and nothing bounded it — a human could type
+# it and park production there permanently. It is now an ACTIVE-DRAIN window:
+# update.sh writes a marker naming this run's rollout id before the drain and
+# deletes it after the restore, and the controllers refuse the stage without it.
+setup 5001 old-legacy-sha old-fc-sha
+install_route 0 rollback rollback
+run_update --both; CALLS_TXT="$(cat "$CALLS")"
+check    "the marked drain deploys cleanly"          0 "$RC"
+contains "$CALLS_TXT" "switchmarker deploy-maintenance-" "the marker exists while the drain switch runs"
+contains "$CALLS_TXT" "switchroute $ROUTE_CONF_PATH"     "switch_pool writes the SAME route file update.sh read"
+check    "the drain window is closed afterwards" "absent" \
+         "$([ -e "$SANDBOX/maintenance-marker" ] && echo present || echo absent)"
+teardown
+
+setup 5001 old-legacy-sha old-fc-sha
+install_route 0 rollback rollback
+: > "$SANDBOX/maintenance-marker"                    # debris from a killed run
+run_update --both; CALLS_TXT="$(cat "$CALLS")"
+check    "a stale marker does not survive the next deploy" 0 "$RC"
+contains "$OUT" "stale maintenance drain marker"     "and the operator is told it was cleared"
+check    "and it is gone at the end"          "absent" \
+         "$([ -e "$SANDBOX/maintenance-marker" ] && echo present || echo absent)"
+teardown
+echo
+
+echo "--- 7d. a leftover maintenance route is NOT replayed as an authorised 100% ---"
+# R3/M1: the restore hands itself CANARY_ALLOW_FLIP=1 whenever it returns to fc.
+# That is defensible for an exposure the operator had already authorised, but the
+# recorded state here is weight 100 at stage `maintenance` — the debris of an
+# EARLIER drain that never unwound. Replaying it would launder a temporary stage
+# into a permanent cutover, which is what the stage exists to prevent.
+setup 5002 old-legacy-sha old-fc-sha
+install_route 100 deploy-maintenance-abc1234 maintenance
+run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+check    "the deploy itself still succeeds"          0 "$RC"
+contains "$CALLS_TXT" "switch --to legacy"           "traffic is still drained off the pool being rebuilt"
+lacks    "$CALLS_TXT" "switch --to fc"               "but it is NOT put back onto the candidate"
+lacks    "$CALLS_TXT" "CANARY_ALLOW_FLIP=1"          "and no flip authorisation is self-granted"
+contains "$OUT" "NOT restoring the pre-drain route"  "the refusal is explicit"
+contains "$OUT" "UNFINISHED drain"                   "and names why the recorded state is not authorisation"
+contains "$OUT" "--stage flip"                       "with the deliberate command that would do it on purpose"
+teardown
+
+# The contrast: a route recorded at 100% under stage `flip` IS an authorised
+# exposure, and is restored exactly as before.
+setup 5002 old-legacy-sha old-fc-sha
+install_route 100 r-flip flip
+run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+contains "$CALLS_TXT" "switch --to fc"               "an authorised 100% is still restored"
+contains "$CALLS_TXT" "CANARY_ALLOW_FLIP=1"          "with the scoped allow-flip"
+teardown
+echo
+
+echo "--- 7e. a SIGNAL takes the failure branch, not 'REDEPLOY SUCCEEDED' ---"
+# R3/M3: the EXIT trap does run on SIGINT/SIGTERM/SIGHUP, but `$?` inside it is 0.
+# The restore therefore took the SUCCESS branch: it demanded `--expect-sha <new
+# pin>` from a pool that was never rebuilt, failed, and reported "REDEPLOY
+# SUCCEEDED BUT THE UPSTREAM IS STILL ON ..." while production sat on the drain
+# target. The signal is now captured and passed to the trap as a failure code.
+setup 5001 old-legacy-sha old-fc-sha
+install_route 0 rollback rollback
+# Interrupt from inside the deploy: the fake signals update.sh itself, so the
+# trap fires at exactly the point a Ctrl-C during a real `compose up` would.
+cat > "$SANDBOX/bin/fakecompose" <<'EOF'
+#!/usr/bin/env bash
+echo "compose $*" >> "$CALLS"
+kill -TERM "$PPID"
+exit 0
+EOF
+chmod +x "$SANDBOX/bin/fakecompose"
+run_update --pool legacy; CALLS_TXT="$(cat "$CALLS")"
+check    "an interrupted deploy exits with the signal code" 143 "$RC"
+contains "$OUT" "INTERRUPTED by signal 15"           "the interrupt is named"
+contains "$OUT" "The redeploy did NOT complete"      "and is not reported as a success"
+lacks    "$OUT" "REDEPLOY SUCCEEDED"                 "the success wording never appears"
+check    "the drain is still unwound"                "fc-legacy" \
+         "$(grep -oE '^switch --to (fc|legacy)' "$CALLS" | sed 's/^switch --to //' | paste -sd- -)"
+INTERRUPTED_RESTORE="$(grep -- '^switch --to legacy' "$CALLS" | tail -1)"
+lacks    "$INTERRUPTED_RESTORE" "--expect-sha"       "and never demands a pin nothing deployed"
+check    "the drain window is closed on the way out" "absent" \
+         "$([ -e "$SANDBOX/maintenance-marker" ] && echo present || echo absent)"
 teardown
 echo
 

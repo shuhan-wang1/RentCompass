@@ -46,8 +46,10 @@
 #   --pool auto|fc|legacy   which pool to deploy (default: auto = the live one)
 #   --both                  deploy BOTH pools to the pin (keeps the rollback
 #                           target from drifting; recommended after a real fix)
-#   --drain                 move the public upstream to the healthy standby,
-#                           redeploy, then move it back (the safe default).
+#   --drain                 move the public upstream to the healthy standby at
+#                           rollout stage `maintenance`, redeploy, then restore the
+#                           recorded pre-drain weight/rollout-id/stage — on success
+#                           AND on failure (EXIT trap). The safe default.
 #   --allow-in-place        explicitly accept a public 502 boot window and the
 #                           risk that failed readiness leaves the candidate on
 #                           the public port. Never implied by failed drain.
@@ -138,7 +140,46 @@ routing_weight() {
   sed -n 's/^# rentcompass-canary-weight: \([0-9][0-9]*\)$/\1/p' "$ROUTE_CONF" 2>/dev/null | head -1
 }
 
+# The generated routing include IS the rollout state file: set_canary_weight.sh
+# writes the live weight, rollout id and stage into its header comments, and
+# every reader (this script, the monitor, canary_report) parses them from there.
+# The drain below records and restores those same markers rather than inventing
+# a second store that could disagree with the file nginx is actually serving.
+route_marker() { # rentcompass-<name>
+  sed -n "s/^# rentcompass-$1: //p" "$ROUTE_CONF" 2>/dev/null | head -1
+}
+
 other_pool() { case "$1" in legacy) echo fc ;; fc) echo legacy ;; esac; }
+
+# ---------------------------------------------------------------------------
+# The active-drain marker
+# ---------------------------------------------------------------------------
+# `--stage maintenance` is the only way to reach 100% candidate exposure without
+# CANARY_ALLOW_FLIP, so it must be provably a DRAIN and not a cutover wearing the
+# word. This file is that proof: written here before the drain, deleted after the
+# restore, and required (with a matching rollout id) by set_canary_weight.sh and
+# switch_pool.sh. It lives beside the deploy lock in the SHARED git metadata dir,
+# so the sudo'd controller resolves the same path from any worktree.
+maintenance_marker_path() {
+  if [ -n "${RENTCOMPASS_MAINTENANCE_MARKER:-}" ]; then
+    printf '%s' "$RENTCOMPASS_MAINTENANCE_MARKER"; return 0
+  fi
+  local common
+  common="$($GIT_CMD rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  [ -n "$common" ] || return 1
+  printf '%s/rentcompass-maintenance-drain' "$common"
+}
+MAINTENANCE_MARKER="$(maintenance_marker_path || true)"
+
+open_maintenance_window() { # <rollout-id> — authorise ONE drain, by name
+  [ -n "$MAINTENANCE_MARKER" ] \
+    || die "cannot resolve the maintenance drain marker path; set RENTCOMPASS_MAINTENANCE_MARKER"
+  mkdir -p "$(dirname "$MAINTENANCE_MARKER")" \
+    || die "cannot create the directory for $MAINTENANCE_MARKER"
+  printf '%s' "$1" > "$MAINTENANCE_MARKER" \
+    || die "cannot write the maintenance drain marker $MAINTENANCE_MARKER"
+}
+close_maintenance_window() { [ -n "$MAINTENANCE_MARKER" ] && rm -f "$MAINTENANCE_MARKER"; return 0; }
 
 # "<arch> <sha> <specialists>" for a pool, or "" when readiness/identity fails.
 identity_of() {
@@ -232,8 +273,8 @@ fi
 # needs it. All mutating paths continue through the strict gate below.
 _head_full="$($GIT_CMD rev-parse "HEAD^{commit}")"
 ROUTE_WEIGHT="$(routing_weight || true)"
-ROUTE_ROLLOUT_ID="$(sed -n 's/^# rentcompass-rollout-id: //p' "$ROUTE_CONF" 2>/dev/null | head -1 || true)"
-ROUTE_ROLLOUT_STAGE="$(sed -n 's/^# rentcompass-rollout-stage: //p' "$ROUTE_CONF" 2>/dev/null | head -1 || true)"
+ROUTE_ROLLOUT_ID="$(route_marker rollout-id || true)"
+ROUTE_ROLLOUT_STAGE="$(route_marker rollout-stage || true)"
 if [ -n "$ROUTE_WEIGHT" ]; then
   case "$ROUTE_WEIGHT" in
     0) LIVE_PORT=5001; LIVE_POOL=legacy ;;
@@ -284,6 +325,14 @@ if [ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" != "1" ]; then
   exec 9>"$DEPLOY_LOCK_FILE" || die "cannot open deploy lock: $DEPLOY_LOCK_FILE"
   flock -n 9 || die "another release/update/switch/retirement operation is running"
   export RENTCOMPASS_DEPLOY_LOCK_HELD=1
+fi
+
+# The deploy lock is held from here on, so no other drain can be in flight: any
+# marker still on disk is the debris of a run that was killed outright (SIGKILL,
+# power loss) and must not keep authorising a 100% maintenance exposure.
+if [ -n "$MAINTENANCE_MARKER" ] && [ -e "$MAINTENANCE_MARKER" ]; then
+  warn "Clearing a stale maintenance drain marker from an interrupted run: $MAINTENANCE_MARKER"
+  rm -f "$MAINTENANCE_MARKER"
 fi
 
 if [ ! -r "$PIN_ENV_FILE" ]; then
@@ -481,6 +530,120 @@ deploy_legacy() {
 deploy_pool() { case "$1" in fc) deploy_fc ;; legacy) deploy_legacy ;; esac; }
 
 # ---------------------------------------------------------------------------
+# Maintenance drain: record the public route, restore it on success AND failure
+# ---------------------------------------------------------------------------
+# Draining onto the candidate means 100% candidate exposure for the length of a
+# pool redeploy. That is legitimate ONLY because it is temporary, so the pre-drain
+# weight/rollout-id/stage are read out of the routing include (the file that IS the
+# rollout state) and put back by both the normal path and an EXIT trap.
+DRAIN_ACTIVE=0
+DRAINED_FROM=""
+PRE_DRAIN_WEIGHT=""; PRE_DRAIN_ROLLOUT_ID=""; PRE_DRAIN_STAGE=""
+PRE_DRAIN_FLIP_AUTHORISED=0
+
+record_pre_drain_route() {
+  PRE_DRAIN_WEIGHT="$(routing_weight || true)"
+  PRE_DRAIN_ROLLOUT_ID="$(route_marker rollout-id || true)"
+  PRE_DRAIN_STAGE="$(route_marker rollout-stage || true)"
+  # NOTE (implicit invariant): a weighted host at 5/20/50 is `LIVE_POOL=mixed`,
+  # which is refused before any deploy, so PRE_DRAIN_WEIGHT here is only ever
+  # 0, 100 or empty. That is why the restore replays the stage/id but not a
+  # partial weight — there is no partial weight to replay.
+  #
+  # Did the operator ALREADY authorise 100% candidate exposure before this run?
+  # Only then may the restore re-grant CANARY_ALLOW_FLIP=1 (see below).  A
+  # recorded `maintenance` at 100 is NOT authorisation: it is the debris of an
+  # earlier interrupted drain, and replaying it would make a temporary stage
+  # permanent — the precise outcome this stage exists to prevent.
+  PRE_DRAIN_FLIP_AUTHORISED=0
+  if [ -z "$PRE_DRAIN_WEIGHT" ]; then
+    # Single-upstream host: the live upstream port IS the whole rollout state.
+    [ "$LIVE_POOL" = fc ] && PRE_DRAIN_FLIP_AUTHORISED=1
+  elif [ "$PRE_DRAIN_WEIGHT" = 100 ] && [ "${PRE_DRAIN_STAGE:-flip}" != maintenance ]; then
+    PRE_DRAIN_FLIP_AUTHORISED=1
+  fi
+  return 0
+}
+
+restore_pre_drain_route() { # <rc of the work that just finished>
+  local rc="${1:-0}" rrc=0
+  [ "$DRAIN_ACTIVE" -eq 1 ] || return 0
+  DRAIN_ACTIVE=0
+  trap - EXIT
+  local interrupted=0
+  if [ "$rc" -ge 128 ]; then
+    interrupted=1
+    warn "INTERRUPTED by signal $((rc - 128)) — unwinding the maintenance drain before exiting. The redeploy did NOT complete."
+  fi
+  local restore_id="$PRE_DRAIN_ROLLOUT_ID" restore_stage="$PRE_DRAIN_STAGE"
+  local -a args=(--to "$DRAINED_FROM") runner=(env "SWITCH_ROUTE_CONF=$ROUTE_CONF")
+  # Only a SUCCESSFUL redeploy may demand the new pin; a restore after a failure
+  # (or an interrupt, which never rebuilt anything) puts traffic back on code that
+  # was already there and must not ask that pool to name the undeployed pin.
+  if [ "$rc" -eq 0 ]; then args+=(--expect-sha "$PIN_FULL"); fi
+  if [ "$DRAINED_FROM" = "fc" ] && [ "$PRE_DRAIN_FLIP_AUTHORISED" -eq 1 ]; then
+    args+=(--allow-public-fc)
+    if [ -z "$restore_id" ];    then restore_id="deploy-return-$PIN_SHORT"; fi
+    if [ -z "$restore_stage" ]; then restore_stage="flip"; fi
+    # Restoring an exposure the operator had ALREADY authorised is not a new flip
+    # decision, so the allow-flip switch is scoped to this one call and is never
+    # exported for anything else this script runs.
+    warn "Restoring the pre-drain candidate exposure (weight=${PRE_DRAIN_WEIGHT:-100} stage=$restore_stage); CANARY_ALLOW_FLIP is scoped to this restore only"
+    runner+=(CANARY_ALLOW_FLIP=1)
+  elif [ "$DRAINED_FROM" = "fc" ]; then
+    # The recorded pre-drain state was 100% candidate at stage `maintenance` — an
+    # earlier drain that never unwound, not an authorised exposure. Replaying it
+    # (with a self-granted CANARY_ALLOW_FLIP) would launder leftover debris into a
+    # permanent cutover nobody approved. Public traffic therefore STAYS on the
+    # drain target, which is the legacy rollback pool, and the operator decides.
+    close_maintenance_window
+    warn "NOT restoring the pre-drain route: it recorded weight=${PRE_DRAIN_WEIGHT:-<single-upstream>} at stage '${PRE_DRAIN_STAGE:-<none>}', which is an UNFINISHED drain, not an authorised 100% exposure."
+    warn "Public traffic stays on '$(other_pool "$DRAINED_FROM")'. To put the candidate back on 100% deliberately:"
+    warn "    sudo CANARY_ALLOW_FLIP=1 $SWITCH_CMD --to fc --allow-public-fc --rollout-id <id> --stage flip"
+    return 0
+  fi
+  if [ -n "$restore_id" ];    then args+=(--rollout-id "$restore_id"); fi
+  if [ -n "$restore_stage" ]; then args+=(--stage "$restore_stage"); fi
+  say "Returning public traffic to '$DRAINED_FROM' (restoring weight=${PRE_DRAIN_WEIGHT:-<single-upstream>} stage=${restore_stage:-<default>})"
+  "${runner[@]}" $SWITCH_CMD "${args[@]}" || rrc=$?
+  # The drain's authorisation ends here, whether or not the switch back worked:
+  # leaving the marker would let a later hand-run reuse this run's 100% licence.
+  close_maintenance_window
+  if [ "$rrc" -ne 0 ]; then
+    if [ "$interrupted" -eq 1 ]; then
+      die "INTERRUPTED AND THE DRAIN WAS NOT UNWOUND: public traffic is still on '$(other_pool "$DRAINED_FROM")' at stage maintenance. Fix by hand: $SWITCH_CMD --to $DRAINED_FROM"
+    fi
+    if [ "$rc" -eq 0 ]; then
+      die "REDEPLOY SUCCEEDED BUT THE UPSTREAM IS STILL ON '$(other_pool "$DRAINED_FROM")'. Fix by hand: $SWITCH_CMD --to $DRAINED_FROM"
+    fi
+    warn "THE MAINTENANCE DRAIN WAS NOT RESTORED: public traffic is still on '$(other_pool "$DRAINED_FROM")' at stage maintenance. Fix by hand: $SWITCH_CMD --to $DRAINED_FROM"
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Interrupts must reach the EXIT trap as FAILURES
+# ---------------------------------------------------------------------------
+# An EXIT trap does run on SIGINT/SIGTERM/SIGHUP, but `$?` inside it is 0, so a
+# Ctrl-C during the drain used to take the SUCCESS branch of the restore: it
+# demanded `--expect-sha <new pin>` from a pool that was never rebuilt, the switch
+# failed, and the operator was told "REDEPLOY SUCCEEDED BUT THE UPSTREAM IS STILL
+# ON ..." while production sat on the drain target (100% candidate at stage
+# maintenance when the standby is fc). Each signal therefore records its own code
+# and exits; the EXIT trap prefers that code over `$?`.
+_INTERRUPT_RC=0
+_on_signal() { _INTERRUPT_RC="$1"; exit "$1"; }
+_on_exit() {
+  local rc="${1:-0}"
+  if [ "$_INTERRUPT_RC" -ne 0 ]; then rc="$_INTERRUPT_RC"; fi
+  restore_pre_drain_route "$rc"
+}
+# The handlers MUST exit themselves: bash resumes the script otherwise.
+trap '_on_signal 130' INT
+trap '_on_signal 143' TERM
+trap '_on_signal 129' HUP
+
+# ---------------------------------------------------------------------------
 # Deploy
 # ---------------------------------------------------------------------------
 for target in "${TARGETS[@]}"; do
@@ -503,16 +666,35 @@ for target in "${TARGETS[@]}"; do
   # can leave a live-but-not-ready candidate behind. Drain is therefore the
   # fail-closed default. A requested drain that cannot use the standby NEVER
   # degrades into an in-place production mutation.
-  drained_from=""
   if [ "$DRAIN" -eq 1 ] && [ "$target" = "$LIVE_POOL" ]; then
     standby="$(other_pool "$target")"
     if identity_of "$standby" >/dev/null 2>&1; then
-      say "Draining public traffic to '$standby' for the redeploy (needs sudo for nginx)"
-      $SWITCH_CMD --to "$standby" \
+      record_pre_drain_route
+      say "Draining public traffic to '$standby' for the redeploy (stage maintenance; needs sudo for nginx)"
+      say "    pre-drain public route: weight=${PRE_DRAIN_WEIGHT:-<single-upstream>} rollout=${PRE_DRAIN_ROLLOUT_ID:-<none>}/${PRE_DRAIN_STAGE:-<none>} — restored when this pool finishes OR fails"
+      # `--stage maintenance` is what authorises the drain's 100% exposure when
+      # the standby is the candidate: set_canary_weight.sh refuses weight 100 for
+      # every other stage unless CANARY_ALLOW_FLIP=1 is set deliberately, and it
+      # requires this marker plus the machine rollout-id shape, so the stage
+      # cannot be typed by hand into a permanent cutover.
+      # SWITCH_ROUTE_CONF is passed explicitly: update.sh READ the pre-drain state
+      # out of $ROUTE_CONF, and switch_pool.sh must WRITE the same file rather than
+      # its own default, or a rehearsal silently records one file and edits another.
+      open_maintenance_window "deploy-maintenance-$PIN_SHORT"
+      env "SWITCH_ROUTE_CONF=$ROUTE_CONF" $SWITCH_CMD --to "$standby" \
+        --rollout-id "deploy-maintenance-$PIN_SHORT" --stage maintenance \
         $([ "$standby" = "legacy" ] && echo "--allow-unidentified-target") \
-        $([ "$standby" = "fc" ] && echo "--allow-public-fc --rollout-id deploy-maintenance-$PIN_SHORT --stage maintenance") \
-        || die "could not drain to '$standby' — nothing was redeployed"
-      drained_from="$target"
+        $([ "$standby" = "fc" ] && echo "--allow-public-fc") \
+        || { close_maintenance_window
+             die "could not drain to '$standby' — nothing was redeployed"; }
+      DRAINED_FROM="$target"
+      DRAIN_ACTIVE=1
+      # The restore must survive a failed build, a failed compose, a failed
+      # readiness gate and a Ctrl-C: leaving production parked on the drain
+      # target is exactly the "routine release ends at 100% candidate" outcome
+      # this stage exists to make temporary. The signal traps below make sure an
+      # interrupt reaches this trap with a FAILURE code, not 0.
+      trap '_on_exit "$?"' EXIT
     else
       die "cannot drain public '$target': standby '$standby' is not ready; no public container was redeployed. Refresh it first with: bash deploy/update.sh --pool $standby"
     fi
@@ -524,12 +706,7 @@ for target in "${TARGETS[@]}"; do
 
   deploy_pool "$target"
 
-  if [ -n "$drained_from" ]; then
-    say "Returning public traffic to '$drained_from'"
-    $SWITCH_CMD --to "$drained_from" --expect-sha "$PIN_FULL" \
-      $([ "$drained_from" = "fc" ] && echo "--allow-public-fc --rollout-id ${ROUTE_ROLLOUT_ID:-deploy-return-$PIN_SHORT} --stage ${ROUTE_ROLLOUT_STAGE:-flip}") \
-      || die "REDEPLOY SUCCEEDED BUT THE UPSTREAM IS STILL ON '$(other_pool "$drained_from")'. Fix by hand: $SWITCH_CMD --to $drained_from"
-  fi
+  restore_pre_drain_route 0
 done
 
 # ---------------------------------------------------------------------------

@@ -27,7 +27,10 @@ telemetry stream and returns an exit code (0 proceed, 2 hold/stage-pause, 3 zero
 - Both pools run the **same** application. `app-fc` is retained as a service name
   for deploy compatibility; it means “candidate”, not “always fc_loop”.
 - Production routing starts at **0% candidate**. The only accepted public weights
-  are 0, 5, 20, 50 and 100.
+  are 0, 5, 20, 50 and 100 — and **100 is not an operator-authorised rollout stage**:
+  it is reachable only by the deploy drain (`--stage maintenance`) or by a
+  deliberately gated flip (`--stage flip` with `CANARY_ALLOW_FLIP=1`). See
+  "The 100% policy stop" in §2.
 
 ### Env wiring
 
@@ -118,6 +121,41 @@ reports `X-Agent-Arch: manager_v1` and `X-Agent-Specialists: 1`.
 - **Shared message history.** Both arches see the same user-visible message transcript, so
   a conversation reads coherently and either arch can rebuild context from it.
 
+#### The checkpoint identity stamp (enforced, not conventional)
+
+The per-pool `CHECKPOINT_DB_PATH` above is only a **naming convention**: an
+override, the `CHECKPOINT_PATH` back-compat fallback, or the shared default all point
+two architectures at one file, and a cross-arch resume corrupts the run. So the file
+now carries its own identity. On open, the runtime stamps
+`{agent_arch, manager_v1_specialists}` into a small side table
+`rentcompass_runtime_identity`, and:
+
+| File state | Behaviour |
+|---|---|
+| unstamped (a pre-existing database) | stamped in place on first open; **nothing is moved or migrated** |
+| same identity | reopened normally |
+| different identity | startup/readiness **fails** with `CheckpointIdentityError` |
+
+```
+checkpoint database belongs to a different runtime: file identity
+[agent_arch=fc_loop manager_v1_specialists=0] != process identity
+[agent_arch=manager_v1 manager_v1_specialists=1] at
+/app/.runtime/checkpoints.sqlite3. Point CHECKPOINT_DB_PATH at this runtime's own
+file (docker-compose.yml derives it from CANARY_AGENT_ARCH /
+CANARY_MANAGER_V1_SPECIALISTS); never let one architecture resume another's
+LangGraph checkpoints.
+```
+
+`/ready`'s `checkpoint_store` check reports the identity it opened with, and fails
+closed when the stamp disagrees.
+
+**Write `CANARY_MANAGER_V1_SPECIALISTS` as `0` or `1`.** Compose interpolation cannot
+normalise, so `true` used to interpolate into a *third* database
+(`checkpoints_manager_v1_specialists-true.sqlite3`) sharing no state with the
+`...-1.sqlite3` the same pool used yesterday. The token is now normalised back to
+`0`/`1` when the path is resolved (with a startup warning), and a spelling that is
+neither true nor false is refused rather than forking a fourth file.
+
 ### Image build (immutable candidate image)
 
 > `bash deploy/update.sh` now performs this whole section automatically for the pool the
@@ -196,13 +234,18 @@ the candidate-turn-count floor. Neither alone is sufficient. Use one unique,
 content-free rollout ID per stage so direct :5002 smoke traffic cannot enter the
 public cohort denominator.
 
-| Stage | Candidate traffic | Min hold | Min candidate turns |
-|---|---|---|---|
-| `internal` | internal only | 24h | 50 |
-| `c1` | 5% | 24h | 200 |
-| `c2` | 20% | 48h | 500 |
-| `c3` | 50% | 72h | 1000 |
-| `flip` | 100% | 7d (168h) | 2000 |
+| Stage | Candidate traffic | Min hold | Min candidate turns | Authorised? |
+|---|---|---|---|---|
+| `internal` | internal only | 24h | 50 | yes |
+| `c1` | 5% | 24h | 200 | yes |
+| `c2` | 20% | 48h | 500 | yes |
+| `c3` | 50% | 72h | 1000 | **yes — highest authorised stage** |
+| `flip` | 100% | 7d (168h) | 2000 | **NO** — blocked until a frozen/shadow control gate exists; the controller refuses it without `CANARY_ALLOW_FLIP=1` |
+| `maintenance` | 100% (temporary) | n/a | n/a | machine-only, and mechanically so: it needs the deploy lock, a `deploy-maintenance-<sha>` rollout id AND an active-drain marker `deploy/update.sh` owns |
+
+`c3` (50%) is the highest stage an operator may advance to. `flip` and
+`maintenance` are the only two stages the controller will accept at weight 100,
+and they are described in "The 100% policy stop" below.
 
 Apply a stage only after its offline evaluation gate passes:
 
@@ -218,17 +261,235 @@ sudo bash deploy/set_canary_weight.sh --weight 50 \
 bash deploy/set_canary_weight.sh --status
 ```
 
-Do not execute the 100% command from this runbook yet. At 100%, there are no live
+### The 100% policy stop
+
+Do not execute a 100% command from this runbook yet. At 100%, there are no live
 legacy turns in the rollout window, while the comparative report deliberately
 requires a non-empty control arm. It therefore HOLDs rather than treating an empty
 control as a clean baseline. A flip requires a separately implemented, immutable
 frozen-control artifact (or a shadow control stream) bound to the same candidate;
-until that gate exists, 50% is the maximum authorized stage. The controller retains
-the 100% primitive for a future gated cutover, not as evidence that flip is eligible.
+until that gate exists, **50% is the maximum authorized stage**.
+
+That is now enforced, not only documented. `deploy/set_canary_weight.sh` accepts
+weight 100 in exactly two cases:
+
+| How you reach 100 | Accepted when | Who calls it |
+|---|---|---|
+| `--stage maintenance` | **all three**: `RENTCOMPASS_DEPLOY_LOCK_HELD=1`, `--rollout-id deploy-maintenance-<sha>`, and an active-drain marker naming that same id (plus, on a public route, `--allow-public-candidate`) | `deploy/update.sh` while it redeploys the other pool — nothing else can satisfy all three |
+| `--stage flip` | only when the environment carries `CANARY_ALLOW_FLIP=1` | a human performing the gated cutover |
+
+Anything else — including a bare `--weight 100`, which defaults to `--stage flip` —
+is refused before the route file is touched, with a one-line reason pointing here.
+`deploy/switch_pool.sh --to fc` applies the identical rule on a pre-weighted
+single-upstream host, so migrating a host between routing modes cannot change what
+a release is allowed to do.
+
+**`maintenance` is a window, not a stage you may enter.** It used to be accepted
+unconditionally: `--stage maintenance --rollout-id anything-you-like` put the
+candidate on 100% of public traffic with no `CANARY_ALLOW_FLIP`, no TTL and no
+record that a restore was owed — a permanent cutover through the one door the flip
+gate did not cover. The three and-gates above make it what it claims to be:
+
+- the **deploy lock** must be held, which only `release.sh` / `update.sh` /
+  `switch_pool.sh` do while they are actually running;
+- the **rollout id** must be `deploy-maintenance-<sha>` (`update.sh`'s own shape),
+  so the drain's turns are always filterable out of a stage window;
+- an **active-drain marker** must exist and name that exact rollout id.
+  `update.sh` writes it (beside the deploy lock, in the shared git metadata
+  directory) immediately before the drain and deletes it after the restore, so the
+  authorisation expires with the deploy that opened it. A marker left behind by a
+  `SIGKILL`ed run is cleared by the next `update.sh` once it holds the lock.
+
+There is no operator procedure that involves typing `--stage maintenance`. A
+deliberate 100% is `--stage flip` with `CANARY_ALLOW_FLIP=1`.
+
+```bash
+# Refused (this is the shape a routine release used to be able to reach):
+sudo bash deploy/set_canary_weight.sh --weight 100 --rollout-id r --allow-public-candidate
+#   FAIL refusing candidate weight 100 at stage 'flip' without CANARY_ALLOW_FLIP=1;
+#        50% is the highest authorised rollout stage (docs/canary_runbook.md section 2)
+
+# The gated cutover, once the frozen/shadow control gate exists:
+sudo CANARY_ALLOW_FLIP=1 bash deploy/set_canary_weight.sh --weight 100 \
+  --rollout-id manager-v1-20260910-flip --stage flip --allow-public-candidate
+```
+
+#### The `maintenance` stage and its automatic restore
+
+`bash deploy/release.sh` runs `deploy/update.sh --both --drain`, which moves public
+traffic onto the standby pool while it recreates the other one. When the standby is
+the candidate, that drain IS 100% candidate exposure — legitimate only because it is
+temporary. So the drain:
+
+1. reads the pre-drain `weight`, `rollout-id` and `stage` out of the generated
+   routing include's own `# rentcompass-*` markers (that file is the rollout state;
+   there is no second state store);
+2. switches with `--stage maintenance` and its own
+   `--rollout-id deploy-maintenance-<short-sha>`, so the drain's turns are always
+   **identifiable** — see the warning below about what that does and does not do
+   for your report window;
+3. restores those recorded values when the pool update finishes, when it **fails**,
+   and when it is **interrupted** (SIGINT/SIGTERM/SIGHUP), via an EXIT trap. A
+   restore back onto a pool that was already at 100% carries `CANARY_ALLOW_FLIP=1`
+   scoped to that single call — restoring an exposure the operator had already
+   authorised is not a new flip decision.
+
+> **The drain's turns are NOT excluded from a `--since`-only window.**
+> `scripts/canary_report.py` has no notion of `maintenance` (grep it: zero hits).
+> Filtering by rollout happens only when you pass `--rollout-id`. So a drain that
+> overlaps your stage window puts 100%-candidate, zero-control turns *inside* it
+> unless you name the rollout id you are measuring:
+>
+> ```bash
+> # RIGHT: the window is this stage's traffic, drains excluded by construction
+> python scripts/canary_report.py --input .runtime/logs/ --stage c1 \
+>   --since <stage-start-ISO> --rollout-id manager-v1-20260830-c1
+>
+> # WRONG during/after a release: --since alone also counts the drain's turns
+> python scripts/canary_report.py --input .runtime/logs/ --stage c1 --since <ISO>
+> ```
+
+**What is restored, and what is not.** A recorded pre-drain state of 100% at stage
+`maintenance` is *not* an authorised exposure — it is the debris of an earlier drain
+that never unwound. `update.sh` refuses to replay it (that would launder a temporary
+stage into a permanent cutover), leaves public traffic on the drain target, which is
+the legacy rollback pool, and prints the deliberate `--stage flip` command instead.
+
+If the restore itself fails, the run says so explicitly and names the command to fix
+it by hand; it never exits quietly with production parked on the drain target. An
+interrupted run says `INTERRUPTED by signal N ... The redeploy did NOT complete` —
+before this it reported the interrupt as `REDEPLOY SUCCEEDED`, demanded the new pin
+from a pool it had never rebuilt, and left production on the drain target.
+
+`deploy/release.sh` prints a preflight showing the resolved candidate identity and
+the weight/stage the run will END on, and refuses outright to run when that ending
+is 100% unless `CANARY_ALLOW_FLIP=1` was set:
+
+```
+    candidate  arch=manager_v1 specialists=1 mcp=0   (root .env: /home/shuhan/uk_rent_recommendation/.env)
+    ends at    candidate weight 0% stage rollback rollout rollback   (weighted include: /etc/nginx/snippets/rentcompass-canary-routing.conf)
+```
+
+**On a host with no weighted include** the snippet is untracked and simply not
+installed, and the preflight resolves the end state from the single
+`server 127.0.0.1:PORT;` line instead — `:5002` there IS 100% candidate traffic and
+meets the same refusal:
+
+```
+    ends at    SINGLE-UPSTREAM mode, sole upstream 127.0.0.1:5002 = candidate = candidate weight 100%   (/etc/nginx/sites-available/rentcompass.co.uk.conf)
+```
+
+Until 2026-08-31 that case was worse than ungated. Reading the absent snippet's
+markers under `set -euo pipefail` exited 2, `errexit` aborted the whole script, and
+`bash deploy/release.sh` printed **nothing** past `Release plan` — on every host
+where the snippet is not installed, which is where production is. Both the crash and
+the gap in the gate are fixed; if neither routing file is readable the run says
+`upstream UNKNOWN`, warns, and lets `update.sh` (which derives its target from the
+same line and refuses to guess) make the call.
 
 The controller preflights pool identity, writes the include with a same-directory
 rename, runs `nginx -t`, reloads, and probes both cohorts. Any failure restores the
 previous include and reloads it.
+
+### The answer probe (identity is not the same as working)
+
+`/ready` proves a pool's identity and its dependency wiring. It does **not** prove
+the pool can answer: `_check_llm_configuration` only asserts the provider credential
+is non-empty and reports `connectivity: "not_probed"`. That is exactly the hole the
+2026-07-25 incident fell through — a stale `DEEPSEEK_MODEL` in `app/.env` broke both
+pools for a day while `/ready` stayed green. A greeting cannot detect it either: the
+guard node answers greetings, rent conversions and statutory-money questions
+deterministically, with zero model calls.
+
+So before **any** weight > 0, the controller drives one real turn through
+`POST /api/alex` against each pool with `deploy/probe_pool_answer.py` and requires:
+
+- HTTP 200 with `X-Agent-Outcome: ok`;
+- `X-Agent-Arch` / `X-Agent-Specialists` matching the expected identity;
+- an answer that is **not** one of the canned/fallback renderers (time-budget and
+  no-reliable-numbers fallbacks, the critic's generic template, the DSML boundary
+  fallback, the greeting fast path, the endpoint crash strings);
+- the grounding substring the query's tool must produce — the default query is
+  benchmark case D1, `Is Peckham (SE15 5DP) safe to live in?`, whose grounded answer
+  must cite `data.police.uk`.
+
+```bash
+# Run it by hand against a pool before a stage:
+python3 deploy/probe_pool_answer.py --url http://127.0.0.1:5002 \
+  --expect-arch manager_v1 --expect-specialists 1
+
+# With the telemetry sink mounted, also require that the turn was OBSERVED:
+python3 deploy/probe_pool_answer.py --url http://127.0.0.1:5002 \
+  --canary-log .runtime/logs/canary-manager_v1.jsonl
+#   fails when the record for this request_id says llm_usage_status=not_instrumented
+```
+
+`--skip-answer-probe` on `set_canary_weight.sh` opts out; it prints
+`WARNING: ... was NOT proven able to answer a turn`. Injection points:
+`CANARY_ANSWER_PROBE_CMD`, `CANARY_LEGACY_ANSWER_URL`, `CANARY_CANDIDATE_ANSWER_URL`,
+`CANARY_ANSWER_PROBE_TIMEOUT`. An injected probe prints
+`WARNING: the answer probe is INJECTED via CANARY_ANSWER_PROBE_CMD=...` on every
+use — `CANARY_ANSWER_PROBE_CMD=true` would otherwise turn the gate off in total
+silence — and an override set to the empty string is refused outright.
+
+**When the probe does NOT run** (both are deliberate, and both are the same rule —
+never make reducing exposure harder than increasing it):
+
+- **weight 0**, the emergency rollback: it must not wait on a model call;
+- **any DECREASE** (new weight < the weight currently in the include, e.g. 50 → 5):
+  a candidate that cannot answer is the reason you are de-escalating. Probing it
+  first would fail and leave the *higher* weight in place, making weight 0 the only
+  reachable move. The pool's `/ready` identity is still verified, because it keeps
+  serving the smaller cohort. The line to look for is
+  `WARNING: lowering candidate exposure 50% -> 5%: the answer probe is SKIPPED`.
+
+**A clarification is INCONCLUSIVE, not a failure.** `app/app.py` returns
+`response_type: "clarification"` when the graph asked a follow-up question. That
+reply can never carry the tool grounding, and it can be produced by the
+deterministic criteria gate with no model call, so it proves nothing either way:
+the probe exits **2**, and `set_canary_weight.sh` retries once before failing.
+
+**Cost and side effects — the probe drives REAL turns against production.** Each
+weight increase runs it against both pools, so per weight change expect:
+
+- **2 real `POST /api/alex` turns** (4 if one pool clarifies and is retried), each
+  paying for real model and tool calls;
+- **2 new anonymous users + 2 conversations** in the shared
+  `conversations.sqlite3`: `resolve_identity` mints an anonymous `user_id` when
+  there is no cookie, and `start_request_turn` then creates the conversation/turn;
+- **2 canary records with `traffic_source != edge`**, which the cost report treats
+  as unattributable;
+- up to `2 × CANARY_ANSWER_PROBE_TIMEOUT` (default 120s, run serially) of added
+  wall-clock on every weight change.
+
+That is the price of not repeating 2026-07-25. It is not a reason to make
+`--skip-answer-probe` routine, but it is why weight 0 and de-escalations skip it.
+
+### Where `switch_pool.sh` gets the candidate identity
+
+`deploy/switch_pool.sh` reads **`CANARY_AGENT_ARCH` / `CANARY_MANAGER_V1_SPECIALISTS`
+from the root `.env`** — the same pair `update.sh`, `set_canary_weight.sh` and
+`deploy/monitoring/rentcompass-monitor.sh` read. It previously read only
+`SWITCH_CANDIDATE_ARCH` / `SWITCH_CANDIDATE_SPECIALISTS`, which nothing else sets, so
+on a host whose `.env` selected `manager_v1` a `switch_pool.sh --to fc` failed on an
+arch mismatch against a pool that was in fact correct. `SWITCH_CANDIDATE_*` remain as
+an **explicit override** for rehearsals; the accepted pairs are still exactly
+`fc_loop`/specialists=0 and `manager_v1`/specialists=1, and boolean spellings
+(`true`/`yes`/`on`) normalise to `1`.
+
+**One route file, two variable names.** `update.sh` READS the pre-drain markers from
+`UPDATE_ROUTE_CONF`; `switch_pool.sh` WRITES through `SWITCH_ROUTE_CONF` (which it
+passes on as `CANARY_ROUTE_CONF`). Their production defaults are the same path, so
+this never diverged in production — but a rehearsal that set only one of them
+recorded its state from one file and edited another. `update.sh` now passes
+`SWITCH_ROUTE_CONF=$ROUTE_CONF` explicitly on both the drain and the restore, so the
+file it read is the file that gets written. Override both, or neither.
+
+Boolean spellings normalise in the checkpoint filename too, with one exception: if
+`checkpoints_<arch>_specialists-true.sqlite3` **already exists**, it is used as is
+and the canonical name is only reported. Silently switching such a host to
+`..._specialists-1.sqlite3` would orphan that pool's live checkpoints, and nothing
+migrates them. To adopt the canonical name, stop the pool and `mv` the file.
 
 `canary_report.py --stage <name> --since <stage-start-ISO>` reports `turns_ok`, `hours_ok`,
 and `eligible = turns_ok AND hours_ok`. `--since` also **filters the records** (see §5), so
@@ -252,6 +513,12 @@ It forwards every argument to `canary_report.py`. Exit 3 alone invokes
 `set_canary_weight.sh --weight 0`; exit 0 never promotes automatically, while
 2/1/64 leave routing untouched. If rollback itself fails the wrapper exits 70
 and prints `ROLLBACK_FAILED` for immediate operator escalation.
+
+**Exit 70 may just be a deploy in flight.** The weight controller takes the deploy
+lock with `flock -n`, and a `release.sh` drain holds it for minutes, so an automatic
+rollback that lands inside one dies with `another release/update/switch/retirement
+operation is running` → 70. Before escalating, check whether a deploy is running;
+then run `sudo bash deploy/set_canary_weight.sh --weight 0` by hand.
 
 ---
 
@@ -298,7 +565,13 @@ Exit-code precedence: **zero-tolerance (3) > hold/stage-pause (2) > proceed (0)*
 
   Weight 0 requires only a ready pool reporting `legacy`; an old rollback image
   without a full SHA may proceed with a loud warning so missing provenance cannot
-  strand traffic on a broken candidate.
+  strand traffic on a broken candidate. Weight 0 also **skips the answer probe**:
+  rollback must never wait on a model call.
+
+- Partial de-escalation (50% → 5%) is equally always available: any weight
+  **decrease** skips the answer probe for the same reason. Going straight to 0 is
+  still the emergency verb; stepping down is for a candidate that is degraded
+  rather than dead.
 
 ### Emergency rollback
 
@@ -416,6 +689,31 @@ A mismatch is an **INSTRUMENTATION-HOLD (exit 2)** — the telemetry does not de
 the run that was driven, so every rate in the report has an unknown denominator. It
 ranks *below* zero-tolerance: a run that both lost turns and committed a real breach
 still exits **3**.
+
+### Mixed `telemetry_schema_version` in one window is also an INSTRUMENTATION-HOLD
+
+`canary_report.py` refuses a window whose records mix
+`telemetry_schema_version` **2** and **3**: the two contracts are not comparable, so
+any rate computed across both has an undefined denominator.
+
+**This will fire on the day you roll a pool forward.** While the legacy pool still
+runs a v2 image and the candidate already emits v3, every window spanning the cutover
+HOLDs immediately. That is the check working, not a regression in the candidate.
+
+The correct handling is to **move `--since` to after BOTH pools finished deploying**,
+so the window contains a single schema:
+
+```bash
+# WRONG — the window straddles the deploy and mixes v2 with v3 records:
+bash deploy/run_canary_gate.sh --input .runtime/logs/ --stage c1 --since <before-the-deploy>
+
+# RIGHT — open the stage window after `deploy/update.sh --both` reported both pools live:
+bash deploy/run_canary_gate.sh --input .runtime/logs/ --stage c1 --since <both-pools-live-ISO>
+```
+
+Do **not** relax the check or hand-edit the logs to make the window pass. The stage
+hold clocks (§2) run from the window you open, so a window opened after the deploy is
+also the only one whose elapsed-hours figure means anything.
 
 > Passing 50 rounds is a **functional** gate only. The `internal` stage still requires
 > its **24h minimum elapsed** (see the stage table) — driving 50 turns quickly does not

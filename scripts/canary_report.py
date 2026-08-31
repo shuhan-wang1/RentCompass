@@ -107,8 +107,24 @@ _CLEAN_AUDIT_VALUES = {"", "clean", "ok", "pass", "passed", "none", "clear", "gr
 # has no idea what v3 says, and the gate would score records it cannot actually
 # read. This consumer understands exactly these versions; anything else HOLDs
 # until someone teaches it the new schema.
-SUPPORTED_SCHEMA_VERSIONS = (2,)
+SUPPORTED_SCHEMA_VERSIONS = (2, 3)
 MIN_SCHEMA_VERSION = min(SUPPORTED_SCHEMA_VERSIONS)
+CURRENT_SCHEMA_VERSION = max(SUPPORTED_SCHEMA_VERSIONS)
+
+# v3 REDEFINED `llm_calls` (fc `loop_turn` -> the observer's billed-call count on
+# every arch, now including the nested tool-internal DeepSeek calls) and made
+# `tool_batches` a real number on legacy instead of null. Two consequences, and
+# both are load-bearing:
+#
+#   1. Each record is validated under the rules that applied WHEN IT WAS WRITTEN.
+#      Applying the v3 contract retroactively turned 0 -> 81 of 230 fc records and
+#      590 -> 2643 of 2748 legacy records into "violations" of a contract that did
+#      not exist when they were emitted. That is not a finding; it is a consumer
+#      rewriting history, and it would have held every window containing a single
+#      pre-upgrade record.
+#   2. A window that MIXES v2 and v3 cannot be compared on those two fields at all,
+#      so it holds rather than averaging two different measurements into one mean.
+SCHEMA_V3_FIELDS = ("llm_calls", "tool_batches")
 
 # Gate default: only the agent endpoint decides the A/B. The deterministic form
 # path (search_direct) is aggregated separately so it cannot dilute agent metrics.
@@ -134,10 +150,34 @@ REQUIRED_TOP_FIELDS = (
     # observe must not average in as if it were free, so the STATUS is required even
     # though llm_usage itself is not.
     "llm_usage_status",
-    # These are the denominators for the cost/tool-overhead side of the gate.
-    # Null/missing values must not aggregate as a free zero-call turn.
-    "llm_calls", "tool_batches",
 )
+
+# Required only of a v3+ producer, and only on a turn that could observe them.
+# These are the denominators for the cost / tool-overhead side of the gate, so
+# null/missing must not aggregate as a free zero-call turn. A v2 record was
+# allowed to emit null here and is NOT retroactively in breach.
+REQUIRED_TOP_FIELDS_V3 = SCHEMA_V3_FIELDS
+
+# Outcomes on which the turn's own bookkeeping never existed: the exception
+# destroyed `final_state`, and `tool_batches` is derived from it. Requiring the v3
+# fields here made every crash/5xx record a GUARANTEED violation of a contract it
+# is structurally incapable of satisfying — 11 of 11 v3 crash records in the real
+# legacy log validated as broken on `tool_batches` alone, with 14% of that log's
+# history being crash/server_error, i.e. a permanent INSTRUMENTATION-HOLD whose
+# stated reason had nothing to do with the candidate. A crashed turn still HOLDs
+# for the reasons it always did (security counters null, llm_usage_status
+# not_instrumented); it is no longer ALSO charged with a field it can never have.
+UNOBSERVABLE_OUTCOMES = ("crash", "server_error")
+
+# `tool_ledger_status` is how a v3 producer STATES that gap rather than leaving it
+# to be inferred. It is checked in both directions: "unavailable" is legal only on
+# an unobservable outcome (so a healthy turn cannot opt out of the requirement) and
+# obliges `tool_batches` to be null (so the marker cannot sit next to a number and
+# mean nothing). Absent is accepted — historical v3 records predate it, and the
+# outcome-based exemption above already covers them.
+TOOL_LEDGER_COMPLETE = "complete"
+TOOL_LEDGER_UNAVAILABLE = "unavailable"
+VALID_TOOL_LEDGER_STATUSES = (TOOL_LEDGER_COMPLETE, TOOL_LEDGER_UNAVAILABLE)
 
 VALID_USAGE_STATUSES = ("complete", "partial", "no_llm_calls", "not_instrumented")
 # "partial" == calls happened that we could not price; "not_instrumented" == no
@@ -166,17 +206,41 @@ VALID_CANARY_WEIGHTS = (0, 5, 20, 50, 100)
 VALID_TRAFFIC_SOURCES = ("direct", "edge")
 VALID_ASSIGNED_POOLS = ("direct", "legacy", "candidate")
 _SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
+# `partial` is a terminal outcome in its own right: usable output AND an unmet
+# part of the objective. It is NOT scored as a failure — doing so would trip the
+# specialist failure-rate stage-pause on turns that answered the user perfectly
+# well — and NOT as a completion, which would hide a systematic shortfall.
 _SPECIALIST_STATUSES = frozenset(
-    {"planned", "started", "completed", "failed", "skipped"}
+    {"planned", "started", "completed", "partial", "failed", "skipped"}
 )
+_SPECIALIST_TERMINAL_STATUSES = frozenset(
+    {"completed", "partial", "failed", "skipped"}
+)
+_SPECIALIST_OUTCOME_STATUSES = frozenset({"partial", "failed", "skipped"})
+# A refused dispatch inside an already-running task. Carries no task identity, so
+# it is validated as its own shape and never enters the lifecycle arithmetic.
+_SPECIALIST_DENIED_STATUS = "denied"
 _SPECIALIST_EVENT_FIELDS = frozenset({
     "plan_id", "task_id", "parent_task_id", "role", "status",
     "duration_ms", "call_count",
 })
+_SPECIALIST_EVENT_FIELDS_WITH_CODE = _SPECIALIST_EVENT_FIELDS | {"error_code"}
+_SPECIALIST_DENIED_EVENT_FIELDS = frozenset({"status", "tool", "error_code"})
 _MULTI_AGENT_COUNTER_FIELDS = (
     "planned", "started", "completed", "failed", "skipped", "max_in_flight",
 )
+# Optional for the CONSUMER only: a record from a manager_v1 build that predates
+# these counters has neither, and 0 is the correct reading there (nothing was
+# counted) where defaulting a core counter would be a fabrication.
+_MULTI_AGENT_OPTIONAL_COUNTER_FIELDS = (
+    "partial", "denied_calls", "dropped_error_codes",
+)
+_ALL_MULTI_AGENT_COUNTER_FIELDS = (
+    _MULTI_AGENT_COUNTER_FIELDS + _MULTI_AGENT_OPTIONAL_COUNTER_FIELDS
+)
 _MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 
 
 def _check_count(name: str, v) -> List[str]:
@@ -191,12 +255,38 @@ def _check_count(name: str, v) -> List[str]:
     return []
 
 
-def _validate_multi_agent(value: object) -> List[str]:
+def _validate_multi_agent(value: object, *, crashed: bool = False) -> List[str]:
     """Validate the content-free specialist lifecycle projection.
 
     Counters are authoritative even when the bounded event ring truncates.  When
     it did not truncate, the event stream is also reconciled so a malformed or
     silently filtered transition cannot make a broken lifecycle look complete.
+
+    Turn-end invariants (the contract with the dispatcher):
+
+        planned >= started
+        started == completed + partial + failed
+        completed + partial + failed + skipped == planned
+        skipped <= planned - started
+
+    The previous form was ``planned == completed+failed+skipped`` and
+    ``started == completed+failed``. Both were arithmetically unsatisfiable the
+    moment a task ended ``partial``: the outcome existed in the producer and in
+    no counter the consumer added up, so a perfectly healthy turn read as
+    "lifecycle incomplete".
+
+    The third line is the accounting rule that the ``partial`` rewrite dropped and
+    this restores. Without it ``planned=10, started=0, skipped=0`` validated — ten
+    tasks the manager planned and then simply lost, with no counter recording what
+    became of them. The ONLY legal way for a planned task not to start is
+    ``skipped``, so every planned task must land in exactly one terminal bucket.
+    (``skipped <= planned - started`` is kept as the tighter statement that a task
+    cannot be skipped after it started.)
+
+    ``crashed`` exempts the ARITHMETIC, not the shape. A turn that died mid-flight
+    genuinely has tasks with no terminal transition; convicting the record for that
+    reports "broken instrumentation" about working instrumentation observing a
+    crash. Every event is still validated for shape and safety.
     """
     prefix = "multi_agent"
     if not isinstance(value, dict):
@@ -204,6 +294,15 @@ def _validate_multi_agent(value: object) -> List[str]:
     problems: List[str] = []
     counts: Dict[str, int] = {}
     for field in _MULTI_AGENT_COUNTER_FIELDS:
+        raw = value.get(field)
+        field_problems = _check_count(f"{prefix}.{field}", raw)
+        problems.extend(field_problems)
+        if not field_problems:
+            counts[field] = raw
+    for field in _MULTI_AGENT_OPTIONAL_COUNTER_FIELDS:
+        if field not in value:
+            counts[field] = 0
+            continue
         raw = value.get(field)
         field_problems = _check_count(f"{prefix}.{field}", raw)
         problems.extend(field_problems)
@@ -217,21 +316,31 @@ def _validate_multi_agent(value: object) -> List[str]:
         problems.append(f"{prefix}.events is not a list")
         events = []
 
-    if len(counts) == len(_MULTI_AGENT_COUNTER_FIELDS):
+    if len(counts) == len(_ALL_MULTI_AGENT_COUNTER_FIELDS) and not crashed:
         planned = counts["planned"]
         started = counts["started"]
-        terminal = counts["completed"] + counts["failed"] + counts["skipped"]
-        started_terminal = counts["completed"] + counts["failed"]
+        started_terminal = counts["completed"] + counts["partial"] + counts["failed"]
+        accounted = started_terminal + counts["skipped"]
         max_flight = counts["max_in_flight"]
-        if planned != terminal:
+        if planned < started:
             problems.append(
-                f"multi_agent lifecycle incomplete: planned={planned} but "
-                f"completed+failed+skipped={terminal}"
+                f"multi_agent lifecycle incomplete: started={started} exceeds "
+                f"planned={planned}"
             )
         if started != started_terminal:
             problems.append(
-                f"multi_agent lifecycle incomplete: started={started} but "
-                f"completed+failed={started_terminal}"
+                f"multi_agent lifecycle must be balanced: started={started} but "
+                f"completed+partial+failed={started_terminal}"
+            )
+        if accounted != planned:
+            problems.append(
+                f"multi_agent lifecycle must account for every planned task: "
+                f"planned={planned} but completed+partial+failed+skipped={accounted}"
+            )
+        if counts["skipped"] > planned - started:
+            problems.append(
+                f"multi_agent lifecycle must be balanced: skipped={counts['skipped']} "
+                f"exceeds planned-started={planned - started}"
             )
         if max_flight > started:
             problems.append(
@@ -241,13 +350,33 @@ def _validate_multi_agent(value: object) -> List[str]:
             problems.append("multi_agent.max_in_flight must be >= 1 when tasks started")
 
     status_counts = {status: 0 for status in _SPECIALIST_STATUSES}
+    denied_events = 0
     task_states: Dict[tuple, dict] = {}
     for index, event in enumerate(events):
         label = f"multi_agent.events[{index}]"
         if not isinstance(event, dict):
             problems.append(f"{label} is not an object")
             continue
-        if set(event) != _SPECIALIST_EVENT_FIELDS:
+        if event.get("status") == _SPECIALIST_DENIED_STATUS:
+            # A denied dispatch is not a task transition. It is validated for shape
+            # and safety only, and is deliberately absent from every lifecycle sum:
+            # a refusal is the control working, so counting it as a task outcome
+            # would both unbalance the invariants and score a working guard as a
+            # regression.
+            if set(event) != _SPECIALIST_DENIED_EVENT_FIELDS:
+                problems.append(f"{label} has missing or unsafe extra fields")
+                continue
+            tool = event.get("tool")
+            if not isinstance(tool, str) or not _TOOL_NAME_RE.fullmatch(tool):
+                problems.append(f"{label}.tool is not a tool identifier")
+            code = event.get("error_code")
+            if not isinstance(code, str) or not _ERROR_CODE_RE.fullmatch(code):
+                problems.append(f"{label}.error_code is not a closed-set error code")
+            denied_events += 1
+            continue
+        if set(event) not in (
+            _SPECIALIST_EVENT_FIELDS, _SPECIALIST_EVENT_FIELDS_WITH_CODE
+        ):
             problems.append(f"{label} has missing or unsafe extra fields")
             continue
         identifiers = []
@@ -272,6 +401,16 @@ def _validate_multi_agent(value: object) -> List[str]:
             or duration < 0
         ):
             problems.append(f"{label}.duration_ms is not a non-negative finite number")
+        if "error_code" in event:
+            code = event.get("error_code")
+            if not isinstance(code, str) or not _ERROR_CODE_RE.fullmatch(code):
+                problems.append(f"{label}.error_code is not a closed-set error code")
+            # An error code on planned/started explains an outcome that has not
+            # happened yet — a producer bug, not a diagnostic.
+            elif status not in _SPECIALIST_OUTCOME_STATUSES:
+                problems.append(
+                    f"{label}.error_code is not allowed on status {status!r}"
+                )
         status_counts[status] += 1
 
         # A truncated deque may legitimately begin after a task's plan/start, so
@@ -289,21 +428,27 @@ def _validate_multi_agent(value: object) -> List[str]:
                 problems.append(f"{label} duplicates status {status!r}")
             if status != "planned" and "planned" not in seen:
                 problems.append(f"{label} occurs before planned")
-            if status in {"completed", "failed"} and "started" not in seen:
+            if status in {"completed", "partial", "failed"} and "started" not in seen:
                 problems.append(f"{label} occurs before started")
             if status == "skipped" and "started" in seen:
                 problems.append(f"{label} skips an already-started task")
-            if seen.intersection({"completed", "failed", "skipped"}):
+            if seen.intersection(_SPECIALIST_TERMINAL_STATUSES):
                 problems.append(f"{label} occurs after a terminal status")
             seen.add(status)
 
-    if truncated is False and len(counts) == len(_MULTI_AGENT_COUNTER_FIELDS):
+    if (truncated is False and not crashed
+            and len(counts) == len(_ALL_MULTI_AGENT_COUNTER_FIELDS)):
         for status in _SPECIALIST_STATUSES:
             if status_counts[status] != counts[status]:
                 problems.append(
                     f"multi_agent.{status}={counts[status]} but events contain "
                     f"{status_counts[status]}"
                 )
+        if denied_events != counts["denied_calls"]:
+            problems.append(
+                f"multi_agent.denied_calls={counts['denied_calls']} but events "
+                f"contain {denied_events}"
+            )
     return problems
 
 
@@ -312,6 +457,26 @@ def validate_record(rec: dict) -> List[str]:
 
     Missing AND null both count: ``"dsml_leak": null`` asserts nothing, so it must
     not be allowed to satisfy the gate.
+
+    Rules are applied PER RECORD VERSION. A record is judged by the contract that
+    was in force when its producer wrote it, never by a contract that was invented
+    afterwards: the v3 requirements below (``llm_calls`` / ``tool_batches``
+    non-null, and their reconciliation against ``llm_usage``) are things a v2
+    producer was explicitly allowed not to state, so charging a v2 record with
+    them is the consumer inventing violations, not finding them. Forward
+    compatibility is still refused outright — an UNKNOWN version cannot be
+    validated at all, so it holds.
+
+    Rules are also applied PER OBSERVABILITY. A contract may only require what the
+    producer was in a position to state. ``tool_batches`` is folded from the
+    artifact ledger inside ``final_state``, and a turn that crashed has no
+    ``final_state`` — so at v3 every crash/5xx record was a certain violation, and
+    a window containing one held forever on an instrumentation complaint that no
+    amount of instrumentation could ever satisfy. That is how operators learn to
+    ignore INSTRUMENTATION-HOLD. The exemption is narrow (``UNOBSERVABLE_OUTCOMES``
+    only) and does not soften anything a crashed turn CAN state: its null security
+    counters and ``not_instrumented`` usage status still hold the gate, which is the
+    honest reason a crash was never promotable evidence.
     """
     problems: List[str] = []
     ver = rec.get("telemetry_schema_version")
@@ -328,7 +493,33 @@ def validate_record(rec: dict) -> List[str]:
                 f"{list(SUPPORTED_SCHEMA_VERSIONS)}")
         return problems  # unknown schema: don't cascade every field as its own violation
     declared_eval_only = set(rec.get("eval_only") or ())
-    for f in REQUIRED_TOP_FIELDS:
+    crashed = rec.get("turn_outcome") in UNOBSERVABLE_OUTCOMES
+    ledger_status = rec.get("tool_ledger_status")
+    if ledger_status is not None:
+        if ledger_status not in VALID_TOOL_LEDGER_STATUSES:
+            problems.append(
+                f"tool_ledger_status={ledger_status!r} not in "
+                f"{list(VALID_TOOL_LEDGER_STATUSES)}")
+        elif ledger_status == TOOL_LEDGER_UNAVAILABLE:
+            if not crashed:
+                # Otherwise the marker becomes an opt-out: any turn could declare
+                # its own ledger unavailable and stop being measured on tool
+                # overhead while still reporting a normal outcome.
+                problems.append(
+                    f"tool_ledger_status='unavailable' on turn_outcome="
+                    f"{rec.get('turn_outcome')!r}: only "
+                    f"{list(UNOBSERVABLE_OUTCOMES)} may have no tool ledger")
+            if rec.get("tool_batches") is not None:
+                problems.append(
+                    "tool_ledger_status='unavailable' but tool_batches carries a "
+                    "count: the marker and the value contradict each other")
+        elif ver >= 3 and rec.get("tool_batches") is None:
+            problems.append(
+                "tool_ledger_status='complete' but tool_batches is null")
+    required = REQUIRED_TOP_FIELDS + (
+        REQUIRED_TOP_FIELDS_V3 if (ver >= 3 and not crashed) else ()
+    )
+    for f in required:
         if f not in rec:
             problems.append(f"missing required field {f!r}")
         elif rec[f] is None:
@@ -384,7 +575,12 @@ def validate_record(rec: dict) -> List[str]:
             f"unknown size, so the cost side of the A/B cannot be evaluated")
     usage = rec.get("llm_usage")
     llm_calls = rec.get("llm_calls")
-    if us == "complete":
+    if ver < 3:
+        # v2 `llm_calls` meant fc super-steps (and null on legacy), so it is NOT
+        # the same quantity as `llm_usage.calls` and reconciling them would
+        # manufacture a violation out of a definition difference.
+        pass
+    elif us == "complete":
         if not isinstance(usage, dict):
             problems.append("llm_usage_status='complete' but llm_usage is not an object")
         else:
@@ -426,7 +622,9 @@ def validate_record(rec: dict) -> List[str]:
         if not isinstance(specialists, bool):
             problems.append("manager_v1_specialists is missing/null or not a boolean")
         if "multi_agent" in rec:
-            problems.extend(_validate_multi_agent(rec.get("multi_agent")))
+            problems.extend(
+                _validate_multi_agent(rec.get("multi_agent"), crashed=crashed)
+            )
             if specialists is False:
                 problems.append(
                     "multi_agent lifecycle present while manager_v1_specialists is false"
@@ -523,6 +721,20 @@ def validate_records(records: Sequence[dict], *, candidate_arch: str = "fc_loop"
         offenders[f"window mixes {len(shas)} candidate_sha values on {candidate_arch}: "
                   f"{sorted(str(s) for s in shas)}"] = len(shas)
         bad = max(bad, 1)
+    # Cross-record: `llm_calls` and `tool_batches` mean different things either
+    # side of v3, so a window spanning the upgrade cannot be summed or compared on
+    # them. Averaging across the boundary produces a number that describes no
+    # build — the same class of error as mixing two candidate shas above, and the
+    # reason the version was bumped instead of the fields being changed silently.
+    versions = {r.get("telemetry_schema_version") for r in records
+                if r.get("telemetry_schema_version") in SUPPORTED_SCHEMA_VERSIONS}
+    if len(versions) > 1:
+        offenders[
+            f"window mixes telemetry_schema_version {sorted(versions)}: "
+            f"{list(SCHEMA_V3_FIELDS)} were redefined at v{CURRENT_SCHEMA_VERSION} "
+            f"and are not comparable across the boundary"
+        ] = len(versions)
+        bad = max(bad, 1)
     variants = {
         r.get("manager_v1_specialists")
         for r in records
@@ -538,6 +750,7 @@ def validate_records(records: Sequence[dict], *, candidate_arch: str = "fc_loop"
         "violating": bad,
         "violations": dict(sorted(offenders.items(), key=lambda kv: -kv[1])),
         "candidate_shas": sorted(str(s) for s in shas),
+        "schema_versions": sorted(versions),
         "manager_v1_specialist_variants": sorted(variants),
         "ok": bad == 0 and len(records) > 0,
     }
@@ -1026,7 +1239,7 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
     multi = [r["multi_agent"] for r in records if isinstance(r.get("multi_agent"), dict)]
     specialist_totals = {
         field: sum(_to_int(item.get(field)) for item in multi)
-        for field in _MULTI_AGENT_COUNTER_FIELDS
+        for field in _ALL_MULTI_AGENT_COUNTER_FIELDS
     }
     specialist_planned = specialist_totals["planned"]
 
@@ -1039,6 +1252,13 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
         "strict_true": sum(1 for r in records if _truthy(r.get("strict"))),
         "llm_calls_total": sum(_to_int(r.get("llm_calls")) for r in records),
         "tool_batches_total": sum(_to_int(r.get("tool_batches")) for r in records),
+        # The denominator for the line above. A crashed turn has no artifact
+        # ledger, so it contributes a null that sums as 0; dividing the total by
+        # `turns` would then report tool overhead per turn as if those turns had
+        # run no tools. This is the count of turns that could actually state it.
+        "tool_batches_observed_turns": sum(
+            1 for r in records if r.get("tool_batches") is not None
+        ),
         "latency_n": len(lats),
         "p50_ms": percentile(lats, 0.50),
         "p95_ms": percentile(lats, 0.95),
@@ -1079,11 +1299,29 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
         "multi_agent_turns": len(multi),
         "specialist": {
             **specialist_totals,
+            # `partial` is deliberately NOT in this numerator. A partial task
+            # answered the user with a stated gap; scoring it as a failure would
+            # stage-pause a release for behaving honestly, and would also make the
+            # rate uninterpretable (it would no longer mean "how often does a
+            # specialist not deliver"). It is reported alongside so the shortfall
+            # is still visible.
             "failure_rate": (
                 _rate(specialist_totals["failed"], specialist_planned)
                 if specialist_planned else None
             ),
+            "partial_rate": (
+                _rate(specialist_totals["partial"], specialist_planned)
+                if specialist_planned else None
+            ),
         },
+        # v2 and v3 `llm_calls`/`tool_batches` are different measurements. Reporting
+        # which versions produced this arm is what lets a reader tell a real
+        # per-call change from a definition change.
+        "schema_versions": sorted(
+            {r.get("telemetry_schema_version") for r in records
+             if isinstance(r.get("telemetry_schema_version"), int)
+             and not isinstance(r.get("telemetry_schema_version"), bool)}
+        ),
     }
 
 
@@ -1238,7 +1476,8 @@ def evaluate_expected_turns(windowed: Sequence[dict], expected: int,
             "window": window_desc or "not stated by the caller (no record filter reported)",
             "agent_arch": candidate_arch,
             "endpoint": list(GATE_ENDPOINTS),
-            "schema": f"v{MIN_SCHEMA_VERSION} contract-valid only",
+            "schema": (f"contract-valid only, per-record rules for schema "
+                       f"v{list(SUPPORTED_SCHEMA_VERSIONS)}"),
             "candidate_sha": "exactly one",
         },
         "ineligible_records": dict(sorted(ineligible.items(), key=lambda kv: -kv[1])),
@@ -1412,7 +1651,8 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
         n = instrumentation.get("violating", 0)
         top = list(instrumentation.get("violations", {}).items())[:3]
         instr_reasons.append(
-            f"{n} record(s) violate the v{MIN_SCHEMA_VERSION} contract: "
+            f"{n} record(s) violate the canary telemetry contract "
+            f"(supported schema versions {list(SUPPORTED_SCHEMA_VERSIONS)}): "
             + "; ".join(f"{k} (x{v})" for k, v in top))
 
     # External anchor. A mismatch is an INSTRUMENTATION failure, not a stage pause:

@@ -12,6 +12,7 @@ budget, cancellation and request-order semantics remain unchanged.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import math
 import re
@@ -98,7 +99,13 @@ class ReadCall:
 
 @dataclass(frozen=True)
 class ResolvedSpecialistCapability:
-    """Opaque handle minted by the trusted in-process ToolRegistry."""
+    """Opaque handle minted by the trusted in-process ToolRegistry.
+
+    Everything that decides WHAT the pinned callable receives (``input_model``), WHAT is
+    returned (``output_model``) and HOW MANY TIMES it runs (``max_retries`` /
+    ``retry_on_error``) is captured here as well, so a post-grant mutation of the otherwise
+    identical ``Tool`` object cannot reshape an already-authorised dispatch (audit K7).
+    """
 
     provider_identity: int
     tool_name: str
@@ -107,6 +114,12 @@ class ResolvedSpecialistCapability:
     tool_callable_identity: int
     tool_callable: Callable[..., Any]
     spec_digest: str
+    input_model: Any = None
+    input_model_identity: int = 0
+    output_model: Any = None
+    output_model_identity: int = 0
+    max_retries: int = 1
+    retry_on_error: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,9 +152,18 @@ class PreparedSpecialistBatch:
     plan: TaskPlan
     calls_by_index: Mapping[int, PreparedSpecialistCall]
     _plan_json: str
+    #: index -> stable ``SpecialistDispatchError.error_code`` for calls this batch refused
+    #: to seal.  A rejected call is NOT a member of any task; it must be denied
+    #: individually by the caller while every other call — including its role siblings —
+    #: dispatches normally (audit K1).
+    rejected: Mapping[int, str] = MappingProxyType({})
 
     def call(self, index: int) -> PreparedSpecialistCall | None:
         return self.calls_by_index.get(index)
+
+    def rejection_for_index(self, index: int) -> str | None:
+        """Return the stable error code for a per-call rejection, if any."""
+        return self.rejected.get(index)
 
     @property
     def eligible_indices(self) -> tuple[int, ...]:
@@ -180,6 +202,14 @@ def specialist_role_for_tool(tool_name: str) -> SpecialistRole | None:
 
 
 def _canonical_json(value: Any, *, label: str, max_bytes: int) -> str:
+    """Canonical JSON or a stable dispatch error — never a raw encoder exception.
+
+    The UTF-8 measurement is inside the ``try`` on purpose: a lone surrogate
+    (``"Lon\\ud800don"``) survives ``json.dumps(ensure_ascii=False)`` and only fails when
+    the resulting ``str`` is encoded.  With that call outside the handler the raw
+    ``UnicodeEncodeError`` escaped every ``except SpecialistDispatchError`` in the runtime
+    and crashed the execute_tools node (audit K10).
+    """
     try:
         encoded = json.dumps(
             value,
@@ -196,13 +226,104 @@ def _canonical_json(value: Any, *, label: str, max_bytes: int) -> str:
             separators=(",", ":"),
             allow_nan=False,
         )
-    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
+        oversize = len(encoded.encode("utf-8")) > max_bytes
+    except SpecialistDispatchError:
+        raise
+    except Exception as exc:
+        # TypeError / ValueError / UnicodeError / RecursionError are the expected
+        # families; anything a hostile ``__eq__``/``__hash__``/``default`` raises is the
+        # same class of defect and must fail closed with the same stable code.
         raise SpecialistDispatchError(f"{label}_not_finite_json") from exc
     if encoded != round_trip:
         raise SpecialistDispatchError(f"{label}_lossy_json")
-    if len(encoded.encode("utf-8")) > max_bytes:
+    if oversize:
         raise SpecialistDispatchError(f"{label}_too_large")
     return encoded
+
+
+_MAX_ARGS_DEPTH = 32
+
+
+def _assert_json_native(value: Any, *, label: str) -> None:
+    """Reject anything a JSON round trip would silently COERCE rather than lose.
+
+    ``_canonical_json``'s ``encoded != round_trip`` guard cannot see a coercion that is
+    idempotent: ``{1: "a"}`` encodes to ``{"1":"a"}`` and re-encodes identically, and a
+    ``tuple`` becomes a ``list`` the same way.  The specialist boundary promises the tool
+    receives the manager's exact arguments, so the sealed snapshot must contain only
+    JSON-native values with ``str`` keys (audit K-seal / F5).
+    """
+    stack: list[tuple[Any, int]] = [(value, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if depth > _MAX_ARGS_DEPTH:
+            raise SpecialistDispatchError(f"{label}_too_deep")
+        if node is None or isinstance(node, (str, bool)):
+            continue
+        if isinstance(node, int):
+            continue
+        if isinstance(node, float):
+            if not math.isfinite(node):
+                raise SpecialistDispatchError(f"{label}_not_finite_json")
+            continue
+        if isinstance(node, dict):
+            for key, item in node.items():
+                if not isinstance(key, str) or isinstance(key, bool):
+                    raise SpecialistDispatchError(f"{label}_not_json_native")
+                stack.append((item, depth + 1))
+            continue
+        if isinstance(node, list):
+            for item in node:
+                stack.append((item, depth + 1))
+            continue
+        # tuple, set, bytes, datetime, pydantic model, numpy scalar, ...
+        raise SpecialistDispatchError(f"{label}_not_json_native")
+
+
+_SAFE_TURN_ROOT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+
+
+def safe_turn_root_id(request_id: Any) -> str | None:
+    """``turn:<request_id>`` for a well-formed id, an opaque hash otherwise.
+
+    ``observability.new_request_id`` accepts a client-supplied id, so the turn root can
+    inherit arbitrary text (newlines, ``/node:`` lookalikes, 4 KB of it).  A root id is a
+    trace label that ends up in execution contexts and log lines, so an unrecognised shape
+    is hashed rather than propagated (audit K8).  Returns ``None`` when there is no id.
+    """
+    raw = str(request_id or "").strip()
+    if not raw:
+        return None
+    if _SAFE_TURN_ROOT_RE.fullmatch(raw):
+        return f"turn:{raw}"
+    return f"turn:h:{hashlib.sha256(raw.encode('utf-8', 'surrogatepass')).hexdigest()[:16]}"
+
+
+def _checkpoint_digest_factory(run_id: Any) -> Callable[[str], str]:
+    """Per-run keyed masking of the manager params digest (audit K8)."""
+    key = hashlib.sha256(
+        b"rentcompass-specialist:" + str(run_id or "").encode("utf-8", "surrogatepass")
+    ).digest()
+
+    def mask(digest: str) -> str:
+        return hmac.new(
+            key, str(digest or "").encode("utf-8", "surrogatepass"), hashlib.sha256
+        ).hexdigest()[:16]
+
+    return mask
+
+
+def validation_fanout_task_id(*, plan_id: str | None, root_task_id: str) -> str:
+    """Stable task id for the post-search commute fan-out (audit F5).
+
+    These calls are real specialist work but they are NOT members of the immutable
+    ``TaskPlan``: they are discovered from a search RESULT, after the plan was sealed.
+    They therefore get a deterministic id derived from the plan/root rather than a task
+    entry, and they produce no ``SpecialistResult``.
+    """
+    return _stable_id(
+        "task", "commute-validation-v1", str(plan_id or ""), str(root_task_id)
+    )
 
 
 def _stable_id(prefix: str, *parts: Any) -> str:
@@ -211,17 +332,66 @@ def _stable_id(prefix: str, *parts: Any) -> str:
 
 
 def tool_spec_security_digest(spec: ToolSpecLike) -> str:
-    """Pin every security-relevant ToolSpec field, including its input schema."""
-    payload = {
-        "name": getattr(spec, "name", None),
-        "version": getattr(spec, "version", None),
-        "side_effect": getattr(spec, "side_effect", None),
-        "terminal": getattr(spec, "terminal", None),
-        "retry_safe": getattr(spec, "retry_safe", None),
-        "input_schema_digest": tool_input_schema_digest(spec),
-    }
-    encoded = _canonical_json(payload, label="tool_spec", max_bytes=MAX_CALL_ARGS_BYTES)
+    """Pin every security-relevant ToolSpec field, including its input schema.
+
+    ``input_schema`` is the MODEL-VISIBLE schema (``Tool.parameters``), computed once in
+    ``Tool.__init__``.  Swapping ``Tool.input_model`` afterwards therefore left this digest
+    unchanged while the tool started validating — and accepting — attacker-shaped arguments
+    (audit K7, PoC-confirmed).  ``input_model_ref``/``output_model_ref`` are recomputed live
+    from the models themselves, and ``max_retries``/``retry_on_error`` are pinned because
+    they decide how many times the pinned callable actually runs.
+
+    ``spec`` is duck-typed: an MCP wrapper, a registry fallback adapter or a test double can
+    put ANY object behind these attribute names.  Every failure mode of reading them is
+    therefore mapped onto one stable ``SpecialistDispatchError`` code — a bare exception here
+    would cross ``prepare_specialist_batch`` (which does not wrap this call) and crash
+    ``execute_tools`` itself, which is precisely the class of failure the boundary exists to
+    contain (review R1/R3).
+    """
+    try:
+        payload = {
+            # The five original fields stay RAW: a non-JSON value there already fails closed
+            # in ``_canonical_json`` with a stable code, and digesting its ``repr`` instead
+            # would be a weakening, not a fix.
+            "name": getattr(spec, "name", None),
+            "version": getattr(spec, "version", None),
+            "side_effect": getattr(spec, "side_effect", None),
+            "terminal": getattr(spec, "terminal", None),
+            "retry_safe": getattr(spec, "retry_safe", None),
+            "max_retries": _digest_scalar(getattr(spec, "max_retries", None)),
+            "retry_on_error": _digest_scalar(getattr(spec, "retry_on_error", None)),
+            "input_model_ref": _digest_scalar(getattr(spec, "input_model_ref", None)),
+            "output_model_ref": _digest_scalar(getattr(spec, "output_model_ref", None)),
+            "input_schema_digest": tool_input_schema_digest(spec),
+        }
+        encoded = _canonical_json(payload, label="tool_spec", max_bytes=MAX_CALL_ARGS_BYTES)
+    except SpecialistDispatchError:
+        raise
+    except Exception as exc:
+        raise SpecialistDispatchError("specialist_tool_spec_invalid") from exc
     return f"sha256:{hashlib.sha256(encoded.encode('utf-8')).hexdigest()}"
+
+
+def _digest_scalar(value: Any) -> Any:
+    """Keep a hostile/exotic spec attribute from breaking the digest itself.
+
+    ``repr()`` is attacker-reachable code: a duck-typed spec whose ``__repr__`` raises used to
+    propagate that exception straight out of the digest, past
+    ``prepare_specialist_batch`` and past every ``except SpecialistDispatchError`` in the
+    caller (review R1/R3).  A value that cannot even describe itself cannot be PINNED either
+    — two such objects would digest identically — so this fails closed with a stable code
+    rather than minting a grant over an unpinnable capability.
+    """
+    if value is None or isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    try:
+        return f"repr:{value!r}"
+    except Exception as exc:
+        raise SpecialistDispatchError("specialist_tool_spec_invalid") from exc
 
 
 def _index_specs(live_specs: Iterable[ToolSpecLike]) -> dict[str, ToolSpecLike]:
@@ -238,17 +408,29 @@ def _index_specs(live_specs: Iterable[ToolSpecLike]) -> dict[str, ToolSpecLike]:
     return indexed
 
 
-def _eligible(call: ReadCall) -> SpecialistRole | None:
-    role = specialist_role_for_tool(call.tool_name)
-    if role is None or call.tool_name in MANAGER_ONLY_TOOLS:
+def specialist_eligible_role(
+    tool_name: str, args: Mapping[str, Any] | None = None
+) -> SpecialistRole | None:
+    """THE single predicate for "this call belongs to a specialist role".
+
+    ``_eligible`` and the caller-side denial set used to disagree: the caller only asked
+    ``specialist_role_for_tool``, so a ``web_search`` carrying ``sub_queries`` was exempt on
+    the happy path and denied on the failure path (audit K1/F2).  The ``sub_queries``
+    exemption is gone — a model-controlled argument must never be able to steer a call OUT
+    of the capability boundary and back onto unrestricted manager dispatch.
+
+    ``args`` is accepted (and currently unused) so a future arg-sensitive rule has exactly
+    one place to live; it is deliberately never a reason to LEAVE the boundary.
+    """
+    name = str(tool_name or "")
+    role = _ROLE_BY_TOOL.get(name)
+    if role is None or name in MANAGER_ONLY_TOOLS:
         return None
-    if call.tool_name == "web_search":
-        try:
-            if call.args.get("sub_queries"):
-                return None
-        except Exception as exc:
-            raise SpecialistDispatchError("specialist_web_search_args_invalid") from exc
     return role
+
+
+def _eligible(call: ReadCall) -> SpecialistRole | None:
+    return specialist_eligible_role(call.tool_name, getattr(call, "args", None))
 
 
 def _snapshot_call(call: ReadCall) -> tuple[str, str]:
@@ -271,12 +453,40 @@ def _snapshot_call(call: ReadCall) -> tuple[str, str]:
     call_id = call.tool_call_id or f"call_{call.index}"
     if not isinstance(call_id, str) or not call_id or len(call_id) > 128:
         raise SpecialistDispatchError("specialist_tool_call_id_invalid")
+    args = dict(call.args)
+    _assert_json_native(args, label="specialist_call_args")
     args_json = _canonical_json(
-        dict(call.args), label="specialist_call_args", max_bytes=MAX_CALL_ARGS_BYTES
+        args, label="specialist_call_args", max_bytes=MAX_CALL_ARGS_BYTES
     )
     if not isinstance(json.loads(args_json), dict):
         raise SpecialistDispatchError("specialist_call_args_invalid")
     return args_json, call_id
+
+
+def seal_specialist_args(args: Mapping[str, Any]) -> dict[str, Any]:
+    """Apply the exact sealing rules of a planned call to a single ad-hoc call.
+
+    Used by the post-search commute fan-out (audit F5), whose calls are driven by SCRAPED
+    listing text and therefore need the same reserved-key, JSON-native and size checks as a
+    manager-planned call even though they are not members of the immutable ``TaskPlan``.
+    """
+    if not isinstance(args, Mapping):
+        raise SpecialistDispatchError("specialist_call_args_invalid")
+    keys = tuple(args)
+    if any(not isinstance(key, str) or key.startswith("_") for key in keys):
+        raise SpecialistDispatchError("specialist_reserved_argument")
+    if _RESERVED_INPUT_KEYS.intersection(keys):
+        raise SpecialistDispatchError("specialist_reserved_argument")
+    payload = dict(args)
+    _assert_json_native(payload, label="specialist_call_args")
+    sealed = json.loads(
+        _canonical_json(
+            payload, label="specialist_call_args", max_bytes=MAX_CALL_ARGS_BYTES
+        )
+    )
+    if not isinstance(sealed, dict):
+        raise SpecialistDispatchError("specialist_call_args_invalid")
+    return sealed
 
 
 def prepare_specialist_batch(
@@ -299,12 +509,25 @@ def prepare_specialist_batch(
     buckets: OrderedDict[
         SpecialistRole, list[tuple[ReadCall, str, str]]
     ] = OrderedDict()
+    rejected: dict[int, str] = {}
     total_args = 0
     for call in call_list:
         role = _eligible(call)
         if role is None:
             continue
-        args_json, call_id = _snapshot_call(call)
+        try:
+            args_json, call_id = _snapshot_call(call)
+        except SpecialistDispatchError as exc:
+            # PER-CALL failure radius (audit K1).  One hallucinated ``user_id`` on
+            # ``check_safety`` used to abort the whole batch, and the caller then denied
+            # every role-mapped read in the turn.  The defective call is recorded and
+            # excluded here; its siblings — including siblings in the SAME role — keep
+            # their grants and dispatch normally.  Only BATCH-level defects below still
+            # deny the whole eligible set.
+            index = call.index
+            if isinstance(index, int) and not isinstance(index, bool) and index >= 0:
+                rejected[index] = exc.error_code
+            continue
         total_args += len(args_json.encode("utf-8"))
         if total_args > MAX_BATCH_ARGS_BYTES:
             raise SpecialistDispatchError("specialist_batch_args_too_large")
@@ -313,15 +536,27 @@ def prepare_specialist_batch(
     # Execution-context IDs can be syntactically valid while still embedding a
     # client-controlled request ID, email address, postcode, or other source
     # identifier. Checkpoint only an opaque, deterministic boundary ID.
+    #
+    # ``turn`` is deliberately NOT in this seed (audit K8): the root task is the TURN's
+    # root, so seeding it per super-step minted eight different "roots" for one request
+    # and nothing downstream could join them.  ``plan_id`` below still carries ``turn``,
+    # so per-super-step uniqueness is unaffected.
     safe_root_task_id = _stable_id(
-        "manager", "root-task-v1", str(run_id), turn, str(root_task_id)
+        "manager", "root-task-v1", str(run_id), str(root_task_id)
     )
+    # The manager-owned params digest is an unsalted truncated hash of the tool arguments.
+    # Checkpointing it verbatim turned the SQLite checkpoint into an offline oracle for a
+    # user address (audit K8, PoC-confirmed).  Everything PERSISTED (plan_id, task inputs,
+    # tool_call_id, artifact_id) is seeded from a per-run keyed digest instead; the raw
+    # value stays in memory on PreparedSpecialistCall so _artifact_matches still binds the
+    # ledger entry written by the fc artifact writer.
+    checkpoint_digest = _checkpoint_digest_factory(run_id)
     plan_seed = [
         str(run_id),
         int(turn),
         str(root_task_id),
         [
-            [call.index, call.tool_name, call.params_digest, call_id]
+            [call.index, call.tool_name, checkpoint_digest(call.params_digest), call_id]
             for entries in buckets.values()
             for call, _args_json, call_id in entries
         ],
@@ -350,10 +585,10 @@ def prepare_specialist_batch(
                     str(root_task_id),
                     call.index,
                     call_id,
-                    call.params_digest,
+                    checkpoint_digest(call.params_digest),
                     hashlib.sha256(args_json.encode("utf-8")).hexdigest(),
                 ),
-                "params_digest": call.params_digest,
+                "params_digest": checkpoint_digest(call.params_digest),
             }
             for call, args_json, call_id in entries
         ]
@@ -388,7 +623,11 @@ def prepare_specialist_batch(
                 role=role,
                 grant=grant_by_name[call.tool_name],
                 artifact_id=_stable_id(
-                    "artifact", plan_id, task_id, call.index, call.params_digest
+                    "artifact",
+                    plan_id,
+                    task_id,
+                    call.index,
+                    checkpoint_digest(call.params_digest),
                 ),
                 spec_digest=spec_digest,
                 _args_json=args_json,
@@ -414,6 +653,7 @@ def prepare_specialist_batch(
         plan=plan,
         calls_by_index=MappingProxyType(dict(prepared)),
         _plan_json=plan_json,
+        rejected=MappingProxyType(dict(rejected)),
     )
 
 
@@ -448,6 +688,13 @@ def revalidate_specialist_call(
 
 
 def _duration(artifacts: Iterable[Mapping[str, Any]]) -> float:
+    """Fallback duration derived from the ledger.
+
+    ``elapsed_ms`` is NOT a latency measurement for every artifact shape: an abandoned
+    read carries the batch-window constant and a denied/never-dispatched call carries 0
+    (audit K-duration).  The caller passes measured wall clock via ``duration_ms_by_task``
+    whenever it has one; this remains the fallback for tasks it never started.
+    """
     values: list[float] = []
     for artifact in artifacts:
         value = artifact.get("elapsed_ms")
@@ -457,6 +704,17 @@ def _duration(artifacts: Iterable[Mapping[str, Any]]) -> float:
         if math.isfinite(value) and value >= 0:
             values.append(value)
     return max(values, default=0.0)
+
+
+def _measured_duration(
+    wall_clock_ms: Any, matched: Iterable[Mapping[str, Any]]
+) -> float:
+    """Prefer the scheduler's measured wall clock over ledger ``elapsed_ms``."""
+    if isinstance(wall_clock_ms, (int, float)) and not isinstance(wall_clock_ms, bool):
+        value = float(wall_clock_ms)
+        if math.isfinite(value) and value >= 0:
+            return value
+    return _duration(matched)
 
 
 def _artifact_matches(
@@ -479,8 +737,11 @@ def _artifact_matches(
 def build_specialist_results(
     prepared: PreparedSpecialistBatch,
     artifacts: Iterable[Mapping[str, Any]],
+    *,
+    duration_ms_by_task: Mapping[str, float] | None = None,
 ) -> tuple[SpecialistResult, ...]:
     """Derive typed results solely from manager-minted artifact references."""
+    measured = duration_ms_by_task or {}
     plan = prepared.validated_plan()
     ledger = [item for item in artifacts if isinstance(item, Mapping)]
     by_artifact: dict[str, list[Mapping[str, Any]]] = {}
@@ -588,7 +849,7 @@ def build_specialist_results(
             },
             evidence=tuple(evidence),
             error=error,
-            duration_ms=_duration(matched),
+            duration_ms=_measured_duration(measured.get(task.task_id), matched),
         )
         results.append(SpecialistResult.model_validate_json(result.model_dump_json()))
 
@@ -618,6 +879,10 @@ __all__ = [
     "build_specialist_results_from_artifacts",
     "prepare_specialist_batch",
     "revalidate_specialist_call",
+    "safe_turn_root_id",
+    "seal_specialist_args",
+    "specialist_eligible_role",
     "specialist_role_for_tool",
     "tool_spec_security_digest",
+    "validation_fanout_task_id",
 ]

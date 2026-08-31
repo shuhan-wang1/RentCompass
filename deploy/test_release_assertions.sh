@@ -44,6 +44,13 @@ setup() {
   OLD_SHA="$(cd "$repo" && git rev-parse HEAD)"
   NEW_SHA="$(cd "$repo" && git rev-parse refs/remotes/origin/main)"
   printf 'DEPLOY_PINNED_SHA=%s\n' "$OLD_SHA" > "$SANDBOX/pin.env"
+  printf 'CANARY_AGENT_ARCH=fc_loop\nCANARY_MANAGER_V1_SPECIALISTS=0\nCANARY_USE_MCP_TOOLS=0\n' \
+    > "$SANDBOX/root.env"
+  # The rollout preflight reads the routing include, never the host's /etc copy.
+  install_route 0 rollback rollback
+  # ...and, when there is no weighted include, the single upstream line instead.
+  mkdir -p "$SANDBOX/nginx"
+  install_upstream 5001
 
   cat > "$SANDBOX/bin/fakegh" <<'EOF'
 #!/usr/bin/env bash
@@ -81,6 +88,25 @@ EOF
 }
 teardown() { [ -n "$SANDBOX" ] && rm -rf "$SANDBOX"; SANDBOX=""; }
 
+# install_route <weight> <rollout-id> <stage> — the state the maintenance drain
+# restores, and therefore the state a release ENDS on.
+install_route() {
+  ROUTE_CONF_PATH="$SANDBOX/canary-routing.conf"
+  printf '# rentcompass-canary-weight: %s\n# rentcompass-rollout-id: %s\n# rentcompass-rollout-stage: %s\n' \
+    "$1" "$2" "$3" > "$ROUTE_CONF_PATH"
+}
+# remove_route — the shape of a host that has NOT been migrated to the weighted
+# include (the untracked snippet is absent from /etc/nginx/snippets). The release
+# preflight must survive it AND still resolve where the traffic ends up.
+remove_route() { ROUTE_CONF_PATH="$SANDBOX/no-weighted-include.conf"; rm -f "$ROUTE_CONF_PATH"; }
+# install_upstream <port> — the single `server 127.0.0.1:PORT;` line switch_pool.sh
+# owns; on a single-upstream host it IS the whole rollout state.
+install_upstream() {
+  SITE_CONF_PATH="$SANDBOX/nginx/site.conf"
+  printf 'upstream rentcompass_app {\n    server 127.0.0.1:%s;\n}\n' "$1" > "$SITE_CONF_PATH"
+}
+remove_upstream() { SITE_CONF_PATH="$SANDBOX/nginx/absent-site.conf"; rm -f "$SITE_CONF_PATH"; }
+
 # Sets OUT and RC. Not a command substitution: that subshell would swallow RC.
 run_release() {
   local stdin_data="${RELEASE_STDIN:-}"
@@ -92,6 +118,9 @@ run_release() {
     RELEASE_UPDATE_CMD="$SANDBOX/bin/fakeupdate" \
     RELEASE_RUNTIME_MAINTENANCE_CMD="$SANDBOX/bin/fakepreflight" \
     RELEASE_REQUIRED_CHECKS="Tests (Python 3.12),Compose smoke" \
+    RELEASE_ENV_FILE="$SANDBOX/root.env" \
+    RELEASE_ROUTE_CONF="$ROUTE_CONF_PATH" \
+    RELEASE_SITE_CONF="$SITE_CONF_PATH" \
     bash deploy/release.sh --no-fetch "$@" <<<"$stdin_data" ) > "$SANDBOX/out.txt" 2>&1
   RC=$?
   OUT="$(cat "$SANDBOX/out.txt")"
@@ -244,6 +273,100 @@ teardown
 setup green
 run_release --yes -- --pool legacy; CALLS_TXT="$(cat "$CALLS")"
 contains "$CALLS_TXT" "update --pool legacy" "explicit update arguments override the safe release defaults"
+teardown
+echo
+
+echo "--- 9. a routine release can never END at 100% candidate traffic ---"
+# K4: `bash deploy/release.sh` carries no rollout flag at all, yet `--both --drain`
+# used to be able to leave the candidate on 100% of the public. The preflight now
+# states the identity that ships and the weight/stage the run ends on, and refuses
+# the 100% ending unless CANARY_ALLOW_FLIP=1 was set on purpose.
+setup green
+install_route 0 rollback rollback
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a weight-0 host releases normally"     0 "$RC"
+contains "$OUT" "candidate  arch=fc_loop specialists=0 mcp=0" "the resolved candidate identity is shown"
+contains "$OUT" "ends at    candidate weight 0% stage rollback" "so is the weight/stage the run ends on"
+teardown
+
+setup green
+install_route 100 r-flip flip
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a release that would end at 100% is refused" 1 "$RC"
+contains "$OUT"       "END with the candidate"    "and says exactly what it refused"
+contains "$OUT"       "50% is the highest authorised rollout stage" "citing the runbook rule"
+check    "the pin did NOT move"                  "$OLD_SHA" "$(pin_now)"
+check    "HEAD did NOT move"                     "$OLD_SHA" "$(head_now)"
+lacks    "$CALLS_TXT" "update"                   "update.sh is never reached"
+lacks    "$CALLS_TXT" "preflight"                "and runtime state is left alone"
+teardown
+
+setup green
+install_route 100 r-flip flip
+CANARY_ALLOW_FLIP=1 run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "CANARY_ALLOW_FLIP=1 authorises the flip release" 0 "$RC"
+contains "$CALLS_TXT" "update --both --drain"    "and the deploy proceeds"
+teardown
+
+setup green
+install_route 0 rollback rollback
+printf 'CANARY_AGENT_ARCH=manager_v1\nCANARY_MANAGER_V1_SPECIALISTS=0\nCANARY_USE_MCP_TOOLS=0\n' > "$SANDBOX/root.env"
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a compatibility-shell manager_v1 candidate is refused" 1 "$RC"
+contains "$OUT"       "unsupported candidate identity" "the whitelist is named"
+lacks    "$CALLS_TXT" "update"                   "and nothing ships"
+teardown
+echo
+
+echo "--- 10. a host with NO weighted include is still resolved, and still gated ---"
+# R3/H2: the preflight read these markers WITHOUT `|| true`. `set -euo pipefail`
+# turns `sed` on a missing file into exit 2, which errexit turns into a silent
+# abort — the entire release died after "Release plan" with no output and rc=2 on
+# every host where the untracked snippet is not installed, i.e. production today.
+setup green
+remove_route
+install_upstream 5001
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "no weighted include does not abort the release" 0 "$RC"
+contains "$OUT" "SINGLE-UPSTREAM mode"        "the routing mode is named, not silently skipped"
+contains "$OUT" "127.0.0.1:5001 = legacy"     "and the sole upstream is resolved to a pool"
+contains "$OUT" "candidate weight 0%"         "and to the candidate exposure it means"
+contains "$CALLS_TXT" "update --both --drain" "so the release proceeds"
+teardown
+
+# R3/M1: with no weighted include, END_WEIGHT was empty and the K4 gate was skipped
+# entirely — on a host already serving :5002 a bare `bash deploy/release.sh` ended
+# at 100% candidate, because update.sh's restore hands itself CANARY_ALLOW_FLIP=1.
+setup green
+remove_route
+install_upstream 5002
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "single-upstream on the candidate is refused like weight 100" 1 "$RC"
+contains "$OUT" "END with the candidate"      "and says exactly what it refused"
+contains "$OUT" "single-upstream mode"        "naming the routing mode it resolved"
+contains "$OUT" "50% is the highest authorised rollout stage" "citing the runbook rule"
+check    "the pin did NOT move"               "$OLD_SHA" "$(pin_now)"
+check    "HEAD did NOT move"                  "$OLD_SHA" "$(head_now)"
+lacks    "$CALLS_TXT" "update"                "update.sh is never reached"
+lacks    "$CALLS_TXT" "preflight"             "and runtime state is left alone"
+teardown
+
+setup green
+remove_route
+install_upstream 5002
+CANARY_ALLOW_FLIP=1 run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "CANARY_ALLOW_FLIP=1 authorises it on a single-upstream host too" 0 "$RC"
+contains "$CALLS_TXT" "update --both --drain" "and the deploy proceeds"
+teardown
+
+setup green
+remove_route
+remove_upstream
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "neither routing file readable still does not abort silently" 0 "$RC"
+contains "$OUT" "upstream UNKNOWN"            "the unresolved end state is stated"
+contains "$OUT" "could not be resolved"       "with a warning rather than silence"
+contains "$CALLS_TXT" "update --both --drain" "and update.sh, which refuses to guess, decides"
 teardown
 echo
 

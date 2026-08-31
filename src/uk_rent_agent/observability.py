@@ -7,6 +7,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from collections.abc import Iterator
@@ -26,9 +27,50 @@ parent_task_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 
 _AGENT_CONTEXT_FIELDS = ("agent_role", "task_id", "parent_task_id")
 
+logger = logging.getLogger(__name__)
+
+# A client-supplied correlation id is UNTRUSTED INPUT. It is echoed into every
+# JsonFormatter line, into the canary record's ``request_id``, and (as
+# ``turn:<request_id>``) into the manager root task label — so accepting it
+# verbatim let a caller write arbitrary text, of arbitrary length, into ops
+# telemetry that is read by humans and shipped off-box. The grammar below is the
+# same machine-id shape the rest of the trace layer enforces: it admits a uuid
+# hex, a dashed uuid, and the ``svc:1234`` forms real proxies emit, and nothing
+# that could carry a user's words.
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$")
+
 
 def new_request_id(value: str | None = None) -> str:
-    return value or uuid.uuid4().hex
+    """Return a safe request id: the client's, only if it is a machine identifier.
+
+    A rejected value is REPLACED, never sanitised — a truncated or stripped copy
+    of attacker-controlled text is still attacker-controlled text, and a partial
+    match would also break the "one id, one request" correlation the field
+    exists for. The rejected value is deliberately never logged: writing it to
+    the log to explain why we refused to write it to the log is the whole defect.
+
+    The replacement is a DIGEST of the rejected value, not a fresh uuid4. Both
+    callers in ``app.py`` do::
+
+        request_id = new_request_id(request.headers.get("X-Request-Id"))
+        prior = conversation_store.get_request_turn(user_id, request_id)
+
+    — an idempotent-replay lookup. A random replacement gave the same client
+    retrying the same request a different id every time, so the replay never
+    matched and the whole turn re-ran and re-billed. That hit exactly the callers
+    who send a well-formed id of a shape this grammar does not admit (AWS X-Ray
+    ``Root=1-...``, base64 trace ids, ids longer than 96 chars). SHA-256 is a
+    total, deterministic function: it echoes none of the client's text and keeps
+    one-id-one-request intact. Only a genuinely absent id gets a fresh uuid4,
+    because there is nothing to correlate with.
+    """
+    if value is not None and _REQUEST_ID_RE.fullmatch(value):
+        return value
+    if value is not None:
+        logger.debug("observability.request_id.replaced client id did not match "
+                     "the machine-identifier grammar")
+        return hashlib.sha256(value.encode("utf-8", "replace")).hexdigest()[:32]
+    return uuid.uuid4().hex
 
 
 def pseudonymous_user_ref(value: str | None) -> str:

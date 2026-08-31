@@ -84,6 +84,15 @@ def _bootstrap_env(state_dir: Path, events_log: Path) -> None:
     os.environ["SEARCH_LISTING_CACHE_PATH"] = str(state_dir / "listing_cache.sqlite3")
     os.environ["IDEMPOTENCY_DB"] = str(state_dir / "idempotency.sqlite3")
     os.environ["AUTH_DB_PATH"] = str(state_dir / "users.json")
+    # DECLARE that an offline eval writes no canary telemetry. This used to be an
+    # accident: `app._wire_canary_sink()` defaults to
+    # `<checkpoint_path>.parent/logs/canary-<arch>.jsonl` when CANARY_LOG_PATH is
+    # unset, so the only thing keeping an eval process off the PRODUCTION canary log
+    # was the CHECKPOINT_PATH redirect two lines up. Anything that wired the sink
+    # without that redirect -- or any future change to how the default path is
+    # derived -- appended eval turns to the log the release gate reads.
+    # `setdefault` so an operator can still point it at a scratch file on purpose.
+    os.environ.setdefault("CANARY_LOG_PATH", "off")
     # Load the REAL app/.env so LIVE runs use the genuine DeepSeek key. llm_config
     # also loads it, but only with override=False and AFTER this bootstrap runs — so
     # unless we populate os.environ here first, the offline placeholder below would
@@ -413,7 +422,21 @@ def build_fc_batches(case: dict) -> List[List[str]]:
 
 
 class _FakeFCModel:
-    """Scripted, duck-typed stand-in for the fc_loop agent's bound-tools chat model."""
+    """Scripted, duck-typed stand-in for the fc_loop agent's bound-tools chat model.
+
+    It is NOT a LangChain ``BaseChatModel``, so the collector's callback handler
+    (``collector.instrument_chat_model``) never sees it.  Every invocation therefore
+    records its own ``llm_call`` event through the SAME public boundary the real
+    model's callback uses (``collector.record_llm_call``).  Without that, an offline
+    fc/manager round reported ``llm_calls == 0`` for every case, which made the
+    paired gate's ``llm_call_budget`` check a comparison of 0 against 0 — a
+    threshold that cannot fail.  A tool turn now reports 2 (one batch decision plus
+    the final answer), matching the round trips the real loop would make.
+    """
+
+    #: Deterministic token accounting: identical inputs must yield identical counts
+    #: in both arms, so the paired comparison stays exact.  ~4 chars per token.
+    _CHARS_PER_TOKEN = 4
 
     def __init__(self, batches: List[List[str]], final_text: str, query: str):
         self._batches = batches
@@ -480,8 +503,36 @@ class _FakeFCModel:
             if isinstance(field, str)
         }
 
+    @staticmethod
+    def _text_of(messages) -> str:
+        if isinstance(messages, (list, tuple)):
+            return "".join(str(getattr(m, "content", m)) for m in messages)
+        return str(messages)
+
+    def _record_llm_call(self, messages, rendered: str, latency_ms: float) -> None:
+        """Emit the same ``llm_call`` event shape the real model's callback emits.
+
+        ``agent_context`` is deliberately left unset: ``collector.record_llm_call``
+        then captures the CURRENT execution context at emission time, so a call made
+        inside a manager/specialist scope carries that scope's ``agent_role`` /
+        ``task_id`` exactly as the live callback would.  No-op when capture is off.
+        """
+        from evaluation.metrics import collector as _collector
+
+        _collector.record_llm_call(
+            provider="deepseek",
+            model="fake-chat",
+            purpose="fc_agent",
+            input_tokens=len(self._text_of(messages)) // self._CHARS_PER_TOKEN,
+            output_tokens=len(rendered) // self._CHARS_PER_TOKEN,
+            cached_tokens=0,
+            latency_ms=latency_ms,
+            success=True,
+        )
+
     async def ainvoke(self, messages, **kwargs):  # noqa: ANN001
         from langchain_core.messages import AIMessage
+        started = time.perf_counter()
         if self._step < len(self._batches):
             batch = self._batches[self._step]
             self._step += 1
@@ -490,7 +541,14 @@ class _FakeFCModel:
                  "id": f"call_{self._step}_{i}", "type": "tool_call"}
                 for i, name in enumerate(batch)
             ]
+            self._record_llm_call(
+                messages, json.dumps(tool_calls, sort_keys=True, default=str),
+                (time.perf_counter() - started) * 1000.0,
+            )
             return AIMessage(content="", tool_calls=tool_calls)
+        self._record_llm_call(
+            messages, self._final_text, (time.perf_counter() - started) * 1000.0,
+        )
         return AIMessage(content=self._final_text)
 
 
@@ -1341,13 +1399,15 @@ class CaseRunner:
 
             return _stub
 
-        async def patched_specialist(capability, *, expected_spec_digest, **kwargs):
+        async def patched_specialist(capability, **kwargs):
+            # Forward the caller's keywords VERBATIM.  This wrapper must not restate
+            # the production signature: ``execute_resolved_specialist_capability``
+            # owns it (it now takes the tool's own arguments as one ``args`` mapping
+            # rather than sharing the kwarg namespace), and a wrapper that spells the
+            # parameters out turns any signature change into a benchmark-only
+            # TypeError that looks like a tool failure.
             desired_specialist_result.set(None)
-            result = await orig_specialist_execute(
-                capability,
-                expected_spec_digest=expected_spec_digest,
-                **kwargs,
-            )
+            result = await orig_specialist_execute(capability, **kwargs)
             desired = desired_specialist_result.get()
             desired_specialist_result.set(None)
             if desired is not None:

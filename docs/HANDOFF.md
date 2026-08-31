@@ -1,7 +1,62 @@
 # HANDOFF — START HERE
 
 Master index for the fc_loop work. **Every other document is a leaf; this is the only file
-that spans all branches.** Last updated 2026-08-12.
+that spans all branches.** Last updated 2026-08-31.
+
+> ## `manager_v1` + specialists — 2026-08-31
+>
+> An uncommitted working-tree feature on top of `4171d84`, reviewed by four independent
+> reviewers. Read this before citing it as multi-agent work, and before planning on top
+> of it.
+>
+> **What exists.** A **capability sandbox plus telemetry layer over `fc_loop`**, gated
+> behind `AGENT_ARCH=manager_v1` + `MANAGER_V1_SPECIALISTS=1` + `USE_MCP_TOOLS=0`. The
+> manager's already-approved read batch is projected into per-role `SpecialistTask`
+> objects (`app/core/specialist_runtime.py::prepare_specialist_batch`). What the layer
+> adds that is real: **capability pinning** to an immutable digest-checked `ToolSpec`,
+> **revalidation** at the execution boundary (`revalidate_specialist_call`), a hard
+> manager-only capability set (`remember` / `recall_memory` / `ask_user` / checkpoint
+> mutation / the final answer), taint propagation, and **role-labelled telemetry**
+> (`agent_role` / `task_id` / `parent_task_id`). What it is NOT: a specialist makes **no
+> model call**, has **no context isolation** (it runs inside the manager's own turn and
+> context), and there is **no plan step** — the batch was already chosen. This is Stage 1
+> of `docs/layered_agent_architecture_proposal.md` with a capability sandbox bolted on,
+> **not the proposal's Stage 3**.
+>
+> **The proposal's Stage 1 prerequisites are being addressed, not yet met.** Stage 1 is
+> observer/telemetry coverage: nested `_call_deepseek` calls that the observer did not
+> see (the `llm_calls` undercount of §3.11) and per-tool latency attribution. That work is
+> in flight in this same round; until it lands, any per-layer latency number quoted from
+> before it is an undercount, exactly as §3.11 records.
+>
+> **Four-reviewer verdict: 5/10 — this is not multi-agent.** The reviewers' unanimous
+> reading is that the honest technical name is a **tool capability broker**. The security
+> and pinning work is genuine and worth keeping; the framing is not.
+>
+> **The offline paired gate cannot evidence quality, and now says so.**
+> `python -m evaluation.run_paired_manager_eval` runs two offline `run_benchmark` arms
+> and compares them with `evaluation/paired_gate.py`. On the 98-case round both arms
+> produce **byte-identical `final_answer` on 98/98 pairs**, so every quality / evidence /
+> grounding comparison in it was arithmetic on the same numbers twice. As of 2026-08-31
+> the gate detects this itself and reports those checks `VACUOUS`, reports
+> `memory_isolation` / `prompt_injection` as `not_measurable_offline` (offline the graded
+> answer comes from a test double that cannot fail them), and reports the latency check
+> `LOW_POWER` at `--repeat 1`. The honest outcome of an offline round is **HOLD**. See
+> `evaluation/README.md`.
+>
+> **Open owner decision.** Either (a) implement Phase 3 — a final agent that consumes
+> `specialist_results` under `AnswerContract` — which would make the contracts load-bearing
+> and the "specialist" framing true; or (b) **delete the unused contracts**
+> (`AnswerContract` is consumed by no runtime path and `depends_on` is always empty) and
+> keep the capability broker under its honest name. Do not leave unused contract
+> scaffolding in the tree as implied roadmap.
+>
+> **fc_loop behaviour change riding in this diff.** `search_nearby_pois` was added to the
+> untrusted/taint sets (`app/core/agent_loop.py::_UNTRUSTED_TOOLS` and
+> `UNTRUSTED_SPECIALIST_TOOLS`). POI results are therefore sanitised on the model-facing
+> channel and taint the turn, which **gates memory writes on POI turns for every
+> fc-family architecture**, not only `manager_v1`. This is a production behaviour change,
+> not a manager-only one.
 
 > ## Current release status — 2026-08-12
 >
@@ -310,7 +365,7 @@ earlier notes that named it as the shippable SHA were wrong.
 | `docs/eval_infrastructure.md` | `eval/measurement-infrastructure` | what the shippable branch adds, and why items 5–6 exist (both are scars). |
 | `docs/canary_runbook.md` | all branches | canary/rollout operations: image build out of band, stage table, gate metrics, rollback. **Read §1 "Image build" before building any candidate.** |
 | `docs/output_length_latency_preregistration.md` | `docs/output-length-latency-prereg` (PR #15) | the surviving latency lever, as a design. **Every threshold is `<TO BE FILLED>` and §3.5 constrains how they may be filled.** |
-| `docs/layered_agent_architecture_proposal.md` | mainline (PR #29) | **read before proposing any multi-agent work.** Simulated per-turn on the warm n=64 round: layering buys ~308ms of a 1,402ms gap and moves ZERO turns under the bar; a mandatory plan hop improves the median while 5 more turns miss it. Stage 1 is telemetry, not architecture. |
+| `docs/layered_agent_architecture_proposal.md` | mainline (PR #29) | **read before proposing any multi-agent work.** Simulated per-turn on the warm n=64 round: layering bought ~308ms of a 1,402ms gap and moved ZERO turns under the bar as a **p50 latency lever**. That is the only claim the simulation supports. It is **not** a ruling on layering as a security/capability boundary, and it is quantified with the `llm_calls` instrument that §3.11 later WITHDREW as undercounting. Its Stage 1 (observer coverage of nested `_call_deepseek`, per-tool latency) remains a prerequisite for any staged layering claim, and is the work in flight in the 2026-08-31 `manager_v1` round above. |
 | `docs/round_variance_preregistration.md` | mainline (PR #19, **unfrozen**) | σ(p50). Threshold **126ms** derived from α=0.05/power=0.80/δ=500ms, `k = ceil(2·(2.8016·σ̂/500)²)`. Read §0 first: the estimand is round-level p50, NOT per-case. |
 | `.runtime/round-8793c0b-internal-2026-07-25/README.txt` | deploy tree, not committed | procedure and caveats for the round of record (§3.8/§3.9). Authoritative on how that round was actually run. |
 
@@ -481,7 +536,7 @@ On (1), the lever ledger, **as amended on 2026-07-26**:
 | output length | surviving, and the only one with a fitted relationship |
 | serving-path overhead | surviving; +599ms paired median vs the in-process harness |
 | **intra-batch tool parallelism** | **NOT A LEVER — it was already parallel.** 16 concurrent 1.0s reads finish in 1.010s. An earlier draft of this section asserted the opposite without reading the code. |
-| **layered / multi-agent** | quantified and insufficient: ~308ms of a 1,402ms gap, **zero** turns moved under the bar. A p95 lever. See `docs/layered_agent_architecture_proposal.md`. |
+| **layered / multi-agent** | **as a p50 latency lever: quantified and insufficient** — ~308ms of a 1,402ms gap, **zero** turns moved under the bar; a p95 lever at best. Scope that verdict to latency only: it says nothing about layering as a capability/security boundary, which is what the 2026-08-31 `manager_v1` work actually builds (and which the four-reviewer round scored 5/10 *as multi-agent*, while keeping the pinning/revalidation). The 308ms figure also rests on the `llm_calls` instrument WITHDRAWN in §3.11. See `docs/layered_agent_architecture_proposal.md`. |
 
 §3.8 shows the two surviving levers are **not yet separable**, so neither may be planned
 against yet. And per §3.12, ~740ms of round-to-round p50 drift on identical code means no

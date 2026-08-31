@@ -223,6 +223,55 @@ AGENT_ARCH=manager_v1 MANAGER_V1_SPECIALISTS=1 USE_MCP_TOOLS=0 \
   uk-rent-asgi
 ```
 
+#### What a "specialist" is here, precisely
+
+The word *specialist* names a role label on a tool grant, not a second agent. Read
+this before planning work on top of it.
+
+- **No specialist makes a model call, and there is no context isolation.** A
+  specialist has no prompt, no model, and no separate message history. It runs
+  inside the manager's own turn and process, under the manager's context. There is
+  no plan step either: the manager's **already-approved read batch** — the tool
+  calls the fc agent node had already decided to make — is what gets projected
+  into per-role `SpecialistTask` objects
+  (`app/core/specialist_runtime.py::prepare_specialist_batch`). Nothing chooses to
+  call a tool that the manager had not already chosen. The paired offline gate
+  pre-registers exactly this as `llm_call_budget`: the adapter must add **no**
+  model round trip.
+- **What it does provide today**, and this is real: **capability pinning** (a task
+  is bound to one immutable, digest-checked `ToolSpec`, so a tool swapped or
+  redefined between resolve and execute fails closed), **revalidation** at the
+  execution boundary (`revalidate_specialist_call`), a hard manager-only
+  capability set (`remember`, `recall_memory`, `ask_user`, checkpoint/state
+  mutation, the final answer), taint propagation on every untrusted read, and
+  **role-labelled telemetry** — `agent_role` / `task_id` / `parent_task_id` on
+  tool-call, model-usage and lifecycle events, which is what makes per-role
+  attribution measurable at all.
+- **`AnswerContract` and `depends_on` are scaffolding, not runtime.**
+  `src/uk_rent_agent/agent/specialist_contracts.py` defines both;
+  `AnswerContract` is not consumed by any runtime path, and `depends_on` is
+  always empty because a projected read batch has no declared ordering. The
+  dependency validation and cycle detection in the contract module are exercised
+  only by their own tests. Treat them as a reserved interface for a future phase
+  in which a final agent consumes `specialist_results`, not as behaviour you can
+  rely on now.
+- **Specialist result statuses** are `succeeded`, `partial`, `failed`, and
+  `skipped` (`build_specialist_results`); the separate *lifecycle event*
+  vocabulary is `planned`, `started`, `completed`, `failed`, `skipped`. A
+  `partial` task returned reliable evidence for some of its calls and not others,
+  and is a normal, observable outcome — not an error state.
+- **The honest technical name for this feature is a tool capability broker.**
+  It brokers a pinned, revalidated, role-labelled, read-only capability grant out
+  of a batch the manager already approved. It is not multi-agent orchestration,
+  and no measurement in this repository claims that it is.
+
+One part of this work is **not** behind the flag. `search_nearby_pois` was added to
+`app/core/agent_loop.py::_UNTRUSTED_TOOLS` (and to `UNTRUSTED_SPECIALIST_TOOLS`)
+unconditionally, so POI results are now sanitized on the model-facing channel and
+taint the turn — which gates memory writes on POI turns for **every** fc-family
+architecture, `manager_v1` or not, with `MANAGER_V1_SPECIALISTS` unset. Treat it as
+a production behaviour change in its own right.
+
 ```mermaid
 flowchart TD
     START([START]) -.->|ENABLE_STORE| HY[hydrate_prefs]
@@ -704,38 +753,50 @@ Rolling a new conversational architecture into production is not a deploy — it
 is an experiment with a rollback lever. The full procedure lives in
 `docs/canary_runbook.md`; this section is the whole shape of it.
 
-### The two pools
+### The two pools: control, and one configurable candidate
+
+The canary is **not** a fixed `legacy` vs `fc_loop` pair. It is a stable control
+pool and one **candidate** pool whose architecture is a configuration choice.
 
 | Pool | Service | Port | Config | Image |
 |---|---|---|---|---|
-| **legacy** | `app` | `127.0.0.1:5001` | `AGENT_ARCH=legacy` | built from the tree (`:latest`) |
-| **fc** | `app-fc` | `127.0.0.1:5002` | `AGENT_ARCH=fc_loop`, `DEEPSEEK_STRICT=1` | **immutable pre-built tag** `uk-rent-agent:canary-fc-loop-<sha>` |
+| **control** | `app` | `127.0.0.1:5001` | `AGENT_ARCH=legacy` (the rollback target) | built from the tree (`:latest`) |
+| **candidate** | `app-fc` | `127.0.0.1:5002` | `AGENT_ARCH` selects the candidate: `fc_loop` (default, specialists off) or `manager_v1` with `MANAGER_V1_SPECIALISTS=1`; `DEEPSEEK_STRICT=1` | **immutable pre-built tag** `uk-rent-agent:canary-<arch>-<sha>` |
 
-The fc service has **no `build:`** in compose, deliberately: the working tree can
-never silently become what canary traffic executes. A new candidate gets a new
-tag; tags are never rebuilt in place.
+The service name `app-fc` and the `FC_*` variables are historical: they mean
+**"candidate"**, not "always `fc_loop`". The candidate service has **no `build:`**
+in compose, deliberately: the working tree can never silently become what canary
+traffic executes. A new candidate gets a new tag; tags are never rebuilt in place.
 
 ```bash
-docker compose up -d                              # legacy stack only (unchanged)
-docker compose --profile canary up -d app-fc      # add the fc pool
+docker compose up -d                              # control stack only (unchanged)
+docker compose --profile canary up -d app-fc      # add the candidate pool
 ```
 
 ### Per-pool environment
 
-| Env | legacy (`app`) | fc (`app-fc`) |
+| Env | control (`app`) | candidate (`app-fc`) |
 |---|---|---|
-| `AGENT_ARCH` | `legacy` | `fc_loop` |
+| `AGENT_ARCH` | `legacy` | the selected candidate arch (`fc_loop` or `manager_v1`) |
+| `MANAGER_V1_SPECIALISTS` | unset | `1` only for a `manager_v1` candidate |
 | `DEEPSEEK_STRICT` | unset | `1` |
 | `APP_CANDIDATE_SHA` | `${LEGACY_APP_SHA:-}` | `${FC_CANARY_SHA:?}` |
-| `CHECKPOINT_DB_PATH` | `checkpoints.sqlite3` | `checkpoints_fc.sqlite3` |
+| `CHECKPOINT_DB_PATH` | `checkpoints.sqlite3` | `checkpoints_${CANARY_AGENT_ARCH}_specialists-${CANARY_MANAGER_V1_SPECIALISTS}.sqlite3` |
 | `CONVERSATION_DB_PATH` | `conversations.sqlite3` | `conversations.sqlite3` (**shared**) |
-| `CANARY_LOG_PATH` | `canary-legacy.jsonl` | `canary-fc_loop.jsonl` |
+| `CANARY_LOG_PATH` | `canary-legacy.jsonl` | `canary-<arch>.jsonl` |
 
-The two substitution operators differ on purpose. The fc pins are `:?` — no fc
-pool without an explicit pin. The legacy pin is `:-` with an empty default,
-because `app` is the **only rollback target** and a `:?` there would make every
-compose command fail while the variable was missing, including the one that
+The two substitution operators differ on purpose. The candidate pins are `:?` — no
+candidate pool without an explicit pin. The control pin is `:-` with an empty
+default, because `app` is the **only rollback target** and a `:?` there would make
+every compose command fail while the variable was missing, including the one that
 brings the escape hatch back.
+
+The candidate's checkpoint filename is **derived, never chosen**: compose builds it
+from the identity pair (`docker-compose.yml`), and the file itself now carries a
+`rentcompass_runtime_identity` stamp, so pointing a pool at another architecture's
+database fails `/ready` with `CheckpointIdentityError` instead of resuming foreign
+LangGraph state. Setting `CHECKPOINT_DB_PATH` to a hand-written name (this table
+said `checkpoints_fc.sqlite3` until 2026-08-31) is how you trip that error.
 
 ### Assignment and state isolation
 
@@ -750,35 +811,72 @@ brings the escape hatch back.
 
 ### Telemetry
 
-Each completed turn emits exactly one JSON line (`event: canary.turn`, schema
-v2) carrying arch, candidate sha, endpoint, HTTP status, turn outcome, latency,
+Each completed turn emits exactly one JSON line (`event: canary.turn`,
+`telemetry_schema_version` **3** — `app/core/canary_telemetry.py::SCHEMA_VERSION`)
+carrying arch, candidate sha, endpoint, HTTP status, turn outcome, latency,
 security counters (denied vs **executed** — different events), `dsml_blocked` vs
-`dsml_leak`, and degradation flags. Observations are accumulated in a ContextVar
-*as they happen*, so a turn that crashes still reports what its provider did —
-a schema 400 is a plausible cause of a crash and must not vanish with the
-final state.
+`dsml_leak`, and the degradation flags `partial`, `soft_wrapped` and
+`tool_budget_timeout` — all three are **required** fields, so a degraded turn is
+counted rather than dropped. Observations are accumulated in a ContextVar *as they
+happen*, so a turn that crashes still reports what its provider did — a schema 400
+is a plausible cause of a crash and must not vanish with the final state.
+
+A crashed turn is the one case that genuinely *cannot* count its tool batches: that
+number is folded from the artifact ledger inside the final state, and a crash has no
+final state. `tool_ledger_status` states that gap instead of leaving `tool_batches:
+null` to be read as "ran no tools". It is validated in both directions, so it can
+never become an opt-out: `unavailable` is legal **only** on a `crash` /
+`server_error` outcome and **requires** `tool_batches: null`; `complete` at v3
+requires `tool_batches` non-null; and the key is *omitted*, never defaulted, when the
+producer does not state it (so records written before the field existed are not
+convicted by a rule invented after them — the consumer falls back to the outcome).
+`scripts/canary_report.py` reports `tool_batches_observed_turns` as the honest
+denominator for `tool_batches_total`. A crash still holds the gate for what it really
+failed to observe (`security.*` null, `llm_usage_status=not_instrumented`).
+
+Metrics
+production genuinely cannot observe (`forbidden_read`, `no_evidence_numbers`) are
+emitted as `null` and declared EVAL-ONLY; they are never emitted as `false`, which
+would assert a clean observation nobody made.
 
 ### Gates
 
 `scripts/canary_report.py` reads the stream and returns a verdict as an exit
 code. Stages advance only when **both** minima clear:
 
-| Stage | fc traffic | Min hold | Min fc turns |
+| Stage | Candidate traffic | Min hold | Min candidate turns |
 |---|---|---|---|
-| `internal` | internal only | 24h | 50 |
+| `internal` | internal only (weight 0) | 24h | 50 |
 | `c1` | 5% | 24h | 200 |
 | `c2` | 20% | 48h | 500 |
 | `c3` | 50% | 72h | 1000 |
-| `flip` | 100% | 7d | 2000 (reserved: requires frozen/shadow control gate) |
+| `flip` | 100% | 7d | 2000 — requires `CANARY_ALLOW_FLIP=1` **and** a frozen or shadow control gate |
+
+Two operational preconditions sit on top of the table:
+
+- **Any weight > 0** requires the answer probe `deploy/probe_pool_answer.py` to
+  pass against the candidate pool first. `/health` and `/ready` cannot see a pool
+  that returns 200 while producing no usable answer — the 2026-07-25 incident, in
+  which a stale model id broke **both** pools for a day behind green health
+  checks. A greeting is not a probe; the probe must drive a real, answer-producing
+  query.
+- **100% (`flip`) requires `CANARY_ALLOW_FLIP=1`.** At 100% there is no
+  concurrent control arm left, so every "no worse than control" comparison in the
+  gate loses its denominator. The flip stage is only meaningful against a
+  separately pre-registered **frozen control artifact or a shadow control
+  stream** bound to the same candidate. Without that gate the 100% weight is a
+  routing primitive, not evidence of eligibility.
 
 **Zero-tolerance (exit 3, immediate rollback):** a tainted/unauthorised memory
 write **executed**; a forbidden write **executed**; a DSML/tool-markup leak; a
 systematic schema/API 400. A *denied* attempt is the designed safe path and does
 not trip these.
 
-**Stage-pause (exit 2):** fc p50 > 6000 ms or p95 > 30000 ms; degraded-turn rate
-(partial ∪ soft-wrapped) > 10%; forbidden-read rate, no-evidence-number rate or
-5xx rate more than 1pp worse than legacy.
+**Stage-pause (exit 2):** candidate p50 > 6000 ms or p95 > 30000 ms; degraded-turn
+rate (`partial` ∪ `soft_wrapped`) > 10%; forbidden-read rate, no-evidence-number
+rate or 5xx rate more than 1pp worse than the control pool. `partial` is a turn
+lifecycle status in its own right — an abandoned/partial tool result — and is
+counted, not discarded.
 
 | Exit | Meaning |
 |---|---|
@@ -807,9 +905,10 @@ report has an unknown denominator. Read the applied window off the report's own
 - **Normal:** switch during the rollout window with the command below. There is no
   load-balancer stickiness assumption: the inactive target is refreshed before
   cutover and rehydrates conversation state from the shared durable store.
-- **Emergency:** point the upstream back at legacy immediately. Legacy rebuilds
-  affected conversations from the shared transcript into its own checkpoint
-  namespace and never reads fc's checkpoints, which are treated as abandoned.
+- **Emergency:** point the upstream back at the control pool immediately (on a
+  weighted install this is candidate weight 0). The control pool rebuilds affected
+  conversations from the shared transcript into its own checkpoint namespace and
+  never reads the candidate's checkpoints, which are treated as abandoned.
 
 ```bash
 bash deploy/switch_pool.sh --status

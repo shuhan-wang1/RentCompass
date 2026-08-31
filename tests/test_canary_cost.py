@@ -225,10 +225,10 @@ def test_invalid_price_table_metadata_holds(field, value, message):
     assert message in report["error"]
 
 
-def test_missing_rollout_and_unknown_arch_are_not_canonicalised():
+def test_unknown_arch_is_not_canonicalised_and_holds():
     records = [
         _record("MANAGER_V1", "rollout-1"),
-        _record("manager_v1", None),
+        _record("manager_v1", "rollout-1"),
     ]
 
     report = cc.build_cost_report(records, _prices())
@@ -236,9 +236,57 @@ def test_missing_rollout_and_unknown_arch_are_not_canonicalised():
 
     assert report["exit_code"] == 2
     assert ("MANAGER_V1", "rollout-1") in groups
-    assert ("manager_v1", cc.MISSING_DIMENSION) in groups
+    assert ("manager_v1", "rollout-1") in groups
     assert "unknown agent_arch" in report["error"]
-    assert "missing rollout_id" in report["error"]
+
+
+def test_records_without_a_rollout_id_are_costed_not_held_forever():
+    """rollout_id only exists on edge-labelled traffic.
+
+    Every historical turn and every direct-pool smoke turn has none, so treating
+    its absence as a malformed identity made `decision=HOLD, total_cost=None` the
+    permanent answer for the entire cost history — the script could never cost the
+    records it was written to cost. Absence is now a NOTE and a named bucket.
+    """
+    report = cc.build_cost_report(
+        [_record("manager_v1", None), _record("manager_v1", None)], _prices()
+    )
+    groups = _groups(report)
+
+    assert report["exit_code"] == 0, report.get("error")
+    assert report["decision"] != "HOLD"
+    assert report["total_cost"] is not None
+    assert ("manager_v1", cc.UNLABELLED_ROLLOUT) in groups
+    unlabelled = groups[("manager_v1", cc.UNLABELLED_ROLLOUT)]
+    assert unlabelled["total_cost"] is not None
+    assert unlabelled["records"] == 2
+    # Reported, but never as a blocking issue.
+    assert any("no rollout_id" in note for note in report["notes"])
+    assert not any("rollout_id" in issue for issue in (report.get("issues") or []))
+
+
+def test_a_malformed_rollout_id_still_holds():
+    """Absent and unparseable are different facts. Only one of them is a defect."""
+    report = cc.build_cost_report([_record("manager_v1", "not a rollout id!")],
+                                  _prices())
+    groups = _groups(report)
+
+    assert report["exit_code"] == 2
+    assert ("manager_v1", cc.INVALID_DIMENSION) in groups
+    assert "invalid rollout_id" in report["error"]
+
+
+def test_labelled_and_unlabelled_records_are_never_folded_together():
+    report = cc.build_cost_report(
+        [_record("manager_v1", "rollout-1"), _record("manager_v1", None)],
+        _prices(),
+    )
+    groups = _groups(report)
+
+    assert ("manager_v1", "rollout-1") in groups
+    assert ("manager_v1", cc.UNLABELLED_ROLLOUT) in groups
+    assert groups[("manager_v1", "rollout-1")]["records"] == 1
+    assert groups[("manager_v1", cc.UNLABELLED_ROLLOUT)]["records"] == 1
 
 
 def test_empty_records_and_skipped_lines_hold():
@@ -312,3 +360,90 @@ def test_cli_missing_input_is_a_hold_not_a_traceback(tmp_path, capsys):
     assert code == 2
     assert output["decision"] == "HOLD"
     assert "no canary.turn records" in output["error"]
+
+
+# --------------------------------------------------------------------------- #
+# An unlabelled EDGE record is a defect, not history.                          #
+# --------------------------------------------------------------------------- #
+
+def _edge(rollout_id: str | None, **usage_kwargs) -> dict:
+    record = _record("manager_v1", rollout_id)
+    record["traffic_source"] = "edge"
+    if usage_kwargs:
+        record["llm_usage"] = _usage(**usage_kwargs)
+    return record
+
+
+def test_an_edge_record_without_a_rollout_id_blocks_instead_of_joining_history():
+    """The trusted edge is what stamps `rollout_id`; `canary_report` already treats
+    a labelled-edge record without one as a contract violation. Here the same record
+    was silently folded into `<none>` with a note asserting it was "pre-rollout or
+    direct-traffic" — a provenance nobody checked.
+
+    The consequence, with one mislabelled 999k-token edge turn among 50 historical
+    direct turns: the report printed `decision=PROCEED`, `r-1: $0.00076`, and hid
+    this rollout's real spend inside `<none>: $0.399`.
+    """
+    records = [
+        _edge("rollout-1"),
+        _edge(None, input_tokens=999_000),
+        *[_record("manager_v1", None) for _ in range(3)],
+    ]
+    report = cc.build_cost_report(records, _prices())
+    groups = _groups(report)
+
+    assert ("manager_v1", cc.UNLABELLED_EDGE_ROLLOUT) in groups
+    unlabelled_edge = groups[("manager_v1", cc.UNLABELLED_EDGE_ROLLOUT)]
+    assert unlabelled_edge["records"] == 1
+    assert unlabelled_edge["decision"] == "HOLD"
+    assert any("edge" in issue for issue in unlabelled_edge["issues"])
+
+    # The historical bucket now holds ONLY the direct records...
+    assert groups[("manager_v1", cc.UNLABELLED_ROLLOUT)]["records"] == 3
+    # ...and the mislabelled turn's spend is not inside it.
+    assert (groups[("manager_v1", cc.UNLABELLED_ROLLOUT)]["usage"]["model-a"]
+            ["input_tokens"] == 3000)
+    assert (groups[("manager_v1", cc.UNLABELLED_EDGE_ROLLOUT)]["usage"]["model-a"]
+            ["input_tokens"] == 999_000)
+
+    assert report["decision"] == "HOLD"
+    assert report["exit_code"] == cc.EXIT_HOLD
+
+
+def test_direct_and_unlabelled_traffic_is_still_costed_not_refused():
+    """The permanent-HOLD defect this bucket was created to fix must stay fixed:
+    every historical turn and every direct :5001/:5002 smoke turn has no
+    `rollout_id`, and refusing to cost them made the cost history uncostable."""
+    report = cc.build_cost_report(
+        [_record("manager_v1", None), {**_record("manager_v1", None),
+                                       "traffic_source": "direct"}],
+        _prices(),
+    )
+    group = _groups(report)[("manager_v1", cc.UNLABELLED_ROLLOUT)]
+
+    assert report["decision"] == "PROCEED"
+    assert group["total_cost"] is not None
+    assert group["issues"] == []
+    assert group["notes"], "reported, not silently costed"
+
+
+def test_the_unlabelled_note_describes_rather_than_asserts_provenance():
+    report = cc.build_cost_report([_record("manager_v1", None)], _prices())
+    note = " ".join(_groups(report)[("manager_v1", cc.UNLABELLED_ROLLOUT)]["notes"])
+
+    assert "no rollout_id on these records" in note
+    assert "pre-rollout" not in note, (
+        "the script cannot know these predate the rollout; it only knows the field "
+        "is absent and the traffic is not labelled edge")
+
+
+def test_a_malformed_rollout_id_still_holds_on_either_traffic_source():
+    """Absent is history; MALFORMED is a defect. Collapsing the two is what put
+    `decision=HOLD, total_cost=None` on the entire cost history in the first place."""
+    for source in ("direct", "edge"):
+        record = _record("manager_v1", "rollout id with spaces")
+        record["traffic_source"] = source
+        report = cc.build_cost_report([record], _prices())
+        groups = _groups(report)
+        assert ("manager_v1", cc.INVALID_DIMENSION) in groups, source
+        assert report["exit_code"] == cc.EXIT_HOLD, source

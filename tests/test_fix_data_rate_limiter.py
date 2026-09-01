@@ -49,6 +49,32 @@ def test_rate_limiter_spaces_calls_with_mock_clock(monkeypatch):
         assert round(cur - prev, 6) >= 1.2
 
 
+def test_rate_limiter_does_not_sleep_or_claim_when_budget_cannot_fit_delay(monkeypatch):
+    """A detail worker near its absolute deadline must stop before crawl-delay, not
+    sleep past the budget and issue a late network request."""
+    class Clock:
+        def __init__(self):
+            self.t = 1000.0
+            self.sleeps = []
+
+        def monotonic(self):
+            return self.t
+
+        def sleep(self, seconds):
+            self.sleeps.append(seconds)
+            self.t += seconds
+
+    clock = Clock()
+    monkeypatch.setattr(
+        om, "time", types.SimpleNamespace(monotonic=clock.monotonic, sleep=clock.sleep))
+    monkeypatch.setattr(om, "_LAST_DETAIL_TS", clock.t)
+    monkeypatch.setattr(om, "_MIN_DETAIL_INTERVAL_S", 1.2)
+
+    assert om._rate_limited_detail_wait(budget_s=0.2) is False
+    assert clock.sleeps == []
+    assert om._LAST_DETAIL_TS == 1000.0
+
+
 # --------------------------------------------------------------------------
 # Real concurrency: N threads calling the limiter are paced in aggregate.
 # --------------------------------------------------------------------------

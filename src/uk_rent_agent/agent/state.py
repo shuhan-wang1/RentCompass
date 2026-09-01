@@ -92,6 +92,27 @@ class AgentState(TypedDict, total=False):
     plan_notes: list
     plan_just_completed: bool
     task_results: Annotated[list, bounded_add]
+    # Phase-2 manager/specialist contract ledgers. These are deliberately
+    # distinct from the legacy wave planner's task_plan/task_results channels.
+    # They are PLAIN, per-turn, single-writer channels: execute_tools returns the
+    # full ledger and create_initial_state resets both under a checkpointer.
+    # Writers must store model_dump(mode="json") output (dict/list/scalars), never
+    # Pydantic/dataclass instances, so SQLite checkpoints stay plain JSON.
+    manager_task_plans: list
+    specialist_results: list
+    # The manager's answer boundary for the finished turn (AnswerContract.model_dump(
+    # mode="json")): the response type, the text that shipped, the specialist tasks whose
+    # evidence supports it, their EvidenceRefs, and one limitation line per failed/partial/
+    # skipped task. Written ONCE, by the last node before the response leaves the graph
+    # (agent_loop.format_output_fc under specialist_dispatch), so it records the answer as
+    # sent rather than an intermediate draft — bounded at AnswerText's 8 000 chars, with
+    # `final_response_chars` / `final_response_truncated` saying so when a longer answer
+    # shipped (the recorded copy is a prefix; the user's answer is never trimmed). Same PLAIN per-turn discipline as the two
+    # ledgers above, and likewise JSON-plain so SQLite checkpoints stay plain JSON. A
+    # contract that fails validation is stored as {"valid": false, "error_code": ...,
+    # "limitations": [...]} — a broken contract is an observability defect, never a failed
+    # user turn.
+    answer_contract: Dict[str, Any]
     # Deterministic response-contract channels. Candidate state is produced from tool
     # payloads/evidence, never inferred from generated prose. Commute evidence is a
     # per-listing ledger so one successful call cannot cover another listing.
@@ -155,4 +176,7 @@ def create_initial_state(
         plan_notes=[],
         plan_just_completed=False,
         task_results=[],
+        manager_task_plans=[],
+        specialist_results=[],
+        answer_contract={},
     )

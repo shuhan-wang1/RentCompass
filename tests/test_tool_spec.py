@@ -38,6 +38,50 @@ def test_list_specs_count_and_type(registry):
         specs[0].name = "mutated"
 
 
+def test_list_specs_stays_cheap_enough_for_the_hot_path(registry):
+    """Review R1/R2: `to_spec()` is called per super-step, per read and per fan-out call.
+
+    Recomputing `model_json_schema()` for both models on every call made `list_specs()`
+    ~250x slower (0.035 ms -> 8.9 ms for 14 tools) and burned that CPU synchronously on the
+    graph event loop, in a project whose release gate is an absolute p50. The bound is
+    deliberately generous — it catches a return of the O(schema) recomputation, not noise.
+    """
+    import time
+
+    for _ in range(3):  # warm the per-model memoisation
+        registry.list_specs()
+
+    started = time.perf_counter()
+    for _ in range(100):
+        registry.list_specs()
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+
+    assert elapsed_ms < 50.0, f"100 list_specs() calls took {elapsed_ms:.1f} ms"
+
+
+def test_model_security_ref_is_memoised_but_still_sees_a_swap(registry):
+    """A memoised ref must not become a blind ref: a model SWAP is the K7 threat."""
+    from pydantic import BaseModel
+
+    from core.tool_system import model_security_ref
+
+    tool = registry.get("get_weather")
+    original = tool.input_model
+    try:
+        before = model_security_ref(original)
+        assert model_security_ref(original) == before  # cache hit, same object
+
+        class Wide(BaseModel):
+            model_config = {"extra": "allow"}
+
+        assert model_security_ref(Wide) != before
+        tool.input_model = Wide
+        assert tool.to_spec().input_model_ref != before
+    finally:
+        tool.input_model = original
+    assert tool.to_spec().input_model_ref == before
+
+
 def test_specs_mirror_registered_tools(registry):
     """Every spec field mirrors the live Tool — registry is the single source of truth."""
     for spec in registry.list_specs():

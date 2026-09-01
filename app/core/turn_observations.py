@@ -33,16 +33,102 @@ produce a 0, and only then does 0 mean "we looked and there were none".
 from __future__ import annotations
 
 import contextvars
+import math
+import re
+import threading
+from collections import deque
 from typing import Any, Dict, Optional
 
 # Set once per request by begin_turn(). Default None => "no turn in progress",
 # which is not the same as "a turn that saw nothing".
 _turn_obs: contextvars.ContextVar = contextvars.ContextVar("canary_turn_obs", default=None)
 
+_AGENT_CONTEXT_FIELDS = ("agent_role", "task_id", "parent_task_id")
+
+# Specialist lifecycle telemetry is intentionally a much smaller surface than the
+# task contracts themselves.  In particular, objectives, tool args/results and
+# arbitrary error text are not accepted by this module, so they cannot accidentally
+# become operations telemetry.  Identifiers follow the same machine-id grammar as
+# ``specialist_contracts.Identifier``.
+_SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
+# ``partial`` is a TERMINAL outcome, not a degraded ``completed``: the task
+# produced usable output AND left some of its objective unmet. Folding it into
+# either neighbour is the mistake this set exists to prevent — scored as
+# completed it hides a systematic shortfall, scored as failed it would trip the
+# specialist failure-rate gate on turns that answered the user perfectly well.
+_SPECIALIST_STATUSES = frozenset(
+    {"planned", "started", "completed", "partial", "failed", "skipped"}
+)
+_SPECIALIST_TERMINAL_STATUSES = frozenset(
+    {"completed", "partial", "failed", "skipped"}
+)
+# Statuses that may carry an ``error_code``. ``planned``/``started`` cannot: there
+# is no outcome yet to explain, and accepting one there would let a producer
+# attach a reason to a transition that has not happened.
+_SPECIALIST_OUTCOME_STATUSES = frozenset({"partial", "failed", "skipped"})
+# THE canonical closed vocabulary for a specialist lifecycle outcome code.
+#
+# It lives here, and only here, because it used to live in TWO places that never
+# referenced each other: ``agent_loop._SPECIALIST_ERROR_CODES`` (the producer's
+# filter) and ``turn_observations._ERROR_CODE_RE`` (the grammar). They agreed by
+# coincidence, and the day someone added ``"tool-error"`` / ``"TIMEOUT"`` to the
+# producer's copy the grammar would have rejected it — silently, and (before this
+# revision) by dropping the whole terminal transition. Import THIS name; do not
+# re-declare the set.
+SPECIALIST_ERROR_CODES = frozenset({
+    "dispatch_denied", "tool_error", "timeout", "abandoned",
+    "budget_exhausted", "cancelled", "ledger_invalid", "incomplete",
+})
+# A denied CALL is not a task transition — it is one dispatch the policy refused
+# inside an already-started task — so it lives in its own bounded event ring
+# under its own status and never enters the lifecycle arithmetic.
+_SPECIALIST_DENIED_STATUS = "denied"
+_MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+# Deliberately NARROWER than _MACHINE_ID_RE: an error code is a closed vocabulary
+# chosen by the dispatcher, so lowercase snake_case is the whole grammar. Anything
+# else is either a typo or free text, and free text is exactly what this module
+# refuses to carry.
+_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+# Tool names are python identifiers in the registry; no separators, no user text.
+# Shape only — membership in the LIVE registry is checked separately, because the
+# only producer of a denied event derives the name from the MODEL's plan, so a
+# shape check alone would let a 128-character model-chosen identifier into ops
+# telemetry. See ``_registered_tool_names``.
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
+# The stand-in recorded when a denied dispatch names a tool that is not in the
+# registry or the specialist allowlist. It is a FIXED string, so the denial is
+# still counted and still visible without the model choosing the label.
+UNREGISTERED_TOOL = "unregistered"
+_MAX_SPECIALIST_EVENTS = 64
+# Denied dispatches get their OWN small ring. They used to share the 64-slot
+# lifecycle ring, so 64 refusals inside one turn evicted every plan/start/finish
+# event — deleting exactly the detail ("which specialist task broke?") that the
+# record exists to answer, while the denial storm itself is already summarised by
+# the ``denied_calls`` counter.
+_MAX_DENIED_EVENTS = 8
+_MAX_SPECIALIST_TASKS_PER_TURN = 128
+_MAX_SPECIALIST_CALLS_PER_TASK = 10_000
+
 # Module-level, deliberately NOT per-turn: the LLM client is built once and
 # memoized, long before any request. If installation ever fails we must report
 # null (hold the gate), not 0 (assert a clean observation we never made).
+#
+# TWO flags, because there are two independent observers and they cover different
+# call paths:
+#
+#   _observer_installed      the LangChain callback (install_observer). It is the
+#                            ONLY thing that sees ModelRouter calls, i.e. every
+#                            agent-loop model call.
+#   _raw_observer_installed  the raw-SDK reporter (note_raw_llm_call), which sees
+#                            only llm_interface._call_deepseek.
+#
+# They used to be one flag, so a single raw call declared the process "observed"
+# even when install_observer had failed (its except-clause deliberately swallows).
+# snapshot() then reported `complete` over a call count containing the raw calls
+# and none of the ModelRouter ones — a clean, cheap-looking candidate assembled
+# from a measurement that never happened. `complete` now requires the CALLBACK.
 _observer_installed = False
+_raw_observer_installed = False
 
 
 # Arches whose tool-execution node carries the write-audit instrumentation. Set at
@@ -53,12 +139,51 @@ _write_auditors: set = set()
 
 
 def observer_installed() -> bool:
+    """True iff the LangChain CALLBACK observer is attached.
+
+    This is the flag ``app.py::_wire_canary_llm_observer`` acts on and the one that
+    means "an agent-loop LLM call would have been counted". A raw-SDK call must not
+    be able to set it — see the two-flag note above.
+    """
     return _observer_installed
+
+
+def raw_observer_installed() -> bool:
+    """True iff at least one raw-SDK call reported itself in this process."""
+    return _raw_observer_installed
 
 
 def _mark_observer_installed() -> None:
     global _observer_installed
     _observer_installed = True
+
+
+def _mark_raw_observer_installed() -> None:
+    global _raw_observer_installed
+    _raw_observer_installed = True
+
+
+def _current_agent_context() -> Dict[str, str]:
+    try:
+        from uk_rent_agent.observability import current_agent_context
+
+        return current_agent_context()
+    except Exception:
+        return {}
+
+
+def _normalise_agent_context(value: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    # ``None`` means read the live context.  An explicit empty dict is a real
+    # captured value and prevents an end callback being attributed to a later
+    # manager/specialist scope.
+    source = _current_agent_context() if value is None else value
+    if not isinstance(source, dict):
+        return {}
+    return {
+        key: str(source[key])
+        for key in _AGENT_CONTEXT_FIELDS
+        if source.get(key) is not None
+    }
 
 
 def register_write_auditor(arch: str) -> None:
@@ -103,6 +228,41 @@ def begin_turn() -> Dict[str, Any]:
         # Markup that survived every in-band guard and was only stopped at the
         # response boundary. Zero-tolerance: it means the primary control failed.
         "dsml_leak": 0,
+        # Optional manager/root identity for the turn-level canary record.  It is
+        # separate from per-call context because a deterministic zero-LLM turn
+        # still needs an attributable root task.
+        "root_agent_context": None,
+        # Mutable and shared across copied ContextVars, just like the other turn
+        # accumulators.  Tool calls can finish on worker threads, so all compound
+        # lifecycle transitions are protected by the same per-turn lock.
+        "_specialist_trace": {
+            "lock": threading.RLock(),
+            "events": deque(maxlen=_MAX_SPECIALIST_EVENTS),
+            "events_total": 0,
+            # Separate ring + separate total: a denial storm must not be able to
+            # push the lifecycle events out of the record (see _MAX_DENIED_EVENTS).
+            "denied_events": deque(maxlen=_MAX_DENIED_EVENTS),
+            "denied_events_total": 0,
+            "tasks": {},
+            "planned": 0,
+            "started": 0,
+            "completed": 0,
+            "partial": 0,
+            "failed": 0,
+            "skipped": 0,
+            # Dispatches the specialist policy refused. Non-gating diagnostics:
+            # a denial is the control WORKING, so it must never be summed into
+            # the failure counters the release gate reads.
+            "denied_calls": 0,
+            # Terminal transitions whose ``error_code`` was outside the closed
+            # vocabulary and was therefore DROPPED. The transition itself is still
+            # recorded (see note_specialist_event); this counter is what keeps that
+            # from being a silent loss of diagnosis.
+            "dropped_error_codes": 0,
+            "in_flight": 0,
+            "max_in_flight": 0,
+            "observed": False,
+        },
     }
     _turn_obs.set(obs)
     return obs
@@ -119,6 +279,469 @@ def end_turn() -> None:
     _turn_obs.set(None)
 
 
+def note_root_agent_context(
+    *,
+    agent_role: str,
+    task_id: str,
+    parent_task_id: Optional[str] = None,
+) -> bool:
+    """Attach the manager/root identity once; generated IDs must contain no user text.
+
+    "Must contain no user text" used to be a comment. It is now a CHECK, because
+    the only caller derives ``task_id`` from the request id, and the request id
+    came from a client header — so the rule the docstring stated was enforced
+    nowhere and the label landed verbatim in the canary record and in every
+    JsonFormatter line. Each id is validated against the same machine-id grammar
+    the specialist events use; a value that fails is not sanitised or truncated,
+    it is REFUSED (returns False, records nothing), so a caller cannot end up
+    shipping a half-scrubbed copy of whatever it was given.
+    """
+    obs = _turn_obs.get()
+    if obs is None or obs.get("root_agent_context") is not None:
+        return False
+    safe_role = _machine_identifier(agent_role)
+    safe_task_id = _machine_identifier(task_id)
+    if not safe_role or not safe_task_id:
+        return False
+    if parent_task_id is None:
+        safe_parent_id = None
+    else:
+        safe_parent_id = _machine_identifier(parent_task_id)
+        if not safe_parent_id:
+            return False
+    root = {"agent_role": safe_role, "task_id": safe_task_id}
+    if safe_parent_id is not None:
+        root["parent_task_id"] = safe_parent_id
+    obs["root_agent_context"] = root
+    return True
+
+
+# --------------------------------------------------------------------------- #
+# Specialist task lifecycle                                                   #
+# --------------------------------------------------------------------------- #
+
+def _machine_identifier(value: Any) -> Optional[str]:
+    try:
+        candidate = value.strip() if isinstance(value, str) else ""
+        return candidate if _MACHINE_ID_RE.fullmatch(candidate) else None
+    except Exception:
+        return None
+
+
+def _specialist_role(value: Any) -> Optional[str]:
+    try:
+        candidate = value.strip() if isinstance(value, str) else ""
+        return candidate if candidate in _SPECIALIST_ROLES else None
+    except Exception:
+        return None
+
+
+def _call_count(value: Any, *, default: Optional[int] = None) -> Optional[int]:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    if value < 0 or value > _MAX_SPECIALIST_CALLS_PER_TASK:
+        return None
+    return value
+
+
+def _error_code(value: Any, *, closed_set: Optional[frozenset] = None) -> Optional[str]:
+    """A closed-vocabulary outcome code, or None when it is not one.
+
+    The dispatcher's own error TEXT is never accepted here: a provider message or
+    an exception's str() can carry the user's query verbatim, and this record ends
+    up in ops telemetry. A code is a label the dispatcher chose, so it is safe by
+    construction — provided the vocabulary is actually enforced, which is what this
+    is.
+
+    ``closed_set`` (normally :data:`SPECIALIST_ERROR_CODES`) is the primary check;
+    the regex stays as a SECOND guard so that a future addition to the set which
+    does not fit the snake_case grammar is caught here rather than at the consumer.
+    Passing ``None`` checks the grammar only — used by the DENIAL path, whose codes
+    come from the dispatch policy (a wider vocabulary than the lifecycle outcome
+    set) and are non-gating diagnostics.
+    """
+    try:
+        candidate = value.strip() if isinstance(value, str) else ""
+        if not _ERROR_CODE_RE.fullmatch(candidate):
+            return None
+        if closed_set is not None and candidate not in closed_set:
+            return None
+        return candidate
+    except Exception:
+        return None
+
+
+_dispatchable_tool_names: Optional[frozenset] = None
+
+
+def _registered_tool_names() -> frozenset:
+    """Names a specialist dispatch can legitimately be about, or an empty set.
+
+    The source is the DECLARED contract — the union of every specialist role
+    allowlist and the manager-only tools — rather than the live registry object,
+    because this must work identically in the web process, in an eval process and
+    in a unit test, none of which agree on whether a registry has been built. An
+    empty result means "cannot check here", and the caller then falls back to the
+    shape check alone rather than discarding a denial it has no way to verify.
+    """
+    global _dispatchable_tool_names
+    if _dispatchable_tool_names is not None:
+        return _dispatchable_tool_names
+    try:
+        from uk_rent_agent.agent.specialist_contracts import (
+            MANAGER_ONLY_TOOLS,
+            SPECIALIST_TOOL_ALLOWLISTS,
+        )
+
+        names = set(MANAGER_ONLY_TOOLS)
+        for allowed in SPECIALIST_TOOL_ALLOWLISTS.values():
+            names.update(allowed)
+        _dispatchable_tool_names = frozenset(str(n) for n in names)
+    except Exception:
+        _dispatchable_tool_names = frozenset()
+    return _dispatchable_tool_names
+
+
+def _tool_name(value: Any, *, allowlist: Optional[frozenset] = None) -> Optional[str]:
+    """Validate a tool identifier for shape and, when known, for EXISTENCE.
+
+    ``allowlist`` is the union of names the process will actually dispatch. When
+    it is non-empty a name outside it is not returned verbatim — the caller
+    substitutes :data:`UNREGISTERED_TOOL` — because the only producer of this
+    value reads it out of the MODEL's plan, and a 128-character model-chosen
+    identifier is model output, not a registry identifier.
+    """
+    try:
+        candidate = value.strip() if isinstance(value, str) else ""
+        if not _TOOL_NAME_RE.fullmatch(candidate):
+            return None
+        if allowlist and candidate not in allowlist:
+            return None
+        return candidate
+    except Exception:
+        return None
+
+
+def _duration_ms(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        duration = float(value)
+    except Exception:
+        return None
+    if not math.isfinite(duration) or duration < 0:
+        return None
+    return round(duration, 3)
+
+
+def _emit_specialist_eval_event(event: Dict[str, Any]) -> None:
+    """Mirror an accepted event into the opt-in eval sink, best effort."""
+    try:
+        from evaluation.metrics import collector
+
+        collector.record_specialist_lifecycle(**event)
+    except Exception:
+        pass
+
+
+def note_specialist_event(
+    status: Any = None,
+    *,
+    plan_id: Any = None,
+    task_id: Any = None,
+    parent_task_id: Any = None,
+    role: Any = None,
+    duration_ms: Any = None,
+    call_count: Any = None,
+    error_code: Any = None,
+    **_ignored: Any,
+) -> bool:
+    """Record one content-free specialist lifecycle transition.
+
+    This is an instrumentation boundary, so malformed values, out-of-order or
+    duplicate transitions, and unexpected keyword arguments are silent no-ops.
+    It must never become a reason a user turn fails.
+
+    ``error_code`` is optional and only meaningful on an unsuccessful outcome
+    (``partial`` / ``failed`` / ``skipped``). It is a code from
+    :data:`SPECIALIST_ERROR_CODES`, never an error message — see ``_error_code``.
+    An unusable code DEGRADES the event (the code is dropped, the transition is
+    still recorded, ``dropped_error_codes`` is incremented). It used to reject the
+    whole call: the counters then stopped at ``started`` while the producer
+    believed the task had finished, and the consumer's turn-end invariant
+    ``started == completed + partial + failed`` failed — a spurious
+    INSTRUMENTATION-HOLD caused by a diagnostics typo. Losing the reason for one
+    failure is a diagnostic gap; losing the failure itself is a wrong gate verdict.
+    """
+    event: Optional[Dict[str, Any]] = None
+    dropped_code = False
+    try:
+        obs = _turn_obs.get()
+        trace = obs.get("_specialist_trace") if isinstance(obs, dict) else None
+        if not isinstance(trace, dict) or status not in _SPECIALIST_STATUSES:
+            return False
+
+        safe_plan_id = _machine_identifier(plan_id)
+        safe_task_id = _machine_identifier(task_id)
+        safe_parent_id = _machine_identifier(parent_task_id)
+        safe_role = _specialist_role(role)
+        if not all((safe_plan_id, safe_task_id, safe_parent_id, safe_role)):
+            return False
+
+        # A supplied malformed count/duration is DROPPED, never coerced: surprising
+        # objects and non-finite floats must not reach JSON logs. Dropping the value
+        # rather than the event is the same rule as ``error_code`` below — a bad
+        # measurement is a diagnostics bug, and refusing the transition over it turns
+        # that into a lifecycle-imbalance HOLD. ``call_count`` then falls back to the
+        # task's running count and ``duration_ms`` to null, both of which the record
+        # already allows.
+        safe_calls = _call_count(call_count)
+        safe_duration = _duration_ms(duration_ms)
+        safe_error_code = _error_code(error_code, closed_set=SPECIALIST_ERROR_CODES)
+        if error_code is not None and (
+            safe_error_code is None or status not in _SPECIALIST_OUTCOME_STATUSES
+        ):
+            # Degrade, never reject. An out-of-vocabulary code, or a code attached
+            # to a status that has no outcome to explain, is a producer bug in the
+            # DIAGNOSTIC — it says nothing about whether the transition happened.
+            # The transition is therefore recorded without the code and the loss is
+            # counted, so "we dropped a code" is visible in the record instead of
+            # being indistinguishable from "the task never finished".
+            safe_error_code = None
+            dropped_code = True
+
+        lock = trace.get("lock")
+        if lock is None:
+            return False
+        with lock:
+            tasks = trace.get("tasks")
+            if not isinstance(tasks, dict):
+                return False
+            key = (safe_plan_id, safe_task_id)
+            task = tasks.get(key)
+            if task is None:
+                if len(tasks) >= _MAX_SPECIALIST_TASKS_PER_TURN:
+                    return False
+                task = {
+                    "parent_task_id": safe_parent_id,
+                    "role": safe_role,
+                    "call_count": safe_calls if safe_calls is not None else 0,
+                    "seen": set(),
+                    "active": False,
+                    "terminal": False,
+                }
+                tasks[key] = task
+            elif (
+                task.get("parent_task_id") != safe_parent_id
+                or task.get("role") != safe_role
+            ):
+                # The identity of a task is immutable for the duration of the turn.
+                return False
+
+            seen = task.get("seen")
+            if not isinstance(seen, set) or status in seen:
+                return False
+            if task.get("terminal"):
+                return False
+            if status == "planned" and "started" in seen:
+                return False
+
+            if safe_calls is None:
+                safe_calls = int(task.get("call_count", 0))
+            else:
+                task["call_count"] = safe_calls
+
+            if status == "started":
+                trace["started"] = int(trace.get("started", 0)) + 1
+                if not task.get("active"):
+                    task["active"] = True
+                    trace["in_flight"] = int(trace.get("in_flight", 0)) + 1
+                    trace["max_in_flight"] = max(
+                        int(trace.get("max_in_flight", 0)),
+                        int(trace.get("in_flight", 0)),
+                    )
+            elif status == "planned":
+                trace["planned"] = int(trace.get("planned", 0)) + 1
+            else:
+                trace[status] = int(trace.get(status, 0)) + 1
+                task["terminal"] = True
+                if task.get("active"):
+                    task["active"] = False
+                    trace["in_flight"] = max(
+                        0, int(trace.get("in_flight", 0)) - 1
+                    )
+
+            seen.add(status)
+            trace["observed"] = True
+            event = {
+                "plan_id": safe_plan_id,
+                "task_id": safe_task_id,
+                "parent_task_id": safe_parent_id,
+                "role": safe_role,
+                "status": status,
+                "duration_ms": (
+                    safe_duration if status in _SPECIALIST_TERMINAL_STATUSES else None
+                ),
+                "call_count": safe_calls,
+            }
+            # Additive: an event without a code keeps the exact historical shape,
+            # so a consumer that predates this key is unaffected.
+            if safe_error_code is not None:
+                event["error_code"] = safe_error_code
+            if dropped_code:
+                trace["dropped_error_codes"] = (
+                    int(trace.get("dropped_error_codes", 0)) + 1
+                )
+            trace["events_total"] = int(trace.get("events_total", 0)) + 1
+            trace["events"].append(event)
+    except Exception:
+        return False
+
+    if event is not None:
+        _emit_specialist_eval_event(dict(event))
+        return True
+    return False
+
+
+def note_specialist_plan(**fields: Any) -> bool:
+    return note_specialist_event("planned", **fields)
+
+
+def note_specialist_start(**fields: Any) -> bool:
+    return note_specialist_event("started", **fields)
+
+
+def note_specialist_complete(**fields: Any) -> bool:
+    return note_specialist_event("completed", **fields)
+
+
+def note_specialist_fail(**fields: Any) -> bool:
+    return note_specialist_event("failed", **fields)
+
+
+def note_specialist_partial(**fields: Any) -> bool:
+    return note_specialist_event("partial", **fields)
+
+
+def note_specialist_skip(**fields: Any) -> bool:
+    return note_specialist_event("skipped", **fields)
+
+
+def note_specialist_call_denied(*, tool: Any, error_code: Any) -> bool:
+    """Record one specialist tool dispatch the policy refused. Returns True if stored.
+
+    Deliberately NOT a lifecycle transition. The task it happened inside is still
+    running and will still reach its own terminal status, so counting a denial as
+    a task outcome would double-count the task and unbalance the turn-end
+    invariants the gate checks. It is also never summed into ``failed``: a denial
+    is the control working as designed, and a release gate that treats "we blocked
+    a forbidden call" as a regression teaches operators to disable the control.
+
+    Both arguments are validated against closed grammars so no argument value,
+    objective or provider message can reach the record through this door. ``tool``
+    additionally has to EXIST: the only producer reads the name out of the model's
+    own plan (``agent_loop``: ``plan[i][0].get("name")``), so a shape check alone
+    let a 128-character model-chosen identifier into ops telemetry. A name outside
+    the dispatchable set is replaced by the fixed :data:`UNREGISTERED_TOOL` — the
+    denial is still counted and still visible, but the label is ours.
+
+    ``error_code`` here is the DISPATCH POLICY's refusal code, a wider vocabulary
+    than the lifecycle outcome set (:data:`SPECIALIST_ERROR_CODES`), so only the
+    grammar is enforced. It is non-gating diagnostics either way.
+    """
+    try:
+        obs = _turn_obs.get()
+        trace = obs.get("_specialist_trace") if isinstance(obs, dict) else None
+        if not isinstance(trace, dict):
+            return False
+        allowlist = _registered_tool_names()
+        safe_tool = _tool_name(tool, allowlist=allowlist)
+        if safe_tool is None and _tool_name(tool) is not None:
+            # Correct shape, unknown name: record THAT, not the model's string.
+            safe_tool = UNREGISTERED_TOOL
+        safe_code = _error_code(error_code)
+        if not safe_tool or not safe_code:
+            return False
+        lock = trace.get("lock")
+        if lock is None:
+            return False
+        with lock:
+            trace["denied_calls"] = int(trace.get("denied_calls", 0)) + 1
+            trace["observed"] = True
+            trace["denied_events_total"] = (
+                int(trace.get("denied_events_total", 0)) + 1
+            )
+            # Its OWN bounded ring, not the lifecycle one: a denial storm must
+            # neither grow the record without limit nor evict the plan/start/finish
+            # events that say which specialist task broke.
+            event = {
+                "status": _SPECIALIST_DENIED_STATUS,
+                "tool": safe_tool,
+                "error_code": safe_code,
+            }
+            trace["denied_events"].append(event)
+    except Exception:
+        return False
+    _emit_specialist_eval_event(dict(event))
+    return True
+
+
+def specialist_snapshot() -> Optional[Dict[str, Any]]:
+    """Return the bounded per-turn projection, or ``None`` without a window."""
+    try:
+        obs = _turn_obs.get()
+        trace = obs.get("_specialist_trace") if isinstance(obs, dict) else None
+        if not isinstance(trace, dict) or trace.get("lock") is None:
+            return None
+        with trace["lock"]:
+            lifecycle = list(trace.get("events", ()))
+            denied = list(trace.get("denied_events", ()))
+            truncated = (
+                int(trace.get("events_total", 0)) > len(lifecycle)
+                or int(trace.get("denied_events_total", 0)) > len(denied)
+            )
+            return {
+                "planned": int(trace.get("planned", 0)),
+                "started": int(trace.get("started", 0)),
+                "completed": int(trace.get("completed", 0)),
+                "partial": int(trace.get("partial", 0)),
+                "failed": int(trace.get("failed", 0)),
+                "skipped": int(trace.get("skipped", 0)),
+                "denied_calls": int(trace.get("denied_calls", 0)),
+                "dropped_error_codes": int(trace.get("dropped_error_codes", 0)),
+                "max_in_flight": int(trace.get("max_in_flight", 0)),
+                # ONE flag for two rings. Either ring overflowing disables the
+                # consumer's events-vs-counters reconciliation, which is the
+                # conservative reading: the counters stay authoritative.
+                "events_truncated": truncated,
+                # Lifecycle first, then denials. The two streams are validated by
+                # different rules and never reconciled against each other, so the
+                # concatenation order carries no meaning the consumer relies on.
+                "events": (
+                    [dict(item) for item in lifecycle]
+                    + [dict(item) for item in denied]
+                ),
+            }
+    except Exception:
+        return None
+
+
+def _specialist_was_observed() -> bool:
+    try:
+        obs = _turn_obs.get()
+        trace = obs.get("_specialist_trace") if isinstance(obs, dict) else None
+        if not isinstance(trace, dict) or trace.get("lock") is None:
+            return False
+        with trace["lock"]:
+            return bool(trace.get("observed"))
+    except Exception:
+        return False
+
+
 # llm_usage_status values.
 USAGE_COMPLETE = "complete"                  # every observed run reported its tokens
 USAGE_PARTIAL = "partial"                    # >=1 run finished with no usage — HOLD
@@ -131,11 +754,28 @@ def snapshot() -> Dict[str, Any]:
 
     None is the honest answer in two cases: no observer was installed, or no turn
     window was opened. Both mean the gate must HOLD rather than read a fabricated 0.
+
+    There is a third, partial case: the raw-SDK reporter is live but the LangChain
+    callback is not. Then the raw calls ARE facts (they are reported), the
+    ModelRouter calls are unobservable, and the counters only the callback can
+    state stay null. The status is ``partial`` — a floor, and a HOLD — never
+    ``complete`` and never ``no_llm_calls``.
     """
     obs = _turn_obs.get()
-    if obs is None or not _observer_installed:
-        return {"provider_schema_400_count": None, "provider_other_400_count": None,
-                "llm_usage_calls": None, "llm_usage_status": USAGE_NOT_INSTRUMENTED}
+    if obs is None or not (_observer_installed or _raw_observer_installed):
+        result = {"provider_schema_400_count": None, "provider_other_400_count": None,
+                  "llm_usage_calls": None, "llm_calls": None,
+                  "llm_usage_status": USAGE_NOT_INSTRUMENTED,
+                  # Stated on EVERY snapshot, including this one. The consumer's
+                  # crash exemption is granted on positive evidence that the
+                  # callback observer was live, so "we do not know" and "it was
+                  # not installed" must be different values, not one absence.
+                  "llm_observer_installed": bool(_observer_installed)}
+        if obs is not None and obs.get("root_agent_context"):
+            result["root_agent_context"] = dict(obs["root_agent_context"])
+        if _specialist_was_observed():
+            result["specialist"] = specialist_snapshot()
+        return result
     calls = list(obs.get("llm_usage_calls") or [])
     missing = int(obs.get("llm_usage_missing", 0))
     if missing:
@@ -143,16 +783,47 @@ def snapshot() -> Dict[str, Any]:
         # as if they were the turn's totals would understate spend by an unknown
         # amount, which is worse than refusing to answer.
         status = USAGE_PARTIAL
+    elif not _observer_installed:
+        # We are here only because a RAW-SDK call reported itself. The LangChain
+        # callback never attached, so every ModelRouter call this turn made is
+        # invisible: the calls below are a floor, not a total. `partial` says
+        # exactly that ("an undercount of unknown size") and HOLDs the gate;
+        # `complete` would certify a number we cannot certify, and `no_llm_calls`
+        # would certify a zero we cannot certify either.
+        status = USAGE_PARTIAL
     elif calls:
         status = USAGE_COMPLETE
     else:
         status = USAGE_NO_CALLS
-    return {
-        "provider_schema_400_count": int(obs.get("provider_schema_400", 0)),
-        "provider_other_400_count": int(obs.get("provider_other_400", 0)),
+    result = {
+        # ZERO-TOLERANCE metric: a 0 here is read as "we looked and there were
+        # none". Only the LangChain callback can look at the ModelRouter calls,
+        # and a strict-schema 400 can only happen on that path (the raw client
+        # binds no tools/functions/response_format), so without the callback the
+        # honest answer is null — a HOLD — not a clean zero.
+        "provider_schema_400_count": (
+            int(obs.get("provider_schema_400", 0)) if _observer_installed else None
+        ),
+        "provider_other_400_count": (
+            int(obs.get("provider_other_400", 0)) if _observer_installed else None
+        ),
         "llm_usage_calls": calls,
+        # Includes completed calls whose provider response omitted token usage.
+        # llm_runs_seen is de-duplicated at the callback boundary, so this is the
+        # billed-call denominator even when llm_usage_status is partial.
+        "llm_calls": len(obs.get("llm_runs_seen") or ()),
         "llm_usage_status": status,
+        # The fact the consumer's unobservable-turn exemption turns on: was the
+        # LangChain callback attached while this turn ran? A crash with the
+        # observer live is a turn we could not measure; a crash without it is the
+        # 2026-07-25 incident class, and only the second may be forgiven nothing.
+        "llm_observer_installed": bool(_observer_installed),
     }
+    if obs.get("root_agent_context"):
+        result["root_agent_context"] = dict(obs["root_agent_context"])
+    if _specialist_was_observed():
+        result["specialist"] = specialist_snapshot()
+    return result
 
 
 # --------------------------------------------------------------------------- #
@@ -176,7 +847,8 @@ def _status_of(exc: Any) -> Optional[int]:
     return v if isinstance(v, int) else None
 
 
-def note_provider_error(exc: Any, *, schemas_bound: bool) -> Optional[str]:
+def note_provider_error(exc: Any, *, schemas_bound: bool,
+                        agent_context: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """Classify and record one provider-side failure. Returns the bucket, or None.
 
     Classification is STRUCTURAL — the HTTP status the provider returned, and
@@ -198,8 +870,10 @@ def note_provider_error(exc: Any, *, schemas_bound: bool) -> Optional[str]:
         obs[key] = obs.get(key, 0) + 1
     errors = obs.setdefault("provider_errors", [])
     if len(errors) < 20:  # bounded: a retry storm must not grow the record without limit
-        errors.append({"type": type(exc).__name__, "status": status,
-                       "schemas_bound": bool(schemas_bound), "bucket": bucket})
+        record = {"type": type(exc).__name__, "status": status,
+                  "schemas_bound": bool(schemas_bound), "bucket": bucket}
+        record.update(_normalise_agent_context(agent_context))
+        errors.append(record)
     return bucket
 
 
@@ -293,7 +967,8 @@ def extract_model_name(response: Any) -> Optional[str]:
     return None
 
 
-def note_llm_usage(run_id: Any, response: Any, *, configured_model: Optional[str]) -> bool:
+def note_llm_usage(run_id: Any, response: Any, *, configured_model: Optional[str],
+                   agent_context: Optional[Dict[str, Any]] = None) -> bool:
     """Record one completed LLM run. Returns True if it was counted.
 
     De-duplicated by run_id: LangChain can deliver a terminal callback more than
@@ -316,19 +991,22 @@ def note_llm_usage(run_id: Any, response: Any, *, configured_model: Optional[str
         obs["llm_usage_missing"] = obs.get("llm_usage_missing", 0) + 1
         return False
     observed_model = extract_model_name(response)
-    obs.setdefault("llm_usage_calls", []).append({
+    call = {
         "model": observed_model or configured_model or "unknown",
         "model_source": ("response" if observed_model
                          else "config" if configured_model else "unknown"),
         "input_tokens": usage.get("input_tokens") or 0,
         "output_tokens": usage.get("output_tokens") or 0,
         "cache_read_tokens": usage.get("cache_read_tokens") or 0,
-    })
+    }
+    call.update(_normalise_agent_context(agent_context))
+    obs.setdefault("llm_usage_calls", []).append(call)
     return True
 
 
 def note_raw_llm_call(run_id: Any, *, usage_blob: Any,
-                      configured_model: Optional[str]) -> bool:
+                      configured_model: Optional[str],
+                      agent_context: Optional[Dict[str, Any]] = None) -> bool:
     """Record one completed LLM run made WITHOUT LangChain.
 
     ``install_observer`` attaches a LangChain callback, so it can only see models
@@ -356,7 +1034,12 @@ def note_raw_llm_call(run_id: Any, *, usage_blob: Any,
     # this function exists to close. In production _wire_canary_llm_observer() sets the
     # flag at startup and would mask it; relying on that would leave the fix depending
     # on an unrelated commit staying in place.
-    _mark_observer_installed()
+    #
+    # It marks the RAW flag only. Proof that this path is observed is not proof that
+    # the LangChain path is: with the callback missing, snapshot() reports these calls
+    # and degrades the status to `partial` rather than certifying `complete` over a
+    # count that omits every ModelRouter call.
+    _mark_raw_observer_installed()
     seen = obs.setdefault("llm_runs_seen", set())
     if run_id in seen:
         return False
@@ -366,13 +1049,15 @@ def note_raw_llm_call(run_id: Any, *, usage_blob: Any,
     if usage is None:
         obs["llm_usage_missing"] = obs.get("llm_usage_missing", 0) + 1
         return False
-    obs.setdefault("llm_usage_calls", []).append({
+    call = {
         "model": configured_model or "unknown",
         "model_source": "config" if configured_model else "unknown",
         "input_tokens": usage.get("input_tokens") or 0,
         "output_tokens": usage.get("output_tokens") or 0,
         "cache_read_tokens": usage.get("cache_read_tokens") or 0,
-    })
+    }
+    call.update(_normalise_agent_context(agent_context))
+    obs.setdefault("llm_usage_calls", []).append(call)
     return True
 
 
@@ -478,7 +1163,7 @@ def note_write_decision(*, tool: str, decision: str, context_tainted: bool,
     audit = obs.setdefault("write_audit", {})
     if audit_key in audit:
         return False
-    audit[audit_key] = {
+    record = {
         "tool": tool,
         # Stored VERBATIM, never validated against VALID_DECISIONS here. A producer
         # bug must surface as an unrecognised value in the record, not get quietly
@@ -493,6 +1178,8 @@ def note_write_decision(*, tool: str, decision: str, context_tainted: bool,
         "gate_bypassed": bool(gate_bypassed),
         "reason": reason,
     }
+    record.update(_normalise_agent_context(None))
+    audit[audit_key] = record
     return True
 
 
@@ -588,10 +1275,12 @@ def _get_callback_cls():
             # run_id -> whether the request carried tool/function schemas. Needed
             # because on_llm_error does not describe the request that failed.
             self._schemas_bound: dict = {}
+            self._agent_contexts: dict = {}
             # Fallback only; the provider's own answer wins (see extract_model_name).
             self.configured_model = configured_model
 
         def _note_start(self, run_id, kwargs):
+            self._agent_contexts[run_id] = _current_agent_context()
             try:
                 params = kwargs.get("invocation_params") or {}
                 bound = bool(params.get("tools") or params.get("functions")
@@ -608,15 +1297,19 @@ def _get_callback_cls():
 
         def on_llm_end(self, response, *, run_id=None, **kwargs):
             self._schemas_bound.pop(run_id, None)
+            agent_context = self._agent_contexts.pop(run_id, {})
             try:
-                note_llm_usage(run_id, response, configured_model=self.configured_model)
+                note_llm_usage(run_id, response, configured_model=self.configured_model,
+                               agent_context=agent_context)
             except Exception:
                 pass  # telemetry must never break a successful turn
 
         def on_llm_error(self, error, *, run_id=None, **kwargs):
             bound = self._schemas_bound.pop(run_id, False)
+            agent_context = self._agent_contexts.pop(run_id, {})
             try:
-                note_provider_error(error, schemas_bound=bound)
+                note_provider_error(error, schemas_bound=bound,
+                                    agent_context=agent_context)
             except Exception:
                 pass  # telemetry must never convert a provider error into a worse one
 

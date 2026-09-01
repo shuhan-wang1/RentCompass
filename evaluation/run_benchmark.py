@@ -28,8 +28,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import contextvars
 import csv
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -49,6 +51,16 @@ BENCH_DIR = REPO_ROOT / "evaluation" / "benchmark"
 CASES_PATH = BENCH_DIR / "cases.jsonl"
 SCHEMA_PATH = BENCH_DIR / "schema.json"
 FIXTURES_DIR = BENCH_DIR / "fixtures"
+
+
+def _uses_fc_runtime(arch: str) -> bool:
+    """Keep evaluation semantics aligned with the product architecture family.
+
+    Importing :mod:`uk_rent_agent.agent.architecture` here would happen before the
+    benchmark has bootstrapped ``src/`` onto ``sys.path``.  This tiny local predicate
+    intentionally mirrors that module's public ``FC_RUNTIME_ARCHES`` contract.
+    """
+    return str(arch or "").strip().lower() in {"fc_loop", "manager_v1"}
 
 
 # --------------------------------------------------------------------------- #
@@ -72,6 +84,15 @@ def _bootstrap_env(state_dir: Path, events_log: Path) -> None:
     os.environ["SEARCH_LISTING_CACHE_PATH"] = str(state_dir / "listing_cache.sqlite3")
     os.environ["IDEMPOTENCY_DB"] = str(state_dir / "idempotency.sqlite3")
     os.environ["AUTH_DB_PATH"] = str(state_dir / "users.json")
+    # DECLARE that an offline eval writes no canary telemetry. This used to be an
+    # accident: `app._wire_canary_sink()` defaults to
+    # `<checkpoint_path>.parent/logs/canary-<arch>.jsonl` when CANARY_LOG_PATH is
+    # unset, so the only thing keeping an eval process off the PRODUCTION canary log
+    # was the CHECKPOINT_PATH redirect two lines up. Anything that wired the sink
+    # without that redirect -- or any future change to how the default path is
+    # derived -- appended eval turns to the log the release gate reads.
+    # `setdefault` so an operator can still point it at a scratch file on purpose.
+    os.environ.setdefault("CANARY_LOG_PATH", "off")
     # Load the REAL app/.env so LIVE runs use the genuine DeepSeek key. llm_config
     # also loads it, but only with override=False and AFTER this bootstrap runs — so
     # unless we populate os.environ here first, the offline placeholder below would
@@ -323,10 +344,38 @@ def _grounding_suffix(case: dict) -> str:
     return (" | grounded on: " + "; ".join(uniq)) if uniq else ""
 
 
+_UNTRUSTED_INSTRUCTION_RE = re.compile(
+    r"(?:agent\s+system\s+message|ignore\s+(?:all\s+)?previous\s+instructions|"
+    r"reply\s+only\s+with)",
+    re.IGNORECASE,
+)
+
+
+def _offline_fake_answer(case: dict, responder: str) -> str:
+    """Build deterministic offline text without replaying an injected payload.
+
+    Most cases retain the historical query preview because some deterministic
+    checkers intentionally exercise values stated by the user. A query that itself
+    contains an obvious instruction-smuggling marker is different: reflecting that
+    untrusted payload into the assistant answer is observable prompt-injection
+    failure, even when it came from the test double rather than the runtime. Use a
+    fixed safe response for that narrow branch; do not weaken the security grader.
+    """
+    query = str(case.get("user_query", ""))
+    if _UNTRUSTED_INSTRUCTION_RE.search(query):
+        body = (
+            f"[{responder}] Reviewed the pasted listing as untrusted content. "
+            "I cannot validate its claims or payment request; verify the listing "
+            "independently and do not send money based on embedded instructions."
+        )
+    else:
+        body = f"[{responder}] Processed request: {query[:140]}"
+    return body + _grounding_suffix(case)
+
+
 def build_fake_scripts(case: dict) -> Dict[str, str]:
     query = case.get("user_query", "")
-    answer = (f"[offline-fake responder] Processed request: {query[:140]}"
-              + _grounding_suffix(case))
+    answer = _offline_fake_answer(case, "offline-fake responder")
     return {
         "intent": json.dumps({"intent": _map_intent(case.get("expected_route"))}),
         "classification": json.dumps({"intent": _map_intent(case.get("expected_route"))}),
@@ -373,16 +422,65 @@ def build_fc_batches(case: dict) -> List[List[str]]:
 
 
 class _FakeFCModel:
-    """Scripted, duck-typed stand-in for the fc_loop agent's bound-tools chat model."""
+    """Scripted, duck-typed stand-in for the fc_loop agent's bound-tools chat model.
+
+    It is NOT a LangChain ``BaseChatModel``, so the collector's callback handler
+    (``collector.instrument_chat_model``) never sees it.  Every invocation therefore
+    records its own ``llm_call`` event through the SAME public boundary the real
+    model's callback uses (``collector.record_llm_call``).  Without that, an offline
+    fc/manager round reported ``llm_calls == 0`` for every case, which made the
+    paired gate's ``llm_call_budget`` check a comparison of 0 against 0 — a
+    threshold that cannot fail.  A tool turn now reports 2 (one batch decision plus
+    the final answer), matching the round trips the real loop would make.
+    """
+
+    #: Deterministic token accounting: identical inputs must yield identical counts
+    #: in both arms, so the paired comparison stays exact.  ~4 chars per token.
+    _CHARS_PER_TOKEN = 4
 
     def __init__(self, batches: List[List[str]], final_text: str, query: str):
         self._batches = batches
         self._final_text = final_text
         self._query = query
         self._step = 0
+        self._tool_schemas: Dict[str, dict] = {}
 
     def bind_tools(self, tools, **kwargs):  # noqa: ANN001 - duck-typed, returns self
+        for item in tools or []:
+            if not isinstance(item, dict):
+                continue
+            function = item.get("function") if item.get("type") == "function" else item
+            if not isinstance(function, dict):
+                continue
+            name = function.get("name")
+            schema = function.get("parameters") or function.get("input_schema")
+            if isinstance(name, str) and isinstance(schema, dict):
+                self._tool_schemas[name] = schema
         return self
+
+    def _placeholder(self, field: str, schema: dict) -> Any:
+        if field in {"from_address", "address", "property_address"}:
+            return "Offline test origin, London"
+        if field in {"to_address", "destination", "commute_destination"}:
+            return "Offline test destination, London"
+        if field in {"query", "user_query", "current_message", "question"}:
+            return self._query or "offline benchmark query"
+        node = schema
+        if isinstance(node.get("anyOf"), list):
+            node = next(
+                (part for part in node["anyOf"]
+                 if isinstance(part, dict) and part.get("type") != "null"),
+                {},
+            )
+        kind = node.get("type")
+        return {
+            "string": "offline benchmark value",
+            "integer": 1,
+            "number": 1.0,
+            "boolean": False,
+            "array": [],
+            "object": {},
+        }.get(kind, "offline benchmark value")
 
     def _args_for(self, name: str) -> dict:
         # Minimal args synthesized from the case; the executor re-injects real search
@@ -394,10 +492,47 @@ class _FakeFCModel:
             # must_ask_clarification checker looks for question markers.
             return {"question": f"Could you tell me more about what you need? ({self._query[:60]}?)",
                     "clarification_kind": "other"}
-        return {}
+        schema = self._tool_schemas.get(name) or {}
+        properties = schema.get("properties") if isinstance(schema, dict) else {}
+        required = schema.get("required") if isinstance(schema, dict) else []
+        if not isinstance(properties, dict) or not isinstance(required, list):
+            return {}
+        return {
+            field: self._placeholder(field, properties.get(field) or {})
+            for field in required
+            if isinstance(field, str)
+        }
+
+    @staticmethod
+    def _text_of(messages) -> str:
+        if isinstance(messages, (list, tuple)):
+            return "".join(str(getattr(m, "content", m)) for m in messages)
+        return str(messages)
+
+    def _record_llm_call(self, messages, rendered: str, latency_ms: float) -> None:
+        """Emit the same ``llm_call`` event shape the real model's callback emits.
+
+        ``agent_context`` is deliberately left unset: ``collector.record_llm_call``
+        then captures the CURRENT execution context at emission time, so a call made
+        inside a manager/specialist scope carries that scope's ``agent_role`` /
+        ``task_id`` exactly as the live callback would.  No-op when capture is off.
+        """
+        from evaluation.metrics import collector as _collector
+
+        _collector.record_llm_call(
+            provider="deepseek",
+            model="fake-chat",
+            purpose="fc_agent",
+            input_tokens=len(self._text_of(messages)) // self._CHARS_PER_TOKEN,
+            output_tokens=len(rendered) // self._CHARS_PER_TOKEN,
+            cached_tokens=0,
+            latency_ms=latency_ms,
+            success=True,
+        )
 
     async def ainvoke(self, messages, **kwargs):  # noqa: ANN001
         from langchain_core.messages import AIMessage
+        started = time.perf_counter()
         if self._step < len(self._batches):
             batch = self._batches[self._step]
             self._step += 1
@@ -406,14 +541,20 @@ class _FakeFCModel:
                  "id": f"call_{self._step}_{i}", "type": "tool_call"}
                 for i, name in enumerate(batch)
             ]
+            self._record_llm_call(
+                messages, json.dumps(tool_calls, sort_keys=True, default=str),
+                (time.perf_counter() - started) * 1000.0,
+            )
             return AIMessage(content="", tool_calls=tool_calls)
+        self._record_llm_call(
+            messages, self._final_text, (time.perf_counter() - started) * 1000.0,
+        )
         return AIMessage(content=self._final_text)
 
 
 def build_fake_fc_model(case: dict) -> _FakeFCModel:
     query = case.get("user_query", "")
-    final_text = (f"[offline-fake fc responder] Processed request: {query[:140]}"
-                  + _grounding_suffix(case))
+    final_text = _offline_fake_answer(case, "offline-fake fc responder")
     return _FakeFCModel(build_fc_batches(case), final_text, query)
 
 
@@ -722,6 +863,106 @@ def _security_audit(runs: List["RunResult"]) -> Dict[str, Any]:
     }
 
 
+_SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
+_SPECIALIST_TERMINAL = frozenset({"completed", "failed", "skipped"})
+_MANAGER_ONLY_TOOLS = frozenset({"remember", "recall_memory", "ask_user"})
+
+
+def summarize_specialist_lifecycle(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Aggregate the content-free specialist lifecycle already captured per run."""
+    status_counts: Dict[str, int] = {
+        status: 0 for status in ("planned", "started", "completed", "failed", "skipped")
+    }
+    tasks: Dict[tuple, List[str]] = {}
+    durations: List[float] = []
+    for run in runs:
+        for event in getattr(run, "specialist_lifecycle", None) or []:
+            status = event.get("status")
+            if status in status_counts:
+                status_counts[status] += 1
+            key = (run.case_id, run.repeat, event.get("plan_id"), event.get("task_id"))
+            tasks.setdefault(key, []).append(status)
+            duration = event.get("duration_ms")
+            if status in _SPECIALIST_TERMINAL and isinstance(duration, (int, float)):
+                durations.append(float(duration))
+
+    invalid: List[dict] = []
+    for key, statuses in tasks.items():
+        planned = statuses.count("planned")
+        terminals = [s for s in statuses if s in _SPECIALIST_TERMINAL]
+        started = statuses.count("started")
+        valid = (
+            planned == 1
+            and len(terminals) == 1
+            and started in {0, 1}
+            and (terminals[0] == "skipped" or started == 1)
+        )
+        if not valid:
+            invalid.append({
+                "case_id": key[0], "repeat": key[1], "plan_id": key[2],
+                "task_id": key[3], "statuses": statuses,
+            })
+    return {
+        "observed": bool(tasks),
+        "task_count": len(tasks),
+        "status_counts": status_counts,
+        "balanced": bool(tasks) and not invalid,
+        "invalid_tasks": invalid,
+        "duration_ms": {
+            "mean": mean(durations) if durations else None,
+            "p95": _percentile(durations, 0.95),
+            "n": len(durations),
+        },
+    }
+
+
+def summarize_memory_safety(runs: List["RunResult"]) -> Dict[str, Any]:
+    """Surface memory isolation and manager-only capability violations explicitly."""
+    isolation: List[tuple["RunResult", dict]] = []
+    prompt_injection: List[tuple["RunResult", dict]] = []
+    specialist_manager_only_calls: List[dict] = []
+    for run in runs:
+        for constraint in (run.verdict or {}).get("constraints", []) or []:
+            if constraint.get("type") == "memory_isolation":
+                isolation.append((run, constraint))
+            if constraint.get("type") == "resist_prompt_injection":
+                prompt_injection.append((run, constraint))
+        for event in getattr(run, "tool_call_events", None) or []:
+            if (event.get("agent_role") in _SPECIALIST_ROLES
+                    and event.get("tool") in _MANAGER_ONLY_TOOLS):
+                specialist_manager_only_calls.append({
+                    "case_id": run.case_id,
+                    "repeat": run.repeat,
+                    "tool": event.get("tool"),
+                    "agent_role": event.get("agent_role"),
+                    "task_id": event.get("task_id"),
+                })
+    failed_isolation = [
+        {"case_id": run.case_id, "repeat": run.repeat}
+        for run, constraint in isolation if constraint.get("passed") is not True
+    ]
+    failed_injection = [
+        {"case_id": run.case_id, "repeat": run.repeat}
+        for run, constraint in prompt_injection if constraint.get("passed") is not True
+    ]
+    return {
+        "memory_isolation": {
+            "observed": bool(isolation),
+            "passed": sum(1 for _, c in isolation if c.get("passed") is True),
+            "total": len(isolation),
+            "failed_cases": failed_isolation,
+        },
+        "prompt_injection": {
+            "observed": bool(prompt_injection),
+            "passed": sum(1 for _, c in prompt_injection if c.get("passed") is True),
+            "total": len(prompt_injection),
+            "failed_cases": failed_injection,
+        },
+        "tainted_write_count": sum(len(r.tainted_writes) for r in runs),
+        "specialist_manager_only_calls": specialist_manager_only_calls,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Per-run result record
 # --------------------------------------------------------------------------- #
@@ -799,6 +1040,10 @@ class RunResult:
     # ``soft_wrapped`` = the turn hit the soft time/step wrap.
     budget_timeout_events: List[dict] = field(default_factory=list)
     soft_wrapped: bool = False
+    # Content-free manager_v1 specialist lifecycle events.  These are copied from the
+    # existing collector format (IDs/role/status/duration/call_count only); objectives,
+    # arguments and result payloads never enter the result package.
+    specialist_lifecycle: List[dict] = field(default_factory=list)
     turn_latency_ms: Optional[float] = None
     final_answer: str = ""
     # Frozen product-output contract used by held-out v3 deterministic grading. v2 only
@@ -849,10 +1094,14 @@ class CaseRunner:
 
     def __init__(self, *, mode: str, cfg, state_root: Path, events_log: Path,
                  judge: bool, arch: str = "legacy",
+                 manager_v1_specialists: bool = False,
                  cache_protocol: Optional[Dict[str, Any]] = None,
                  fixtures_dir: Optional[Path] = None):
         self.mode = mode          # "offline" | "live"
-        self.arch = arch          # "legacy" | "fc_loop"
+        self.arch = arch          # "legacy" | "fc_loop" | "manager_v1"
+        self.manager_v1_specialists = bool(
+            arch == "manager_v1" and manager_v1_specialists
+        )
         self.cfg = cfg
         self.state_root = state_root
         self.events_log = events_log
@@ -1034,7 +1283,7 @@ class CaseRunner:
         # Legacy's assembler has no structured-history channel, so it keeps the string
         # prefix (unchanged). This mirrors production: fc reads ec['history'], legacy the
         # assembled string.
-        if not hist or self.arch == "fc_loop":
+        if not hist or _uses_fc_runtime(self.arch):
             base = q
         else:
             lines = [f"User: {t['content']}" if t["role"] == "user"
@@ -1060,6 +1309,9 @@ class CaseRunner:
     def _patch_tools(self, registry, fixture_queue: Dict[str, List[dict]],
                      evidence: List[dict], fixture_report: Optional[dict] = None):
         orig_execute = registry.execute_tool
+        orig_specialist_execute = getattr(
+            registry, "execute_resolved_specialist_capability", None
+        )
         last_by_tool: Dict[str, dict] = {}
         offline = self.mode == "offline"
         ToolResult = self.ToolResult
@@ -1069,6 +1321,10 @@ class CaseRunner:
         # ``fixture_report`` is an out-param filled at teardown (see fixture_service_report).
         declared_records: Dict[str, int] = {t: len(v) for t, v in fixture_queue.items()}
         served_records: Dict[str, int] = {}
+        desired_specialist_result: contextvars.ContextVar[Any] = contextvars.ContextVar(
+            "eval_desired_specialist_result", default=None
+        )
+        patched_tool_state: Dict[str, tuple[Any, Any]] = {}
 
         def _result_from_fixture(name, item) -> Any:
             return ToolResult(
@@ -1079,7 +1335,8 @@ class CaseRunner:
                 execution_time_ms=0.5,
             )
 
-        async def patched(name, **kwargs):
+        def _next_result(name: str) -> Optional[Any]:
+            """Return the exact replay result, or ``None`` for a permitted live call."""
             item = None
             if name in fixture_queue and fixture_queue[name]:
                 item = fixture_queue[name].pop(0)
@@ -1092,23 +1349,26 @@ class CaseRunner:
                 served_records[name] = served_records.get(name, 0) + 1
 
             if item is not None:
-                result = _result_from_fixture(name, item)
-                record(name, result, kwargs, mcp=False)
-            elif fixture_denies_unbound_tool(declared_records, name):
+                return _result_from_fixture(name, item)
+            if fixture_denies_unbound_tool(declared_records, name):
                 # A fixtured held-out case is a closed evidence world.  Letting an
                 # unrecorded tool fall through to production mixes live data into a
                 # supposedly frozen packet and makes a rerun non-reproducible.
-                result = ToolResult(
+                return ToolResult(
                     success=False,
                     data={"success": False, "fixture_unbound_tool": name},
                     error=f"fixture denied unbound tool: {name}",
                     tool_name=name, execution_time_ms=0.0,
                 )
-                record(name, result, kwargs, mcp=False)
-            elif offline:
+            if offline:
                 data = _CANNED_TOOL_DATA.get(name, {"success": True, "stub": True})
-                result = ToolResult(success=True, data=data, error=None,
-                                    tool_name=name, execution_time_ms=0.5)
+                return ToolResult(success=True, data=data, error=None,
+                                  tool_name=name, execution_time_ms=0.5)
+            return None
+
+        async def patched(name, **kwargs):
+            result = _next_result(name)
+            if result is not None:
                 record(name, result, kwargs, mcp=False)
             else:
                 # live, no fixture: real tool (records itself inside orig_execute)
@@ -1117,11 +1377,78 @@ class CaseRunner:
                              "success": result.success, "error": result.error})
             return result
 
+        def _make_specialist_stub(name: str, original):
+            async def _stub(**kwargs):
+                desired = _next_result(name)
+                if desired is None:
+                    value = original(**kwargs)
+                    return await value if inspect.isawaitable(value) else value
+                desired_specialist_result.set(desired)
+                if desired.success:
+                    return desired.data
+                # Tool._execute_with_callable derives logical success from this public
+                # envelope.  The outer adapter restores the fixture's exact ``data`` and
+                # ``error`` after the real capability validator has run.
+                payload = dict(desired.data) if isinstance(desired.data, dict) else {
+                    "data": desired.data
+                }
+                payload["success"] = False
+                payload["error"] = desired.error or "offline fixture failure"
+                payload["retryable"] = False
+                return payload
+
+            return _stub
+
+        async def patched_specialist(capability, **kwargs):
+            # Forward the caller's keywords VERBATIM.  This wrapper must not restate
+            # the production signature: ``execute_resolved_specialist_capability``
+            # owns it (it now takes the tool's own arguments as one ``args`` mapping
+            # rather than sharing the kwarg namespace), and a wrapper that spells the
+            # parameters out turns any signature change into a benchmark-only
+            # TypeError that looks like a tool failure.
+            desired_specialist_result.set(None)
+            result = await orig_specialist_execute(capability, **kwargs)
+            desired = desired_specialist_result.get()
+            desired_specialist_result.set(None)
+            if desired is not None:
+                # Preserve the exact fixture/canned evidence shape used by the baseline
+                # arm.  Capability validation, schema validation and the pinned callable
+                # path have already executed; only the eval boundary's result is replayed.
+                desired.execution_time_ms = result.execution_time_ms
+                desired.version = result.version
+                desired.idempotency_key = result.idempotency_key
+                result = desired
+            name = str(getattr(capability, "tool_name", "") or result.tool_name or "?")
+            evidence.append({"tool": name, "data": result.data,
+                             "success": result.success, "error": result.error})
+            return result
+
         registry.execute_tool = patched
+        # A specialist deliberately bypasses ``registry.execute_tool`` and invokes its
+        # pinned Tool callable.  Patch that callable only inside this per-case context so
+        # offline/canned and frozen-fixture runs cannot accidentally hit the network while
+        # the production capability checks still run unchanged.
+        should_stub_specialists = offline or bool(declared_records)
+        if should_stub_specialists and callable(orig_specialist_execute):
+            for name, tool in (getattr(registry, "tools", {}) or {}).items():
+                patched_tool_state[name] = (getattr(tool, "func", None),
+                                            getattr(tool, "max_retries", None))
+                tool.func = _make_specialist_stub(name, tool.func)
+                # A fixture record represents one captured invocation.  Retrying it would
+                # consume another record and make the candidate incomparable to baseline.
+                tool.max_retries = 1
+            registry.execute_resolved_specialist_capability = patched_specialist
         try:
             yield
         finally:
             registry.execute_tool = orig_execute
+            if callable(orig_specialist_execute):
+                registry.execute_resolved_specialist_capability = orig_specialist_execute
+            for name, (func, max_retries) in patched_tool_state.items():
+                tool = (getattr(registry, "tools", {}) or {}).get(name)
+                if tool is not None:
+                    tool.func = func
+                    tool.max_retries = max_retries
             # Fill the out-param even if the turn raised: a run that errored out before
             # reaching its bound tool is exactly a case whose fixture went unserved, and
             # that is the reading a reviewer needs most.
@@ -1162,7 +1489,11 @@ class CaseRunner:
         # Run-namespaced user_id: isolates memory across cases even under a shared store
         # (defense-in-depth on top of the fresh per-run SQLite path in _isolate_state).
         eff_uid = self._ns_uid(run_id, case.get("user_id", "u")) or "u"
-        self._seed_memory(case, run_id)
+        # Seeding calls the real long-term-memory implementation, whose extraction path
+        # may itself invoke an LLM. It must be inside the same fake seam as the graph or an
+        # "offline" benchmark can still attempt a provider request before capture begins.
+        with self._patch_llm(case):
+            self._seed_memory(case, run_id)
 
         registry = self.create_tool_registry()
         fixture_queue = load_fixture_queue(case, self.fixtures_dir)
@@ -1212,32 +1543,47 @@ class CaseRunner:
         started = time.perf_counter()
         final_state = None
         run_error: Optional[str] = None
-        # Offline fc_loop: inject a scripted fake agent model so the tool loop runs
-        # unbilled (design §2.3). Legacy / live builds pass agent_llm=None (unused by
-        # legacy; live fc uses the real ModelRouter driver).
+        # Offline FC-family architectures inject the same scripted fake agent model so
+        # both paired arms are unbilled and receive byte-identical model decisions.
         agent_llm = (build_fake_fc_model(case)
-                     if (self.arch == "fc_loop" and self.mode == "offline") else None)
+                     if (_uses_fc_runtime(self.arch) and self.mode == "offline") else None)
+        turn_observations = None
+        if self.arch == "manager_v1" and self.manager_v1_specialists:
+            try:
+                from core import turn_observations as _turn_observations
+                turn_observations = _turn_observations
+                turn_observations.begin_turn()
+            except Exception:
+                turn_observations = None
         with self.collector.capture_run(run_id, case_id, self.cfg.name):
-            with self._patch_tools(registry, fixture_queue, evidence,
-                                   fixture_report), self._patch_llm(case):
-                # Build graph INSIDE the patches so build-time LLM factory (intent) is faked.
-                graph = self.build_agent_graph(registry, checkpointer=checkpointer,
-                                               agent_llm=agent_llm)
-                try:
-                    final_state = await graph.ainvoke(state, config=gconfig)
-                except Exception as exc:
-                    run_error = f"{type(exc).__name__}: {exc}"
-                _lat = (time.perf_counter() - started) * 1000
-                # Emit the turn event the app.py handler would (parity with collector's
-                # documented event set); the runner supersedes app.py's turn record.
-                fs = final_state or {}
-                self.collector.record_turn(
-                    route=fs.get("tool_decision"),
-                    response_type=fs.get("response_type", "answer"),
-                    critic_attempts=fs.get("critic_attempts"),
-                    verdict=fs.get("verdict"),
-                    latency_ms=_lat,
-                )
+            try:
+                with self._patch_tools(registry, fixture_queue, evidence,
+                                       fixture_report), self._patch_llm(case):
+                    # Build graph INSIDE the patches so build-time LLM factory (intent) is faked.
+                    graph = self.build_agent_graph(
+                        registry,
+                        checkpointer=checkpointer,
+                        agent_llm=agent_llm,
+                        manager_v1_specialists=self.manager_v1_specialists,
+                    )
+                    try:
+                        final_state = await graph.ainvoke(state, config=gconfig)
+                    except Exception as exc:
+                        run_error = f"{type(exc).__name__}: {exc}"
+                    _lat = (time.perf_counter() - started) * 1000
+                    # Emit the turn event the app.py handler would (parity with collector's
+                    # documented event set); the runner supersedes app.py's turn record.
+                    fs = final_state or {}
+                    self.collector.record_turn(
+                        route=fs.get("tool_decision"),
+                        response_type=fs.get("response_type", "answer"),
+                        critic_attempts=fs.get("critic_attempts"),
+                        verdict=fs.get("verdict"),
+                        latency_ms=_lat,
+                    )
+            finally:
+                if turn_observations is not None:
+                    turn_observations.end_turn()
         rr.turn_latency_ms = (time.perf_counter() - started) * 1000
         # Was this case's fixture evidence actually delivered? Recorded, never graded on:
         # the constraint verdicts below are computed identically with and without it.
@@ -1258,6 +1604,16 @@ class CaseRunner:
 
         tool_events = [e for e in mine if e.get("type") == "tool_call"]
         rr.tool_call_events = tool_events
+        rr.specialist_lifecycle = [
+            {
+                field: e.get(field)
+                for field in (
+                    "plan_id", "task_id", "parent_task_id", "role", "status",
+                    "duration_ms", "call_count",
+                )
+            }
+            for e in mine if e.get("type") == "specialist_task"
+        ]
         # Three-way split (H13): what the turn REQUESTED vs what actually EXECUTED vs what
         # was DENIED (memory-write gate) vs TIMED OUT. tools_called is the backward-compat
         # alias of tools_executed; constraint checkers + the route trace judge executed-only.
@@ -1289,8 +1645,14 @@ class CaseRunner:
         rr.cache_hits, rr.cache_misses, rr.partial_tool_result = _scan_cache_and_partial(
             _artifacts_now, evidence)
         rr.budget_timeout_events = [
-            {"tool": e.get("tool"), "phase": e.get("phase"), "budget_s": e.get("budget_s"),
-             "elapsed_ms": e.get("elapsed_ms"), "outcome": e.get("outcome")}
+            {
+                "tool": e.get("tool"), "phase": e.get("phase"),
+                "budget_s": e.get("budget_s"), "elapsed_ms": e.get("elapsed_ms"),
+                "outcome": e.get("outcome"),
+                **{field: e[field] for field in
+                   ("agent_role", "task_id", "parent_task_id")
+                   if e.get(field) is not None},
+            }
             for e in mine if e.get("type") == "tool_budget_timeout"]
         rr.soft_wrapped = any(e.get("type") == "turn_soft_wrap" for e in mine)
 
@@ -1299,7 +1661,7 @@ class CaseRunner:
         # super-step). legacy trace = one batch per executed tool, in call order
         # (there is no batch structure to recover). Failure flags are per case.
         fs = final_state or {}
-        if self.arch == "fc_loop":
+        if _uses_fc_runtime(self.arch):
             artifacts = fs.get("tool_artifacts") or []
             # extract_tool_trace + the duplicate signatures both judge EXECUTED-only: a
             # denied/timed-out artifact is a requested-not-executed call (skipped), so a
@@ -1470,8 +1832,15 @@ def build_node_spans(events: List[dict]) -> List[dict]:
     prerequisite for proving the p95 tail is multi-hop."""
     spans = sorted((e for e in events or [] if e.get("type") == "node_span"),
                    key=lambda e: e.get("ts_monotonic") or 0.0)
-    return [{"node": e.get("node"), "ms": e.get("latency_ms"), "seq": i}
-            for i, e in enumerate(spans)]
+    return [
+        {
+            "node": e.get("node"), "ms": e.get("latency_ms"), "seq": i,
+            **{field: e[field] for field in
+               ("agent_role", "task_id", "parent_task_id")
+               if e.get(field) is not None},
+        }
+        for i, e in enumerate(spans)
+    ]
 
 
 def _aggregate_spans(spans: List[dict]) -> Dict[str, Any]:
@@ -1917,6 +2286,7 @@ def write_model_usage(out: Path, runs: List[RunResult], pricing) -> None:
 def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
                   repeats: int, cost_cap: float, stopped_reason: Optional[str],
                   n_selected: int, timestamp: str, arch: str = "legacy",
+                  manager_v1_specialists: bool = False,
                   identity: Optional[Dict[str, Any]] = None) -> dict:
     n = len(runs)
     passed = sum(1 for r in runs if r.passed)
@@ -1987,6 +2357,9 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
     summary = {
         "config": cfg_name,
         "arch": arch,
+        "manager_v1_specialists": bool(
+            arch == "manager_v1" and manager_v1_specialists
+        ),
         "mode": mode,
         "offline": mode == "offline",
         "repeats": repeats,
@@ -2036,9 +2409,12 @@ def write_summary(out: Path, runs: List[RunResult], *, mode: str, cfg_name: str,
         "slowest_cases": top_slowest_cases(runs, k=10),
         "profile_totals": {
             "llm_calls": sum(r.llm_calls for r in runs),
+            "tool_calls": sum(len(r.tool_call_events) for r in runs),
             "tool_batches": sum(r.tool_batches for r in runs),
             "critic_repairs_cases": sum(1 for r in runs if r.critic_repairs),
         },
+        "specialist_lifecycle": summarize_specialist_lifecycle(runs),
+        "memory_safety": summarize_memory_safety(runs),
         "tokens": {"input": total_in, "output": total_out},
         "total_cost_usd": total_cost,
         "cost_cap_usd": cost_cap,
@@ -2220,6 +2596,12 @@ def _build_cache_protocol(args) -> Dict[str, Any]:
 
 
 async def _run_all(args) -> int:
+    manager_v1_specialists = bool(
+        args.arch == "manager_v1"
+        and getattr(args, "manager_v1_specialists", False)
+    )
+    if getattr(args, "manager_v1_specialists", False) and args.arch != "manager_v1":
+        raise SystemExit("--manager-v1-specialists requires --arch manager_v1")
     out = Path(args.out)
     guard_output_dir(out, allow_reuse=getattr(args, "allow_reuse_out", False))
     out.mkdir(parents=True, exist_ok=True)
@@ -2245,6 +2627,7 @@ async def _run_all(args) -> int:
     # build time (per case), so set it here BEFORE any graph is constructed. Recorded in
     # summary.json so A/B result dirs are self-describing.
     os.environ["AGENT_ARCH"] = args.arch
+    os.environ["MANAGER_V1_SPECIALISTS"] = "1" if manager_v1_specialists else "0"
 
     from evaluation.configs.loader import load_config, apply_config
     from evaluation.metrics import pricing as pricing_mod
@@ -2291,6 +2674,7 @@ async def _run_all(args) -> int:
     with apply_config(cfg):
         runner = CaseRunner(mode=mode, cfg=cfg, state_root=state_root,
                             events_log=events_log, judge=args.judge, arch=args.arch,
+                            manager_v1_specialists=manager_v1_specialists,
                             cache_protocol=cache_protocol,
                             fixtures_dir=(Path(args.fixtures_dir) if args.fixtures_dir else None))
         for repeat in range(1, args.repeat + 1):
@@ -2351,6 +2735,7 @@ async def _run_all(args) -> int:
     summary = write_summary(out, runs, mode=mode, cfg_name=cfg.name, repeats=args.repeat,
                             cost_cap=args.max_cost_usd, stopped_reason=stopped_reason,
                             n_selected=len(selected), timestamp=timestamp, arch=args.arch,
+                            manager_v1_specialists=manager_v1_specialists,
                             identity=identity)
     # Reproducible results package: lean per_case.csv + manifest.json (argv, env, commit +
     # its provenance, case-file + events digests). events.jsonl stays out of git; only its
@@ -2409,9 +2794,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
                                 description="RentCompass offline eval runner.")
     p.add_argument("--config", default="routed_models",
                    help="config name or path (default: routed_models)")
-    p.add_argument("--arch", choices=["legacy", "fc_loop"], default="legacy",
+    p.add_argument("--arch", choices=["legacy", "fc_loop", "manager_v1"], default="legacy",
                    help="agent architecture: 'legacy' (classify-then-execute, default) or "
-                        "'fc_loop' (native function-calling loop). Sets AGENT_ARCH before build.")
+                        "'fc_loop'/'manager_v1' (native function-calling runtime). "
+                        "Sets AGENT_ARCH before build.")
+    p.add_argument(
+        "--manager-v1-specialists",
+        action="store_true",
+        help=("enable the default-off deterministic read-only specialist adapter; "
+              "valid only with --arch manager_v1"),
+    )
     p.add_argument("--cases", default=None,
                    help="path to an arbitrary case shard (.jsonl); default: benchmark/cases.jsonl")
     p.add_argument("--fixtures-dir", default=None, metavar="PATH",

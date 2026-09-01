@@ -68,6 +68,7 @@ LEGACY_URL="${MON_LEGACY_URL:-http://127.0.0.1:5001/ready}"
 FC_URL="${MON_FC_URL:-http://127.0.0.1:5002/ready}"
 NGINX_CONF="${MON_NGINX_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
 COMPOSE_ENV="${MON_COMPOSE_ENV:-$REPO/.env}"
+ROUTE_CONF="${MON_ROUTE_CONF:-/etc/nginx/snippets/rentcompass-canary-routing.conf}"
 WEBHOOK_URL="${MON_WEBHOOK_URL:-}"
 EMAIL_TO="${MON_EMAIL_TO:-}"
 MAIL_CMD="${MON_MAIL_CMD:-mail}"
@@ -140,12 +141,13 @@ fi
 
 # --- probe a /ready endpoint: echoes "code arch version" -------------------
 probe() {
-  local url="$1" hdr code arch ver
+  local url="$1" hdr code arch ver specialists
   hdr="$(curl -s -k --max-time 8 -D - -o /dev/null "$url" 2>/dev/null)"
   code="$(printf '%s' "$hdr" | awk 'NR==1{print $2; exit}')"
   arch="$(printf '%s' "$hdr" | awk 'tolower($1)=="x-agent-arch:"{gsub(/\r/,"",$2);print $2; exit}')"
   ver="$(printf '%s'  "$hdr" | awk 'tolower($1)=="x-agent-version:"{gsub(/\r/,"",$2);print $2; exit}')"
-  printf '%s %s %s' "${code:-000}" "${arch:-none}" "${ver:-none}"
+  specialists="$(printf '%s' "$hdr" | awk 'tolower($1)=="x-agent-specialists:"{gsub(/\r/,"",$2);print $2; exit}')"
+  printf '%s %s %s %s' "${code:-000}" "${arch:-none}" "${ver:-none}" "${specialists:-none}"
 }
 
 # 1) PUBLIC edge must serve the arch we intend --------------------------------
@@ -155,66 +157,137 @@ probe() {
 # that gets ignored, which is how the next real one is missed -- the same reasoning that
 # demoted provider 429s to sev4.
 #
-# The intent is now declared, not assumed. MON_EXPECTED_PUBLIC_ARCH must be updated as part
-# of any cutover or rollback; a mismatch still pages, because an UNPLANNED change of what the
-# public edge serves is exactly what this check is for. deploy/switch_pool.sh is what moves
-# the upstream, and this variable is what records that the move was on purpose.
-# Derive intent from the public nginx upstream and the matching immutable pool
-# pin. Explicit MON_EXPECTED_PUBLIC_* values remain available for rehearsals.
+# The intent is now declared, not assumed. By default it is derived from the
+# weighted include (or the legacy upstream while migrating) and the matching
+# immutable pool pin. Explicit MON_EXPECTED_PUBLIC_* values remain available for
+# rehearsals; a mismatch still pages because it represents an unplanned change.
 EXPECTED_PUBLIC_ARCH="${MON_EXPECTED_PUBLIC_ARCH:-auto}"
+CANDIDATE_ARCH="${MON_CANDIDATE_ARCH:-}"
+CANDIDATE_SPECIALISTS="${MON_CANDIDATE_SPECIALISTS:-}"
+CANDIDATE_MCP="${MON_CANDIDATE_MCP:-}"
+if [ -r "$COMPOSE_ENV" ]; then
+  [ -n "$CANDIDATE_ARCH" ] || CANDIDATE_ARCH="$(sed -n 's/^CANARY_AGENT_ARCH=//p' "$COMPOSE_ENV" | tr -d '\r\"' | tail -1)"
+  [ -n "$CANDIDATE_SPECIALISTS" ] || CANDIDATE_SPECIALISTS="$(sed -n 's/^CANARY_MANAGER_V1_SPECIALISTS=//p' "$COMPOSE_ENV" | tr -d '\r\"' | tail -1)"
+  [ -n "$CANDIDATE_MCP" ] || CANDIDATE_MCP="$(sed -n 's/^CANARY_USE_MCP_TOOLS=//p' "$COMPOSE_ENV" | tr -d '\r\"' | tail -1)"
+fi
+CANDIDATE_ARCH="${CANDIDATE_ARCH:-fc_loop}"
+CANDIDATE_SPECIALISTS="${CANDIDATE_SPECIALISTS:-0}"
+CANDIDATE_MCP="${CANDIDATE_MCP:-0}"
+bool01() {
+  case "${1,,}" in
+    1|true|yes|on) printf 1 ;;
+    0|false|no|off|'') printf 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# --- CANONICAL specialist-header rule (keep every copy byte-identical) -------
+# X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
+# specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
+# counts as 0: every image built before 2026-08-31 omits the header entirely,
+# which is BOTH pools deployed on this host today, and the legacy pool is the
+# standing rollback escape hatch that must not be recreated just to satisfy a
+# header check.  Demanding the header for an expected 0 turned `--to legacy`
+# (the emergency rollback) and update.sh's drain leg into hard failures.
+# Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
+#         deploy/monitoring/rentcompass-monitor.sh
+# Python twin: deploy/probe_pool_answer.py::specialists_match
+specialists_ok() { # <observed> <expected>
+  local observed="${1:-}" expected="${2:-}"
+  if [ "$observed" = "$expected" ]; then return 0; fi
+  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
+  return 1
+}
+specialists_absent() { # <observed> -> 0 when the pool sent no specialist header
+  [ -z "${1:-}" ] || [ "${1:-}" = none ]
+}
+specialists_shown() { # <observed> -> what to print for it in a message
+  if specialists_absent "${1:-}"; then printf '<absent>'; else printf '%s' "$1"; fi
+}
+if ! CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS")"; then
+  CANDIDATE_SPECIALISTS=invalid
+  emit_alert 3 "CANARY_MANAGER_V1_SPECIALISTS is not boolean in $COMPOSE_ENV"
+fi
+if ! CANDIDATE_MCP="$(bool01 "$CANDIDATE_MCP")"; then
+  CANDIDATE_MCP=invalid
+  emit_alert 3 "CANARY_USE_MCP_TOOLS is not boolean in $COMPOSE_ENV"
+fi
+case "$CANDIDATE_ARCH:$CANDIDATE_SPECIALISTS:$CANDIDATE_MCP" in
+  fc_loop:0:0|manager_v1:1:0) ;;
+  *) emit_alert 3 "unsafe candidate config arch=$CANDIDATE_ARCH specialists=$CANDIDATE_SPECIALISTS mcp=$CANDIDATE_MCP" ;;
+esac
+ROUTE_WEIGHT="${MON_CANARY_WEIGHT:-}"
+if [ -z "$ROUTE_WEIGHT" ] && [ -r "$ROUTE_CONF" ]; then
+  ROUTE_WEIGHT="$(sed -n 's/^# rentcompass-canary-weight: //p' "$ROUTE_CONF" | head -1)"
+fi
 ACTIVE_PORT="${MON_ACTIVE_PORT:-}"
 if [ -z "$ACTIVE_PORT" ] && [ -r "$NGINX_CONF" ]; then
   ACTIVE_PORT="$(awk '/^upstream rentcompass_app[[:space:]]*\{/,/^\}/' "$NGINX_CONF" \
     | sed -n 's/.*server[[:space:]]\+127\.0\.0\.1:\([0-9]\+\);.*/\1/p' | head -1)"
 fi
 if [ "$EXPECTED_PUBLIC_ARCH" = "auto" ]; then
-  case "$ACTIVE_PORT" in
-    5001) EXPECTED_PUBLIC_ARCH=legacy ;;
-    5002) EXPECTED_PUBLIC_ARCH=fc_loop ;;
-    *) EXPECTED_PUBLIC_ARCH=unknown; emit_alert 3 "cannot resolve the active public pool from $NGINX_CONF (port='${ACTIVE_PORT:-none}')" ;;
+  case "$ROUTE_WEIGHT" in
+    0) EXPECTED_PUBLIC_ARCH=legacy ;;
+    100) EXPECTED_PUBLIC_ARCH="$CANDIDATE_ARCH" ;;
+    5|20|50) EXPECTED_PUBLIC_ARCH=mixed ;;
+    *) case "$ACTIVE_PORT" in
+         5001) EXPECTED_PUBLIC_ARCH=legacy ;;
+         5002) EXPECTED_PUBLIC_ARCH="$CANDIDATE_ARCH" ;;
+         *) EXPECTED_PUBLIC_ARCH=unknown; emit_alert 3 "cannot resolve active public routing from $ROUTE_CONF / $NGINX_CONF" ;;
+       esac ;;
   esac
 fi
-EXPECTED_PUBLIC_SHA="${MON_EXPECTED_PUBLIC_SHA:-}"
-if [ -z "$EXPECTED_PUBLIC_SHA" ] && [ -r "$COMPOSE_ENV" ]; then
-  case "$EXPECTED_PUBLIC_ARCH" in
-    legacy) _pin_key=LEGACY_APP_SHA ;;
-    fc_loop) _pin_key=FC_CANARY_SHA ;;
-    *) _pin_key= ;;
-  esac
-  if [ -n "${_pin_key:-}" ]; then
-    EXPECTED_PUBLIC_SHA="$(sed -n "s/^${_pin_key}=//p" "$COMPOSE_ENV" | tr -d '\r"' | head -1)"
-  fi
-fi
+summary+="route=${ROUTE_WEIGHT:-single}/candidate=$CANDIDATE_ARCH/specialists=$CANDIDATE_SPECIALISTS "
 
-read -r p_code p_arch p_ver <<<"$(probe "$PUBLIC_URL")"
+read -r p_code p_arch p_ver p_specialists <<<"$(probe "$PUBLIC_URL")"
 summary+="pub=$p_code/$p_arch "
 if [ "$p_code" != "200" ]; then
   emit_alert 3 "public $PUBLIC_URL returned HTTP $p_code (expected 200)"
+elif [ "$EXPECTED_PUBLIC_ARCH" = mixed ]; then
+  if [ "$p_arch" != legacy ] && [ "$p_arch" != "$CANDIDATE_ARCH" ]; then
+    emit_alert 3 "public edge x-agent-arch=$p_arch is neither legacy nor configured candidate $CANDIDATE_ARCH"
+  fi
 elif [ "$p_arch" != "$EXPECTED_PUBLIC_ARCH" ]; then
   emit_alert 3 "public edge x-agent-arch=$p_arch but MON_EXPECTED_PUBLIC_ARCH=$EXPECTED_PUBLIC_ARCH — the public pool changed without the monitor being told"
+fi
+case "$p_arch" in legacy) _pin_key=LEGACY_APP_SHA; _expected_specialists=0 ;; "$CANDIDATE_ARCH") _pin_key=FC_CANARY_SHA; _expected_specialists="$CANDIDATE_SPECIALISTS" ;; *) _pin_key=; _expected_specialists=none ;; esac
+EXPECTED_PUBLIC_SHA="${MON_EXPECTED_PUBLIC_SHA:-}"
+if [ -z "$EXPECTED_PUBLIC_SHA" ] && [ -r "$COMPOSE_ENV" ] && [ -n "$_pin_key" ]; then
+  EXPECTED_PUBLIC_SHA="$(sed -n "s/^${_pin_key}=//p" "$COMPOSE_ENV" | tr -d '\r"' | head -1)"
 fi
 if ! [[ "$EXPECTED_PUBLIC_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   emit_alert 3 "expected public SHA is missing/invalid for active arch $EXPECTED_PUBLIC_ARCH (set the matching pool pin or MON_EXPECTED_PUBLIC_SHA)"
 elif [ "$p_code" = "200" ] && [ "$p_ver" != "$EXPECTED_PUBLIC_SHA" ]; then
   emit_alert 3 "public edge serves SHA '$p_ver' but active $EXPECTED_PUBLIC_ARCH is pinned to '$EXPECTED_PUBLIC_SHA'"
 fi
+# R3-M3. `probe` reports `none` when the header is absent, and the header does not
+# exist in origin/main — so installing this monitor BEFORE the pools are upgraded
+# paged sev-3 on every run, every five minutes, for a header the running image
+# cannot send. An absent header is only an alert when specialists=1 is expected.
+if [ "$p_code" = 200 ] && ! specialists_ok "$p_specialists" "$_expected_specialists"; then
+  emit_alert 3 "public edge specialists=$(specialists_shown "$p_specialists") but serving arch $p_arch expects $_expected_specialists"
+fi
 
 # 2) local legacy pool -------------------------------------------------------
-read -r l_code l_arch l_ver <<<"$(probe "$LEGACY_URL")"
+read -r l_code l_arch l_ver l_specialists <<<"$(probe "$LEGACY_URL")"
 summary+="legacy=$l_code/$l_arch/$l_ver "
 if [ "$l_code" != "200" ]; then
   emit_alert 3 "legacy $LEGACY_URL returned HTTP $l_code (expected 200)"
 elif [ "$l_arch" != "legacy" ]; then
   emit_alert 3 "legacy pool x-agent-arch=$l_arch (expected legacy)"
+elif ! specialists_ok "$l_specialists" 0; then
+  emit_alert 3 "legacy pool specialists=$(specialists_shown "$l_specialists") (expected 0)"
 fi
 
-# 3) local fc pool (internal canary; lower severity) -------------------------
-read -r f_code f_arch f_ver <<<"$(probe "$FC_URL")"
+# 3) local candidate pool (internal canary; lower severity) ------------------
+read -r f_code f_arch f_ver f_specialists <<<"$(probe "$FC_URL")"
 summary+="fc=$f_code/$f_arch/$f_ver "
 if [ "$f_code" != "200" ]; then
-  emit_alert 4 "fc pool $FC_URL returned HTTP $f_code (internal canary; expected 200 while running)"
-elif [ "$f_arch" != "fc_loop" ]; then
-  emit_alert 4 "fc pool x-agent-arch=$f_arch (expected fc_loop)"
+  emit_alert 4 "candidate pool $FC_URL returned HTTP $f_code (expected 200 while running)"
+elif [ "$f_arch" != "$CANDIDATE_ARCH" ]; then
+  emit_alert 4 "candidate pool x-agent-arch=$f_arch (expected $CANDIDATE_ARCH)"
+elif ! specialists_ok "$f_specialists" "$CANDIDATE_SPECIALISTS"; then
+  emit_alert 3 "candidate pool specialists=$(specialists_shown "$f_specialists") (expected $CANDIDATE_SPECIALISTS)"
 fi
 
 # 3b) identity assertions ---------------------------------------------------
@@ -227,9 +300,9 @@ NOW["ver_legacy"]="$l_ver"; NOW["ver_fc"]="$f_ver"
 # named by MON_EXPECTED_PUBLIC_ARCH, not always legacy. This assertion shipped hard-coded to
 # the legacy pool and started false-alarming the moment the edge moved to fc: the same
 # assumption, in the check written to catch that assumption. Declared intent, one place.
-case "$EXPECTED_PUBLIC_ARCH" in
-  fc_loop) _exp_code="$f_code"; _exp_ver="$f_ver" ;;
-  *)       _exp_code="$l_code"; _exp_ver="$l_ver" ;;
+case "$p_arch" in
+  "$CANDIDATE_ARCH") _exp_code="$f_code"; _exp_ver="$f_ver" ;;
+  *)                 _exp_code="$l_code"; _exp_ver="$l_ver" ;;
 esac
 if [ "$p_code" = "200" ] && [ "$_exp_code" = "200" ] && [ "$p_ver" != "$_exp_ver" ]; then
   emit_alert 3 "public edge version '$p_ver' != $EXPECTED_PUBLIC_ARCH pool version '$_exp_ver' — the edge is not serving the pool it should be"
@@ -244,12 +317,12 @@ for pool in legacy fc; do
   fi
 done
 
-# The fc pool must be running the image the compose .env pins. A mismatch means the
+# The candidate pool must be running the image the compose .env pins. A mismatch means the
 # container is not the candidate anyone thinks is under test.
 if [ "$f_code" = "200" ] && [ -r "$REPO/.env" ]; then
   pinned="$(sed -n 's/^FC_CANARY_SHA=//p' "$REPO/.env" | tr -d '\r\"' | head -1)"
   if [ -n "$pinned" ] && [ "$f_ver" != "none" ] && [ "$f_ver" != "$pinned" ]; then
-    emit_alert 3 "fc pool serves $f_ver but .env pins FC_CANARY_SHA=$pinned"
+    emit_alert 3 "candidate pool serves $f_ver but .env pins FC_CANARY_SHA=$pinned"
   fi
 fi
 
@@ -329,7 +402,7 @@ if [ -n "${disk_pct:-}" ] && [ "$disk_pct" -gt "$DISK_USE_MAX_PCT" ] 2>/dev/null
 fi
 
 # 7) SQLite -wal sizes (large WAL = checkpoint stalled / lock contention) -----
-for wal in "$RUNTIME"/checkpoints.sqlite3-wal "$RUNTIME"/checkpoints_fc.sqlite3-wal "$RUNTIME"/conversations.sqlite3-wal; do
+for wal in "$RUNTIME"/checkpoints*.sqlite3-wal "$RUNTIME"/conversations.sqlite3-wal; do
   [ -f "$wal" ] || continue
   sz=$(( $(stat -c%s "$wal" 2>/dev/null || echo 0) / 1048576 ))
   if [ "$sz" -gt "$WAL_MAX_MB" ] 2>/dev/null; then
@@ -346,7 +419,7 @@ for c in uk-rent-app uk-rent-app-fc; do
 done
 
 # 9) canary telemetry logs: size, mtime, line count (+growth since last run) --
-for name in canary-legacy canary-fc_loop; do
+for name in canary-legacy "canary-$CANDIDATE_ARCH"; do
   f="$RUNTIME/logs/$name.jsonl"
   if [ ! -f "$f" ]; then
     emit_alert 4 "telemetry log $name.jsonl missing"
@@ -397,8 +470,8 @@ done
 # from the 2026-07-25 round (uncached input $0.139/M) this is far below a cent
 # per month.
 PROVIDER_PROBE_EVERY_S="${MON_PROVIDER_PROBE_EVERY_S:-3600}"
-case "$EXPECTED_PUBLIC_ARCH" in
-  fc_loop) _default_probe_container=uk-rent-app-fc ;;
+case "$p_arch" in
+  "$CANDIDATE_ARCH") _default_probe_container=uk-rent-app-fc ;;
   *) _default_probe_container=uk-rent-app ;;
 esac
 PROVIDER_PROBE_CONTAINER="${MON_PROVIDER_PROBE_CONTAINER:-$_default_probe_container}"
@@ -484,7 +557,7 @@ PYPROBE
   # together. Disagreement is itself the alert.
   probe_model="$(printf '%s' "$probe_out" | awk '{print $3}')"
   case "$PROVIDER_PROBE_CONTAINER" in
-    *-fc) probe_arch="fc_loop" ;;
+    *-fc) probe_arch="$CANDIDATE_ARCH" ;;
     *)    probe_arch="legacy"  ;;
   esac
   obs_log="$RUNTIME/logs/canary-$probe_arch.jsonl"

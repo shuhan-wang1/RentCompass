@@ -1,4 +1,4 @@
-"""Canary turn telemetry — schema v2 record builder.
+"""Canary turn telemetry — schema v3 record builder.
 
 Deliberately dependency-light (stdlib only) so the canary CONTRACT can be tested
 end-to-end without importing the Flask app: the closed-loop test imports
@@ -40,17 +40,64 @@ Schema v2 changes vs v1
 * ``user_id_hash`` (HMAC) replaces the raw user id.
 * ``eval_only`` self-declares metrics that prod telemetry cannot determine, so
   the report can distinguish "eval-only" from "missing instrumentation".
+* Experimental ``manager_v1`` turns identify whether specialist dispatch was
+  configured and may carry a content-free ``specialist`` lifecycle diagnostic.
+  The block is named for what it counts — specialist tasks — and deliberately NOT
+  for an architecture: a specialist makes no model call of its own and shares the
+  manager's context. An early v3 draft named it after that architecture; it was
+  renamed in place on 2026-08-31 while v3 still had no production records, so
+  there is no compatibility burden. This producer emits ``specialist`` ONLY; the
+  consumer keeps reading the draft key as an alias
+  (``canary_report.specialist_block``) so a stray pre-rename row is interpreted
+  rather than convicted. Legacy/fc records retain their old shape.
+
+Schema v3 changes vs v2
+-----------------------
+v3 exists because two v2 fields were REDEFINED, not because new ones were added.
+Additive fields do not need a version; a field whose meaning changed does, or a
+window spanning the change silently averages two different measurements:
+
+* ``llm_calls`` was ``final_state["loop_turn"]`` on fc (agent super-steps, and
+  ``null`` on legacy). It is now the OBSERVER's count of billed provider calls on
+  every arch, with ``loop_turn`` retained only as a fail-closed lower bound. From
+  v3 it therefore also includes the nested tool-internal DeepSeek calls that
+  ``llm_interface._call_deepseek`` makes — the ones that were always billed and
+  never counted. v2 and v3 ``llm_calls`` are NOT comparable.
+* ``tool_batches`` was ``null`` on legacy and "distinct fc artifact turns"
+  otherwise; it is now artifact turns plus a legacy execution-plan wave, so it is
+  a real number on both arches. ``search_direct_signals`` likewise reports an
+  observed ``0`` for both counters instead of ``null``.
+* Additive in v3 and safe to ignore: ``variant_id``, the rollout identity block,
+  ``root_agent_context``/``agent_role``/``task_id``/``parent_task_id``,
+  ``tool_latency``, and the ``specialist``
+  ``partial``/``denied_calls``/``dropped_error_codes`` counters.
+* ``tool_ledger_status`` states whether ``tool_batches`` COULD be counted at all.
+  ``tool_batches`` is derived from ``final_state``, and a crashed turn has no
+  ``final_state`` — so requiring it unconditionally at v3 made every crash/5xx
+  record a guaranteed contract violation, i.e. a permanent INSTRUMENTATION-HOLD on
+  any window containing one (14% of legacy history). The marker makes the gap
+  explicit and checkable instead: ``"complete"`` promises a real count,
+  ``"unavailable"`` states that the ledger died with the turn and REQUIRES
+  ``tool_batches`` to be null, and it is only legal on a crash/server_error
+  outcome, so it cannot be used to opt a healthy turn out of the requirement.
+
+The consumer (``scripts/canary_report.py``) validates each record under the rules
+that applied WHEN IT WAS WRITTEN, keyed off this field. That is the whole point of
+bumping it: 2748 historical legacy records and 230 fc records would otherwise have
+started failing a contract that did not exist when they were emitted.
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Optional
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 EVENT_NAME = "canary.turn"
 
 ENDPOINT_ALEX = "alex"
@@ -61,6 +108,14 @@ OUTCOME_OK = "ok"                    # agent produced a normal answer
 OUTCOME_AGENT_ERROR = "agent_error"  # response_type == "error" (handled, HTTP 200)
 OUTCOME_CRASH = "crash"              # exception caught by the endpoint (HTTP 200 by design)
 OUTCOME_SERVER_ERROR = "server_error"  # escaped to the 500 handler
+# Outcomes on which the turn's own bookkeeping (final_state) does not exist. The
+# consumer keys the tool-ledger exemption off exactly this set.
+UNOBSERVABLE_OUTCOMES = (OUTCOME_CRASH, OUTCOME_SERVER_ERROR)
+
+# tool_ledger_status values.
+TOOL_LEDGER_COMPLETE = "complete"        # tool_batches is a real, observed count
+TOOL_LEDGER_UNAVAILABLE = "unavailable"  # the ledger died with the turn -> null
+VALID_TOOL_LEDGER_STATUSES = (TOOL_LEDGER_COMPLETE, TOOL_LEDGER_UNAVAILABLE)
 
 # Metrics prod telemetry genuinely cannot determine. Emitted as null and declared
 # here so the report treats them as EVAL-ONLY rather than missing instrumentation.
@@ -88,6 +143,62 @@ USAGE_NO_CALLS = "no_llm_calls"
 USAGE_NOT_INSTRUMENTED = "not_instrumented"
 VALID_USAGE_STATUSES = (USAGE_COMPLETE, USAGE_PARTIAL, USAGE_NO_CALLS,
                         USAGE_NOT_INSTRUMENTED)
+
+# Additive v3 field: was the LangChain CALLBACK observer attached while this turn
+# ran? (turn_observations keeps a second flag for the raw-SDK reporter; only the
+# callback can see ModelRouter calls, so only the callback answers this question.)
+#
+# It exists to separate two things a null/partial usage status used to collapse:
+#
+#   observer live + turn died   -> UNMEASURABLE. No instrumentation could have
+#                                  measured it; holding the window on it teaches
+#                                  operators to ignore INSTRUMENTATION-HOLD.
+#   observer absent             -> the 2026-07-25 incident class: zero-call
+#                                  telemetry from a process that was not watching.
+#                                  This is exactly what the gate exists to catch.
+#
+# The consumer grants its crash exemption only on `true` — positive evidence — so
+# an absent field (an older producer) keeps the old, stricter reading.
+OBSERVER_INSTALLED_FIELD = "llm_observer_installed"
+_SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
+_SPECIALIST_STATUSES = frozenset(
+    {"planned", "started", "completed", "partial", "failed", "skipped"}
+)
+_SPECIALIST_OUTCOME_STATUSES = frozenset({"partial", "failed", "skipped"})
+_SPECIALIST_DENIED_STATUS = "denied"
+_SPECIALIST_EVENT_FIELDS = (
+    "plan_id", "task_id", "parent_task_id", "role", "status",
+    "duration_ms", "call_count",
+)
+# The one optional lifecycle field. Kept out of the tuple above so the exact-shape
+# assertion at the bottom of the event builder still fails safe for anything else.
+_SPECIALIST_EVENT_OPTIONAL_FIELDS = ("error_code",)
+_SPECIALIST_DENIED_EVENT_FIELDS = ("status", "tool", "error_code")
+# The producer keeps TWO bounded rings (see turn_observations: 64 lifecycle events
+# + 8 denials) and hands us their concatenation. Re-truncating that concatenation
+# at the LIFECYCLE cap silently dropped denial events off the end of a busy turn
+# while `events_truncated` still said False — and the consumer then convicted the
+# record ("denied_calls=8 but events contain 7") for a truncation the producer
+# never admitted. The cap here must therefore be the SUM of the two rings, and
+# anything this function drops for any reason must flip the flag.
+_MAX_SPECIALIST_LIFECYCLE_EVENTS = 64
+_MAX_SPECIALIST_DENIED_EVENTS = 8
+_MAX_SPECIALIST_EVENTS = (
+    _MAX_SPECIALIST_LIFECYCLE_EVENTS + _MAX_SPECIALIST_DENIED_EVENTS
+)
+# ``partial`` and ``denied_calls`` are REQUIRED of this producer but OPTIONAL of
+# the consumer: a record written by an earlier manager_v1 build has neither, and
+# defaulting them to 0 there is correct (nothing was counted) where defaulting a
+# core counter would be a fabrication.
+_SPECIALIST_COUNTER_FIELDS = (
+    "planned", "started", "completed", "failed", "skipped", "max_in_flight",
+)
+_SPECIALIST_OPTIONAL_COUNTER_FIELDS = (
+    "partial", "denied_calls", "dropped_error_codes",
+)
+_MACHINE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
+_ERROR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 REQUIRED_SECURITY_FIELDS = (
     "denied_write_count", "tainted_write_executed_count", "forbidden_write_executed_count",
 )
@@ -150,7 +261,13 @@ def search_direct_signals() -> Dict[str, Any]:
         # there is no spend to miss. That is why the status enum has a value for it
         # instead of overloading null.
         "llm_usage": None, "llm_usage_status": USAGE_NO_CALLS,
-        "llm_calls": None, "tool_batches": None,
+        # These are genuine observed zeros, not FC-only fields. Keeping them null
+        # contradicts no_llm_calls and makes the strict consumer HOLD every window
+        # containing deterministic search traffic.
+        "llm_calls": 0, "tool_batches": 0,
+        # This endpoint dispatches no tools at all, so 0 is an observed count and
+        # the ledger is trivially complete.
+        "tool_ledger_status": TOOL_LEDGER_COMPLETE,
     }
 
 
@@ -187,11 +304,52 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
         "provider_schema_400_count": None,
         "llm_usage": None, "llm_usage_status": USAGE_NOT_INSTRUMENTED,
         "llm_calls": None, "tool_batches": None,
+        # tool_batches is derived from final_state, and a crashed turn HAS no
+        # final_state. There is no out-of-band accumulator for it, so no overlay
+        # below can ever fill it: saying so explicitly is the only honest option.
+        # Fabricating a 0 here would report "this turn ran no tools" about a turn
+        # that may have run several before dying.
+        "tool_ledger_status": TOOL_LEDGER_UNAVAILABLE,
     }
-    for field in ("provider_schema_400_count", "llm_usage_status",
-                  "dsml_blocked", "dsml_leak"):
+    for field in ("provider_schema_400_count",
+                  # Whether anything was WATCHING is itself an observation, and the
+                  # one that decides whether this turn is unmeasurable or
+                  # uninstrumented. It must survive the crash like the rest.
+                  OBSERVER_INSTALLED_FIELD,
+                  "dsml_blocked", "dsml_leak",
+                  # Same argument as llm_usage below: the observer counts a call at
+                  # its completion callback, so the calls that finished BEFORE the
+                  # crash are observed facts. Leaving this null while llm_usage
+                  # reports their tokens would also make the record internally
+                  # inconsistent from v3, where the two are cross-checked.
+                  "llm_calls"):
         if observed and observed.get(field) is not None:
             sig[field] = observed[field]
+    # llm_usage_status is NOT overlaid verbatim, and this is the one place in the
+    # module where a status is rewritten.
+    #
+    # `no_llm_calls` is a POSITIVE assertion — "this turn provably spent nothing" —
+    # and the report and the cost tool both act on it: the turn leaves the
+    # unmeasured population and is priced at zero. On an unobservable outcome that
+    # assertion cannot be made. The accumulator produces `no_llm_calls` whenever no
+    # run reached its COMPLETION callback, which is exactly the state of a turn
+    # killed mid-flight by the graph timeout, or one whose only provider call
+    # errored (note_provider_error does not touch llm_usage_missing). Both may
+    # already have been billed. Reporting zero there is the same fail-open this
+    # function's docstring rejects for the write counters — the crash-shaped hole
+    # in the cost side of the A/B.
+    #
+    # `partial` is the enum's existing "we observed something, the total is an
+    # undercount of unknown size" value: canary_report holds on it
+    # (USAGE_STATUS_HOLD) and canary_cost counts the turn as chargeable-but-
+    # unmeasured instead of as a free turn. `not_instrumented` would also be
+    # treated as unmeasured by both, but it asserts "nothing was watching", which
+    # is false when the accumulator was running — so the honest value is `partial`.
+    if observed and observed.get("llm_usage_status") is not None:
+        _observed_status = observed["llm_usage_status"]
+        sig["llm_usage_status"] = (
+            USAGE_PARTIAL if _observed_status == USAGE_NO_CALLS else _observed_status
+        )
     # The write audit is accumulated at the policy decision point, so a turn that
     # crashed AFTER dispatching a tainted write still reports it. This is the case
     # the docstring above warns about, and the only one that turns it from a
@@ -204,7 +362,201 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
     # observed rather than dropping the turn out of the cost denominator.
     if observed and observed.get("llm_usage_calls"):
         sig["llm_usage"] = aggregate_llm_usage(observed["llm_usage_calls"])
+    root_context = observed.get("root_agent_context") if observed else None
+    if isinstance(root_context, dict) and root_context:
+        sig["root_agent_context"] = dict(root_context)
+    for field in ("agent_role", "task_id", "parent_task_id"):
+        if observed and observed.get(field) is not None:
+            sig[field] = observed[field]
+    if observed and isinstance(observed.get("specialist"), dict):
+        # The record builder applies the content-free whitelist and emits this only
+        # for manager_v1. Keeping it here lets a crash retain lifecycle progress.
+        sig["specialist"] = observed["specialist"]
     return sig
+
+
+def _specialist_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
+    """Sanitise the optional manager_v1 specialist trace.
+
+    This deliberately accepts no objectives, args, outputs or error strings. A
+    malformed projection is omitted rather than allowed to break canary emission.
+    """
+    if not isinstance(value, dict):
+        return None
+    try:
+        out: Dict[str, Any] = {}
+        for field in _SPECIALIST_COUNTER_FIELDS:
+            raw = value.get(field)
+            if isinstance(raw, bool) or not isinstance(raw, int):
+                return None
+            if raw < 0 or raw > 1_000_000:
+                return None
+            out[field] = raw
+        for field in _SPECIALIST_OPTIONAL_COUNTER_FIELDS:
+            raw = value.get(field, 0)
+            if isinstance(raw, bool) or not isinstance(raw, int):
+                return None
+            if raw < 0 or raw > 1_000_000:
+                return None
+            out[field] = raw
+
+        truncated = value.get("events_truncated")
+        if not isinstance(truncated, bool):
+            return None
+        out["events_truncated"] = truncated
+
+        safe_events = []
+        events = value.get("events", [])
+        if not isinstance(events, list):
+            return None
+        for raw_event in events[:_MAX_SPECIALIST_EVENTS]:
+            if not isinstance(raw_event, dict):
+                continue
+            if raw_event.get("status") == _SPECIALIST_DENIED_STATUS:
+                # A refused dispatch carries no task identity — only which tool was
+                # refused and why. Validated against the same closed grammars as the
+                # lifecycle fields so it cannot become a channel for tool arguments.
+                tool = raw_event.get("tool")
+                tool = tool.strip() if isinstance(tool, str) else ""
+                code = raw_event.get("error_code")
+                code = code.strip() if isinstance(code, str) else ""
+                if not _TOOL_NAME_RE.fullmatch(tool) or not _ERROR_CODE_RE.fullmatch(code):
+                    continue
+                denied_event = {
+                    "status": _SPECIALIST_DENIED_STATUS,
+                    "tool": tool,
+                    "error_code": code,
+                }
+                if tuple(denied_event.keys()) == _SPECIALIST_DENIED_EVENT_FIELDS:
+                    safe_events.append(denied_event)
+                continue
+            identifiers = []
+            invalid = False
+            for field in ("plan_id", "task_id", "parent_task_id"):
+                candidate = raw_event.get(field)
+                candidate = candidate.strip() if isinstance(candidate, str) else ""
+                if not _MACHINE_ID_RE.fullmatch(candidate):
+                    invalid = True
+                    break
+                identifiers.append(candidate)
+            if invalid:
+                continue
+            role = raw_event.get("role")
+            status = raw_event.get("status")
+            if role not in _SPECIALIST_ROLES or status not in _SPECIALIST_STATUSES:
+                continue
+            calls = raw_event.get("call_count")
+            if (
+                isinstance(calls, bool)
+                or not isinstance(calls, int)
+                or calls < 0
+                or calls > 10_000
+            ):
+                continue
+            raw_duration = raw_event.get("duration_ms")
+            if raw_duration is None:
+                duration = None
+            else:
+                if (
+                    isinstance(raw_duration, bool)
+                    or not isinstance(raw_duration, (int, float))
+                ):
+                    continue
+                duration = float(raw_duration)
+                if not math.isfinite(duration) or duration < 0:
+                    continue
+                duration = round(duration, 3)
+            event = {
+                "plan_id": identifiers[0],
+                "task_id": identifiers[1],
+                "parent_task_id": identifiers[2],
+                "role": role,
+                "status": status,
+                "duration_ms": duration,
+                "call_count": calls,
+            }
+            error_code = raw_event.get("error_code")
+            if error_code is not None:
+                error_code = error_code.strip() if isinstance(error_code, str) else ""
+                if (
+                    not _ERROR_CODE_RE.fullmatch(error_code)
+                    or status not in _SPECIALIST_OUTCOME_STATUSES
+                ):
+                    continue
+                event["error_code"] = error_code
+            # A local assertion makes future edits fail safe if an unsafe field is
+            # ever accidentally added to the diagnostic shape.
+            if tuple(event.keys()) in (
+                _SPECIALIST_EVENT_FIELDS,
+                _SPECIALIST_EVENT_FIELDS + _SPECIALIST_EVENT_OPTIONAL_FIELDS,
+            ):
+                safe_events.append(event)
+        out["events"] = safe_events
+        # `events_truncated` means one thing to the consumer: "this list is NOT the
+        # complete stream, so do not reconcile it against the counters". Anything
+        # dropped above — by the cap, or by a transition that failed sanitisation —
+        # makes that true, whatever the producer's own ring said. Under-reporting it
+        # turns a bounded diagnostic into a fabricated contract violation; the
+        # counters stay authoritative either way.
+        if len(safe_events) != len(events):
+            out["events_truncated"] = True
+        return out
+    except Exception:
+        return None
+
+
+_TOOL_LATENCY_FIELDS = ("count", "p50_ms", "max_ms", "timed_out", "abandoned")
+_MAX_TOOL_LATENCY_ENTRIES = 32
+
+
+def _tool_latency_summary(value: Any) -> Optional[Dict[str, Any]]:
+    """Sanitise the per-tool latency summary. Content-free by construction.
+
+    Only a TOOL NAME (registry identifier grammar) and five numbers per tool.
+    No arguments, no results, no error text and no per-call vector — a vector
+    would let the shape of one user's session be reconstructed from an ops log,
+    and p50/max answer the question ("which tool is eating the budget") just as
+    well. Non-gating: this is a Stage-1 instrument, not a threshold.
+    """
+    if not isinstance(value, dict):
+        return None
+    out: Dict[str, Any] = {}
+    try:
+        for raw_name, raw_stats in list(value.items())[:_MAX_TOOL_LATENCY_ENTRIES]:
+            name = raw_name.strip() if isinstance(raw_name, str) else ""
+            if not _TOOL_NAME_RE.fullmatch(name) or not isinstance(raw_stats, dict):
+                continue
+            entry: Dict[str, Any] = {}
+            ok = True
+            for field in ("count", "timed_out", "abandoned"):
+                raw = raw_stats.get(field)
+                if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0 or raw > 100_000:
+                    ok = False
+                    break
+                entry[field] = raw
+            if not ok:
+                continue
+            for field in ("p50_ms", "max_ms"):
+                raw = raw_stats.get(field)
+                if raw is None:
+                    entry[field] = None
+                    continue
+                if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                    ok = False
+                    break
+                number = float(raw)
+                if not math.isfinite(number) or number < 0:
+                    ok = False
+                    break
+                entry[field] = round(number, 1)
+            if not ok:
+                continue
+            ordered = {field: entry[field] for field in _TOOL_LATENCY_FIELDS}
+            if tuple(ordered.keys()) == _TOOL_LATENCY_FIELDS:
+                out[name] = ordered
+    except Exception:
+        return None
+    return out or None
 
 
 def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
@@ -218,6 +570,7 @@ def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[D
     if not calls:
         return None
     per_model: Dict[str, Dict[str, int]] = {}
+    per_role: Dict[str, Dict[str, int]] = {}
     totals = {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0}
     saw_any = False
     for c in calls:
@@ -236,9 +589,35 @@ def aggregate_llm_usage(calls: Optional[Iterable[Dict[str, Any]]]) -> Optional[D
             totals[field] += v
         slot["calls"] += 1
         totals["calls"] += 1
+        role = c.get("agent_role")
+        if role is not None:
+            role_slot = per_role.setdefault(
+                str(role),
+                {"calls": 0, "input_tokens": 0, "output_tokens": 0,
+                 "cache_read_tokens": 0, "models": {}},
+            )
+            role_slot["calls"] += 1
+            role_model_slot = role_slot["models"].setdefault(
+                model,
+                {"calls": 0, "input_tokens": 0, "output_tokens": 0,
+                 "cache_read_tokens": 0},
+            )
+            role_model_slot["calls"] += 1
+            for field in ("input_tokens", "output_tokens", "cache_read_tokens"):
+                try:
+                    value = int(c.get(field) or 0)
+                except (TypeError, ValueError):
+                    value = 0
+                role_slot[field] += value
+                role_model_slot[field] += value
     if not saw_any:
         return None
-    return {**totals, "models": per_model}
+    result = {**totals, "models": per_model}
+    # Optional and additive: legacy/fc calls without an execution context retain
+    # the exact historical llm_usage object shape.
+    if per_role:
+        result["roles"] = per_role
+    return result
 
 
 def build_canary_turn_record(
@@ -255,6 +634,8 @@ def build_canary_turn_record(
     turn_latency_ms: float,
     signals: Optional[Dict[str, Any]] = None,
     ts: Optional[datetime] = None,
+    manager_v1_specialists: Optional[bool] = None,
+    rollout: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build ONE schema-v2 ``canary.turn`` record. Pure: no I/O, no globals beyond
     the HMAC key lookup. ``signals`` carries the arch-specific per-turn observations
@@ -262,6 +643,7 @@ def build_canary_turn_record(
     field we could not observe is emitted as ``null`` rather than a fabricated 0/False.
     """
     sig = signals or {}
+    rollout_in = rollout if isinstance(rollout, dict) else {}
     sec_in = sig.get("security") or {}
     uid_hash, hash_status = hash_user_id(user_id)
     stamp = (ts or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -297,7 +679,7 @@ def build_canary_turn_record(
         for r in v[:20]:  # bounded: a retry storm must not grow the record unboundedly
             if not isinstance(r, dict):
                 continue
-            out.append({
+            record = {
                 "tool": r.get("tool"),
                 "security_decision": r.get("security_decision"),
                 "context_tainted": bool(r.get("context_tainted")),
@@ -305,10 +687,14 @@ def build_canary_turn_record(
                 "dispatch_started": bool(r.get("dispatch_started")),
                 "gate_bypassed": bool(r.get("gate_bypassed")),
                 "reason": r.get("reason"),
-            })
+            }
+            for field in ("agent_role", "task_id", "parent_task_id"):
+                if r.get(field) is not None:
+                    record[field] = str(r[field])
+            out.append(record)
         return out
 
-    return {
+    record = {
         "event": EVENT_NAME,
         "telemetry_schema_version": SCHEMA_VERSION,
         "ts": stamp.isoformat(),
@@ -316,6 +702,20 @@ def build_canary_turn_record(
         "agent_arch": agent_arch,
         "candidate_sha": candidate_sha,
         "strict": bool(strict),
+        "variant_id": (
+            f"{agent_arch}:strict-{1 if strict else 0}:specialists-"
+            f"{1 if manager_v1_specialists is True else 0}"
+        ),
+        # Trusted edge provenance is injected by nginx after overwriting any
+        # client copies. Direct :5001/:5002 smoke traffic is explicitly labelled
+        # and can therefore never satisfy a public rollout window by accident.
+        "rollout_id": rollout_in.get("rollout_id"),
+        "rollout_stage": rollout_in.get("rollout_stage"),
+        "configured_candidate_percent": rollout_in.get(
+            "configured_candidate_percent"
+        ),
+        "traffic_source": rollout_in.get("traffic_source", "direct"),
+        "assigned_pool": rollout_in.get("assigned_pool", "direct"),
         "request_id": request_id,
         "conversation_id": conversation_id,
         "user_id_hash": uid_hash,
@@ -362,3 +762,47 @@ def build_canary_turn_record(
         "no_evidence_numbers": None,
         "eval_only": list(EVAL_ONLY_FIELDS),
     }
+    # ADDITIVE and omitted when the caller did not state it. Emitting a default
+    # would be worse than emitting nothing: "unavailable" next to a real
+    # `tool_batches` count is a self-contradicting record, and "complete" next to a
+    # null is a claim we did not make. Absent, the consumer falls back to the
+    # outcome-based rule (a crash/5xx turn had no ledger), which is exactly how it
+    # already has to read the v3 records written before this field existed.
+    ledger_status = sig.get("tool_ledger_status")
+    if ledger_status in VALID_TOOL_LEDGER_STATUSES:
+        record["tool_ledger_status"] = ledger_status
+    # Same additive rule as tool_ledger_status: stated or absent, never defaulted.
+    # A default of False would accuse a working process; a default of True would
+    # hand out the crash exemption to a producer that never claimed it.
+    observer_installed = sig.get(OBSERVER_INSTALLED_FIELD)
+    if isinstance(observer_installed, bool):
+        record[OBSERVER_INSTALLED_FIELD] = observer_installed
+    tool_latency = _tool_latency_summary(sig.get("tool_latency"))
+    if tool_latency is not None:
+        # Additive and arch-agnostic: absent on any turn that dispatched no tool,
+        # so legacy/fc records without it keep exactly their historical shape.
+        record["tool_latency"] = tool_latency
+    root_context = sig.get("root_agent_context")
+    if agent_arch == "manager_v1":
+        # Configuration identity is distinct from lifecycle activity: a perfectly
+        # valid turn may need no specialist tool at all.  Emitting the switch lets
+        # the release gate distinguish that case from a candidate that silently
+        # started with specialist dispatch disabled.  ``None`` is intentional and
+        # fail-closed for older/miswired producers.
+        record["manager_v1_specialists"] = (
+            manager_v1_specialists
+            if isinstance(manager_v1_specialists, bool)
+            else None
+        )
+        specialist = _specialist_diagnostics(sig.get("specialist"))
+        if specialist is not None:
+            record["specialist"] = specialist
+    if not isinstance(root_context, dict):
+        root_context = {}
+    for field in ("agent_role", "task_id", "parent_task_id"):
+        value = sig.get(field)
+        if value is None:
+            value = root_context.get(field)
+        if value is not None:
+            record[field] = str(value)
+    return record

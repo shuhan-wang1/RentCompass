@@ -14,6 +14,7 @@ deterministic and offline. They lock in the contracts added for:
 import asyncio
 import os
 import sys
+import time
 
 # --- Pin the real source roots ahead of tests/ (stale shadow copies live under tests/).
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -145,6 +146,129 @@ def test_recommend_areas_cache_hit_is_instant(monkeypatch, tmp_path):
                          dest_coords={"lat": 51.52, "lng": -0.13}, max_commute_time=45))
     assert [r["name"] for r in second] == [r["name"] for r in first]
     assert all(r["source"] == "cache" for r in second)
+
+
+def test_recommend_areas_cache_separates_max_commute_time(monkeypatch, tmp_path):
+    _reco_mocks(monkeypatch, tmp_path)
+    strict = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=45, limit=4))
+    relaxed = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=60, limit=4))
+
+    assert [r["name"] for r in strict] == ["Camden", "Islington"]
+    assert [r["name"] for r in relaxed] == ["Camden", "Islington", "Stratford"]
+    assert all(r["source"] == "web+validated" for r in relaxed)
+
+
+def test_recommend_areas_cache_separates_different_excludes(monkeypatch, tmp_path):
+    _reco_mocks(monkeypatch, tmp_path)
+    without_camden = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=45, exclude_slugs=["camden"], limit=4))
+    without_islington = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=45, exclude_slugs=["islington"], limit=4))
+
+    assert [r["name"] for r in without_camden] == ["Islington"]
+    assert [r["name"] for r in without_islington] == ["Camden"]
+    assert all(r["source"] == "web+validated" for r in without_islington)
+
+
+def test_recommend_areas_cache_normalizes_exclude_order(monkeypatch, tmp_path):
+    _reco_mocks(monkeypatch, tmp_path)
+    first = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=60, exclude_slugs=["camden", "stratford"], limit=4))
+    assert [r["name"] for r in first] == ["Islington"]
+
+    monkeypatch.setattr(
+        ram, "get_search_snippets",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("exclude order missed cache")),
+    )
+    reordered = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=60, exclude_slugs=["stratford", "camden"], limit=4))
+
+    assert [r["name"] for r in reordered] == ["Islington"]
+    assert all(r["source"] == "cache" for r in reordered)
+
+
+def test_recommend_areas_cache_normalizes_equivalent_identity_inputs(monkeypatch, tmp_path):
+    _reco_mocks(monkeypatch, tmp_path)
+    first = asyncio.run(ram.recommend_areas(
+        "  UCL ", city=" London ", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=60, exclude_slugs=[" Camden ", "STRATFORD"], limit=4))
+    assert [r["name"] for r in first] == ["Islington"]
+
+    monkeypatch.setattr(
+        ram, "get_search_snippets",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("normalized identity missed cache")),
+    )
+    equivalent = asyncio.run(ram.recommend_areas(
+        "ucl", city="london", dest_coords={"lat": "51.5200000", "lng": "-0.1300000"},
+        max_commute_time=60, exclude_slugs=["stratford", "camden"], limit=4))
+
+    assert [r["name"] for r in equivalent] == ["Islington"]
+    assert all(r["source"] == "cache" for r in equivalent)
+
+
+def test_recommend_areas_cache_separates_limit(monkeypatch, tmp_path):
+    _reco_mocks(monkeypatch, tmp_path)
+    one = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=60, limit=1))
+    three = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=60, limit=3))
+
+    assert [r["name"] for r in one] == ["Camden"]
+    assert [r["name"] for r in three] == ["Camden", "Islington", "Stratford"]
+    assert all(r["source"] == "web+validated" for r in three)
+
+
+def test_recommend_areas_cache_separates_destination_coordinates(monkeypatch, tmp_path):
+    _reco_mocks(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        ram, "commute_minutes",
+        lambda dest, dc, *, origin_address=None, origin_geo=None, london=None:
+            _COMMUTES.get(origin_address, 30) + (60 if dc["lat"] > 51.55 else 0),
+    )
+    nearby = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=45, limit=4))
+    shifted = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.60, "lng": -0.13},
+        max_commute_time=45, limit=4))
+
+    assert [r["name"] for r in nearby] == ["Camden", "Islington"]
+    assert shifted == []
+
+
+def test_budget_exhaustion_does_not_cache_incomplete_empty(monkeypatch, tmp_path):
+    _reco_mocks(monkeypatch, tmp_path)
+    snippet_calls = []
+
+    def _slow_snippets(*args, **kwargs):
+        snippet_calls.append(args[0])
+        time.sleep(0.03)
+        return "Camden and Islington are good residential areas near UCL."
+
+    monkeypatch.setattr(ram, "get_search_snippets", _slow_snippets)
+    first = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=45, limit=4, budget_s=0.01))
+
+    assert first == []
+    assert len(snippet_calls) == 2
+
+    second = asyncio.run(ram.recommend_areas(
+        "UCL", city="london", dest_coords={"lat": 51.52, "lng": -0.13},
+        max_commute_time=45, limit=4))
+
+    assert [r["name"] for r in second] == ["Camden", "Islington"]
+    assert len(snippet_calls) == 4
 
 
 def test_recommend_areas_empty_web_grounds_to_empty(monkeypatch, tmp_path):

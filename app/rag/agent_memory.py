@@ -584,11 +584,17 @@ class AgentMemory:
                 if ev == "ADD" and text:
                     self.add(text, "semantic", session_id, user_id, importance=7)
                 elif ev == "UPDATE" and oid and text:
+                    update_failed = False
                     with self._lock:
                         try:
                             self.col.update(ids=[oid], documents=[text])
                         except Exception:
-                            self.add(text, "semantic", session_id, user_id, importance=7)
+                            update_failed = True
+                    if update_failed:
+                        # add() acquires self._lock itself. Run the fallback only after
+                        # releasing the non-reentrant lock above, otherwise an UPDATE
+                        # failure deadlocks the durable outbox worker forever.
+                        self.add(text, "semantic", session_id, user_id, importance=7)
                 elif ev == "DELETE" and oid:
                     with self._lock:
                         try:

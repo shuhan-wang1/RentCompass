@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import functools
 import json
 import logging
 import os
@@ -34,6 +35,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from uk_rent_agent.agent.state import AgentState
 from uk_rent_agent.agent.contracts import ToolInvocation
+from uk_rent_agent.observability import agent_execution_context, current_agent_context
 
 # THE shared dimension vocabulary — one table, both arches (see core/dimensions.py). Imports
 # nothing from either arch, so it can never be part of an import cycle.
@@ -95,7 +97,7 @@ logger = logging.getLogger(__name__)
 # legacy taint set (execute_tool :2717) plus get_property_details' external description page.
 _UNTRUSTED_TOOLS = frozenset({
     "web_search", "search_properties", "reasoning_property", "multi_search",
-    "get_property_details",
+    "get_property_details", "search_nearby_pois",
 })
 
 # Per-tool length cap for the model-facing derived view (chars). Raw ToolResult.data is
@@ -137,6 +139,14 @@ except Exception:  # pragma: no cover
         retry_safe: bool = True
         version: str = "1"
         terminal: bool = False
+        # The capability-boundary fields must be declared here too. Without them every spec
+        # built through this fallback reads as "unset" for exactly the four fields the
+        # specialist security digest was extended to cover (audit K7), so a broken import
+        # would silently drop that coverage instead of failing loudly.
+        max_retries: int = 2
+        retry_on_error: bool = True
+        input_model_ref: str = ""
+        output_model_ref: str = ""
 
 
 class _RegistryToolProvider:
@@ -149,6 +159,17 @@ class _RegistryToolProvider:
     def list_specs(self):
         specs = []
         for tool in getattr(self._registry, "tools", {}).values():
+            # Prefer the tool's own contract: it is the SAME object the capability
+            # resolver digests, so an adapter cannot introduce a phantom metadata drift
+            # by rebuilding a spec that omits a field (e.g. the capability-boundary
+            # fields added for manager_v1 specialists).
+            builder = getattr(tool, "to_spec", None)
+            if callable(builder):
+                try:
+                    specs.append(builder())
+                    continue
+                except Exception:
+                    pass
             specs.append(ToolSpec(
                 name=tool.name,
                 description=tool.description,
@@ -693,6 +714,159 @@ def _note_write_dispatch(audit_key: str) -> None:
         pass
 
 
+# Lifecycle statuses agreed with the turn_observations owner. ``partial`` is terminal and
+# is NOT a failure: a task with one successful and one abandoned call used to be counted as
+# failed, which systematically overstated the specialist failure rate in the canary report.
+_SPECIALIST_LIFECYCLE_RECORDERS = {
+    "planned": "note_specialist_plan",
+    "started": "note_specialist_start",
+    "completed": "note_specialist_complete",
+    "partial": "note_specialist_partial",
+    "failed": "note_specialist_fail",
+    "skipped": "note_specialist_skip",
+}
+# Closed set for the ``error_code`` carried by a non-successful terminal event.
+#
+# turn_observations owns the canonical constant: the producing side (here) and the consuming
+# side (its ``_ERROR_CODE_RE`` gate) used to be two unrelated closed sets that could drift
+# apart silently. The local literal is only a fallback for a turn_observations that has not
+# grown the export yet — it must stay byte-identical to that module's set.
+try:  # pragma: no cover - depends on the turn_observations owner's merge order
+    from core.turn_observations import (  # type: ignore
+        SPECIALIST_ERROR_CODES as _SPECIALIST_ERROR_CODES,
+    )
+except Exception:  # pragma: no cover
+    _SPECIALIST_ERROR_CODES = frozenset({
+        "dispatch_denied", "tool_error", "timeout", "abandoned",
+        "budget_exhausted", "cancelled", "ledger_invalid", "incomplete",
+    })
+
+
+def _note_specialist_lifecycle(status: str, *, plan_id: str, task, call_count: int,
+                               duration_ms: Optional[float] = None,
+                               error_code: Optional[str] = None) -> None:
+    """Content-free, best-effort Phase-2 lifecycle instrumentation.
+
+    Recorders are resolved by NAME through ``getattr`` so this keeps working against a
+    turn_observations module that has not yet grown ``note_specialist_partial``: the generic
+    ``note_specialist_event`` is used as the fallback, and an unknown status there is a
+    silent no-op rather than an exception."""
+    try:
+        from core import turn_observations
+
+        attribute = _SPECIALIST_LIFECYCLE_RECORDERS.get(status)
+        if attribute is None:
+            return
+        recorder = getattr(turn_observations, attribute, None)
+        if not callable(recorder):
+            event = getattr(turn_observations, "note_specialist_event", None)
+            if not callable(event):
+                return
+            recorder = functools.partial(event, status)
+        fields = {
+            "plan_id": plan_id,
+            "task_id": task.task_id,
+            "parent_task_id": task.parent_task_id,
+            "role": task.role,
+            "call_count": int(call_count),
+        }
+        if duration_ms is not None:
+            fields["duration_ms"] = float(duration_ms)
+        if error_code and status != "completed":
+            # Unknown codes are dropped here rather than in telemetry, so the closed set
+            # stays enforceable from the producing side too.
+            if str(error_code) in _SPECIALIST_ERROR_CODES:
+                fields["error_code"] = str(error_code)
+        recorder(**fields)
+    except Exception:
+        pass
+
+
+def _specialist_result_error_code(result) -> Optional[str]:
+    """Map a SpecialistResult onto the closed lifecycle error-code set.
+
+    Delegates to ``specialist_runtime.specialist_result_reason`` so the lifecycle
+    telemetry, the model-facing evidence note and the AnswerContract limitation lines
+    can never disagree about WHY a specialist task produced no evidence.
+    """
+    from core.specialist_runtime import specialist_result_reason
+
+    return specialist_result_reason(
+        getattr(result, "status", ""), getattr(result, "error", None))
+
+
+def _specialist_evidence_note(results: list, plans: list) -> str:
+    """Phase 3 / deliverable 1: the synthesiser's brief for this turn.
+
+    Bounded, manager-authored, and derived ONLY from the specialist ledgers — role,
+    status, granted tool name, taint flag and reason category, each re-checked against a
+    compile-time constant in ``summarize_specialist_results`` before it is rendered. No
+    tool payload, user text or identifier reaches this string, which is what makes it
+    safe to carry instructions. Never fatal: no note is strictly better than a broken one.
+    """
+    try:
+        from core.specialist_runtime import (
+            build_evidence_digest,
+            summarize_specialist_results,
+        )
+
+        return build_evidence_digest(summarize_specialist_results(results, plans))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("manager_v1.evidence_note_failed type=%s", type(exc).__name__)
+        return ""
+
+
+# Application-owned marker for the manager evidence note. It lives in
+# ``additional_kwargs`` and NOT in the message text, because ``messages`` is the FULL
+# per-turn transcript (a plain last-write-wins channel) and the note is rebuilt every
+# batch: matching on a content prefix meant a user who typed the header string had their
+# own message silently deleted from the transcript (review3 R1 low-4). Message CONTENT is
+# user-controlled; ``additional_kwargs`` on a message this module constructed is not.
+_EVIDENCE_NOTE_MARKER = "manager_evidence_note"
+
+
+def _is_manager_evidence_note(message) -> bool:
+    """True only for a note THIS module authored — never for a user message."""
+    if not isinstance(message, HumanMessage):
+        return False
+    extra = getattr(message, "additional_kwargs", None)
+    return isinstance(extra, dict) and extra.get(_EVIDENCE_NOTE_MARKER) is True
+
+
+def _apply_evidence_note(messages: list, results: list, plans: list) -> list:
+    """Replace any earlier evidence note with the current one, at the end of the turn.
+
+    Rebuilt rather than appended: the note describes the WHOLE turn's evidence, so a
+    second batch must not leave a stale first note in the transcript, and the model must
+    never see the same brief twice.
+
+    The ONLY message this function may remove is a note it wrote itself (identified by
+    ``_EVIDENCE_NOTE_MARKER``). Everything else is preserved, in order, untouched: this
+    node receives the whole transcript and returns it as the new value of the channel, so
+    dropping any other message would delete it from the conversation for good.
+    """
+    kept = [message for message in messages if not _is_manager_evidence_note(message)]
+    note = _specialist_evidence_note(results, plans)
+    if not note:
+        return kept
+    return kept + [
+        HumanMessage(content=note,
+                     additional_kwargs={_EVIDENCE_NOTE_MARKER: True})
+    ]
+
+
+def _note_specialist_call_denied(tool: str, error_code: str) -> None:
+    """Best-effort per-CALL denial counter (the hook may not exist yet)."""
+    try:
+        from core import turn_observations
+
+        recorder = getattr(turn_observations, "note_specialist_call_denied", None)
+        if callable(recorder):
+            recorder(tool=str(tool), error_code=str(error_code))
+    except Exception:
+        pass
+
+
 def _dsml_contains_markup(text) -> bool:
     """Shared detection, so the in-graph guard and the response boundary cannot
     disagree about what counts as tool-call markup.
@@ -724,7 +898,13 @@ def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
               timed_out: bool = False, denied: bool = False,
               abandoned: bool = False, outcome_unknown: bool = False,
               elapsed_ms: Optional[int] = None,
-              queue_wait_ms: Optional[int] = None, starved: bool = False) -> dict:
+              queue_wait_ms: Optional[int] = None, starved: bool = False,
+              artifact_id: Optional[str] = None,
+              plan_id: Optional[str] = None,
+              agent_role: Optional[str] = None,
+              task_id: Optional[str] = None,
+              parent_task_id: Optional[str] = None,
+              specialist_error_code: Optional[str] = None) -> dict:
     """A tool_artifacts entry. `success`/`error` mirror the underlying ToolResult so
     downstream readers (P2's critic, format_output_fc) can tell a failed tool apart
     from a successful one without re-parsing the model-facing ToolMessage. The ask_user
@@ -772,6 +952,21 @@ def _artifact(turn: int, tool: str, raw_data: Any, params_digest: str = "",
         art["elapsed_ms"] = int(elapsed_ms)
     if queue_wait_ms is not None:
         art["queue_wait_ms"] = int(queue_wait_ms)
+    # Phase-2 manager metadata is additive and emitted only for specialist-owned calls;
+    # the fc_loop/default artifact shape therefore remains byte-for-byte compatible.
+    for key, value in (
+        ("artifact_id", artifact_id),
+        ("plan_id", plan_id),
+        ("agent_role", agent_role),
+        ("task_id", task_id),
+        ("parent_task_id", parent_task_id),
+        # LEDGER-ONLY: the stable reason a specialist call was refused. It is never part of
+        # the ToolMessage — the model sees one generic denial string for every code, so a
+        # probing model cannot use the wording to map the boundary's internals.
+        ("specialist_error_code", specialist_error_code),
+    ):
+        if value is not None:
+            art[key] = str(value)
     return art
 
 
@@ -869,18 +1064,150 @@ async def _offload_tool_call(coro_factory, *, timing: Optional[dict] = None):
     return outcome
 
 
+# The complete set of harness-injected keys a sealed specialist call may carry. The planned
+# path re-attaches exactly ``_deadline_monotonic`` after sealing; the off-plan fan-out must
+# not be broader.
+_SPECIALIST_INJECTED_KEYS = frozenset({"_deadline_monotonic"})
+
+
+class _SpecialistCapabilityScope:
+    """Route an off-plan tool call through the read-only capability boundary.
+
+    The post-search commute fan-out is the ONE place where untrusted third-party text
+    (a scraped listing address) becomes a tool argument, and it was the one place that
+    bypassed the boundary entirely by calling ``provider.execute_tool`` directly (audit F5).
+
+    These calls are deliberately NOT members of the immutable ``TaskPlan``: they are
+    discovered from a search RESULT, after the plan was sealed, and their evidence is
+    already recorded as ordinary ``calculate_commute`` artifacts.  They still get the full
+    boundary — role allowlist, live-spec revalidation, security digest, pinned capability,
+    sealed arguments and a ``mobility`` execution context parented by the turn root.
+    """
+
+    def __init__(self, provider, *, role, plan_id, root_task_id, task_id):
+        self._provider = provider
+        self._role = role
+        self._plan_id = plan_id
+        self._root_task_id = root_task_id
+        self._task_id = task_id
+
+    @staticmethod
+    def _denied(name, error_code):
+        from core.tool_system import ToolResult
+        logger.warning(
+            "manager_v1.specialist_validation_denied tool=%s error_code=%s",
+            name, error_code)
+        return ToolResult(
+            False,
+            error="specialist dispatch denied: capability validation failed",
+            tool_name=name,
+        )
+
+    async def execute(self, name, params):
+        from core.specialist_runtime import (
+            SpecialistDispatchError,
+            seal_specialist_args,
+            specialist_eligible_role,
+            tool_spec_security_digest,
+        )
+        from uk_rent_agent.agent.specialist_contracts import (
+            grant_read_only_tools_for_role,
+            validate_read_only_dispatch_for_role,
+        )
+
+        params = dict(params or {})
+        # Harness-injected execution hints bypass the model-visible schema exactly as they do
+        # on the planned path — and, exactly as on the planned path, ``_deadline_monotonic``
+        # is the ONE permitted post-seal key. ``sealed.update(injected)`` used to re-admit any
+        # ``_``-prefixed key after sealing, which made the fan-out (the path whose arguments
+        # come from SCRAPED text) strictly weaker than the planned path, where
+        # ``_snapshot_call`` refuses every reserved key (review R1/R6).
+        injected = {
+            k: v for k, v in params.items()
+            if str(k) in _SPECIALIST_INJECTED_KEYS
+        }
+        try:
+            reserved = [
+                k for k in params
+                if str(k).startswith("_") and str(k) not in _SPECIALIST_INJECTED_KEYS
+            ]
+            if reserved:
+                raise SpecialistDispatchError("specialist_reserved_argument")
+            if specialist_eligible_role(name, params) != self._role:
+                raise SpecialistDispatchError("specialist_capability_role_mismatch")
+            specs = tuple(self._provider.list_specs())
+            spec = next((item for item in specs if getattr(item, "name", None) == name), None)
+            if spec is None:
+                raise SpecialistDispatchError("specialist_live_spec_missing")
+            grants = grant_read_only_tools_for_role(self._role, (name,), live_specs=specs)
+            validate_read_only_dispatch_for_role(self._role, grants[0], spec)
+            digest = tool_spec_security_digest(spec)
+            sealed = seal_specialist_args(
+                {k: v for k, v in params.items() if not str(k).startswith("_")}
+            )
+            sealed.update(injected)
+            resolver = getattr(self._provider, "resolve_specialist_capability", None)
+            dispatch = getattr(
+                self._provider, "execute_resolved_specialist_capability", None)
+            if not callable(resolver) or not callable(dispatch):
+                raise SpecialistDispatchError("specialist_capability_resolver_unavailable")
+            capability = resolver(name, digest)
+        except Exception as exc:
+            return self._denied(
+                name, getattr(exc, "error_code", "specialist_dispatch_validation_failed"))
+        with agent_execution_context(
+            agent_role=self._role,
+            task_id=self._task_id,
+            parent_task_id=self._root_task_id,
+        ):
+            return await dispatch(
+                capability, args=sealed, expected_spec_digest=digest)
+
+
 class _OffloadedValidationProvider:
     """Keep post-search fan-out off both the graph loop and its shared default executor."""
 
-    def __init__(self, delegate):
+    def __init__(self, delegate, *, specialist_scope=None):
         self._delegate = delegate
+        self._specialist_scope = specialist_scope
+        # Keep manager-owned timing records outside the child coroutine.  If the parent
+        # turn is cancelled, asyncio cancels the gather children but an offloaded worker
+        # may remain unkillable.  The caller can then account for exactly the dispatches
+        # whose results were never accepted without awaiting those workers.
+        self._dispatch_timings: list[dict] = []
 
     def list_specs(self):
         return self._delegate.list_specs()
 
     async def execute_tool(self, name: str, **params):
-        return await _offload_tool_call(
-            lambda: self._delegate.execute_tool(name, **params))
+        timing = {"tool": str(name), "submitted": time.monotonic()}
+        self._dispatch_timings.append(timing)
+        scope = self._specialist_scope
+        if scope is not None:
+            factory = lambda: scope.execute(name, params)
+        else:
+            factory = lambda: self._delegate.execute_tool(name, **params)
+        try:
+            result = await _offload_tool_call(factory, timing=timing)
+        except asyncio.CancelledError:
+            # Deliberately do not mark this dispatch finished: the private worker may
+            # still complete after its graph-loop waiter has been cancelled.
+            timing["cancelled"] = time.monotonic()
+            raise
+        except BaseException:
+            # The worker outcome was received (as an exception) and is therefore known.
+            timing["finished"] = time.monotonic()
+            raise
+        timing["finished"] = time.monotonic()
+        return result
+
+    def unaccepted_dispatches(self) -> tuple[dict, ...]:
+        """Snapshots submitted calls whose worker outcome was not accepted by the caller."""
+        return tuple(
+            dict(timing)
+            for timing in self._dispatch_timings
+            if "finished" not in timing
+        )
 
 
 def _emit_budget_timeout(tool: str, elapsed_s: float, budget_s: float, kind: str,
@@ -1763,7 +2090,8 @@ def _deterministic_wrap_answer(state: AgentState) -> str:
 # NODE FACTORY
 # ═══════════════════════════════════════════════════════════════════
 
-def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent_llm=None):
+def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent_llm=None,
+                   specialist_dispatch=False):
     """Produce the fc_loop graph nodes.
 
     Args:
@@ -1772,6 +2100,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         enable_hitl: gate a search_properties batch behind interrupt() (needs a checkpointer).
         checkpointer: required for HITL to persist the interrupted state.
         agent_llm: injectable base chat model (tests). Defaults to ModelRouter responder.
+        specialist_dispatch: opt-in manager_v1 read-only specialist adapter. The default is
+            False and preserves the production fc_loop execution path exactly.
 
     Returns dict of {guard, agent, execute_tools, format_output_fc} node callables.
     """
@@ -1888,7 +2218,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         intent = gate.confirmation_intent(cur) if hasattr(gate, "confirmation_intent") else "none"
         if intent == "none" and not gate.user_authorizes_memory(cur):
             return None
-        frozen = gate.consume_pending_write(session_id, digest)
+        consume = (gate.claim_pending_write
+                   if hasattr(gate, "claim_pending_write")
+                   else gate.consume_pending_write)
+        frozen = consume(session_id, digest)
         if not frozen:
             return None
         if intent == "no":
@@ -1897,6 +2230,20 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         kind = frozen.get("kind")
         if kind not in ("semantic", "episodic", "reflection"):
             kind = "semantic"
+        operation_id = str(frozen.get("operation_id") or "").strip()
+        try:
+            memory_attempt = max(0, int(frozen.get("attempt", 0)))
+        except (TypeError, ValueError):
+            memory_attempt = 0
+        # Each later, explicit user confirmation is a NEW logical invocation after a
+        # known/unknown failure, so it needs a new ToolRegistry key. The operation id
+        # and attempt live in the durable pending ledger, surviving process restarts.
+        # The remember implementation independently deduplicates (user, kind, content),
+        # so a new attempt cannot duplicate a write whose earlier outcome was uncertain.
+        idempotency_key = (
+            f"memgate:{session_id}:{digest}:{operation_id}:{memory_attempt}"
+            if operation_id else f"memgate:{session_id}:{digest}"
+        )
         try:
             result = await asyncio.wait_for(
                 provider.execute_tool(
@@ -1905,7 +2252,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     kind=kind,
                     user_id=state.get("user_id") or "",
                     session_id=session_id,
-                    idempotency_key=f"memgate:{session_id}:{digest}",
+                    idempotency_key=idempotency_key,
                 ),
                 TOOL_TIMEOUTS.get("remember", TOOL_TIMEOUT_DEFAULT))
             saved = bool(getattr(result, "success", False))
@@ -1915,8 +2262,27 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             return ("[memory] The user confirmed; the frozen candidate was saved verbatim: "
                     + json.dumps(frozen.get("content") or "", ensure_ascii=False)
                     + ". Tell the user it has been saved.")
-        return ("[memory] The user confirmed, but saving the frozen candidate failed; "
-                "apologize briefly and offer to retry.")
+        # The claim is deliberately single-consumer, so it removes the row before
+        # executing the side effect. Restore the exact candidate at its ORIGINAL
+        # ordering position when the write fails; re-freezing it with a new timestamp
+        # could incorrectly promote it over a candidate created while this call ran.
+        # The stable idempotency key above also makes an uncertain timeout safe to replay
+        # if the provider completed just before cancellation.
+        retry_available = False
+        if hasattr(gate, "restore_pending_write"):
+            try:
+                retry_candidate = dict(frozen)
+                retry_candidate["attempt"] = memory_attempt + 1
+                retry_available = bool(
+                    gate.restore_pending_write(
+                        session_id, digest, retry_candidate))
+            except Exception:
+                retry_available = False
+        if retry_available:
+            return ("[memory] The user confirmed, but saving the frozen candidate failed; "
+                    "it remains pending. Apologize briefly and offer to retry.")
+        return ("[memory] The user confirmed, but saving failed and the retry candidate "
+                "could not be preserved. Apologize and ask them to state it again.")
 
     async def _bounded_llm_invoke(call, prompt_messages, deadline_monotonic: float):
         """Run one provider call without ever waiting beyond an absolute turn deadline."""
@@ -2594,7 +2960,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     continue
             plan.append((tc, digest, "run", args))
 
-        async def _run(name, args, digest, timeout, is_write, timing=None):
+        async def _run(name, args, digest, timeout, is_write, timing=None, *,
+                       specialist_capability=None, specialist_spec_digest=None,
+                       specialist_error_sink=None):
             """Execute one tool under its own wait_for(`timeout`). Returns
             (ToolResult, elapsed_ms, status) where status is 'ok' | 'error' | 'timeout'
             (read/generic per-call timeout) | 'write_timeout' (a WRITE whose own wait_for
@@ -2604,35 +2972,63 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             _offload_tool_call stamps `started` into once a pool worker picks it up). The
             caller keeps the reference so it can read the timings even for a dispatch that is
             ABANDONED and therefore never returns from here."""
-            tool = provider.get(name) if hasattr(provider, "get") else None
-            version = getattr(tool, "version", "1") if tool else "1"
-            # Harness-injected volatile params (leading underscore, e.g. _deadline_monotonic)
-            # are execution-time hints, NOT identity: exclude them from the idempotency key so
-            # two dispatches of the same logical call collapse (mirrors collector._hash_args and
-            # the _params_digest volatile-key exclusion). They still reach the tool via call_args.
-            inv_params = {k: v for k, v in args.items() if not str(k).startswith("_")}
-            inv = ToolInvocation.create(run_id=state.get("run_id", "fc"), node_id="execute_tools",
-                                        tool=name, params=inv_params, version=version)
-            call_args = dict(args)
-            call_args["idempotency_key"] = inv.idempotency_key
-            if is_write:
-                # Stamped BEFORE the call, so a write that hangs or raises still leaves
-                # an audit trail showing the policy let it through. This marks the gate
-                # crossing, not a successful write.
-                _note_write_dispatch(f"{name}:{digest}")
             from core.tool_system import ToolResult
             t_call = time.monotonic()
             if timing is not None:
                 timing["submitted"] = t_call
             try:
+                # IDENTITY IS COMPUTED INSIDE THE TRY (review3 R1-H1). Everything below --
+                # the provider lookup, the idempotency key -- consumes MODEL-AUTHORED
+                # arguments, and every dispatch in the batch was already ensure_future'd by
+                # the time this runs. An exception escaping here therefore killed the whole
+                # execute_tools node AFTER its siblings had run: no Command, no artifacts, no
+                # ToolMessages, and any already-committed write left unlogged. Under this
+                # handler one malformed call degrades to the ordinary per-call
+                # ToolResult(False, "Tool execution failed") and its siblings still land.
+                tool = (
+                    getattr(specialist_capability, "tool", None)
+                    if specialist_capability is not None
+                    else (provider.get(name) if hasattr(provider, "get") else None)
+                )
+                version = getattr(tool, "version", "1") if tool else "1"
+                # Harness-injected volatile params (leading underscore, e.g.
+                # _deadline_monotonic) are execution-time hints, NOT identity: exclude them
+                # from the idempotency key so two dispatches of the same logical call collapse
+                # (mirrors collector._hash_args and the _params_digest volatile-key
+                # exclusion). They still reach the tool via call_args.
+                inv_params = {k: v for k, v in args.items() if not str(k).startswith("_")}
+                inv = ToolInvocation.create(
+                    run_id=state.get("run_id", "fc"), node_id="execute_tools",
+                    tool=name, params=inv_params, version=version)
+                call_args = dict(args)
+                call_args["idempotency_key"] = inv.idempotency_key
+                if is_write:
+                    # Stamped BEFORE the call, so a write that hangs or raises still leaves
+                    # an audit trail showing the policy let it through. This marks the gate
+                    # crossing, not a successful write.
+                    _note_write_dispatch(f"{name}:{digest}")
                 # Offload to a private-loop worker thread (see _offload_tool_call): a blocking,
                 # non-yielding section inside an async tool must not freeze the graph loop, or the
                 # wait_for below (and the batch window) could not fire on time. The coroutine is
                 # built inside the thread via the factory so an abandoned dispatch leaves nothing
                 # un-awaited on the graph loop.
+                if specialist_capability is not None:
+                    dispatch = getattr(
+                        provider, "execute_resolved_specialist_capability", None
+                    )
+                    if not callable(dispatch):
+                        raise RuntimeError("specialist capability executor unavailable")
+                    # The tool's arguments travel as ONE mapping: they must not share the
+                    # kwarg namespace with `capability` / `expected_spec_digest` (audit F9).
+                    coro_factory = lambda: dispatch(
+                        specialist_capability,
+                        args=call_args,
+                        expected_spec_digest=specialist_spec_digest,
+                    )
+                else:
+                    coro_factory = lambda: provider.execute_tool(name, **call_args)
                 res = await asyncio.wait_for(
-                    _offload_tool_call(lambda: provider.execute_tool(name, **call_args),
-                                       timing=timing), timeout)
+                    _offload_tool_call(coro_factory, timing=timing), timeout)
                 return res, int((time.monotonic() - t_call) * 1000), "ok"
             except asyncio.TimeoutError:
                 el = int((time.monotonic() - t_call) * 1000)
@@ -2646,8 +3042,46 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         tool_name=name), el, "write_timeout")
                 return (ToolResult(False, error=f"{name} timed out after {timeout:.0f}s",
                                    tool_name=name), el, "timeout")
-            except Exception:  # degrade-don't-crash: one failed tool never kills the batch
+            except Exception as exc:  # degrade-don't-crash: one failed tool never kills the batch
                 el = int((time.monotonic() - t_call) * 1000)
+                if specialist_capability is not None:
+                    try:
+                        from core.specialist_runtime import SpecialistDispatchError
+                        if isinstance(exc, SpecialistDispatchError):
+                            code = getattr(
+                                exc, "error_code", "specialist_dispatch_denied")
+                            logger.warning(
+                                "manager_v1.specialist_dispatch_denied tool=%s error_code=%s",
+                                name, code,
+                            )
+                            if callable(specialist_error_sink):
+                                specialist_error_sink(code)
+                            if code == "specialist_result_identity_mismatch":
+                                # Raised AFTER the tool ran. Recording it as denied would
+                                # claim the call never executed; the true state is that it
+                                # did execute and its outcome cannot be trusted or used.
+                                return (
+                                    ToolResult(
+                                        False,
+                                        error=("specialist dispatch failed: the tool ran but "
+                                               "its result identity could not be verified"),
+                                        tool_name=name,
+                                        outcome="unknown",
+                                    ),
+                                    el,
+                                    "specialist_outcome_unknown",
+                                )
+                            return (
+                                ToolResult(
+                                    False,
+                                    error="specialist dispatch denied: capability changed",
+                                    tool_name=name,
+                                ),
+                                el,
+                                "specialist_denied",
+                            )
+                    except Exception:
+                        pass
                 return ToolResult(False, error="Tool execution failed", tool_name=name), el, "error"
 
         run_idx = [i for i, (_tc, _d, mode, _a) in enumerate(plan) if mode == "run"]
@@ -2664,6 +3098,244 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         # elapsed still counts against the turn budget).
         read_idx = [i for i in run_idx if _side_effect(plan[i][0].get("name")) != "write"]
         write_idx = [i for i in run_idx if _side_effect(plan[i][0].get("name")) == "write"]
+
+        # manager_v1 Phase 2: the manager's already-authorized FC read batch *is* the
+        # plan.  Build one immutable task per specialist role after all parameter
+        # injection, de-duplication and read/write policy gates, but before any call is
+        # dispatched.  No planner/model invocation is added.
+        prepared_specialists = None
+        specialist_prepare_denied_idx: set[int] = set()
+        specialist_rejected_idx: dict[int, str] = {}
+        specialist_error_code_by_idx: dict[int, str] = {}
+        specialist_call_count_by_task: dict[str, int] = {}
+        specialist_root_task_id: Optional[str] = None
+        manager_task_plans = list(state.get("manager_task_plans") or [])
+        specialist_result_payloads = list(state.get("specialist_results") or [])
+        if specialist_dispatch and read_idx:
+            from core.specialist_runtime import (
+                ReadCall,
+                SpecialistDispatchError,
+                prepare_specialist_batch,
+                safe_turn_root_id,
+                specialist_eligible_role,
+            )
+
+            manager_ctx = current_agent_context()
+            # The TURN root, not this super-step's node id. Preferring the state-derived
+            # turn id over ``task_id`` keeps one request's N super-steps under a single
+            # root even when no HTTP root context is installed (audit K8); ``safe_turn_root_id``
+            # hashes a request id whose shape we do not recognise instead of propagating it.
+            root_task_id = (
+                manager_ctx.get("parent_task_id")
+                or safe_turn_root_id(state.get("request_id") or state.get("run_id"))
+                or manager_ctx.get("task_id")
+                or "manager"
+            )
+            specialist_root_task_id = root_task_id
+            specialist_calls = [
+                ReadCall(
+                    index=i,
+                    tool_name=str(plan[i][0].get("name") or ""),
+                    args=dict(plan[i][3]),
+                    params_digest=str(plan[i][1]),
+                    tool_call_id=(
+                        plan[i][0].get("id")
+                        or plan[i][0].get("tool_call_id")
+                        or f"call_{i}"
+                    ),
+                )
+                for i in read_idx
+            ]
+            try:
+                prepared_specialists = prepare_specialist_batch(
+                    specialist_calls,
+                    live_specs=tuple(specs.values()),
+                    root_task_id=root_task_id,
+                    run_id=str(state.get("run_id") or "manager"),
+                    turn=turn,
+                )
+            except Exception as exc:
+                # BATCH-level defect only (too wide, duplicate index, invalid turn, live
+                # specs / grant / plan / task invalid, total args too large). Once a
+                # manager_v1 call is eligible for specialist authority, a broken boundary
+                # must never silently fall back to unrestricted manager dispatch — but a
+                # single defective CALL no longer reaches this handler (audit K1).
+                #
+                # ``except Exception`` and not just ``except SpecialistDispatchError``:
+                # ``prepare_specialist_batch`` is the ONE boundary call that is not already
+                # inside a broad handler, so an unforeseen defect reading a duck-typed spec
+                # crashed the whole execute_tools node instead of denying the batch
+                # (review R1/R3). An unexpected exception is still fail-closed here.
+                if isinstance(exc, SpecialistDispatchError):
+                    error_code = getattr(exc, "error_code", "specialist_plan_invalid")
+                else:
+                    logger.exception("manager_v1.specialist_prepare_internal_error")
+                    error_code = "specialist_prepare_internal_error"
+                logger.warning(
+                    "manager_v1.specialist_plan_denied error_code=%s", error_code)
+                # Exactly the predicate the happy path uses, so a call can never be exempt
+                # from the boundary on one path and denied on the other (audit K1/F2).
+                specialist_prepare_denied_idx = {
+                    i for i in read_idx
+                    if specialist_eligible_role(
+                        str(plan[i][0].get("name") or ""), plan[i][3]) is not None
+                }
+                for i in specialist_prepare_denied_idx:
+                    specialist_error_code_by_idx[i] = error_code
+            else:
+                # NB: the per-call denial COUNTER is deliberately not incremented here. A
+                # rejected call may never be dispatched at all (the turn/batch budget can
+                # close the window first), and counting it at preparation time reported a
+                # denial for a call that was in fact only skipped (review R1/R7). The
+                # counter is bumped in ``_run_read``, where the denial actually happens.
+                specialist_rejected_idx = dict(prepared_specialists.rejected)
+                for i, code in specialist_rejected_idx.items():
+                    specialist_error_code_by_idx[i] = code
+                if prepared_specialists.plan.tasks:
+                    manager_task_plans.append(
+                        prepared_specialists.plan.model_dump(mode="json")
+                    )
+                    manager_task_plans = manager_task_plans[-16:]
+                    for i in read_idx:
+                        if prepared_specialists.call(i) is None:
+                            continue
+                        task_id = prepared_specialists.task_for_index(i).task_id
+                        specialist_call_count_by_task[task_id] = (
+                            specialist_call_count_by_task.get(task_id, 0) + 1
+                        )
+                    for task in prepared_specialists.plan.tasks:
+                        _note_specialist_lifecycle(
+                            "planned",
+                            plan_id=prepared_specialists.plan.plan_id,
+                            task=task,
+                            call_count=specialist_call_count_by_task.get(task.task_id, 0),
+                        )
+
+        def _specialist_artifact_metadata(i: int) -> dict[str, str]:
+            if prepared_specialists is None or prepared_specialists.call(i) is None:
+                return {}
+            task = prepared_specialists.task_for_index(i)
+            return {
+                "artifact_id": prepared_specialists.artifact_id_for_index(i),
+                "plan_id": prepared_specialists.plan.plan_id,
+                "agent_role": task.role,
+                "task_id": task.task_id,
+                "parent_task_id": task.parent_task_id,
+            }
+
+        def _specialist_ledger_fields(i: int) -> dict:
+            """Additive artifact metadata plus the LEDGER-ONLY denial reason.
+
+            A per-call rejection has no plan membership (it is not part of any task), so
+            for those calls this is only ``specialist_error_code`` — which is exactly what
+            makes an individually-denied call auditable without leaking the reason to the
+            model."""
+            fields = _specialist_artifact_metadata(i)
+            code = specialist_error_code_by_idx.get(i)
+            if code:
+                fields = dict(fields)
+                fields["specialist_error_code"] = code
+            return fields
+
+        # ONE model-facing string for every denial reason: the error CODE is ledger-only.
+        _SPECIALIST_DENIED_TEXT = "specialist dispatch denied: capability validation failed"
+
+        async def _run_read(i: int, name: str, timeout: float, timing: dict):
+            """Use the ordinary runner, adding a capability scope only when planned."""
+            from core.tool_system import ToolResult
+
+            def _denied():
+                return (
+                    ToolResult(False, error=_SPECIALIST_DENIED_TEXT, tool_name=name),
+                    0,
+                    "specialist_denied",
+                )
+
+            if i in specialist_prepare_denied_idx:
+                # Counted HERE, not at preparation time: only a call that actually reached
+                # dispatch was denied (review R1/R7).
+                _note_specialist_call_denied(
+                    name, specialist_error_code_by_idx.get(i, "specialist_plan_invalid"))
+                return _denied()
+
+            if prepared_specialists is None:
+                # specialist_dispatch is off (with it on and any read call present, the
+                # batch is either prepared or the whole eligible set is denied above).
+                return await _run(
+                    name, plan[i][3], plan[i][1], timeout, False, timing
+                )
+
+            if i in specialist_rejected_idx:
+                # ONE defective call, denied on its own. Its role siblings keep running.
+                _note_specialist_call_denied(name, specialist_rejected_idx[i])
+                return _denied()
+
+            if prepared_specialists.call(i) is None:
+                if specialist_eligible_role(name, plan[i][3]) is not None:
+                    # Eligible but unplanned: fail closed rather than fall back to
+                    # unrestricted manager dispatch.
+                    specialist_error_code_by_idx[i] = "specialist_call_not_planned"
+                    return _denied()
+                # Manager-owned tool (memory / ask_user) or an unmapped tool: unchanged.
+                return await _run(
+                    name, plan[i][3], plan[i][1], timeout, False, timing
+                )
+
+            from core.specialist_runtime import (
+                SpecialistDispatchError,
+                revalidate_specialist_call,
+            )
+
+            task = prepared_specialists.task_for_index(i)
+            with agent_execution_context(
+                agent_role=task.role,
+                task_id=task.task_id,
+                parent_task_id=task.parent_task_id,
+            ):
+                try:
+                    prepared_call = revalidate_specialist_call(
+                        prepared_specialists,
+                        i,
+                        provider.list_specs(),
+                    )
+                    resolver = getattr(provider, "resolve_specialist_capability", None)
+                    if not callable(resolver):
+                        raise SpecialistDispatchError(
+                            "specialist_capability_resolver_unavailable"
+                        )
+                    capability = resolver(name, prepared_call.spec_digest)
+                except Exception as exc:
+                    error_code = getattr(
+                        exc, "error_code", "specialist_dispatch_validation_failed"
+                    )
+                    logger.warning(
+                        "manager_v1.specialist_dispatch_denied tool=%s error_code=%s",
+                        name,
+                        error_code,
+                    )
+                    specialist_error_code_by_idx[i] = error_code
+                    _note_specialist_call_denied(name, error_code)
+                    return _denied()
+                sealed_args = prepared_call.args
+                # The search deadline is manager-authored after plan preparation because
+                # it depends on the exact dispatch instant. It is the sole permitted
+                # post-snapshot override and is never model-visible or identity-bearing.
+                deadline = plan[i][3].get("_deadline_monotonic")
+                if deadline is not None:
+                    sealed_args["_deadline_monotonic"] = deadline
+                return await _run(
+                    name,
+                    sealed_args,
+                    plan[i][1],
+                    timeout,
+                    False,
+                    timing,
+                    specialist_capability=capability,
+                    specialist_spec_digest=prepared_call.spec_digest,
+                    specialist_error_sink=(
+                        lambda code, _i=i: specialist_error_code_by_idx.__setitem__(_i, code)
+                    ),
+                )
 
         # ── batch + turn tool budgets (fc loop) ─────────────────────────────
         # Per-call effective wait_for = min(TOOL_TIMEOUTS[name], remaining_batch_window,
@@ -2694,6 +3366,161 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         abandoned_idx: set = set()    # reads dispatched then walked away from (thread leaked)
         per_call_timeout_idx: set = set()  # reads whose OWN (tool) timeout was the binding cap
         write_timeout_idx: set = set()     # writes whose own wait_for fired -> outcome unknown
+        specialist_denied_idx: set = set()  # capability/metadata drift; provider tool not run
+        specialist_unknown_idx: set = set()  # ran, but the result identity is unverifiable
+        specialist_started_task_ids: set[str] = set()
+        specialist_started_at_by_task: dict[str, float] = {}
+        specialist_terminal_task_ids: set[str] = set()
+
+        def _specialist_task_denial_codes(task) -> list[str]:
+            """Per-CALL error codes recorded for this task's calls, in index order."""
+            if prepared_specialists is None:
+                return []
+            return [
+                specialist_error_code_by_idx[call.index]
+                for call in sorted(
+                    prepared_specialists.calls_by_index.values(),
+                    key=lambda item: item.index)
+                if call.task_id == task.task_id
+                and call.index in specialist_error_code_by_idx
+            ]
+
+        def _not_started_error_code(task) -> str:
+            """WHY a planned specialist task never ran — never an empty reason.
+
+            A bare ``skipped`` is indistinguishable from "nothing to report" for every
+            consumer of the lifecycle counters, so a 100%-denied plan read as a healthy
+            turn (review3 R2-1). The reason is derived from what the batch actually
+            recorded, newest signal first, and always resolves to a member of the closed
+            ``SPECIALIST_ERROR_CODES`` vocabulary."""
+            denials = _specialist_task_denial_codes(task)
+            if denials:
+                return "dispatch_denied"
+            if turn_exhausted or soft_exhausted:
+                return "budget_exhausted"
+            # Planned, never dispatched, and nothing recorded a reason: the dispatch did
+            # not happen, which is a denial from the consumer's point of view. Fail
+            # closed rather than reporting an unexplained skip.
+            return "dispatch_denied"
+
+        def _note_specialist_terminal_once(
+            terminal: str,
+            task,
+            *,
+            duration_ms: float,
+            error_code: Optional[str] = None,
+        ) -> None:
+            """Emit at most one terminal lifecycle event for each specialist task.
+
+            Two invariants are enforced HERE, at the only producer, so no ordering of the
+            three call sites (results, batch cancellation, fan-out cancellation) can emit a
+            sequence the consumer's turn-end arithmetic rejects:
+
+            * a task that never STARTED cannot terminate as completed/partial/failed —
+              that breaks ``started == completed + partial + failed`` — so it is reported
+              as ``skipped`` (which the invariant bounds by ``planned - started``);
+            * a task that DID start can never be reported ``skipped`` for the same reason;
+              a started task with nothing to show is a ``failed`` task.
+
+            A ``skipped`` event ALWAYS carries a specific ``error_code``: an unexplained
+            skip is invisible to every failure-rate consumer (review3 R2-1)."""
+            if task.task_id in specialist_terminal_task_ids:
+                return
+            specialist_terminal_task_ids.add(task.task_id)
+            started = task.task_id in specialist_started_task_ids
+            if not started and terminal != "skipped":
+                terminal = "skipped"
+            elif started and terminal == "skipped":
+                terminal = "failed"
+            if terminal == "skipped" and not error_code:
+                error_code = _not_started_error_code(task)
+            _note_specialist_lifecycle(
+                terminal,
+                plan_id=prepared_specialists.plan.plan_id,
+                task=task,
+                call_count=specialist_call_count_by_task.get(task.task_id, 0),
+                duration_ms=duration_ms,
+                error_code=error_code,
+            )
+
+        def _dispatch_succeeded(i: int, result) -> bool:
+            """Did dispatch `i` produce a usable result, per the batch's own bookkeeping?"""
+            if (i in specialist_denied_idx or i in specialist_unknown_idx
+                    or i in abandoned_idx or i in per_call_timeout_idx):
+                return False
+            return (bool(getattr(result, "success", False))
+                    and getattr(result, "data", None) is not None)
+
+        def _harvest_finished_dispatches(tasks) -> dict:
+            """Per-index success flags for dispatches that finished before cancellation.
+
+            The gather handler runs while ``asyncio.wait`` is still in flight, so the loop
+            that fills ``result_by_idx`` has not executed yet even for calls that returned
+            seconds ago.  Their futures ARE done and hold the results; reading them is the
+            only way that handler can tell an already-successful call from a cancelled one
+            (review R1/R4)."""
+            harvested: dict = {}
+            for i, task in (tasks or {}).items():
+                if not task.done() or task.cancelled():
+                    continue
+                try:
+                    if task.exception() is not None:
+                        harvested[i] = False
+                        continue
+                    res, _elapsed, status = task.result()
+                except BaseException:
+                    continue
+                if status in ("timeout", "specialist_denied",
+                              "specialist_outcome_unknown", "write_timeout"):
+                    harvested[i] = False
+                    continue
+                harvested[i] = _dispatch_succeeded(i, res)
+            return harvested
+
+        def _specialist_task_outcome(task, harvested=None) -> tuple[str, Optional[str]]:
+            """Terminal status for `task` from what the batch already has in hand.
+
+            Used by the two cancellation handlers.  Marking every started task ``failed``
+            mis-attributed cancellation to tasks whose calls had all already succeeded
+            (audit K-cancel).  Deriving that from ``artifacts`` alone was a no-op in the
+            gather handler — the artifact-writing loop runs AFTER it, so the ledger held
+            only previous super-steps, whose ``plan_id`` never matches (review R1/R4).
+            The three sources are checked newest-first: freshly harvested futures, then the
+            results the batch already accepted, then the ledger."""
+            if prepared_specialists is None:
+                return "failed", "cancelled"
+            harvested = harvested or {}
+            plan_id = prepared_specialists.plan.plan_id
+            calls = [
+                call for call in prepared_specialists.calls_by_index.values()
+                if call.task_id == task.task_id
+            ]
+            succeeded = 0
+            for call in calls:
+                index = call.index
+                if index in harvested:
+                    succeeded += bool(harvested[index])
+                    continue
+                if index in result_by_idx:
+                    succeeded += bool(
+                        _dispatch_succeeded(index, result_by_idx[index]))
+                    continue
+                art = next(
+                    (a for a in artifacts
+                     if a.get("artifact_id") == call.artifact_id
+                     and a.get("plan_id") == plan_id),
+                    None)
+                if (art is not None and art.get("success") is True
+                        and art.get("raw_data") is not None
+                        and not art.get("denied") and not art.get("timed_out")
+                        and not art.get("abandoned")
+                        and not art.get("outcome_unknown")):
+                    succeeded += 1
+            if calls and succeeded == len(calls):
+                return "completed", None
+            if succeeded:
+                return "partial", "incomplete"
+            return "failed", "cancelled"
         # Per-dispatch {"submitted": t, "started": t} stamps. Owned HERE, not inside _run, so an
         # ABANDONED dispatch (whose _run never returns) can still be attributed: if "started" is
         # missing at the kill, no pool worker ever picked it up and the elapsed is queue wait,
@@ -2770,8 +3597,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     # set is genuinely concurrent: N independent calls of S seconds complete in
                     # ~S, not N*S (pinned by tests/test_parallel_tool_batch.py).
                     timing_by_idx[i] = {}
+                    if prepared_specialists is not None and prepared_specialists.call(i) is not None:
+                        specialist_task = prepared_specialists.task_for_index(i)
+                        if specialist_task.task_id not in specialist_started_task_ids:
+                            specialist_started_task_ids.add(specialist_task.task_id)
+                            specialist_started_at_by_task[specialist_task.task_id] = (
+                                time.monotonic()
+                            )
+                            _note_specialist_lifecycle(
+                                "started",
+                                plan_id=prepared_specialists.plan.plan_id,
+                                task=specialist_task,
+                                call_count=specialist_call_count_by_task.get(
+                                    specialist_task.task_id, 0
+                                ),
+                            )
                     read_tasks[i] = asyncio.ensure_future(
-                        _run(nm, plan[i][3], plan[i][1], eff, False, timing_by_idx[i]))
+                        _run_read(i, nm, eff, timing_by_idx[i]))
                 write_tasks: dict = {}
                 for i in write_idx:
                     nm = plan[i][0].get("name")
@@ -2790,40 +3632,129 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     write_tasks[i] = asyncio.ensure_future(
                         _run(nm, plan[i][3], plan[i][1], write_eff, True, timing_by_idx[i]))
                 t0 = time.monotonic()
-                # Reads share the batch window; stragglers are ABANDONED (deliverable 3).
-                if read_tasks:
-                    done, _pending = await asyncio.wait(list(read_tasks.values()), timeout=batch_window)
-                    for i, task in read_tasks.items():
-                        if task in done:
-                            res, el, status = task.result()
-                            elapsed_by_idx[i] = el
-                            if status == "timeout":
-                                if kind_by_idx[i] == "per_call":
-                                    per_call_timeout_idx.add(i)
-                                    result_by_idx[i] = res  # timeout ToolResult drives the ToolMessage
+                try:
+                    # Reads share the batch window; stragglers are ABANDONED (deliverable 3).
+                    if read_tasks:
+                        done, _pending = await asyncio.wait(
+                            list(read_tasks.values()), timeout=batch_window
+                        )
+                        for i, task in read_tasks.items():
+                            if task in done:
+                                res, el, status = task.result()
+                                elapsed_by_idx[i] = el
+                                if status == "timeout":
+                                    if kind_by_idx[i] == "per_call":
+                                        per_call_timeout_idx.add(i)
+                                        # timeout ToolResult drives the ToolMessage
+                                        result_by_idx[i] = res
+                                    else:
+                                        # window bound it -> batch abandon
+                                        abandoned_idx.add(i)
+                                elif status == "specialist_denied":
+                                    specialist_denied_idx.add(i)
+                                    result_by_idx[i] = res
+                                elif status == "specialist_outcome_unknown":
+                                    # The tool DID run; only its result is unusable.
+                                    specialist_unknown_idx.add(i)
+                                    result_by_idx[i] = res
                                 else:
-                                    abandoned_idx.add(i)     # window bound it -> batch abandon
+                                    result_by_idx[i] = res
                             else:
-                                result_by_idx[i] = res
-                        else:
-                            # Still pending at the window: abandon. Do NOT await the cancelled
-                            # task — a tool running in an executor THREAD cannot be cancelled, so
-                            # awaiting blocks until it finishes and defeats the budget (observed
-                            # live: 37.6s spans past a 20s window). The thread completes in the
-                            # background; the callback swallows the eventual result/CancelledError.
-                            task.cancel()
+                                # Still pending at the window: abandon. Do NOT await the cancelled
+                                # task — a tool running in an executor THREAD cannot be cancelled,
+                                # so awaiting blocks until it finishes and defeats the budget
+                                # (observed live: 37.6s spans past a 20s window). The thread
+                                # completes in the background; the callback swallows the eventual
+                                # result/CancelledError.
+                                task.cancel()
+                                task.add_done_callback(_swallow_abandoned_task)
+                                abandoned_idx.add(i)
+                                kind_by_idx[i] = "batch"
+                                budget_by_idx[i] = batch_window
+                                elapsed_by_idx[i] = int(batch_window * 1000)
+                    # WRITES: await to completion even past the batch window (never abandoned).
+                    for i, task in write_tasks.items():
+                        res, el, status = await task
+                        result_by_idx[i] = res
+                        elapsed_by_idx[i] = el
+                        if status == "write_timeout":
+                            write_timeout_idx.add(i)
+                except BaseException:
+                    # Whole-turn / parent cancellation is different from a normal batch
+                    # timeout: execute_tools will not return a Command, so it cannot persist
+                    # placeholder artifacts. It must nevertheless leave no orphan asyncio
+                    # tasks and must account for offloaded work whose thread may outlive the
+                    # cancelled turn. Never await here — a sync call already running in the
+                    # private worker is intentionally unkillable.
+                    cancelled_at = time.monotonic()
+                    # Read the finished futures BEFORE cancelling anything: a specialist
+                    # call that already returned must be reported completed, not cancelled.
+                    specialist_harvest = _harvest_finished_dispatches(read_tasks)
+                    pending_dispatches = []
+                    for is_write, tasks in ((False, read_tasks), (True, write_tasks)):
+                        for i, task in tasks.items():
+                            if task.done():
+                                # Direct ``await write_task`` propagates parent cancellation
+                                # into the child before control reaches this handler. The asyncio
+                                # Task is then done/cancelled, but its run_in_executor worker can
+                                # still be executing the write and therefore remains unknown.
+                                if task.cancelled():
+                                    pending_dispatches.append((i, is_write))
+                                _swallow_abandoned_task(task)
+                                continue
+                            # Install the consumer before cancel(), including when cancellation
+                            # wins immediately, so no child exception can become un-retrieved.
                             task.add_done_callback(_swallow_abandoned_task)
-                            abandoned_idx.add(i)
-                            kind_by_idx[i] = "batch"
-                            budget_by_idx[i] = batch_window
-                            elapsed_by_idx[i] = int(batch_window * 1000)
-                # WRITES: await to completion even past the batch window (never abandoned).
-                for i, task in write_tasks.items():
-                    res, el, status = await task
-                    result_by_idx[i] = res
-                    elapsed_by_idx[i] = el
-                    if status == "write_timeout":
-                        write_timeout_idx.add(i)
+                            task.cancel()
+                            pending_dispatches.append((i, is_write))
+
+                    for i, is_write in pending_dispatches:
+                        timing = timing_by_idx.get(i) or {}
+                        submitted = timing.get("submitted")
+                        if submitted is None:
+                            # ensure_future existed, but _run never submitted an offload. Its
+                            # cancellation is a known no-run, not an unknown tool outcome.
+                            continue
+                        elapsed_s = max(0.0, cancelled_at - submitted)
+                        name = str(plan[i][0].get("name") or "unknown")
+                        if is_write:
+                            _emit_budget_timeout(
+                                name,
+                                elapsed_s,
+                                budget_by_idx.get(i, 0.0),
+                                "turn",
+                                False,
+                                outcome="outcome_unknown",
+                                queue_wait_ms=_queue_wait_ms(i),
+                            )
+                        else:
+                            _emit_budget_timeout(
+                                name,
+                                elapsed_s,
+                                budget_by_idx.get(i, 0.0),
+                                "turn",
+                                True,
+                                outcome="abandoned",
+                                queue_wait_ms=_queue_wait_ms(i),
+                            )
+
+                    if prepared_specialists is not None:
+                        for task in prepared_specialists.plan.tasks:
+                            if task.task_id not in specialist_started_task_ids:
+                                continue
+                            started_at = specialist_started_at_by_task.get(
+                                task.task_id, cancelled_at
+                            )
+                            terminal, error_code = _specialist_task_outcome(
+                                task, specialist_harvest
+                            )
+                            _note_specialist_terminal_once(
+                                terminal,
+                                task,
+                                duration_ms=max(0.0, cancelled_at - started_at) * 1000.0,
+                                error_code=error_code,
+                            )
+                    raise
                 turn_used += time.monotonic() - t0
 
         tainted_any = False
@@ -2913,7 +3844,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 err = "denied: turn time budget exhausted"
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
-                    denied=True, elapsed_ms=0))
+                    denied=True, elapsed_ms=0,
+                    **_specialist_ledger_fields(i)))
                 messages.append(ToolMessage(
                     content=json.dumps({
                         "success": False, "data": None,
@@ -2927,7 +3859,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 _emit_budget_timeout(name, 0.0, turn_budget, "turn", False, outcome="timed_out")
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
-                    timed_out=True, elapsed_ms=0))
+                    timed_out=True, elapsed_ms=0,
+                    **_specialist_ledger_fields(i)))
                 messages.append(ToolMessage(
                     content=json.dumps({"success": False, "data": None, "error": err},
                                        ensure_ascii=False),
@@ -2957,7 +3890,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
                     timed_out=True, abandoned=True, outcome_unknown=True, elapsed_ms=el,
-                    queue_wait_ms=qw, starved=starved))
+                    queue_wait_ms=qw, starved=starved,
+                    **_specialist_ledger_fields(i)))
                 messages.append(ToolMessage(
                     content=json.dumps({
                         "success": False, "data": None, "abandoned": True,
@@ -2995,7 +3929,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 artifacts.append(_artifact(
                     turn, name, None, digest, success=False, error=err,
                     timed_out=True, elapsed_ms=el,
-                    queue_wait_ms=qw, starved=_starved(i)))
+                    queue_wait_ms=qw, starved=_starved(i),
+                    **_specialist_ledger_fields(i)))
                 content, tainted = _derived_toolmsg(name, result)
                 tainted_any = tainted_any or tainted
                 messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
@@ -3011,11 +3946,125 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     _turn_start + _soft_wrap_s,
                     validation_started + max(0.0, turn_budget - turn_used),
                 )
-                validated, commute_evidence = await validate_search_payload_with_provider(
-                    _OffloadedValidationProvider(provider), result.data,
-                    timeout_s=TOOL_TIMEOUTS.get("calculate_commute", TOOL_TIMEOUT_DEFAULT),
-                    deadline_monotonic=validation_deadline)
+                validation_timeout = TOOL_TIMEOUTS.get(
+                    "calculate_commute", TOOL_TIMEOUT_DEFAULT
+                )
+                # SECURITY (audit F5): these calculate_commute calls take their
+                # from_address from SCRAPED listing text — the only place untrusted
+                # third-party data drives a tool call. With specialist_dispatch on they run
+                # under the same read-only capability boundary as a planned call, in a
+                # `mobility` context parented by the PLAN's root. They are not TaskPlan
+                # members (they are discovered from a search RESULT, after the plan was
+                # sealed) and so produce no SpecialistResult; their evidence stays in the
+                # ordinary calculate_commute artifacts written below — which carry the same
+                # role/plan/task labels, so "did this path go through the boundary?" is
+                # answerable from the ledger instead of only from the code (review R1/R5).
+                validation_scope = None
+                validation_plan_id = (prepared_specialists.plan.plan_id
+                                      if prepared_specialists is not None else None)
+                # The plan hashes the raw root into `manager:<hash>` and parents every planned
+                # task by it. Using the raw `turn:...` here forked the same turn into two
+                # trees that nothing downstream could join (review R1/R5).
+                validation_root_task_id = (
+                    prepared_specialists.plan.root_task_id
+                    if prepared_specialists is not None
+                    else (specialist_root_task_id or "manager")
+                )
+                validation_task_id = None
+                if specialist_dispatch and callable(
+                        getattr(provider, "resolve_specialist_capability", None)):
+                    from core.specialist_runtime import validation_fanout_task_id
+                    validation_task_id = validation_fanout_task_id(
+                        plan_id=validation_plan_id,
+                        root_task_id=validation_root_task_id,
+                    )
+                    validation_scope = _SpecialistCapabilityScope(
+                        provider,
+                        role="mobility",
+                        plan_id=validation_plan_id,
+                        root_task_id=validation_root_task_id,
+                        task_id=validation_task_id,
+                    )
+                validation_provider = _OffloadedValidationProvider(
+                    provider, specialist_scope=validation_scope)
+                try:
+                    validated, commute_evidence = await validate_search_payload_with_provider(
+                        validation_provider,
+                        result.data,
+                        timeout_s=validation_timeout,
+                        deadline_monotonic=validation_deadline,
+                    )
+                except BaseException:
+                    # This await sits after the main read/write batch.  Parent cancellation
+                    # must therefore close its own child fan-out and specialist lifecycle;
+                    # the batch-level handler above cannot see these validation workers.
+                    # asyncio.gather propagates cancellation to its graph-loop children, while
+                    # the private worker thread is deliberately not awaited here.
+                    cancelled_at = time.monotonic()
+                    for timing in validation_provider.unaccepted_dispatches():
+                        submitted = timing.get("submitted")
+                        if not isinstance(submitted, (int, float)):
+                            continue
+                        started = timing.get("started")
+                        queue_end = (
+                            started
+                            if isinstance(started, (int, float))
+                            else cancelled_at
+                        )
+                        queue_wait_ms = int(
+                            max(0.0, float(queue_end) - float(submitted)) * 1000.0
+                        )
+                        starved = not isinstance(started, (int, float))
+                        dispatch_budget = max(
+                            0.0,
+                            min(
+                                float(validation_timeout),
+                                validation_deadline - float(submitted),
+                            ),
+                        )
+                        _emit_budget_timeout(
+                            str(timing.get("tool") or "calculate_commute"),
+                            max(0.0, cancelled_at - float(submitted)),
+                            dispatch_budget,
+                            "turn",
+                            True,
+                            outcome="starved" if starved else "abandoned",
+                            queue_wait_ms=queue_wait_ms,
+                        )
+
+                    if prepared_specialists is not None:
+                        for task in prepared_specialists.plan.tasks:
+                            if task.task_id not in specialist_started_task_ids:
+                                continue
+                            started_at = specialist_started_at_by_task.get(
+                                task.task_id, cancelled_at
+                            )
+                            terminal, error_code = _specialist_task_outcome(task)
+                            _note_specialist_terminal_once(
+                                terminal,
+                                task,
+                                duration_ms=max(
+                                    0.0, cancelled_at - started_at
+                                ) * 1000.0,
+                                error_code=error_code,
+                            )
+                    raise
                 turn_used += time.monotonic() - validation_started
+                # OFF-PLAN but auditable: when the fan-out ran under the capability scope its
+                # ledger entries carry that scope's labels. No ``artifact_id`` is minted, so
+                # these entries stay outside ``build_specialist_results`` and outside
+                # ``TaskPlan.tasks`` — they are evidence that the boundary was entered, not
+                # members of the plan (review R1/R5).
+                fanout_labels = (
+                    {
+                        "agent_role": "mobility",
+                        "plan_id": validation_plan_id,
+                        "task_id": validation_task_id,
+                        "parent_task_id": validation_root_task_id,
+                    }
+                    if validation_scope is not None
+                    else {}
+                )
                 for evidence in commute_evidence:
                     commute_args = {
                         "from_address": evidence.get("from_address", ""),
@@ -3030,7 +4079,8 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                         error=evidence.get("error"),
                         timed_out=evidence_status == "timeout",
                         denied=evidence_status in {"budget_exhausted", "skipped"},
-                        elapsed_ms=evidence.get("elapsed_ms")))
+                        elapsed_ms=evidence.get("elapsed_ms"),
+                        **fanout_labels))
                 result.data = validated
             # A SUCCESSFUL call can also have queued behind a saturated pool — that time is
             # indistinguishable from tool latency in elapsed_ms. Recorded only when it is
@@ -3041,13 +4091,101 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 turn, name, getattr(result, "data", None), digest,
                 success=getattr(result, "success", False),
                 error=getattr(result, "error", None),
-                outcome_unknown=(getattr(result, "outcome", None) == "unknown"),
+                denied=i in specialist_denied_idx,
+                outcome_unknown=(getattr(result, "outcome", None) == "unknown"
+                                 or i in specialist_unknown_idx),
                 elapsed_ms=elapsed_by_idx.get(i),
                 queue_wait_ms=(_qw_ok if _qw_ok is not None
-                               and _qw_ok >= _QUEUE_WAIT_NOTE_MS else None)))
+                               and _qw_ok >= _QUEUE_WAIT_NOTE_MS else None),
+                **_specialist_ledger_fields(i)))
             content, tainted = _derived_toolmsg(name, result)
             tainted_any = tainted_any or tainted
             messages.append(ToolMessage(content=content, tool_call_id=tcid, name=name))
+
+        if prepared_specialists is not None and prepared_specialists.plan.tasks:
+            from core.specialist_runtime import build_specialist_results
+
+            # MEASURED wall clock per task (audit K-duration): the ledger's `elapsed_ms` is
+            # the batch-window constant for an abandoned call and 0 for a denied one, so it
+            # can never be read as latency. Tasks that never started keep the ledger-derived
+            # fallback inside build_specialist_results.
+            _terminal_at = time.monotonic()
+            specialist_duration_by_task = {
+                task_id: max(0.0, _terminal_at - started_at) * 1000.0
+                for task_id, started_at in specialist_started_at_by_task.items()
+            }
+            try:
+                batch_results = build_specialist_results(
+                    prepared_specialists,
+                    (
+                        artifact
+                        for artifact in artifacts
+                        if artifact.get("plan_id") == prepared_specialists.plan.plan_id
+                    ),
+                    duration_ms_by_task=specialist_duration_by_task,
+                )
+            except Exception as exc:
+                # Evidence construction is itself a trust boundary. Never synthesize a
+                # successful specialist result from a malformed ledger, and never let
+                # observational metadata crash the manager's otherwise usable tool turn.
+                logger.warning(
+                    "manager_v1.specialist_result_rejected error_type=%s",
+                    type(exc).__name__,
+                )
+                from uk_rent_agent.agent.specialist_contracts import SpecialistResult
+
+                batch_results = tuple(
+                    SpecialistResult(
+                        task_id=task.task_id,
+                        parent_task_id=task.parent_task_id,
+                        role=task.role,
+                        status="failed",
+                        error="specialist artifact validation failed",
+                        duration_ms=specialist_duration_by_task.get(task.task_id, 0.0),
+                    )
+                    for task in prepared_specialists.plan.tasks
+                )
+
+            specialist_result_payloads.extend(
+                result.model_dump(mode="json") for result in batch_results
+            )
+            specialist_result_payloads = specialist_result_payloads[-64:]
+            for result in batch_results:
+                task = next(
+                    task
+                    for task in prepared_specialists.plan.tasks
+                    if task.task_id == result.task_id
+                )
+                # `partial` is its own terminal state: a task with one successful and one
+                # abandoned call is NOT a failure, and reporting it as one systematically
+                # overstated the specialist failure rate downstream (audit K-lifecycle).
+                terminal = {
+                    "succeeded": "completed",
+                    "partial": "partial",
+                    "skipped": "skipped",
+                }.get(result.status, "failed")
+                _note_specialist_terminal_once(
+                    terminal,
+                    task,
+                    duration_ms=result.duration_ms,
+                    error_code=_specialist_result_error_code(result),
+                )
+
+        if specialist_dispatch and specialist_result_payloads:
+            # Deliverable 3 — taint consumption. An EvidenceRef is tainted exactly when its
+            # tool returned third-party text, so a tainted ref must make the TURN tainted for
+            # the memory-write gate. `_derived_toolmsg` already sets this for every call it
+            # rendered; this closes the seam for a result whose ToolMessage this node never
+            # produced (a ledger-rebuilt result, or a payload carried in from an earlier
+            # super-step of the same turn).
+            from core.specialist_runtime import evidence_is_tainted
+
+            tainted_any = tainted_any or evidence_is_tainted(specialist_result_payloads)
+            # Deliverable 1 — the manager's evidence note for the NEXT agent call (the one
+            # that writes the answer). Rebuilt from the full turn ledger each batch, so
+            # exactly one note is ever in the transcript.
+            messages = _apply_evidence_note(
+                messages, specialist_result_payloads, manager_task_plans)
 
         latest_search = next((a for a in reversed(artifacts)
                               if a.get("tool") == "search_properties"
@@ -3066,6 +4204,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             "commute_evidence": latest_search_data.get("commute_evidence", []),
             "memory_write_contract": memory_contract,
         }
+        if specialist_dispatch:
+            update["manager_task_plans"] = manager_task_plans
+            update["specialist_results"] = specialist_result_payloads
         return Command(update=update, goto="agent")
 
     # ── format_output_fc ───────────────────────────────────────────
@@ -3227,11 +4368,66 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         return {"final_response": _apply_memory_contract(response),
                 "response_type": response_type, "tool_data": tool_data}
 
+    # ── answer contract (manager_v1 only) ──────────────────────────
+    def _answer_contract_payload(state: AgentState, result: dict) -> dict:
+        """Deliverable 2: the manager's answer boundary, recorded as plain JSON.
+
+        Built from the FINAL text and response type — after every card formatter and the
+        memory-contract composer have run — so the contract records the answer that
+        actually shipped. A broken contract is an observability defect, never a failed
+        user turn: the limitation lines still survive on the invalid payload, because they
+        are the half the response layer will want.
+        """
+        from core.specialist_runtime import (
+            build_answer_contract,
+            build_answer_limitations,
+            safe_turn_root_id,
+            summarize_specialist_results,
+        )
+
+        plans = [item for item in (state.get("manager_task_plans") or [])
+                 if isinstance(item, dict)]
+        results = [item for item in (state.get("specialist_results") or [])
+                   if isinstance(item, dict)]
+        root_task_id = next(
+            (plan["root_task_id"] for plan in reversed(plans)
+             if isinstance(plan.get("root_task_id"), str) and plan["root_task_id"]),
+            "",
+        ) or safe_turn_root_id(
+            state.get("request_id") or state.get("run_id")) or "manager"
+        try:
+            limitations = list(
+                build_answer_limitations(summarize_specialist_results(results, plans)))
+        except Exception:  # pragma: no cover - defensive
+            limitations = []
+        try:
+            contract = build_answer_contract(
+                root_task_id=root_task_id,
+                response_type=result.get("response_type") or state.get("response_type"),
+                final_response=result.get("final_response") or "",
+                results=results,
+                plans=plans,
+            )
+        except Exception as exc:
+            error_code = str(getattr(exc, "error_code", None) or "answer_contract_invalid")
+            logger.warning(
+                "manager_v1.answer_contract_invalid error_code=%s error_type=%s",
+                error_code, type(exc).__name__)
+            return {"valid": False, "error_code": error_code, "limitations": limitations}
+        return contract.model_dump(mode="json")
+
+    def format_output_fc_with_contract(state: AgentState) -> dict:
+        """manager_v1 wrapper: the fc formatter, plus the validated answer contract."""
+        payload = dict(format_output_fc_node(state) or {})
+        payload["answer_contract"] = _answer_contract_payload(state, payload)
+        return payload
+
     return {
         "guard": guard_node,
         "agent": agent_node,
         "execute_tools": execute_tools_node,
-        "format_output_fc": format_output_fc_node,
+        "format_output_fc": (format_output_fc_with_contract if specialist_dispatch
+                             else format_output_fc_node),
     }
 
 
@@ -3290,15 +4486,20 @@ def _derive_known_criteria(acc: dict) -> dict:
 def build_fc_graph(tool_registry, *, extract_preferences_node, critic_node,
                    checkpointer=None, store=None, enable_hitl=False,
                    hydrate_prefs_node=None, persist_prefs_node=None, instrument=None,
-                   agent_llm=None):
+                   agent_llm=None, specialist_dispatch=False):
     """Assemble the fc_loop StateGraph, reusing the legacy extract_preferences + critic nodes.
 
     langgraph_agent.build_agent_graph passes the already-constructed legacy nodes so this
     module needs no back-import of them. `instrument` is the legacy _n(name, fn) eval wrapper
     (identity when None).
     """
-    nodes = build_fc_nodes(tool_registry, enable_hitl=enable_hitl, checkpointer=checkpointer,
-                           agent_llm=agent_llm)
+    nodes = build_fc_nodes(
+        tool_registry,
+        enable_hitl=enable_hitl,
+        checkpointer=checkpointer,
+        agent_llm=agent_llm,
+        specialist_dispatch=specialist_dispatch,
+    )
     ident = instrument or (lambda name, fn: fn)
     use_store = store is not None
 

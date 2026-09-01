@@ -24,6 +24,7 @@ import re
 import os
 import html
 import json
+import math
 import time
 import random
 import logging
@@ -64,17 +65,50 @@ _RATE_LOCK = threading.Lock()
 _LAST_DETAIL_TS = 0.0  # time.monotonic() of the last detail GET released
 
 
-def _rate_limited_detail_wait() -> None:
+def _rate_limited_detail_wait(*, budget_s: float | None = None) -> bool:
     """Block until at least _MIN_DETAIL_INTERVAL_S has elapsed since the previous
-    detail GET was released, then claim the slot. Thread-safe and global."""
+    detail GET was released, then claim the slot. Thread-safe and global.
+
+    When ``budget_s`` is provided it covers BOTH waiting to acquire the shared lock and
+    the crawl-delay sleep.  If that window cannot fit, return False without claiming a
+    request slot; callers must not issue the GET.  With no budget, preserve the original
+    blocking/spacing contract exactly.
+    """
     global _LAST_DETAIL_TS
-    with _RATE_LOCK:
+    deadline = None
+    if budget_s is not None:
+        try:
+            budget = float(budget_s)
+        except (TypeError, ValueError):
+            budget = 0.0
+        if not math.isfinite(budget) or budget <= 0:
+            if math.isinf(budget) and budget > 0:
+                deadline = None
+            else:
+                return False
+        else:
+            deadline = time.monotonic() + budget
+
+    if deadline is None:
+        _RATE_LOCK.acquire()
+    else:
+        lock_budget = deadline - time.monotonic()
+        if lock_budget <= 0 or not _RATE_LOCK.acquire(timeout=lock_budget):
+            return False
+    try:
         now = time.monotonic()
         wait = _MIN_DETAIL_INTERVAL_S - (now - _LAST_DETAIL_TS)
         if wait > 0:
+            # Leave at least some positive budget for the HTTP request itself.  Sleeping
+            # through the deadline and then dispatching a request would defeat the guard.
+            if deadline is not None and wait >= deadline - now:
+                return False
             time.sleep(wait)
             now = time.monotonic()
         _LAST_DETAIL_TS = now
+        return True
+    finally:
+        _RATE_LOCK.release()
 
 _NEXT_DATA_RE = re.compile(
     r"""<script\b(?=[^>]*\bid=["']__NEXT_DATA__["'])"""
@@ -662,6 +696,22 @@ def fetch_listing_description(
     if not url:
         return None
 
+    # ``budget_s`` is a TOTAL live-fetch budget, not merely a requests timeout.  Start its
+    # absolute clock before the cache lookup so cache/database overhead is accounted for;
+    # fresh cache hits are still allowed even with a zero budget because they do no network.
+    budget_deadline = None
+    if budget_s is not None:
+        try:
+            total_budget = float(budget_s)
+        except (TypeError, ValueError):
+            total_budget = 0.0
+        if math.isinf(total_budget) and total_budget > 0:
+            budget_deadline = None
+        elif not math.isfinite(total_budget) or total_budget <= 0:
+            budget_deadline = time.monotonic()
+        else:
+            budget_deadline = time.monotonic() + total_budget
+
     cache = _desc_cache()
     if not force_refresh:
         try:
@@ -685,8 +735,16 @@ def fetch_listing_description(
         # SHARED, process-wide limiter (not a bare per-thread sleep) so concurrent
         # enrichment workers are paced >=1.2s apart in aggregate, not each sleeping
         # in parallel and then hitting the site together.
-        _rate_limited_detail_wait()
-        timeout = budget_s if (budget_s and budget_s > 0) else 25
+        limiter_budget = (None if budget_deadline is None
+                          else budget_deadline - time.monotonic())
+        if not _rate_limited_detail_wait(budget_s=limiter_budget):
+            logger.info("onthemarket.detail_budget_exhausted_before_request")
+            return None
+        timeout = (25 if budget_deadline is None
+                   else budget_deadline - time.monotonic())
+        if timeout <= 0:
+            logger.info("onthemarket.detail_budget_exhausted_before_request")
+            return None
         resp = session.get(url, timeout=timeout)
         resp.raise_for_status()
     except requests.RequestException as e:

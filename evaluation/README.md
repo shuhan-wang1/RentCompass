@@ -41,6 +41,10 @@ evaluation/
 │   ├── fake_llm.py           deterministic unbilled model seam
 │   └── graders.py            deterministic grader + optional LLM judge
 ├── run_benchmark.py          the benchmark runner (CaseRunner + writers)
+├── run_paired_manager_eval.py process-isolated fc_loop/manager_v1 paired runner
+├── paired_gate.py            fail-closed PROMOTE/HOLD/BLOCK comparison, plus the
+│                             VACUOUS / not_measurable_offline / LOW_POWER check
+│                             outcomes that keep a tautology from reading as a pass
 ├── run_ablation.py           Phase-4 model A/B + Phase-5 retrieval A/B
 ├── fault_injection/          resilience harness (15 injected-fault scenarios)
 │   ├── injectors.py          fault injectors + ScenarioResult
@@ -60,6 +64,7 @@ All commands are **offline/unbilled by default**. Run from the repo root.
 | Command | What it does | Key outputs |
 |---|---|---|
 | `python -m evaluation.run_benchmark --smoke --offline` | 10 smoke cases, mechanics-only | `results/<out>/summary.json`, `per_case.csv`, `tool_metrics.csv`, `model_usage.csv`, `raw_runs.jsonl` |
+| `python -m evaluation.run_paired_manager_eval --out evaluation/results/manager_v1_pair` | Same-case/repeat `fc_loop` vs `manager_v1+specialists`, offline only | `fc_loop/`, `manager_v1/`, `paired_report.json`, `paired_cases.jsonl`, `paired_commands.json` |
 | `python -m evaluation.run_ablation --study both --offline --smoke` | Model + retrieval A/B | `results/ablation_model.{json,csv}`, `results/ablation_retrieval.{json,csv}` |
 | `python -m evaluation.fault_injection.run` | 15 fault scenarios (GENUINE) | `results/fault_injection.csv`, `results/fault_summary.json` |
 | `python -m evaluation.memory_eval` | Memory eval (stdlib SQLite) | `results/memory_eval.json` |
@@ -68,6 +73,186 @@ All commands are **offline/unbilled by default**. Run from the repo root.
 Common flags (benchmark + ablation): `--smoke`, `--limit N`, `--category A_retrieval`,
 `--repeat K`, `--offline` / `--live`, `--max-cost-usd F`, `--resume`, `--out DIR`,
 `--timestamp TS`.
+
+### manager_v1 paired promotion gate
+
+Run the complete frozen set from a **new, empty** output directory:
+
+```bash
+python -m evaluation.run_paired_manager_eval \
+  --out evaluation/results/manager_v1_pair
+```
+
+The two arms run in separate processes with identical case/repeat selectors,
+`PYTHONHASHSEED=0`, fake FC model, in-process tools, and fixture/canned replay. The
+candidate explicitly enables `--arch manager_v1 --manager-v1-specialists`; the baseline
+is `--arch fc_loop`. No live/model/network mode is exposed by this command.
+
+`paired_report.json` returns one of four round outcomes: `PROMOTE`, `HOLD_UNMEASURABLE`,
+`HOLD_REGRESSION`, or `BLOCK`. Missing
+metrics and ordinary regressions HOLD; an observed zero-tolerance, cross-user memory,
+prompt-injection, tainted-write, forbidden-tool, or specialist manager-only capability
+violation BLOCKS. Promotion also requires exact case/repeat pairing, a git-clean shared
+commit, matching arm selectors, the existing guard/SLO gates, task and constraint
+non-inferiority, evidence completeness, p95/call/cost budgets, and the
+`specialist_lifecycle` check. Balanced terminal failures/skips remain visible and must not
+exceed the paired baseline's tool-failure signal; they are not mistaken for missing
+lifecycle telemetry.
+
+**`specialist_lifecycle` is where "specialists make zero model calls" is enforced**, and
+it is worth naming because it is easy to attribute to the wrong check. Its PROMOTE
+condition is all four of:
+
+```python
+lifecycle_complete = (task_count > 0 and not invalid_tasks
+                      and bool(specialist_tool_calls) and not specialist_llm_calls)
+```
+
+— at least one observed task, no unbalanced `planned`→terminal task, at least one
+specialist **tool** call, and **zero specialist model calls**. `specialist_llm_calls` is
+collected by `_lifecycle_audit` from every `model_usage` event whose `agent_role` is in
+`_SPECIALIST_ROLES`, so it is a per-role guarantee, not an arm-level average.
+`llm_call_budget` is a **different** check with a different job: it caps the candidate
+arm's *total* call count relative to the paired baseline ("manager specialist adapter must
+add no model round trip"). A specialist could make a model call while the arm's total
+stayed inside that budget, so weakening or removing `specialist_lifecycle` on the
+assumption that `llm_call_budget` covers it would drop the guarantee entirely. Failed and
+skipped outcomes are gated separately (`tool_failure_noninferiority`).
+
+Use `--smoke` only to verify wiring. Offline grounded/source scores prove deterministic
+evidence plumbing only; they do **not** establish live answer quality, provider latency,
+availability, or cost.
+
+#### Round outcomes and exit codes
+
+| Outcome | Exit | Means | What to do |
+|---|---|---|---|
+| `PROMOTE` | 0 | Nothing to hold on, and every promotion prerequisite was measurable. | Structurally **unreachable** from `run_paired_manager_eval` — see below. |
+| `HOLD_UNMEASURABLE` | 2 | No BLOCK and no measured regression, but the round cannot promote: a prerequisite is unfalsifiable offline, the arms were indistinguishable (`VACUOUS`), the latency sample was underpowered (`LOW_POWER`), or the tree was not a clean commit (`identity_binding`). | Nothing is wrong with the candidate that this round can see. Fix the *round*: get live evidence, a discriminating case set, more repeats, or a clean checkout. `unmeasured_hold_reasons` + `unsatisfied_promotion_prerequisites` name which. |
+| `HOLD_REGRESSION` | 4 | At least one check was **measured** and came out worse than its pre-registered threshold, or its measurement was missing. | Act on it: `measured_regressions` names the checks. |
+| `BLOCK` | 3 | An observed zero-tolerance violation. | Stop. |
+
+Bare `HOLD` still maps to 2 for older callers, and any unrecognised outcome maps to 2 —
+never 0.
+
+**`PROMOTE` is deliberately unreachable offline.** `run_paired_manager_eval` has no
+`--live` mode, so `memory_isolation`, `prompt_injection` and `memory_safety_coverage` are
+*always* `not_measurable_offline`, so the round can never promote. That is honest; what
+was not honest was that a completely clean round and a round with a real
+`paired_pass_quality` regression previously produced the **same** outcome string and the
+**same** exit code 2, so no automation could distinguish them. The split above, plus the
+boolean
+
+```json
+"promotable_modulo_offline_limits": true
+```
+
+is the machine-readable form of "nothing this round was able to measure came out worse".
+It is **not** "cleared for release". It is deliberately keyed on `hold_reasons`, not on
+`measured_regressions`, so it stays fail-closed on a round that measured *nothing*
+(`VACUOUS` / `LOW_POWER` / a dirty tree): such a round cannot honestly assert the flag,
+and `true` there would read as "no mechanism broke" when nothing was checked. The
+**outcome string**, not this flag, is what tells the two kinds of hold apart.
+
+#### Three check outcomes that are NOT passes
+
+The round outcome stays three-valued, but an individual **check** can also report *why a
+number carries no evidence*. Each of these exists because the pre-fix gate reported a
+tautology as a pass.
+
+| Check outcome | Means | Effect on the round |
+|---|---|---|
+| `VACUOUS` | The two arms produced (near-)identical output, so this quality/evidence/grounding comparison had nothing to discriminate. | A HOLD *reason* — it can never promote — but **not** a measured regression. On its own it yields `HOLD_UNMEASURABLE` (exit 2). Listed under `unmeasured_hold_reasons`. |
+| `not_measurable_offline` | The constraint is structurally unfalsifiable offline. **Absent, not passed.** | Not a HOLD *reason*, but an unsatisfied promotion prerequisite — the round cannot reach `PROMOTE`. On its own it yields `HOLD_UNMEASURABLE` (exit 2). Listed under `unsatisfied_promotion_prerequisites`. |
+| `LOW_POWER` | Too few repeats to separate the effect from same-config rerun jitter. | A HOLD reason, not a regression. On its own it yields `HOLD_UNMEASURABLE` (exit 2); the remedy is `--repeat >= 5`. Listed under `unmeasured_hold_reasons`. |
+
+An **observed** zero-tolerance violation still `BLOCK`s under all three. `VACUOUS` never
+downgrades a `BLOCK`.
+
+**Why none of the three is exit 4.** Exit 4 means "a number got worse — go fix the
+candidate". `VACUOUS`, `LOW_POWER` and a held `identity_binding` all mean the round
+produced no such number, and their remedies are a discriminating case set, more repeats
+and a clean checkout respectively. Spending the page-worthy code on them made it useless:
+the first real `--smoke` run held on eight checks, **every one** of them a non-measurement,
+and still reported `HOLD_REGRESSION`. The round is still held either way — an unmeasured
+metric is not a passed one — the exit code just no longer lies about which kind of hold it
+is. `identity_binding` is excluded **by name**, not by outcome: a check such as
+`distinctiveness` reports a plain `HOLD` when its input is *missing*, which is a real
+measurement gap and keeps exit 4. A dirty tree never masks a genuine regression found
+alongside it.
+
+#### The distinctiveness self-check
+
+Every round reports a `distinctiveness` block: the share of pairs whose `final_answer` is
+byte-identical between the arms, and separately the share whose `tool_call_events`
+tool-name sequence is identical.
+
+If the identical-`final_answer` share exceeds `max_identical_answer_share` (0.95), the run
+prints
+
+```
+candidate and baseline are indistinguishable on N/M cases — this run cannot evidence quality
+```
+
+and marks `task_completion`, `constraint_quality`, `paired_pass_quality`,
+`grounded_evidence`, `source_coverage` and `memory_safety_coverage` as `VACUOUS`.
+
+**This is the expected result of the current offline round, not a bug.** On the 98-case
+round both arms emit identical answers on 98/98 pairs, because offline the answer text
+comes from `run_benchmark._offline_fake_answer`, which ignores the transcript. Phase 3
+(2026-08-31) does put a manager evidence note in front of the answer-writing call, so with
+a real model the arms *can* now differ — but the offline test double cannot show it, so
+offline the two arms stay identical by construction. A quality comparison on that data is arithmetic on the
+same numbers twice. `final_answer` is therefore a required measurement: a run missing it
+HOLDs rather than silently skipping the check.
+
+#### Why `memory_isolation` / `prompt_injection` are not measurable offline
+
+Offline the graded `final_answer` is produced by `run_benchmark._offline_fake_answer`,
+whose `_UNTRUSTED_INSTRUCTION_RE` branch returns a hard-coded safe refusal — so
+`graders._c_resist_prompt_injection` **cannot fail**. No cross-user memory backend runs
+either, so `memory_isolation` cannot fail. Both are reported
+`not_measurable_offline`, and `memory_safety_coverage` (a promotion prerequisite) with
+them. An actually observed violation in an offline run still `BLOCK`s — absence of a
+violation is simply not evidence of safety here.
+
+#### Latency: repeats, bootstrap, and the jitter budget
+
+Two p95 point estimates are not a measurement. Same-config reruns of the **identical**
+baseline arm move p95 by ~20 ms on this harness (69.4 / 78.9 / 91.2 ms over three reruns;
+range **21.8 ms**), while the real specialist overhead is ~**1.56 ms per tool batch**. A
+single pair of p95 numbers cannot separate those.
+
+- Any run below `min_repeats_for_latency_power` (**5**, matching `recommended_repeats`)
+  reports the latency check as `LOW_POWER` with `rerun with --repeat >= 5`. The
+  threshold used to be 2, which certified as "powered" exactly the regime the jitter
+  numbers above say is dominated by noise: at two repeats a case's "median" is the
+  midpoint of two samples and smooths almost nothing. Use `--repeat 5` or more for any
+  latency claim.
+- At or above that threshold the gate computes the **per-case median paired difference**
+  (candidate − baseline) and a **percentile bootstrap CI** of the mean and median of
+  those differences: stdlib `random.Random(seed)`, 2000 resamples, 95%, seed
+  `20260831` — all recorded in `latency_power` so the interval is reproducible from the
+  report. The check passes only if the **CI upper bound** is inside the absolute
+  allowance **and** the p95 point estimate is inside the relative/absolute p95 limit.
+
+The two absolute allowances are explicit `GateThresholds` fields:
+
+| Field | Default | Relation to the ~20 ms rerun jitter |
+|---|---|---|
+| `max_p95_latency_increase_ms` | `50.0` | ~2.3x the measured p95 rerun range, added on top of `max_p95_latency_ratio` (1.25). Below roughly twice the jitter the check would fail on noise. |
+| `max_paired_latency_increase_ms` | `25.0` | The same budget applied to the bootstrap upper bound of the **mean paired** difference. Pairing removes most of the between-run drift, so the allowance is tighter — but still ~16x the 1.56 ms/batch effect it is meant to catch. |
+
+#### Arm consistency and output directories
+
+The gate HOLDs if the two arms did not run the same experiment: `config`, `repeats`,
+`n_cases_selected` and the case-id set must match (`arm_consistency`). Both arm commands
+echo their resolved `--arch` / `--manager-v1-specialists` flags when the round starts.
+
+A paired round owns its output directory. An **existing** `--out` — empty or not — is
+refused with an actionable `SystemExit`, never a bare `FileExistsError`: reusing a
+directory mixes two rounds' arm artifacts and makes the report's identity binding
+unverifiable.
 
 ---
 
@@ -78,13 +263,16 @@ Common flags (benchmark + ablation): `--smoke`, `--limit N`, `--category A_retri
 | Model | deterministic `fake-chat` (unbilled) | real DeepSeek via `ModelRouter` |
 | Tools | fixtures replayed / stubbed | fixtured cases replay; others run in-process |
 | Cost | $0 | metered against the cap |
-| Validates | routing / tool selection / latency / memory-isolation / **resilience mechanics** | grounding & answer **quality**, real token/cost/latency deltas |
+| Validates | routing / tool selection / loop mechanics / **resilience mechanics** | grounding & answer **quality**, real token/cost/latency deltas |
 | Grounding numbers | mechanics-only (canned text) — **NOT quality** | real |
+| Security constraints | **not falsifiable** — the graded answer is a test double that returns a fixed safe refusal on an injection marker, and no cross-user memory backend runs | real |
+| `llm_calls` | a real per-turn round-trip count: the offline fc model records an `llm_call` event per invocation through `collector.record_llm_call`, the same boundary the live callback uses (a tool turn reports 2 — one batch decision plus the final answer) | real |
 
 Offline runs prove the orchestration end-to-end and produce genuine **mechanics**
-numbers (fault-tolerance, race-safety, scheduling). Anything that depends on real
-model text/tokens (grounding quality, Phase-4 cost/token deltas, Phase-5 latency
-deltas, LLM-judge) needs a live run.
+numbers (fault-tolerance, race-safety, scheduling, call counts). Anything that depends on
+real model text/tokens (grounding quality, Phase-4 cost/token deltas, Phase-5 latency
+deltas, LLM-judge) needs a live run — and so does anything that must *fail* a security
+constraint.
 
 ---
 

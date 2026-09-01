@@ -82,7 +82,14 @@ def _rec(arch="fc_loop", *, ts=NOW, latency_ms=1000.0, endpoint="alex", **extra)
         "turn_latency_ms": latency_ms,
         "llm_calls": 2,
         "tool_batches": 1,
-        "llm_usage": None,
+        "llm_usage": {
+            "calls": 2, "input_tokens": 10, "output_tokens": 5,
+            "cache_read_tokens": 0,
+            "models": {"fixture-model": {
+                "calls": 2, "input_tokens": 10, "output_tokens": 5,
+                "cache_read_tokens": 0,
+            }},
+        },
         "llm_usage_status": "complete",
         "forbidden_read": None,
         "no_evidence_numbers": None,
@@ -134,7 +141,8 @@ def test_since_bounds_the_expect_turns_anchor_population():
     """
     warmup = _fc(1, ts=STAGE_START - timedelta(minutes=5))
     round_of_record = _fc(50, ts=STAGE_START + timedelta(minutes=5))
-    rep = cr.build_report(warmup + round_of_record, now_override=NOW,
+    control = [_rec("legacy", ts=STAGE_START + timedelta(minutes=5)) for _ in range(50)]
+    rep = cr.build_report(warmup + round_of_record + control, now_override=NOW,
                           since=STAGE_START, expect_turns=50)
     et = rep["verdict"]["expected_turns"]
     assert et["observed"] == 50, "the warm-up turn must be outside the --since window"

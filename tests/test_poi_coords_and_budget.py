@@ -114,7 +114,22 @@ class _CountingGeocoder:
 
 
 @pytest.fixture(autouse=True)
-def _clear_geocode_cache():
+def _clear_geocode_cache(monkeypatch):
+    # query_osm_pois imports the process-wide persistent cache functions directly.
+    # Give this module a fresh in-memory cell store per test: cache-hit behaviour
+    # remains covered inside each test, while a previous pytest process can no
+    # longer short-circuit mocked Overpass calls or mutate the application cache.
+    poi_result_cache = {}
+    monkeypatch.setattr(
+        poi,
+        "get_from_cache",
+        lambda key, **_kwargs: poi_result_cache.get(key),
+    )
+    monkeypatch.setattr(
+        poi,
+        "set_to_cache",
+        lambda key, value, **_kwargs: poi_result_cache.__setitem__(key, value),
+    )
     poi.geocode_cache_clear()
     yield
     poi.geocode_cache_clear()

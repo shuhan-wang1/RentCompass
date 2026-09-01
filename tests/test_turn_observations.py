@@ -405,6 +405,7 @@ def test_a_call_with_no_usage_makes_the_turn_partial_not_zero(installed):
                         configured_model="cfg")
     tobs.note_llm_usage(uuid.uuid4(), _result(_gen()), configured_model="cfg")
     assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_PARTIAL
+    assert tobs.snapshot()["llm_calls"] == 2
 
 
 def test_all_calls_priced_is_complete(installed):
@@ -414,19 +415,27 @@ def test_all_calls_priced_is_complete(installed):
                             _result(_gen(usage_metadata={"input_tokens": 5, "output_tokens": 1})),
                             configured_model="cfg")
     assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_COMPLETE
+    assert tobs.snapshot()["llm_calls"] == 3
 
 
 def test_no_calls_is_its_own_status_not_a_failure(installed):
     """A turn that made no LLM call did not fail to measure anything."""
     tobs.begin_turn()
     assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_NO_CALLS
+    assert tobs.snapshot()["llm_calls"] == 0
 
 
 def test_uninstalled_observer_reports_not_instrumented(monkeypatch):
     monkeypatch.setattr(tobs, "_observer_installed", False)
+    # The raw-SDK reporter is the SECOND process-wide flag, and it is equally
+    # sticky: one raw call anywhere earlier in the session would leave snapshot()
+    # reporting a raw-only `partial` instead of the uninstrumented nulls this test
+    # is about. Pin both or pin neither.
+    monkeypatch.setattr(tobs, "_raw_observer_installed", False)
     tobs.begin_turn()
     assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_NOT_INSTRUMENTED
     assert tobs.snapshot()["llm_usage_calls"] is None
+    assert tobs.snapshot()["llm_calls"] is None
 
 
 @pytest.mark.parametrize("arch", ["fc_loop", "legacy"])
@@ -452,6 +461,8 @@ def test_usage_reaches_the_record_on_both_arches(client, monkeypatch, caplog, in
     assert r.status_code == 200
     rec = _canary_turns(caplog)[0]
     assert rec["llm_usage_status"] == "complete", rec
+    assert rec["llm_calls"] == 2
+    assert rec["tool_batches"] == 0
     assert rec["llm_usage"]["calls"] == 2
     assert rec["llm_usage"]["input_tokens"] == 200
     assert rec["llm_usage"]["output_tokens"] == 40
@@ -479,6 +490,19 @@ def test_unpriced_call_holds_the_gate(installed):
                                   "tainted_write_executed_count": 0,
                                   "forbidden_write_executed_count": 0},
                      "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0,
+                     "llm_calls": 1, "tool_batches": 0,
+                     "llm_usage": {
+                         "calls": 1,
+                         "input_tokens": 10,
+                         "output_tokens": 2,
+                         "cache_read_tokens": 0,
+                         "models": {"fixture": {
+                             "calls": 1,
+                             "input_tokens": 10,
+                             "output_tokens": 2,
+                             "cache_read_tokens": 0,
+                         }},
+                     },
                      "llm_usage_status": status})
 
     clean = [rec(i, "complete") for i in range(10)]

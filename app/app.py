@@ -21,7 +21,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import subprocess
 import contextvars
-from flask import Flask, request, jsonify, render_template, session, g
+from flask import Flask, request, jsonify, render_template, session, g, has_request_context
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
 import json
@@ -41,9 +41,14 @@ from uk_rent_agent.web.auth_store import (
     AuthStore, AuthError, InvalidUsername, WeakPassword, UsernameTaken,
 )
 from uk_rent_agent.config import Config
+from uk_rent_agent.agent.architecture import MANAGER_V1_ARCH, uses_fc_runtime
 from uk_rent_agent.web.rate_limit import SlidingWindowRateLimiter
 from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, get_prefs_store, graph_config
-from uk_rent_agent.observability import new_request_id, request_context
+from uk_rent_agent.observability import (
+    agent_execution_context,
+    new_request_id,
+    request_context,
+)
 from core.data_loader import load_mock_properties_from_csv, load_properties
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
@@ -230,6 +235,9 @@ _runtime_config = globals().get("_BOOTSTRAP_CONFIG") or Config.from_env()
 # Graph selection and strict-schema binding still have a few legacy getenv consumers. Publish
 # the already-normalized Config values once so all of them observe the same runtime identity.
 os.environ["AGENT_ARCH"] = _runtime_config.agent_arch
+os.environ["MANAGER_V1_SPECIALISTS"] = (
+    "1" if _runtime_config.manager_v1_specialists_effective else "0"
+)
 os.environ["DEEPSEEK_STRICT"] = "1" if _runtime_config.deepseek_strict else "0"
 os.environ["LLM_PROVIDER"] = _runtime_config.llm_provider
 # supports_credentials=True so the signed session cookie (which now carries the
@@ -308,7 +316,10 @@ def _ensure_agent_runtime():
 
         checkpointer = None
         if _runtime_config.enable_checkpointer and _runtime_config.checkpoint_path:
-            checkpointer = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+            checkpointer = get_sqlite_checkpointer(
+                _runtime_config.checkpoint_path,
+                identity=_runtime_config.checkpoint_identity,
+            )
         store = get_prefs_store() if _runtime_config.enable_store else None
         candidate_graph = build_agent_graph(
             agent_tool_provider,
@@ -316,6 +327,7 @@ def _ensure_agent_runtime():
             store=store,
             enable_hitl=_runtime_config.enable_hitl,
             agent_llm=_configured_fc_agent_llm(),
+            manager_v1_specialists=MANAGER_V1_SPECIALISTS,
         )
         # Treat inability to bind as a startup failure: silently falling back to
         # the current global runner could reuse async clients across event loops.
@@ -402,6 +414,10 @@ def _read_strict() -> bool:
     return _runtime_config.deepseek_strict
 
 
+def _read_manager_v1_specialists() -> bool:
+    return _runtime_config.manager_v1_specialists_effective
+
+
 def _startup_git_sha() -> str:
     """Short git SHA if cheaply available at startup, else 'unknown'. Called ONCE."""
     try:
@@ -419,17 +435,18 @@ def _startup_git_sha() -> str:
 
 
 AGENT_ARCH = _read_agent_arch()
+MANAGER_V1_SPECIALISTS = _read_manager_v1_specialists()
 DEEPSEEK_STRICT = _read_strict()
 # APP_CANDIDATE_SHA is the image tag the fc pool is pinned to; fall back to the local git
 # SHA (dev), else "unknown". Read once — a process-level constant, NOT a per-request value.
 APP_CANDIDATE_SHA = (os.getenv("APP_CANDIDATE_SHA") or "").strip() or _startup_git_sha()
 print(f"[STARTUP] Canary: agent_arch={AGENT_ARCH} candidate_sha={APP_CANDIDATE_SHA} "
-      f"strict={DEEPSEEK_STRICT}")
+      f"strict={DEEPSEEK_STRICT} manager_v1_specialists={MANAGER_V1_SPECIALISTS}")
 
 
 def _configured_fc_agent_llm():
-    """Return the explicit non-DeepSeek loop driver when fc_loop is configured for Ollama."""
-    if AGENT_ARCH != "fc_loop" or _runtime_config.llm_provider != "ollama":
+    """Return the explicit Ollama driver for every FC-compatible architecture."""
+    if not uses_fc_runtime(AGENT_ARCH) or _runtime_config.llm_provider != "ollama":
         return None
     from core.llm_config import get_react_llm
     return get_react_llm(low_latency=True)
@@ -582,6 +599,7 @@ def _canary_headers(response):
     turn endpoints themselves (it is per-request)."""
     response.headers["X-Agent-Arch"] = AGENT_ARCH
     response.headers["X-Agent-Version"] = APP_CANDIDATE_SHA
+    response.headers["X-Agent-Specialists"] = "1" if MANAGER_V1_SPECIALISTS else "0"
     return response
 
 
@@ -613,9 +631,11 @@ def _reconcile_agent_arch(user_id: str, conversation_id: str, conv: dict) -> Non
 
 
 from core.canary_telemetry import (  # noqa: E402
-    ENDPOINT_ALEX, ENDPOINT_SEARCH_DIRECT, OUTCOME_AGENT_ERROR, OUTCOME_CRASH,
-    OUTCOME_OK, OUTCOME_SERVER_ERROR, aggregate_llm_usage, build_canary_turn_record,
-    hash_user_id, search_direct_signals, unknown_turn_signals,
+    ENDPOINT_ALEX, ENDPOINT_SEARCH_DIRECT, OBSERVER_INSTALLED_FIELD,
+    OUTCOME_AGENT_ERROR, OUTCOME_CRASH,
+    OUTCOME_OK, OUTCOME_SERVER_ERROR, TOOL_LEDGER_COMPLETE, aggregate_llm_usage,
+    build_canary_turn_record, hash_user_id, search_direct_signals,
+    unknown_turn_signals,
 )
 from core import turn_observations  # noqa: E402
 from core import dsml_guard  # noqa: E402
@@ -631,14 +651,23 @@ def _load_write_audit_instrumentation() -> None:
     than by anything about the turn. Importing it here makes registration a property
     of the process instead of of request ordering.
     """
-    if AGENT_ARCH != "fc_loop":
+    if not uses_fc_runtime(AGENT_ARCH):
         return
     try:
-        import core.agent_loop  # noqa: F401
+        if AGENT_ARCH == MANAGER_V1_ARCH:
+            # Imports the FC executor and registers manager_v1 as an alias of its
+            # write-audited dispatch path.
+            import core.manager_v1  # noqa: F401
+        else:
+            import core.agent_loop  # noqa: F401
     except Exception:
         # Left unregistered deliberately: the counters stay null and the gate HOLDs,
         # which is the right outcome when the instrumented module will not load.
-        logger.warning("canary: fc_loop write-audit instrumentation failed to import")
+        logger.warning(
+            "canary: FC-compatible write-audit instrumentation failed to import "
+            "(arch=%s)",
+            AGENT_ARCH,
+        )
 
 
 def _wire_canary_llm_observer() -> None:
@@ -796,9 +825,13 @@ def _crashed_turn_observations() -> dict:
 
 def _build_fc_signals(final_state) -> dict:
     """Derive the per-turn canary signals from the graph's final_state. Robust to the legacy
-    arch (whose final_state may lack the fc channels): everything defaults safely. llm_calls /
-    tool_batches are only meaningful on the fc loop (loop_turn == one bound-tools call per
-    super-step; batches == distinct tool_artifacts turns) — null on legacy, as designed."""
+    arch (whose final_state may lack the fc channels): everything defaults safely.
+
+    ``llm_calls`` comes from the arch-agnostic callback observer, because legacy
+    classifier/responder calls are billed too. ``loop_turn`` is retained only as a
+    fail-closed lower bound for FC runtimes: if the graph proves more model steps
+    than the observer saw, usage is partial. ``tool_batches`` is derived from the
+    shared artifact ledger plus an optional legacy execution-plan wave."""
     if not isinstance(final_state, dict):
         final_state = {}
     artifacts = final_state.get("tool_artifacts") or []
@@ -821,11 +854,94 @@ def _build_fc_signals(final_state) -> dict:
     _obs = turn_observations.snapshot()
     _audit = turn_observations.write_audit_snapshot(AGENT_ARCH)
     _dsml = turn_observations.dsml_snapshot()
-    is_fc = AGENT_ARCH == "fc_loop"
-    llm_calls = final_state.get("loop_turn") if is_fc else None
-    tool_batches = (len({a.get("turn") for a in artifacts if isinstance(a, dict)})
-                    if is_fc else None)
-    return {
+    is_fc = uses_fc_runtime(AGENT_ARCH)
+    observed_llm_calls = _obs.get("llm_calls")
+    llm_calls = (
+        observed_llm_calls
+        if isinstance(observed_llm_calls, int)
+        and not isinstance(observed_llm_calls, bool)
+        else None
+    )
+    loop_turn = final_state.get("loop_turn")
+    if (
+        is_fc
+        and isinstance(loop_turn, int)
+        and not isinstance(loop_turn, bool)
+        and loop_turn >= 0
+        and (llm_calls is None or loop_turn > llm_calls)
+    ):
+        llm_calls = loop_turn
+        # The graph observed a provider step whose terminal usage callback did not
+        # arrive. Never label the remaining usage complete or zero-call.
+        _obs["llm_usage_status"] = "partial"
+    artifact_turns = {
+        a.get("turn")
+        for a in artifacts
+        if isinstance(a, dict) and a.get("turn") is not None
+    }
+    _CANARY_TOOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
+
+    def _tool_latency_from_artifacts(artifacts) -> dict:
+        """Per-tool latency, derived from the artifact ledger both arches already write.
+
+        ``elapsed_ms`` is set on EVERY artifact (see ``agent_loop._artifact``), so this
+        needs no new instrumentation on the hot path — only a fold at the end of the
+        turn. p50 uses the repo's NEAREST-RANK convention (``ceil(p*n)-1``), i.e. an
+        observed sample, never an interpolation, so a two-call tool reports a number
+        that actually happened.
+
+        Deliberately no per-call vector and no arguments: the counters answer "which
+        tool ate the budget" without letting one user's session be reconstructed from
+        an ops log. Timed-out/abandoned calls are counted but kept OUT of the latency
+        samples — a budget kill measures the budget, not the tool.
+        """
+        import math as _math
+
+        samples: dict = {}
+        for a in artifacts:
+            if not isinstance(a, dict):
+                continue
+            name = a.get("tool")
+            name = name.strip() if isinstance(name, str) else ""
+            if not _CANARY_TOOL_NAME_RE.fullmatch(name):
+                continue
+            slot = samples.setdefault(
+                name, {"count": 0, "timed_out": 0, "abandoned": 0, "samples": []})
+            slot["count"] += 1
+            timed_out = bool(a.get("timed_out"))
+            abandoned = bool(a.get("abandoned"))
+            if timed_out:
+                slot["timed_out"] += 1
+            if abandoned:
+                slot["abandoned"] += 1
+            elapsed = a.get("elapsed_ms")
+            if (
+                not timed_out and not abandoned
+                and not isinstance(elapsed, bool)
+                and isinstance(elapsed, (int, float))
+                and _math.isfinite(float(elapsed))
+                and float(elapsed) >= 0
+            ):
+                slot["samples"].append(float(elapsed))
+        out: dict = {}
+        for name, slot in samples.items():
+            ordered = sorted(slot["samples"])
+            if ordered:
+                index = min(len(ordered) - 1, max(0, _math.ceil(0.50 * len(ordered)) - 1))
+                p50 = round(ordered[index], 1)
+                max_ms = round(ordered[-1], 1)
+            else:
+                # Every call of this tool was killed: there is no observed duration, and
+                # a 0 here would read as "instant" rather than "never finished".
+                p50 = max_ms = None
+            out[name] = {"count": slot["count"], "p50_ms": p50, "max_ms": max_ms,
+                         "timed_out": slot["timed_out"], "abandoned": slot["abandoned"]}
+        return out
+
+    tool_latency = _tool_latency_from_artifacts(artifacts)
+    wave_batches = 1 if final_state.get("task_results") else 0
+    tool_batches = len(artifact_turns) + wave_batches
+    signals = {
         "soft_wrapped": bool(final_state.get("soft_wrapped")),
         # HOW a wrapped turn closed ("llm"/"llm_retry" vs a fallback_* canned renderer).
         # None on a turn that never wrapped; the KEY's absence means the producing build
@@ -864,7 +980,35 @@ def _build_fc_signals(final_state) -> dict:
         "llm_usage_status": _obs["llm_usage_status"],
         "llm_calls": llm_calls,
         "tool_batches": tool_batches,
+        # The graph returned, so the artifact ledger this count is folded from
+        # exists. The crash path has no final_state and reports "unavailable"
+        # instead (see canary_telemetry.unknown_turn_signals) — that distinction is
+        # what stops a crashed turn being convicted for a field it cannot have.
+        "tool_ledger_status": TOOL_LEDGER_COMPLETE,
     }
+    if tool_latency:
+        # Stage-1 instrument (K9): WHICH tool spent the turn's latency budget.
+        # `tool_batches` counts rounds and `turn_latency_ms` measures the whole
+        # turn, so between them a slow tool and a chatty loop are the same number.
+        # Additive, content-free and non-gating — the telemetry layer re-applies
+        # the whitelist, so an unexpected key here cannot reach the record.
+        signals["tool_latency"] = tool_latency
+    # manager_v1 installs a root context at the graph invocation boundary.  Keep
+    # legacy/fc_loop records byte-for-byte compatible by adding these labels only
+    # when that root context was explicitly observed.
+    root_agent_context = _obs.get("root_agent_context")
+    if isinstance(root_agent_context, dict):
+        signals["root_agent_context"] = dict(root_agent_context)
+        for field in ("agent_role", "task_id", "parent_task_id"):
+            value = root_agent_context.get(field)
+            if value is not None:
+                signals[field] = value
+    specialist = _obs.get("specialist")
+    if AGENT_ARCH == MANAGER_V1_ARCH and isinstance(specialist, dict):
+        # Optional, non-gating diagnostics. The telemetry layer already strips
+        # objectives, arguments, data, errors and any other user-derived content.
+        signals["specialist"] = dict(specialist)
+    return signals
 
 
 
@@ -883,6 +1027,34 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
     instrumentation blocks promotion instead of silently reading as clean.
     """
     try:
+        def _rollout_identity() -> dict:
+            if not has_request_context():
+                return {
+                    "rollout_id": None,
+                    "rollout_stage": None,
+                    "configured_candidate_percent": None,
+                    "traffic_source": "direct",
+                    "assigned_pool": "direct",
+                }
+            source = (request.headers.get("X-RentCompass-Traffic-Source") or "direct").strip()
+            rollout_id = request.headers.get("X-RentCompass-Rollout-ID")
+            stage = request.headers.get("X-RentCompass-Rollout-Stage")
+            pool = request.headers.get("X-RentCompass-Assigned-Pool")
+            weight_raw = request.headers.get("X-RentCompass-Rollout-Weight")
+            try:
+                weight = int(weight_raw) if weight_raw is not None else None
+            except (TypeError, ValueError):
+                weight = None
+            safe_id = re.compile(r"^[A-Za-z0-9._:-]{1,96}$")
+            safe_stage = re.compile(r"^[A-Za-z0-9._:-]{1,32}$")
+            return {
+                "rollout_id": rollout_id if isinstance(rollout_id, str) and safe_id.fullmatch(rollout_id) else None,
+                "rollout_stage": stage if isinstance(stage, str) and safe_stage.fullmatch(stage) else None,
+                "configured_candidate_percent": weight if weight in {0, 5, 20, 50, 100} else None,
+                "traffic_source": source if source in {"edge", "direct"} else "invalid",
+                "assigned_pool": pool if pool in {"legacy", "candidate"} else "direct",
+            }
+
         signals = (unknown_turn_signals(_crashed_turn_observations())
                    if fc_signals is None else dict(fc_signals))
         # Re-read the tool-markup counters HERE rather than trusting the snapshot
@@ -893,6 +1065,12 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
         _dsml_now = turn_observations.dsml_snapshot()
         if _dsml_now["dsml_blocked"] is not None:
             signals.update(_dsml_now)
+        # Stated HERE, for every path (normal, crash, boundary 5xx, cancelled,
+        # search_direct), because it is a fact about the PROCESS rather than about
+        # the turn's own bookkeeping — and it is the fact that decides whether a
+        # turn we could not measure is forgiven (observer live, turn died) or
+        # convicted (nothing was watching: the 2026-07-25 incident class).
+        signals[OBSERVER_INSTALLED_FIELD] = turn_observations.observer_installed()
         record = build_canary_turn_record(
             endpoint=endpoint,
             agent_arch=AGENT_ARCH,
@@ -905,6 +1083,10 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
             turn_outcome=turn_outcome,
             turn_latency_ms=turn_latency_ms,
             signals=signals,
+            manager_v1_specialists=(
+                MANAGER_V1_SPECIALISTS if AGENT_ARCH == MANAGER_V1_ARCH else None
+            ),
+            rollout=_rollout_identity(),
         )
         _canary_logger.info(json.dumps(record, ensure_ascii=False, default=str))
         # One record per request. Mark it so a later failure at the response
@@ -1067,7 +1249,16 @@ def _emit_canary_boundary_5xx() -> None:
             endpoint=endpoint,
             conversation_id=getattr(g, "canary_conversation_id", None) or "unknown",
             user_id=getattr(g, "canary_user_id", None),
-            request_id=getattr(g, "canary_request_id", None) or "unknown",
+            # A 5xx raised BEFORE g.canary_request_id is stamped has no id to carry.
+            # A fixed literal is worse than no id: the report's uniqueness rule is
+            # (request_id, endpoint, arch), so two such failures collide and are
+            # reported as "one turn emitted two records" — a duplicate-emission bug
+            # that is not happening, handed to the operator instead of the real
+            # diagnosis. The sentinel keeps the "unknown:" prefix (so it still reads
+            # as "no correlation available" and cannot be mistaken for a real
+            # request id) and appends a uuid4 so distinct turns stay distinct.
+            request_id=(getattr(g, "canary_request_id", None)
+                        or f"unknown:{uuid.uuid4().hex}"),
             http_status=500,
             turn_outcome=OUTCOME_SERVER_ERROR,
             turn_latency_ms=latency,
@@ -1077,6 +1268,52 @@ def _emit_canary_boundary_5xx() -> None:
             fc_signals=None)
     except Exception as e:  # pragma: no cover — never break the error response
         print(f"[canary] boundary 5xx record emit failed; error_type={type(e).__name__}")
+
+
+# The status recorded for a turn the CLIENT abandoned. nginx's 499 ("client closed
+# request") is the honest code and, being < 500, it keeps a wave of disconnects out
+# of the 5xx rate — that rate is a relative stage-pause threshold and a client
+# hanging up is not a server error the candidate caused.
+CANARY_CLIENT_CLOSED_STATUS = 499
+
+
+def _emit_canary_cancelled_turn(*, endpoint: str, conversation_id: str, user_id,
+                                request_id: str, started) -> None:
+    """Emit the record for a turn cancelled out from under us (client disconnect).
+
+    ``asyncio.CancelledError`` is a ``BaseException``. Neither an endpoint's
+    ``except Exception`` nor Flask's ``errorhandler(Exception)`` sees one, so a
+    cancelled turn used to emit NOTHING AT ALL — the only failure mode telemetry
+    must never have. A vanished turn does not merely lose its own row: it silently
+    shrinks the denominator, so every rate in the window is computed over a
+    population missing exactly the turns that died. (``--expect-turns`` catches the
+    mismatch afterwards, but as "these numbers describe a different run", which is
+    a hold, not a record of what happened.)
+
+    Everything this turn would have reported is unobservable, so the record takes
+    the SAME path as a crash — ``fc_signals=None`` -> ``unknown_turn_signals`` ->
+    null security/ledger fields and an UNMEASURED usage status. It never asserts a
+    zero. The latency is the real elapsed time: unlike a boundary 5xx (which fails
+    in ~0ms and would flatter p50), a client that hangs up has usually waited, so
+    that number belongs in the percentile population.
+    """
+    try:
+        latency = ((time.perf_counter() - started) * 1000.0) if started else 0.0
+        _emit_canary_turn(
+            endpoint=endpoint,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            request_id=request_id,
+            http_status=CANARY_CLIENT_CLOSED_STATUS,
+            # `crash` is the existing outcome for "the turn did not complete and its
+            # own bookkeeping does not exist"; it is in UNOBSERVABLE_OUTCOMES, which
+            # is what grants this record the crash exemptions it genuinely needs. A
+            # new enum value would be rejected outright by every deployed consumer.
+            turn_outcome=OUTCOME_CRASH,
+            turn_latency_ms=latency,
+            fc_signals=None)
+    except Exception as e:  # pragma: no cover — never turn a cancel into an error
+        print(f"[canary] cancelled turn record emit failed; error_type={type(e).__name__}")
 
 
 def _request_body():
@@ -1200,7 +1437,10 @@ def _delete_checkpoint_thread(user_id: str, conversation_id: str) -> dict:
     try:
         if not (_runtime_config.enable_checkpointer and _runtime_config.checkpoint_path):
             return {"status": "disabled", "residual": False}
-        cp = get_sqlite_checkpointer(_runtime_config.checkpoint_path)
+        cp = get_sqlite_checkpointer(
+            _runtime_config.checkpoint_path,
+            identity=_runtime_config.checkpoint_identity,
+        )
         if cp is None:
             return {"status": "failed", "residual": None, "error_type": "Unavailable"}
         thread = f"{user_id}:{conversation_id}"
@@ -1233,9 +1473,20 @@ except Exception as e:
 # --- MCP tool client (optional) ---
 # The agent executes tools via the MCP server (stdio); on any failure it falls back
 # to the in-process registry. Disable entirely with env USE_MCP_TOOLS=0.
+#
+# ONE PARSER. This used to re-read the raw environment with its own spelling rule
+# (`not in ("0", "false", "no")`), which disagreed with `config._bool_strict` on
+# every other spelling: `USE_MCP_TOOLS=off` and `USE_MCP_TOOLS=` read FALSE in the
+# config object and TRUE here. That gap is not cosmetic — `Config` refuses the
+# `manager_v1_specialists=1` + `use_mcp_tools=1` pair at load precisely because the
+# MCP provider cannot serve specialist dispatch, and a switch this module parses
+# for itself is a switch that validation never saw: config accepted the pair, then
+# the graph build died with a bare RuntimeError. Reading the already-validated
+# `_runtime_config` means an unrecognised spelling is refused BY NAME before the
+# server binds, and the forbidden pair cannot be assembled here at all.
 import os as _os
 agent_tool_provider = tool_registry
-if _os.environ.get("USE_MCP_TOOLS", "0").lower() not in ("0", "false", "no"):
+if _runtime_config.use_mcp_tools:
     try:
         import sys as _sys
         from core.mcp_client import MCPToolClient
@@ -1590,6 +1841,16 @@ async def api_alex():
                 user_message, context, is_continuation, user_id, conversation_id, request_id,
                 ui_language=ui_language, turn=turn,
             )
+    except asyncio.CancelledError:
+        # The client hung up (or the server is shutting down). CancelledError is a
+        # BaseException, so without this clause the turn produces no canary record
+        # at all — see _emit_canary_cancelled_turn. Record it, then re-raise
+        # UNCHANGED: swallowing a cancellation would leave this coroutine running
+        # after its caller stopped waiting.
+        _emit_canary_cancelled_turn(
+            endpoint=ENDPOINT_ALEX, conversation_id=conversation_id,
+            user_id=user_id, request_id=request_id, started=_turn_started_ms)
+        raise
     except Exception as e:
         logger.error(
             "agent.turn.execution_failed",
@@ -2631,14 +2892,14 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     except Exception as _e:
         print(f"[Memory] retrieve skipped; error_type={type(_e).__name__}")
 
-    # Assemble the legacy query as before. fc_loop has a dedicated state channel for
+    # Assemble the legacy query as before. FC-compatible arches have a dedicated channel for
     # long-term memory; putting the same block into user_query would show it twice in
     # its message array and makes the raw user turn ambiguous to downstream tools.
-    _is_fc_loop = AGENT_ARCH == "fc_loop"
+    _uses_fc_runtime = uses_fc_runtime(AGENT_ARCH)
     query_with_history = assemble_context(
         user_message=user_message,
         history=history_snapshot,
-        memory_block="" if _is_fc_loop else _mem_block,
+        memory_block="" if _uses_fc_runtime else _mem_block,
         has_property_context=has_property_context,
         rolling_summary=(persistent_snapshot.get('extracted_context') or {}).get('rolling_summary'),
     )
@@ -2667,7 +2928,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         user_id=user_id,
         session_id=conversation_id,
         request_id=request_id,
-        memory_context=_mem_block if _is_fc_loop else "",
+        memory_context=_mem_block if _uses_fc_runtime else "",
     )
 
     # ── Phase 2: the slow LLM call — NO turn lock held here ──────
@@ -2708,8 +2969,25 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         _turn_ceiling_s() - (_eval_time.perf_counter() - _eval_turn_started),
     )
     try:
-        final_state = await _ainvoke_graph_with_timeout(
-            request_graph, graph_input, _graph_cfg, _graph_timeout_s)
+        if AGENT_ARCH == MANAGER_V1_ARCH:
+            root_task_id = f"turn:{request_id}"
+            turn_observations.note_root_agent_context(
+                agent_role="manager",
+                task_id=root_task_id,
+                parent_task_id=None,
+            )
+            with agent_execution_context(
+                agent_role="manager",
+                task_id=root_task_id,
+                parent_task_id=None,
+            ):
+                final_state = await _ainvoke_graph_with_timeout(
+                    request_graph, graph_input, _graph_cfg, _graph_timeout_s
+                )
+        else:
+            final_state = await _ainvoke_graph_with_timeout(
+                request_graph, graph_input, _graph_cfg, _graph_timeout_s
+            )
     except asyncio.TimeoutError:
         logger.error(
             "agent.graph.turn_timeout",
@@ -3239,6 +3517,13 @@ async def api_search_direct():
             "commute_evidence": result.get("commute_evidence") or [],
             "area_recommendations": result.get('area_recommendations') or [],
         }
+    except asyncio.CancelledError:
+        # Same reason as /api/alex: a cancelled turn must not vanish from the
+        # denominator. Record, then re-raise unchanged.
+        _emit_canary_cancelled_turn(
+            endpoint=ENDPOINT_SEARCH_DIRECT, conversation_id=conversation_id,
+            user_id=user_id, request_id=request_id, started=_turn_started_ms)
+        raise
     except Exception as e:
         logger.error(
             "search_direct.turn.execution_failed",

@@ -203,9 +203,9 @@ services:
       CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints.sqlite3"
       # Conversation store is SHARED between pools (same file as app-fc): the
       # user-visible transcript, turn leases, idempotency rows and durable
-      # background-job outbox live here. Nginx activates one whole pool at a
-      # time; this shared DB makes requests safe without sticky load-balancer
-      # routing across a cutover. Checkpoints, by contrast, are
+      # background-job outbox live here. Nginx may select either pool by stable
+      # cohort; this shared DB also makes a cohort move/rollback survivable.
+      # Checkpoints, by contrast, are
       # SEPARATE per arch (see CHECKPOINT_DB_PATH above / app-fc below): legacy
       # must NEVER read fc's LangGraph checkpoints — that state is treated as
       # untrusted/abandoned after rollback.
@@ -229,8 +229,11 @@ services:
       retries: 5
       start_period: 40s
 
-  # --- Canary fc pool (internal stage) --------------------------------------
-  # The second pool that runs the candidate `fc_loop` arch alongside legacy.
+  # --- Canary candidate pool (internal / weighted stages) -------------------
+  # The second pool runs a configurable candidate architecture alongside the
+  # standing legacy rollback pool.  The service name remains `app-fc` for
+  # backwards-compatible deploy automation, but its architecture is selected
+  # by CANARY_AGENT_ARCH.  Defaults preserve the previous fc_loop behaviour.
   # It is gated behind the "canary" profile, so the plain
   #   docker compose up -d
   # brings up ONLY the legacy stack (app/searxng/valkey) — unchanged. The fc
@@ -279,9 +282,8 @@ services:
     # web-search infrastructure.
     networks: [rentnet]
     ports:
-      # Loopback only, and deliberately NOT wired into the host nginx: during
-      # the `internal` stage the fc pool takes internal-only traffic (curl /
-      # manual smoke) on :5002. Public canary weighting comes later, upstream.
+      # Loopback only: during `internal` the candidate takes manual smoke traffic
+      # on :5002; the host nginx can later select this port for weighted cohorts.
       - "127.0.0.1:5002:5001"
     # Same secrets/keys as legacy.
     env_file:
@@ -294,9 +296,17 @@ services:
       SESSION_COOKIE_SECURE: "true"
       ALLOW_LEGACY_CLIENT_USER_ID: "false"
       MAX_REQUEST_BYTES: "262144"
-      # ...plus the canary knobs that make this the fc pool:
-      AGENT_ARCH: "fc_loop"
-      # Strict function-calling (1 = strict FC) for the fc_loop harness.
+      # ...plus the candidate knobs.  Safe defaults are fc_loop with specialist
+      # dispatch disabled; manager_v1 is an explicit paired opt-in in the root
+      # .env (CANARY_AGENT_ARCH=manager_v1 and
+      # CANARY_MANAGER_V1_SPECIALISTS=1).
+      AGENT_ARCH: "${CANARY_AGENT_ARCH:-fc_loop}"
+      MANAGER_V1_SPECIALISTS: "${CANARY_MANAGER_V1_SPECIALISTS:-0}"
+      # Specialists may execute only trusted in-process tools.  Config also
+      # rejects manager_v1+specialists when this is 1, so a bad override fails
+      # readiness/startup rather than silently widening the capability boundary.
+      USE_MCP_TOOLS: "${CANARY_USE_MCP_TOOLS:-0}"
+      # Strict function-calling remains enabled for both FC-compatible arches.
       DEEPSEEK_STRICT: "1"
       # Pinned candidate sha — surfaced in X-Agent-Version and per-turn telemetry.
       APP_CANDIDATE_SHA: "${FC_CANARY_SHA:?FC_CANARY_SHA must be set to the candidate commit sha}"
@@ -307,18 +317,29 @@ services:
       RELEASE_METADATA_REQUIRED: "1"
       READINESS_REQUIRE_LLM: "1"
       ROUTING_MODE: "blue_green_shared_conversation_store"
-      # SEPARATE checkpoint DB: fc's LangGraph checkpoints live in their own
-      # file so legacy never reads them (and vice-versa). This is the state
-      # isolation boundary between the two arches.
-      CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_fc.sqlite3"
+      # SEPARATE checkpoint DB per candidate architecture: neither candidate
+      # reads legacy checkpoints, and a manager_v1 trial does not resume an old
+      # fc_loop checkpoint when the selector changes.
+      #
+      # The name below is DERIVED, and for the identity this pool has been running
+      # since 2026-07-20 (fc_loop, specialists=0) the derivation names a file that
+      # does not exist. `uk_rent_agent.config` therefore treats
+      # `checkpoints_fc_loop_specialists-0.sqlite3` as an ALIAS of the file that
+      # identity already owns, `.runtime/checkpoints_fc.sqlite3` — otherwise this
+      # line alone would open an empty database beside 78 MB of live graph state,
+      # orphaning it AND putting it out of reach of the account-erasure route
+      # (which deletes only from the resolved checkpoint path). Every OTHER
+      # identity still gets its own per-identity file, which is the separation
+      # this derivation exists for. See docs/canary_runbook.md, "Checkpoint
+      # database names", and `_HISTORICAL_CHECKPOINT_NAMES` in config.py.
+      CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_${CANARY_AGENT_ARCH:-fc_loop}_specialists-${CANARY_MANAGER_V1_SPECIALISTS:-0}.sqlite3"
       # SHARED conversation store: same file/mount as legacy `app`. Complete
       # transcripts, turn leases, idempotency and the durable background outbox
-      # survive whole-pool cutovers; no load-balancer session affinity is
-      # assumed. Checkpoints remain architecture-local.
+      # survive cohort movement and rollback. Checkpoints remain architecture-local.
       CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"
       # Per-turn canary telemetry sink (event canary.turn), one bare-JSON line
       # per turn; consumed by scripts/canary_report.py --input .runtime/logs/.
-      CANARY_LOG_PATH: "/app/.runtime/logs/canary-fc_loop.jsonl"
+      CANARY_LOG_PATH: "/app/.runtime/logs/canary-${CANARY_AGENT_ARCH:-fc_loop}.jsonl"
     volumes:
       # Same bind mounts as `app` — crucially the SHARED ./.runtime, which holds
       # the shared conversation store, both (separate) checkpoint DBs, and the

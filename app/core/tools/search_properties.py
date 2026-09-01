@@ -24,6 +24,7 @@ import os
 import sys
 import threading
 import time
+from functools import partial
 from pathlib import Path
 from datetime import date
 import json
@@ -38,6 +39,43 @@ from core.search_readiness import (
 
 
 logger = logging.getLogger("app.search")
+
+# Keep optional area-recommendation tasks strongly referenced after their inline wait
+# expires.  They populate a durable cache for the next request, so timing out the foreground
+# await must not garbage-collect/cancel the useful work.  The callback both releases that
+# reference and consumes any exception (avoids "Task exception was never retrieved").
+_BACKGROUND_AREA_RECO_TASKS: set[asyncio.Task] = set()
+
+
+def _consume_task_exception(task: asyncio.Task) -> None:
+    """Retrieve a detached task's exception without changing cancellation semantics."""
+    if task.cancelled():
+        return
+    try:
+        task.exception()
+    except asyncio.CancelledError:
+        pass
+
+
+def _finish_background_area_recommendation(task: asyncio.Task) -> None:
+    _BACKGROUND_AREA_RECO_TASKS.discard(task)
+    if task.cancelled():
+        return
+    try:
+        task.result()
+    except Exception as exc:
+        logger.warning(
+            "property_search.background_area_recommendation_failed",
+            extra={"error_type": type(exc).__name__},
+        )
+
+
+def _detach_background_area_recommendation(task: asyncio.Task) -> None:
+    """Retain optional cache-filling work and consume its eventual outcome exactly once."""
+    if task in _BACKGROUND_AREA_RECO_TASKS:
+        return
+    _BACKGROUND_AREA_RECO_TASKS.add(task)
+    task.add_done_callback(_finish_background_area_recommendation)
 
 # Sentinel meaning "user set no commute limit" — kept internally so the search can
 # proceed without asking, but must never be shown to the user (see _commute_phrase).
@@ -2406,8 +2444,24 @@ async def search_properties_impl(
                             max(0.0, _time_left() - 0.2))
             try:
                 area_recommendations = await asyncio.wait_for(
-                    _reco_task, timeout=_reco_cap
+                    asyncio.shield(_reco_task), timeout=_reco_cap
                 ) or []
+            except asyncio.CancelledError:
+                # The parent search was externally cancelled.  shield deliberately keeps
+                # the cache-filling recommender alive, so retain/consume that detached task
+                # before preserving the parent's cancellation semantics.
+                _detach_background_area_recommendation(_reco_task)
+                raise
+            except asyncio.TimeoutError:
+                # This is optional precomputation with a durable cache.  Detach it from the
+                # foreground wait, retain a strong reference, and consume its eventual
+                # result/exception instead of wait_for cancelling the underlying task.
+                _detach_background_area_recommendation(_reco_task)
+                logger.info(
+                    "property_search.area_recommendation_continues_in_background",
+                    extra={"inline_timeout_seconds": round(_reco_cap, 3)},
+                )
+                area_recommendations = []
             except Exception as _e:
                 logger.warning(
                     "property_search.area_recommendation_failed",
@@ -3123,12 +3177,58 @@ async def search_properties_impl(
 
                 async def _enrich_one(_url):
                     async with _enrich_sema:
-                        return await loop.run_in_executor(None, _fetch_details, _url)
+                        # Re-read the ABSOLUTE deadline only after acquiring the semaphore:
+                        # queued workers must not inherit a stale/full budget.  The sync
+                        # detail function applies this total budget to limiter wait + HTTP.
+                        _remaining = _time_left()
+                        if _remaining <= 0:
+                            return None
+                        _call = partial(_fetch_details, _url, budget_s=_remaining)
+                        return await loop.run_in_executor(None, _call)
 
-                _details_list = await asyncio.gather(*[
+                _enrich_tasks = [asyncio.create_task(
                     _enrich_one(p.get('URL') or p.get('url') or '')
-                    for p in _to_enrich
-                ])
+                ) for p in _to_enrich]
+                # Bound the AWAIT itself by the same absolute deadline.  Worker functions
+                # also receive the remaining budget above, because cancelling an asyncio
+                # wrapper cannot stop a function already running in an executor thread.
+                try:
+                    _done, _pending = await asyncio.wait(
+                        _enrich_tasks, timeout=max(0.0, _time_left()))
+                except BaseException:
+                    # asyncio.wait never cancels its inputs.  If the parent search is
+                    # cancelled (or otherwise unwinds), explicitly cancel and consume every
+                    # child wrapper before propagating the original BaseException.
+                    for _task in _enrich_tasks:
+                        if not _task.done():
+                            _task.cancel()
+                        _task.add_done_callback(_consume_task_exception)
+                    raise
+                for _task in _pending:
+                    _task.cancel()
+                    _task.add_done_callback(_consume_task_exception)
+
+                _details_list = []
+                for _task in _enrich_tasks:
+                    if _task not in _done or _task.cancelled():
+                        _details_list.append(None)
+                        continue
+                    try:
+                        _details_list.append(_task.result())
+                    except Exception as _detail_exc:
+                        logger.warning(
+                            "property_search.detail_enrichment_failed",
+                            extra={"error_type": type(_detail_exc).__name__},
+                        )
+                        _details_list.append(None)
+                if _pending:
+                    logger.info(
+                        "property_search.detail_enrichment_deadline",
+                        extra={
+                            "completed_count": len(_done),
+                            "timed_out_count": len(_pending),
+                        },
+                    )
                 for _p, _d in zip(_to_enrich, _details_list):
                     if not isinstance(_d, dict):
                         continue

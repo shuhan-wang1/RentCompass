@@ -1,7 +1,256 @@
 # HANDOFF — START HERE
 
 Master index for the fc_loop work. **Every other document is a leaf; this is the only file
-that spans all branches.** Last updated 2026-08-12.
+that spans all branches.** Last updated 2026-09-01.
+
+> ## PR #83 pre-push review — 2026-09-01
+>
+> Four independent Opus reviewers read the branch at `e5a5ca7` before it is pushed again
+> (R1 runtime/security/Phase 3, R2 telemetry/schema v3/gate, R3 rollout/deploy/config/
+> checkpoint identity, R4 test honesty/isolation/offline gate/docs/merge readiness).
+> **5 高 / 19 中 / 32 低.** R1, R2 and R3 returned FIX-FIRST; R4 returned SHIP with doc
+> fixes. The fixes are in the working tree on top of `e5a5ca7` and are **not yet
+> committed** at the time of writing.
+>
+> **The 高, and what closed each.**
+>
+> * **R1-H1 — a lone surrogate in a model-authored argument killed the whole fc_loop turn,
+>   *after* the batch had been dispatched.** `_params_digest` had been hardened; the same
+>   dict then hit a strict UTF-8 encode in `ToolInvocation.create`, which `_run` called
+>   above its own `try:`. Reproduced on fc_loop with specialists **off**, i.e. production.
+>   Fixed in `src/uk_rent_agent/agent/contracts.py::ToolInvocation.create`
+>   (`encode("utf-8", "surrogatepass")`) and by moving the identity construction inside
+>   `app/core/agent_loop.py::build_fc_nodes._run`'s existing `try:`, so a malformed
+>   argument degrades to that one call's `ToolResult(False, …)` and its siblings land.
+> * **R2-1 — a specialist runtime that never starts passed the gate with `PROCEED`.**
+>   `_note_specialist_terminal_once` rewrites a never-started task to `skipped`; the only
+>   SLO was `failed / planned`, so `planned=180, started=0, skipped=180` printed
+>   `specialist failed rate 0.00%` and exited 0, *including* under `--require-specialists`.
+>   Fixed in `scripts/canary_report.py`: `aggregate_arch` gains
+>   `specialist.non_success_rate = (failed + skipped) / planned` plus `skipped_rate` and
+>   `skipped_error_codes`; `build_verdict` stage-pauses on it at the same 5%
+>   `SPECIALIST_FAILURE_RATE_LIMIT` and `--require-specialists` now requires planned > 0,
+>   **started > 0**, and at least one completed-or-partial, reporting which one failed.
+>   Producer side, `agent_loop::_note_specialist_terminal_once` + `_not_started_error_code`
+>   now guarantee both directions of the arithmetic and a coded reason on every `skipped`.
+> * **R3-H1 — the emergency rollback lever was dead against the containers actually
+>   running.** `switch_pool.sh` demanded `X-Agent-Specialists` equality with no exemption;
+>   the header does not exist in `origin/main`, so neither pool emits it, and on this
+>   single-upstream host `switch_pool.sh` *is* the routing verb. `--to legacy` and the
+>   `--pool fc --drain` drain both refused. Fixed by one rule in five implementations
+>   (`specialists_ok` in `switch_pool.sh`, `update.sh`, `set_canary_weight.sh`, the monitor;
+>   `probe_pool_answer.py::specialists_match`): the header is required only when the
+>   **expected** identity has `specialists=1`, and every use of the exemption is printed.
+>   New offline exerciser `deploy/test_switch_pool_assertions.sh` (37 assertions) — the
+>   path had none, which is why this was green in 221 harness assertions.
+> * **R3-H2 — the candidate's `CHECKPOINT_DB_PATH` was silently renamed**, so the next
+>   deploy would have opened an empty database beside the live 78 MB
+>   `.runtime/checkpoints_fc.sqlite3`, losing every in-flight graph/HITL resume and putting
+>   that personal state out of reach of the account-erasure route while the endpoint still
+>   reported `deleted`. Fixed in `src/uk_rent_agent/config.py`
+>   (`_HISTORICAL_CHECKPOINT_NAMES` / `_resolve_checkpoint_alias`: the derived
+>   `checkpoints_fc_loop_specialists-0.sqlite3` is an **alias** of the file that identity
+>   already owns) and `src/uk_rent_agent/agent/persistence.py`
+>   (`_guard_unexpected_new_database`, `OrphanedCheckpointError`,
+>   `CHECKPOINT_ALLOW_NEW_DB=1` as the deliberate opt-in).
+> * **R3-H3 — `bash deploy/release.sh`, including `--dry-run`, exited 1 on this host and
+>   deployed nothing.** The step-4a preflight gated on the absolute END state, and on a
+>   single-upstream box the candidate is *always* the sole upstream, so every routine
+>   release needed `CANARY_ALLOW_FLIP=1` — the exact habit that disarms the gate for the
+>   real cutover. Fixed in `deploy/release.sh` §4a: the gate now compares a START and an
+>   END exposure and fires only when an architecture that is **not** at 100% would end
+>   there. `--dry-run` never dies on a policy decision, and the remedy text no longer
+>   suggests demoting production to `legacy`.
+>
+> **Three owner decisions, taken during the round.**
+>
+> 1. **`web_search_tool.description` is reverted to the `origin/main` text.** The R1-M1 fix
+>    had added a role/nested-tool catalog sentence to a description shared by both arches;
+>    that is fc_loop **prompt bytes** and would confound the paired canary the two pools
+>    exist to produce. The per-sub_query refusal itself is kept — a cross-role sub_query is
+>    now dropped individually instead of denying the whole `web_search` call, and the
+>    refusal names the offending tool and the tools the role may use instead, in
+>    `refused_sub_queries` and in the model-visible `results`.
+> 2. **A crashed / timed-out / cancelled / 5xx turn with no completed LLM call is
+>    UNMEASURED, not an instrumentation violation.** The producer still refuses to promote
+>    `no_llm_calls` on such a turn (it may have been billed for work nobody saw), so it
+>    reports `llm_usage_status: partial`. The consumer withdraws the violation only with
+>    positive evidence: `turn_outcome ∈ UNOBSERVABLE_OUTCOMES` **and**
+>    `llm_observer_installed is True` **and** the status is `partial`. `not_instrumented`
+>    is never forgiven — that is the 2026-07-25 class. Forgiven is not invisible: the
+>    report prints `unmeasured spend turns` / `of which unobservable`, and `canary_cost`
+>    still counts the turn as chargeable-and-unmeasured. Replay-neutral: no record on disk
+>    carries the flag, so no historical record can reach the exemption.
+> 3. **`fc_loop:0` keeps `checkpoints_fc.sqlite3`. There is no migration and nothing to
+>    `mv`.** R3 recommended a one-time rename with the pool stopped; the alias makes it
+>    unnecessary, and the `mv` carries a stop-the-pool / WAL risk for no benefit.
+>
+> **Everything else that changed.** R1-M2 (`tool_system::Tool._execute_with_callable` now
+> copies the context into the executor, so a *sync* tool callable can no longer read itself
+> back as manager authority — and log attribution follows); R1-M3 (`config::_bool_strict`,
+> `Config.MCP_SPECIALISTS_CONFLICT`, and `asgi::_check_runtime_configuration` comparing
+> against the provider the app actually holds — the real hole was a spelling divergence
+> between `app.py`'s raw-env MCP rule and `Config._bool`, not the pair itself, which was
+> already refused); R1-M4 (docs only — see the HMAC note below); R2-2
+> (`canary_telemetry::_specialist_diagnostics` slices at the **sum** of the two producer
+> rings and forces `events_truncated` whenever it drops anything, so denied events are no
+> longer pushed off the end and then convicted); R2-4 (`turn_observations` splits
+> `_raw_observer_installed` from the callback flag, so one raw SDK call no longer certifies
+> the whole process); R2-5/R2-6/R2-10 (unique sentinel for a pre-identity boundary 5xx;
+> `canary_report.LOG_SUFFIXES` applied to globs as well as directory walks; a cancelled turn
+> is now recorded as `turn_outcome: crash`, `http_status: 499` instead of vanishing from the
+> denominator); R2-8/R3-M1 (`deploy/run_canary_gate.sh` resolves its own interpreter and
+> exits **69** = `CANARY_GATE_UNRUNNABLE` if it cannot — the old bare `python` default
+> exited 127 on this host, so the automatic zero-tolerance rollback could never fire);
+> R3-M2 (`--skip-answer-probe` plumbed through every layer, and the **restore** leg always
+> passes it); R3-M3 (monitor uses the shared header rule; `.sha256` regenerated); R3-M4
+> (`update.sh` / `release.sh` normalise boolean spellings like every other consumer);
+> R3-M5 (the drain's restore trap is armed **before** the switch runs); R3-M6
+> (`setup_tls.sh` / `setup_nginx_http.sh` preserve existing routing instead of resetting
+> the candidate to weight 0; `--force-route-reset` is the deliberate reset); R3-M7 (both
+> rehearsal harnesses now model a pool that omits the header); R3-M8 (the exclusive
+> candidate slot is stated in `release.sh`, `switch_pool.sh` and the runbook); R1 低-3/4/5
+> (per-call args-budget rejection; the evidence note is identified by an
+> `additional_kwargs` marker, not a content prefix, so a user message that looks like the
+> note can no longer be deleted from the transcript; `AnswerContract` declares
+> `final_response_chars` / `final_response_truncated`); R4-5 (all five pool-URL variables
+> use `${VAR-…}` plus an explicit empty-value refusal); R4-11 (the unguarded module-level
+> `sys.path.insert` is gone).
+>
+> **Correction to the K8 "checkpoint oracle" claim.** The per-run HMAC in
+> `specialist_runtime::_checkpoint_digest_factory` makes every identifier the *specialist*
+> contract persists — `plan_id`, the minted `tool_call_id`, `artifact_id` and
+> `TaskPlan.tasks[].inputs.calls[].params_digest` — non-guessable from the tool arguments
+> and non-correlatable across runs. It does **not** make the checkpoint confidential: the
+> pre-existing fc_loop ledger still checkpoints the raw `_params_digest` in
+> `tool_artifacts[]`, beside `raw_data` and `messages`, in the same SQLite file. Anyone who
+> can read that file does not need an oracle. Earlier wording said the oracle was closed;
+> it is not, and closing it would mean changing the fc artifact format.
+>
+> **Open items — none of them blocking this PR.**
+>
+> * **Erasure coverage across checkpoint databases must be decided before the first
+>   non-zero `manager_v1` weight.** `app/app.py::_delete_checkpoint_thread` deletes only
+>   from `_runtime_config.checkpoint_path`. After the alias fix that is still
+>   `checkpoints_fc.sqlite3`, so nothing becomes unreachable in *this* release — but the
+>   day a `manager_v1` candidate takes the slot, the displaced identity's file is
+>   unreachable by the erasure route while the endpoint reports `deleted`. Decide whether
+>   erasure should sweep every `checkpoints*.sqlite3` in the runtime directory.
+> * `depends_on` in `SpecialistTask` is still always empty scaffolding; `tool_latency` is
+>   emitted and has no consumer.
+> * **Host monitor drift, and the install order.** `/usr/local/bin/rentcompass-monitor.sh`
+>   is still `origin/main`'s copy; neither `release.sh` nor `update.sh` reinstalls it.
+>   Reinstall **after** both pools verify, not before (`docs/canary_runbook.md` §0 step 9),
+>   and expect `tests/test_monitor_install_provenance.py` to need deselecting until then.
+> * **The production logs still hold older leaked test rows**, unrelated to this branch and
+>   identical on `origin/main`: `canary-legacy.jsonl` carries `candidate_sha` values
+>   `shaLEGACY` (93 rows) and `shaSER` (28, all violating) plus 825 `agent_arch: fc_loop`
+>   records. `bash deploy/run_canary_gate.sh --input .runtime/logs/` therefore returns
+>   **CANARY-BLOCK (exit 3)** today, under the old validator as well as the new one. Know
+>   that before running the wrapper for real.
+> * `.runtime/logs/canary-legacy.jsonl.bak-20260831` (2 973 rows, still holding the 69
+>   cleaned v3 records) should be moved **out of** `.runtime/logs/`. The reader's suffix
+>   allowlist now ignores it, but that is a seatbelt, not a filing policy.
+> * **Untracked `agent_test_artifacts/` at the repo root should be deleted** (owner). It is
+>   an agent capability self-test's output, referenced by nothing in the repo, and
+>   `results_package::_git_identity` reads `git status --porcelain`, so it stamps
+>   `dirty=True` / `trust=GIT-DIRTY` on **every** benchmark and paired round taken in this
+>   tree and holds `paired_gate`'s `identity_binding`. Do not add it to `.gitignore` —
+>   that enshrines it, and this repo already has one `git add -A` contamination on file.
+
+> ## `manager_v1` + specialists — 2026-08-31
+>
+> A feature branch on top of `4171d84` — `manager-v1/audit-fixes-20260831` — reviewed by
+> four independent reviewers. Read this before citing it as agent-to-agent orchestration,
+> and before planning on top of it. Commits: **`b96bcca`** (framework snapshot —
+> capability-scoped specialist runtime over `fc_loop`), **`1150333`** (the 2026-08-31
+> audit fixes + review-round-2 defects), **`e90fb31`** (the telemetry rename) and
+> **`e5a5ca7`** (minimal Phase 3). Opened as **PR #83**; not merged to mainline and not
+> deployed. (An earlier version of this paragraph said Phase 3 and the rename were "still
+> in the working tree" — it shipped inside `e5a5ca7`, the commit that lands Phase 3, and
+> was false the moment it was written. A third review round on 2026-09-01 added more
+> commits on top; see the entry above.) The word
+> the reviewers rejected has been retired from the code as well: the per-turn telemetry
+> block is named `specialist`, not for an architecture, but for the thing it counts.
+>
+> **What exists.** A **capability sandbox plus telemetry layer over `fc_loop`**, gated
+> behind `AGENT_ARCH=manager_v1` + `MANAGER_V1_SPECIALISTS=1` + `USE_MCP_TOOLS=0`. The
+> manager's already-approved read batch is projected into per-role `SpecialistTask`
+> objects (`app/core/specialist_runtime.py::prepare_specialist_batch`). What the layer
+> adds that is real: **capability pinning** to an immutable digest-checked `ToolSpec`,
+> **revalidation** at the execution boundary (`revalidate_specialist_call`), a hard
+> manager-only capability set (`remember` / `recall_memory` / `ask_user` / checkpoint
+> mutation / the final answer), taint propagation, and **role-labelled telemetry**
+> (`agent_role` / `task_id` / `parent_task_id`). What it is NOT: a specialist makes **no
+> model call**, has **no context isolation** (it runs inside the manager's own turn and
+> context), and there is **no plan step** — the batch was already chosen. This is Stage 1
+> of `docs/layered_agent_architecture_proposal.md` with a capability sandbox bolted on,
+> **not the proposal's Stage 3**.
+>
+> **The proposal's Stage 1 prerequisites are being addressed, not yet met.** Stage 1 is
+> observer/telemetry coverage: nested `_call_deepseek` calls that the observer did not
+> see (the `llm_calls` undercount of §3.11) and per-tool latency attribution. That work is
+> in flight in this same round; until it lands, any per-layer latency number quoted from
+> before it is an undercount, exactly as §3.11 records.
+>
+> **Four-reviewer verdict: 5/10 — this is not agent-to-agent orchestration.** The unanimous
+> reading is that the honest technical name is a **tool capability broker**. The security
+> and pinning work is genuine and worth keeping; the framing is not.
+>
+> **The offline paired gate cannot evidence quality, and now says so.**
+> `python -m evaluation.run_paired_manager_eval` runs two offline `run_benchmark` arms
+> and compares them with `evaluation/paired_gate.py`. On the 98-case round both arms
+> produce **byte-identical `final_answer` on 98/98 pairs**, so every quality / evidence /
+> grounding comparison in it was arithmetic on the same numbers twice. As of 2026-08-31
+> the gate detects this itself and reports those checks `VACUOUS`, reports
+> `memory_isolation` / `prompt_injection` as `not_measurable_offline` (offline the graded
+> answer comes from a test double that cannot fail them), and reports the latency check
+> `LOW_POWER` at `--repeat 1`. The honest outcome of an offline round is **HOLD**. See
+> `evaluation/README.md`.
+>
+> **Owner decision, taken 2026-08-31: option (a), minimal.** The choice was between
+> implementing Phase 3 so the contracts become load-bearing, and deleting the unused
+> contracts. **Phase 3 (minimal) was implemented**, and the telemetry block was renamed.
+> Concretely:
+>
+> * The manager now **consumes** `specialist_results` / `manager_task_plans`. On a
+>   dispatching turn that actually produced specialist results, `execute_tools` appends one
+>   bounded (**≤700 char**) manager-authored evidence note to the transcript, so the
+>   answer-writing `agent` call receives it. It carries only derived metadata — role,
+>   outcome word, reason category, granted tool names, a `[third-party]` taint marker —
+>   each re-checked against a compile-time constant, never tool payload, user text or an
+>   id, plus the honesty rules (cite third-party sources; state what is unavailable rather
+>   than estimating; answer only from what the tools returned). **No extra model call**,
+>   and specialists still make **zero** model calls.
+> * `format_output_fc` builds and validates an `AnswerContract` from the text that actually
+>   shipped, into a new per-turn `answer_contract` state channel. **An invalid contract
+>   never fails a turn** — the answer ships unchanged and the channel records
+>   `{"valid": false, "error_code": …, "limitations": [...]}` with a
+>   `manager_v1.answer_contract_invalid` warning.
+> * A tainted `EvidenceRef` carried in from an earlier super-step now sets
+>   `context_tainted` for the memory-write gate.
+> * **Telemetry rename**: the per-turn canary block is now `specialist` end to end —
+>   `turn_observations.snapshot()["specialist"]` -> the `specialist` block of a `canary.turn`
+>   record -> the report's `specialist_turns`. The pre-rename key claimed an architecture
+>   the layer does not have; it survives only as
+>   `scripts/canary_report.py::LEGACY_SPECIALIST_BLOCK_KEY`, a tolerant reader so a
+>   pre-rename row is still interpreted rather than convicted. Carrying both keys is itself
+>   a violation. Producers emit only `specialist`.
+> * **Identifiers were kept**, not renamed: `SpecialistTask`, `specialist_runtime`,
+>   `MANAGER_V1_SPECIALISTS`, and the eval arm's `specialist_lifecycle` are unchanged.
+>
+> `AnswerContract` is therefore **load-bearing**; any earlier note calling it "consumed by
+> no runtime path" is superseded by this entry. `depends_on` is **still always empty** —
+> Phase 3 did not touch it, and it remains scaffolding, not roadmap. The honest name is
+> unchanged: this is a **tool capability broker** whose manager now reads its own
+> specialists' output; it is still not agent-to-agent orchestration.
+>
+> **fc_loop behaviour change riding in this diff.** `search_nearby_pois` was added to the
+> untrusted/taint sets (`app/core/agent_loop.py::_UNTRUSTED_TOOLS` and
+> `UNTRUSTED_SPECIALIST_TOOLS`). POI results are therefore sanitised on the model-facing
+> channel and taint the turn, which **gates memory writes on POI turns for every
+> fc-family architecture**, not only `manager_v1`. This is a production behaviour change,
+> not a manager-only one.
 
 > ## Current release status — 2026-08-12
 >
@@ -276,7 +525,7 @@ one sentence.
 | `perf/parallel-tool-batch` | — | **MERGED** (PR #26 → `814fc4a`) | the batch was already parallel; pins it, fixes worker-starvation misattribution |
 | `fix/grounded-derived-numbers` | — | **MERGED** (PR #28 → `59a2b08`) | commute estimate / nearest station / POI reference point |
 | `feat/incremental-listing-panel` | — | **MERGED** (PR #27 → `1e509f6`) | refinement in place, both arches, `core/refine_results.py` |
-| `design/layered-agent-architecture` | — | **MERGED** (PR #29 → `1022e0d`) | the multi-agent proposal, docs only |
+| `design/layered-agent-architecture` | — | **MERGED** (PR #29 → `1022e0d`) | the layered-agent proposal, docs only |
 | `docs/agent-round-findings` | — | **MERGED** (PR #31 → `36488f4`) | §3.11 withdrawals + §3.12 findings |
 | `docs/cutover-2026-07-26` | — | **MERGED** (PR #20 → `c9e60c2`) | §3.10, the cutover recorded as an override |
 | `design/round-variance-preregistration` | `96c8ec3` | **PR #19 OPEN — awaiting the owner's FREEZE** | σ(p50); D1–D4 applied. Not runnable until frozen. |
@@ -310,7 +559,7 @@ earlier notes that named it as the shippable SHA were wrong.
 | `docs/eval_infrastructure.md` | `eval/measurement-infrastructure` | what the shippable branch adds, and why items 5–6 exist (both are scars). |
 | `docs/canary_runbook.md` | all branches | canary/rollout operations: image build out of band, stage table, gate metrics, rollback. **Read §1 "Image build" before building any candidate.** |
 | `docs/output_length_latency_preregistration.md` | `docs/output-length-latency-prereg` (PR #15) | the surviving latency lever, as a design. **Every threshold is `<TO BE FILLED>` and §3.5 constrains how they may be filled.** |
-| `docs/layered_agent_architecture_proposal.md` | mainline (PR #29) | **read before proposing any multi-agent work.** Simulated per-turn on the warm n=64 round: layering buys ~308ms of a 1,402ms gap and moves ZERO turns under the bar; a mandatory plan hop improves the median while 5 more turns miss it. Stage 1 is telemetry, not architecture. |
+| `docs/layered_agent_architecture_proposal.md` | mainline (PR #29) | **read before proposing any layered or agent-to-agent work.** Simulated per-turn on the warm n=64 round: layering bought ~308ms of a 1,402ms gap and moved ZERO turns under the bar as a **p50 latency lever**. That is the only claim the simulation supports. It is **not** a ruling on layering as a security/capability boundary, and it is quantified with the `llm_calls` instrument that §3.11 later WITHDREW as undercounting. Its Stage 1 (observer coverage of nested `_call_deepseek`, per-tool latency) remains a prerequisite for any staged layering claim, and is the work in flight in the 2026-08-31 `manager_v1` round above. |
 | `docs/round_variance_preregistration.md` | mainline (PR #19, **unfrozen**) | σ(p50). Threshold **126ms** derived from α=0.05/power=0.80/δ=500ms, `k = ceil(2·(2.8016·σ̂/500)²)`. Read §0 first: the estimand is round-level p50, NOT per-case. |
 | `.runtime/round-8793c0b-internal-2026-07-25/README.txt` | deploy tree, not committed | procedure and caveats for the round of record (§3.8/§3.9). Authoritative on how that round was actually run. |
 
@@ -481,7 +730,7 @@ On (1), the lever ledger, **as amended on 2026-07-26**:
 | output length | surviving, and the only one with a fitted relationship |
 | serving-path overhead | surviving; +599ms paired median vs the in-process harness |
 | **intra-batch tool parallelism** | **NOT A LEVER — it was already parallel.** 16 concurrent 1.0s reads finish in 1.010s. An earlier draft of this section asserted the opposite without reading the code. |
-| **layered / multi-agent** | quantified and insufficient: ~308ms of a 1,402ms gap, **zero** turns moved under the bar. A p95 lever. See `docs/layered_agent_architecture_proposal.md`. |
+| **layered agents** | **as a p50 latency lever: quantified and insufficient** — ~308ms of a 1,402ms gap, **zero** turns moved under the bar; a p95 lever at best. Scope that verdict to latency only: it says nothing about layering as a capability/security boundary, which is what the 2026-08-31 `manager_v1` work actually builds (and which the four-reviewer round scored 5/10 *as agent-to-agent orchestration*, while keeping the pinning/revalidation). The 308ms figure also rests on the `llm_calls` instrument WITHDRAWN in §3.11. See `docs/layered_agent_architecture_proposal.md`. |
 
 §3.8 shows the two surviving levers are **not yet separable**, so neither may be planned
 against yet. And per §3.12, ~740ms of round-to-round p50 drift on identical code means no

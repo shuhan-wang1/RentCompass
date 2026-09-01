@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import json
+import math
 import os
 import re
 import sqlite3
@@ -132,11 +133,64 @@ def _cache() -> AreaRecoCache:
 # --------------------------------------------------------------------------
 # Helpers
 # --------------------------------------------------------------------------
-def _dest_key(destination: str, city: str | None) -> str:
-    """Stable lowercase cache key from destination (+ city)."""
-    base = re.sub(r"\s+", " ", (destination or "").strip().lower())
-    c = re.sub(r"\s+", " ", (city or "").strip().lower())
-    return f"{base}|{c}" if c else base
+_CACHE_KEY_VERSION = 2
+
+
+def _norm_cache_text(value) -> str:
+    """Canonical text representation for semantic cache-key fields."""
+    return re.sub(r"\s+", " ", str(value or "").strip()).casefold()
+
+
+def _norm_dest_coords(dest_coords: dict | None) -> dict[str, str] | None:
+    """Canonicalise caller-supplied destination coordinates for cache identity.
+
+    Coordinates affect both the London routing branch and the coordinate commute
+    fallback, so two explicit coordinate pairs must never share recommendations.
+    ``None`` deliberately remains a distinct "resolve from destination" identity.
+    Seven decimal places retain substantially more precision than this pipeline
+    needs while making numeric strings and floats equivalent.
+    """
+    if dest_coords is None:
+        return None
+    try:
+        lat = float(dest_coords["lat"])
+        lng = float(dest_coords["lng"])
+        if not math.isfinite(lat) or not math.isfinite(lng):
+            raise ValueError("non-finite coordinates")
+        lat = 0.0 if lat == 0 else lat
+        lng = 0.0 if lng == 0 else lng
+        return {"lat": f"{lat:.7f}", "lng": f"{lng:.7f}"}
+    except (KeyError, TypeError, ValueError):
+        # Invalid coordinates eventually produce an honest empty result. Keep their
+        # identity deterministic without letting cache-key construction raise.
+        if isinstance(dest_coords, dict):
+            return {
+                "lat": _norm_cache_text(dest_coords.get("lat")),
+                "lng": _norm_cache_text(dest_coords.get("lng")),
+            }
+        return {"invalid": _norm_cache_text(dest_coords)}
+
+
+def _dest_key(
+    destination: str,
+    city: str | None,
+    *,
+    max_commute: int,
+    excludes: set[str],
+    limit: int,
+    dest_coords: dict | None,
+) -> str:
+    """Versioned cache identity for every semantic input affecting the output."""
+    payload = {
+        "version": _CACHE_KEY_VERSION,
+        "destination": _norm_cache_text(destination),
+        "city": _norm_cache_text(city),
+        "max_commute": int(max_commute),
+        "exclude_slugs": sorted(excludes),
+        "limit": int(limit),
+        "dest_coords": _norm_dest_coords(dest_coords),
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _norm_exclude_token(value) -> str:
@@ -541,7 +595,14 @@ async def recommend_areas(
     t0 = time.time()
     max_commute = int(max_commute_time) if max_commute_time else AREA_RECO_DEFAULT_COMMUTE
     excludes = _norm_excludes(exclude_slugs)
-    dest_key = _dest_key(destination, city)
+    dest_key = _dest_key(
+        destination,
+        city,
+        max_commute=max_commute,
+        excludes=excludes,
+        limit=limit,
+        dest_coords=dest_coords,
+    )
 
     # ---- 1) Cache lookup (fresh hit -> instant) --------------------------
     try:
@@ -574,7 +635,11 @@ async def recommend_areas(
             dest_coords = await _run_blocking(loop, geocode_address, geo_target)
         if not dest_coords:
             print(f"[AREA_RECO] could not geocode destination; destination_chars={len(str(destination))}")
-            _cache().set(dest_key, [])
+            # A geocoder that returned only after the soft budget elapsed did not
+            # establish an honest empty result. Do not let that incomplete attempt
+            # poison a later, better-budgeted call through the empty-result cache.
+            if budget_s is None or (time.time() - t0) < budget_s:
+                _cache().set(dest_key, [])
             return []
         london = in_london(dest_coords)
 
@@ -590,16 +655,23 @@ async def recommend_areas(
             dest_coords=dest_coords,
             london=london,
             max_commute_time=max_commute,
-            exclude_slugs=exclude_slugs,
+            exclude_slugs=excludes,
             budget_s=budget_s,
             t0=t0,
         )
 
         # 2f) Sort by commute ascending, cap at limit, persist (incl. honest empty).
+        # Budget exhaustion inside the shared core is represented as a partial/empty
+        # list for API compatibility. Such a result is useful to this caller but is
+        # not evidence that the destination has no recommendations, so never cache it.
         final = sorted(validated, key=_commute_key)[:limit]
-        _cache().set(dest_key, final)
+        budget_exhausted = (
+            budget_s is not None and (time.time() - t0) >= budget_s)
+        if not budget_exhausted:
+            _cache().set(dest_key, final)
         print(f"[AREA_RECO] destination_chars={len(str(destination))}; "
-              f"validated_count={len(final)} elapsed_s={time.time() - t0:.1f}")
+              f"validated_count={len(final)} elapsed_s={time.time() - t0:.1f} "
+              f"cached={not budget_exhausted}")
         return final
 
     except Exception as e:  # never poison the cache with a hard error

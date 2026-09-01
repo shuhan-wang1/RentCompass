@@ -128,25 +128,27 @@ bash deploy/monitoring/check_install_drift.sh --write-manifest   # then commit
 | Area | Check | Alert priority |
 |------|-------|----------------|
 | Monitor build | running `src=` matches `MON_EXPECTED_SRC_SHA`, when declared | err (3) |
-| Public `:443/ready` | HTTP 200; arch/SHA match the active nginx pool and its compose pin | err (3) |
-| Local `:5001/ready` | 200 + `x-agent-arch: legacy` (+ version) | err (3) |
-| Local `:5002/ready` | 200 + `x-agent-arch: fc_loop` (internal) | warning (4) |
-| Pool identity | fc vs `FC_CANARY_SHA`, legacy vs `LEGACY_APP_SHA`, edge vs expected pool | err (3) / warn (4) |
+| Public `:443/ready` | HTTP 200; arch/SHA/specialist bit match the weighted route and compose pin | err (3) |
+| Local `:5001/ready` | 200 + legacy arch, version and specialists off | err (3) |
+| Local `:5002/ready` | 200 + configured candidate arch and specialist bit | warning (4) / err (3) |
+| Pool identity | candidate vs `FC_CANARY_SHA`, legacy vs `LEGACY_APP_SHA`, edge vs assigned pool | err (3) / warn (4) |
 | Containers | health status + restart-count delta | err/warn |
 | Host memory | `MemAvailable` ≥ 800 MB (no swap) | err (3) |
 | Disk | `/` usage ≤ 90 % | err (3) |
 | SQLite | `-wal` size ≤ 200 MB; `database is locked` in recent logs | warn/err |
-| Telemetry | `canary-legacy.jsonl` / `canary-fc_loop.jsonl` size, mtime, line count | warn if missing |
+| Telemetry | `canary-legacy.jsonl` / `canary-<candidate-arch>.jsonl` size, mtime, line count | warn if missing |
 | Provider (check 10) | one-token completion **direct to the provider**, ≤ hourly; 4xx = configured model rejected | err (3) / warn (4) on 429/5xx |
 
 - **flock** (`/run/rentcompass-monitor.lock`) prevents overlapping runs.
 - OK runs are silent in the journal; every run appends one line to
   `/var/log/rentcompass/monitor.log` (rotated daily, 7 kept), led by `src=`.
 - Thresholds/paths are env-overridable (`MON_*`) — see the script header.
-- Public intent is derived from the nginx upstream (`:5001` legacy, `:5002`
-  fc_loop) and the matching `LEGACY_APP_SHA`/`FC_CANARY_SHA` in the compose
-  env. `MON_EXPECTED_PUBLIC_ARCH` and `MON_EXPECTED_PUBLIC_SHA` are explicit
-  overrides for rehearsals.
+- Public intent is derived from the weighted nginx include (0/5/20/50/100),
+  falling back to the old `:5001`/`:5002` upstream only during migration. The
+  candidate identity comes from `CANARY_AGENT_ARCH`,
+  `CANARY_MANAGER_V1_SPECIALISTS` and `CANARY_USE_MCP_TOOLS`; only fc_loop/off/MCP-off
+  and manager_v1/on/MCP-off are accepted. `MON_EXPECTED_PUBLIC_ARCH` and
+  `MON_EXPECTED_PUBLIC_SHA` remain explicit rehearsal overrides.
 - Put optional `MON_WEBHOOK_URL`, `MON_EMAIL_TO`, and `MON_HEARTBEAT_URL`
   in `/etc/rentcompass/monitor.env`. Alerts exit non-zero; the heartbeat is a
   dead-man signal that detects the monitor itself no longer running.

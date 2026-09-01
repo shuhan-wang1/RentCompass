@@ -52,7 +52,15 @@ def make(i=0, *, arch="fc_loop", endpoint=ENDPOINT_ALEX, latency=1000.0,
         "dsml_blocked": dsml_blocked,
         "dsml_leak": dsml_leak,
         "provider_schema_400_count": provider_400,
-        "llm_calls": 1, "tool_batches": 0, "llm_usage": None,
+        "llm_calls": 1, "tool_batches": 0,
+        "llm_usage": {
+            "calls": 1, "input_tokens": 10, "output_tokens": 5,
+            "cache_read_tokens": 0,
+            "models": {"fixture-model": {
+                "calls": 1, "input_tokens": 10, "output_tokens": 5,
+                "cache_read_tokens": 0,
+            }},
+        },
         # Layer B: token accounting is trusted only when every call reported usage.
         "llm_usage_status": usage_status,
     }
@@ -83,6 +91,30 @@ def test_producer_output_is_contract_conformant():
     """The producer's own output must satisfy the consumer's required-field contract."""
     v = canary_report.validate_records([make(0)])
     assert v["ok"], f"producer emits a non-conformant record: {v['violations']}"
+
+
+def test_search_direct_producer_output_is_contract_conformant():
+    """A deterministic turn has provable zero denominators, never null ones."""
+    rec = build_canary_turn_record(
+        endpoint=ENDPOINT_SEARCH_DIRECT,
+        agent_arch="legacy",
+        candidate_sha="d62628c",
+        strict=False,
+        request_id="req-direct",
+        conversation_id="conv-direct",
+        user_id="user-direct",
+        http_status=200,
+        turn_outcome=OUTCOME_OK,
+        turn_latency_ms=5.0,
+        signals=search_direct_signals(),
+        ts=_T0,
+    )
+
+    assert rec["llm_calls"] == 0
+    assert rec["tool_batches"] == 0
+    assert rec["llm_usage"] is None
+    assert rec["llm_usage_status"] == "no_llm_calls"
+    assert canary_report.validate_record(rec) == []
 
 
 def test_clean_population_proceeds():
@@ -391,14 +423,21 @@ _MALFORMED_CASES = [
     ("eval-only value shipped without the declaration",
      lambda recs: [_mutate(recs[0], no_evidence_numbers=False, eval_only=[])] + recs[1:],
      "eval_only", 2),
-    # A ">= 2" floor was fail-open forwards: a v3 that re-means a field would be
-    # scored by a consumer that cannot read it.
+    # A ">= 2" floor was fail-open forwards: a version that re-means a field would
+    # be scored by a consumer that cannot read it. v3 is now KNOWN (it is what the
+    # producer emits), so the unknown-future case has to move up with it.
     ("unknown FUTURE schema version",
-     lambda recs: [_mutate(recs[0], telemetry_schema_version=3)] + recs[1:],
+     lambda recs: [_mutate(recs[0], telemetry_schema_version=4)] + recs[1:],
      "newer than this consumer knows", 2),
     ("schema version as a float",
-     lambda recs: [_mutate(recs[0], telemetry_schema_version=2.0)] + recs[1:],
+     lambda recs: [_mutate(recs[0], telemetry_schema_version=3.0)] + recs[1:],
      "telemetry_schema_version", 2),
+    # v3 redefined llm_calls/tool_batches. A window straddling the change averages
+    # two different measurements, so it must hold rather than produce a mean that
+    # describes neither build.
+    ("window mixes schema v2 and v3",
+     lambda recs: [_mutate(recs[0], telemetry_schema_version=2)] + recs[1:],
+     "mixes telemetry_schema_version", 2),
     # `strict` decides whether a record is the configuration under test, so the
     # CONTROL arm has to carry it too — not just fc_loop.
     ("legacy record missing strict",

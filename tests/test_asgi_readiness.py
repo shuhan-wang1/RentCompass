@@ -132,6 +132,16 @@ def test_release_prompt_version_is_semantic_not_a_source_qualified_identifier(
     assert "prompt.runtime_specs.zh.prompt_version" in problems
 
 
+def test_release_metadata_accepts_experimental_manager_identity(monkeypatch, tmp_path):
+    module = _install_runtime(monkeypatch, tmp_path)
+    module.AGENT_ARCH = "manager_v1"
+
+    result = asgi._check_release_metadata(asgi._release_manifest())
+
+    assert result["status"] == "ok"
+    assert "arch" not in result["missing_or_invalid"]
+
+
 def test_dead_durable_background_jobs_are_visible_degradation(monkeypatch, tmp_path):
     _install_runtime(monkeypatch, tmp_path, dead=2)
 
@@ -277,6 +287,81 @@ def test_graph_factory_validation_is_offline_and_accepts_ollama_injection(
     assert result["provider"] == "ollama"
 
 
+def test_manager_graph_factory_validation_uses_fc_ollama_injection(monkeypatch, tmp_path):
+    class _Provider:
+        def list_specs(self):
+            return []
+
+    class _Graph:
+        async def ainvoke(self, *_args, **_kwargs):
+            return {}
+
+    def _factory(tool_registry, *, agent_llm=None):
+        assert agent_llm is probe
+        return _Graph()
+
+    probe = object()
+    module = SimpleNamespace(
+        agent_graph=None,
+        agent_tool_provider=_Provider(),
+        build_agent_graph=_factory,
+        create_initial_state=lambda **_kwargs: {},
+        _configured_fc_agent_llm=lambda: probe,
+    )
+    monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
+    config = Config(
+        project_root=tmp_path,
+        agent_arch="manager_v1",
+        llm_provider="ollama",
+        flask_secret_key="test",
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+        enable_checkpointer=False,
+    )
+
+    result = asgi._check_agent_graph(config)
+
+    assert result["status"] == "ok"
+    assert result["state"] == "factory_compiled"
+    assert result["arch"] == "manager_v1"
+    assert result["provider"] == "ollama"
+
+
+def test_enabled_manager_specialists_require_factory_flag_support(monkeypatch, tmp_path):
+    class _Provider:
+        def list_specs(self):
+            return []
+
+    class _Graph:
+        async def ainvoke(self, *_args, **_kwargs):
+            return {}
+
+    def _legacy_factory(tool_registry, *, agent_llm=None):
+        return _Graph()
+
+    module = SimpleNamespace(
+        agent_graph=None,
+        agent_tool_provider=_Provider(),
+        build_agent_graph=_legacy_factory,
+        create_initial_state=lambda **_kwargs: {},
+        _configured_fc_agent_llm=lambda: object(),
+    )
+    monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
+    config = Config(
+        project_root=tmp_path,
+        agent_arch="manager_v1",
+        manager_v1_specialists=True,
+        llm_provider="ollama",
+        flask_secret_key="test",
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+        enable_checkpointer=False,
+    )
+
+    result = asgi._check_agent_graph(config)
+
+    assert result["status"] == "fail"
+    assert "RuntimeError" in result["detail"]
+
+
 
 def test_graph_factory_exception_fails_readiness_without_leaking_error(monkeypatch, tmp_path):
     sentinel = "PRIVATE-FACTORY-DETAIL"
@@ -388,3 +473,59 @@ def test_checkpoint_readiness_rejects_an_existing_nonwritable_database(
         "required": True,
         "detail": "checkpoint database is not readable/writable",
     }
+
+
+def test_checkpoint_readiness_refuses_another_architectures_database(tmp_path):
+    """F8: `/ready` must fail rather than let manager_v1 resume fc_loop checkpoints.
+
+    Compose gives each pool a differently NAMED file, but a name is a convention:
+    the `CHECKPOINT_PATH` fallback, an override, or the shared default all point two
+    architectures at one file. Readiness now hands the runtime identity down, so the
+    stamped file itself refuses the open."""
+    from uk_rent_agent.agent import persistence
+
+    checkpoint = tmp_path / "runtime" / "checkpoints.sqlite3"
+    checkpoint.parent.mkdir()
+    fc = Config(
+        project_root=tmp_path,
+        flask_secret_key="test",
+        agent_arch="fc_loop",
+        checkpoint_path=checkpoint,
+        enable_checkpointer=True,
+    )
+    manager = Config(
+        project_root=tmp_path,
+        flask_secret_key="test",
+        agent_arch="manager_v1",
+        manager_v1_specialists=True,
+        checkpoint_path=checkpoint,
+        enable_checkpointer=True,
+    )
+    saved = dict(persistence._CHECKPOINTERS)
+    persistence._CHECKPOINTERS.clear()
+    try:
+        first = asgi._check_checkpoint(fc)
+        assert first["status"] == "ok"
+        assert first["identity"] == {"agent_arch": "fc_loop",
+                                     "manager_v1_specialists": "0"}
+
+        second = asgi._check_checkpoint(manager)
+    finally:
+        persistence._CHECKPOINTERS.clear()
+        persistence._CHECKPOINTERS.update(saved)
+
+    assert second["status"] == "fail"
+    assert second["required"] is True
+    assert second["identity"] == {"agent_arch": "manager_v1",
+                                  "manager_v1_specialists": "1"}
+    assert "CheckpointIdentityError" in second["detail"]
+    assert "different runtime" in second["detail"]
+    # The USEFUL half of this message is its tail: the full path and the
+    # remediation. A 200-character cap cut the path in half and dropped
+    # "Point CHECKPOINT_DB_PATH at this runtime's own file ..." entirely, leaving
+    # /ready showing a diagnosis with no fix — while the runbook quoted the whole
+    # message, so readers had no idea it was truncated.
+    assert str(checkpoint) in second["detail"]
+    assert "Point CHECKPOINT_DB_PATH at" in second["detail"]
+    assert second["detail"].rstrip().endswith("checkpoints.")
+    assert second["path"] == str(checkpoint)

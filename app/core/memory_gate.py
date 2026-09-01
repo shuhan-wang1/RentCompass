@@ -43,12 +43,14 @@ DELETE-based single consumption.
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import re
 import sqlite3
 import tempfile
 import threading
 import time
+import uuid
 from pathlib import Path
 
 
@@ -438,7 +440,36 @@ class _PendingWriteStore:
                 "CREATE TABLE IF NOT EXISTS pending_memory_writes ("
                 "session_id TEXT NOT NULL, digest TEXT NOT NULL, content TEXT NOT NULL, "
                 "kind TEXT NOT NULL, created REAL NOT NULL, "
+                "operation_id TEXT NOT NULL DEFAULT '', "
+                "attempt INTEGER NOT NULL DEFAULT 0, "
                 "PRIMARY KEY(session_id, digest))"
+            )
+            columns = {
+                row[1] for row in db.execute(
+                    "PRAGMA table_info(pending_memory_writes)")
+            }
+            migrations = (
+                ("operation_id",
+                 "ALTER TABLE pending_memory_writes ADD COLUMN "
+                 "operation_id TEXT NOT NULL DEFAULT ''"),
+                ("attempt",
+                 "ALTER TABLE pending_memory_writes ADD COLUMN "
+                 "attempt INTEGER NOT NULL DEFAULT 0"),
+            )
+            for column, ddl in migrations:
+                if column in columns:
+                    continue
+                try:
+                    db.execute(ddl)
+                except sqlite3.OperationalError as exc:
+                    # Two serving processes may migrate the shared ledger together.
+                    # Losing that race is harmless; every other schema error is not.
+                    if "duplicate column name" not in str(exc).lower():
+                        raise
+            db.execute(
+                "UPDATE pending_memory_writes "
+                "SET operation_id=lower(hex(randomblob(16))) "
+                "WHERE operation_id IS NULL OR operation_id=''"
             )
 
     def _connect(self) -> sqlite3.Connection:
@@ -446,11 +477,13 @@ class _PendingWriteStore:
 
     def freeze(self, session_id: str, content: str, kind: str) -> str:
         digest = hashlib.sha256((content or "").encode("utf-8")).hexdigest()
+        operation_id = uuid.uuid4().hex
         with self._lock, self._connect() as db:
             db.execute(
                 "INSERT OR REPLACE INTO pending_memory_writes"
-                "(session_id, digest, content, kind, created) VALUES (?, ?, ?, ?, ?)",
-                (session_id, digest, content, kind, time.time()),
+                "(session_id, digest, content, kind, created, operation_id, attempt) "
+                "VALUES (?, ?, ?, ?, ?, ?, 0)",
+                (session_id, digest, content, kind, time.time(), operation_id),
             )
         return digest
 
@@ -463,10 +496,13 @@ class _PendingWriteStore:
             ).fetchone()
             return row[0] if row else None
 
-    def consume(self, session_id: str, digest: str) -> dict | None:
+    def consume(
+        self, session_id: str, digest: str, *, include_created: bool = False
+    ) -> dict | None:
         with self._lock, self._connect() as db:
             row = db.execute(
-                "SELECT content, kind FROM pending_memory_writes "
+                "SELECT content, kind, created, operation_id, attempt "
+                "FROM pending_memory_writes "
                 "WHERE session_id=? AND digest=?",
                 (session_id, digest),
             ).fetchone()
@@ -481,7 +517,53 @@ class _PendingWriteStore:
             )
             if cursor.rowcount != 1:
                 return None
-            return {"content": row[0], "kind": row[1]}
+            candidate = {"content": row[0], "kind": row[1]}
+            if include_created:
+                candidate["created"] = float(row[2])
+                candidate["operation_id"] = row[3]
+                candidate["attempt"] = int(row[4])
+            return candidate
+
+    def restore(self, session_id: str, digest: str, candidate: dict) -> bool:
+        """Restore a failed claim without making it newer than later candidates.
+
+        ``freeze`` intentionally timestamps a newly denied write with ``time.time()``.
+        A failed replay is different: it must retain the timestamp captured by ``claim``
+        or it can jump ahead of a candidate frozen while the side effect was in flight.
+        ``INSERT OR IGNORE`` also avoids overwriting a same-content candidate that was
+        independently re-frozen after the claim.
+        """
+        if not isinstance(candidate, dict):
+            return False
+        content = candidate.get("content")
+        kind = candidate.get("kind")
+        operation_id = candidate.get("operation_id")
+        try:
+            created = float(candidate.get("created"))
+            attempt = int(candidate.get("attempt"))
+        except (TypeError, ValueError):
+            return False
+        if (not isinstance(content, str) or not isinstance(kind, str)
+                or not isinstance(operation_id, str)
+                or re.fullmatch(r"[0-9a-f]{32}", operation_id) is None
+                or not math.isfinite(created) or attempt < 0):
+            return False
+        expected = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        if digest != expected:
+            return False
+        with self._lock, self._connect() as db:
+            db.execute(
+                "INSERT OR IGNORE INTO pending_memory_writes"
+                "(session_id, digest, content, kind, created, operation_id, attempt) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (session_id, digest, content, kind, created, operation_id, attempt),
+            )
+            row = db.execute(
+                "SELECT content FROM pending_memory_writes "
+                "WHERE session_id=? AND digest=?",
+                (session_id, digest),
+            ).fetchone()
+            return bool(row and row[0] == content)
 
 
 _STORE: _PendingWriteStore | None = None
@@ -515,6 +597,16 @@ def consume_pending_write(session_id: str, digest: str) -> dict | None:
     else ``None`` (absent, digest mismatch, wrong session, or already consumed).
     """
     return _store().consume(session_id, digest)
+
+
+def claim_pending_write(session_id: str, digest: str) -> dict | None:
+    """Atomically consume a candidate while retaining metadata needed for rollback."""
+    return _store().consume(session_id, digest, include_created=True)
+
+
+def restore_pending_write(session_id: str, digest: str, candidate: dict) -> bool:
+    """Restore a failed claim at its original ordering position."""
+    return _store().restore(session_id, digest, candidate)
 
 
 def latest_pending_digest(session_id: str) -> str | None:

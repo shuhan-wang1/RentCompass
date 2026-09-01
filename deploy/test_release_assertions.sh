@@ -44,6 +44,13 @@ setup() {
   OLD_SHA="$(cd "$repo" && git rev-parse HEAD)"
   NEW_SHA="$(cd "$repo" && git rev-parse refs/remotes/origin/main)"
   printf 'DEPLOY_PINNED_SHA=%s\n' "$OLD_SHA" > "$SANDBOX/pin.env"
+  printf 'CANARY_AGENT_ARCH=fc_loop\nCANARY_MANAGER_V1_SPECIALISTS=0\nCANARY_USE_MCP_TOOLS=0\n' \
+    > "$SANDBOX/root.env"
+  # The rollout preflight reads the routing include, never the host's /etc copy.
+  install_route 0 rollback rollback
+  # ...and, when there is no weighted include, the single upstream line instead.
+  mkdir -p "$SANDBOX/nginx"
+  install_upstream 5001
 
   cat > "$SANDBOX/bin/fakegh" <<'EOF'
 #!/usr/bin/env bash
@@ -81,6 +88,31 @@ EOF
 }
 teardown() { [ -n "$SANDBOX" ] && rm -rf "$SANDBOX"; SANDBOX=""; }
 
+# install_route <weight> <rollout-id> <stage> — the state the maintenance drain
+# restores, and therefore the state a release ENDS on.
+install_route() {
+  ROUTE_CONF_PATH="$SANDBOX/canary-routing.conf"
+  printf '# rentcompass-canary-weight: %s\n# rentcompass-rollout-id: %s\n# rentcompass-rollout-stage: %s\n' \
+    "$1" "$2" "$3" > "$ROUTE_CONF_PATH"
+}
+# remove_route — the shape of a host that has NOT been migrated to the weighted
+# include (the untracked snippet is absent from /etc/nginx/snippets). The release
+# preflight must survive it AND still resolve where the traffic ends up.
+remove_route() { ROUTE_CONF_PATH="$SANDBOX/no-weighted-include.conf"; rm -f "$ROUTE_CONF_PATH"; }
+# install_upstream <port> — the single `server 127.0.0.1:PORT;` line switch_pool.sh
+# owns; on a single-upstream host it IS the whole rollout state.
+install_upstream() {
+  SITE_CONF_PATH="$SANDBOX/nginx/site.conf"
+  printf 'upstream rentcompass_app {\n    server 127.0.0.1:%s;\n}\n' "$1" > "$SITE_CONF_PATH"
+}
+remove_upstream() { SITE_CONF_PATH="$SANDBOX/nginx/absent-site.conf"; rm -f "$SITE_CONF_PATH"; }
+# manager_v1_candidate — the only OTHER identity the whitelist accepts. On this
+# two-pool host it takes the single candidate slot away from fc_loop (R3-M8).
+manager_v1_candidate() {
+  printf 'CANARY_AGENT_ARCH=manager_v1\nCANARY_MANAGER_V1_SPECIALISTS=1\nCANARY_USE_MCP_TOOLS=0\n' \
+    > "$SANDBOX/root.env"
+}
+
 # Sets OUT and RC. Not a command substitution: that subshell would swallow RC.
 run_release() {
   local stdin_data="${RELEASE_STDIN:-}"
@@ -92,6 +124,9 @@ run_release() {
     RELEASE_UPDATE_CMD="$SANDBOX/bin/fakeupdate" \
     RELEASE_RUNTIME_MAINTENANCE_CMD="$SANDBOX/bin/fakepreflight" \
     RELEASE_REQUIRED_CHECKS="Tests (Python 3.12),Compose smoke" \
+    RELEASE_ENV_FILE="$SANDBOX/root.env" \
+    RELEASE_ROUTE_CONF="$ROUTE_CONF_PATH" \
+    RELEASE_SITE_CONF="$SITE_CONF_PATH" \
     bash deploy/release.sh --no-fetch "$@" <<<"$stdin_data" ) > "$SANDBOX/out.txt" 2>&1
   RC=$?
   OUT="$(cat "$SANDBOX/out.txt")"
@@ -244,6 +279,217 @@ teardown
 setup green
 run_release --yes -- --pool legacy; CALLS_TXT="$(cat "$CALLS")"
 contains "$CALLS_TXT" "update --pool legacy" "explicit update arguments override the safe release defaults"
+teardown
+echo
+
+echo "--- 9. the flip gate fires on a CHANGE in exposure, never on a rebuild ---"
+# K4: `bash deploy/release.sh` carries no rollout flag at all, yet `--both --drain`
+# used to be able to leave the candidate on 100% of the public.
+#
+# R3-H3: the first version of that gate compared only the END state, so it also
+# refused every ROUTINE release on a host where the candidate was already the sole
+# public pool — which is this box since 07-27. The gate now compares the START and
+# END exposure and fires only when an architecture that is not at 100% ends there.
+setup green
+install_route 0 rollback rollback
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a weight-0 host releases normally"     0 "$RC"
+contains "$OUT" "candidate  arch=fc_loop specialists=0 mcp=0" "the resolved candidate identity is shown"
+contains "$OUT" "ends at    candidate weight 0% stage rollback" "so is the weight/stage the run ends on"
+teardown
+
+# The pool that is ALREADY at 100% staying at 100% is not a flip.
+setup green
+install_route 100 r-flip flip
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a rebuild of the pool already at 100% is NOT a flip" 0 "$RC"
+contains "$OUT"       "routing    UNCHANGED"         "and the preflight says the routing does not change"
+contains "$OUT"       "No cutover happens"           "spelling out why no flag is needed"
+contains "$CALLS_TXT" "update --both --drain"        "so the routine release proceeds with no CANARY_ALLOW_FLIP"
+teardown
+
+# ...but the SAME weight with a DIFFERENT architecture in the candidate slot is.
+setup green
+install_route 100 r-flip flip
+manager_v1_candidate
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a release that puts a NEW arch on 100% is refused" 1 "$RC"
+contains "$OUT"       "END with the candidate"       "and says exactly what it refused"
+contains "$OUT"       "100% currently runs 'fc_loop'" "naming the architecture being displaced"
+contains "$OUT"       "50% is the highest authorised rollout stage" "citing the runbook rule"
+lacks    "$OUT"       "switch_pool.sh --to legacy"   "and never suggests demoting production to the legacy arch"
+check    "the pin did NOT move"                  "$OLD_SHA" "$(pin_now)"
+check    "HEAD did NOT move"                     "$OLD_SHA" "$(head_now)"
+lacks    "$CALLS_TXT" "update"                   "update.sh is never reached"
+lacks    "$CALLS_TXT" "preflight"                "and runtime state is left alone"
+teardown
+
+setup green
+install_route 100 r-flip flip
+manager_v1_candidate
+CANARY_ALLOW_FLIP=1 run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "CANARY_ALLOW_FLIP=1 authorises the flip release" 0 "$RC"
+contains "$OUT"       "authorising a cutover"          "and the authorisation is announced"
+contains "$CALLS_TXT" "update --both --drain"          "and the deploy proceeds"
+teardown
+
+# A recorded 100%@maintenance is the debris of an interrupted drain: update.sh
+# refuses to replay it, so the run ENDS on legacy. That is a DECREASE, not a flip.
+setup green
+install_route 100 deploy-maintenance-abc1234 maintenance
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "an unfinished drain is not treated as a flip" 0 "$RC"
+contains "$OUT"       "UNFINISHED drain"               "the debris is named"
+contains "$OUT"       "ENDS with public traffic on legacy" "and the real end state is stated"
+contains "$CALLS_TXT" "update --both --drain"          "and the release proceeds"
+teardown
+
+setup green
+install_route 0 rollback rollback
+printf 'CANARY_AGENT_ARCH=manager_v1\nCANARY_MANAGER_V1_SPECIALISTS=0\nCANARY_USE_MCP_TOOLS=0\n' > "$SANDBOX/root.env"
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a compatibility-shell manager_v1 candidate is refused" 1 "$RC"
+contains "$OUT"       "unsupported candidate identity" "the whitelist is named"
+lacks    "$CALLS_TXT" "update"                   "and nothing ships"
+teardown
+echo
+
+echo "--- 9b. R3-M4: the documented boolean spellings must not kill a release ---"
+setup green
+install_route 0 rollback rollback
+printf 'CANARY_AGENT_ARCH=fc_loop\nCANARY_MANAGER_V1_SPECIALISTS=false\nCANARY_USE_MCP_TOOLS=no\n' > "$SANDBOX/root.env"
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "false/no normalise to 0 instead of dying" 0 "$RC"
+contains "$OUT"       "arch=fc_loop specialists=0 mcp=0" "and are reported in canonical form"
+contains "$CALLS_TXT" "update --both --drain"           "so the release proceeds"
+teardown
+
+setup green
+install_route 0 rollback rollback
+printf 'CANARY_AGENT_ARCH=manager_v1\nCANARY_MANAGER_V1_SPECIALISTS=true\nCANARY_USE_MCP_TOOLS=off\n' > "$SANDBOX/root.env"
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "true/off normalise to 1/0 instead of dying" 0 "$RC"
+contains "$OUT"       "arch=manager_v1 specialists=1 mcp=0" "and reach the whitelist in canonical form"
+teardown
+
+setup green
+install_route 0 rollback rollback
+printf 'CANARY_AGENT_ARCH=fc_loop\nCANARY_MANAGER_V1_SPECIALISTS=maybe\nCANARY_USE_MCP_TOOLS=0\n' > "$SANDBOX/root.env"
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a value that is neither true nor false is refused" 1 "$RC"
+contains "$OUT"       "neither a true (1/true/yes/on) nor a false" "loudly, by name"
+lacks    "$CALLS_TXT" "update"                                    "and nothing ships"
+teardown
+echo
+
+echo "--- 10. TODAY'S HOST: single upstream on :5002, no weighted include ---"
+# R3/H2 (round 2): the preflight read these markers WITHOUT `|| true`. `set -euo
+# pipefail` turns `sed` on a missing file into exit 2, which errexit turns into a
+# silent abort — the entire release died after "Release plan" with no output.
+setup green
+remove_route
+install_upstream 5001
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "no weighted include does not abort the release" 0 "$RC"
+contains "$OUT" "SINGLE-UPSTREAM mode"        "the routing mode is named, not silently skipped"
+contains "$OUT" "127.0.0.1:5001 = legacy"     "and the sole upstream is resolved to a pool"
+contains "$OUT" "candidate weight 0%"         "and to the candidate exposure it means"
+contains "$CALLS_TXT" "update --both --drain" "so the release proceeds"
+teardown
+
+# THE R3-H3 REGRESSION TEST. This is the exact live state of the production box:
+# no /etc/nginx/snippets/rentcompass-canary-routing.conf, and the site conf's sole
+# upstream is 127.0.0.1:5002. `bash deploy/release.sh` must work with no new flags.
+setup green
+remove_route
+install_upstream 5002
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "TODAY'S HOST: a routine release needs NO flag"  0 "$RC"
+contains "$OUT" "SINGLE-UPSTREAM mode"        "the routing mode is named"
+contains "$OUT" "routing    UNCHANGED"        "and the run is identified as a rebuild, not a cutover"
+contains "$CALLS_TXT" "update --both --drain" "so update.sh is handed the deploy"
+check    "the pin advanced"                   "$NEW_SHA" "$(pin_now)"
+teardown
+
+setup green
+remove_route
+install_upstream 5002
+run_release --dry-run; CALLS_TXT="$(cat "$CALLS")"
+check    "TODAY'S HOST: --dry-run exits 0"    0 "$RC"
+contains "$OUT" "routing    UNCHANGED"        "and previews the unchanged routing"
+check    "the pin is untouched by a dry run"  "$OLD_SHA" "$(pin_now)"
+lacks    "$CALLS_TXT" "update"                "and nothing is deployed"
+teardown
+
+# The manager_v1 cutover on the same host IS a flip: :5002 is the ONE candidate
+# slot, so a manager_v1 canary REPLACES the fc_loop pool that serves the public.
+setup green
+remove_route
+install_upstream 5002
+manager_v1_candidate
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "a manager_v1 cutover on the live pool is refused" 1 "$RC"
+contains "$OUT" "END with the candidate"      "and says exactly what it refused"
+contains "$OUT" "single-upstream mode"        "naming the routing mode it resolved"
+contains "$OUT" "CANDIDATE SLOT IS EXCLUSIVE" "R3-M8: the slot consequence is stated"
+contains "$OUT" "is REPLACED, not compared against" "including the loss of the fc_loop control arm"
+contains "$OUT" "rollback target stays the 'legacy' pool" "and what rollback actually means here"
+lacks    "$OUT" "switch_pool.sh --to legacy"  "and the remedy never demotes production to legacy"
+check    "the pin did NOT move"               "$OLD_SHA" "$(pin_now)"
+lacks    "$CALLS_TXT" "update"                "update.sh is never reached"
+teardown
+
+setup green
+remove_route
+install_upstream 5002
+manager_v1_candidate
+run_release --dry-run; CALLS_TXT="$(cat "$CALLS")"
+check    "--dry-run NEVER dies on a policy gate" 0 "$RC"
+contains "$OUT" "WOULD BE REFUSED"               "it says what would happen"
+contains "$OUT" "the flag it needs is CANARY_ALLOW_FLIP=1" "and names the flag"
+check    "the pin is untouched"                  "$OLD_SHA" "$(pin_now)"
+lacks    "$CALLS_TXT" "update"                   "and still deploys nothing"
+teardown
+
+# A slot that ALREADY runs manager_v1 (its image tag says so) is a rebuild again.
+setup green
+remove_route
+install_upstream 5002
+manager_v1_candidate
+printf 'FC_CANARY_IMAGE=uk-rent-agent:canary-manager-v1-abc1234\n' >> "$SANDBOX/root.env"
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "re-releasing the arch the slot already runs is not a flip" 0 "$RC"
+contains "$OUT" "routing    UNCHANGED"        "the live arch is read from FC_CANARY_IMAGE"
+lacks    "$OUT" "CANDIDATE SLOT IS EXCLUSIVE" "and there is no slot-replacement warning"
+teardown
+
+setup green
+remove_route
+remove_upstream
+run_release --yes; CALLS_TXT="$(cat "$CALLS")"
+check    "neither routing file readable still does not abort silently" 0 "$RC"
+contains "$OUT" "upstream UNKNOWN"            "the unresolved end state is stated"
+contains "$OUT" "could not be resolved"       "with a warning rather than silence"
+contains "$CALLS_TXT" "update --both --drain" "and update.sh, which refuses to guess, decides"
+teardown
+echo
+
+echo "--- 11. R3-M2: --skip-answer-probe reaches update.sh ---"
+setup green
+remove_route
+install_upstream 5002
+run_release --yes --skip-answer-probe; CALLS_TXT="$(cat "$CALLS")"
+check    "exit 0"                             0 "$RC"
+contains "$CALLS_TXT" "update --both --drain --skip-answer-probe" \
+         "the opt-out is appended to the default update policy"
+teardown
+
+setup green
+remove_route
+install_upstream 5002
+run_release --yes --skip-answer-probe -- --pool fc; CALLS_TXT="$(cat "$CALLS")"
+contains "$CALLS_TXT" "update --pool fc --skip-answer-probe" \
+         "and to an explicit one"
 teardown
 echo
 

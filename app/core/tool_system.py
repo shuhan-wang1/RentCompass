@@ -7,7 +7,9 @@ Tool System - Agent框架的核心工具系统
 """
 
 import asyncio
+import contextvars
 import datetime as _datetime
+import hashlib
 import ipaddress
 import json
 import math
@@ -15,7 +17,7 @@ import re
 import time
 import urllib.parse
 import uuid
-from typing import Callable, Dict, Any, Optional, List
+from typing import Callable, Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
 import logging
 import os
@@ -329,6 +331,80 @@ class ToolSpec:
     retry_safe: bool
     version: str = "1"      # 幂等键的工具版本语义——必须与 Tool.version 一致
     terminal: bool = False  # ask_user
+    # Capability-boundary fields (manager_v1 specialists).  ``input_schema`` above is the
+    # MODEL-VISIBLE schema frozen at Tool construction; it cannot see a later
+    # ``Tool.input_model`` swap, which is what actually validates and re-shapes the kwargs
+    # the callable receives.  The retry policy is here for the same reason: it decides how
+    # many times a pinned callable runs.  Defaults keep every other ToolSpec producer
+    # (MCP, adapters) constructing exactly as before.
+    max_retries: int = 2
+    retry_on_error: bool = True
+    input_model_ref: str = ""
+    output_model_ref: str = ""
+
+
+# Memoised per MODEL OBJECT.  ``model_json_schema()`` costs ~1.5 ms and ``to_spec()`` sits on
+# the hottest path there is (every super-step binds tools, every specialist read revalidates,
+# every fan-out call resolves a capability), so recomputing the refs on each call made
+# ``list_specs()`` ~250x slower and burned that CPU synchronously on the graph event loop.
+# Each entry keeps a STRONG reference to the model, so ``id()`` cannot be recycled by another
+# object while the entry lives: a hit therefore proves same-object identity.  A model SWAP —
+# the K7 threat this ref exists to detect — is a different object, hence a different key and a
+# freshly computed ref.  An IN-PLACE mutation of an already-cached model class is deliberately
+# out of scope here (it is caught by the pinned ``input_model`` identity checks in
+# ``execute_resolved_specialist_capability``, not by this string).
+_MODEL_SECURITY_REF_CACHE: Dict[int, Tuple[Any, str]] = {}
+_MODEL_SECURITY_REF_CACHE_MAX = 512
+
+
+def _compute_model_security_ref(model: Any) -> str:
+    label = "%s.%s" % (
+        getattr(model, "__module__", "?"),
+        getattr(model, "__qualname__", getattr(model, "__name__", type(model).__name__)),
+    )
+    try:
+        payload = json.dumps(
+            model.model_json_schema(),
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    except Exception:
+        return f"{label}#object:{id(model):x}"
+    return f"{label}#sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
+
+
+def model_security_ref(model: Optional[type]) -> str:
+    """Stable in-process identity for a pydantic model at the capability boundary.
+
+    Prefers the model's JSON schema, so two distinct ``create_model`` products that share a
+    generated ``__qualname__`` still differ.  Falls back to the object identity when a model
+    cannot produce a schema — a swap is then still visible for the lifetime of the process,
+    which is the whole window a grant covers.
+
+    Memoised by model identity; see ``_MODEL_SECURITY_REF_CACHE`` for why that keeps swap
+    detection intact.
+    """
+    if model is None:
+        return "none"
+    key = id(model)
+    cached = _MODEL_SECURITY_REF_CACHE.get(key)
+    if cached is not None and cached[0] is model:
+        return cached[1]
+    ref = _compute_model_security_ref(model)
+    if len(_MODEL_SECURITY_REF_CACHE) >= _MODEL_SECURITY_REF_CACHE_MAX:
+        # Bounded, and dropped wholesale rather than by age: the cache is a pure function
+        # of object identity, so losing it only costs one recomputation per live model.
+        _MODEL_SECURITY_REF_CACHE.clear()
+    _MODEL_SECURITY_REF_CACHE[key] = (model, ref)
+    return ref
+
+
+@dataclass(frozen=True)
+class _PinnedExecution:
+    """Everything ``_execute_with_callable`` must read from the GRANT, not from ``self``."""
+
+    input_model: Any
+    output_model: Any
+    max_retries: int
+    retry_on_error: bool
 
 
 def to_function_calling_format(spec: "ToolSpec") -> Dict[str, Any]:
@@ -442,11 +518,45 @@ class Tool:
             raise ValueError(f"[{self.name}] parameters 必须包含 'properties' 字段")
 
     
-    async def execute(self, **kwargs) -> ToolResult:
+    async def execute(self, /, **kwargs) -> ToolResult:
         """
         执行工具（带重试和错误处理）
+
+        ``self`` is POSITIONAL-ONLY for the same reason ``_execute_with_callable``'s harness
+        parameters are (audit F9): ``**kwargs`` is the tool's own argument namespace, so a
+        tool parameter literally named ``self`` must reach the tool instead of colliding with
+        the bound receiver and surfacing as an opaque TypeError.
+        """
+        return await self._execute_with_callable(None, **kwargs)
+
+    async def _execute_with_callable(
+        self,
+        pinned_callable: Optional[Callable] = None,
+        pinned: Optional["_PinnedExecution"] = None,
+        /,
+        **kwargs,
+    ) -> ToolResult:
+        """Run the normal Tool pipeline, optionally against one fixed callable.
+
+        Ordinary callers pass through :meth:`execute` and resolve ``self.func`` at the start
+        of each attempt. Specialist capabilities pass the callable captured at capability
+        resolution, so a later mutation of the otherwise same ``Tool`` object cannot redirect
+        an already-authorised dispatch.
+
+        ``pinned`` extends that from the callable to the rest of the execution surface —
+        the validating ``input_model``, the ``output_model`` and the retry policy — because
+        swapping ``input_model`` after the grant let a caller reshape the kwargs the pinned
+        callable received, and raising ``max_retries`` made it run N times (audit K7).
+        Both parameters are POSITIONAL-ONLY: ``**kwargs`` is the tool's own argument
+        namespace and must never be able to collide with a harness parameter (audit F9).
         """
         start_time = time.time()
+        input_model = self.input_model if pinned is None else pinned.input_model
+        output_model = self.output_model if pinned is None else pinned.output_model
+        max_retries = self.max_retries if pinned is None else pinned.max_retries
+        retry_on_error = (
+            self.retry_on_error if pinned is None else pinned.retry_on_error
+        )
         
         idempotency_key = kwargs.pop("idempotency_key", None)
         idempotency_store = kwargs.pop("_idempotency_store", None)
@@ -463,7 +573,7 @@ class Tool:
         # 填充默认值
         kwargs = self._apply_defaults(kwargs)
         try:
-            kwargs = self.input_model.model_validate(kwargs).model_dump(exclude_none=True)
+            kwargs = input_model.model_validate(kwargs).model_dump(exclude_none=True)
         except Exception:
             return ToolResult(False, error="ValidationError: invalid parameters", tool_name=self.name,
                               version=self.version, idempotency_key=idempotency_key)
@@ -521,10 +631,16 @@ class Tool:
                     )
 
         # ``max_retries=0`` means execute once with no retry; it must never mean zero calls.
-        attempts = max(1, int(self.max_retries)) if self.retry_safe else 1
+        attempts = max(1, int(max_retries)) if self.retry_safe else 1
         for attempt in range(attempts):
             try:
                 logger.debug("Executing %s (attempt %s/%s)", self.name, attempt + 1, attempts)
+
+                execution_callable = (
+                    pinned_callable if pinned_callable is not None else self.func
+                )
+                if not callable(execution_callable):
+                    raise TypeError("tool callable is not callable")
                 
                 # 验证输入参数
                 self._validate_input(kwargs)
@@ -532,17 +648,41 @@ class Tool:
                 # Re-attach injected runtime params (see above) only for funcs that accept them.
                 call_kwargs = kwargs
                 if injected:
-                    accepted = {k: v for k, v in injected.items() if self._accepts_kwarg(k)}
+                    if pinned_callable is None:
+                        accepted = {
+                            k: v for k, v in injected.items() if self._accepts_kwarg(k)
+                        }
+                    else:
+                        accepted = {
+                            k: v
+                            for k, v in injected.items()
+                            if self._callable_accepts_kwarg(execution_callable, k)
+                        }
                     if accepted:
                         call_kwargs = {**kwargs, **accepted}
 
                 # 执行函数（支持同步和异步）
-                if asyncio.iscoroutinefunction(self.func):
-                    result = await self.func(**call_kwargs)
+                if asyncio.iscoroutinefunction(execution_callable):
+                    result = await execution_callable(**call_kwargs)
                 else:
-                    # 同步函数在 executor 中运行（避免阻塞）
+                    # 同步函数在 executor 中运行（避免阻塞）。
+                    #
+                    # SECURITY: the copied context is not an optimisation. ``run_in_executor``
+                    # runs the callable on a bare pool thread, where contextvars do NOT
+                    # propagate, so a SYNC tool observed ``current_agent_context() == {}`` --
+                    # i.e. no ``agent_role`` -- while its ASYNC twin saw the specialist role.
+                    # ``web_search._current_specialist_role()`` reads exactly that context and
+                    # maps "no role" to MANAGER authority (unrestricted nested dispatch), so
+                    # declaring a granted tool ``def`` instead of ``async def`` silently
+                    # restored the cross-role escalation the capability boundary exists to
+                    # close (review3 R1-M2). Copying the context makes the boundary a property
+                    # of the runtime rather than of how a tool happens to be declared; it also
+                    # fixes the same gap in log attribution (JsonFormatter reads that context).
                     loop = asyncio.get_running_loop()
-                    result = await loop.run_in_executor(None, lambda: self.func(**call_kwargs))
+                    ctx = contextvars.copy_context()
+                    result = await loop.run_in_executor(
+                        None, lambda: ctx.run(execution_callable, **call_kwargs)
+                    )
                 
                 execution_time = (time.time() - start_time) * 1000
                 
@@ -557,15 +697,15 @@ class Tool:
                 # tool can opt out with retryable=false for a final domain result
                 # such as "no listings" or "need clarification".
                 if (not logical_success and attempt < attempts - 1
-                        and self.retry_on_error and self.retry_safe
+                        and retry_on_error and self.retry_safe
                         and result.get("retryable", True)):
                     wait_time = 2 ** attempt
                     logger.info("Retrying %s after retryable logical failure in %ss",
                                 self.name, wait_time)
                     await asyncio.sleep(wait_time)
                     continue
-                if logical_success and self.output_model is not None:
-                    result = self.output_model.model_validate(result).model_dump()
+                if logical_success and output_model is not None:
+                    result = output_model.model_validate(result).model_dump()
                 if logical_success and claimed:
                     idempotency_store.complete(idempotency_key, result)
                 elif not logical_success and claimed:
@@ -600,7 +740,7 @@ class Tool:
                 logger.warning("Tool %s failed error_type=%s", self.name, error_type)
                 
                 # 是否重试
-                if attempt < attempts - 1 and self.retry_on_error and self.retry_safe:
+                if attempt < attempts - 1 and retry_on_error and self.retry_safe:
                     wait_time = 2 ** attempt  # 指数退避：2, 4, 8...
                     logger.info("Retrying %s in %ss", self.name, wait_time)
                     await asyncio.sleep(wait_time)
@@ -641,6 +781,28 @@ class Tool:
                 cache["varkw"] = True  # uninspectable callable -> be permissive
             self._accepts_cache = cache
         return cache["varkw"] or name in cache["names"]
+
+    @staticmethod
+    def _callable_accepts_kwarg(func: Callable, name: str) -> bool:
+        """Check a capability-pinned callable without consulting ``self.func``."""
+        import inspect
+
+        try:
+            parameters = inspect.signature(func).parameters.values()
+        except (TypeError, ValueError):
+            return True
+        return any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            or (
+                parameter.name == name
+                and parameter.kind
+                in (
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.KEYWORD_ONLY,
+                )
+            )
+            for parameter in parameters
+        )
 
     def _validate_input(self, kwargs: Dict):
         """验证是否满足 required 的参数"""
@@ -734,7 +896,12 @@ class Tool:
         }
 
     def to_spec(self) -> "ToolSpec":
-        """构造统一的 ToolSpec 契约（design §2.8a）。"""
+        """构造统一的 ToolSpec 契约（design §2.8a）。
+
+        ``input_model_ref``/``output_model_ref`` are recomputed from the LIVE models on
+        every call, so a post-construction ``input_model`` swap changes the spec (and
+        therefore the specialist security digest) even though ``parameters`` cannot.
+        """
         return ToolSpec(
             name=self.name,
             description=self.description,
@@ -743,6 +910,10 @@ class Tool:
             retry_safe=self.retry_safe,
             version=self.version,
             terminal=self.terminal,
+            max_retries=self.max_retries,
+            retry_on_error=self.retry_on_error,
+            input_model_ref=model_security_ref(getattr(self, "input_model", None)),
+            output_model_ref=model_security_ref(getattr(self, "output_model", None)),
         )
 
     def __repr__(self) -> str:
@@ -796,6 +967,165 @@ class ToolRegistry:
     def list_specs(self) -> List[ToolSpec]:
         """列出所有已注册工具的 ToolSpec 契约（design §2.8a）。"""
         return [tool.to_spec() for tool in self.tools.values()]
+
+    def resolve_specialist_capability(self, name: str, expected_spec_digest: str):
+        """Pin one trusted in-process tool for read-only specialist execution.
+
+        A normal registry dispatch intentionally resolves by name.  That is convenient for
+        hot replacement, but it is the wrong primitive for a capability boundary: a tool
+        could be replaced after the manager validated its metadata and before execution.
+        This method snapshots the exact ``Tool`` object plus a canonical security digest;
+        :meth:`execute_resolved_specialist_capability` executes that same object only after
+        rechecking that the registry entry and metadata are unchanged.
+
+        The digest implementation lives with the specialist runtime so the grant factory,
+        dispatch validator and registry cannot silently disagree about which fields matter.
+        Importing it lazily keeps the ordinary tool registry independent of manager_v1.
+        """
+        from core.specialist_runtime import (
+            ResolvedSpecialistCapability,
+            SpecialistDispatchError,
+            tool_spec_security_digest,
+        )
+
+        tool = self.get(name)
+        if tool is None:
+            raise SpecialistDispatchError("specialist_capability_missing")
+        spec = tool.to_spec()
+        digest = tool_spec_security_digest(spec)
+        if digest != expected_spec_digest:
+            raise SpecialistDispatchError("specialist_capability_metadata_drift")
+        if spec.side_effect != "none" or spec.terminal is not False:
+            raise SpecialistDispatchError("specialist_capability_not_read_only")
+        tool_callable = getattr(tool, "func", None)
+        if not callable(tool_callable):
+            raise SpecialistDispatchError("specialist_capability_callable_invalid")
+        input_model = getattr(tool, "input_model", None)
+        if input_model is None:
+            # Every Tool builds one in __init__; its absence means this object is not the
+            # execution surface the digest describes.
+            raise SpecialistDispatchError("specialist_capability_input_model_invalid")
+        output_model = getattr(tool, "output_model", None)
+        return ResolvedSpecialistCapability(
+            provider_identity=id(self),
+            tool_name=name,
+            tool_identity=id(tool),
+            tool=tool,
+            tool_callable_identity=id(tool_callable),
+            tool_callable=tool_callable,
+            spec_digest=digest,
+            # Strong references, so these objects cannot be collected and their id() reused.
+            input_model=input_model,
+            input_model_identity=id(input_model),
+            output_model=output_model,
+            output_model_identity=id(output_model),
+            max_retries=int(getattr(tool, "max_retries", 1) or 1),
+            retry_on_error=bool(getattr(tool, "retry_on_error", False)),
+        )
+
+    async def execute_resolved_specialist_capability(
+        self,
+        capability,
+        *,
+        args: Dict[str, Any],
+        expected_spec_digest: str,
+    ) -> ToolResult:
+        """Execute an already-resolved specialist capability without a name re-lookup race.
+
+        The tool's own arguments arrive as ONE explicit mapping rather than ``**kwargs``:
+        sharing the kwarg namespace with ``capability``/``expected_spec_digest``/``self``
+        meant a tool argument with one of those names became a ``TypeError`` swallowed as
+        a generic "Tool execution failed" (audit F9).
+        """
+        from core.specialist_runtime import (
+            SpecialistDispatchError,
+            tool_spec_security_digest,
+        )
+
+        if not isinstance(args, dict):
+            raise SpecialistDispatchError("specialist_capability_args_invalid")
+        if "_idempotency_store" in args:
+            # The only harness parameter _execute_with_callable still takes by keyword.
+            raise SpecialistDispatchError("specialist_capability_args_invalid")
+
+        if getattr(capability, "provider_identity", None) != id(self):
+            raise SpecialistDispatchError("specialist_capability_provider_mismatch")
+        name = getattr(capability, "tool_name", "")
+        tool = getattr(capability, "tool", None)
+        if not name or tool is None or getattr(capability, "tool_identity", None) != id(tool):
+            raise SpecialistDispatchError("specialist_capability_invalid")
+        if self.get(name) is not tool:
+            raise SpecialistDispatchError("specialist_capability_replaced")
+        tool_callable = getattr(capability, "tool_callable", None)
+        if (
+            not callable(tool_callable)
+            or getattr(capability, "tool_callable_identity", None) != id(tool_callable)
+        ):
+            raise SpecialistDispatchError("specialist_capability_callable_invalid")
+        if getattr(tool, "func", None) is not tool_callable:
+            raise SpecialistDispatchError("specialist_capability_callable_replaced")
+
+        # The pinned validation/serialisation surface must still BE the live one. Checked
+        # by identity (``is``) before the digest so a swap is reported as a replacement
+        # rather than as anonymous metadata drift.
+        input_model = getattr(capability, "input_model", None)
+        if (
+            input_model is None
+            or getattr(capability, "input_model_identity", None) != id(input_model)
+        ):
+            raise SpecialistDispatchError("specialist_capability_input_model_invalid")
+        if getattr(tool, "input_model", None) is not input_model:
+            raise SpecialistDispatchError("specialist_capability_replaced")
+        output_model = getattr(capability, "output_model", None)
+        if getattr(capability, "output_model_identity", None) != id(output_model):
+            raise SpecialistDispatchError("specialist_capability_input_model_invalid")
+        if getattr(tool, "output_model", None) is not output_model:
+            raise SpecialistDispatchError("specialist_capability_replaced")
+
+        live_spec = tool.to_spec()
+        live_digest = tool_spec_security_digest(live_spec)
+        if live_digest != expected_spec_digest or live_digest != getattr(
+            capability, "spec_digest", None
+        ):
+            raise SpecialistDispatchError("specialist_capability_metadata_drift")
+        if live_spec.side_effect != "none" or live_spec.terminal is not False:
+            raise SpecialistDispatchError("specialist_capability_not_read_only")
+
+        # Execute both the pinned Tool object and its pinned callable. No await occurs before
+        # entering the Tool execution pipeline; if another thread mutates ``tool.func`` after
+        # the check above, the already-authorised call still invokes only this captured object.
+        kwargs = dict(args)
+        result = await tool._execute_with_callable(
+            tool_callable,
+            _PinnedExecution(
+                input_model=input_model,
+                output_model=output_model,
+                max_retries=int(getattr(capability, "max_retries", 1) or 1),
+                retry_on_error=bool(getattr(capability, "retry_on_error", False)),
+            ),
+            _idempotency_store=self._idempotency_store,
+            **kwargs,
+        )
+        if result.tool_name != name or result.version != live_spec.version:
+            raise SpecialistDispatchError("specialist_result_identity_mismatch")
+
+        stats = self._stats.get(name)
+        if stats is not None:
+            stats["total_calls"] += 1
+            if result.success:
+                stats["successful_calls"] += 1
+            else:
+                stats["failed_calls"] += 1
+            if result.execution_time_ms:
+                stats["total_time_ms"] += result.execution_time_ms
+
+        try:
+            from evaluation.metrics import collector
+            if collector.is_active():
+                collector.record_tool_call(name, result, kwargs, mcp=False)
+        except Exception:
+            pass
+        return result
     
     def list_tools_for_llm(self) -> str:
         """
@@ -821,8 +1151,13 @@ class ToolRegistry:
 3. 一次只能调用一个工具
 """
     
-    async def execute_tool(self, name: str, **kwargs) -> ToolResult:
-        """执行工具"""
+    async def execute_tool(self, name: str, /, **kwargs) -> ToolResult:
+        """执行工具
+
+        ``name`` is positional-only (audit F9): every call site already passes it
+        positionally, and leaving it positional-or-keyword meant a tool whose own schema has
+        a ``name`` parameter could never be dispatched through the registry.
+        """
         tool = self.get(name)
         
         if not tool:

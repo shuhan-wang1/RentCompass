@@ -45,7 +45,14 @@ class ToolInvocation(ContractModel):
     ) -> "ToolInvocation":
         values = params or {}
         canonical = json.dumps(values, ensure_ascii=False, sort_keys=True, default=str)
-        raw = f"{run_id}:{node_id}:{tool}:{canonical}".encode("utf-8")
+        # "surrogatepass": ``params`` is MODEL-AUTHORED. A lone surrogate (e.g. "Lon\ud800don")
+        # survives json.dumps(ensure_ascii=False) and only fails at encode time, so a strict
+        # encode here raised UnicodeEncodeError out of the tool runner -- on fc_loop with
+        # specialists OFF, i.e. production -- after the whole batch had already been
+        # dispatched, losing every sibling result. Mirrors langgraph_agent._params_digest, so
+        # the two identities of the same call agree on what is encodable. Keys for every
+        # non-surrogate payload are byte-identical to before.
+        raw = f"{run_id}:{node_id}:{tool}:{canonical}".encode("utf-8", "surrogatepass")
         return cls(
             tool=tool,
             params=values,

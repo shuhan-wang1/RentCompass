@@ -11,6 +11,7 @@ All tests run against a temporary SQLite AgentMemory directory and stub every LL
 import importlib
 import os
 import sys
+import threading
 
 import pytest
 
@@ -55,6 +56,69 @@ def memory(tmp_path, monkeypatch):
 def _episodic_records(memory, user_id="user-A"):
     got = memory.col.get(where={"$and": [{"user_id": user_id}, {"mtype": "episodic"}]})
     return list(zip(got.get("ids") or [], got.get("metadatas") or []))
+
+
+def test_semantic_add_deduplicates_same_user_kind_and_content(memory):
+    """Explicit retry attempts may use new ledger keys without duplicating memory."""
+    first = memory.add("budget is £1400", "semantic", user_id="user-A")
+    second = memory.add("budget is £1400", "semantic", user_id="user-A")
+
+    assert second == first
+    got = memory.col.get(
+        where={"$and": [{"user_id": "user-A"}, {"mtype": "semantic"}]})
+    assert got["ids"] == [first]
+
+
+def test_consolidate_update_failure_falls_back_without_lock_reentry(memory, monkeypatch):
+    """A failed semantic UPDATE must not call add() while holding the write lock."""
+    memory.col.add(
+        documents=["old semantic fact"],
+        metadatas=[{
+            "mtype": "semantic", "user_id": "user-A",
+            "created_at": "2026-07-17T00:00:00", "importance": 7,
+        }],
+        ids=["existing-semantic"],
+    )
+    monkeypatch.setattr(
+        am_mod,
+        "call_ollama",
+        lambda *a, **k: (
+            '{"ops":[{"event":"UPDATE","id":"existing-semantic",'
+            '"text":"replacement semantic fact"}]}'
+        ),
+    )
+
+    update_calls = []
+
+    def failing_update(*args, **kwargs):
+        update_calls.append((args, kwargs))
+        raise RuntimeError("simulated update failure")
+
+    monkeypatch.setattr(memory.col, "update", failing_update)
+    original_add = memory.add
+    fallback_adds = []
+
+    def tracked_add(*args, **kwargs):
+        fallback_adds.append((args, kwargs))
+        return original_add(*args, **kwargs)
+
+    monkeypatch.setattr(memory, "add", tracked_add)
+
+    worker = threading.Thread(
+        target=memory._consolidate,
+        args=(["replacement semantic fact"], "default", "user-A"),
+        daemon=True,
+    )
+    worker.start()
+    worker.join(timeout=1.0)
+
+    assert not worker.is_alive(), "fallback add deadlocked while re-entering memory._lock"
+    assert len(update_calls) == 1
+    assert len(fallback_adds) == 1
+    stored = memory.col.get(
+        where={"$and": [{"user_id": "user-A"}, {"mtype": "semantic"}]}
+    )
+    assert "replacement semantic fact" in stored["documents"]
 
 
 # ------------------------------------------------ static importance (no LLM call)

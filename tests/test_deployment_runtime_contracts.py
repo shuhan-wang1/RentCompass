@@ -6,8 +6,28 @@ from pathlib import Path
 import re
 import subprocess
 
+import pytest
+import yaml
+
+from uk_rent_agent.config import _resolve_checkpoint_path as _resolve_checkpoint_path_env
+
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _resolve_checkpoint_path(root: Path, db_path: str) -> Path:
+    """Run the REAL resolver over one interpolated compose value."""
+    previous = {name: os.environ.get(name) for name in ("CHECKPOINT_DB_PATH", "CHECKPOINT_PATH")}
+    os.environ["CHECKPOINT_DB_PATH"] = db_path
+    os.environ.pop("CHECKPOINT_PATH", None)
+    try:
+        return _resolve_checkpoint_path_env(root)
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def _text(path: str) -> str:
@@ -28,8 +48,65 @@ def test_blue_green_contract_shares_conversations_but_not_checkpoints():
     compose = _text("docker-compose.yml")
     assert compose.count('CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"') == 2
     assert 'CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints.sqlite3"' in compose
-    assert 'CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_fc.sqlite3"' in compose
+    assert (
+        'CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_${CANARY_AGENT_ARCH:-fc_loop}'
+        '_specialists-${CANARY_MANAGER_V1_SPECIALISTS:-0}.sqlite3"'
+    ) in compose
     assert compose.count('ROUTING_MODE: "blue_green_shared_conversation_store"') == 2
+
+
+def test_the_compose_checkpoint_path_can_only_ever_resolve_to_a_0_or_1_pool():
+    """F8: compose interpolation cannot normalize, so `CANARY_MANAGER_V1_SPECIALISTS=true`
+    used to produce a THIRD database (`..._specialists-true.sqlite3`) sharing no state
+    with the `..._specialists-1.sqlite3` the same pool used yesterday — silently.
+
+    The template is taken from docker-compose.yml itself and pushed through the real
+    resolver, so every boolean spelling of one runtime must land on ONE path, and an
+    unrecognised spelling must fail closed rather than fork a fourth file."""
+    compose = yaml.safe_load(_text("docker-compose.yml"))
+    template = compose["services"]["app-fc"]["environment"]["CHECKPOINT_DB_PATH"]
+    assert "${CANARY_MANAGER_V1_SPECIALISTS:-0}" in template
+
+    def interpolate(arch: str, specialists: str) -> str:
+        return (
+            template
+            .replace("${CANARY_AGENT_ARCH:-fc_loop}", arch or "fc_loop")
+            .replace("${CANARY_MANAGER_V1_SPECIALISTS:-0}", specialists or "0")
+        )
+
+    for arch in ("fc_loop", "manager_v1"):
+        resolved = set()
+        for truthy in ("1", "true", "TRUE", "yes", "on", " True "):
+            resolved.add(_resolve_checkpoint_path(Path("/app"), interpolate(arch, truthy)))
+        assert resolved == {Path(f"/app/.runtime/checkpoints_{arch}_specialists-1.sqlite3")}
+
+        resolved = set()
+        for falsy in ("0", "false", "no", "off", ""):
+            resolved.add(_resolve_checkpoint_path(Path("/app"), interpolate(arch, falsy)))
+        assert resolved == {Path(f"/app/.runtime/checkpoints_{arch}_specialists-0.sqlite3")}
+
+        with pytest.raises(ValueError, match="neither true nor false"):
+            _resolve_checkpoint_path(Path("/app"), interpolate(arch, "maybe"))
+
+
+def test_normalising_the_specialist_token_never_orphans_an_existing_database(tmp_path):
+    """Normalising `_specialists-true` -> `_specialists-1` is right for a path that
+    does not exist yet. On a host that has ALREADY been running with the
+    non-canonical spelling it silently repoints the pool at a different (empty)
+    file and abandons the live one — nothing migrates it, and the only notice is a
+    startup warning. An existing database therefore keeps its own path."""
+    existing = tmp_path / "checkpoints_manager_v1_specialists-true.sqlite3"
+    canonical = tmp_path / "checkpoints_manager_v1_specialists-1.sqlite3"
+
+    # Nothing on disk: normalise, so one runtime cannot fork a third database.
+    assert _resolve_checkpoint_path(tmp_path, str(existing)) == canonical
+
+    # The same host after it has accumulated checkpoints under the old spelling.
+    existing.write_bytes(b"")
+    assert _resolve_checkpoint_path(tmp_path, str(existing)) == existing
+    # ...and the canonical spelling is of course still itself.
+    canonical.write_bytes(b"")
+    assert _resolve_checkpoint_path(tmp_path, str(canonical)) == canonical
 
 
 def test_app_containers_are_non_root_read_only_and_probe_readiness():
@@ -72,6 +149,18 @@ def test_nginx_discards_client_supplied_forwarding_chains():
         nginx = _text(path)
         assert "proxy_set_header X-Forwarded-For   $remote_addr;" in nginx
         assert "$proxy_add_x_forwarded_for" not in nginx
+
+
+def test_nginx_canary_metadata_is_overwritten_at_the_trusted_edge():
+    for path in (
+        "deploy/nginx/rentcompass.co.uk.conf",
+        "deploy/nginx/rentcompass.co.uk.ssl.conf",
+    ):
+        nginx = _text(path)
+        assert "include /etc/nginx/snippets/rentcompass-canary-routing.conf;" in nginx
+        assert "proxy_set_header X-Request-ID      $request_id;" in nginx
+        assert "X-RentCompass-Traffic-Source edge;" in nginx
+        assert "X-RentCompass-Assigned-Pool  $rentcompass_pool;" in nginx
 
 
 def test_local_release_metadata_can_degrade_but_production_enables_strict_gate():

@@ -362,6 +362,15 @@ def test_canary_turn_record_fc_with_signals(client, user, monkeypatch, caplog):
 
 
 def test_canary_turn_record_crashed_turn_defaults(client, user, monkeypatch, caplog):
+    # _observer_installed is a module-level global that stays True once any LLM
+    # client has been built, so leaving it ambient makes llm_calls flip between
+    # null and 0 depending on which tests ran first. Pin the UNINSTRUMENTED case
+    # here; the installed case is asserted by the test below it.
+    monkeypatch.setattr(appmod.turn_observations, "_observer_installed", False)
+    # The raw-SDK reporter is a SECOND process-wide flag with the same stickiness:
+    # one raw call anywhere earlier in the session leaves it True, and snapshot()
+    # would then report counters instead of nulls. Pin both or pin neither.
+    monkeypatch.setattr(appmod.turn_observations, "_raw_observer_installed", False)
     monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
 
     async def _boom(*a, **k):
@@ -379,6 +388,42 @@ def test_canary_turn_record_crashed_turn_defaults(client, user, monkeypatch, cap
     assert rec["partial"] is False
     assert rec["tool_budget_timeout"] is False
     assert rec["llm_calls"] is None
+    assert rec["tool_batches"] is None
+
+
+def test_crashed_turn_reports_the_llm_calls_the_observer_did_see(
+        client, user, monkeypatch, caplog):
+    """A crash destroys final_state; it does not un-bill the calls already made.
+
+    ``llm_calls`` is accumulated out-of-band per call, exactly like
+    ``provider_schema_400_count`` and ``llm_usage`` — so with the observer running
+    it is an observation that survives the crash, not a value the final_state
+    carried. Dropping it left the turn out of the cost denominator, and from
+    schema v3 it would also have made the record internally inconsistent: the
+    tokens would be reported while the call count that produced them was null.
+    ``tool_batches`` stays null, because there is no artifact ledger to read.
+    """
+    monkeypatch.setattr(appmod.turn_observations, "_observer_installed", True)
+    monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
+
+    async def _boom(*a, **k):
+        from core import turn_observations as tobs
+        tobs.note_raw_llm_call(
+            "crash-run-1",
+            usage_blob={"prompt_tokens": 40, "completion_tokens": 7},
+            configured_model="deepseek-v4-flash",
+        )
+        raise RuntimeError("boom")
+    monkeypatch.setattr(appmod, "handle_with_react_agent", _boom)
+
+    with caplog.at_level(logging.INFO, logger="canary"):
+        r = _alex(client, user, "crash after one call")
+    assert r.status_code == 502
+    rec = _canary_turns(caplog)[0]
+    assert rec["turn_outcome"] == "crash"
+    assert rec["llm_calls"] == 1
+    assert rec["llm_usage"]["calls"] == 1
+    assert rec["llm_usage"]["input_tokens"] == 40
     assert rec["tool_batches"] is None
 
 
@@ -487,19 +532,30 @@ def test_search_direct_emits_canary_turn(client, user, monkeypatch, caplog):
     rec = turns[0]
     assert _REQUIRED_TURN_KEYS.issubset(rec.keys())
     assert rec["agent_arch"] == "legacy"
-    # Deterministic path: no fc graph, so fc fields default.
-    assert rec["llm_calls"] is None and rec["tool_batches"] is None
+    # Deterministic path: zero calls/batches are facts, not missing telemetry.
+    assert rec["llm_calls"] == 0 and rec["tool_batches"] == 0
+    assert rec["llm_usage_status"] == "no_llm_calls"
 
 
 # ---------------------------------------------------------------------------
 # _build_fc_signals unit derivation
 # ---------------------------------------------------------------------------
 
-def test_build_fc_signals_legacy_arch_nulls(monkeypatch):
+def test_build_fc_signals_legacy_arch_uses_observed_calls_and_shared_artifacts(monkeypatch):
     monkeypatch.setattr(appmod, "AGENT_ARCH", "legacy")
-    sig = appmod._build_fc_signals({"loop_turn": 5, "tool_artifacts": [{"turn": 0}]})
-    assert sig["llm_calls"] is None
-    assert sig["tool_batches"] is None
+    monkeypatch.setattr(appmod.turn_observations, "snapshot", lambda: {
+        "provider_schema_400_count": 0,
+        "llm_usage_calls": [],
+        "llm_calls": 2,
+        "llm_usage_status": "partial",
+    })
+    sig = appmod._build_fc_signals({
+        "loop_turn": 5,
+        "tool_artifacts": [{"turn": 0}],
+        "task_results": [{"id": "wave-1"}],
+    })
+    assert sig["llm_calls"] == 2
+    assert sig["tool_batches"] == 2
     assert sig["soft_wrapped"] is False
 
 
@@ -588,11 +644,38 @@ def test_config_checkpoint_default(monkeypatch):
 
 @pytest.fixture
 def _restore_canary_sink(monkeypatch):
-    """Re-wire the sink to its default after the test so a temp-path handler cannot leak into
-    later tests. monkeypatch reverts CANARY_LOG_PATH first, then we rewire on the clean env."""
+    """Re-wire the sink to the SESSION default after the test, so a temp-path handler
+    cannot leak into later tests.
+
+    It used to ``delenv`` the variable and then rewire. With CANARY_LOG_PATH UNSET,
+    ``_wire_canary_sink`` takes its documented "default enabled" branch and attaches a
+    handler pointing at the REAL ``<project>/.runtime/logs/canary-<arch>.jsonl``. So
+    from the moment this fixture first tore down, every canary-emitting test in the
+    same pytest process appended live-looking records to PRODUCTION telemetry — the
+    same files ``scripts/canary_report.py`` and the audit read. conftest.py pins the
+    variable to "off" for the whole session precisely so that cannot happen;
+    restoring THAT is what "restore" was always supposed to mean.
+    """
+    original = os.environ.get("CANARY_LOG_PATH", "off")
     yield
-    monkeypatch.delenv("CANARY_LOG_PATH", raising=False)
+    monkeypatch.setenv("CANARY_LOG_PATH", original)
     appmod._wire_canary_sink()
+
+
+def test_the_sink_never_defaults_onto_the_production_log_during_tests():
+    """Guard the guard. The fixture above is the only thing standing between the test
+    suite and the real telemetry files, and its failure mode is silent: nothing errors,
+    the records simply appear in production data."""
+    assert os.environ.get("CANARY_LOG_PATH", "").lower() in {"off", "0", "disabled"}, (
+        "conftest pins CANARY_LOG_PATH=off; if a test leaves it unset, _wire_canary_sink "
+        "attaches a handler to .runtime/logs/canary-<arch>.jsonl and the suite starts "
+        "writing into production telemetry")
+    ours = [h for h in appmod._canary_logger.handlers
+            if getattr(h, appmod._CANARY_SINK_MARKER, False)]
+    for handler in ours:
+        target = str(getattr(handler, "baseFilename", ""))
+        assert ".runtime/logs/canary-" not in target, (
+            f"a test left the canary sink pointed at production telemetry: {target}")
 
 
 def test_canary_sink_writes_one_json_line(tmp_path, monkeypatch, user, _restore_canary_sink):
@@ -655,9 +738,14 @@ def test_asgi_health_identity_headers(monkeypatch):
     fake = types.ModuleType("uk_rent_agent._legacy_web_app")
     fake.AGENT_ARCH = "fc_loop"
     fake.APP_CANDIDATE_SHA = "abc1234"
+    fake.MANAGER_V1_SPECIALISTS = False
     monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", fake)
     headers = asgi._canary_identity()
-    assert headers == {"X-Agent-Arch": "fc_loop", "X-Agent-Version": "abc1234"}
+    assert headers == {
+        "X-Agent-Arch": "fc_loop",
+        "X-Agent-Version": "abc1234",
+        "X-Agent-Specialists": "0",
+    }
 
 
 def test_asgi_health_identity_degrades_when_app_not_loaded(monkeypatch):

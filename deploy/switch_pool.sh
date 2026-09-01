@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# Atomic pool switch / rollback lever for the public upstream.
+# Compatibility pool switch / rollback lever for the public route.
 #
-# runbook §4 describes rollback as "set fc weight to zero". No such weight exists: the
-# public nginx has ONE upstream with ONE server line. This script is that missing verb.
+# On a weighted install this is a 0/100 wrapper around set_canary_weight.sh.  The
+# older single-upstream implementation below remains only so an emergency rollback
+# still works while a host is being migrated to the weighted include.
 #
 #   switch_pool.sh --to legacy            # 127.0.0.1:5001
-#   switch_pool.sh --to fc                # 127.0.0.1:5002   (needs --allow-public-fc)
+#   switch_pool.sh --to fc                # candidate 100% (needs --allow-public-fc,
+#                                         #   plus --stage maintenance for a deploy
+#                                         #   drain or CANARY_ALLOW_FLIP=1 for a
+#                                         #   gated flip — see docs/canary_runbook.md)
 #   switch_pool.sh --status
+#
+# Candidate identity comes from the root .env's CANARY_AGENT_ARCH /
+# CANARY_MANAGER_V1_SPECIALISTS — the same pair update.sh, set_canary_weight.sh
+# and the monitor read. SWITCH_CANDIDATE_ARCH / SWITCH_CANDIDATE_SPECIALISTS
+# remain as an explicit override for rehearsals.
 #
 # Guarantees, in order:
 #   1. only ports 5001/5002 are ever written;
-#   2. the TARGET pool must answer /ready with the expected arch BEFORE anything changes;
+#   2. the TARGET pool must answer /ready with the expected arch and specialist bit
+#      BEFORE anything changes;
 #   3. on production, the inactive target is restarted and re-probed before cutover;
 #      this clears process-local hot session state so the target rehydrates from the
 #      shared ConversationStore instead of assuming load-balancer stickiness;
@@ -28,6 +38,7 @@
 set -uo pipefail
 
 CONF="${SWITCH_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
+CURL_CMD="${SWITCH_CURL_CMD:-curl}"
 TEST_CMD="${SWITCH_TEST_CMD:-sudo nginx -t}"
 RELOAD_CMD="${SWITCH_RELOAD_CMD:-sudo systemctl reload nginx}"
 VERIFY_URL="${SWITCH_VERIFY_URL:-https://127.0.0.1/ready}"
@@ -37,15 +48,101 @@ HEALTH_FMT="${SWITCH_POOL_HEALTH_FMT:-http://127.0.0.1:%s/ready}"
 REFRESH_CMD="${SWITCH_REFRESH_CMD:-docker restart}"
 REFRESH_RETRIES="${SWITCH_REFRESH_RETRIES:-30}"
 REFRESH_DELAY="${SWITCH_REFRESH_DELAY:-2}"
+ROUTE_CONF="${SWITCH_ROUTE_CONF:-/etc/nginx/snippets/rentcompass-canary-routing.conf}"
+WEIGHT_SCRIPT="${SWITCH_WEIGHT_SCRIPT:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/set_canary_weight.sh}"
+SWITCH_REPO_DIR="${SWITCH_REPO_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SWITCH_ENV_FILE="${SWITCH_ENV_FILE:-$SWITCH_REPO_DIR/.env}"
+
+# --- candidate identity: ONE source, shared with the rest of the deploy path ---
+# This used to read only SWITCH_CANDIDATE_ARCH / SWITCH_CANDIDATE_SPECIALISTS,
+# variables nothing else in the repo sets or documents, while update.sh,
+# set_canary_weight.sh and deploy/monitoring/rentcompass-monitor.sh all read
+# CANARY_AGENT_ARCH / CANARY_MANAGER_V1_SPECIALISTS from the root .env. On a host
+# whose .env selects manager_v1 that disagreement made `switch_pool.sh --to fc`
+# fail on an arch mismatch against a pool that was in fact correct.
+#
+# The CANARY_* variables are now the source of truth. SWITCH_CANDIDATE_* remain
+# as an explicit, documented override (rehearsals against a private nginx, and
+# ad-hoc probes of a pool that is deliberately not what .env selects).
+env_value() { # key default; process env wins, then root .env, then default
+  local key="$1" fallback="$2" value=""
+  if [[ -n "${!key+x}" ]]; then
+    value="${!key}"
+  elif [[ -r "$SWITCH_ENV_FILE" ]]; then
+    value="$(sed -n "s/^${key}=//p" "$SWITCH_ENV_FILE" | tail -1 | tr -d '\r')"
+    value="${value#\"}"; value="${value%\"}"
+    value="${value#\'}"; value="${value%\'}"
+  fi
+  printf '%s' "${value:-$fallback}"
+}
+
+bool01() {
+  case "${1,,}" in
+    1|true|yes|on) printf 1 ;;
+    0|false|no|off|'') printf 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# --- CANONICAL specialist-header rule (keep every copy byte-identical) -------
+# X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
+# specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
+# counts as 0: every image built before 2026-08-31 omits the header entirely,
+# which is BOTH pools deployed on this host today, and the legacy pool is the
+# standing rollback escape hatch that must not be recreated just to satisfy a
+# header check.  Demanding the header for an expected 0 turned `--to legacy`
+# (the emergency rollback) and update.sh's drain leg into hard failures.
+# Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
+#         deploy/monitoring/rentcompass-monitor.sh
+# Python twin: deploy/probe_pool_answer.py::specialists_match
+specialists_ok() { # <observed> <expected>
+  local observed="${1:-}" expected="${2:-}"
+  if [ "$observed" = "$expected" ]; then return 0; fi
+  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
+  return 1
+}
+specialists_absent() { # <observed> -> 0 when the pool sent no specialist header
+  [ -z "${1:-}" ] || [ "${1:-}" = none ]
+}
+specialists_shown() { # <observed> -> what to print for it in a message
+  if specialists_absent "${1:-}"; then printf '<absent>'; else printf '%s' "$1"; fi
+}
+
+CANDIDATE_ARCH="${SWITCH_CANDIDATE_ARCH:-$(env_value CANARY_AGENT_ARCH fc_loop)}"
+CANDIDATE_SPECIALISTS_RAW="${SWITCH_CANDIDATE_SPECIALISTS:-$(env_value CANARY_MANAGER_V1_SPECIALISTS 0)}"
+if ! CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS_RAW")"; then
+  die_early="candidate specialists switch must be a boolean (got '$CANDIDATE_SPECIALISTS_RAW')"
+  CANDIDATE_SPECIALISTS=0
+fi
+
+CANDIDATE_MCP_RAW="${SWITCH_CANDIDATE_MCP:-$(env_value CANARY_USE_MCP_TOOLS 0)}"
+if ! CANDIDATE_MCP="$(bool01 "$CANDIDATE_MCP_RAW")"; then
+  die_early="${die_early:-candidate MCP switch must be a boolean (got '$CANDIDATE_MCP_RAW')}"
+  CANDIDATE_MCP=0
+fi
+
+case "$CANDIDATE_ARCH:$CANDIDATE_SPECIALISTS" in
+  fc_loop:0|manager_v1:1) ;;
+  *) die_early="${die_early:-candidate identity must be fc_loop/specialists=0 or manager_v1/specialists=1}" ;;
+esac
+# Defence in depth against a root .env the rest of the deploy path would refuse:
+# update.sh, release.sh, set_canary_weight.sh and the monitor all reject MCP for a
+# public candidate, and Config.__post_init__ fails the pool's /ready anyway. This
+# lever should not be the one place that would have moved the route regardless.
+[[ "$CANDIDATE_MCP" == 0 ]] \
+  || die_early="${die_early:-candidate identity must be MCP-free for a public rollout (CANARY_USE_MCP_TOOLS=$CANDIDATE_MCP_RAW)}"
 
 UPSTREAM_BLOCK='upstream rentcompass_app'
 declare -A PORT=( [legacy]=5001 [fc]=5002 )
-declare -A ARCH=( [legacy]=legacy [fc]=fc_loop )
+declare -A ARCH=( [legacy]=legacy [fc]="$CANDIDATE_ARCH" )
+declare -A SPECIALISTS=( [legacy]=0 [fc]="$CANDIDATE_SPECIALISTS" )
 declare -A CONTAINER=( [legacy]=uk-rent-app [fc]=uk-rent-app-fc )
 
 die() { printf '\033[31mFAIL\033[0m %s\n' "$*" >&2; exit 1; }
 ok()  { printf '\033[32m ok \033[0m %s\n' "$*"; }
 note(){ printf '     %s\n' "$*"; }
+
+[[ -z "${die_early:-}" ]] || die "$die_early"
 
 current_port() {
   awk "/^${UPSTREAM_BLOCK}[[:space:]]*\{/,/^\}/" "$CONF" \
@@ -54,25 +151,48 @@ current_port() {
 
 pool_of_port() { case "$1" in 5001) echo legacy ;; 5002) echo fc ;; *) echo "unknown:$1" ;; esac; }
 
-# Identity of whatever is answering a URL: "<arch> <sha>", or empty on failure.
-identity_at() {
-  local url="$1" hdrs
-  hdrs=$(curl $CURL_OPTS -D- -o /dev/null --max-time 10 "$url" 2>/dev/null) || return 1
-  grep -qi '^HTTP/[0-9.]* 200' <<<"$hdrs" || return 1
-  printf '%s %s\n' \
-    "$(grep -i '^x-agent-arch:'    <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
-    "$(grep -i '^x-agent-version:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
+# The active-drain marker deploy/update.sh writes before it drains and removes
+# after it restores; resolved exactly as set_canary_weight.sh resolves it, so both
+# routing modes read one file.
+maintenance_marker_path() {
+  if [[ -n "${RENTCOMPASS_MAINTENANCE_MARKER:-}" ]]; then
+    printf '%s' "$RENTCOMPASS_MAINTENANCE_MARKER"; return 0
+  fi
+  local common
+  common="$(git -C "$SWITCH_REPO_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+    || return 1
+  [[ -n "$common" ]] || return 1
+  printf '%s/rentcompass-maintenance-drain' "$common"
 }
 
-verify_public() {                      # $1 expected arch — returns 0 only on a full match
-  local want="$1" got arch sha
+# Identity of whatever is answering a URL: "<arch> <sha> <specialists>", or
+# empty on failure.  A missing specialist header is deliberately not guessed.
+identity_at() {
+  local url="$1" hdrs specialists
+  hdrs=$($CURL_CMD $CURL_OPTS -D- -o /dev/null --max-time 10 "$url" 2>/dev/null) || return 1
+  grep -qi '^HTTP/[0-9.]* 200' <<<"$hdrs" || return 1
+  specialists="$(grep -i '^x-agent-specialists:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
+  printf '%s %s %s\n' \
+    "$(grep -i '^x-agent-arch:'    <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
+    "$(grep -i '^x-agent-version:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
+    "${specialists:-none}"
+}
+
+verify_public() { # $1 expected arch, $2 expected specialists
+  local want="$1" want_specialists="$2" got arch sha specialists
   got=$(identity_at "$VERIFY_URL") || return 1
-  read -r arch sha <<<"$got"
+  read -r arch sha specialists <<<"$got"
   [[ "$arch" == "$want" ]] || { note "arch mismatch: want '$want', got '$arch'"; return 1; }
+  if ! specialists_ok "$specialists" "$want_specialists"; then
+    note "specialists mismatch: want '$want_specialists', got '$(specialists_shown "$specialists")'"; return 1
+  fi
+  if specialists_absent "$specialists"; then
+    note "the public endpoint sends no X-Agent-Specialists header (pre-2026-08-31 image); absent counts as specialists=0"
+  fi
   if [[ ${#sha} -ne 40 && "${ALLOW_UNIDENTIFIED:-0}" -ne 1 ]]; then
     note "sha is not a full 40-char commit: '${sha:-<absent>}'"; return 1
   fi
-  echo "$arch $sha"; return 0
+  echo "$arch $sha specialists=$specialists"; return 0
 }
 
 write_upstream() {                     # $1 port — surgical, single-line substitution
@@ -106,17 +226,46 @@ status() {
   done
 }
 
-TARGET=""; ALLOW_PUBLIC_FC=0; ALLOW_UNIDENTIFIED=0; EXPECT_SHA=""
+TARGET=""; ALLOW_PUBLIC_FC=0; ALLOW_UNIDENTIFIED=0; EXPECT_SHA=""; STATUS_ONLY=0
+ROLLOUT_ID=""; ROLLOUT_STAGE=""
+# The single-upstream path never drives a real turn, so this flag exists here only
+# to be FORWARDED to set_canary_weight.sh on a weighted host: without it neither
+# deploy/update.sh nor deploy/release.sh could ever reach the opt-out, and the
+# restore leg of every release paid for two real billed turns it cannot skip.
+SKIP_ANSWER_PROBE="${CANARY_SKIP_ANSWER_PROBE:-0}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --to) TARGET="${2:-}"; shift 2 ;;
     --allow-public-fc) ALLOW_PUBLIC_FC=1; shift ;;
     --expect-sha) EXPECT_SHA="${2:-}"; shift 2 ;;
+    --rollout-id) ROLLOUT_ID="${2:-}"; shift 2 ;;
+    --stage) ROLLOUT_STAGE="${2:-}"; shift 2 ;;
     --allow-unidentified-target) ALLOW_UNIDENTIFIED=1; shift ;;
-    --status) status; exit 0 ;;
+    --skip-answer-probe) SKIP_ANSWER_PROBE=1; shift ;;
+    --status) STATUS_ONLY=1; shift ;;
     *) die "unknown argument: $1" ;;
   esac
 done
+if [[ -r "$ROUTE_CONF" ]] && grep -q '^# rentcompass-canary-weight:' "$ROUTE_CONF"; then
+  [[ -x "$WEIGHT_SCRIPT" ]] || die "weighted route is installed but controller is not executable: $WEIGHT_SCRIPT"
+  if [[ "$STATUS_ONLY" == 1 ]]; then
+    exec env CANARY_ROUTE_CONF="$ROUTE_CONF" "$WEIGHT_SCRIPT" --status
+  fi
+  [[ -n "$TARGET" ]] || die "usage: $0 --to <legacy|fc> [--allow-public-fc] | --status"
+  [[ "$TARGET" == legacy || "$TARGET" == fc ]] \
+    || die "target must be 'legacy' or 'fc' (got '$TARGET')"
+  _weight=0; [[ "$TARGET" == fc ]] && _weight=100
+  _args=(--weight "$_weight")
+  [[ "$ALLOW_PUBLIC_FC" == 1 ]] && _args+=(--allow-public-candidate)
+  [[ "$ALLOW_UNIDENTIFIED" == 1 ]] && _args+=(--allow-unidentified-target)
+  [[ -n "$EXPECT_SHA" ]] && _args+=(--expect-sha "$EXPECT_SHA")
+  [[ -n "$ROLLOUT_ID" ]] && _args+=(--rollout-id "$ROLLOUT_ID")
+  [[ -n "$ROLLOUT_STAGE" ]] && _args+=(--stage "$ROLLOUT_STAGE")
+  [[ "$SKIP_ANSWER_PROBE" == 1 ]] && _args+=(--skip-answer-probe)
+  exec env CANARY_ROUTE_CONF="$ROUTE_CONF" "$WEIGHT_SCRIPT" "${_args[@]}"
+fi
+
+[[ "$STATUS_ONLY" == 0 ]] || { status; exit 0; }
 [[ -n "$TARGET" ]] || die "usage: $0 --to <legacy|fc> [--allow-public-fc] | --status"
 [[ -n "${PORT[$TARGET]:-}" ]] || die "target must be 'legacy' or 'fc' (got '$TARGET')"
 
@@ -134,7 +283,7 @@ if [[ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" != 1 ]]; then
   export RENTCOMPASS_DEPLOY_LOCK_HELD=1
 fi
 
-TO_PORT="${PORT[$TARGET]}"; WANT_ARCH="${ARCH[$TARGET]}"
+TO_PORT="${PORT[$TARGET]}"; WANT_ARCH="${ARCH[$TARGET]}"; WANT_SPECIALISTS="${SPECIALISTS[$TARGET]}"
 [[ "$TO_PORT" == "5001" || "$TO_PORT" == "5002" ]] || die "refusing port $TO_PORT (only 5001/5002)"
 [[ -r "$CONF" ]] || die "conf not readable: $CONF"
 
@@ -142,10 +291,66 @@ FROM_PORT=$(current_port)
 [[ -n "$FROM_PORT" ]] || die "could not find a server line in the '$UPSTREAM_BLOCK' block"
 if [[ "$FROM_PORT" == "$TO_PORT" ]]; then ok "already on $TARGET (127.0.0.1:$TO_PORT)"; exit 0; fi
 
-# The fc candidate is at STAGE-PAUSE. Pointing public traffic at it is a policy decision,
+# The candidate is at STAGE-PAUSE. Pointing public traffic at it is a policy decision,
 # not a mechanical one, so it takes an explicit flag even when everything else is green.
 if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* && "$ALLOW_PUBLIC_FC" -ne 1 ]]; then
-  die "refusing to put fc on the PUBLIC upstream without --allow-public-fc (fc is at STAGE-PAUSE)"
+  die "refusing to put candidate on the PUBLIC upstream without --allow-public-fc (candidate is at STAGE-PAUSE)"
+fi
+
+# --to fc on a single-upstream host is 100% of public traffic, i.e. the same
+# decision set_canary_weight.sh gates on a weighted host. Keep one policy: a
+# deploy drain says --stage maintenance and restores afterwards; a real cutover
+# sets CANARY_ALLOW_FLIP=1 deliberately. Anything else is refused here too, so
+# migrating a host between routing modes cannot change what a release may do.
+if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* ]]; then
+  case "${ROLLOUT_STAGE:-flip}" in
+    maintenance)
+      # Identical and-gates to set_canary_weight.sh's maintenance branch: the
+      # deploy lock, update.sh's machine rollout-id shape, and the active-drain
+      # marker update.sh writes before the drain and removes after the restore.
+      # Without them `--stage maintenance` is a permanent, unlogged 100% flip that
+      # never has to meet CANARY_ALLOW_FLIP, on the one host shape where nothing
+      # else gates it either.
+      [[ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" == 1 ]] \
+        || die "stage 'maintenance' is machine-only: it is the drain deploy/update.sh takes, and this caller does not hold the deploy lock (docs/canary_runbook.md section 2)"
+      [[ "$ROLLOUT_ID" =~ ^deploy-maintenance-[0-9a-f]{7,}$ ]] \
+        || die "stage 'maintenance' requires --rollout-id deploy-maintenance-<sha> (got '${ROLLOUT_ID:-<none>}')"
+      MAINTENANCE_MARKER="$(maintenance_marker_path)" \
+        || die "stage 'maintenance' cannot resolve its marker path; set RENTCOMPASS_MAINTENANCE_MARKER"
+      [[ -r "$MAINTENANCE_MARKER" ]] \
+        || die "stage 'maintenance' requires an active drain marker at $MAINTENANCE_MARKER; deploy/update.sh writes it before the drain and removes it after the restore. A 100% cutover is '--stage flip' with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)"
+      [[ "$(cat "$MAINTENANCE_MARKER" 2>/dev/null || true)" == "$ROLLOUT_ID" ]] \
+        || die "the drain marker at $MAINTENANCE_MARKER names a different rollout id than '$ROLLOUT_ID'; refusing a 100% exposure no running deploy asked for"
+      _marker_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_MARKER" 2>/dev/null || echo 0) ))
+      [[ "$_marker_age" -ge 0 && "$_marker_age" -le "${RENTCOMPASS_MAINTENANCE_MARKER_TTL:-3600}" ]] \
+        || die "the drain marker at $MAINTENANCE_MARKER is ${_marker_age}s old (TTL ${RENTCOMPASS_MAINTENANCE_MARKER_TTL:-3600}s); a drain authorisation must expire with the deploy that opened it — re-run deploy/update.sh instead of reusing it"
+      note "stage 'maintenance': temporary drain onto the candidate; the caller must restore the previous upstream"
+      ;;
+    flip)
+      [[ "${CANARY_ALLOW_FLIP:-0}" == 1 ]] \
+        || die "refusing 100% public candidate traffic without CANARY_ALLOW_FLIP=1; 50% is the highest authorised rollout stage (docs/canary_runbook.md section 2)"
+      ;;
+    *) die "refusing 100% public candidate traffic at stage '$ROLLOUT_STAGE'; use --stage maintenance (deploy drain) or --stage flip with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)" ;;
+  esac
+fi
+
+# R3-M8. This host has exactly TWO pool slots: :5001 is hardcoded `legacy` in
+# docker-compose.yml and :5002 is the single candidate slot. A candidate arch that
+# is not what the slot runs today therefore REPLACES today's production
+# architecture rather than running beside it, and the rollback target stays
+# `legacy` — not the architecture being displaced. Say that out loud before the
+# route moves; the runbook stage table repeats it.
+LIVE_CANDIDATE_ARCH="$(env_value SWITCH_LIVE_CANDIDATE_ARCH "$(printf '%s' "$(env_value FC_CANARY_IMAGE '')" | sed -n 's/.*:canary-\(.*\)-[0-9a-f]\{7,\}$/\1/p' | tr '-' '_')")"
+LIVE_CANDIDATE_ARCH="${LIVE_CANDIDATE_ARCH:-fc_loop}"
+if [[ "$CANDIDATE_ARCH" != "$LIVE_CANDIDATE_ARCH" ]]; then
+  printf '\033[33mWARN\033[0m the candidate slot (:%s) runs %s today; this switch makes %s the candidate.\n' \
+    "${PORT[fc]}" "$LIVE_CANDIDATE_ARCH" "$CANDIDATE_ARCH" >&2
+  printf '\033[33mWARN\033[0m the slot is EXCLUSIVE: %s is REPLACED, not compared against, and the rollback target stays legacy (:%s).\n' \
+    "$LIVE_CANDIDATE_ARCH" "${PORT[legacy]}" >&2
+fi
+
+if [[ "$TARGET" == fc && "$CANDIDATE_ARCH" != fc_loop ]]; then
+  die "candidate arch '$CANDIDATE_ARCH' requires the weighted routing include; refusing legacy single-upstream switch"
 fi
 
 note "switching $(pool_of_port "$FROM_PORT") (:$FROM_PORT) -> $TARGET (:$TO_PORT)"
@@ -154,8 +359,13 @@ note "switching $(pool_of_port "$FROM_PORT") (:$FROM_PORT) -> $TARGET (:$TO_PORT
 TARGET_URL="$(printf "$HEALTH_FMT" "$TO_PORT")"
 TARGET_ID=$(identity_at "$TARGET_URL") \
   || die "target pool 127.0.0.1:$TO_PORT is not answering /ready with 200 — nothing changed"
-read -r t_arch t_sha <<<"$TARGET_ID"
+read -r t_arch t_sha t_specialists <<<"$TARGET_ID"
 [[ "$t_arch" == "$WANT_ARCH" ]] || die "target reports arch '$t_arch', expected '$WANT_ARCH' — nothing changed"
+specialists_ok "$t_specialists" "$WANT_SPECIALISTS" \
+  || die "target reports specialists='$(specialists_shown "$t_specialists")', expected '$WANT_SPECIALISTS' — nothing changed"
+if specialists_absent "$t_specialists"; then
+  note "target sends no X-Agent-Specialists header (pre-2026-08-31 image); absent counts as specialists=0"
+fi
 
 # The durable ConversationStore is shared, but SessionStore is process-local.
 # Restarting the inactive target clears any old hot slice and forces its first
@@ -177,9 +387,11 @@ if [[ "$REFRESH_TARGET" == 1 ]]; then
   done
   [[ -n "$TARGET_ID" ]] \
     || die "target did not become ready after refresh — public upstream was not changed"
-  read -r t_arch t_sha <<<"$TARGET_ID"
+  read -r t_arch t_sha t_specialists <<<"$TARGET_ID"
   [[ "$t_arch" == "$WANT_ARCH" ]] \
     || die "refreshed target reports arch '$t_arch', expected '$WANT_ARCH' — nothing changed"
+  specialists_ok "$t_specialists" "$WANT_SPECIALISTS" \
+    || die "refreshed target reports specialists='$(specialists_shown "$t_specialists")', expected '$WANT_SPECIALISTS' — nothing changed"
 fi
 # Provenance is directional. A FORWARD switch onto a pool that cannot name its commit is
 # refused. A ROLLBACK onto one is allowed with --allow-unidentified-target, loudly: being
@@ -210,7 +422,8 @@ rollback() {
   $WRITE_CMD "$CONF" < "$BACKUP" >/dev/null || die "RESTORE WRITE FAILED — conf is $CONF, backup is $BACKUP"
   $TEST_CMD >/dev/null 2>&1 || die "RESTORED CONF FAILS nginx -t — manual intervention needed, backup at $BACKUP"
   $RELOAD_CMD >/dev/null 2>&1 || die "RESTORED CONF RELOAD FAILED — manual intervention needed, backup at $BACKUP"
-  if ALLOW_UNIDENTIFIED=1 verify_public "${ARCH[$(pool_of_port "$FROM_PORT")]}" >/dev/null; then
+  _from_pool="$(pool_of_port "$FROM_PORT")"
+  if ALLOW_UNIDENTIFIED=1 verify_public "${ARCH[$_from_pool]}" "${SPECIALISTS[$_from_pool]}" >/dev/null; then
     ok "rolled back cleanly to $(pool_of_port "$FROM_PORT")"
   else
     die "ROLLED BACK BUT VERIFY FAILED — check $VERIFY_URL by hand, backup at $BACKUP"
@@ -227,7 +440,7 @@ if ! $RELOAD_CMD >/dev/null 2>&1; then note "reload failed"; rollback; die "swit
 ok "reloaded"
 
 sleep 1
-if ! NEW_ID=$(verify_public "$WANT_ARCH"); then
+if ! NEW_ID=$(verify_public "$WANT_ARCH" "$WANT_SPECIALISTS"); then
   note "post-switch verification failed"; rollback; die "switch aborted at verification"
 fi
 ok "serving $NEW_ID"

@@ -1,5 +1,6 @@
 # ollama_interface.py - COMPLETE UPDATED VERSION
 
+import itertools
 import json
 import re
 from typing import Any
@@ -38,7 +39,17 @@ def _effective_request_timeout(requested: float | None) -> float:
         raise ValueError("LLM timeout must be positive")
     return min(value, ceiling)
 
-def _record_deepseek_eval(resp, latency_ms, success, error=None):
+# One monotonic token per raw-SDK call. Deliberately NOT id(response): CPython
+# recycles an address as soon as the object is freed, so two sequential calls in a
+# turn can be handed the SAME id — and the second is then dropped by the
+# de-duplication as a "repeat" of the first. That is silent UNDERCOUNTING in the
+# very function whose purpose is to stop this path from undercounting, and it only
+# appears under the memory pressure of a real turn, never in a test that holds both
+# responses alive.
+_raw_call_seq = itertools.count()
+
+
+def _record_deepseek_eval(resp, latency_ms, success, error=None, purpose="memory"):
     """Emit an offline-eval llm_call event for a raw DeepSeek call.
 
     Additive; no-op unless RENTCOMPASS_EVAL is active. Covers the memory +
@@ -60,7 +71,7 @@ def _record_deepseek_eval(resp, latency_ms, success, error=None):
             if cached is None:
                 cached = getattr(usage, "prompt_cache_hit_tokens", None)
         collector.record_llm_call(
-            provider="deepseek", model=DEEPSEEK_MODEL, purpose="memory",
+            provider="deepseek", model=DEEPSEEK_MODEL, purpose=purpose,
             input_tokens=it, output_tokens=ot, cached_tokens=cached,
             latency_ms=latency_ms, success=success, error=error,
         )
@@ -88,8 +99,30 @@ def _usage_blob(resp: Any) -> dict:
 
 
 def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
-                   temperature: float = 0.1, max_tokens: int = 4000) -> str:
-    """Call DeepSeek's OpenAI-compatible chat API. Returns text, or None on error."""
+                   temperature: float = 0.1, max_tokens: int = 4000,
+                   purpose: str = "memory") -> str:
+    """Call DeepSeek's OpenAI-compatible chat API. Returns text, or None on error.
+
+    Every exit from this function reports to BOTH per-turn accounts — the canary
+    observer (``turn_observations``, which the release gate reads) and the offline
+    eval collector. This is a nested, tool-internal model call: a single
+    ``search_properties`` turn makes one, so a turn's ``llm_calls`` was short by one
+    for every such turn until both recorders were wired here. ``purpose`` labels
+    which internal job made the call in the eval stream; it never reaches the
+    canary record, which is per-turn and content-free.
+
+    ``purpose`` is CURRENTLY DEFAULTED BY EVERY CALLER, so the mislabelling it was
+    added to fix is not yet fixed: ``core.recommend_areas`` (its ``_call_deepseek``
+    alias) and ``call_ollama`` below both take the default, and area-recommendation
+    calls therefore still appear in the eval cost stream as ``"memory"``. The one
+    change that makes the parameter earn its place is passing
+    ``purpose="area_recommendation"`` at the ``recommend_areas`` call site; until
+    then this is a knob nobody turns. What IS closed is the trap that came with it:
+    ``evaluation.metrics.fake_llm``'s offline twin now accepts ``purpose`` and
+    ``**kwargs``, so the first caller to start passing it does not get a TypeError
+    offline — which, since almost every call site here sits inside a ``try/except``,
+    would have been swallowed and misread as a tool failure.
+    """
     # DELIBERATELY OUTSIDE the try/except below. Every provider error on this path is
     # swallowed into `return None` plus a print — which is precisely how a whole day of
     # HTTP 400s produced no alarm. A dead model name is a configuration defect, not a
@@ -119,7 +152,8 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
             # memory extraction / judging where thinking only adds latency and cost.
             extra_body={"thinking": {"type": "disabled"}},
         )
-        _record_deepseek_eval(resp, (_time.perf_counter() - _started) * 1000, True)
+        _latency_ms = (_time.perf_counter() - _started) * 1000
+        _record_deepseek_eval(resp, _latency_ms, True, purpose=purpose)
         # ...and into the CANARY observation, which is what the gate reads. These two
         # recorders had drifted apart: the eval one has always seen this path (that is how
         # 48 calls at p50 934ms were counted in the 2026-07-25 round), while `llm_calls`
@@ -127,14 +161,30 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
         # turn. Best-effort by design — a telemetry failure must never break a real answer.
         try:
             from core.turn_observations import note_raw_llm_call
-            note_raw_llm_call(id(resp), usage_blob=_usage_blob(resp),
-                              configured_model=DEEPSEEK_MODEL)
+            note_raw_llm_call(f"rawds:{next(_raw_call_seq)}",
+                              usage_blob=_usage_blob(resp),
+                              configured_model=DEEPSEEK_MODEL,
+                              # None => read the live manager/specialist scope, so a
+                              # nested call made inside a specialist is attributed to
+                              # it in llm_usage.roles instead of to the whole turn.
+                              agent_context=None)
         except Exception:
             pass
         return resp.choices[0].message.content
     except Exception as e:
         _record_deepseek_eval(None, (_time.perf_counter() - _started) * 1000, False,
-                              error=type(e).__name__)
+                              error=type(e).__name__, purpose=purpose)
+        # The provider counters were blind on this path: the observer is a LangChain
+        # callback and there is no LangChain here, so a 400/429/5xx on a nested
+        # tool-internal call was swallowed into `return None` and counted nowhere.
+        # schemas_bound=False is a FACT about this request, not a default — it binds
+        # no tools, functions or response_format — so these can never inflate the
+        # zero-tolerance provider_schema_400 metric.
+        try:
+            from core.turn_observations import note_provider_error
+            note_provider_error(e, schemas_bound=False, agent_context=None)
+        except Exception:
+            pass
         print(f"❌ DeepSeek API error_type={type(e).__name__}")
         return None
 

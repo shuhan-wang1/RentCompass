@@ -99,9 +99,13 @@ USAGE_NOT_INSTRUMENTED = "not_instrumented"
 #
 #     [[ "$label" == legacy && "$specialists" == none && "$want_specialists" == 0 ]]
 #
-# This probe mirrors it EXACTLY — an absent header counts as 0 only for the
-# legacy pool.  A candidate that fails to state its specialist bit is still a
-# failure: that is the header the whole manager_v1 rollout is gated on.
+# The rule was widened on 2026-09-01 (R3-H1): an absent header counts as 0 for
+# ANY pool whose EXPECTED identity is specialists=0, not only for `legacy`.  The
+# header does not exist in origin/main, so BOTH containers deployed on this host
+# omit it; requiring it for an expected 0 made the emergency rollback and the
+# deploy drain refuse against the very images they exist to protect.  A candidate
+# expected to run specialists=1 must still state it — that is the header the
+# manager_v1 rollout is gated on, and no exemption applies there.
 LEGACY_ARCH = "legacy"
 _ABSENT_SPECIALISTS_OK = frozenset({"0", "none"})
 
@@ -121,16 +125,18 @@ def inconclusive(message: str) -> int:
 
 
 def specialists_match(observed: str, expected: str, arch: str) -> bool:
-    """Mirror of `set_canary_weight.sh::verify_local`'s specialist comparison."""
+    """Python twin of the shell `specialists_ok` helper.
+
+    `arch` is kept in the signature (and reported by callers) because the pool's
+    architecture is what makes an absent header explicable, but it no longer
+    narrows the exemption: any pool EXPECTED to run specialists=0 may omit the
+    header.  See the block comment above.
+    """
     if not expected:
         return True
     if observed == expected:
         return True
-    return (
-        not observed
-        and expected in _ABSENT_SPECIALISTS_OK
-        and arch == LEGACY_ARCH
-    )
+    return not observed and expected in _ABSENT_SPECIALISTS_OK
 
 
 def post_turn(base_url: str, query: str, timeout: float, request_id: str):

@@ -98,6 +98,32 @@ check "edge vs the EXPECTED pool is silent"     "silent"               "$(edge_v
 check "edge vs the wrong pool would page"       "sev3-edge-mismatch"   "$(edge_ver 200 abc123 unknown)"
 echo
 
+# --- the specialist-header rule, verbatim from the monitor -------------------
+# R3-M3: `probe` reports `none` when X-Agent-Specialists is absent, and the header
+# does not exist in origin/main — so the first version of this check paged sev3 on
+# EVERY run for every pool, five minutes apart, from the moment the new monitor was
+# installed until both pools had been rebuilt. An always-firing alert is an ignored
+# alert, which is the same defect the "expected public arch" section above records.
+specialists_ok() { # <observed> <expected>
+  local observed="${1:-}" expected="${2:-}"
+  if [ "$observed" = "$expected" ]; then return 0; fi
+  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
+  return 1
+}
+spec() { specialists_ok "$1" "$2" && echo "silent" || echo "sev3-specialists"; }
+echo "--- specialist header (absent == 0 only when 0 is expected) ---"
+check "matching bits are silent"                    "silent"           "$(spec 0 0)"
+check "matching 1s are silent"                      "silent"           "$(spec 1 1)"
+check "TODAY'S IMAGE: absent where 0 is expected"   "silent"           "$(spec none 0)"
+check "an empty value where 0 is expected"          "silent"           "$(spec '' 0)"
+check "absent where 1 is expected still pages"      "sev3-specialists" "$(spec none 1)"
+check "1 where 0 is expected still pages"           "sev3-specialists" "$(spec 1 0)"
+check "0 where 1 is expected still pages"           "sev3-specialists" "$(spec 0 1)"
+# `_expected_specialists` is literally `none` when the edge serves an arch that is
+# neither legacy nor the configured candidate; that must stay an alert.
+check "an unresolvable expectation still pages"     "sev3-specialists" "$(spec 0 none)"
+echo
+
 # --- end-to-end exit contract ------------------------------------------------
 # An unreachable public readiness endpoint is an anomaly, so systemd/cron must
 # receive a non-zero exit and can trigger its own alerting policy.

@@ -22,7 +22,15 @@ from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 from typing import AbstractSet, Annotated, Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    NonNegativeInt,
+    StringConstraints,
+    model_validator,
+)
 
 
 SpecialistRole = Literal["listings", "mobility", "area_evidence"]
@@ -383,6 +391,14 @@ class AnswerContract(_StrictContract):
     root_task_id: Identifier
     response_type: AnswerResponseType
     final_response: AnswerText
+    # The answer as sent is capped at ``AnswerText``'s 8 000 chars. A long multi-area card
+    # runs past that, and trimming the RECORD silently made a truncated copy
+    # indistinguishable from a short answer (review3 R1 low-5). These two fields carry the
+    # fact instead: ``final_response_chars`` is the length of the text that actually
+    # shipped, and ``final_response_truncated`` says whether ``final_response`` is a
+    # prefix of it rather than the whole thing. Neither affects what the user received.
+    final_response_chars: NonNegativeInt = 0
+    final_response_truncated: bool = False
     used_task_ids: tuple[Identifier, ...] = ()
     evidence: tuple[EvidenceRef, ...] = ()
     limitations: tuple[ShortText, ...] = ()

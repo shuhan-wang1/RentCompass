@@ -30,9 +30,13 @@ WRITE_CMD="${CANARY_WRITE_CMD:-sudo tee}"
 MOVE_CMD="${CANARY_MOVE_CMD:-sudo mv}"
 CURL_CMD="${CANARY_CURL_CMD:-curl}"
 CURL_OPTS="${CANARY_CURL_OPTS:--sk}"
-PUBLIC_URL="${CANARY_PUBLIC_URL:-https://127.0.0.1/ready}"
-LEGACY_URL="${CANARY_LEGACY_URL:-http://127.0.0.1:5001/ready}"
-CANDIDATE_URL="${CANARY_CANDIDATE_URL:-http://127.0.0.1:5002/ready}"
+# `-`, NOT `:-`, on every URL: an explicitly EMPTY override must stay empty and be
+# refused below.  With `:-` an empty value silently resolved to the REAL live pools
+# — the exact shape of the incident that motivated the CANARY_ANSWER_PROBE_CMD
+# hardening, and the way two real billed turns were driven from a rehearsal.
+PUBLIC_URL="${CANARY_PUBLIC_URL-https://127.0.0.1/ready}"
+LEGACY_URL="${CANARY_LEGACY_URL-http://127.0.0.1:5001/ready}"
+CANDIDATE_URL="${CANARY_CANDIDATE_URL-http://127.0.0.1:5002/ready}"
 PROBE_COUNT="${CANARY_PROBE_COUNT:-256}"
 # `-`, NOT `:-`: an explicitly EMPTY override must stay empty and be refused
 # below. Falling back to the real probe there would silently drive a live turn
@@ -45,9 +49,16 @@ ANSWER_PROBE_INJECTED=0
 if [[ -n "${CANARY_ANSWER_PROBE_CMD+x}" ]]; then
   ANSWER_PROBE_INJECTED=1
 fi
-LEGACY_ANSWER_URL="${CANARY_LEGACY_ANSWER_URL:-http://127.0.0.1:5001}"
-CANDIDATE_ANSWER_URL="${CANARY_CANDIDATE_ANSWER_URL:-http://127.0.0.1:5002}"
+LEGACY_ANSWER_URL="${CANARY_LEGACY_ANSWER_URL-http://127.0.0.1:5001}"
+CANDIDATE_ANSWER_URL="${CANARY_CANDIDATE_ANSWER_URL-http://127.0.0.1:5002}"
 ANSWER_PROBE_TIMEOUT="${CANARY_ANSWER_PROBE_TIMEOUT:-120}"
+# The grounding substring the probe requires. It defaults to what
+# deploy/probe_pool_answer.py has always defaulted to, so behaviour is unchanged —
+# but it is now a knob rather than a constant buried in the probe: a citation
+# format or localisation change should not silently block every weight increase,
+# and an operator should be able to say so in one command. An explicitly EMPTY
+# value keeps only the fallback-marker check (see the probe's --expect-substring).
+ANSWER_PROBE_SUBSTRING="${CANARY_ANSWER_PROBE_SUBSTRING-data.police.uk}"
 
 die()  { printf '\033[31mFAIL\033[0m %s\n' "$*" >&2; exit 1; }
 ok()   { printf '\033[32m ok \033[0m %s\n' "$*"; }
@@ -57,6 +68,17 @@ note() { printf '     %s\n' "$*"; }
 # command: a failure, but an incomprehensible one. Refuse it where it is set.
 [[ "$ANSWER_PROBE_INJECTED" == 0 || -n "${ANSWER_PROBE_CMD// /}" ]] \
   || die "CANARY_ANSWER_PROBE_CMD is set but empty; unset it to use deploy/probe_pool_answer.py, or pass --skip-answer-probe to opt out explicitly"
+
+# Same rule for every URL: an explicitly empty override is a caller mistake, and
+# falling back to the real :5001/:5002 would answer it by talking to production.
+for _u in CANARY_PUBLIC_URL:PUBLIC_URL CANARY_LEGACY_URL:LEGACY_URL \
+          CANARY_CANDIDATE_URL:CANDIDATE_URL CANARY_LEGACY_ANSWER_URL:LEGACY_ANSWER_URL \
+          CANARY_CANDIDATE_ANSWER_URL:CANDIDATE_ANSWER_URL; do
+  _env="${_u%%:*}"; _var="${_u##*:}"
+  [[ -z "${!_env+x}" || -n "${!_var// /}" ]] \
+    || die "$_env is set but EMPTY; unset it to use the default, or give it a real URL — an empty override must never resolve to the live pools"
+done
+unset _u _env _var
 
 env_value() { # key default; process env wins, then root .env, then default
   local key="$1" fallback="$2" value=""
@@ -76,6 +98,30 @@ bool01() {
     0|false|no|off|'') printf 0 ;;
     *) return 1 ;;
   esac
+}
+
+# --- CANONICAL specialist-header rule (keep every copy byte-identical) -------
+# X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
+# specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
+# counts as 0: every image built before 2026-08-31 omits the header entirely,
+# which is BOTH pools deployed on this host today, and the legacy pool is the
+# standing rollback escape hatch that must not be recreated just to satisfy a
+# header check.  Demanding the header for an expected 0 turned `--to legacy`
+# (the emergency rollback) and update.sh's drain leg into hard failures.
+# Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
+#         deploy/monitoring/rentcompass-monitor.sh
+# Python twin: deploy/probe_pool_answer.py::specialists_match
+specialists_ok() { # <observed> <expected>
+  local observed="${1:-}" expected="${2:-}"
+  if [ "$observed" = "$expected" ]; then return 0; fi
+  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
+  return 1
+}
+specialists_absent() { # <observed> -> 0 when the pool sent no specialist header
+  [ -z "${1:-}" ] || [ "${1:-}" = none ]
+}
+specialists_shown() { # <observed> -> what to print for it in a message
+  if specialists_absent "${1:-}"; then printf '<absent>'; else printf '%s' "$1"; fi
 }
 
 CANDIDATE_ARCH="$(env_value CANARY_AGENT_ARCH fc_loop)"
@@ -109,7 +155,9 @@ esac
 [[ "$PROBE_COUNT" =~ ^[1-9][0-9]*$ ]] || die "CANARY_PROBE_COUNT must be positive"
 
 WEIGHT=""; STATUS_ONLY=0; ALLOW_PUBLIC=0; ALLOW_UNIDENTIFIED=0; EXPECT_SHA=""
-SKIP_ANSWER_PROBE=0
+# The env door exists so deploy/update.sh and deploy/release.sh can reach the
+# opt-out through deploy/switch_pool.sh without every layer growing a flag.
+SKIP_ANSWER_PROBE="${CANARY_SKIP_ANSWER_PROBE:-0}"
 ROLLOUT_ID="${CANARY_ROLLOUT_ID:-}"; ROLLOUT_STAGE="${CANARY_ROLLOUT_STAGE:-}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -240,6 +288,9 @@ if [[ "$WEIGHT" == 100 ]]; then
         || die "stage 'maintenance' requires an active drain marker at $MAINTENANCE_MARKER; deploy/update.sh writes it before the drain and removes it after the restore. A 100% cutover is '--stage flip' with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)"
       [[ "$(cat "$MAINTENANCE_MARKER" 2>/dev/null || true)" == "$ROLLOUT_ID" ]] \
         || die "the drain marker at $MAINTENANCE_MARKER names a different rollout id than '$ROLLOUT_ID'; refusing a 100% exposure no running deploy asked for"
+      _marker_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_MARKER" 2>/dev/null || echo 0) ))
+      [[ "$_marker_age" -ge 0 && "$_marker_age" -le "${RENTCOMPASS_MAINTENANCE_MARKER_TTL:-3600}" ]] \
+        || die "the drain marker at $MAINTENANCE_MARKER is ${_marker_age}s old (TTL ${RENTCOMPASS_MAINTENANCE_MARKER_TTL:-3600}s); a drain authorisation must expire with the deploy that opened it — re-run deploy/update.sh instead of reusing it"
       note "stage 'maintenance': 100% is a temporary drain; the caller must restore the recorded weight/stage"
       ;;
     flip)
@@ -280,9 +331,11 @@ verify_local() { # label url want_arch want_specialists configured_sha allow_unk
   got="$(identity_at "$url")" || die "$label pool is not ready at $url; routing unchanged"
   read -r arch sha specialists pool <<<"$got"
   [[ "$arch" == "$want_arch" ]] || die "$label pool reports arch '$arch', expected '$want_arch'; routing unchanged"
-  [[ "$specialists" == "$want_specialists" ]] \
-    || { [[ "$label" == legacy && "$specialists" == none && "$want_specialists" == 0 ]] \
-      || die "$label pool reports specialists='$specialists', expected '$want_specialists'; routing unchanged"; }
+  specialists_ok "$specialists" "$want_specialists" \
+    || die "$label pool reports specialists='$specialists', expected '$want_specialists'; routing unchanged"
+  if specialists_absent "$specialists"; then
+    note "$label sends no X-Agent-Specialists header (pre-2026-08-31 image); absent counts as specialists=0"
+  fi
   if [[ "$configured_sha" =~ ^[0-9a-f]{40}$ ]]; then
     [[ "$sha" == "$configured_sha" ]] \
       || die "$label pool sha '$sha' != configured pin '$configured_sha'; routing unchanged"
@@ -304,7 +357,8 @@ run_answer_probe() { # base_url want_arch want_specialists -> stdout, probe rc
   # probe_pool_answer.py::specialists_match mirrors verify_local's `none` branch —
   # an absent header counts as 0 only when the pool answers as arch 'legacy'.
   $ANSWER_PROBE_CMD --url "$1" --expect-arch "$2" \
-    --expect-specialists "$3" --timeout "$ANSWER_PROBE_TIMEOUT" 2>&1
+    --expect-specialists "$3" --expect-substring "$ANSWER_PROBE_SUBSTRING" \
+    --timeout "$ANSWER_PROBE_TIMEOUT" 2>&1
 }
 
 verify_answer() { # label base_url want_arch want_specialists
@@ -473,11 +527,12 @@ verify_public_sample() { # cookie -> selected pool; validates identity correspon
   read -r arch sha specialists pool <<<"$got"
   case "$pool" in
     legacy)
-      [[ "$arch" == legacy && "$specialists" =~ ^(0|none)$ ]] || return 1
+      [[ "$arch" == legacy ]] && specialists_ok "$specialists" 0 || return 1
       [[ ! "$LEGACY_SHA" =~ ^[0-9a-f]{40}$ || "$sha" == "$LEGACY_SHA" ]] || return 1
       ;;
     candidate)
-      [[ "$arch" == "$CANDIDATE_ARCH" && "$specialists" == "$CANDIDATE_SPECIALISTS" ]] || return 1
+      [[ "$arch" == "$CANDIDATE_ARCH" ]] \
+        && specialists_ok "$specialists" "$CANDIDATE_SPECIALISTS" || return 1
       [[ "$sha" == "$CANDIDATE_SHA" ]] || return 1
       ;;
     *) return 1 ;;

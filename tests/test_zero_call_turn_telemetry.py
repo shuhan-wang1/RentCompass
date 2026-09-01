@@ -50,11 +50,19 @@ _T0 = datetime(2026, 7, 25, 12, 0, 0, tzinfo=timezone.utc)
 
 @pytest.fixture
 def fresh_observer_state():
-    """Save/restore the module-global observer flag and the turn window."""
+    """Save/restore the module-global observer flags and the turn window.
+
+    BOTH flags. There are two — the LangChain callback and the raw-SDK reporter —
+    and each is enough to make snapshot() report counters instead of nulls. Any
+    earlier test in this process that made a raw call leaves the second one set, so
+    a test that pins only the first is not testing the uninstrumented case at all.
+    """
     prev = tobs._observer_installed
+    prev_raw = tobs._raw_observer_installed
     tobs.end_turn()
     yield
     tobs._observer_installed = prev
+    tobs._raw_observer_installed = prev_raw
     tobs.end_turn()
 
 
@@ -83,6 +91,7 @@ def _zero_call_record(snapshot: dict, *, i: int = 0) -> dict:
 def test_zero_call_turn_without_observer_is_contract_invalid(fresh_observer_state):
     """Reproduces smoke turn 1: no model has ever been built, so the record is rejected."""
     tobs._observer_installed = False
+    tobs._raw_observer_installed = False
     tobs.begin_turn()
 
     snap = tobs.snapshot()

@@ -1,6 +1,6 @@
 # 实验总索引
 
-_更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026-08-06，HEAD `d74561b`。_
+_更新于 2026-09-01（第五节遥测口径 + PR #83 三轮评审后的复算数字）；上一次内容更新 2026-08-31。_
 
 这份索引回答三个问题：**每个实验测了什么、跑在哪条架构上、结论能不能引用。**
 可引用的措辞与 caveat 一律以 `CV_METRICS.md` 为准，本文件只做导航与状态。
@@ -52,7 +52,7 @@ _更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026
 1. **fc_loop 上没有修复后的 held-out 复测。** 契约加固与 Phase 1 修复都只在 legacy（v6）或单测层面验证过。这是当前最大的证据空缺。
 2. **#1 的 fc-vs-legacy 对照每例只跑 1 次，没有 CI。** 升级路径明确：每臂 3 次重复 + cluster bootstrap，harness `_harness/ab_runner.py` 现成。
 3. **实验 D 只测到 plan-time 一半机制**，answer-time 的 `_completion_sweep_into_batch` 在 192 次运行中触发 0 次。
-4. **线上跑的是 `uk-rent-agent:canary-fc-loop-0952c56`**，早于全部契约加固与 Phase 1 修复。合并 ≠ 部署。
+4. **线上跑的是 `uk-rent-agent:canary-fc-loop-4171d84`**（root `.env` 的 `FC_CANARY_IMAGE`，与 `/etc/rentcompass/deploy.env` 的 `DEPLOY_PINNED_SHA=4171d84778be…` 一致，2026-09-01 核对）。本文件此前写的 `0952c56` 是 2026-07 的旧 pin，已过时。**PR #83 的 `manager_v1`／specialist 工作全部未合并、未部署**——合并 ≠ 部署，部署前先 `docker inspect --format '{{.Config.Image}}'`。
 
 ## 五、遥测口径变更（引用跨期数字前必读）
 
@@ -80,28 +80,51 @@ _更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026
 3. **历史记录不会被追溯判违规。** `scripts/canary_report.py::validate_record` 按记录**自身**的
    `telemetry_schema_version` 选规则：v≤2 用当时生效的契约，v3 才要求
    `llm_calls`/`tool_batches` 非空并与 `llm_usage.calls` 对账。
-   用旧/新校验器回放真实日志的结果见下表。`OLD` = `git show HEAD:scripts/canary_report.py`
-   （`SUPPORTED_SCHEMA_VERSIONS = (2,)`），`NEW` = 当前树。
-   **快照时刻 2026-08-31T11:52 UTC**——这两个是活日志，条数会涨，复算前先记条数。
-   复算脚本：`<scratchpad>/fixB2/replay.py`。
+   用旧/新校验器回放真实日志的结果见下表。`OLD` = `git show 4171d84:scripts/canary_report.py`
+   （`SUPPORTED_SCHEMA_VERSIONS = (2,)`；**按 sha 引用，不要写 `HEAD`** —— 本分支合并后
+   `HEAD` 就是新校验器，那条指令会自我反转），`NEW` = 当前树。复算方式：把两份
+   `canary_report.py` 分别 `importlib` 加载，对每条解析出的记录调用各自的
+   `validate_record`，比较两个违规集合（`newly_broken = NEW - OLD`）。这两个是活日志，
+   条数会涨，复算前先记条数。
 
-   | 日志 | records | violating_OLD | violating_NEW | newly_broken |
-   |---|---|---|---|---|
-   | `.runtime/logs/canary-fc_loop.jsonl` | 231 | 0 | 0 | 0 |
-   | `.runtime/logs/canary-legacy.jsonl` | 2973 | 726 | 682 | 0 |
+   **下表的"清理前"行是快照（2026-08-31T11:52 UTC），"清理后"行是 owner 清理后的当前实测
+   （2026-09-01 复算，同一方法）：**
 
-   **`OLD == NEW` 在算术上不可能**，此前表里写的 `654 / 654` 是错的：旧校验器把泄漏进来的
-   69 条 v3 记录一律判成 unknown-schema 违规，新校验器只判其中一部分，所以 OLD 必然多出
-   那 42 条差额。这一节的全部说服力就在这张表上，所以它必须是实测数。
+   | 日志 | 时点 | records | v3 | violating_OLD | violating_NEW | newly_broken |
+   |---|---|---|---|---|---|---|
+   | `canary-fc_loop.jsonl` | 清理前/后（未变） | 231 | 0 | 0 | 0 | 0 |
+   | `canary-legacy.jsonl` | **清理前**（现存于 `.bak-20260831`） | 2973 | 69 | 726 | 682 | 0 |
+   | `canary-legacy.jsonl` | **清理后**（当前活日志） | 2904 | 0 | 657 | 657 | 0 |
+
+   清理前 `OLD > NEW` 的 44 条差额全部来自那 69 条泄漏的 v3 记录：旧校验器把它们一律判成
+   unknown-schema 违规（69/69），新校验器按 v3 规则只判其中 25 条，69 − 25 = 44。
+   （此前正文写"42 条差额"与自己的表不符，已改正。）
+
+   **这些泄漏记录已于 2026-08-31 由 owner 从活日志中清除，当前 `canary-legacy.jsonl` 内
+   v3 记录为 0。** 因此今天照上述方法重跑会得到 `OLD == NEW == 657`——**这不反驳本节**：
+   两个校验器只在 v3 记录上可能分歧，没有 v3 记录时相等才是预期结果。要复现有分歧的那张表，
+   必须对着 `.runtime/logs/canary-legacy.jsonl.bak-20260831` 跑（该备份仍持有那 69 条，
+   且它不在门禁的输入后缀白名单内，见下）。
 
    修复前同一回放为 fc `0 → 81`、legacy `2840 → 684`（审计当时是 `590 → 2643`／2748 条），
    即消费端曾在给一份写入时并不存在的契约追溯定罪。
 
+   **备份文件不要留在 `.runtime/logs/` 里。** `scripts/canary_report.py::resolve_inputs`
+   现在把 `.jsonl`/`.log`/`.ndjson` 后缀白名单同时施加于目录遍历**和 glob 展开**
+   （`LOG_SUFFIXES`），所以 `.bak-20260831` 不会被门禁读进去；但这是安全带不是归档策略，
+   备份应当移出该目录。
+
 **v3 新增（纯增量，旧消费者可忽略）：** `variant_id`、rollout 身份块
 （`rollout_id`/`rollout_stage`/`configured_candidate_percent`/`traffic_source`/`assigned_pool`）、
-`root_agent_context`/`agent_role`/`task_id`/`parent_task_id`、`tool_latency`（每工具
+`agent_role`/`task_id`/`parent_task_id`、`tool_latency`（每工具
 `count`/`p50_ms`/`max_ms`/`timed_out`/`abandoned`，content-free、不参与门禁）、
+`llm_observer_installed`（bool，LangChain **回调**观察器在该回合是否挂载；见下第 5 条）、
 以及 `specialist` 块的 `partial` / `denied_calls` / `dropped_error_codes` 计数器。
+
+> **更正（2026-09-01）：`root_agent_context` 不是记录字段。** 此前本节把它列为 v3 新增字段，
+> 但 `canary_telemetry.build_canary_turn_record` 从不写出这个键——它只把该上下文**摊平**成
+> `agent_role` / `task_id` / `parent_task_id` 三个顶层字段。`root_agent_context` 只存在于
+> 进程内的 `turn_observations` 累加器里。错的是文档，不是生产端。
 
 **命名说明（2026-08-31，v3 内部改名）：** v3 的 specialist 生命周期诊断块名为
 `specialist`。早期 v3 草稿用的是一个宣称多智能体架构的旧名——specialist 不发起自己的
@@ -128,6 +151,26 @@ _更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026
    崩溃回合**仍然 HOLD**，理由是它真正没观测到的东西（`security.*` 为 null、
    `llm_usage_status=not_instrumented`），不再是一个它永远不可能有的字段。
 
+5. **"无法测量" ≠ "没装仪表"（2026-09-01 三轮修，owner 裁定）。** 生产端不再把
+   `no_llm_calls` 原样透传到不可观测的回合上：崩溃 / 超时 / 取消 / 5xx 且无任何调用完成时，
+   `canary_telemetry.unknown_turn_signals` 把状态改写为 `partial`——**一个被杀掉的回合可能
+   已经计费，它没有资格声称零花费**。同时新增 `llm_observer_installed`（只反映 LangChain
+   回调观察器；一次裸 SDK 调用不再把整个进程标记为"已挂载"）。消费端按四格判定：
+
+   | outcome | 回调观察器 | `llm_usage_status` | `canary_report` | `canary_cost` |
+   |---|---|---|---|---|
+   | `crash`/`server_error` | true | `partial` | 不违规（不可测量） | 计费、未测量、unobservable |
+   | `crash`/`server_error` | false / 缺失 | `not_instrumented` | **违规 → HOLD** | 计费、未测量 |
+   | `ok` | true | `no_llm_calls` | 不违规（可证明的零） | 不计费、已测量的零 |
+   | `ok` | false | `not_instrumented` | **违规 → HOLD** | 计费、未测量 |
+
+   被豁免的那一格不是隐形的：`aggregate_arch` 输出 `unmeasured_spend_turns` 与
+   `unobservable_unmeasured_turns`，报告打印 `unmeasured spend turns` 与
+   `of which unobservable`；`canary_cost` 仍把该回合算作**计费且未测量**，永远不按零计价。
+   **回放中性**：现存日志里没有任何记录带 `llm_observer_installed`，所以没有一条旧记录能
+   拿到这个豁免（上表 `newly_broken = 0` 已含此项）。取消的回合现在也会落记录
+   （`turn_outcome: crash`、`http_status: 499`），不再静默缩小分母。
+
 ### 2026-08-31 — 离线配对门全量 98 例：**HOLD，不可作为质量证据引用**
 
 产物：会话级临时目录下的 `paired_report.json`（`--out <dir>/paired_report.json`）。
@@ -146,7 +189,15 @@ _更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026
 
 - **Python**：`/tmp/rentcompass-venv/bin/python`（3.12.3）。**本机没有 conda**。
 - **凭证**：`app/.env` 的 `DEEPSEEK_API_KEY`。从别处的干净检出跑时该文件不在，会静默降级成占位 key 然后 HTTP 401——v6 首次运行就是这么中止的。**开批前先用一次廉价调用断言认证**。
-- **测试**：`.runtime/logs/canary-*.jsonl` 是 root 属主（容器写的），不导 `CANARY_LOG_PATH` 会有约 29 个测试假红。当前基线 **29 failed / 3364 passed**，其中真实产品失败 **0** 个：22 个 canary/dsml（全量下的顺序污染，单独跑全绿）、3 个 POI 缓存脏、2 个测试间 env 泄漏（单独跑过）、1 个 `.env.bak` 在树里、1 个 monitor 安装漂移。
+- **测试**：`.runtime/logs/canary-*.jsonl` 是 root 属主（容器写的）。历史上不导
+  `CANARY_LOG_PATH` 会有约 29 个测试假红（旧基线 **29 failed / 3364 passed**，真实产品失败
+  0 个）——**该条件现已由 `tests/conftest.py` 的
+  `os.environ.setdefault("CANARY_LOG_PATH", "off")` 从源头消除**，不必再手动导。
+  2026-08-31 在 `e5a5ca7` 上实测 **4438 passed / 3 skipped / 21 deselected，177s**；
+  2026-09-01 三轮修复后实测 **4581 passed / 3 skipped / 21 deselected，218s**
+  （3 个 skip 是 env 门控的 live 测试；21 个 deselect 是整个
+  `tests/test_monitor_install_provenance.py`，本机 monitor 安装漂移）。`pyproject.toml` 的
+  `testpaths = ["tests", "tests_refactor"]`，所以只跑 `pytest tests/` 会少约 49 条。
 - **测试曾污染生产遥测（2026-08-31 已修）**：`tests/test_canary_rollout.py::_restore_canary_sink`
   teardown 里做的是 `delenv("CANARY_LOG_PATH")` 再 `_wire_canary_sink()`。变量**未设**时
   `_wire_canary_sink` 走的是「默认启用」分支，把 handler 指向真实的
@@ -155,6 +206,15 @@ _更新于 2026-08-31（遥测口径见第五节）；上一次内容更新 2026
   `candidate_sha=7db03e7` 的测试记录**（ts 2026-08-31T04:2x–04:3x，`agent_arch` 甚至是 fc_loop）。
   已改为恢复 conftest 的会话默认值 `off`，并加了守卫测试
   `test_the_sink_never_defaults_onto_the_production_log_during_tests`。
-  **凡是用这两个日志算历史数字的，先按 `telemetry_schema_version <= 2` 过滤掉这些注入记录。**
+  **这 69 条已于 2026-08-31 由 owner 从活日志中删除**（2973 → 2904 行，当前 v3 记录 0 条），
+  所以**不需要**再按 `telemetry_schema_version <= 2` 过滤——已经没有可过滤的东西了。
+  它们仍存在于 `.runtime/logs/canary-legacy.jsonl.bak-20260831`，那是复现第五节回放表的唯一途径。
+- **生产日志里还有更早的泄漏测试记录（未清理，`origin/main` 上同样存在）**：
+  `canary-legacy.jsonl` 里有 `candidate_sha` 为 `shaLEGACY`（93 条，其中 32 条无
+  `telemetry_schema_version`）/ `shaSER`（28 条，全部 v2）的行，以及 825 条
+  `agent_arch: fc_loop` 的记录混在 legacy 日志里。2026-09-01 实测：shaLEGACY 32 条违规、
+  shaSER 28 条全部违规（`agent_arch=fc_loop but strict is not true`）。因此
+  `deploy/run_canary_gate.sh --input .runtime/logs/` 今天就会判
+  **CANARY-BLOCK（exit 3）**，用新旧校验器都一样。这不是本轮引入的，跑真门禁前先知道。
 - **一手来源**：所有结论对着源码与原始 run 记录核，**不要对着摘要或更早的报告核**。引用按符号名，不要按行号。
 - **禁 `git stash`**：`refs/stash` 在本机是跨 worktree 的单一全局栈，历史上因此丢过工作。

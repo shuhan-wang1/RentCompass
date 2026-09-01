@@ -143,6 +143,23 @@ USAGE_NO_CALLS = "no_llm_calls"
 USAGE_NOT_INSTRUMENTED = "not_instrumented"
 VALID_USAGE_STATUSES = (USAGE_COMPLETE, USAGE_PARTIAL, USAGE_NO_CALLS,
                         USAGE_NOT_INSTRUMENTED)
+
+# Additive v3 field: was the LangChain CALLBACK observer attached while this turn
+# ran? (turn_observations keeps a second flag for the raw-SDK reporter; only the
+# callback can see ModelRouter calls, so only the callback answers this question.)
+#
+# It exists to separate two things a null/partial usage status used to collapse:
+#
+#   observer live + turn died   -> UNMEASURABLE. No instrumentation could have
+#                                  measured it; holding the window on it teaches
+#                                  operators to ignore INSTRUMENTATION-HOLD.
+#   observer absent             -> the 2026-07-25 incident class: zero-call
+#                                  telemetry from a process that was not watching.
+#                                  This is exactly what the gate exists to catch.
+#
+# The consumer grants its crash exemption only on `true` — positive evidence — so
+# an absent field (an older producer) keeps the old, stricter reading.
+OBSERVER_INSTALLED_FIELD = "llm_observer_installed"
 _SPECIALIST_ROLES = frozenset({"listings", "mobility", "area_evidence"})
 _SPECIALIST_STATUSES = frozenset(
     {"planned", "started", "completed", "partial", "failed", "skipped"}
@@ -157,6 +174,18 @@ _SPECIALIST_EVENT_FIELDS = (
 # assertion at the bottom of the event builder still fails safe for anything else.
 _SPECIALIST_EVENT_OPTIONAL_FIELDS = ("error_code",)
 _SPECIALIST_DENIED_EVENT_FIELDS = ("status", "tool", "error_code")
+# The producer keeps TWO bounded rings (see turn_observations: 64 lifecycle events
+# + 8 denials) and hands us their concatenation. Re-truncating that concatenation
+# at the LIFECYCLE cap silently dropped denial events off the end of a busy turn
+# while `events_truncated` still said False — and the consumer then convicted the
+# record ("denied_calls=8 but events contain 7") for a truncation the producer
+# never admitted. The cap here must therefore be the SUM of the two rings, and
+# anything this function drops for any reason must flip the flag.
+_MAX_SPECIALIST_LIFECYCLE_EVENTS = 64
+_MAX_SPECIALIST_DENIED_EVENTS = 8
+_MAX_SPECIALIST_EVENTS = (
+    _MAX_SPECIALIST_LIFECYCLE_EVENTS + _MAX_SPECIALIST_DENIED_EVENTS
+)
 # ``partial`` and ``denied_calls`` are REQUIRED of this producer but OPTIONAL of
 # the consumer: a record written by an earlier manager_v1 build has neither, and
 # defaulting them to 0 there is correct (nothing was counted) where defaulting a
@@ -282,7 +311,11 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
         # that may have run several before dying.
         "tool_ledger_status": TOOL_LEDGER_UNAVAILABLE,
     }
-    for field in ("provider_schema_400_count", "llm_usage_status",
+    for field in ("provider_schema_400_count",
+                  # Whether anything was WATCHING is itself an observation, and the
+                  # one that decides whether this turn is unmeasurable or
+                  # uninstrumented. It must survive the crash like the rest.
+                  OBSERVER_INSTALLED_FIELD,
                   "dsml_blocked", "dsml_leak",
                   # Same argument as llm_usage below: the observer counts a call at
                   # its completion callback, so the calls that finished BEFORE the
@@ -292,6 +325,31 @@ def unknown_turn_signals(observed: Optional[Dict[str, Any]] = None) -> Dict[str,
                   "llm_calls"):
         if observed and observed.get(field) is not None:
             sig[field] = observed[field]
+    # llm_usage_status is NOT overlaid verbatim, and this is the one place in the
+    # module where a status is rewritten.
+    #
+    # `no_llm_calls` is a POSITIVE assertion — "this turn provably spent nothing" —
+    # and the report and the cost tool both act on it: the turn leaves the
+    # unmeasured population and is priced at zero. On an unobservable outcome that
+    # assertion cannot be made. The accumulator produces `no_llm_calls` whenever no
+    # run reached its COMPLETION callback, which is exactly the state of a turn
+    # killed mid-flight by the graph timeout, or one whose only provider call
+    # errored (note_provider_error does not touch llm_usage_missing). Both may
+    # already have been billed. Reporting zero there is the same fail-open this
+    # function's docstring rejects for the write counters — the crash-shaped hole
+    # in the cost side of the A/B.
+    #
+    # `partial` is the enum's existing "we observed something, the total is an
+    # undercount of unknown size" value: canary_report holds on it
+    # (USAGE_STATUS_HOLD) and canary_cost counts the turn as chargeable-but-
+    # unmeasured instead of as a free turn. `not_instrumented` would also be
+    # treated as unmeasured by both, but it asserts "nothing was watching", which
+    # is false when the accumulator was running — so the honest value is `partial`.
+    if observed and observed.get("llm_usage_status") is not None:
+        _observed_status = observed["llm_usage_status"]
+        sig["llm_usage_status"] = (
+            USAGE_PARTIAL if _observed_status == USAGE_NO_CALLS else _observed_status
+        )
     # The write audit is accumulated at the policy decision point, so a turn that
     # crashed AFTER dispatching a tainted write still reports it. This is the case
     # the docstring above warns about, and the only one that turns it from a
@@ -351,7 +409,7 @@ def _specialist_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
         events = value.get("events", [])
         if not isinstance(events, list):
             return None
-        for raw_event in events[:64]:
+        for raw_event in events[:_MAX_SPECIALIST_EVENTS]:
             if not isinstance(raw_event, dict):
                 continue
             if raw_event.get("status") == _SPECIALIST_DENIED_STATUS:
@@ -434,6 +492,14 @@ def _specialist_diagnostics(value: Any) -> Optional[Dict[str, Any]]:
             ):
                 safe_events.append(event)
         out["events"] = safe_events
+        # `events_truncated` means one thing to the consumer: "this list is NOT the
+        # complete stream, so do not reconcile it against the counters". Anything
+        # dropped above — by the cap, or by a transition that failed sanitisation —
+        # makes that true, whatever the producer's own ring said. Under-reporting it
+        # turns a bounded diagnostic into a fabricated contract violation; the
+        # counters stay authoritative either way.
+        if len(safe_events) != len(events):
+            out["events_truncated"] = True
         return out
     except Exception:
         return None
@@ -705,6 +771,12 @@ def build_canary_turn_record(
     ledger_status = sig.get("tool_ledger_status")
     if ledger_status in VALID_TOOL_LEDGER_STATUSES:
         record["tool_ledger_status"] = ledger_status
+    # Same additive rule as tool_ledger_status: stated or absent, never defaulted.
+    # A default of False would accuse a working process; a default of True would
+    # hand out the crash exemption to a producer that never claimed it.
+    observer_installed = sig.get(OBSERVER_INSTALLED_FIELD)
+    if isinstance(observer_installed, bool):
+        record[OBSERVER_INSTALLED_FIELD] = observer_installed
     tool_latency = _tool_latency_summary(sig.get("tool_latency"))
     if tool_latency is not None:
         # Additive and arch-agnostic: absent on any turn that dispatched no tool,

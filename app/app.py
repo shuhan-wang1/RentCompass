@@ -631,7 +631,8 @@ def _reconcile_agent_arch(user_id: str, conversation_id: str, conv: dict) -> Non
 
 
 from core.canary_telemetry import (  # noqa: E402
-    ENDPOINT_ALEX, ENDPOINT_SEARCH_DIRECT, OUTCOME_AGENT_ERROR, OUTCOME_CRASH,
+    ENDPOINT_ALEX, ENDPOINT_SEARCH_DIRECT, OBSERVER_INSTALLED_FIELD,
+    OUTCOME_AGENT_ERROR, OUTCOME_CRASH,
     OUTCOME_OK, OUTCOME_SERVER_ERROR, TOOL_LEDGER_COMPLETE, aggregate_llm_usage,
     build_canary_turn_record, hash_user_id, search_direct_signals,
     unknown_turn_signals,
@@ -1064,6 +1065,12 @@ def _emit_canary_turn(*, endpoint: str, conversation_id: str, user_id: str, requ
         _dsml_now = turn_observations.dsml_snapshot()
         if _dsml_now["dsml_blocked"] is not None:
             signals.update(_dsml_now)
+        # Stated HERE, for every path (normal, crash, boundary 5xx, cancelled,
+        # search_direct), because it is a fact about the PROCESS rather than about
+        # the turn's own bookkeeping — and it is the fact that decides whether a
+        # turn we could not measure is forgiven (observer live, turn died) or
+        # convicted (nothing was watching: the 2026-07-25 incident class).
+        signals[OBSERVER_INSTALLED_FIELD] = turn_observations.observer_installed()
         record = build_canary_turn_record(
             endpoint=endpoint,
             agent_arch=AGENT_ARCH,
@@ -1242,7 +1249,16 @@ def _emit_canary_boundary_5xx() -> None:
             endpoint=endpoint,
             conversation_id=getattr(g, "canary_conversation_id", None) or "unknown",
             user_id=getattr(g, "canary_user_id", None),
-            request_id=getattr(g, "canary_request_id", None) or "unknown",
+            # A 5xx raised BEFORE g.canary_request_id is stamped has no id to carry.
+            # A fixed literal is worse than no id: the report's uniqueness rule is
+            # (request_id, endpoint, arch), so two such failures collide and are
+            # reported as "one turn emitted two records" — a duplicate-emission bug
+            # that is not happening, handed to the operator instead of the real
+            # diagnosis. The sentinel keeps the "unknown:" prefix (so it still reads
+            # as "no correlation available" and cannot be mistaken for a real
+            # request id) and appends a uuid4 so distinct turns stay distinct.
+            request_id=(getattr(g, "canary_request_id", None)
+                        or f"unknown:{uuid.uuid4().hex}"),
             http_status=500,
             turn_outcome=OUTCOME_SERVER_ERROR,
             turn_latency_ms=latency,
@@ -1252,6 +1268,52 @@ def _emit_canary_boundary_5xx() -> None:
             fc_signals=None)
     except Exception as e:  # pragma: no cover — never break the error response
         print(f"[canary] boundary 5xx record emit failed; error_type={type(e).__name__}")
+
+
+# The status recorded for a turn the CLIENT abandoned. nginx's 499 ("client closed
+# request") is the honest code and, being < 500, it keeps a wave of disconnects out
+# of the 5xx rate — that rate is a relative stage-pause threshold and a client
+# hanging up is not a server error the candidate caused.
+CANARY_CLIENT_CLOSED_STATUS = 499
+
+
+def _emit_canary_cancelled_turn(*, endpoint: str, conversation_id: str, user_id,
+                                request_id: str, started) -> None:
+    """Emit the record for a turn cancelled out from under us (client disconnect).
+
+    ``asyncio.CancelledError`` is a ``BaseException``. Neither an endpoint's
+    ``except Exception`` nor Flask's ``errorhandler(Exception)`` sees one, so a
+    cancelled turn used to emit NOTHING AT ALL — the only failure mode telemetry
+    must never have. A vanished turn does not merely lose its own row: it silently
+    shrinks the denominator, so every rate in the window is computed over a
+    population missing exactly the turns that died. (``--expect-turns`` catches the
+    mismatch afterwards, but as "these numbers describe a different run", which is
+    a hold, not a record of what happened.)
+
+    Everything this turn would have reported is unobservable, so the record takes
+    the SAME path as a crash — ``fc_signals=None`` -> ``unknown_turn_signals`` ->
+    null security/ledger fields and an UNMEASURED usage status. It never asserts a
+    zero. The latency is the real elapsed time: unlike a boundary 5xx (which fails
+    in ~0ms and would flatter p50), a client that hangs up has usually waited, so
+    that number belongs in the percentile population.
+    """
+    try:
+        latency = ((time.perf_counter() - started) * 1000.0) if started else 0.0
+        _emit_canary_turn(
+            endpoint=endpoint,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            request_id=request_id,
+            http_status=CANARY_CLIENT_CLOSED_STATUS,
+            # `crash` is the existing outcome for "the turn did not complete and its
+            # own bookkeeping does not exist"; it is in UNOBSERVABLE_OUTCOMES, which
+            # is what grants this record the crash exemptions it genuinely needs. A
+            # new enum value would be rejected outright by every deployed consumer.
+            turn_outcome=OUTCOME_CRASH,
+            turn_latency_ms=latency,
+            fc_signals=None)
+    except Exception as e:  # pragma: no cover — never turn a cancel into an error
+        print(f"[canary] cancelled turn record emit failed; error_type={type(e).__name__}")
 
 
 def _request_body():
@@ -1411,9 +1473,20 @@ except Exception as e:
 # --- MCP tool client (optional) ---
 # The agent executes tools via the MCP server (stdio); on any failure it falls back
 # to the in-process registry. Disable entirely with env USE_MCP_TOOLS=0.
+#
+# ONE PARSER. This used to re-read the raw environment with its own spelling rule
+# (`not in ("0", "false", "no")`), which disagreed with `config._bool_strict` on
+# every other spelling: `USE_MCP_TOOLS=off` and `USE_MCP_TOOLS=` read FALSE in the
+# config object and TRUE here. That gap is not cosmetic — `Config` refuses the
+# `manager_v1_specialists=1` + `use_mcp_tools=1` pair at load precisely because the
+# MCP provider cannot serve specialist dispatch, and a switch this module parses
+# for itself is a switch that validation never saw: config accepted the pair, then
+# the graph build died with a bare RuntimeError. Reading the already-validated
+# `_runtime_config` means an unrecognised spelling is refused BY NAME before the
+# server binds, and the forbidden pair cannot be assembled here at all.
 import os as _os
 agent_tool_provider = tool_registry
-if _os.environ.get("USE_MCP_TOOLS", "0").lower() not in ("0", "false", "no"):
+if _runtime_config.use_mcp_tools:
     try:
         import sys as _sys
         from core.mcp_client import MCPToolClient
@@ -1768,6 +1841,16 @@ async def api_alex():
                 user_message, context, is_continuation, user_id, conversation_id, request_id,
                 ui_language=ui_language, turn=turn,
             )
+    except asyncio.CancelledError:
+        # The client hung up (or the server is shutting down). CancelledError is a
+        # BaseException, so without this clause the turn produces no canary record
+        # at all — see _emit_canary_cancelled_turn. Record it, then re-raise
+        # UNCHANGED: swallowing a cancellation would leave this coroutine running
+        # after its caller stopped waiting.
+        _emit_canary_cancelled_turn(
+            endpoint=ENDPOINT_ALEX, conversation_id=conversation_id,
+            user_id=user_id, request_id=request_id, started=_turn_started_ms)
+        raise
     except Exception as e:
         logger.error(
             "agent.turn.execution_failed",
@@ -3434,6 +3517,13 @@ async def api_search_direct():
             "commute_evidence": result.get("commute_evidence") or [],
             "area_recommendations": result.get('area_recommendations') or [],
         }
+    except asyncio.CancelledError:
+        # Same reason as /api/alex: a cancelled turn must not vanish from the
+        # denominator. Record, then re-raise unchanged.
+        _emit_canary_cancelled_turn(
+            endpoint=ENDPOINT_SEARCH_DIRECT, conversation_id=conversation_id,
+            user_id=user_id, request_id=request_id, started=_turn_started_ms)
+        raise
     except Exception as e:
         logger.error(
             "search_direct.turn.execution_failed",

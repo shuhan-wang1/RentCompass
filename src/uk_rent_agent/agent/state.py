@@ -105,7 +105,9 @@ class AgentState(TypedDict, total=False):
     # evidence supports it, their EvidenceRefs, and one limitation line per failed/partial/
     # skipped task. Written ONCE, by the last node before the response leaves the graph
     # (agent_loop.format_output_fc under specialist_dispatch), so it records the answer as
-    # sent rather than an intermediate draft. Same PLAIN per-turn discipline as the two
+    # sent rather than an intermediate draft — bounded at AnswerText's 8 000 chars, with
+    # `final_response_chars` / `final_response_truncated` saying so when a longer answer
+    # shipped (the recorded copy is a prefix; the user's answer is never trimmed). Same PLAIN per-turn discipline as the two
     # ledgers above, and likewise JSON-plain so SQLite checkpoints stay plain JSON. A
     # contract that fails validation is stored as {"valid": false, "error_code": ...,
     # "limitations": [...]} — a broken contract is an observability defect, never a failed

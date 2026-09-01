@@ -34,10 +34,44 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${CANARY_GATE_REPO:-$(cd "$HERE/.." && pwd)}"
-REPORT_PYTHON="${CANARY_GATE_PYTHON:-python}"
 REPORT_SCRIPT="${CANARY_GATE_REPORT_SCRIPT:-$REPO/scripts/canary_report.py}"
 REPORT_CMD="${CANARY_GATE_REPORT_CMD:-}"
 WEIGHT_SCRIPT="${CANARY_GATE_WEIGHT_SCRIPT:-$HERE/set_canary_weight.sh}"
+
+# INTERPRETER RESOLUTION — do not shorten this to `python`.
+# ---------------------------------------------------------------------------
+# The default used to be a bare `python`, which does not exist on this host (or on
+# any modern Debian/Ubuntu image: PEP 394 leaves `python` unversioned and the
+# distro ships `python3` only). The wrapper then died with 127 BEFORE running the
+# report, so: no verdict, no rollback on a zero-tolerance breach, and a driver that
+# branches on "non-zero means bad" silently read the missing interpreter as a HOLD.
+# A gate that cannot start must never look like a gate that ran.
+#
+# Order: explicit override, then the ambient PYTHON, then a repo virtualenv (where
+# the report's dependencies actually live), then python3, then python.
+_gate_python() {
+  local candidate
+  for candidate in "${CANARY_GATE_PYTHON:-}" "${PYTHON:-}" \
+                   "$REPO/.venv/bin/python" "$REPO/venv/bin/python" \
+                   python3 python; do
+    [[ -n "$candidate" ]] || continue
+    if command -v "$candidate" >/dev/null 2>&1; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+REPORT_PYTHON="$(_gate_python || true)"
+if [[ -z "$REPORT_PYTHON" && -z "$REPORT_CMD" ]]; then
+  # 69 = sysexits EX_UNAVAILABLE. Deliberately NOT a gate verdict code (0/2/3) and
+  # not 127: "the gate could not run" must be distinguishable from every verdict
+  # and from a generic command-not-found.
+  printf '\033[31mCANARY_GATE_UNRUNNABLE\033[0m: no python interpreter found (tried CANARY_GATE_PYTHON, PYTHON, %s, python3, python); NO verdict was produced and NO rollback was attempted\n' \
+    "$REPO/.venv/bin/python" >&2
+  exit 69
+fi
 
 if [[ -n "$REPORT_CMD" ]]; then
   "$REPORT_CMD" "$@"

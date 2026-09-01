@@ -94,10 +94,30 @@ metrics and ordinary regressions HOLD; an observed zero-tolerance, cross-user me
 prompt-injection, tainted-write, forbidden-tool, or specialist manager-only capability
 violation BLOCKS. Promotion also requires exact case/repeat pairing, a git-clean shared
 commit, matching arm selectors, the existing guard/SLO gates, task and constraint
-non-inferiority, evidence completeness, p95/call/cost budgets, and balanced specialist
-lifecycle events. Balanced terminal failures/skips remain visible and must not exceed the
-paired baseline's tool-failure signal; they are not mistaken for missing lifecycle
-telemetry.
+non-inferiority, evidence completeness, p95/call/cost budgets, and the
+`specialist_lifecycle` check. Balanced terminal failures/skips remain visible and must not
+exceed the paired baseline's tool-failure signal; they are not mistaken for missing
+lifecycle telemetry.
+
+**`specialist_lifecycle` is where "specialists make zero model calls" is enforced**, and
+it is worth naming because it is easy to attribute to the wrong check. Its PROMOTE
+condition is all four of:
+
+```python
+lifecycle_complete = (task_count > 0 and not invalid_tasks
+                      and bool(specialist_tool_calls) and not specialist_llm_calls)
+```
+
+— at least one observed task, no unbalanced `planned`→terminal task, at least one
+specialist **tool** call, and **zero specialist model calls**. `specialist_llm_calls` is
+collected by `_lifecycle_audit` from every `model_usage` event whose `agent_role` is in
+`_SPECIALIST_ROLES`, so it is a per-role guarantee, not an arm-level average.
+`llm_call_budget` is a **different** check with a different job: it caps the candidate
+arm's *total* call count relative to the paired baseline ("manager specialist adapter must
+add no model round trip"). A specialist could make a model call while the arm's total
+stayed inside that budget, so weakening or removing `specialist_lifecycle` on the
+assumption that `llm_call_budget` covers it would drop the guarantee entirely. Failed and
+skipped outcomes are gated separately (`tool_failure_noninferiority`).
 
 Use `--smoke` only to verify wiring. Offline grounded/source scores prove deterministic
 evidence plumbing only; they do **not** establish live answer quality, provider latency,

@@ -90,13 +90,27 @@ url="${@: -1}"
 port="${url##*:}"; port="${port%%/*}"
 case "$port" in
   5001) sha="$LEGACY_SHA"; arch=legacy ;;
-  5002) sha="$FC_SHA";     arch=fc_loop ;;
+  5002) sha="$FC_SHA";     arch="${FAKE_FC_ARCH:-fc_loop}" ;;
   *) exit 1 ;;
 esac
-grep -q "compose .*up .*app-fc" "$CALLS" 2>/dev/null && [ "$port" = 5002 ] && sha="$PIN"
-grep -q "compose up -d app$" "$CALLS" 2>/dev/null && [ "$port" = 5001 ] && sha="$PIN"
+upgraded=0
+grep -q "compose .*up .*app-fc" "$CALLS" 2>/dev/null && [ "$port" = 5002 ] && { sha="$PIN"; upgraded=1; }
+grep -q "compose up -d app$" "$CALLS" 2>/dev/null && [ "$port" = 5001 ] && { sha="$PIN"; upgraded=1; }
 [ "$sha" = "DOWN" ] && exit 1
-printf 'HTTP/1.1 200 OK\r\nx-agent-arch: %s\r\nx-agent-version: %s\r\nx-agent-specialists: 0\r\n\r\n' "$arch" "$sha"
+printf 'HTTP/1.1 200 OK\r\nx-agent-arch: %s\r\nx-agent-version: %s\r\n' "$arch" "$sha"
+# R3-M7. A pool still running the pre-2026-08-31 image sends NO
+# X-Agent-Specialists header at all — which is BOTH containers on the production
+# box today (the header does not exist in origin/main). Listing a port in
+# FAKE_NO_SPECIALISTS_PORTS models that; the header appears as soon as the pool
+# has been recreated on this release's image, so a scenario can rehearse the real
+# upgrade transition: old container without the header -> drain -> new one with it.
+_emit=1
+if grep -qw -- "$port" <<<"${FAKE_NO_SPECIALISTS_PORTS:-}"; then
+  _emit=0
+  [ "$upgraded" = 1 ] && [ "${FAKE_NO_SPECIALISTS_EVER:-0}" != 1 ] && _emit=1
+fi
+[ "$_emit" = 1 ] && printf 'x-agent-specialists: %s\r\n' "${FAKE_SPECIALISTS:-0}"
+printf '\r\n'
 EOF
   # Logs the scoped flip authorisation separately from argv, so the existing
   # `switch --to <pool>` assertions keep matching a bare argv line.
@@ -109,7 +123,28 @@ echo "switchenv CANARY_ALLOW_FLIP=${CANARY_ALLOW_FLIP:-0}" >> "$CALLS"
 echo "switchroute ${SWITCH_ROUTE_CONF:-<unset>}" >> "$CALLS"
 echo "switchmarker $(cat "${RENTCOMPASS_MAINTENANCE_MARKER:-/nonexistent}" 2>/dev/null || echo '<absent>')" >> "$CALLS"
 echo "switch $*" >> "$CALLS"
-exit "${FAKE_SWITCH_RC:-0}"
+_rc="${FAKE_SWITCH_RC:-0}"
+# A real switch MOVES the public route; a failed one restores its own backup and
+# leaves it where it was. update.sh's restore now reads the LIVE route to tell
+# "the drain took effect" from "the drain never ran" (R3-M5), so the fake has to
+# move it too or the rehearsal stops modelling the thing under test.
+_to=""; while [ $# -gt 0 ]; do case "$1" in --to) _to="${2:-}"; shift 2 ;; *) shift ;; esac; done
+if [ "$_rc" = 0 ] && [ -n "$_to" ] && [ "${FAKE_SWITCH_MOVES_ROUTE:-1}" = 1 ]; then
+  case "$_to" in legacy) _port=5001; _weight=0 ;; fc) _port=5002; _weight=100 ;; *) _port=""; _weight="" ;; esac
+  if [ -n "$_port" ]; then
+    [ -f "${SWITCH_ROUTE_CONF:-/nonexistent}" ] \
+      && sed -i "s/^# rentcompass-canary-weight: .*/# rentcompass-canary-weight: $_weight/" "$SWITCH_ROUTE_CONF"
+    [ -f "${UPDATE_CONF:-/nonexistent}" ] \
+      && sed -i "s/server 127\.0\.0\.1:[0-9]*;/server 127.0.0.1:$_port;/" "$UPDATE_CONF"
+  fi
+fi
+# Deliver a signal to update.sh from INSIDE the drain window: the one interval
+# where the pre-R3-M5 code had moved the route but not yet armed the EXIT trap.
+if [ -n "${FAKE_SWITCH_SIGNAL:-}" ] && [ ! -e "$CALLS.signalled" ]; then
+  : > "$CALLS.signalled"
+  kill -"$FAKE_SWITCH_SIGNAL" "$PPID" 2>/dev/null
+fi
+exit "$_rc"
 EOF
   chmod +x "$SANDBOX"/bin/*
   export CALLS="$SANDBOX/calls.log"; : > "$CALLS"
@@ -521,6 +556,113 @@ DEPLOY_ORDER="$(awk '/^compose / { if ($0 ~ /app-fc/) print "fc"; else if ($0 ~ 
 check   "when legacy is public, --both deploys standby first" "fc-legacy" "$DEPLOY_ORDER"
 contains "$CALLS_TXT" "switch --to fc"              "legacy-public release drains to refreshed fc"
 contains "$CALLS_TXT" "switch --to legacy"          "and returns only after legacy verifies"
+teardown
+echo
+
+echo "--- 8. R3-M7: pools that predate X-Agent-Specialists (TODAY'S CONTAINERS) ---"
+# The header does not exist in origin/main, so NEITHER deployed container emits
+# it. Every fake in this harness used to send `x-agent-specialists: 0` for both
+# ports unconditionally, which is why R3-H1 — the new equality check refusing the
+# emergency rollback and the drain — was green across 124 assertions.
+setup 5002 old-legacy-sha old-fc-sha
+FAKE_NO_SPECIALISTS_PORTS="5001 5002" run_update --both; CALLS_TXT="$(cat "$CALLS")"
+unset FAKE_NO_SPECIALISTS_PORTS
+check    "the upgrade transition deploys cleanly"      0 "$RC"
+contains "$CALLS_TXT" "switch --to legacy"             "the drain onto the headerless legacy pool still runs"
+contains "$CALLS_TXT" "switch --to fc"                 "and traffic is returned afterwards"
+lacks    "$OUT" "release identity is incomplete"       "no pool is refused for a header its image cannot send"
+teardown
+
+# A pool that STAYS headerless (an image that genuinely predates the header) is
+# still acceptable while its expected identity is specialists=0.
+setup 5001 old-legacy-sha old-fc-sha
+FAKE_NO_SPECIALISTS_PORTS="5001" FAKE_NO_SPECIALISTS_EVER=1 \
+  run_update --pool legacy --allow-in-place; CALLS_TXT="$(cat "$CALLS")"
+check    "absent counts as 0 when 0 is expected"       0 "$RC"
+contains "$OUT" "sends no X-Agent-Specialists header"  "with an explicit note"
+unset FAKE_NO_SPECIALISTS_PORTS FAKE_NO_SPECIALISTS_EVER
+teardown
+
+# ...but a candidate EXPECTED to run specialists=1 must still state it. That is
+# the header the whole manager_v1 rollout is gated on: no exemption there.
+# The candidate identity is supplied through the process environment: the pin gate
+# refuses a dirty tree, and `.env` is tracked in this sandbox repo.
+setup 5001 old-legacy-sha old-fc-sha
+CANARY_AGENT_ARCH=manager_v1 CANARY_MANAGER_V1_SPECIALISTS=1 CANARY_USE_MCP_TOOLS=0 \
+  FAKE_FC_ARCH=manager_v1 FAKE_NO_SPECIALISTS_PORTS="5002" FAKE_NO_SPECIALISTS_EVER=1 \
+  run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+check    "a specialists=1 candidate may NOT omit the header" 1 "$RC"
+contains "$OUT" "specialists='<absent>', expected '1'"  "and the refusal names what was missing"
+unset CANARY_AGENT_ARCH CANARY_MANAGER_V1_SPECIALISTS CANARY_USE_MCP_TOOLS FAKE_FC_ARCH
+unset FAKE_NO_SPECIALISTS_PORTS FAKE_NO_SPECIALISTS_EVER
+teardown
+echo
+
+echo "--- 8b. R3-M5: a signal inside the drain window still unwinds ---"
+# The trap used to be armed AFTER the switch returned. A SIGINT/SIGTERM delivered
+# between the switch completing its nginx reload and that `trap` statement ran
+# `_on_signal` -> `exit` with DRAIN_ACTIVE=0 and NO EXIT trap: no restore, no
+# warning, the marker left on disk, and public traffic parked on the drain target.
+setup 5002 old-legacy-sha old-fc-sha
+FAKE_SWITCH_SIGNAL=TERM run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+unset FAKE_SWITCH_SIGNAL
+check    "a signal in the drain window exits with the signal code" 143 "$RC"
+contains "$OUT" "INTERRUPTED by signal 15"           "the interrupt is named"
+check    "and the drain is STILL unwound"            "legacy-fc" \
+         "$(grep -oE '^switch --to (fc|legacy)' "$CALLS" | sed 's/^switch --to //' | paste -sd- -)"
+check    "the drain window is closed on the way out" "absent" \
+         "$([ -e "$SANDBOX/maintenance-marker" ] && echo present || echo absent)"
+teardown
+
+# The mirror case: the same early trap must NOT invent a switch when the route
+# never actually moved, or arming it early would itself become a second cutover.
+setup 5002 old-legacy-sha old-fc-sha
+FAKE_SWITCH_SIGNAL=TERM FAKE_SWITCH_MOVES_ROUTE=0 run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+unset FAKE_SWITCH_SIGNAL FAKE_SWITCH_MOVES_ROUTE
+check    "an interrupt before the route moved still exits on the signal" 143 "$RC"
+contains "$OUT" "the drain never took effect"        "the no-op restore is explicit"
+check    "and no second switch is issued"            "legacy" \
+         "$(grep -oE '^switch --to (fc|legacy)' "$CALLS" | sed 's/^switch --to //' | paste -sd- -)"
+check    "the drain window is still closed"          "absent" \
+         "$([ -e "$SANDBOX/maintenance-marker" ] && echo present || echo absent)"
+teardown
+echo
+
+echo "--- 8c. R3-M2: the answer probe is skippable, and a restore never probes ---"
+setup 5002 old-legacy-sha old-fc-sha
+install_route 100 r-flip flip
+run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+RESTORE_LINE="$(grep -- '^switch --to fc' "$CALLS" | tail -1)"
+contains "$RESTORE_LINE" "--skip-answer-probe" \
+         "the restore leg never drives a billed turn against the pool that was already live"
+DRAIN_LINE="$(grep -- '^switch --to legacy' "$CALLS" | head -1)"
+lacks    "$DRAIN_LINE" "--skip-answer-probe"  "while the drain keeps the gate unless asked"
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+install_route 100 r-flip flip
+run_update --pool fc --skip-answer-probe; CALLS_TXT="$(cat "$CALLS")"
+check    "--skip-answer-probe is accepted"    0 "$RC"
+DRAIN_LINE="$(grep -- '^switch --to legacy' "$CALLS" | head -1)"
+contains "$DRAIN_LINE" "--skip-answer-probe"  "and is forwarded to the drain switch too"
+teardown
+echo
+
+echo "--- 8d. R3-M4: the documented boolean spellings must not kill a deploy ---"
+setup 5002 old-legacy-sha old-fc-sha
+CANARY_AGENT_ARCH=fc_loop CANARY_MANAGER_V1_SPECIALISTS=false CANARY_USE_MCP_TOOLS=no \
+  run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+check    "false/no normalise to 0 instead of dying"  0 "$RC"
+contains "$OUT" "specialists=0"                      "and are used in canonical form"
+unset CANARY_AGENT_ARCH CANARY_MANAGER_V1_SPECIALISTS CANARY_USE_MCP_TOOLS
+teardown
+
+setup 5002 old-legacy-sha old-fc-sha
+CANARY_MANAGER_V1_SPECIALISTS=maybe run_update --pool fc; CALLS_TXT="$(cat "$CALLS")"
+check    "a value that is neither true nor false is refused" 1 "$RC"
+contains "$OUT" "neither a true (1/true/yes/on) nor a false" "loudly, by name"
+lacks    "$CALLS_TXT" "compose"                              "and nothing is deployed"
+unset CANARY_MANAGER_V1_SPECIALISTS
 teardown
 echo
 

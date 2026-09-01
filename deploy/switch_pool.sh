@@ -38,6 +38,7 @@
 set -uo pipefail
 
 CONF="${SWITCH_CONF:-/etc/nginx/sites-available/rentcompass.co.uk.conf}"
+CURL_CMD="${SWITCH_CURL_CMD:-curl}"
 TEST_CMD="${SWITCH_TEST_CMD:-sudo nginx -t}"
 RELOAD_CMD="${SWITCH_RELOAD_CMD:-sudo systemctl reload nginx}"
 VERIFY_URL="${SWITCH_VERIFY_URL:-https://127.0.0.1/ready}"
@@ -83,6 +84,30 @@ bool01() {
   esac
 }
 
+# --- CANONICAL specialist-header rule (keep every copy byte-identical) -------
+# X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
+# specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
+# counts as 0: every image built before 2026-08-31 omits the header entirely,
+# which is BOTH pools deployed on this host today, and the legacy pool is the
+# standing rollback escape hatch that must not be recreated just to satisfy a
+# header check.  Demanding the header for an expected 0 turned `--to legacy`
+# (the emergency rollback) and update.sh's drain leg into hard failures.
+# Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
+#         deploy/monitoring/rentcompass-monitor.sh
+# Python twin: deploy/probe_pool_answer.py::specialists_match
+specialists_ok() { # <observed> <expected>
+  local observed="${1:-}" expected="${2:-}"
+  if [ "$observed" = "$expected" ]; then return 0; fi
+  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
+  return 1
+}
+specialists_absent() { # <observed> -> 0 when the pool sent no specialist header
+  [ -z "${1:-}" ] || [ "${1:-}" = none ]
+}
+specialists_shown() { # <observed> -> what to print for it in a message
+  if specialists_absent "${1:-}"; then printf '<absent>'; else printf '%s' "$1"; fi
+}
+
 CANDIDATE_ARCH="${SWITCH_CANDIDATE_ARCH:-$(env_value CANARY_AGENT_ARCH fc_loop)}"
 CANDIDATE_SPECIALISTS_RAW="${SWITCH_CANDIDATE_SPECIALISTS:-$(env_value CANARY_MANAGER_V1_SPECIALISTS 0)}"
 if ! CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS_RAW")"; then
@@ -90,10 +115,22 @@ if ! CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS_RAW")"; then
   CANDIDATE_SPECIALISTS=0
 fi
 
+CANDIDATE_MCP_RAW="${SWITCH_CANDIDATE_MCP:-$(env_value CANARY_USE_MCP_TOOLS 0)}"
+if ! CANDIDATE_MCP="$(bool01 "$CANDIDATE_MCP_RAW")"; then
+  die_early="${die_early:-candidate MCP switch must be a boolean (got '$CANDIDATE_MCP_RAW')}"
+  CANDIDATE_MCP=0
+fi
+
 case "$CANDIDATE_ARCH:$CANDIDATE_SPECIALISTS" in
   fc_loop:0|manager_v1:1) ;;
   *) die_early="${die_early:-candidate identity must be fc_loop/specialists=0 or manager_v1/specialists=1}" ;;
 esac
+# Defence in depth against a root .env the rest of the deploy path would refuse:
+# update.sh, release.sh, set_canary_weight.sh and the monitor all reject MCP for a
+# public candidate, and Config.__post_init__ fails the pool's /ready anyway. This
+# lever should not be the one place that would have moved the route regardless.
+[[ "$CANDIDATE_MCP" == 0 ]] \
+  || die_early="${die_early:-candidate identity must be MCP-free for a public rollout (CANARY_USE_MCP_TOOLS=$CANDIDATE_MCP_RAW)}"
 
 UPSTREAM_BLOCK='upstream rentcompass_app'
 declare -A PORT=( [legacy]=5001 [fc]=5002 )
@@ -131,13 +168,14 @@ maintenance_marker_path() {
 # Identity of whatever is answering a URL: "<arch> <sha> <specialists>", or
 # empty on failure.  A missing specialist header is deliberately not guessed.
 identity_at() {
-  local url="$1" hdrs
-  hdrs=$(curl $CURL_OPTS -D- -o /dev/null --max-time 10 "$url" 2>/dev/null) || return 1
+  local url="$1" hdrs specialists
+  hdrs=$($CURL_CMD $CURL_OPTS -D- -o /dev/null --max-time 10 "$url" 2>/dev/null) || return 1
   grep -qi '^HTTP/[0-9.]* 200' <<<"$hdrs" || return 1
+  specialists="$(grep -i '^x-agent-specialists:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
   printf '%s %s %s\n' \
     "$(grep -i '^x-agent-arch:'    <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
     "$(grep -i '^x-agent-version:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
-    "$(grep -i '^x-agent-specialists:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
+    "${specialists:-none}"
 }
 
 verify_public() { # $1 expected arch, $2 expected specialists
@@ -145,8 +183,12 @@ verify_public() { # $1 expected arch, $2 expected specialists
   got=$(identity_at "$VERIFY_URL") || return 1
   read -r arch sha specialists <<<"$got"
   [[ "$arch" == "$want" ]] || { note "arch mismatch: want '$want', got '$arch'"; return 1; }
-  [[ "$specialists" == "$want_specialists" ]] \
-    || { note "specialists mismatch: want '$want_specialists', got '${specialists:-<absent>}'"; return 1; }
+  if ! specialists_ok "$specialists" "$want_specialists"; then
+    note "specialists mismatch: want '$want_specialists', got '$(specialists_shown "$specialists")'"; return 1
+  fi
+  if specialists_absent "$specialists"; then
+    note "the public endpoint sends no X-Agent-Specialists header (pre-2026-08-31 image); absent counts as specialists=0"
+  fi
   if [[ ${#sha} -ne 40 && "${ALLOW_UNIDENTIFIED:-0}" -ne 1 ]]; then
     note "sha is not a full 40-char commit: '${sha:-<absent>}'"; return 1
   fi
@@ -186,6 +228,11 @@ status() {
 
 TARGET=""; ALLOW_PUBLIC_FC=0; ALLOW_UNIDENTIFIED=0; EXPECT_SHA=""; STATUS_ONLY=0
 ROLLOUT_ID=""; ROLLOUT_STAGE=""
+# The single-upstream path never drives a real turn, so this flag exists here only
+# to be FORWARDED to set_canary_weight.sh on a weighted host: without it neither
+# deploy/update.sh nor deploy/release.sh could ever reach the opt-out, and the
+# restore leg of every release paid for two real billed turns it cannot skip.
+SKIP_ANSWER_PROBE="${CANARY_SKIP_ANSWER_PROBE:-0}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --to) TARGET="${2:-}"; shift 2 ;;
@@ -194,6 +241,7 @@ while [[ $# -gt 0 ]]; do
     --rollout-id) ROLLOUT_ID="${2:-}"; shift 2 ;;
     --stage) ROLLOUT_STAGE="${2:-}"; shift 2 ;;
     --allow-unidentified-target) ALLOW_UNIDENTIFIED=1; shift ;;
+    --skip-answer-probe) SKIP_ANSWER_PROBE=1; shift ;;
     --status) STATUS_ONLY=1; shift ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -213,6 +261,7 @@ if [[ -r "$ROUTE_CONF" ]] && grep -q '^# rentcompass-canary-weight:' "$ROUTE_CON
   [[ -n "$EXPECT_SHA" ]] && _args+=(--expect-sha "$EXPECT_SHA")
   [[ -n "$ROLLOUT_ID" ]] && _args+=(--rollout-id "$ROLLOUT_ID")
   [[ -n "$ROLLOUT_STAGE" ]] && _args+=(--stage "$ROLLOUT_STAGE")
+  [[ "$SKIP_ANSWER_PROBE" == 1 ]] && _args+=(--skip-answer-probe)
   exec env CANARY_ROUTE_CONF="$ROUTE_CONF" "$WEIGHT_SCRIPT" "${_args[@]}"
 fi
 
@@ -272,6 +321,9 @@ if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* ]]; then
         || die "stage 'maintenance' requires an active drain marker at $MAINTENANCE_MARKER; deploy/update.sh writes it before the drain and removes it after the restore. A 100% cutover is '--stage flip' with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)"
       [[ "$(cat "$MAINTENANCE_MARKER" 2>/dev/null || true)" == "$ROLLOUT_ID" ]] \
         || die "the drain marker at $MAINTENANCE_MARKER names a different rollout id than '$ROLLOUT_ID'; refusing a 100% exposure no running deploy asked for"
+      _marker_age=$(( $(date +%s) - $(stat -c %Y "$MAINTENANCE_MARKER" 2>/dev/null || echo 0) ))
+      [[ "$_marker_age" -ge 0 && "$_marker_age" -le "${RENTCOMPASS_MAINTENANCE_MARKER_TTL:-3600}" ]] \
+        || die "the drain marker at $MAINTENANCE_MARKER is ${_marker_age}s old (TTL ${RENTCOMPASS_MAINTENANCE_MARKER_TTL:-3600}s); a drain authorisation must expire with the deploy that opened it — re-run deploy/update.sh instead of reusing it"
       note "stage 'maintenance': temporary drain onto the candidate; the caller must restore the previous upstream"
       ;;
     flip)
@@ -280,6 +332,21 @@ if [[ "$TARGET" == "fc" && "$CONF" == /etc/nginx/* ]]; then
       ;;
     *) die "refusing 100% public candidate traffic at stage '$ROLLOUT_STAGE'; use --stage maintenance (deploy drain) or --stage flip with CANARY_ALLOW_FLIP=1 (docs/canary_runbook.md section 2)" ;;
   esac
+fi
+
+# R3-M8. This host has exactly TWO pool slots: :5001 is hardcoded `legacy` in
+# docker-compose.yml and :5002 is the single candidate slot. A candidate arch that
+# is not what the slot runs today therefore REPLACES today's production
+# architecture rather than running beside it, and the rollback target stays
+# `legacy` — not the architecture being displaced. Say that out loud before the
+# route moves; the runbook stage table repeats it.
+LIVE_CANDIDATE_ARCH="$(env_value SWITCH_LIVE_CANDIDATE_ARCH "$(printf '%s' "$(env_value FC_CANARY_IMAGE '')" | sed -n 's/.*:canary-\(.*\)-[0-9a-f]\{7,\}$/\1/p' | tr '-' '_')")"
+LIVE_CANDIDATE_ARCH="${LIVE_CANDIDATE_ARCH:-fc_loop}"
+if [[ "$CANDIDATE_ARCH" != "$LIVE_CANDIDATE_ARCH" ]]; then
+  printf '\033[33mWARN\033[0m the candidate slot (:%s) runs %s today; this switch makes %s the candidate.\n' \
+    "${PORT[fc]}" "$LIVE_CANDIDATE_ARCH" "$CANDIDATE_ARCH" >&2
+  printf '\033[33mWARN\033[0m the slot is EXCLUSIVE: %s is REPLACED, not compared against, and the rollback target stays legacy (:%s).\n' \
+    "$LIVE_CANDIDATE_ARCH" "${PORT[legacy]}" >&2
 fi
 
 if [[ "$TARGET" == fc && "$CANDIDATE_ARCH" != fc_loop ]]; then
@@ -294,8 +361,11 @@ TARGET_ID=$(identity_at "$TARGET_URL") \
   || die "target pool 127.0.0.1:$TO_PORT is not answering /ready with 200 — nothing changed"
 read -r t_arch t_sha t_specialists <<<"$TARGET_ID"
 [[ "$t_arch" == "$WANT_ARCH" ]] || die "target reports arch '$t_arch', expected '$WANT_ARCH' — nothing changed"
-[[ "$t_specialists" == "$WANT_SPECIALISTS" ]] \
-  || die "target reports specialists='${t_specialists:-<absent>}', expected '$WANT_SPECIALISTS' — nothing changed"
+specialists_ok "$t_specialists" "$WANT_SPECIALISTS" \
+  || die "target reports specialists='$(specialists_shown "$t_specialists")', expected '$WANT_SPECIALISTS' — nothing changed"
+if specialists_absent "$t_specialists"; then
+  note "target sends no X-Agent-Specialists header (pre-2026-08-31 image); absent counts as specialists=0"
+fi
 
 # The durable ConversationStore is shared, but SessionStore is process-local.
 # Restarting the inactive target clears any old hot slice and forces its first
@@ -320,8 +390,8 @@ if [[ "$REFRESH_TARGET" == 1 ]]; then
   read -r t_arch t_sha t_specialists <<<"$TARGET_ID"
   [[ "$t_arch" == "$WANT_ARCH" ]] \
     || die "refreshed target reports arch '$t_arch', expected '$WANT_ARCH' — nothing changed"
-  [[ "$t_specialists" == "$WANT_SPECIALISTS" ]] \
-    || die "refreshed target reports specialists='${t_specialists:-<absent>}', expected '$WANT_SPECIALISTS' — nothing changed"
+  specialists_ok "$t_specialists" "$WANT_SPECIALISTS" \
+    || die "refreshed target reports specialists='$(specialists_shown "$t_specialists")', expected '$WANT_SPECIALISTS' — nothing changed"
 fi
 # Provenance is directional. A FORWARD switch onto a pool that cannot name its commit is
 # refused. A ROLLBACK onto one is allowed with --allow-unidentified-target, loudly: being

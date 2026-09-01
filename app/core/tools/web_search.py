@@ -125,6 +125,62 @@ def _nested_allowlist_for_role(role: str) -> frozenset:
     return frozenset(allowed)
 
 
+def _known_specialist_roles() -> frozenset:
+    """Roles the manager-owned capability catalog actually declares."""
+    try:
+        from uk_rent_agent.agent.specialist_contracts import SPECIALIST_TOOL_ALLOWLISTS
+    except Exception:  # pragma: no cover - broken deployment
+        return frozenset()
+    return frozenset(SPECIALIST_TOOL_ALLOWLISTS)
+
+
+def _role_label(role: Optional[str]) -> str:
+    """A role name safe to put in a model-facing string.
+
+    The ambient execution context is not this module's to trust, so only a role the
+    declared catalog knows is echoed; anything else is described generically.
+    """
+    return role if role in _known_specialist_roles() else "this specialist role"
+
+
+def _role_refusal(tool_name: str, role: Optional[str]) -> Dict[str, Any]:
+    """One dropped sub_query, described precisely enough for the model to retry.
+
+    Both interpolated values are closed vocabularies -- ``tool_name`` has already been
+    checked against ``_ALLOWED_NESTED_TOOLS`` and the role against the declared catalog --
+    so nothing model- or third-party-authored is reflected back (review3 R1-M1).
+    """
+    allowed = sorted(_nested_allowlist_for_role(role) if role is not None else _ALLOWED_NESTED_TOOLS)
+    return {
+        "tool": tool_name,
+        "error_code": "nested_tool_role_forbidden",
+        "reason": (
+            f"sub_query dropped: {tool_name} is not available to {_role_label(role)}; "
+            + (f"allowed nested tools here: {', '.join(allowed)}."
+               if allowed else "no nested tools are available here.")
+            + " The rest of this web_search call still ran."
+        ),
+    }
+
+
+def _refusal_report(refusals: List[Dict[str, Any]]) -> List[str]:
+    """The refusal block that goes into the model-facing ``results`` text."""
+    if not refusals:
+        return []
+    return ["### refused sub_queries"] + [item["reason"] for item in refusals]
+
+
+def _with_refusals(payload: dict, refusals: List[Dict[str, Any]]) -> dict:
+    """Attach the dropped-sub_query report, and only when there is one.
+
+    Absent refusals the payload shape is byte-identical to before, so the fc path and
+    every existing consumer are unaffected.
+    """
+    if refusals:
+        payload["refused_sub_queries"] = refusals
+    return payload
+
+
 async def _dispatch_nested_under_capability(registry, role: str, tool_name: str, params: Dict):
     """Run one nested call through the read-only capability boundary.
 
@@ -359,69 +415,92 @@ def _preflight_sub_queries(
     sub_queries: Any,
     registry: Any,
     role: Optional[str] = None,
-) -> Tuple[Optional[List[Tuple[str, Dict[str, Any]]]], Optional[dict]]:
+) -> Tuple[
+    Optional[List[Tuple[str, Dict[str, Any]]]],
+    Optional[dict],
+    List[Dict[str, Any]],
+]:
     """Validate the complete batch before dispatching any member.
+
+    Returns ``(prepared, batch_refusal, dropped)``.
 
     ``role`` is the specialist role this web_search is executing under, or None for the
     manager/fc path. Under a role, the nested surface is narrowed to that role's own
-    capability allowlist BEFORE anything is dispatched, so a cross-role nested call is
-    refused with the whole batch rather than escalating privilege (review R1/R1).
+    capability allowlist BEFORE anything is dispatched, so a cross-role nested call can
+    never escalate privilege (review R1/R1).
+
+    A cross-role sub_query is DROPPED INDIVIDUALLY and reported in ``dropped``; its legal
+    siblings keep running and the caller still performs the plain search. Refusing the
+    whole batch instead cost the model every legal sibling and the main query, and told it
+    only "Invalid or unauthorized web-search request" -- naming neither the offending tool
+    nor a shape that would work, so its only move was to retry the same call (review3
+    R1-M1). MALFORMED input is different and still refuses the batch: a batch this module
+    cannot parse is not a batch with one bad member.
+
+    On the fc/manager path ``role`` is None, ``role_allowlist`` is None, and ``dropped`` is
+    therefore always empty -- that path is byte-identical to before.
     """
     role_allowlist = None if role is None else _nested_allowlist_for_role(role)
+    dropped: List[Dict[str, Any]] = []
     if not isinstance(query, str) or len(query) > _MAX_QUERY_CHARS:
-        return None, _failure("invalid_query", query)
+        return None, _failure("invalid_query", query), dropped
     if not isinstance(sub_queries, list):
-        return None, _failure("sub_queries_must_be_array", query)
+        return None, _failure("sub_queries_must_be_array", query), dropped
     if len(sub_queries) > _MAX_SUB_QUERIES:
         return None, _failure(
             "too_many_sub_queries", query, subquery_count=len(sub_queries)
-        )
+        ), dropped
     if sub_queries and registry is None:
         return None, _failure(
             "nested_tool_registry_unavailable",
             query,
             subquery_count=len(sub_queries),
-        )
+        ), dropped
 
     prepared: List[Tuple[str, Dict[str, Any]]] = []
     for sub_query in sub_queries:
         if not isinstance(sub_query, dict):
             return None, _failure(
                 "sub_query_must_be_object", query, subquery_count=len(sub_queries)
-            )
+            ), dropped
         if set(sub_query) != {"tool", "params"}:
             return None, _failure(
                 "invalid_sub_query_fields", query, subquery_count=len(sub_queries)
-            )
+            ), dropped
 
         tool_name = sub_query.get("tool")
         params = sub_query.get("params")
         if not isinstance(tool_name, str):
             return None, _failure(
                 "invalid_nested_tool_name", query, subquery_count=len(sub_queries)
-            )
+            ), dropped
         if tool_name == _SELF_TOOL_NAME:
             return None, _failure(
                 "nested_self_recursion_forbidden",
                 query,
                 subquery_count=len(sub_queries),
-            )
+            ), dropped
         if tool_name not in _ALLOWED_NESTED_TOOLS:
             return None, _failure(
                 "nested_tool_not_allowed", query, subquery_count=len(sub_queries)
-            )
+            ), dropped
         if role_allowlist is not None and tool_name not in role_allowlist:
             # The grant in force does not include this tool. Denied fail-closed, and
-            # VISIBLY: the model sees the refusal in the returned payload.
-            return None, _failure(
-                "nested_tool_role_forbidden", query, subquery_count=len(sub_queries)
+            # VISIBLY: the model sees the refusal, WITH the offending tool name and the
+            # tools it may use instead, in the returned payload. Only this sub_query is
+            # dropped -- its legal siblings and the plain search still run (review3 R1-M1).
+            logger.warning(
+                "Nested sub_query dropped reason=nested_tool_role_forbidden tool=%s",
+                tool_name,
             )
+            dropped.append(_role_refusal(tool_name, role))
+            continue
 
         params_error = _validate_param_shape(params)
         if params_error:
             return None, _failure(
                 params_error, query, subquery_count=len(sub_queries)
-            )
+            ), dropped
 
         if tool_name == "web_search_only":
             if set(params) - {"query"}:
@@ -429,20 +508,20 @@ def _preflight_sub_queries(
                     "invalid_web_search_only_params",
                     query,
                     subquery_count=len(sub_queries),
-                )
+                ), dropped
             search_query = params.get("query", query)
             if not isinstance(search_query, str) or len(search_query) > _MAX_QUERY_CHARS:
                 return None, _failure(
                     "invalid_nested_query", query, subquery_count=len(sub_queries)
-                )
+                ), dropped
         else:
             allowed, reason = _nested_tool_policy(registry, tool_name)
             if not allowed:
-                return None, _failure(reason, query, subquery_count=len(sub_queries))
+                return None, _failure(reason, query, subquery_count=len(sub_queries)), dropped
 
         prepared.append((tool_name, params))
 
-    return prepared, None
+    return prepared, None, dropped
 
 
 async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) -> dict:
@@ -466,15 +545,19 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
 
         results_parts = []
         all_data = {}
+        prepared: List[Tuple[str, Dict[str, Any]]] = []
+        refusals: List[Dict[str, Any]] = []
 
-        if sub_queries:
-            prepared, rejected = _preflight_sub_queries(
+        if sub_queries is not None:
+            prepared, rejected, refusals = _preflight_sub_queries(
                 query, sub_queries, registry, role
             )
             if rejected is not None:
+                if refusals:
+                    rejected["refused_sub_queries"] = refusals
                 return rejected
-            assert prepared is not None
 
+        if prepared:
             logger.info("Executing nested web-search batch count=%d", len(prepared))
             for index, (tool_name, params) in enumerate(prepared, 1):
                 logger.info(
@@ -499,8 +582,9 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                     # Re-check immediately before dispatch to close mutable-registry races.
                     allowed, reason = _nested_tool_policy(registry, tool_name)
                     if not allowed:
-                        return _failure(
-                            reason, query, subquery_count=len(prepared)
+                        return _with_refusals(
+                            _failure(reason, query, subquery_count=len(prepared)),
+                            refusals,
                         )
 
                     try:
@@ -513,8 +597,9 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                     except _NestedDispatchDenied as denial:
                         # Fail closed and VISIBLY: a nested call the boundary refused is
                         # never silently skipped or silently run.
-                        return _failure(
-                            denial.reason, query, subquery_count=len(prepared)
+                        return _with_refusals(
+                            _failure(denial.reason, query, subquery_count=len(prepared)),
+                            refusals,
                         )
                     except Exception as exc:
                         logger.warning(
@@ -539,15 +624,12 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
 
                 results_parts.append("")
         else:
-            # An explicit empty list has the same semantics as omitting sub_queries.
-            if sub_queries is not None:
-                prepared, rejected = _preflight_sub_queries(
-                    query, sub_queries, registry, role
-                )
-                if rejected is not None:
-                    return rejected
-                assert prepared == []
-
+            # Nothing runnable was nested: sub_queries was omitted, was an explicit empty
+            # list (always equivalent to omitting it), or every member was refused by the
+            # role boundary. Run the plain search of the MAIN query either way, so one
+            # forbidden sub_query never costs the model its own question as well
+            # (review3 R1-M1). A plain search is web_search's own capability, so it is
+            # inside whatever grant dispatched this call.
             logger.info("Executing plain web search query_chars=%d", query_meta["length"])
             web_result = await asyncio.to_thread(get_search_snippets, query, 5)
 
@@ -556,18 +638,21 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                     "Web search returned no usable evidence query_chars=%d",
                     query_meta["length"],
                 )
-                return {
+                return _with_refusals({
                     "success": False,
                     "error": "No search results found",
                     "query_metadata": query_meta,
                     "results": "",
                     "detailed_data": {},
-                }
+                }, refusals)
 
             results_parts.append(web_result)
             all_data["web_search"] = web_result
 
-        combined_results = "\n---\n".join(results_parts)
+        # The refusal block rides in the model-facing text as well as the structured key:
+        # the model reads `results`, so a refusal only present in a sibling key is a
+        # refusal it will not act on.
+        combined_results = "\n---\n".join(results_parts + _refusal_report(refusals))
 
         if not _evidence_usable(all_data):
             logger.warning(
@@ -575,21 +660,21 @@ async def web_search_func(query: str, sub_queries: Optional[List[Dict]] = None) 
                 query_meta["length"],
                 len(sub_queries) if isinstance(sub_queries, list) else 0,
             )
-            return {
+            return _with_refusals({
                 "success": False,
                 "error": "No usable search results",
                 "query_metadata": query_meta,
                 "results": combined_results,
                 "detailed_data": all_data,
-            }
+            }, refusals)
 
         logger.info("Web-search request completed result_parts=%d", len(results_parts))
-        return {
+        return _with_refusals({
             "success": True,
             "query_metadata": query_meta,
             "results": combined_results,
             "detailed_data": all_data,
-        }
+        }, refusals)
     except Exception as exc:
         # HTTP exception strings often contain URLs and raw query parameters.
         logger.error("Web-search request failed exception_type=%s", type(exc).__name__)

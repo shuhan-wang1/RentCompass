@@ -185,6 +185,16 @@ VALID_USAGE_STATUSES = ("complete", "partial", "no_llm_calls", "not_instrumented
 # size, which is worse than refusing to answer.
 USAGE_STATUS_HOLD = ("partial", "not_instrumented")
 
+#: Additive v3 field: was the LangChain CALLBACK observer attached while the turn
+#: ran? Absent on every record written before it existed, and the exemption below
+#: is granted only on an explicit `True`, so an older record keeps the old reading.
+OBSERVER_INSTALLED_FIELD = "llm_observer_installed"
+#: The unmeasured usage status an unobservable turn may carry WITHOUT being charged
+#: as an instrumentation violation. `not_instrumented` is deliberately absent: it
+#: asserts that nothing was watching, which contradicts the flag that grants the
+#: exemption in the first place.
+USAGE_STATUS_UNOBSERVABLE_OK = ("partial",)
+
 # A process-random HMAC salt would re-hash the same user differently after every
 # restart, silently decorrelating user counts across windows. The producer refuses
 # to do that and reports this status instead; the gate must hold on it.
@@ -603,9 +613,35 @@ def validate_record(rec: dict) -> List[str]:
     if rec.get("agent_arch") is not None and rec["agent_arch"] not in VALID_ARCHES:
         problems.append(f"agent_arch={rec['agent_arch']!r} not in {list(VALID_ARCHES)}")
     us = rec.get("llm_usage_status")
+    observer_installed = rec.get(OBSERVER_INSTALLED_FIELD)
+    if observer_installed is not None and not isinstance(observer_installed, bool):
+        problems.append(
+            f"{OBSERVER_INSTALLED_FIELD}={observer_installed!r} is not a boolean")
+    # A turn we could not measure and a process that was not measuring are DIFFERENT
+    # facts, and only the second is the defect this gate exists to catch (the
+    # 2026-07-25 round: a stale model id produced zero-call telemetry from an
+    # unobserved process for a day). A crash/5xx/timeout/cancellation that happened
+    # while the callback observer WAS attached is unmeasurable, not uninstrumented:
+    # no amount of instrumentation could have priced a call that never reached its
+    # completion callback. Charging it as a contract violation held every window
+    # containing one — at the crash rates in the real logs, every window — which is
+    # how operators learn to ignore INSTRUMENTATION-HOLD, or to switch it off. The
+    # spend is still UNMEASURED (canary_cost keeps the turn chargeable and refuses
+    # to price it at zero) and the crash still counts against the outcome/5xx rates
+    # it already counted against; only the "your telemetry is broken" verdict is
+    # withdrawn, and only on positive evidence that it was not.
+    #
+    # The exemption is narrow by construction: unobservable outcome AND an explicit
+    # `llm_observer_installed: true` AND a status that admits partial observation.
+    # Absent flag, false flag, `not_instrumented`, or a completed turn -> unchanged.
+    unmeasurable_by_outcome = (
+        crashed
+        and observer_installed is True
+        and us in USAGE_STATUS_UNOBSERVABLE_OK
+    )
     if us is not None and us not in VALID_USAGE_STATUSES:
         problems.append(f"llm_usage_status={us!r} not in {list(VALID_USAGE_STATUSES)}")
-    elif us in USAGE_STATUS_HOLD:
+    elif us in USAGE_STATUS_HOLD and not unmeasurable_by_outcome:
         problems.append(
             f"llm_usage_status={us!r}: this turn's token spend is an undercount of "
             f"unknown size, so the cost side of the A/B cannot be evaluated")
@@ -899,16 +935,35 @@ def record_ts(rec: dict) -> Optional[datetime]:
 # Input loading                                                               #
 # --------------------------------------------------------------------------- #
 
+#: The only suffixes a DISCOVERED file may have. An explicitly named file is
+#: honoured whatever it is called — that is the operator stating an intent — but
+#: anything this script finds for itself must look like a canary log.
+LOG_SUFFIXES = (".jsonl", ".log", ".ndjson")
+
+
 def resolve_inputs(inputs: Sequence[str]) -> List[str]:
     """Expand --input values (files, directories, or globs) into a sorted, de-duplicated
-    list of file paths. Directories are searched recursively for ``*.jsonl`` and ``*.log``."""
+    list of file paths. Directories are searched recursively for ``*.jsonl`` and ``*.log``.
+
+    Discovery is suffix-filtered, and the filter is applied to GLOB results too, not
+    just to directory walks. The live log directory holds sidecar files —
+    ``canary-legacy.jsonl.bak-20260831`` is a 2 973-record pre-cleanup backup of the
+    log next to it — and pulling one in would double every record it copies:
+    duplicate request_ids (a HOLD whose stated reason is a duplicate-emission bug
+    that never happened) and, for that particular file, the mixed-schema HOLD the
+    cleanup existed to remove. The directory walk already excluded it by accident of
+    its suffix; ``--input '.runtime/logs/*'`` did not, and neither would a future
+    widening of the walk's patterns. So the rule is stated once, here.
+    """
     paths: List[str] = []
     for item in inputs:
         if any(c in item for c in "*?[") and not os.path.isdir(item):
-            paths.extend(_glob.glob(item, recursive=True))
+            paths.extend(p for p in _glob.glob(item, recursive=True)
+                         if p.endswith(LOG_SUFFIXES))
         elif os.path.isdir(item):
-            for pat in ("*.jsonl", "*.log", "*.ndjson"):
-                paths.extend(_glob.glob(os.path.join(item, "**", pat), recursive=True))
+            for pat in LOG_SUFFIXES:
+                paths.extend(_glob.glob(os.path.join(item, "**", f"*{pat}"),
+                                        recursive=True))
         else:
             paths.append(item)
     seen, out = set(), []
@@ -1281,10 +1336,44 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
         for field in _ALL_SPECIALIST_COUNTER_FIELDS
     }
     specialist_planned = specialist_totals["planned"]
+    # `skipped` is the terminal a task gets when it never STARTED — dispatch denied
+    # at preparation, or the turn budget exhausted before the task ran. It is
+    # therefore the bucket that a completely non-functional specialist runtime
+    # lands in, and the report has to say so out loud AND say why: the error-code
+    # breakdown is what turns "180 planned tasks produced nothing" into a
+    # diagnosis instead of a mystery. The event ring is bounded, so this is a
+    # best-effort attribution of an authoritative counter — a truncated record
+    # still contributes its `skipped` count, just fewer codes.
+    skipped_codes: Dict[str, int] = {}
+    for block in multi:
+        events = block.get("events")
+        if not isinstance(events, list):
+            continue
+        for event in events:
+            if not isinstance(event, dict) or event.get("status") != "skipped":
+                continue
+            code = event.get("error_code")
+            code = code if isinstance(code, str) and code else "unspecified"
+            skipped_codes[code] = skipped_codes.get(code, 0) + 1
+
+    # Forgiven must never mean invisible. These two counters are what let a reader
+    # see how much of the window went unpriced, and how much of THAT was the
+    # unobservable-outcome exemption rather than broken instrumentation.
+    unmeasured_spend = sum(
+        1 for r in records if r.get("llm_usage_status") in USAGE_STATUS_HOLD
+    )
+    unobservable_unmeasured = sum(
+        1 for r in records
+        if r.get("turn_outcome") in UNOBSERVABLE_OUTCOMES
+        and r.get(OBSERVER_INSTALLED_FIELD) is True
+        and r.get("llm_usage_status") in USAGE_STATUS_UNOBSERVABLE_OK
+    )
 
     return {
         "turns": turns,
         "conversations": len(convos),
+        "unmeasured_spend_turns": unmeasured_spend,
+        "unobservable_unmeasured_turns": unobservable_unmeasured,
         "users": len(users),
         "candidate_shas": sorted({str(r.get("candidate_sha")) for r in records
                                   if r.get("candidate_sha") is not None}),
@@ -1351,6 +1440,27 @@ def aggregate_arch(records: Sequence[dict]) -> dict:
             "partial_rate": (
                 _rate(specialist_totals["partial"], specialist_planned)
                 if specialist_planned else None
+            ),
+            # THE gate metric for specialist delivery. `failure_rate` alone scored
+            # only the tasks that ran and then failed, so a candidate whose every
+            # dispatch was refused BEFORE it started read as `failed=0` /
+            # `failure_rate=0.00%` and passed — a fail-open on the one metric the
+            # manager_v1 rollout adds, on exactly the runtime it is supposed to be
+            # gating. A planned task that produced no specialist answer is a
+            # non-delivery whether it failed loudly or never ran, so both buckets
+            # are in this numerator. `partial` is still excluded (see above): it
+            # answered the user with a stated gap.
+            "non_success_rate": (
+                _rate(specialist_totals["failed"] + specialist_totals["skipped"],
+                      specialist_planned)
+                if specialist_planned else None
+            ),
+            "skipped_rate": (
+                _rate(specialist_totals["skipped"], specialist_planned)
+                if specialist_planned else None
+            ),
+            "skipped_error_codes": dict(
+                sorted(skipped_codes.items(), key=lambda kv: (-kv[1], kv[0]))
             ),
         },
         # v2 and v3 `llm_calls`/`tool_batches` are different measurements. Reporting
@@ -1676,10 +1786,48 @@ def build_verdict(fc: dict, legacy: dict, deltas: dict,
             f"specialist failure rate {specialist_failure_rate*100:.1f}% > "
             f"{SPECIALIST_FAILURE_RATE_LIMIT*100:.0f}%"
         )
-    if require_specialists and not specialist.get("planned"):
-        instr_reasons.append(
-            "specialist dispatch was required but no planned specialist task was observed"
+    specialist_non_success_rate = specialist.get("non_success_rate")
+    if (
+        specialist_non_success_rate is not None
+        and specialist_non_success_rate > SPECIALIST_FAILURE_RATE_LIMIT
+    ):
+        _skipped_codes = specialist.get("skipped_error_codes") or {}
+        _why = ("; ".join(f"{k} x{v}" for k, v in list(_skipped_codes.items())[:3])
+                or "no error_code recorded")
+        sp_reasons.append(
+            f"specialist non-delivery rate "
+            f"{specialist_non_success_rate*100:.1f}% > "
+            f"{SPECIALIST_FAILURE_RATE_LIMIT*100:.0f}% "
+            f"(failed {specialist.get('failed')} + skipped "
+            f"{specialist.get('skipped')} of {specialist.get('planned')} planned; "
+            f"skipped: {_why})"
         )
+    if require_specialists:
+        # "A plan was made" is not evidence that specialists RAN. The dispatcher
+        # rewrites the terminal of any task that never started to `skipped`, so a
+        # runtime whose every dispatch is refused still reports planned=N — and the
+        # old check (`not specialist.get("planned")`) passed it. Requiring
+        # specialists has to mean the three things that can independently be false:
+        # planned > 0, started > 0, and at least one task that actually delivered.
+        _planned = specialist.get("planned") or 0
+        _started = specialist.get("started") or 0
+        _delivered = (specialist.get("completed") or 0) + (specialist.get("partial") or 0)
+        if not _planned:
+            instr_reasons.append(
+                "specialist dispatch was required but no planned specialist task was observed"
+            )
+        elif not _started:
+            instr_reasons.append(
+                f"specialist dispatch was required but no specialist task ever STARTED "
+                f"(planned={_planned}, skipped={specialist.get('skipped')}): the "
+                f"specialist runtime did not run in this window"
+            )
+        elif not _delivered:
+            instr_reasons.append(
+                f"specialist dispatch was required but no specialist task completed or "
+                f"partially completed (planned={_planned}, started={_started}, "
+                f"failed={specialist.get('failed')}, skipped={specialist.get('skipped')})"
+            )
 
     zt_breached = bool(zt_reasons)
     sp_breached = bool(sp_reasons)
@@ -2070,11 +2218,30 @@ def render_text(report: dict) -> str:
         ("schema/API 400s", _fmt(fc["api_400_count"]), _fmt(lg["api_400_count"]), ""),
         ("5xx rate", _fmt(fc["http_5xx_rate"], "pct"), _fmt(lg["http_5xx_rate"], "pct"),
          _fmt(d["http_5xx_rate_pp"], "pp")),
+        # planned/started/skipped are printed TOGETHER on purpose. Printing only
+        # `planned` next to a `failed rate` let a window where nothing ever started
+        # read as a clean 0.00% — the operator's only hint was a max-in-flight of 0
+        # that no threshold looked at.
+        ("unmeasured spend turns", str(fc.get("unmeasured_spend_turns", 0)),
+         str(lg.get("unmeasured_spend_turns", 0)), ""),
+        ("  of which unobservable", str(fc.get("unobservable_unmeasured_turns", 0)),
+         str(lg.get("unobservable_unmeasured_turns", 0)), ""),
         ("specialist planned", str(fc["specialist"]["planned"]), "n/a", ""),
+        ("specialist started", str(fc["specialist"]["started"]), "n/a", ""),
+        ("specialist skipped", str(fc["specialist"]["skipped"]), "n/a", ""),
         ("specialist failed rate", _fmt(fc["specialist"]["failure_rate"], "pct"),
+         "n/a", ""),
+        ("specialist non-delivery", _fmt(fc["specialist"]["non_success_rate"], "pct"),
          "n/a", ""),
         ("specialist max in-flight", str(fc["specialist"]["max_in_flight"]), "n/a", ""),
     ]
+    _skipped_codes = fc["specialist"].get("skipped_error_codes") or {}
+    if _skipped_codes:
+        rows.append((
+            "specialist skip codes",
+            ", ".join(f"{k} x{v}" for k, v in list(_skipped_codes.items())[:3]),
+            "n/a", "",
+        ))
     w0 = max(len(r[0]) for r in rows)
     colw = max(12, len(candidate_arch), len(control_arch))
     hdr = (f"{'metric':<{w0}}  {candidate_arch:>{colw}}  "

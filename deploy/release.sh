@@ -50,15 +50,23 @@
 #   --yes                do not ask for confirmation (for cron/CI)
 #   --no-fetch           use the refs already on disk
 #   --allow-failing-ci   release even though the target's CI checks FAILED
-#   --dry-run            do everything except re-pin and deploy; print the plan
+#   --dry-run            do everything except re-pin and deploy; print the plan.
+#                        NEVER fails on a rollout policy decision: it prints what
+#                        would happen and the flag that would be needed.
+#   --skip-answer-probe  passed to update.sh: do not drive a real billed turn
+#                        against either pool during the drain
 #   --                   override the default --both --drain arguments passed
 #                        to update.sh
 #
 # ENVIRONMENT
-#   CANARY_ALLOW_FLIP=1  authorise a run that would END with the candidate at 100%
-#                        of public traffic. Without it such a run is refused: the
-#                        runbook authorises 50% as the highest rollout stage, and a
-#                        routine release must not be able to perform a cutover.
+#   CANARY_ALLOW_FLIP=1  authorise a run that would CHANGE what 100% of the public
+#                        runs — i.e. an architecture that is NOT at 100% when the
+#                        run starts ends there. Rebuilding the pool that is already
+#                        the sole public upstream is NOT that: routing is unchanged,
+#                        and a routine release on this host needs no flag. Only a
+#                        real cutover (a different candidate architecture taking the
+#                        exclusive :5002 slot, or a weighted host being advanced to
+#                        100%) is refused without it.
 #
 # Every external command is injectable so this can be rehearsed with no docker,
 # no root and no network (see deploy/test_release_assertions.sh).
@@ -88,6 +96,14 @@ UPSTREAM_BLOCK='upstream rentcompass_app'
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '\033[33m!!  %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[31m!!  %s\033[0m\n' "$*" >&2; exit 1; }
+
+bool01() {
+  case "${1,,}" in
+    1|true|yes|on) printf 1 ;;
+    0|false|no|off|'') printf 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 read_root_env() { # key default; explicit process env wins
   local key="$1" fallback="$2" value=""
@@ -125,7 +141,8 @@ upstream_port() {
     | sed -n 's/.*server[[:space:]]\+127\.0\.0\.1:\([0-9]\+\);.*/\1/p' | head -1
 }
 
-REF=""; ASSUME_YES=0; NO_FETCH=0; ALLOW_FAILING_CI=0; DRY_RUN=0; PASSTHROUGH=()
+REF=""; ASSUME_YES=0; NO_FETCH=0; ALLOW_FAILING_CI=0; DRY_RUN=0; SKIP_ANSWER_PROBE=0
+PASSTHROUGH=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --ref)              REF="${2:-}"; shift 2 ;;
@@ -133,6 +150,7 @@ while [ $# -gt 0 ]; do
     --no-fetch)         NO_FETCH=1; shift ;;
     --allow-failing-ci) ALLOW_FAILING_CI=1; shift ;;
     --dry-run)          DRY_RUN=1; shift ;;
+    --skip-answer-probe) SKIP_ANSWER_PROBE=1; shift ;;
     --)                 shift; PASSTHROUGH=("$@"); break ;;
     -h|--help)          sed -n '2,/^set -euo/p' "$SELF" | sed '$d'; exit 0 ;;
     *)                  die "unknown argument: $1  (try --help; use -- to pass options to update.sh)" ;;
@@ -144,6 +162,11 @@ done
 # can still pass an explicit update policy after --.
 if [ "${#PASSTHROUGH[@]}" -eq 0 ]; then
   PASSTHROUGH=(--both --drain)
+fi
+# R3-M2: the opt-out has to reach set_canary_weight.sh through update.sh and
+# switch_pool.sh, or no caller above set_canary_weight.sh can ever use it.
+if [ "$SKIP_ANSWER_PROBE" -eq 1 ]; then
+  PASSTHROUGH+=(--skip-answer-probe)
 fi
 
 if [ "${RENTCOMPASS_DEPLOY_LOCK_HELD:-0}" != "1" ]; then
@@ -261,27 +284,59 @@ printf '    then       %s %s\n' "$UPDATE_CMD" "${PASSTHROUGH[*]:-}"
 # `--both --drain` hands the public route to the standby and back. Before this
 # preflight existed the return leg could resolve to `--stage flip` at weight 100,
 # so `bash deploy/release.sh` — with no rollout flag anywhere — could end with the
-# candidate serving 100% of the public. The runbook authorises 50% as the highest
-# rollout stage, so a run that would END at 100% is now shown and refused unless
-# CANARY_ALLOW_FLIP=1 says the operator means it.
+# candidate serving 100% of the public.
+#
+# R3-H3: the first version of the gate compared only the END state, so it could
+# not tell "the pool that is already live stays at 100%" from "this run flips the
+# candidate to 100%". On this box the fc_loop pool on :5002 has BEEN the sole
+# public upstream since the 07-27 cutover, so every routine release was refused
+# and had to be typed as `CANARY_ALLOW_FLIP=1 bash deploy/release.sh` — training
+# the exact habit that disarms the gate for the real manager_v1 cutover later.
+#
+# The gate now fires only on a CHANGE: an architecture that is NOT running at 100%
+# when the run starts ends there. A rebuild of the already-live single-upstream
+# pool is routine and needs no flag.
 CANDIDATE_ARCH="$(read_root_env CANARY_AGENT_ARCH fc_loop)"
-CANDIDATE_SPECIALISTS="$(read_root_env CANARY_MANAGER_V1_SPECIALISTS 0)"
-CANDIDATE_MCP="$(read_root_env CANARY_USE_MCP_TOOLS 0)"
+# R3-M4: normalise the boolean the same way config.py::_bool_token does, so the
+# spellings .env.example and the runbook bless (`true`/`yes`/`on`) cannot kill
+# every release while every other consumer accepts them.
+CANDIDATE_SPECIALISTS_RAW="$(read_root_env CANARY_MANAGER_V1_SPECIALISTS 0)"
+CANDIDATE_MCP_RAW="$(read_root_env CANARY_USE_MCP_TOOLS 0)"
+CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS_RAW")" \
+  || die "CANARY_MANAGER_V1_SPECIALISTS='$CANDIDATE_SPECIALISTS_RAW' in $ENV_FILE is neither a true (1/true/yes/on) nor a false (0/false/no/off) spelling"
+CANDIDATE_MCP="$(bool01 "$CANDIDATE_MCP_RAW")" \
+  || die "CANARY_USE_MCP_TOOLS='$CANDIDATE_MCP_RAW' in $ENV_FILE is neither a true (1/true/yes/on) nor a false (0/false/no/off) spelling"
 case "$CANDIDATE_ARCH:$CANDIDATE_SPECIALISTS:$CANDIDATE_MCP" in
   fc_loop:0:0|manager_v1:1:0) ;;
   *) die "root .env selects an unsupported candidate identity ${CANDIDATE_ARCH}:${CANDIDATE_SPECIALISTS}:${CANDIDATE_MCP}; the only accepted pairs are fc_loop:0:0 and manager_v1:1:0 (docs/canary_runbook.md)" ;;
 esac
+
+# What the exclusive candidate SLOT (:5002) runs RIGHT NOW. update.sh tags every
+# candidate image `uk-rent-agent:canary-<arch-with-dashes>-<short sha>`, so the
+# root .env's own FC_CANARY_IMAGE is a primary source for it — no probe, no
+# guess. An unparseable tag falls back to fc_loop, the only architecture that has
+# ever occupied the slot on this host.
+LIVE_CANDIDATE_ARCH="${RELEASE_LIVE_CANDIDATE_ARCH:-}"
+if [ -z "$LIVE_CANDIDATE_ARCH" ]; then
+  LIVE_CANDIDATE_ARCH="$(printf '%s' "$(read_root_env FC_CANARY_IMAGE '')" \
+    | sed -n 's/.*:canary-\(.*\)-[0-9a-f]\{7,\}$/\1/p' | tr '-' '_')"
+fi
+LIVE_CANDIDATE_ARCH="${LIVE_CANDIDATE_ARCH:-fc_loop}"
+
 END_WEIGHT="$(route_marker canary-weight || true)"
 END_STAGE="$(route_marker rollout-stage || true)"
 END_ROLLOUT_ID="$(route_marker rollout-id || true)"
 END_MODE=weighted
 END_SOURCE="$ROUTE_CONF"
+END_NOTE=""
+# START = the exposure this host is on before the release. update.sh records the
+# same markers before its drain and puts them back afterwards, so START and END
+# are equal for every routine release; where they differ is stated below.
+START_WEIGHT="$END_WEIGHT"
+START_STAGE="$END_STAGE"
 if [ -z "$END_WEIGHT" ]; then
   # No weighted include: resolve the end state from the single upstream instead of
-  # skipping the gate. Skipping it is what let K4 apply to weighted hosts only —
-  # on a single-upstream host already serving :5002 the whole chain (release ->
-  # update --both --drain -> restore onto fc) ended at 100% candidate with no
-  # human authorisation anywhere, which is the exact outcome this gate exists for.
+  # skipping the gate. Skipping it is what let K4 apply to weighted hosts only.
   END_MODE=single-upstream
   END_SOURCE="$SITE_CONF"
   END_PORT="$(upstream_port || true)"
@@ -290,7 +345,25 @@ if [ -z "$END_WEIGHT" ]; then
     5002) END_POOL=candidate; END_WEIGHT=100 ;;
     *)    END_POOL=unknown;   END_WEIGHT="" ;;
   esac
+  START_WEIGHT="$END_WEIGHT"
+  START_STAGE="$END_STAGE"
+elif [ "$END_WEIGHT" = 100 ] && [ "${END_STAGE:-flip}" = maintenance ]; then
+  # update.sh REFUSES to replay a recorded `100 @ maintenance`: that is the debris
+  # of an interrupted drain, not an authorised exposure. The run therefore ends
+  # with the public on legacy, i.e. LOWER exposure than it started with.
+  END_WEIGHT=0
+  END_STAGE=rollback
+  END_NOTE="the recorded 100%@maintenance is an UNFINISHED drain; update.sh will not replay it, so this run ENDS with public traffic on legacy"
 fi
+
+# The architecture 100% of the public runs, before and after. Specialists are
+# bound to the architecture by the whitelist above (fc_loop=>0, manager_v1=>1),
+# so the arch alone identifies the exposure.
+START_100_ARCH=""; [ "${START_WEIGHT:-}" = 100 ] && START_100_ARCH="$LIVE_CANDIDATE_ARCH"
+END_100_ARCH="";   [ "${END_WEIGHT:-}" = 100 ]   && END_100_ARCH="$CANDIDATE_ARCH"
+FLIP=0
+if [ -n "$END_100_ARCH" ] && [ "$START_100_ARCH" != "$END_100_ARCH" ]; then FLIP=1; fi
+
 printf '    candidate  arch=%s specialists=%s mcp=%s   (root .env: %s)\n' \
   "$CANDIDATE_ARCH" "$CANDIDATE_SPECIALISTS" "$CANDIDATE_MCP" "$ENV_FILE"
 if [ "$END_MODE" = weighted ]; then
@@ -305,8 +378,35 @@ else
   warn "The end state of this release could not be resolved from either routing file."
   warn "update.sh derives its deploy target from the same upstream line and will refuse to guess, so this run is expected to stop there."
 fi
-if [ "${END_WEIGHT:-}" = "100" ] && [ "${CANARY_ALLOW_FLIP:-0}" != "1" ]; then
-  die "this release would END with the candidate ($CANDIDATE_ARCH, specialists=$CANDIDATE_SPECIALISTS) at 100% of public traffic (${END_MODE} mode, stage '${END_STAGE:-flip}'). 50% is the highest authorised rollout stage; roll the route back first (sudo bash deploy/set_canary_weight.sh --weight 0, or sudo bash deploy/switch_pool.sh --to legacy on a single-upstream host), or re-run with CANARY_ALLOW_FLIP=1 for a deliberately gated flip (docs/canary_runbook.md section 2)."
+[ -z "$END_NOTE" ] || warn "$END_NOTE"
+
+# R3-M8. This host has exactly TWO pool slots: docker-compose.yml hardcodes :5001
+# to arch `legacy`, and :5002 is the single candidate slot. A candidate whose arch
+# is not what the slot runs today therefore REPLACES today's production
+# architecture instead of running beside it, and "rollback" means `legacy` — not
+# the architecture being displaced. docs/canary_runbook.md section 2 repeats this.
+if [ "$CANDIDATE_ARCH" != "$LIVE_CANDIDATE_ARCH" ]; then
+  warn "CANDIDATE SLOT IS EXCLUSIVE: :5002 runs '$LIVE_CANDIDATE_ARCH' today and this release makes it '$CANDIDATE_ARCH'."
+  warn "  '$LIVE_CANDIDATE_ARCH' is REPLACED, not compared against: there is no control arm for it and no way back to it except a new release."
+  warn "  The rollback target stays the 'legacy' pool on :5001 — rolling back does NOT return you to '$LIVE_CANDIDATE_ARCH'."
+fi
+
+if [ "$FLIP" -eq 1 ]; then
+  FLIP_MSG="this release would END with the candidate ($CANDIDATE_ARCH, specialists=$CANDIDATE_SPECIALISTS) at 100% of public traffic (${END_MODE} mode, stage '${END_STAGE:-flip}'), and that is a CHANGE: 100% currently runs '${START_100_ARCH:-<not at 100%>}'. 50% is the highest authorised rollout stage, so a routine release must not perform this cutover. Re-run with CANARY_ALLOW_FLIP=1 for a deliberately gated flip (docs/canary_runbook.md section 2). Do NOT 'fix' this by pointing the public route at the legacy architecture — that is a production downgrade, not a remedy."
+  if [ "${CANARY_ALLOW_FLIP:-0}" = "1" ]; then
+    warn "CANARY_ALLOW_FLIP=1: authorising a cutover from '${START_100_ARCH:-<not at 100%>}' to '$CANDIDATE_ARCH' at 100% of public traffic."
+  elif [ "$DRY_RUN" -eq 1 ]; then
+    # A dry run prints the plan and changes nothing, so a policy decision must
+    # never abort it: the operator loses the preview exactly when they need it.
+    warn "--dry-run: this release WOULD BE REFUSED. $FLIP_MSG"
+    warn "--dry-run: the flag it needs is CANARY_ALLOW_FLIP=1"
+  else
+    die "$FLIP_MSG"
+  fi
+elif [ "${END_WEIGHT:-}" = 100 ]; then
+  printf '    routing    UNCHANGED — %s is already serving 100%% of public traffic; this release rebuilds it in place.\n' \
+    "$CANDIDATE_ARCH"
+  printf '               No cutover happens, so no CANARY_ALLOW_FLIP is needed (R3-H3).\n'
 fi
 echo
 

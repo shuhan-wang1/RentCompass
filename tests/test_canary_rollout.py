@@ -367,6 +367,10 @@ def test_canary_turn_record_crashed_turn_defaults(client, user, monkeypatch, cap
     # null and 0 depending on which tests ran first. Pin the UNINSTRUMENTED case
     # here; the installed case is asserted by the test below it.
     monkeypatch.setattr(appmod.turn_observations, "_observer_installed", False)
+    # The raw-SDK reporter is a SECOND process-wide flag with the same stickiness:
+    # one raw call anywhere earlier in the session leaves it True, and snapshot()
+    # would then report counters instead of nulls. Pin both or pin neither.
+    monkeypatch.setattr(appmod.turn_observations, "_raw_observer_installed", False)
     monkeypatch.setattr(appmod, "AGENT_ARCH", "fc_loop")
 
     async def _boom(*a, **k):

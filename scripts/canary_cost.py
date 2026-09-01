@@ -23,7 +23,9 @@ import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from canary_report import load_records  # noqa: E402
+from canary_report import (  # noqa: E402
+    OBSERVER_INSTALLED_FIELD, UNOBSERVABLE_OUTCOMES, load_records,
+)
 
 
 EXIT_PROCEED = 0
@@ -153,6 +155,14 @@ def sum_usage(records: List[dict]) -> Dict[str, Any]:
     unmeasured = 0
     no_calls = 0
     chargeable = 0
+    # A SUBSET of `unmeasured`, never a substitute for it: a turn that crashed while
+    # the callback observer was running still cost real money we cannot count, so it
+    # stays chargeable and unpriced. The split exists so an operator reading a HOLD
+    # can tell "the observer is broken" from "the candidate is crashing" — two very
+    # different next actions, previously one number. canary_report withdraws its
+    # CONTRACT complaint for these turns; the spend is still unknown, and this tool
+    # still says so.
+    unobservable = 0
     issues: List[str] = []
 
     for index, record in enumerate(records):
@@ -185,9 +195,18 @@ def sum_usage(records: List[dict]) -> Dict[str, Any]:
             continue
         if status != "complete":
             unmeasured += 1
-            issues.append(
-                f"{label}: llm_usage_status={status!r} is not fully measured"
-            )
+            if (record.get("turn_outcome") in UNOBSERVABLE_OUTCOMES
+                    and record.get(OBSERVER_INSTALLED_FIELD) is True):
+                unobservable += 1
+                issues.append(
+                    f"{label}: llm_usage_status={status!r} on an unobservable "
+                    f"{record.get('turn_outcome')!r} turn (observer was installed): "
+                    f"unmeasurable spend, not broken instrumentation"
+                )
+            else:
+                issues.append(
+                    f"{label}: llm_usage_status={status!r} is not fully measured"
+                )
             continue
 
         validated, record_issues = _validated_usage(
@@ -206,6 +225,7 @@ def sum_usage(records: List[dict]) -> Dict[str, Any]:
                 slot[field] += metrics[field]
 
     per_model["_unmeasured_turns"] = {"count": unmeasured}
+    per_model["_unobservable_turns"] = {"count": unobservable}
     per_model["_no_llm_call_turns"] = {"count": no_calls}
     per_model["_chargeable_turns"] = {"count": chargeable}
     per_model["_usage_issues"] = {
@@ -340,6 +360,11 @@ def compute_cost(
         "total_cost": rounded if ok else None,
         "by_model": lines,
         "unmeasured_turns": unmeasured,
+        # The crash-driven subset of the line above. Same spend, different cause,
+        # different fix.
+        "unobservable_turns": _metadata_count(
+            per_model, "_unobservable_turns"
+        ),
         "no_llm_call_turns": _metadata_count(
             per_model, "_no_llm_call_turns"
         ),

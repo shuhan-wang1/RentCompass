@@ -53,6 +53,10 @@
 #   --allow-in-place        explicitly accept a public 502 boot window and the
 #                           risk that failed readiness leaves the candidate on
 #                           the public port. Never implied by failed drain.
+#   --skip-answer-probe     do not drive a real billed turn against either pool
+#                           before the drain moves the route (the RESTORE leg
+#                           never probes: it returns traffic to the pool that was
+#                           already serving it when this run started)
 #   --rebuild-image         rebuild the fc image even if its tag already exists
 #   --force                 redeploy even when the pool already serves the pin
 #   --status                print pin + both pools' identity, change nothing
@@ -93,9 +97,51 @@ read_root_env() { # key default; explicit process env wins
   printf '%s' "${value:-$fallback}"
 }
 
+bool01() {
+  case "${1,,}" in
+    1|true|yes|on) printf 1 ;;
+    0|false|no|off|'') printf 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# --- CANONICAL specialist-header rule (keep every copy byte-identical) -------
+# X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
+# specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
+# counts as 0: every image built before 2026-08-31 omits the header entirely,
+# which is BOTH pools deployed on this host today, and the legacy pool is the
+# standing rollback escape hatch that must not be recreated just to satisfy a
+# header check.  Demanding the header for an expected 0 turned `--to legacy`
+# (the emergency rollback) and update.sh's drain leg into hard failures.
+# Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
+#         deploy/monitoring/rentcompass-monitor.sh
+# Python twin: deploy/probe_pool_answer.py::specialists_match
+specialists_ok() { # <observed> <expected>
+  local observed="${1:-}" expected="${2:-}"
+  if [ "$observed" = "$expected" ]; then return 0; fi
+  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
+  return 1
+}
+specialists_absent() { # <observed> -> 0 when the pool sent no specialist header
+  [ -z "${1:-}" ] || [ "${1:-}" = none ]
+}
+specialists_shown() { # <observed> -> what to print for it in a message
+  if specialists_absent "${1:-}"; then printf '<absent>'; else printf '%s' "$1"; fi
+}
+
 CANDIDATE_ARCH="$(read_root_env CANARY_AGENT_ARCH fc_loop)"
-CANDIDATE_SPECIALISTS="$(read_root_env CANARY_MANAGER_V1_SPECIALISTS 0)"
-CANDIDATE_MCP="$(read_root_env CANARY_USE_MCP_TOOLS 0)"
+# R3-M4. This used to `case` the RAW .env string, so `CANARY_MANAGER_V1_SPECIALISTS=true`
+# — a spelling .env.example and the runbook both bless, and which
+# set_canary_weight.sh, switch_pool.sh, the monitor and config.py all accept —
+# killed every release and every update with "unsupported candidate identity".
+# One normaliser, the same one config.py::_bool_token implements, and anything
+# that is neither a true nor a false spelling is refused by name.
+CANDIDATE_SPECIALISTS_RAW="$(read_root_env CANARY_MANAGER_V1_SPECIALISTS 0)"
+CANDIDATE_MCP_RAW="$(read_root_env CANARY_USE_MCP_TOOLS 0)"
+CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS_RAW")" \
+  || die "CANARY_MANAGER_V1_SPECIALISTS='$CANDIDATE_SPECIALISTS_RAW' in $ENV_FILE is neither a true (1/true/yes/on) nor a false (0/false/no/off) spelling"
+CANDIDATE_MCP="$(bool01 "$CANDIDATE_MCP_RAW")" \
+  || die "CANARY_USE_MCP_TOOLS='$CANDIDATE_MCP_RAW' in $ENV_FILE is neither a true (1/true/yes/on) nor a false (0/false/no/off) spelling"
 case "$CANDIDATE_ARCH:$CANDIDATE_SPECIALISTS:$CANDIDATE_MCP" in
   fc_loop:0:0|manager_v1:1:0) ;;
   manager_v1:*) die "manager_v1 candidate requires CANARY_MANAGER_V1_SPECIALISTS=1 and CANARY_USE_MCP_TOOLS=0" ;;
@@ -110,10 +156,15 @@ declare -A SERVICE=( [legacy]=app [fc]=app-fc )
 
 POOL="auto"; BOTH=0; DRAIN=1; ALLOW_IN_PLACE=0
 REBUILD_IMAGE=0; FORCE=0; STATUS_ONLY=0
+# R3-M2. Only set_canary_weight.sh parsed --skip-answer-probe, and nothing in the
+# deploy path forwarded it, so on a weighted host the drain leg drove two real
+# billed /api/alex turns that no caller could opt out of.
+SKIP_ANSWER_PROBE="${CANARY_SKIP_ANSWER_PROBE:-0}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --pool)           POOL="${2:-}"; shift 2 ;;
     --both)           BOTH=1; shift ;;
+    --skip-answer-probe) SKIP_ANSWER_PROBE=1; shift ;;
     --drain)          DRAIN=1; ALLOW_IN_PLACE=0; shift ;;
     --allow-in-place) DRAIN=0; ALLOW_IN_PLACE=1; shift ;;
     --rebuild-image)  REBUILD_IMAGE=1; shift ;;
@@ -151,6 +202,18 @@ route_marker() { # rentcompass-<name>
 
 other_pool() { case "$1" in legacy) echo fc ;; fc) echo legacy ;; esac; }
 
+# The pool the PUBLIC route selects right now, in whichever routing mode this host
+# uses. Read live (not from the values recorded before the drain) so the restore
+# can tell "the drain moved the route" from "the drain never happened".
+current_public_pool() {
+  local w; w="$(routing_weight || true)"
+  if [ -n "$w" ]; then
+    case "$w" in 0) echo legacy ;; 100) echo fc ;; *) echo "mixed:$w" ;; esac
+  else
+    pool_of_port "$(upstream_port || true)"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # The active-drain marker
 # ---------------------------------------------------------------------------
@@ -187,10 +250,12 @@ identity_of() {
   url=$(printf "$HEALTH_FMT" "${PORT[$1]}")
   hdrs=$($CURL_CMD -sS -D- -o /dev/null --max-time 10 "$url" 2>/dev/null) || return 1
   grep -qi '^HTTP/[0-9.]* 200' <<<"$hdrs" || return 1
+  local _specialists
+  _specialists="$(grep -i '^x-agent-specialists:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
   printf '%s %s %s\n' \
     "$(grep -i '^x-agent-arch:'    <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
     "$(grep -i '^x-agent-version:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')" \
-    "$(grep -i '^x-agent-specialists:' <<<"$hdrs" | tr -d '\r' | awk '{print $2}')"
+    "${_specialists:-none}"
 }
 
 # Block until the pool answers 200, then hold the caller to arch AND full sha.
@@ -206,8 +271,11 @@ verify_pool() {
   read -r arch sha specialists <<<"$got"
   [ "$arch" = "${ARCH[$pool]}" ] \
     || die "$pool answered as arch '$arch', expected '${ARCH[$pool]}' — the wrong image is on :${PORT[$pool]}"
-  [ "$specialists" = "${SPECIALISTS[$pool]}" ] \
-    || die "$pool answered with specialists='${specialists:-<absent>}', expected '${SPECIALISTS[$pool]}' — release identity is incomplete"
+  specialists_ok "$specialists" "${SPECIALISTS[$pool]}" \
+    || die "$pool answered with specialists='$(specialists_shown "$specialists")', expected '${SPECIALISTS[$pool]}' — release identity is incomplete"
+  if specialists_absent "$specialists"; then
+    say "$pool sends no X-Agent-Specialists header (pre-2026-08-31 image); absent counts as specialists=0"
+  fi
   # The whole point of the deploy is that the NEW commit is live. A pool that
   # cannot name its commit, or names the old one, is a failed deploy however
   # healthy it looks.
@@ -575,8 +643,25 @@ restore_pre_drain_route() { # <rc of the work that just finished>
     interrupted=1
     warn "INTERRUPTED by signal $((rc - 128)) — unwinding the maintenance drain before exiting. The redeploy did NOT complete."
   fi
+  # R3-M5. The route may never have moved: the trap is armed BEFORE the switch, so
+  # a signal in the window between the switch's nginx reload and the old trap
+  # statement now reaches this function. Restoring a route that never changed
+  # would be a second, unauthorised switch, so check the live routing first.
+  local now_pool; now_pool="$(current_public_pool)"
+  if [ "$now_pool" = "$DRAINED_FROM" ]; then
+    say "The public route is still on '$DRAINED_FROM' — the drain never took effect; nothing to restore."
+    close_maintenance_window
+    if [ "$interrupted" -eq 1 ]; then
+      warn "The redeploy did NOT complete, but public routing was never changed."
+    fi
+    return 0
+  fi
   local restore_id="$PRE_DRAIN_ROLLOUT_ID" restore_stage="$PRE_DRAIN_STAGE"
-  local -a args=(--to "$DRAINED_FROM") runner=(env "SWITCH_ROUTE_CONF=$ROUTE_CONF")
+  # R3-M2. Returning traffic to the pool that was ALREADY serving it when this run
+  # started is a restore, not a new exposure decision: it must never drive a
+  # billed turn, and a probe failure must never be able to strand production on
+  # the drain target ("REDEPLOY SUCCEEDED BUT THE UPSTREAM IS STILL ON ...").
+  local -a args=(--to "$DRAINED_FROM" --skip-answer-probe) runner=(env "SWITCH_ROUTE_CONF=$ROUTE_CONF")
   # Only a SUCCESSFUL redeploy may demand the new pin; a restore after a failure
   # (or an interrupt, which never rebuilt anything) puts traffic back on code that
   # was already there and must not ask that pool to name the undeployed pin.
@@ -681,20 +766,24 @@ for target in "${TARGETS[@]}"; do
       # out of $ROUTE_CONF, and switch_pool.sh must WRITE the same file rather than
       # its own default, or a rehearsal silently records one file and edits another.
       open_maintenance_window "deploy-maintenance-$PIN_SHORT"
-      env "SWITCH_ROUTE_CONF=$ROUTE_CONF" $SWITCH_CMD --to "$standby" \
-        --rollout-id "deploy-maintenance-$PIN_SHORT" --stage maintenance \
-        $([ "$standby" = "legacy" ] && echo "--allow-unidentified-target") \
-        $([ "$standby" = "fc" ] && echo "--allow-public-fc") \
-        || { close_maintenance_window
-             die "could not drain to '$standby' — nothing was redeployed"; }
+      # R3-M5. The unwind is armed BEFORE the switch, not after it. A SIGINT or
+      # SIGTERM delivered between the switch completing its nginx reload and the
+      # old `trap` statement ran `_on_signal` -> `exit` with DRAIN_ACTIVE=0 and no
+      # EXIT trap: no restore, no warning, the marker left on disk and public
+      # traffic parked on the drain target — on a host whose standby is `fc` that
+      # is a permanent, unauthorised 100% candidate exposure, the exact outcome
+      # this stage exists to prevent. `restore_pre_drain_route` now reads the live
+      # route first, so arming it early is a no-op when the switch never ran.
       DRAINED_FROM="$target"
       DRAIN_ACTIVE=1
-      # The restore must survive a failed build, a failed compose, a failed
-      # readiness gate and a Ctrl-C: leaving production parked on the drain
-      # target is exactly the "routine release ends at 100% candidate" outcome
-      # this stage exists to make temporary. The signal traps below make sure an
-      # interrupt reaches this trap with a FAILURE code, not 0.
       trap '_on_exit "$?"' EXIT
+      env "SWITCH_ROUTE_CONF=$ROUTE_CONF" $SWITCH_CMD --to "$standby" \
+        --rollout-id "deploy-maintenance-$PIN_SHORT" --stage maintenance \
+        $([ "$SKIP_ANSWER_PROBE" = 1 ] && echo "--skip-answer-probe") \
+        $([ "$standby" = "legacy" ] && echo "--allow-unidentified-target") \
+        $([ "$standby" = "fc" ] && echo "--allow-public-fc") \
+        || { DRAIN_ACTIVE=0; trap - EXIT; close_maintenance_window
+             die "could not drain to '$standby' — nothing was redeployed"; }
     else
       die "cannot drain public '$target': standby '$standby' is not ready; no public container was redeployed. Refresh it first with: bash deploy/update.sh --pool $standby"
     fi

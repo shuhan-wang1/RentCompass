@@ -7,13 +7,12 @@ byte-identical so the no-progress guard and artifact identity are unchanged.
 """
 import hashlib
 import json
-import os
-import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from core.langgraph_agent import _DIGEST_VOLATILE_KEYS, _params_digest  # noqa: E402
+# NB: no sys.path munging here. ``tests/conftest.py`` pins ``app/`` and ``src/`` to the
+# front of sys.path for the whole tree; the two unguarded inserts this file used to carry
+# prepended UNNORMALISED ".." paths ahead of them, so import resolution depended on which
+# file pytest collected first.
+from core.langgraph_agent import _DIGEST_VOLATILE_KEYS, _params_digest
 
 
 def test_lone_surrogate_argument_yields_a_digest_not_an_exception():

@@ -427,6 +427,11 @@ def test_no_calls_is_its_own_status_not_a_failure(installed):
 
 def test_uninstalled_observer_reports_not_instrumented(monkeypatch):
     monkeypatch.setattr(tobs, "_observer_installed", False)
+    # The raw-SDK reporter is the SECOND process-wide flag, and it is equally
+    # sticky: one raw call anywhere earlier in the session would leave snapshot()
+    # reporting a raw-only `partial` instead of the uninstrumented nulls this test
+    # is about. Pin both or pin neither.
+    monkeypatch.setattr(tobs, "_raw_observer_installed", False)
     tobs.begin_turn()
     assert tobs.snapshot()["llm_usage_status"] == tobs.USAGE_NOT_INSTRUMENTED
     assert tobs.snapshot()["llm_usage_calls"] is None

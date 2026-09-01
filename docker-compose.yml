@@ -320,6 +320,18 @@ services:
       # SEPARATE checkpoint DB per candidate architecture: neither candidate
       # reads legacy checkpoints, and a manager_v1 trial does not resume an old
       # fc_loop checkpoint when the selector changes.
+      #
+      # The name below is DERIVED, and for the identity this pool has been running
+      # since 2026-07-20 (fc_loop, specialists=0) the derivation names a file that
+      # does not exist. `uk_rent_agent.config` therefore treats
+      # `checkpoints_fc_loop_specialists-0.sqlite3` as an ALIAS of the file that
+      # identity already owns, `.runtime/checkpoints_fc.sqlite3` — otherwise this
+      # line alone would open an empty database beside 78 MB of live graph state,
+      # orphaning it AND putting it out of reach of the account-erasure route
+      # (which deletes only from the resolved checkpoint path). Every OTHER
+      # identity still gets its own per-identity file, which is the separation
+      # this derivation exists for. See docs/canary_runbook.md, "Checkpoint
+      # database names", and `_HISTORICAL_CHECKPOINT_NAMES` in config.py.
       CHECKPOINT_DB_PATH: "/app/.runtime/checkpoints_${CANARY_AGENT_ARCH:-fc_loop}_specialists-${CANARY_MANAGER_V1_SPECIALISTS:-0}.sqlite3"
       # SHARED conversation store: same file/mount as legacy `app`. Complete
       # transcripts, turn leases, idempotency and the durable background outbox

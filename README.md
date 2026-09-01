@@ -264,6 +264,28 @@ this before planning work on top of it.
   vocabulary is `planned`, `started`, `completed`, `failed`, `skipped`. A
   `partial` task returned reliable evidence for some of its calls and not others,
   and is a normal, observable outcome — not an error state.
+- **`skipped` means "never started", and always says why.** One producer,
+  `agent_loop::_note_specialist_terminal_once`, enforces both directions: a task that
+  never started can never be reported `completed`/`partial`/`failed`, and a task that
+  *did* start can never be reported `skipped` (that would break
+  `started == completed + partial + failed`, which the consumer's turn-end arithmetic
+  relies on). Every `skipped` terminal carries an `error_code` from the closed set
+  `turn_observations.SPECIALIST_ERROR_CODES` — derived from what the batch actually
+  recorded (`budget_exhausted` for a turn/soft budget stop; `dispatch_denied`
+  otherwise, fail-closed), so a bare unexplained skip cannot reach telemetry. The
+  canary gate reads exactly this: see §13, "specialist non-delivery".
+- **The per-run HMAC on specialist identifiers is not checkpoint confidentiality.**
+  Every identifier the *specialist* contract persists — `plan_id`, the minted
+  `tool_call_id`, `artifact_id` and `TaskPlan.tasks[].inputs.calls[].params_digest` —
+  is derived from an HMAC keyed by the run
+  (`specialist_runtime::_checkpoint_digest_factory`), so those identifiers are not a
+  guessable function of the tool arguments and cannot be correlated across runs. What
+  it does **not** do is make the checkpoint confidential: the pre-existing `fc_loop`
+  ledger still checkpoints the raw `_params_digest` in `tool_artifacts[]`, beside
+  `raw_data` (the whole tool payload, addresses included) and `messages` (the user's
+  own text), in the same SQLite file. Anyone who can read that file does not need an
+  oracle. Closing that would mean changing the fc artifact format, which this boundary
+  deliberately does not do.
 - **The honest technical name for this feature is still a tool capability broker.**
   It brokers a pinned, revalidated, role-labelled, read-only capability grant out
   of a batch the manager already approved. It is not agent-to-agent
@@ -288,7 +310,13 @@ could not change a single answer. Phase 3 (minimal) gives each of them exactly o
 consumer. All of it sits behind `AGENT_ARCH=manager_v1` + `MANAGER_V1_SPECIALISTS=1`
 (`specialist_dispatch=True`); the `fc_loop` path is unchanged, **no additional model
 call is made**, and specialists still make **zero** model calls — which is what
-`evaluation/paired_gate.py` pre-registers as `llm_call_budget`.
+`evaluation/paired_gate.py` pre-registers as **`specialist_lifecycle`** (its
+`lifecycle_complete` term requires `not lifecycle["specialist_llm_calls"]`, counted from
+`model_usage` events whose `agent_role` is a specialist role). `llm_call_budget` is a
+*different* check and does not cover it: it caps the candidate arm's **total** call count
+against the paired baseline, so a specialist could in principle make a call while the arm's
+total stayed inside the budget. Both are pre-registered; only the first one is the per-role
+guarantee.
 
 **1. The evidence note.** When — and only when — a dispatching turn actually produced
 specialist results, `execute_tools` appends one manager-authored `HumanMessage` to the
@@ -853,6 +881,17 @@ The service name `app-fc` and the `FC_*` variables are historical: they mean
 in compose, deliberately: the working tree can never silently become what canary
 traffic executes. A new candidate gets a new tag; tags are never rebuilt in place.
 
+> **The candidate slot is exclusive.** There are two pool slots, and `app` (:5001) is
+> hardcoded to `AGENT_ARCH: "legacy"`. Starting a `manager_v1` canary therefore does not
+> add a third arm — it **converts :5002 away from `fc_loop`**, which is what serves 100%
+> of public traffic today. So the comparison arm at every stage is `legacy`, not
+> `fc_loop`; `--weight 0`, `switch_pool.sh --to legacy` and the automatic zero-tolerance
+> rollback all land the public on **`legacy`**; and getting back to `fc_loop` is a new
+> release, not a rollback. `deploy/release.sh` and `deploy/switch_pool.sh` print this as
+> a preflight warning whenever the configured candidate arch differs from the arch the
+> slot runs today. Decide it deliberately before the first non-zero `manager_v1` weight —
+> `docs/canary_runbook.md` §2 has the full statement.
+
 ```bash
 docker compose up -d                              # control stack only (unchanged)
 docker compose --profile canary up -d app-fc      # add the candidate pool
@@ -880,8 +919,20 @@ The candidate's checkpoint filename is **derived, never chosen**: compose builds
 from the identity pair (`docker-compose.yml`), and the file itself now carries a
 `rentcompass_runtime_identity` stamp, so pointing a pool at another architecture's
 database fails `/ready` with `CheckpointIdentityError` instead of resuming foreign
-LangGraph state. Setting `CHECKPOINT_DB_PATH` to a hand-written name (this table
-said `checkpoints_fc.sqlite3` until 2026-08-31) is how you trip that error.
+LangGraph state.
+
+The derived name is an **alias of the file that identity already owns**, not a rename.
+`config::_HISTORICAL_CHECKPOINT_NAMES` maps
+`checkpoints_fc_loop_specialists-0.sqlite3` → the existing `checkpoints_fc.sqlite3`, so
+the pool this box has been running since 2026-07-20 keeps opening the database it has
+always written; every *other* identity still gets its own per-identity file. **There is
+no migration step and nothing to `mv`.** Two guards back the mapping up: if both files
+exist for one identity, startup refuses rather than orphaning one; and if the resolved
+path does not exist while a database that identity already owns sits beside it, startup
+refuses with `OrphanedCheckpointError` (`agent/persistence.py`) naming both files.
+`CHECKPOINT_ALLOW_NEW_DB=1` is the deliberate opt-in to start on a new empty database —
+the old one is **not** migrated and is **not** reachable by account erasure.
+`docs/canary_runbook.md` §1 "Checkpoint database names" carries the full table.
 
 ### Assignment and state isolation
 
@@ -891,6 +942,8 @@ said `checkpoints_fc.sqlite3` until 2026-08-31) is how you trip that error.
   only changes what **new** conversations are assigned.
 - **Checkpoints are isolated per arch.** Neither pool reads the other's
   LangGraph state — the channels diverge, and a cross-arch resume corrupts the run.
+  Read that as *which architectures never share state*, **not** as which of them can
+  be live at once: only two pools exist, and only one of them is the candidate.
 - **Message history is shared.** Either pool can rebuild a conversation from the
   shared transcript, which is what makes rollback survivable.
 
@@ -916,8 +969,33 @@ requires `tool_batches` non-null; and the key is *omitted*, never defaulted, whe
 producer does not state it (so records written before the field existed are not
 convicted by a rule invented after them — the consumer falls back to the outcome).
 `scripts/canary_report.py` reports `tool_batches_observed_turns` as the honest
-denominator for `tool_batches_total`. A crash still holds the gate for what it really
-failed to observe (`security.*` null, `llm_usage_status=not_instrumented`).
+denominator for `tool_batches_total`.
+
+**Unmeasurable is not the same as uninstrumented.** Every record now carries
+`llm_observer_installed` (`canary_telemetry.OBSERVER_INSTALLED_FIELD`): whether the
+LangChain **callback** observer — the only thing that can see `ModelRouter` calls — was
+attached while that turn ran. A raw-SDK call no longer flips that bit
+(`turn_observations` keeps a second `_raw_observer_installed` flag), because one raw call
+used to declare the whole process instrumented while every agent-loop call stayed
+invisible. The producer also refuses to promote `no_llm_calls` on an unobservable outcome:
+a turn that crashed, timed out or was cancelled before any call completed reports
+`llm_usage_status: partial`, never a positive zero. The consumer then applies four cells:
+
+| turn outcome | callback observer | `llm_usage_status` | `canary_report` | `canary_cost` |
+|---|---|---|---|---|
+| `crash` / `server_error` | **true** | `partial` | **no violation** — unmeasurable spend | chargeable, unmeasured, *unobservable* |
+| `crash` / `server_error` | false or absent | `not_instrumented` | **violation → HOLD** | chargeable, unmeasured |
+| `ok` | true | `no_llm_calls` | no violation (a provable zero) | not chargeable, measured zero |
+| `ok` | false | `not_instrumented` | **violation → HOLD** | chargeable, unmeasured |
+
+Forgiven is not invisible: the crash still counts against the 5xx/outcome rates, the turn
+is never priced at zero, and the report prints `unmeasured spend turns` with an
+`of which unobservable` sub-row. Reading a HOLD: both high → the candidate is crashing,
+look at the outcome rates; `of which unobservable` low while unmeasured is high → the
+observer is not wired, and no number in the report can be trusted until it is. That second
+case is the 2026-07-25 class (a stale `DEEPSEEK_MODEL` produced clean-looking zero-call
+telemetry from an unwatched process for a day). A record from a producer that predates the
+flag has no flag, gets no exemption, and keeps the stricter reading.
 
 Metrics
 production genuinely cannot observe (`forbidden_read`, `no_evidence_numbers`) are
@@ -963,6 +1041,18 @@ rate or 5xx rate more than 1pp worse than the control pool. `partial` is a turn
 lifecycle status in its own right — an abandoned/partial tool result — and is
 counted, not discarded.
 
+**The specialist gate measures delivery, not just failure.** A `manager_v1` candidate
+is graded on `specialist.non_success_rate = (failed + skipped) / planned` against the
+same 5% `SPECIALIST_FAILURE_RATE_LIMIT`; `partial` is deliberately excluded (it answered
+with a stated gap). The failed rate is still printed but no longer decides anything on
+its own, and the report prints `specialist started`, `specialist skipped`,
+`specialist non-delivery` and a `specialist skip codes` breakdown beside `planned`.
+`--require-specialists` now asserts three separately-reported things — at least one task
+**planned**, at least one **started**, and at least one **completed or partial**. "A plan
+was made" is no longer sufficient: a runtime whose every dispatch was refused reports
+`planned=N, started=0, failed=0` and used to reach PROCEED with a printed
+`specialist failed rate 0.00%`.
+
 | Exit | Meaning |
 |---|---|
 | `0` | proceed / stage-progress-ok |
@@ -975,6 +1065,17 @@ counted, not discarded.
 python scripts/canary_report.py --input .runtime/logs/ --stage internal --since <ISO>
 python scripts/canary_report.py --input .runtime/logs/ --window 24 --json out/canary.json
 ```
+
+A directory **or a glob** yields only `*.jsonl` / `*.log` / `*.ndjson`
+(`canary_report.LOG_SUFFIXES`), so a `canary-*.jsonl.bak-<date>` sitting beside the live
+log cannot double the record population; a file named explicitly is still read whatever
+its suffix. Production gates should run through `deploy/run_canary_gate.sh`, which couples
+exit 3 to the weight-0 rollback. That wrapper now resolves its own interpreter
+(`CANARY_GATE_PYTHON` → `PYTHON` → `.venv`/`venv` → `python3` → `python`) instead of
+defaulting to a bare `python`, which does not exist on the production host and made the
+wrapper exit 127 without ever producing a verdict. If no interpreter is found it prints
+`CANARY_GATE_UNRUNNABLE` and exits **69** — deliberately outside the verdict set
+`{0, 2, 3}`, so "the gate could not start" can never be read as "the gate held".
 
 A turn count that does not reconcile is an **instrumentation hold**, not a pass:
 if the telemetry does not describe the run that was driven, every rate in the
@@ -1000,13 +1101,34 @@ bash deploy/switch_pool.sh --status
 bash deploy/switch_pool.sh --to legacy
 ```
 
+**`X-Agent-Specialists`: absent means 0 unless 1 is expected.** The header does not exist
+in `origin/main`, so no currently-deployed container emits it. `switch_pool.sh`,
+`update.sh`, `set_canary_weight.sh`, `deploy/probe_pool_answer.py` and the monitor
+therefore require it only when the **expected** identity has `specialists=1`; where 0 is
+expected, an absent header counts as 0 for any arch, and the exemption is printed rather
+than being silent. That window matters: during a release the new scripts are on disk while
+both containers still run the old image, and demanding the header there turned the
+documented emergency rollback (`switch_pool.sh --to legacy`) and the drain leg of
+`update.sh --pool fc` into hard refusals exactly when they are needed. A candidate
+expected to run `specialists=1` must still state its bit — there is no exemption for that.
+
 `switch_pool.sh` verifies the target pool answers `/ready` with the expected arch
 *before* touching nginx, rewrites only the `server 127.0.0.1:PORT;` line inside
 the upstream block (the live conf has drifted from the repo copy and that drift
 must survive a switch), requires `nginx -t` to pass, re-verifies arch **and** the
 full 40-char sha at the public endpoint afterwards, and restores the backup on
-any failure. `deploy/switch_pool_rehearse.sh` runs the identical code path
-against a private nginx with no root and no public traffic.
+any failure. `deploy/switch_pool_rehearse.sh` runs the identical code path against a
+private nginx — but it starts a **real** nginx and probes the **real** pools, so it is
+not for automated contexts. The offline exercisers are
+`deploy/test_switch_pool_assertions.sh`, `deploy/test_update_assertions.sh` and
+`deploy/test_release_assertions.sh`, which open no socket at all.
+
+`--skip-answer-probe` now reaches every layer — `release.sh` → `update.sh` →
+`switch_pool.sh` → `set_canary_weight.sh` (which also honours
+`CANARY_SKIP_ANSWER_PROBE=1`). The **restore** leg of a drain always passes it: returning
+traffic to the pool that was already serving it when the run started is a restore, not a
+new exposure decision, so it can never drive a billed turn nor be blocked by a probe
+failure that would otherwise strand production on the drain target.
 
 ---
 
@@ -1025,6 +1147,19 @@ never an uncommitted tree), requires every predeclared CI check to be present,
 completed and successful, and fails closed when GitHub evidence is unavailable.
 It requires a clean tracked **and untracked** build context, shows
 `old-pin → new-pin`, asks for confirmation, and only then advances the pin.
+
+Its rollout preflight gates on a **change in exposure, not on the end state**: it refuses
+the run only when an architecture that is *not* at 100% when the run starts would end
+there, and that refusal is what `CANARY_ALLOW_FLIP=1` authorises. Rebuilding the pool that
+is already the sole public upstream is routine and takes no flag — the preflight prints
+`routing UNCHANGED` and proceeds. The first version of the gate compared only the end
+state, so on a single-upstream host it refused every routine release and trained the
+operator to type `CANARY_ALLOW_FLIP=1` on every run — precisely the habit that disarms the
+gate for a real cutover. `--dry-run` never dies on a policy decision: it prints what would
+happen and names the flag it would need. The refusal text does not tell you to point the
+public route at `legacy`; on a host serving `fc_loop` that is a production downgrade, not
+a remedy. `docs/canary_runbook.md` §0 is the whole procedure for the next release on the
+production box.
 
 ### The pin gate
 
@@ -1061,6 +1196,11 @@ drift is visible rather than inferred:
 bash deploy/monitoring/check_install_drift.sh
 sudo install -m 0755 deploy/monitoring/rentcompass-monitor.sh /usr/local/bin/rentcompass-monitor.sh
 ```
+
+Neither `release.sh` nor `update.sh` reinstalls the monitor, so a release that edits it
+leaves the timer running the previous build and `check_install_drift.sh` red until you
+reinstall by hand. Do that **after** both pools verify, not before — see
+`docs/canary_runbook.md` §0.
 
 TLS and nginx provisioning: `deploy/setup_nginx_http.sh`, `deploy/setup_tls.sh`,
 `deploy/migrate_ports_443.sh`, `deploy/DEPLOY_DOMAIN.md`.
@@ -1129,7 +1269,7 @@ stubbed memory-extraction figures, any n<15 single-run rate) and why.
 ## 16. Testing and CI
 
 ```bash
-python -m pytest -q          # both trees; ~3,355 tests, ~2 minutes
+python -m pytest -q          # both trees; ~4,580 tests, ~4 minutes
 uk-rent-eval-gate path/to/PREREGISTRATION.json path/to/manifest.json \
   --repo-root . --package-root path/to/evidence-package
 ```

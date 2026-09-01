@@ -7,6 +7,7 @@ Tool System - Agent框架的核心工具系统
 """
 
 import asyncio
+import contextvars
 import datetime as _datetime
 import hashlib
 import ipaddress
@@ -664,10 +665,23 @@ class Tool:
                 if asyncio.iscoroutinefunction(execution_callable):
                     result = await execution_callable(**call_kwargs)
                 else:
-                    # 同步函数在 executor 中运行（避免阻塞）
+                    # 同步函数在 executor 中运行（避免阻塞）。
+                    #
+                    # SECURITY: the copied context is not an optimisation. ``run_in_executor``
+                    # runs the callable on a bare pool thread, where contextvars do NOT
+                    # propagate, so a SYNC tool observed ``current_agent_context() == {}`` --
+                    # i.e. no ``agent_role`` -- while its ASYNC twin saw the specialist role.
+                    # ``web_search._current_specialist_role()`` reads exactly that context and
+                    # maps "no role" to MANAGER authority (unrestricted nested dispatch), so
+                    # declaring a granted tool ``def`` instead of ``async def`` silently
+                    # restored the cross-role escalation the capability boundary exists to
+                    # close (review3 R1-M2). Copying the context makes the boundary a property
+                    # of the runtime rather than of how a tool happens to be declared; it also
+                    # fixes the same gap in log attribution (JsonFormatter reads that context).
                     loop = asyncio.get_running_loop()
+                    ctx = contextvars.copy_context()
                     result = await loop.run_in_executor(
-                        None, lambda: execution_callable(**call_kwargs)
+                        None, lambda: ctx.run(execution_callable, **call_kwargs)
                     )
                 
                 execution_time = (time.time() - start_time) * 1000

@@ -112,7 +112,23 @@ _MAX_SPECIALIST_CALLS_PER_TASK = 10_000
 # Module-level, deliberately NOT per-turn: the LLM client is built once and
 # memoized, long before any request. If installation ever fails we must report
 # null (hold the gate), not 0 (assert a clean observation we never made).
+#
+# TWO flags, because there are two independent observers and they cover different
+# call paths:
+#
+#   _observer_installed      the LangChain callback (install_observer). It is the
+#                            ONLY thing that sees ModelRouter calls, i.e. every
+#                            agent-loop model call.
+#   _raw_observer_installed  the raw-SDK reporter (note_raw_llm_call), which sees
+#                            only llm_interface._call_deepseek.
+#
+# They used to be one flag, so a single raw call declared the process "observed"
+# even when install_observer had failed (its except-clause deliberately swallows).
+# snapshot() then reported `complete` over a call count containing the raw calls
+# and none of the ModelRouter ones — a clean, cheap-looking candidate assembled
+# from a measurement that never happened. `complete` now requires the CALLBACK.
 _observer_installed = False
+_raw_observer_installed = False
 
 
 # Arches whose tool-execution node carries the write-audit instrumentation. Set at
@@ -123,12 +139,28 @@ _write_auditors: set = set()
 
 
 def observer_installed() -> bool:
+    """True iff the LangChain CALLBACK observer is attached.
+
+    This is the flag ``app.py::_wire_canary_llm_observer`` acts on and the one that
+    means "an agent-loop LLM call would have been counted". A raw-SDK call must not
+    be able to set it — see the two-flag note above.
+    """
     return _observer_installed
+
+
+def raw_observer_installed() -> bool:
+    """True iff at least one raw-SDK call reported itself in this process."""
+    return _raw_observer_installed
 
 
 def _mark_observer_installed() -> None:
     global _observer_installed
     _observer_installed = True
+
+
+def _mark_raw_observer_installed() -> None:
+    global _raw_observer_installed
+    _raw_observer_installed = True
 
 
 def _current_agent_context() -> Dict[str, str]:
@@ -722,12 +754,23 @@ def snapshot() -> Dict[str, Any]:
 
     None is the honest answer in two cases: no observer was installed, or no turn
     window was opened. Both mean the gate must HOLD rather than read a fabricated 0.
+
+    There is a third, partial case: the raw-SDK reporter is live but the LangChain
+    callback is not. Then the raw calls ARE facts (they are reported), the
+    ModelRouter calls are unobservable, and the counters only the callback can
+    state stay null. The status is ``partial`` — a floor, and a HOLD — never
+    ``complete`` and never ``no_llm_calls``.
     """
     obs = _turn_obs.get()
-    if obs is None or not _observer_installed:
+    if obs is None or not (_observer_installed or _raw_observer_installed):
         result = {"provider_schema_400_count": None, "provider_other_400_count": None,
                   "llm_usage_calls": None, "llm_calls": None,
-                  "llm_usage_status": USAGE_NOT_INSTRUMENTED}
+                  "llm_usage_status": USAGE_NOT_INSTRUMENTED,
+                  # Stated on EVERY snapshot, including this one. The consumer's
+                  # crash exemption is granted on positive evidence that the
+                  # callback observer was live, so "we do not know" and "it was
+                  # not installed" must be different values, not one absence.
+                  "llm_observer_installed": bool(_observer_installed)}
         if obs is not None and obs.get("root_agent_context"):
             result["root_agent_context"] = dict(obs["root_agent_context"])
         if _specialist_was_observed():
@@ -740,19 +783,41 @@ def snapshot() -> Dict[str, Any]:
         # as if they were the turn's totals would understate spend by an unknown
         # amount, which is worse than refusing to answer.
         status = USAGE_PARTIAL
+    elif not _observer_installed:
+        # We are here only because a RAW-SDK call reported itself. The LangChain
+        # callback never attached, so every ModelRouter call this turn made is
+        # invisible: the calls below are a floor, not a total. `partial` says
+        # exactly that ("an undercount of unknown size") and HOLDs the gate;
+        # `complete` would certify a number we cannot certify, and `no_llm_calls`
+        # would certify a zero we cannot certify either.
+        status = USAGE_PARTIAL
     elif calls:
         status = USAGE_COMPLETE
     else:
         status = USAGE_NO_CALLS
     result = {
-        "provider_schema_400_count": int(obs.get("provider_schema_400", 0)),
-        "provider_other_400_count": int(obs.get("provider_other_400", 0)),
+        # ZERO-TOLERANCE metric: a 0 here is read as "we looked and there were
+        # none". Only the LangChain callback can look at the ModelRouter calls,
+        # and a strict-schema 400 can only happen on that path (the raw client
+        # binds no tools/functions/response_format), so without the callback the
+        # honest answer is null — a HOLD — not a clean zero.
+        "provider_schema_400_count": (
+            int(obs.get("provider_schema_400", 0)) if _observer_installed else None
+        ),
+        "provider_other_400_count": (
+            int(obs.get("provider_other_400", 0)) if _observer_installed else None
+        ),
         "llm_usage_calls": calls,
         # Includes completed calls whose provider response omitted token usage.
         # llm_runs_seen is de-duplicated at the callback boundary, so this is the
         # billed-call denominator even when llm_usage_status is partial.
         "llm_calls": len(obs.get("llm_runs_seen") or ()),
         "llm_usage_status": status,
+        # The fact the consumer's unobservable-turn exemption turns on: was the
+        # LangChain callback attached while this turn ran? A crash with the
+        # observer live is a turn we could not measure; a crash without it is the
+        # 2026-07-25 incident class, and only the second may be forgiven nothing.
+        "llm_observer_installed": bool(_observer_installed),
     }
     if obs.get("root_agent_context"):
         result["root_agent_context"] = dict(obs["root_agent_context"])
@@ -969,7 +1034,12 @@ def note_raw_llm_call(run_id: Any, *, usage_blob: Any,
     # this function exists to close. In production _wire_canary_llm_observer() sets the
     # flag at startup and would mask it; relying on that would leave the fix depending
     # on an unrelated commit staying in place.
-    _mark_observer_installed()
+    #
+    # It marks the RAW flag only. Proof that this path is observed is not proof that
+    # the LangChain path is: with the callback missing, snapshot() reports these calls
+    # and degrades the status to `partial` rather than certifying `complete` over a
+    # count that omits every ModelRouter call.
+    _mark_raw_observer_installed()
     seen = obs.setdefault("llm_runs_seen", set())
     if run_id in seen:
         return False

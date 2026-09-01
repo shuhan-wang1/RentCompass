@@ -479,11 +479,36 @@ def _check_runtime_configuration(config: Config) -> dict[str, Any]:
     llm_module = sys.modules.get("core.llm_config")
     if llm_module is not None and str(getattr(llm_module, "LLM_PROVIDER", "")) != config.llm_provider:
         problems.append("LLM_PROVIDER factory mismatch")
+    # R1-M3. `app/app.py` picks the tool provider from the RAW environment
+    # (`USE_MCP_TOOLS not in ("0", "false", "no")`) — a DIFFERENT rule from
+    # `Config.use_mcp_tools`, so spellings like `off` or an empty string mean
+    # "off" to the config and "on" to the app. With specialists effective that
+    # disagreement is not cosmetic: `MCPToolClient` exposes neither
+    # `resolve_specialist_capability` nor `execute_resolved_specialist_capability`,
+    # so `build_manager_v1_graph` raises a bare RuntimeError out of graph
+    # construction on the first turn. Compare against the provider the Flask
+    # module ACTUALLY holds rather than deriving the answer a third time.
+    provider = getattr(mod, "agent_tool_provider", None)
+    registry = getattr(mod, "tool_registry", None)
+    serving_over_mcp = (
+        provider is not None and registry is not None and provider is not registry
+    )
+    if serving_over_mcp:
+        if config.manager_v1_specialists_effective:
+            problems.append(Config.MCP_SPECIALISTS_CONFLICT)
+        elif not config.use_mcp_tools:
+            problems.append(
+                "USE_MCP_TOOLS mismatch: tools are being served over MCP while "
+                "Config.use_mcp_tools is False — check the spelling in the "
+                "environment ('off' and '' are false to Config and true to app.py)"
+            )
     return {
         "status": "fail" if problems else "ok",
         "required": True,
         "agent_arch": config.agent_arch,
         "manager_v1_specialists": config.manager_v1_specialists_effective,
+        "use_mcp_tools": config.use_mcp_tools,
+        "tools_over_mcp": serving_over_mcp,
         "llm_provider": config.llm_provider,
         "deepseek_strict": config.deepseek_strict,
         **({"detail": "; ".join(problems)} if problems else {}),

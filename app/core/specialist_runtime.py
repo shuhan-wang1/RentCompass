@@ -301,7 +301,24 @@ def safe_turn_root_id(request_id: Any) -> str | None:
 
 
 def _checkpoint_digest_factory(run_id: Any) -> Callable[[str], str]:
-    """Per-run keyed masking of the manager params digest (audit K8)."""
+    """Per-run keyed masking of the manager params digest (audit K8).
+
+    WHAT THIS PROTECTS, precisely — the earlier wording claimed more than the code does
+    (review3 R1-M4).  Every identifier the SPECIALIST contract persists (``plan_id``, the
+    minted ``tool_call_id``, ``artifact_id`` and ``TaskPlan.tasks[].inputs.calls[]
+    .params_digest``) is derived from an HMAC keyed by the run, so those identifiers are
+    not themselves a guessable function of the tool arguments and cannot be correlated
+    across runs.
+
+    WHAT IT DOES NOT PROTECT: it does not make the checkpoint confidential.  The
+    pre-existing fc_loop ledger still checkpoints the RAW ``params_digest`` in
+    ``tool_artifacts[]`` — next to ``raw_data`` (the whole tool payload, addresses
+    included) and ``messages`` (the user's own text) — in the same SQLite file.  Anyone
+    who can read that file does not need an oracle.  Closing that requires changing the
+    fc artifact format, which this boundary deliberately does not do; the raw digest also
+    stays in memory on ``PreparedSpecialistCall`` so ``_artifact_matches`` can still bind
+    the ledger entry the fc artifact writer produced.
+    """
     key = hashlib.sha256(
         b"rentcompass-specialist:" + str(run_id or "").encode("utf-8", "surrogatepass")
     ).digest()
@@ -512,6 +529,17 @@ def prepare_specialist_batch(
     ] = OrderedDict()
     rejected: dict[int, str] = {}
     total_args = 0
+
+    def _reject(index: Any, error_code: str) -> None:
+        """Record a PER-CALL rejection; an unusable index simply drops the call.
+
+        The caller re-derives eligibility with ``specialist_eligible_role`` and denies any
+        eligible call it cannot find in the plan, so a dropped call is still fail-closed —
+        it is never silently promoted to unrestricted manager dispatch.
+        """
+        if isinstance(index, int) and not isinstance(index, bool) and index >= 0:
+            rejected[index] = error_code
+
     for call in call_list:
         role = _eligible(call)
         if role is None:
@@ -525,13 +553,18 @@ def prepare_specialist_batch(
             # excluded here; its siblings — including siblings in the SAME role — keep
             # their grants and dispatch normally.  Only BATCH-level defects below still
             # deny the whole eligible set.
-            index = call.index
-            if isinstance(index, int) and not isinstance(index, bool) and index >= 0:
-                rejected[index] = exc.error_code
+            _reject(call.index, exc.error_code)
             continue
-        total_args += len(args_json.encode("utf-8"))
-        if total_args > MAX_BATCH_ARGS_BYTES:
-            raise SpecialistDispatchError("specialist_batch_args_too_large")
+        call_bytes = len(args_json.encode("utf-8"))
+        if total_args + call_bytes > MAX_BATCH_ARGS_BYTES:
+            # ALSO per-call (review3 R1 low-3).  The cumulative budget is a memory bound,
+            # not a verdict on the batch: raising here denied every role-mapped read in the
+            # turn — including a tiny well-formed one — which is precisely the blast radius
+            # audit K1 set out to eliminate.  The call that would cross the ceiling is
+            # rejected on its own and the ceiling still holds for everything else.
+            _reject(call.index, "specialist_call_args_over_batch_budget")
+            continue
+        total_args += call_bytes
         buckets.setdefault(role, []).append((call, args_json, call_id))
 
     # Execution-context IDs can be syntactically valid while still embedding a
@@ -545,12 +578,15 @@ def prepare_specialist_batch(
     safe_root_task_id = _stable_id(
         "manager", "root-task-v1", str(run_id), str(root_task_id)
     )
-    # The manager-owned params digest is an unsalted truncated hash of the tool arguments.
-    # Checkpointing it verbatim turned the SQLite checkpoint into an offline oracle for a
-    # user address (audit K8, PoC-confirmed).  Everything PERSISTED (plan_id, task inputs,
-    # tool_call_id, artifact_id) is seeded from a per-run keyed digest instead; the raw
+    # The manager-owned params digest is an unsalted truncated hash of the tool arguments,
+    # i.e. an offline oracle for a user address wherever it is persisted (audit K8,
+    # PoC-confirmed).  Every identifier THIS boundary persists (plan_id, task inputs,
+    # tool_call_id, artifact_id) is therefore seeded from a per-run keyed digest; the raw
     # value stays in memory on PreparedSpecialistCall so _artifact_matches still binds the
-    # ledger entry written by the fc artifact writer.
+    # ledger entry written by the fc artifact writer.  NOTE what this does NOT do: the
+    # fc_loop `tool_artifacts` channel is checkpointed with the RAW digest, `raw_data` and
+    # the user`s own `messages`, so the checkpoint file as a whole is not confidential --
+    # see _checkpoint_digest_factory.
     checkpoint_digest = _checkpoint_digest_factory(run_id)
     plan_seed = [
         str(run_id),
@@ -1129,6 +1165,10 @@ def build_answer_contract(
     ``used_task_ids`` are exactly the tasks that returned evidence (``succeeded`` /
     ``partial``); every other task becomes a limitation line.  Raises rather than
     guessing: the caller decides that a broken contract must not break the turn.
+
+    ``final_response`` is the answer as sent, bounded by ``MAX_ANSWER_TEXT_CHARS``; when
+    the shipped answer was longer, ``final_response_truncated`` is True and
+    ``final_response_chars`` carries its real length.
     """
     ledger = [item for item in results if isinstance(item, Mapping)]
     entries = summarize_specialist_results(ledger, plans)
@@ -1161,11 +1201,19 @@ def build_answer_contract(
             seen_evidence.add(item["evidence_id"])
             evidence.append(item)
 
-    text = str(final_response or "")[:MAX_ANSWER_TEXT_CHARS]
+    # The contract records the answer AS SENT, and ``AnswerText`` caps it at 8 000 chars.
+    # A long multi-area card exceeds that, and the copy was previously trimmed with no
+    # trace, so a reader of the contract could not tell a short answer from a truncated
+    # record of a long one (review3 R1 low-5).  The shipped answer is untouched either
+    # way; what is recorded now says so.
+    shipped = str(final_response or "")
+    text = shipped[:MAX_ANSWER_TEXT_CHARS]
     return AnswerContract(
         root_task_id=str(root_task_id or "manager"),
         response_type=_ANSWER_RESPONSE_TYPES.get(str(response_type or ""), "answer"),
         final_response=text,
+        final_response_chars=len(shipped),
+        final_response_truncated=len(shipped) > len(text),
         used_task_ids=tuple(used),
         evidence=tuple(evidence),
         limitations=build_answer_limitations(entries),

@@ -816,25 +816,43 @@ def _specialist_evidence_note(results: list, plans: list) -> str:
         return ""
 
 
+# Application-owned marker for the manager evidence note. It lives in
+# ``additional_kwargs`` and NOT in the message text, because ``messages`` is the FULL
+# per-turn transcript (a plain last-write-wins channel) and the note is rebuilt every
+# batch: matching on a content prefix meant a user who typed the header string had their
+# own message silently deleted from the transcript (review3 R1 low-4). Message CONTENT is
+# user-controlled; ``additional_kwargs`` on a message this module constructed is not.
+_EVIDENCE_NOTE_MARKER = "manager_evidence_note"
+
+
+def _is_manager_evidence_note(message) -> bool:
+    """True only for a note THIS module authored — never for a user message."""
+    if not isinstance(message, HumanMessage):
+        return False
+    extra = getattr(message, "additional_kwargs", None)
+    return isinstance(extra, dict) and extra.get(_EVIDENCE_NOTE_MARKER) is True
+
+
 def _apply_evidence_note(messages: list, results: list, plans: list) -> list:
     """Replace any earlier evidence note with the current one, at the end of the turn.
 
     Rebuilt rather than appended: the note describes the WHOLE turn's evidence, so a
     second batch must not leave a stale first note in the transcript, and the model must
     never see the same brief twice.
-    """
-    from core.specialist_runtime import EVIDENCE_NOTE_HEADER
 
-    kept = [
-        message for message in messages
-        if not (isinstance(message, HumanMessage)
-                and isinstance(getattr(message, "content", None), str)
-                and message.content.startswith(EVIDENCE_NOTE_HEADER))
-    ]
+    The ONLY message this function may remove is a note it wrote itself (identified by
+    ``_EVIDENCE_NOTE_MARKER``). Everything else is preserved, in order, untouched: this
+    node receives the whole transcript and returns it as the new value of the channel, so
+    dropping any other message would delete it from the conversation for good.
+    """
+    kept = [message for message in messages if not _is_manager_evidence_note(message)]
     note = _specialist_evidence_note(results, plans)
     if not note:
         return kept
-    return kept + [HumanMessage(content=note)]
+    return kept + [
+        HumanMessage(content=note,
+                     additional_kwargs={_EVIDENCE_NOTE_MARKER: True})
+    ]
 
 
 def _note_specialist_call_denied(tool: str, error_code: str) -> None:
@@ -2954,31 +2972,41 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             _offload_tool_call stamps `started` into once a pool worker picks it up). The
             caller keeps the reference so it can read the timings even for a dispatch that is
             ABANDONED and therefore never returns from here."""
-            tool = (
-                getattr(specialist_capability, "tool", None)
-                if specialist_capability is not None
-                else (provider.get(name) if hasattr(provider, "get") else None)
-            )
-            version = getattr(tool, "version", "1") if tool else "1"
-            # Harness-injected volatile params (leading underscore, e.g. _deadline_monotonic)
-            # are execution-time hints, NOT identity: exclude them from the idempotency key so
-            # two dispatches of the same logical call collapse (mirrors collector._hash_args and
-            # the _params_digest volatile-key exclusion). They still reach the tool via call_args.
-            inv_params = {k: v for k, v in args.items() if not str(k).startswith("_")}
-            inv = ToolInvocation.create(run_id=state.get("run_id", "fc"), node_id="execute_tools",
-                                        tool=name, params=inv_params, version=version)
-            call_args = dict(args)
-            call_args["idempotency_key"] = inv.idempotency_key
-            if is_write:
-                # Stamped BEFORE the call, so a write that hangs or raises still leaves
-                # an audit trail showing the policy let it through. This marks the gate
-                # crossing, not a successful write.
-                _note_write_dispatch(f"{name}:{digest}")
             from core.tool_system import ToolResult
             t_call = time.monotonic()
             if timing is not None:
                 timing["submitted"] = t_call
             try:
+                # IDENTITY IS COMPUTED INSIDE THE TRY (review3 R1-H1). Everything below --
+                # the provider lookup, the idempotency key -- consumes MODEL-AUTHORED
+                # arguments, and every dispatch in the batch was already ensure_future'd by
+                # the time this runs. An exception escaping here therefore killed the whole
+                # execute_tools node AFTER its siblings had run: no Command, no artifacts, no
+                # ToolMessages, and any already-committed write left unlogged. Under this
+                # handler one malformed call degrades to the ordinary per-call
+                # ToolResult(False, "Tool execution failed") and its siblings still land.
+                tool = (
+                    getattr(specialist_capability, "tool", None)
+                    if specialist_capability is not None
+                    else (provider.get(name) if hasattr(provider, "get") else None)
+                )
+                version = getattr(tool, "version", "1") if tool else "1"
+                # Harness-injected volatile params (leading underscore, e.g.
+                # _deadline_monotonic) are execution-time hints, NOT identity: exclude them
+                # from the idempotency key so two dispatches of the same logical call collapse
+                # (mirrors collector._hash_args and the _params_digest volatile-key
+                # exclusion). They still reach the tool via call_args.
+                inv_params = {k: v for k, v in args.items() if not str(k).startswith("_")}
+                inv = ToolInvocation.create(
+                    run_id=state.get("run_id", "fc"), node_id="execute_tools",
+                    tool=name, params=inv_params, version=version)
+                call_args = dict(args)
+                call_args["idempotency_key"] = inv.idempotency_key
+                if is_write:
+                    # Stamped BEFORE the call, so a write that hangs or raises still leaves
+                    # an audit trail showing the policy let it through. This marks the gate
+                    # crossing, not a successful write.
+                    _note_write_dispatch(f"{name}:{digest}")
                 # Offload to a private-loop worker thread (see _offload_tool_call): a blocking,
                 # non-yielding section inside an async tool must not freeze the graph loop, or the
                 # wait_for below (and the batch window) could not fire on time. The coroutine is
@@ -3344,6 +3372,37 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         specialist_started_at_by_task: dict[str, float] = {}
         specialist_terminal_task_ids: set[str] = set()
 
+        def _specialist_task_denial_codes(task) -> list[str]:
+            """Per-CALL error codes recorded for this task's calls, in index order."""
+            if prepared_specialists is None:
+                return []
+            return [
+                specialist_error_code_by_idx[call.index]
+                for call in sorted(
+                    prepared_specialists.calls_by_index.values(),
+                    key=lambda item: item.index)
+                if call.task_id == task.task_id
+                and call.index in specialist_error_code_by_idx
+            ]
+
+        def _not_started_error_code(task) -> str:
+            """WHY a planned specialist task never ran — never an empty reason.
+
+            A bare ``skipped`` is indistinguishable from "nothing to report" for every
+            consumer of the lifecycle counters, so a 100%-denied plan read as a healthy
+            turn (review3 R2-1). The reason is derived from what the batch actually
+            recorded, newest signal first, and always resolves to a member of the closed
+            ``SPECIALIST_ERROR_CODES`` vocabulary."""
+            denials = _specialist_task_denial_codes(task)
+            if denials:
+                return "dispatch_denied"
+            if turn_exhausted or soft_exhausted:
+                return "budget_exhausted"
+            # Planned, never dispatched, and nothing recorded a reason: the dispatch did
+            # not happen, which is a denial from the consumer's point of view. Fail
+            # closed rather than reporting an unexplained skip.
+            return "dispatch_denied"
+
         def _note_specialist_terminal_once(
             terminal: str,
             task,
@@ -3353,16 +3412,28 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         ) -> None:
             """Emit at most one terminal lifecycle event for each specialist task.
 
-            A task that never STARTED cannot terminate as completed/partial/failed without
-            breaking the turn-end invariant ``started == completed + partial + failed``; it
-            is reported as ``skipped`` (which the invariant bounds by ``planned - started``)
-            while keeping the specific reason in ``error_code``."""
+            Two invariants are enforced HERE, at the only producer, so no ordering of the
+            three call sites (results, batch cancellation, fan-out cancellation) can emit a
+            sequence the consumer's turn-end arithmetic rejects:
+
+            * a task that never STARTED cannot terminate as completed/partial/failed —
+              that breaks ``started == completed + partial + failed`` — so it is reported
+              as ``skipped`` (which the invariant bounds by ``planned - started``);
+            * a task that DID start can never be reported ``skipped`` for the same reason;
+              a started task with nothing to show is a ``failed`` task.
+
+            A ``skipped`` event ALWAYS carries a specific ``error_code``: an unexplained
+            skip is invisible to every failure-rate consumer (review3 R2-1)."""
             if task.task_id in specialist_terminal_task_ids:
                 return
             specialist_terminal_task_ids.add(task.task_id)
-            if (task.task_id not in specialist_started_task_ids
-                    and terminal != "skipped"):
+            started = task.task_id in specialist_started_task_ids
+            if not started and terminal != "skipped":
                 terminal = "skipped"
+            elif started and terminal == "skipped":
+                terminal = "failed"
+            if terminal == "skipped" and not error_code:
+                error_code = _not_started_error_code(task)
             _note_specialist_lifecycle(
                 terminal,
                 plan_id=prepared_specialists.plan.plan_id,

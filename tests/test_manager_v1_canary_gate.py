@@ -405,8 +405,18 @@ def test_planned_tasks_that_simply_vanish_hold_exit2():
     assert "account for every planned task" in _instrumentation_text(report)
 
 
-def test_planned_tasks_that_were_all_skipped_are_legal():
-    """The one legal shape of `started=0`: they were skipped, and it is recorded."""
+def test_planned_tasks_that_were_all_skipped_are_legal_but_do_not_pass_the_gate():
+    """The one legal shape of `started=0`: they were skipped, and it is recorded.
+
+    Legal is not the same as good. This record is CONTRACT-conformant — every
+    planned task landed in a terminal bucket and the arithmetic balances — and it
+    also describes a specialist runtime that delivered nothing at all. The gate
+    used to read the second half as `failed=0` -> `failure_rate 0.00%` -> PROCEED,
+    which is the fail-open R2-1 found: `skipped` was in no numerator and
+    `require_specialists` only asserted that a PLAN existed. Both halves are
+    asserted here so neither can be lost: the validator must stay quiet, and the
+    verdict must not be PROCEED.
+    """
     candidate = _turn("manager_v1", lifecycle=True)
     common = {"plan_id": "plan-1", "task_id": "task-1", "parent_task_id": "root-1",
               "role": "listings"}
@@ -419,10 +429,20 @@ def test_planned_tasks_that_were_all_skipped_are_legal():
             {**common, "status": "skipped", "duration_ms": None, "call_count": 0},
         ],
     }
+    # The record itself is conformant: this shape is a legal thing to REPORT.
+    assert cr.validate_record(candidate) == []
+
     report = _report(candidate)
 
-    assert report["verdict"]["decision"] == "PROCEED"
-    assert report["verdict"]["exit_code"] == 0
+    # ...and it is not a thing to PROMOTE. 1 of 1 planned tasks delivered nothing.
+    assert report["verdict"]["decision"] != "PROCEED"
+    assert report["verdict"]["exit_code"] != 0
+    specialist = report["arches"]["candidate"]["specialist"]
+    assert specialist["non_success_rate"] == 1.0
+    assert specialist["skipped"] == 1 and specialist["started"] == 0
+    assert any("non-delivery" in reason
+               for reason in report["verdict"]["stage_pause"]["reasons"])
+    assert "no specialist task ever STARTED" in _instrumentation_text(report)
 
 
 def test_a_crashed_turn_is_not_charged_with_an_unbalanced_lifecycle():

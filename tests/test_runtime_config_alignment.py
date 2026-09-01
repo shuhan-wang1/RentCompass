@@ -81,8 +81,12 @@ def test_manager_specialists_reject_mcp_execution_boundary(monkeypatch, tmp_path
     monkeypatch.setenv("MANAGER_V1_SPECIALISTS", "1")
     monkeypatch.setenv("USE_MCP_TOOLS", "1")
 
-    with pytest.raises(ValueError, match="trusted in-process ToolRegistry only"):
+    # The message is now the single named constant `/ready` also reports (R1-M3),
+    # so the operator sees the same sentence whether the pool refused to start or
+    # answered readiness with a diagnosis.
+    with pytest.raises(ValueError, match="trusted in-process ToolRegistry"):
         Config.from_env()
+    assert Config.MCP_SPECIALISTS_CONFLICT.startswith("MANAGER_V1_SPECIALISTS=1")
 
 
 def test_agent_arch_default_remains_legacy(monkeypatch, tmp_path):

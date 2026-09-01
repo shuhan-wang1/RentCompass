@@ -241,19 +241,49 @@ def test_the_legacy_pool_may_omit_the_specialist_header_entirely():
 
 
 def test_a_candidate_that_omits_the_specialist_header_is_still_refused():
-    """The exemption is legacy-only. A candidate that cannot state its specialist
-    bit is the exact failure the manager_v1 rollout is gated on, so an absent
-    header there must not be laundered into a 0."""
-    for arch, expected in (("manager_v1", "1"), ("fc_loop", "0")):
-        state = _state(GOOD_ANSWER, arch=arch, specialists=None)
-        server, url = _serve(state)
-        try:
-            result = _run_probe(url, "--expect-arch", arch,
-                                "--expect-specialists", expected)
-        finally:
-            server.shutdown()
-        assert result.returncode == 1, (arch, result.stdout)
-        assert "specialists=''" in result.stdout, (arch, result.stdout)
+    """The exemption is for an EXPECTED 0, not for an architecture (R3-H1).
+
+    `X-Agent-Specialists` does not exist in origin/main, so the CANDIDATE pool's
+    image omits it exactly as the legacy pool's does — the header only appears once
+    that pool has been rebuilt on this release. Requiring it wherever `arch !=
+    legacy` therefore refused the candidate for a header its running image cannot
+    send, which is what broke `switch_pool.sh --to legacy` and the deploy drain.
+
+    What must NOT be laundered is the bit the manager_v1 rollout is gated on: a
+    candidate EXPECTED to run specialists=1 that cannot state it is still refused.
+    """
+    state = _state(GOOD_ANSWER, arch="manager_v1", specialists=None)
+    server, url = _serve(state)
+    try:
+        refused = _run_probe(url, "--expect-arch", "manager_v1",
+                             "--expect-specialists", "1")
+    finally:
+        server.shutdown()
+    assert refused.returncode == 1, refused.stdout
+    assert "specialists" in refused.stdout + refused.stderr
+
+    # ...while a candidate whose expected bit is 0 passes without the header, the
+    # same way the legacy pool does.
+    state = _state(GOOD_ANSWER, arch="fc_loop", specialists=None)
+    server, url = _serve(state)
+    try:
+        accepted = _run_probe(url, "--expect-arch", "fc_loop",
+                              "--expect-specialists", "0")
+    finally:
+        server.shutdown()
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+
+def test_a_pool_that_states_the_wrong_bit_is_always_refused():
+    """The exemption covers an ABSENT header only; a stated disagreement never."""
+    state = _state(GOOD_ANSWER, arch="fc_loop", specialists="1")
+    server, url = _serve(state)
+    try:
+        result = _run_probe(url, "--expect-arch", "fc_loop",
+                            "--expect-specialists", "0")
+    finally:
+        server.shutdown()
+    assert result.returncode == 1, result.stdout
 
 
 def test_a_clarification_is_inconclusive_rather_than_a_failure():

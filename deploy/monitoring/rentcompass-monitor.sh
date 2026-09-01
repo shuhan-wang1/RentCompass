@@ -180,6 +180,30 @@ bool01() {
     *) return 1 ;;
   esac
 }
+
+# --- CANONICAL specialist-header rule (keep every copy byte-identical) -------
+# X-Agent-Specialists is REQUIRED only when the EXPECTED identity has
+# specialists=1.  When 0 is expected an ABSENT header (reported as '' or 'none')
+# counts as 0: every image built before 2026-08-31 omits the header entirely,
+# which is BOTH pools deployed on this host today, and the legacy pool is the
+# standing rollback escape hatch that must not be recreated just to satisfy a
+# header check.  Demanding the header for an expected 0 turned `--to legacy`
+# (the emergency rollback) and update.sh's drain leg into hard failures.
+# Copies: deploy/update.sh, deploy/set_canary_weight.sh, deploy/switch_pool.sh,
+#         deploy/monitoring/rentcompass-monitor.sh
+# Python twin: deploy/probe_pool_answer.py::specialists_match
+specialists_ok() { # <observed> <expected>
+  local observed="${1:-}" expected="${2:-}"
+  if [ "$observed" = "$expected" ]; then return 0; fi
+  if [ "$expected" = 0 ] && { [ -z "$observed" ] || [ "$observed" = none ]; }; then return 0; fi
+  return 1
+}
+specialists_absent() { # <observed> -> 0 when the pool sent no specialist header
+  [ -z "${1:-}" ] || [ "${1:-}" = none ]
+}
+specialists_shown() { # <observed> -> what to print for it in a message
+  if specialists_absent "${1:-}"; then printf '<absent>'; else printf '%s' "$1"; fi
+}
 if ! CANDIDATE_SPECIALISTS="$(bool01 "$CANDIDATE_SPECIALISTS")"; then
   CANDIDATE_SPECIALISTS=invalid
   emit_alert 3 "CANARY_MANAGER_V1_SPECIALISTS is not boolean in $COMPOSE_ENV"
@@ -236,8 +260,12 @@ if ! [[ "$EXPECTED_PUBLIC_SHA" =~ ^[0-9a-f]{40}$ ]]; then
 elif [ "$p_code" = "200" ] && [ "$p_ver" != "$EXPECTED_PUBLIC_SHA" ]; then
   emit_alert 3 "public edge serves SHA '$p_ver' but active $EXPECTED_PUBLIC_ARCH is pinned to '$EXPECTED_PUBLIC_SHA'"
 fi
-if [ "$p_code" = 200 ] && [ "$p_specialists" != "$_expected_specialists" ]; then
-  emit_alert 3 "public edge specialists=$p_specialists but serving arch $p_arch expects $_expected_specialists"
+# R3-M3. `probe` reports `none` when the header is absent, and the header does not
+# exist in origin/main — so installing this monitor BEFORE the pools are upgraded
+# paged sev-3 on every run, every five minutes, for a header the running image
+# cannot send. An absent header is only an alert when specialists=1 is expected.
+if [ "$p_code" = 200 ] && ! specialists_ok "$p_specialists" "$_expected_specialists"; then
+  emit_alert 3 "public edge specialists=$(specialists_shown "$p_specialists") but serving arch $p_arch expects $_expected_specialists"
 fi
 
 # 2) local legacy pool -------------------------------------------------------
@@ -247,8 +275,8 @@ if [ "$l_code" != "200" ]; then
   emit_alert 3 "legacy $LEGACY_URL returned HTTP $l_code (expected 200)"
 elif [ "$l_arch" != "legacy" ]; then
   emit_alert 3 "legacy pool x-agent-arch=$l_arch (expected legacy)"
-elif [ "$l_specialists" != 0 ]; then
-  emit_alert 3 "legacy pool specialists=$l_specialists (expected 0)"
+elif ! specialists_ok "$l_specialists" 0; then
+  emit_alert 3 "legacy pool specialists=$(specialists_shown "$l_specialists") (expected 0)"
 fi
 
 # 3) local candidate pool (internal canary; lower severity) ------------------
@@ -258,8 +286,8 @@ if [ "$f_code" != "200" ]; then
   emit_alert 4 "candidate pool $FC_URL returned HTTP $f_code (expected 200 while running)"
 elif [ "$f_arch" != "$CANDIDATE_ARCH" ]; then
   emit_alert 4 "candidate pool x-agent-arch=$f_arch (expected $CANDIDATE_ARCH)"
-elif [ "$f_specialists" != "$CANDIDATE_SPECIALISTS" ]; then
-  emit_alert 3 "candidate pool specialists=$f_specialists (expected $CANDIDATE_SPECIALISTS)"
+elif ! specialists_ok "$f_specialists" "$CANDIDATE_SPECIALISTS"; then
+  emit_alert 3 "candidate pool specialists=$(specialists_shown "$f_specialists") (expected $CANDIDATE_SPECIALISTS)"
 fi
 
 # 3b) identity assertions ---------------------------------------------------

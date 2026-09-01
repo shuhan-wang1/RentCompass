@@ -51,7 +51,22 @@ class _Resp:
 
 
 @pytest.fixture()
-def turn():
+def turn(monkeypatch):
+    """One turn window, on a KNOWN observer state.
+
+    Both observer flags are module-level globals that stay set for the rest of the
+    session once anything sets them, so a file about the raw path must pin them or
+    it is really testing "did an earlier test in this shuffle happen to install an
+    observer". CI seed 1009 found exactly that: `[500]` ran before any successful
+    raw call and saw null counters where `[429]` and `[503]`, running after one, saw
+    integers.
+
+    The pin is the HARDER state, not a convenient one: both flags False, i.e. the
+    callback observer never attached. Every assertion below therefore has to hold on
+    the strength of what the raw path itself reports.
+    """
+    monkeypatch.setattr(obs, "_observer_installed", False)
+    monkeypatch.setattr(obs, "_raw_observer_installed", False)
     obs.begin_turn()
     yield
     obs.end_turn()

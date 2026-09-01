@@ -840,7 +840,8 @@ def _status_of(exc: Any) -> Optional[int]:
 
 
 def note_provider_error(exc: Any, *, schemas_bound: bool,
-                        agent_context: Optional[Dict[str, Any]] = None) -> Optional[str]:
+                        agent_context: Optional[Dict[str, Any]] = None,
+                        raw_path: bool = False) -> Optional[str]:
     """Classify and record one provider-side failure. Returns the bucket, or None.
 
     Classification is STRUCTURAL — the HTTP status the provider returned, and
@@ -849,10 +850,22 @@ def note_provider_error(exc: Any, *, schemas_bound: bool,
     a gate that silently stops matching when a vendor rewrites a sentence is worse
     than no gate. The cost of this choice is that a non-schema 400 on a
     schemas-bound call is counted as a schema 400; that direction is the safe one.
+
+    ``raw_path`` says this failure came from ``llm_interface._call_deepseek`` rather
+    than from the LangChain callback. OBSERVING A FAILURE IS PROOF THAT THIS PATH IS
+    OBSERVED, exactly as observing a success is: a turn whose only LLM work was one
+    raw call that 500'd has a real, written counter, and snapshot() must report it
+    as the integer it is rather than as "nothing was watching". Marking it here is
+    what stops a raw-only FAILURE turn from being the one shape that still reported
+    null — the residue of an earlier revision that let a raw-only process claim no
+    observations at all. It marks the RAW flag only; ``install_observer`` remains the
+    sole authority for the callback one.
     """
     obs = _turn_obs.get()
     if obs is None:
         return None
+    if raw_path:
+        _mark_raw_observer_installed()
     obs["provider_error_count"] = obs.get("provider_error_count", 0) + 1
     status = _status_of(exc)
     bucket = None

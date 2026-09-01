@@ -166,8 +166,13 @@ def test_uninstalled_observer_reports_null_not_zero(monkeypatch):
     """If the observer never attached, we did not look — and 'did not look' must not
     render as 'looked and saw none'. This is the whole fail-closed contract: a
     refactor that bypasses ModelRouter.create HOLDS the gate instead of silently
-    reporting a clean pool."""
+    reporting a clean pool.
+
+    "Did not look" is both observers off: the raw-SDK reporter is a second,
+    equally process-wide flag, and if IT is live the counters describe the raw path
+    truthfully (with llm_observer_installed:false stating the gap)."""
     monkeypatch.setattr(tobs, "_observer_installed", False)
+    monkeypatch.setattr(tobs, "_raw_observer_installed", False)
     tobs.begin_turn()
     assert tobs.snapshot()["provider_schema_400_count"] is None
 

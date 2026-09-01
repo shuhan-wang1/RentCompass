@@ -182,7 +182,11 @@ def _call_deepseek(prompt: str, system_prompt: str = None, timeout: int = 360,
         # zero-tolerance provider_schema_400 metric.
         try:
             from core.turn_observations import note_provider_error
-            note_provider_error(e, schemas_bound=False, agent_context=None)
+            # raw_path=True: this failure is ALSO the proof that the raw path is
+            # observed, so a turn whose only call failed still reports integer
+            # counters instead of "no observer ran".
+            note_provider_error(e, schemas_bound=False, agent_context=None,
+                                raw_path=True)
         except Exception:
             pass
         print(f"❌ DeepSeek API error_type={type(e).__name__}")

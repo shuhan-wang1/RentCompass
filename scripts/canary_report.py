@@ -617,6 +617,23 @@ def validate_record(rec: dict) -> List[str]:
     if observer_installed is not None and not isinstance(observer_installed, bool):
         problems.append(
             f"{OBSERVER_INSTALLED_FIELD}={observer_installed!r} is not a boolean")
+    elif observer_installed is False:
+        # THE 2026-07-25 CLASS, stated on the field that actually knows it. The
+        # LangChain callback is the only thing that sees ModelRouter calls, so with
+        # it absent every counter on this record describes a SUBSET of the turn —
+        # `llm_calls`, `llm_usage` and the provider-error counts are floors, and a
+        # `complete` status means "complete for what was watched", which is not the
+        # same claim.
+        #
+        # This used to be expressed by degrading the STATUS to `partial`, which had
+        # to null the raw path's own observations to avoid contradicting itself —
+        # deleting a real 429 to express "something else may be uncounted". Two
+        # facts, two fields: the status describes the calls that were observed, and
+        # this flag describes whether everything was.
+        problems.append(
+            f"{OBSERVER_INSTALLED_FIELD}=false: the LLM callback observer was not "
+            f"attached, so this record's call counts and token totals omit every "
+            f"ModelRouter call the turn made")
     # A turn we could not measure and a process that was not measuring are DIFFERENT
     # facts, and only the second is the defect this gate exists to catch (the
     # 2026-07-25 round: a stale model id produced zero-call telemetry from an

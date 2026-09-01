@@ -114,12 +114,17 @@ def test_readiness_reports_the_conflict_when_the_runtime_serves_tools_over_mcp()
         agent_tool_provider=object(),   # an MCP client: NOT the registry
     )
     saved = asgi._legacy_module
+    # Evict the cached module for this call only and put it back afterwards:
+    # leaving it popped makes later tests (e.g. test_model_name_defaults) see a
+    # freshly-imported core.llm_config under a different environment.
+    saved_llm_config = sys.modules.pop("core.llm_config", None)
     try:
         asgi._legacy_module = lambda: module
-        sys.modules.pop("core.llm_config", None)
         result = asgi._check_runtime_configuration(config)
     finally:
         asgi._legacy_module = saved
+        if saved_llm_config is not None:
+            sys.modules["core.llm_config"] = saved_llm_config
 
     assert result["status"] == "fail"
     assert result["tools_over_mcp"] is True
@@ -143,12 +148,17 @@ def test_readiness_flags_a_quiet_mcp_provider_even_without_specialists():
         agent_tool_provider=object(),
     )
     saved = asgi._legacy_module
+    # Evict the cached module for this call only and put it back afterwards:
+    # leaving it popped makes later tests (e.g. test_model_name_defaults) see a
+    # freshly-imported core.llm_config under a different environment.
+    saved_llm_config = sys.modules.pop("core.llm_config", None)
     try:
         asgi._legacy_module = lambda: module
-        sys.modules.pop("core.llm_config", None)
         result = asgi._check_runtime_configuration(config)
     finally:
         asgi._legacy_module = saved
+        if saved_llm_config is not None:
+            sys.modules["core.llm_config"] = saved_llm_config
 
     assert result["status"] == "fail"
     assert "USE_MCP_TOOLS mismatch" in result["detail"]
@@ -172,12 +182,17 @@ def test_readiness_is_quiet_when_the_registry_serves_tools():
         agent_tool_provider=registry,
     )
     saved = asgi._legacy_module
+    # Evict the cached module for this call only and put it back afterwards:
+    # leaving it popped makes later tests (e.g. test_model_name_defaults) see a
+    # freshly-imported core.llm_config under a different environment.
+    saved_llm_config = sys.modules.pop("core.llm_config", None)
     try:
         asgi._legacy_module = lambda: module
-        sys.modules.pop("core.llm_config", None)
         result = asgi._check_runtime_configuration(config)
     finally:
         asgi._legacy_module = saved
+        if saved_llm_config is not None:
+            sys.modules["core.llm_config"] = saved_llm_config
 
     assert result["status"] == "ok", result.get("detail")
     assert result["tools_over_mcp"] is False

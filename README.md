@@ -977,16 +977,20 @@ LangChain **callback** observer — the only thing that can see `ModelRouter` ca
 attached while that turn ran. A raw-SDK call no longer flips that bit
 (`turn_observations` keeps a second `_raw_observer_installed` flag), because one raw call
 used to declare the whole process instrumented while every agent-loop call stayed
-invisible. The producer also refuses to promote `no_llm_calls` on an unobservable outcome:
+invisible. `llm_usage_status` itself describes only the calls that *were* observed — a raw
+400/429/5xx is a fact about that request, so raw counters stay real integers and `complete`
+is allowed — and the flag alone carries scope: `canary_report` charges an explicit
+`llm_observer_installed: false` with its own violation, and `canary_cost` counts such a turn
+as chargeable-and-unmeasured before it ever looks at `no_llm_calls`. The producer also refuses to promote `no_llm_calls` on an unobservable outcome:
 a turn that crashed, timed out or was cancelled before any call completed reports
 `llm_usage_status: partial`, never a positive zero. The consumer then applies four cells:
 
 | turn outcome | callback observer | `llm_usage_status` | `canary_report` | `canary_cost` |
 |---|---|---|---|---|
 | `crash` / `server_error` | **true** | `partial` | **no violation** — unmeasurable spend | chargeable, unmeasured, *unobservable* |
-| `crash` / `server_error` | false or absent | `not_instrumented` | **violation → HOLD** | chargeable, unmeasured |
+| `crash` / `server_error` | false or absent | whatever the raw path observed (`not_instrumented`, `partial`, …) | **violation → HOLD** (an explicit `false` is charged on its own) | chargeable, unmeasured |
 | `ok` | true | `no_llm_calls` | no violation (a provable zero) | not chargeable, measured zero |
-| `ok` | false | `not_instrumented` | **violation → HOLD** | chargeable, unmeasured |
+| `ok` | false | whatever the raw path observed (`not_instrumented`, `complete`, …) | **violation → HOLD** (an explicit `false` is charged on its own) | chargeable, unmeasured |
 
 Forgiven is not invisible: the crash still counts against the 5xx/outcome rates, the turn
 is never priced at zero, and the report prints `unmeasured spend turns` with an

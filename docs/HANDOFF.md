@@ -96,7 +96,10 @@ that spans all branches.** Last updated 2026-09-01.
 > rings and forces `events_truncated` whenever it drops anything, so denied events are no
 > longer pushed off the end and then convicted); R2-4 (`turn_observations` splits
 > `_raw_observer_installed` from the callback flag, so one raw SDK call no longer certifies
-> the whole process); R2-5/R2-6/R2-10 (unique sentinel for a pre-identity boundary 5xx;
+> the whole process; after CI seed 1009 exposed 7 order-dependent failures, the status now
+> describes only the observed calls — raw counters stay integers, `complete` allowed — and an
+> explicit `llm_observer_installed: false` is charged its own violation by `canary_report`
+> and counted chargeable-and-unmeasured by `canary_cost`); R2-5/R2-6/R2-10 (unique sentinel for a pre-identity boundary 5xx;
 > `canary_report.LOG_SUFFIXES` applied to globs as well as directory walks; a cancelled turn
 > is now recorded as `turn_outcome: crash`, `http_status: 499` instead of vanishing from the
 > denominator); R2-8/R3-M1 (`deploy/run_canary_gate.sh` resolves its own interpreter and

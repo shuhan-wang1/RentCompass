@@ -249,8 +249,16 @@ def test_a_provider_failure_on_the_raw_path_is_classified_not_swallowed(monkeypa
 
 def test_without_an_observer_the_same_turn_reports_null_not_zero(monkeypatch):
     """The fail-closed half of the pair above: "we looked and saw none" (0) and
-    "nothing was watching" (null) must never collapse into the same number."""
+    "nothing was watching" (null) must never collapse into the same number.
+
+    NOTHING watching means BOTH observers off. There are two — the LangChain
+    callback and the raw-SDK reporter — and either one being live means real
+    observations exist and 0 is an honest count of them. Both are process-wide
+    globals, so the raw one stays set for the rest of the session once any test in
+    this file makes a raw call; pinning only the callback made this assertion
+    depend on test order (CI seed 1009 found it)."""
     monkeypatch.setattr(obs, "_observer_installed", False)
+    monkeypatch.setattr(obs, "_raw_observer_installed", False)
     obs.begin_turn()
     try:
         assert obs.snapshot()["provider_schema_400_count"] is None

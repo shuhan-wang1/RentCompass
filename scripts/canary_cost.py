@@ -175,6 +175,20 @@ def sum_usage(records: List[dict]) -> Dict[str, Any]:
         status = record.get("llm_usage_status")
         usage = record.get("llm_usage")
 
+        if record.get(OBSERVER_INSTALLED_FIELD) is False:
+            # Checked BEFORE the no_llm_calls branch: without the callback observer
+            # even "no calls" is a statement about the raw path only, so this turn
+            # can be neither priced nor counted as free. Its own status may well say
+            # `complete` — complete for what was watched — and pricing that as the
+            # turn's total is exactly how an unobserved pool looks cheap.
+            unmeasured += 1
+            chargeable += 1
+            issues.append(
+                f"{label}: llm_observer_installed=false: token totals omit every "
+                f"ModelRouter call, so this turn's spend is a floor, not a total"
+            )
+            continue
+
         if status == "no_llm_calls":
             if usage is not None:
                 # Contradictory evidence: do not price this ambiguous turn as zero.

@@ -276,7 +276,17 @@ def test_a_raw_call_does_not_declare_the_callback_observer_installed(observer_fl
     assert tobs.raw_observer_installed() is True
 
 
-def test_raw_only_observation_is_a_floor_not_a_certified_total(observer_flags):
+def test_raw_only_observation_reports_its_own_facts_and_flags_the_gap(observer_flags):
+    """TWO FACTS, TWO FIELDS.
+
+    The raw path's observations are real: the call happened, it was billed, and a
+    429 on it is a fact about that request. The snapshot states them. What it must
+    NOT do is imply they are the whole turn — and that is what
+    `llm_observer_installed: False` says, in its own field, without deleting
+    anything true. (An earlier revision expressed the gap by degrading the STATUS
+    to `partial` and nulling these counters; it erased real observations to state a
+    different fact, and CI caught it as seven contradictions in the raw-path tests.)
+    """
     tobs._observer_installed = False
     tobs._raw_observer_installed = False
     tobs.begin_turn()
@@ -285,15 +295,60 @@ def test_raw_only_observation_is_a_floor_not_a_certified_total(observer_flags):
                            configured_model="deepseek-v4-flash")
     snapshot = tobs.snapshot()
 
-    # The raw call is reported — it is a fact and it was billed...
     assert snapshot["llm_calls"] == 1
     assert len(snapshot["llm_usage_calls"]) == 1
-    # ...but the turn is NOT certified: any ModelRouter call is invisible.
-    assert snapshot["llm_usage_status"] == tobs.USAGE_PARTIAL
-    # And the zero-tolerance counter only the callback can state stays null, so a
-    # window of these turns holds instead of reading as a clean 0.
-    assert snapshot["provider_schema_400_count"] is None
-    assert snapshot["provider_other_400_count"] is None
+    # Complete FOR WHAT WAS WATCHED — the same rule the callback path follows.
+    assert snapshot["llm_usage_status"] == tobs.USAGE_COMPLETE
+    # A raw-path provider error is still counted, not nulled away.
+    assert snapshot["provider_schema_400_count"] == 0
+    assert snapshot["provider_other_400_count"] == 0
+    # ...and the scope of all of it is stated explicitly.
+    assert snapshot["llm_observer_installed"] is False
+
+
+def test_a_raw_only_record_cannot_reach_the_gate_as_a_clean_cheap_turn(observer_flags):
+    """R2-4's actual failure mode, asserted where it is now caught: the RECORD.
+
+    A process whose callback observer never attached emits turns whose counters
+    omit every ModelRouter call. The status may legitimately read `complete`; the
+    flag is what stops that from being promotable, in both consumers."""
+    tobs._observer_installed = False
+    tobs._raw_observer_installed = False
+    tobs.begin_turn()
+    tobs.note_raw_llm_call("rawds:0",
+                           usage_blob={"prompt_tokens": 10, "completion_tokens": 2},
+                           configured_model="deepseek-v4-flash")
+    snapshot = tobs.snapshot()
+    signals = {
+        "soft_wrapped": False, "wrapped_by": None, "partial": False,
+        "tool_budget_timeout": False,
+        "security": {"denied_write_count": 0, "tainted_write_executed_count": 0,
+                     "forbidden_write_executed_count": 0, "write_audit": []},
+        "dsml_blocked": 0, "dsml_leak": 0, "tool_batches": 0,
+        "tool_ledger_status": ct.TOOL_LEDGER_COMPLETE,
+    }
+    signals.update({
+        "llm_usage_status": snapshot["llm_usage_status"],
+        "llm_calls": snapshot["llm_calls"],
+        "llm_usage": ct.aggregate_llm_usage(snapshot["llm_usage_calls"]),
+        "provider_schema_400_count": snapshot["provider_schema_400_count"],
+        ct.OBSERVER_INSTALLED_FIELD: snapshot["llm_observer_installed"],
+    })
+    record = ct.build_canary_turn_record(
+        endpoint="alex", agent_arch="fc_loop", candidate_sha="c" * 12, strict=True,
+        request_id="req-raw-only", conversation_id="conv-1", user_id="user-1",
+        http_status=200, turn_outcome=ct.OUTCOME_OK, turn_latency_ms=10.0,
+        signals=signals)
+
+    assert record["llm_usage_status"] == "complete"
+    assert record[ct.OBSERVER_INSTALLED_FIELD] is False
+    problems = cr.validate_record(record)
+    assert any("llm_observer_installed=false" in p for p in problems), problems
+    # And the cost side refuses to price a floor as a total.
+    priced = cc.sum_usage([record])
+    assert priced["_unmeasured_turns"]["count"] == 1
+    assert priced["_chargeable_turns"]["count"] == 1
+    assert priced["_no_llm_call_turns"]["count"] == 0
 
 
 def test_the_callback_observer_still_certifies_a_complete_turn(observer_flags):

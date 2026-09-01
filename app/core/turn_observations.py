@@ -755,11 +755,15 @@ def snapshot() -> Dict[str, Any]:
     None is the honest answer in two cases: no observer was installed, or no turn
     window was opened. Both mean the gate must HOLD rather than read a fabricated 0.
 
-    There is a third, partial case: the raw-SDK reporter is live but the LangChain
-    callback is not. Then the raw calls ARE facts (they are reported), the
-    ModelRouter calls are unobservable, and the counters only the callback can
-    state stay null. The status is ``partial`` — a floor, and a HOLD — never
-    ``complete`` and never ``no_llm_calls``.
+    There is a third case: the raw-SDK reporter is live but the LangChain callback
+    is not. Every counter below then describes the raw path truthfully — a 429 on
+    that path happened, and saying so is not a claim about any other path — while
+    ``llm_observer_installed: False`` states, in its own field, that the process was
+    not watching everything. TWO FACTS, TWO FIELDS: overloading the status to mean
+    "something else may be uncounted" would erase the observations that ARE real,
+    and it is the flag, not the status, that the consumer holds the gate on (see
+    canary_report: an explicit ``false`` is a contract violation whatever the
+    status says).
     """
     obs = _turn_obs.get()
     if obs is None or not (_observer_installed or _raw_observer_installed):
@@ -783,30 +787,18 @@ def snapshot() -> Dict[str, Any]:
         # as if they were the turn's totals would understate spend by an unknown
         # amount, which is worse than refusing to answer.
         status = USAGE_PARTIAL
-    elif not _observer_installed:
-        # We are here only because a RAW-SDK call reported itself. The LangChain
-        # callback never attached, so every ModelRouter call this turn made is
-        # invisible: the calls below are a floor, not a total. `partial` says
-        # exactly that ("an undercount of unknown size") and HOLDs the gate;
-        # `complete` would certify a number we cannot certify, and `no_llm_calls`
-        # would certify a zero we cannot certify either.
-        status = USAGE_PARTIAL
     elif calls:
         status = USAGE_COMPLETE
     else:
         status = USAGE_NO_CALLS
     result = {
-        # ZERO-TOLERANCE metric: a 0 here is read as "we looked and there were
-        # none". Only the LangChain callback can look at the ModelRouter calls,
-        # and a strict-schema 400 can only happen on that path (the raw client
-        # binds no tools/functions/response_format), so without the callback the
-        # honest answer is null — a HOLD — not a clean zero.
-        "provider_schema_400_count": (
-            int(obs.get("provider_schema_400", 0)) if _observer_installed else None
-        ),
-        "provider_other_400_count": (
-            int(obs.get("provider_other_400", 0)) if _observer_installed else None
-        ),
+        # These count what the live observers SAW. A raw-path 429/500/503 is a fact
+        # about that request whether or not the LangChain callback is attached, and
+        # nulling it would delete a real observation to express a different fact —
+        # "this process was not watching everything" — which is carried separately
+        # and unambiguously by llm_observer_installed below.
+        "provider_schema_400_count": int(obs.get("provider_schema_400", 0)),
+        "provider_other_400_count": int(obs.get("provider_other_400", 0)),
         "llm_usage_calls": calls,
         # Includes completed calls whose provider response omitted token usage.
         # llm_runs_seen is de-duplicated at the callback boundary, so this is the

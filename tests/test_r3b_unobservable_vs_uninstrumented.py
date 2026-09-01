@@ -137,7 +137,28 @@ def test_cell2_unobservable_outcome_without_an_observer_is_still_a_violation(out
 
     assert record[ct.OBSERVER_INSTALLED_FIELD] is False
     problems = cr.validate_record(record)
-    assert any("undercount of unknown size" in p for p in problems), problems
+    assert any("llm_observer_installed=false" in p for p in problems), problems
+
+
+def test_the_flag_convicts_on_its_own_whatever_the_status_says():
+    """A process whose callback observer never attached still produces perfectly
+    self-consistent records: its raw-SDK calls are real, so the status is
+    legitimately `complete` — complete for what was watched. Only the flag knows
+    the counts omit every ModelRouter call, so only the flag can catch it."""
+    record = _record(9, outcome=ct.OUTCOME_OK, installed=False)
+    record["llm_usage_status"] = "complete"
+    record["llm_calls"] = 1
+    record["llm_usage"] = ct.aggregate_llm_usage(
+        [{"model": "deepseek-v4-flash", "input_tokens": 10, "output_tokens": 2,
+          "cache_read_tokens": 0}])
+    record["provider_schema_400_count"] = 0
+
+    problems = cr.validate_record(record)
+    assert any("llm_observer_installed=false" in p for p in problems), problems
+    assert not any("undercount of unknown size" in p for p in problems), (
+        "the status is not the complaint here; the scope is")
+    priced = cc.sum_usage([record])
+    assert priced["_unmeasured_turns"]["count"] == 1, "a floor is never a total"
 
 
 def test_cell3_a_completed_zero_call_turn_with_an_observer_is_unchanged():
@@ -154,7 +175,7 @@ def test_cell4_a_completed_turn_without_an_observer_still_holds():
     record = _record(4, outcome=ct.OUTCOME_OK, installed=False)
 
     problems = cr.validate_record(record)
-    assert any("undercount of unknown size" in p for p in problems), problems
+    assert any("llm_observer_installed=false" in p for p in problems), problems
 
 
 # --------------------------------------------------------------------------- #

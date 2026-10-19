@@ -281,6 +281,83 @@ def erasure_request_fields(text: str) -> tuple:
     return tuple(hits)
 
 
+# ── Sensitive personal data in AUTO-memory (2026-10-19 A-09) ─────────────────
+# Told "I earn £62,000, I'm on a Skilled Worker visa, I have asthma, my phone is 07700
+# 900123", the assistant said it would not store health, immigration, income or contact
+# details — while remember_turn wrote all of them verbatim into the episodic layer
+# ("User asked: <first 300 chars>"), retrievable for 500 turns. Storage now matches the
+# promise: the AUTOMATIC layers (the episodic turn log, the facts extracted from a turn,
+# the reflections over them) never keep these categories. A user's explicit "remember
+# X" goes through the remember tool and its own authorisation, not through here.
+#
+# Accessibility needs (wheelchair, step-free, lift) are deliberately NOT in the health
+# list: they are housing requirements the search uses, stated as property facts.
+_SENSITIVE_CLAUSE_PATTERNS = (
+    ("income", re.compile(
+        r"\b(?:earn(?:s|ing)?|salary|salaries|income|wage|wages|take[- ]home|per annum|"
+        r"a year|annually|p\.?a\.?)\b|年薪|月薪|收入|工资", re.I)),
+    ("immigration", re.compile(
+        r"\b(?:visa|immigration|asylum|refugee|brp|biometric residence|indefinite leave|"
+        r"settled status|pre-settled|right to remain|leave to remain|work permit)\b|"
+        r"签证|移民|难民|居留", re.I)),
+    ("health", re.compile(
+        r"\b(?:asthma|diabet\w*|epilep\w*|cancer|hiv|pregnan\w*|depress\w*|anxiety|"
+        r"adhd|autis\w*|bipolar|schizo\w*|mental health|medical condition|health condition|"
+        r"chronic (?:illness|pain|condition)|diagnos\w*|medication|therapy|chemo\w*|"
+        r"illness|allerg\w*)\b|哮喘|糖尿病|癫痫|癌|怀孕|抑郁|焦虑|病情|疾病|过敏", re.I)),
+)
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_PHONE_RE = re.compile(r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?|\b0)\d(?:[\s-]?\d){8,9}(?!\d)")
+# Clause boundaries: sentence/clause punctuation (a comma or full stop between digits is a
+# thousands separator or a decimal point, never a boundary), or "and/but" introducing a new
+# first-person clause ("... a year and I'm on a visa").
+_CLAUSE_BOUNDARY = re.compile(
+    r"[;:!?，；：。！？]\s*|[,.](?!\d)\s*|\s+(?:and|but)\s+(?=(?:i|i'm|i am|my)\b)", re.I)
+_SENSITIVE_MARKER = "[personal detail not stored]"
+
+
+def redact_sensitive(text: str) -> tuple[str, list[str]]:
+    """``text`` with income, immigration, health and contact details removed.
+
+    Clause-level: a clause that states one of these categories is replaced by a neutral
+    marker, so the housing parts of the same message ("1-bed in Hackney under £1,900")
+    survive byte-for-byte. Emails and phone numbers are removed wherever they appear.
+    Returns the redacted text and the categories found (for the ``pii_categories``
+    metadata). Never raises."""
+    try:
+        value = str(text or "")
+        found: list[str] = []
+        if _EMAIL_RE.search(value) or _PHONE_RE.search(value):
+            found.append("contact")
+            value = _PHONE_RE.sub("[contact detail not stored]",
+                                  _EMAIL_RE.sub("[contact detail not stored]", value))
+        out: list[str] = []
+        start = 0
+        bounds = [(m.start(), m.end()) for m in _CLAUSE_BOUNDARY.finditer(value)]
+        bounds.append((len(value), len(value)))
+        for left, right in bounds:
+            clause, separator = value[start:left], value[left:right]
+            start = right
+            hit = next((name for name, pattern in _SENSITIVE_CLAUSE_PATTERNS
+                        if pattern.search(clause)), None)
+            if hit:
+                if hit not in found:
+                    found.append(hit)
+                if out and out[-1].startswith(_SENSITIVE_MARKER):
+                    out[-1] = _SENSITIVE_MARKER + separator
+                    continue
+                clause = _SENSITIVE_MARKER
+            out.append(clause + separator)
+        return "".join(out).strip(), found
+    except Exception:
+        return "", ["unparsed"]
+
+
+def contains_sensitive(text: str) -> bool:
+    """True when an extracted fact or insight states a category auto-memory never keeps."""
+    return bool(redact_sensitive(text)[1])
+
+
 def _classify_pii(text: str) -> str:
     """Conservative metadata tag; content stays local and remains erasable by user_id."""
     value = (text or "").casefold()
@@ -291,6 +368,7 @@ def _classify_pii(text: str) -> str:
         categories.append("location")
     if any(term in value for term in ("partner", "child", "family", "flatmate", "roommate")):
         categories.append("household")
+    categories.extend(c for c in redact_sensitive(text)[1] if c not in categories)
     return ",".join(categories) or "none"
 
 
@@ -546,7 +624,10 @@ class AgentMemory:
         try:
             data = _extract_json(call_ollama(prompt, timeout=60) or "")
             facts = data.get("facts", []) if isinstance(data, dict) else []
-            return [f.strip() for f in facts if isinstance(f, str) and f.strip()][:8]
+            # A fact the extractor inferred despite the redaction ("user has asthma",
+            # "on a work visa") is dropped, never stored (A-09).
+            return [f.strip() for f in facts if isinstance(f, str) and f.strip()
+                    and not contains_sensitive(f)][:8]
         except Exception:
             return []
 
@@ -636,6 +717,11 @@ class AgentMemory:
                     {"idempotency_key": idempotency_key}, {"user_id": user_id}]})
                 if existing and existing.get("ids"):
                     return True
+            # Sensitive categories are redacted BEFORE anything is written or extracted
+            # (A-09): the episodic log, the fact extractor and the reflections built on
+            # them all see the redacted text only.
+            user_msg, _sensitive = redact_sensitive(user_msg)
+            assistant_msg, _ = redact_sensitive(assistant_msg)
             ep = f"User asked: {(user_msg or '').strip()[:300]}"
             if tool_used:
                 ep += f"  [assistant used: {tool_used}]"
@@ -735,7 +821,7 @@ class AgentMemory:
             )
             data = _extract_json(call_ollama(prompt, timeout=60) or "") or {}
             for ins in (data.get("insights") or [])[:3]:
-                if isinstance(ins, str) and ins.strip():
+                if isinstance(ins, str) and ins.strip() and not contains_sensitive(ins):
                     self.add(ins.strip(), "reflection", session_id, user_id, importance=8)
         except Exception as e:
             print(f"[memory] reflect error_type={type(e).__name__}")

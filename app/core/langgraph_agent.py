@@ -810,9 +810,21 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # "switch to Bristol", "actually London", a bare/Chinese city name) overrides the
     # frozen accumulated area even with no search verb. _extract_area returns None for
     # nonsense areas (Mars/火星/Wakanda), so those never clobber the current area.
-    from core.tools.search_properties import _extract_areas
-    new_areas = _extract_areas(current_message)
-    new_area = new_areas[0] if new_areas else _extract_area(current_message)
+    from core.tools.search_properties import _extract_areas, area_list_edit
+    standing_areas = list(result.get('areas') or ([result['area']] if result.get('area') else []))
+    edited_areas = area_list_edit(current_message, standing_areas)
+    if edited_areas is not None:
+        # "Add Islington as well." / "Drop Hackney, just Islington." / "Remove Stratford."
+        # edit the standing list instead of replacing it (R1-02). Removing the last area
+        # leaves none: the next search asks where, rather than silently keeping it.
+        new_areas, new_area = [], None
+        if edited_areas != standing_areas:
+            result['area'] = edited_areas[0] if edited_areas else None
+            result['areas'] = edited_areas
+            changed = True
+    else:
+        new_areas = _extract_areas(current_message)
+        new_area = new_areas[0] if new_areas else _extract_area(current_message)
     # A curated contextual workplace does not also become a home area.
     def _place_key(value):
         return re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).strip()

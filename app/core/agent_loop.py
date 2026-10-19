@@ -3200,10 +3200,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         except Exception as exc:
             logger.error("fc_loop.ground_hard_constraints_failed type=%s", type(exc).__name__)
         try:
-            from core.tools.search_properties import _extract_area
-            switched = _extract_area(p.get("current_message") or "")
+            from core.tools.search_properties import _extract_area, area_list_edit, bare_city_downgrades
+            # An add/remove edit is already folded into `acc` above; reading "Also search in
+            # Islington." as a switch here would replace the list (R1-02).
+            switched = (None if area_list_edit(p.get("current_message") or "", acc.get("areas")) is not None
+                        else _extract_area(p.get("current_message") or ""))
+            # "伦敦UCL附近" names only the city in words this parser knows; a model that
+            # read a neighbourhood into it (or one from a table we lack) must not be
+            # widened back to all of London (R1-01).
+            kept_city = (switched if switched and bare_city_downgrades(switched, p.get("area"))
+                         else None)
         except Exception:
+            switched = kept_city = None
+        if kept_city:
+            logger.info("fc_loop.kept_specific_area city=%s", kept_city)
             switched = None
+            if not p.get("areas") or [str(a).strip().lower() for a in p["areas"]] == ["london"]:
+                p["areas"] = [p["area"]]
         if switched:
             p["area"] = switched
             p["areas"] = [switched]
@@ -3270,11 +3283,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             ('max_travel_time', 'max_commute_time'), ('no_commute', 'no_commute'),
         ):
             if stored in acc:
+                if kept_city and stored in ('area', 'areas') and acc.get('area') == kept_city:
+                    continue    # the bare city this turn named; the model's area is finer
                 if acc[stored] is None:
                     p.pop(argument, None)
                 else:
                     p[argument] = acc[stored]
-        if acc.get('area') and not acc.get('areas'):
+        if acc.get('area') and not acc.get('areas') and not (kept_city and acc.get('area') == kept_city):
             p['areas'] = [acc['area']]
         if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd

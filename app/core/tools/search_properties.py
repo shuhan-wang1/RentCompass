@@ -1023,6 +1023,27 @@ _ZH_AREA_MAP = {
     "雷丁": "Reading", "巴斯": "Bath", "杜伦": "Durham",
     "坎特伯雷": "Canterbury", "格林威治": "Greenwich", "卡姆登": "Camden",
     "肯辛顿": "Kensington", "切尔西": "Chelsea",
+    # London neighbourhoods. Without them "伦敦肖迪奇附近的一居室" matched only 伦敦 and the
+    # search covered all of London (Chigwell, Barking …) under a "verified" header (R1-01).
+    # Every value is a canonical _LONDON_AREA_NAMES spelling, so the London-beats-city
+    # ranking in _extract_area applies.
+    "肖迪奇": "Shoreditch", "肖尔迪奇": "Shoreditch", "国王十字": "King's Cross",
+    "卡姆登镇": "Camden", "哈克尼": "Hackney", "伊斯灵顿": "Islington",
+    "霍克斯顿": "Hoxton", "达尔斯顿": "Dalston", "布里克斯顿": "Brixton",
+    "克拉珀姆": "Clapham", "克拉芬": "Clapham", "佩卡姆": "Peckham",
+    "斯特拉特福": "Stratford", "汉普斯特德": "Hampstead", "白教堂": "Whitechapel",
+    "贝斯纳尔格林": "Bethnal Green", "马里波恩": "Marylebone", "马里本": "Marylebone",
+    "苏豪": "Soho", "苏活": "Soho", "梅费尔": "Mayfair", "梅菲尔": "Mayfair",
+    "诺丁山": "Notting Hill", "富勒姆": "Fulham", "哈默史密斯": "Hammersmith",
+    "温布尔登": "Wimbledon", "温布尔顿": "Wimbledon", "金丝雀码头": "Canary Wharf",
+    "南华克": "Southwark", "伊灵": "Ealing", "克罗伊登": "Croydon",
+    "巴特西": "Battersea", "沃克斯豪尔": "Vauxhall", "旺兹沃思": "Wandsworth",
+    "托特纳姆": "Tottenham", "温布利": "Wembley", "里士满": "Richmond",
+    "帕特尼": "Putney", "克勒肯维尔": "Clerkenwell", "法灵顿": "Farringdon",
+    "刘易舍姆": "Lewisham", "伍尔维奇": "Woolwich", "奇斯威克": "Chiswick",
+    "阿克顿": "Acton", "伯蒙德西": "Bermondsey", "海格特": "Highgate",
+    "海布里": "Highbury", "芬斯伯里公园": "Finsbury Park", "沃尔瑟姆斯托": "Walthamstow",
+    "迈尔恩德": "Mile End", "金斯顿": "Kingston", "肯特镇": "Kentish Town",
 }
 
 # Curated set of well-known UK cities + London boroughs/areas (canonical spelling).
@@ -1285,6 +1306,100 @@ def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
     return areas
 
 
+# Edits to the CURRENT area list (R1-02 / ledger A-05). "Add Islington as well.",
+# "Drop Hackney, just Islington.", "Add Camden to the search too." and "Remove Stratford."
+# all left the stored areas and the search arguments on the old place while the answer
+# claimed the change; "Also search in Islington." replaced the list instead of growing it.
+_AREA_ADD_BEFORE = re.compile(
+    r"(?:\badd(?:ing)?|\balso\s+(?:include|search|look|check|cover|consider|show)(?:\s+(?:in|at|around))?"
+    r"|\b(?:please|can you|could you)\s+(?:also\s+)?include|\bas\s+well\s+as|\bplus"
+    r"|(?:加上|添加|增加|加入|也看看?|也搜(?:索|一下)?|也找(?:找)?|再加(?:上)?))\s*(?:in\s+)?$", re.I)
+_AREA_ADD_AFTER = re.compile(r"\s*(?:(?:as\s+well|too)\b|也?(?:加上|加进来?|加入|添加|算上))", re.I)
+_AREA_INCLUDE_BEFORE = re.compile(r"\binclude\s+$", re.I)
+_AREA_INCLUDE_AFTER = re.compile(r"\s*(?:too|as\s+well|in\s+(?:the|my)\s+search)\b", re.I)
+_AREA_REMOVE_BEFORE = re.compile(
+    r"(?:\b(?:remove|drop|exclude|delete|skip|forget(?:\s+about)?|take(?:\s+out)?|cross\s+off|no\s+more"
+    r"|no\s+longer\s+(?:want|consider|search(?:\s+in)?)|without|not)"
+    r"|(?:去掉|删除|删掉|移除|排除|不要|不看|不考虑|不再考虑|取消))\s*(?:the\s+)?$", re.I)
+_AREA_REMOVE_AFTER = re.compile(
+    r"\s*(?:(?:out|off)\b(?!\s+of\s+(?:the\s+)?(?:question|budget))|from\s+(?:the|my)\s+(?:search|list|areas?)\b"
+    r"|(?:也)?(?:去掉|删掉|删除|移除|排除|不要了|不看了))", re.I)
+_AREA_ONLY_BEFORE = re.compile(
+    r"(?:\b(?:just|only|stick\s+(?:to|with))(?:\s+(?:search|look|show)(?:\s+(?:in|at))?)?"
+    r"|(?:只看|只要|只搜(?:索)?|只在|仅看|仅在|只考虑))\s*$", re.I)
+_AREA_ONLY_AFTER = re.compile(r"\s*(?:only\b|就好|就行|就可以)", re.I)
+_AREA_NAMED_ADD = re.compile(
+    r"\b(?i:add)\s+((?:[A-Z][a-z’'\-]+)(?:\s+[A-Z][a-z’'\-]+){0,2})\s+"
+    r"(?:as\s+(?:a|an(?:other)?|my)\s+(?:second\s+|third\s+|new\s+|extra\s+|additional\s+)?(?:search\s+)?area"
+    r"|to\s+(?:the|my)\s+(?:search|areas?|list))\b")
+
+
+def area_list_edit(text: str, current: list | None) -> list[str] | None:
+    """The area list after an explicit add / remove / "just X" edit, else None.
+
+    None means the message is not an edit of the area list (a switch, a question, or no
+    place at all) and the caller keeps its own area logic. Idempotent: applying the same
+    message to its own result returns the result again, so the state node, the executor
+    and the tool can all apply it."""
+    from core.constraint_updates import housing_update_text
+    source = housing_update_text(text or '')
+    if not source or not source.strip():
+        return None
+    current = [a for a in (current or []) if isinstance(a, str) and a.strip()]
+    names = {**_KNOWN_AREAS, **_ZH_AREA_MAP}
+    for area in current:
+        names.setdefault(re.sub(r"[’']", '', area.lower()), area)
+    alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+    place = re.compile(rf"(?<![a-z])(?:{alternatives})(?![a-z])", re.I)
+    adds, removes, only = [], [], []
+    for clause_match in re.finditer(r"[^.;!?\n。；！？]+", source):
+        clause = clause_match.group()
+        if is_hypothetical(clause) or re.search(r"\b(?:don.t|do not|never|shouldn.t)\s+(?:\w+\s+){0,2}"
+                                                r"(?:add|include|remove|drop|exclude)\b", clause, re.I):
+            continue
+        for found in place.finditer(re.sub(r"[’']", "'", clause)):
+            raw = found.group()
+            canonical = names.get(raw) or names.get(re.sub(r"[’']", '', raw.lower()))
+            if not canonical:
+                continue
+            before = re.split(r"[,，、:：]|\band\b|\bbut\b|但", clause[:found.start()])[-1]
+            after = clause[found.end():found.end() + 40]
+            if _AREA_REMOVE_BEFORE.search(before) or _AREA_REMOVE_AFTER.match(after):
+                removes.append(canonical)
+            elif _AREA_ONLY_BEFORE.search(before) or _AREA_ONLY_AFTER.match(after):
+                only.append(canonical)
+            elif (_AREA_ADD_BEFORE.search(before) or _AREA_ADD_AFTER.match(after)
+                  or (_AREA_INCLUDE_BEFORE.search(before) and _AREA_INCLUDE_AFTER.match(after))):
+                adds.append(canonical)
+        for named in _AREA_NAMED_ADD.finditer(clause):
+            # "Add Angel as a second area": a place outside the curated table, named with
+            # explicit area wording. The curated table deliberately omits Angel/Bow/Kew.
+            candidate = named.group(1).strip()
+            key = re.sub(r"[’']", '', candidate.lower())
+            if not any(key == re.sub(r"[’']", '', a.lower()) for a in adds):
+                adds.append(names.get(key) or candidate)
+    def _key(value):
+        return re.sub(r"[’']", '', value.lower())
+
+    # With no standing list, a removal alone edits nothing ("在Camden找，不要伦敦其他地方"
+    # negates the wider city on a first turn; it must not read as "no area").
+    if not (adds or only or (removes and current)):
+        return None
+
+    if only:
+        result = []
+        for area in only:
+            if _key(area) not in {_key(a) for a in result}:
+                result.append(area)
+        return result
+    gone = {_key(a) for a in removes}
+    result = [a for a in current if _key(a) not in gone]
+    for area in adds:
+        if _key(area) not in gone and _key(area) not in {_key(a) for a in result}:
+            result.append(area)
+    return result
+
+
 def _extract_areas(text: str) -> list[str]:
     """Explicit residential place alternatives in order; [] means no update.
 
@@ -1308,7 +1423,10 @@ def _extract_areas(text: str) -> list[str]:
         clause = before + phrase
         if is_hypothetical(clause):
             continue
-        if not re.search(r'\b(?:search|find|live|living|look|keep|focus|choose|flats?|homes?|properties|areas?)\b|找|住|搜|改为|改成|保留|恢复', before, re.I):
+        # Chinese puts the predicate after the places: "我想在哈克尼和伊斯灵顿找房".
+        after = source[match.end():match.end() + 8]
+        if not (re.search(r'\b(?:search|find|live|living|look|keep|focus|choose|flats?|homes?|properties|areas?)\b|找|住|搜|改为|改成|保留|恢复', before, re.I)
+                or re.match(r'\s*(?:附近|周边|一带)?(?:找|租|住|搜)', after)):
             continue
         if re.search(r'\b(?:work|job|office|route|journey|weather)\b|上班|工作|天气|路线', before, re.I) and not re.search(r'\b(?:live|search|find|keep|focus|flats?|homes?|properties)\b|找房|住在|搜索', before, re.I):
             continue
@@ -1356,6 +1474,23 @@ def most_specific_known_area(text: str) -> str | None:
         return _KNOWN_AREAS[winner] if winner else None
     except Exception:
         return None
+
+
+def bare_city_downgrades(city, model_area) -> bool:
+    """True when replacing ``model_area`` with the bare ``city`` this turn's words named
+    would WIDEN the search: the city is London (the only city whose sub-areas the
+    product tables know) and the model supplied a different, non-city place. A model
+    area that is itself another UK city ("Manchester") is a switch, not a refinement,
+    so it never counts."""
+    if not isinstance(city, str) or not isinstance(model_area, str):
+        return False
+    city_key = re.sub(r"[\u2019']", "", city.strip().lower())
+    area_key = re.sub(r"[\u2019']", "", model_area.strip().lower())
+    if city_key != 'london' or not area_key or area_key == city_key:
+        return False
+    if area_key in _KNOWN_AREAS and area_key not in LONDON_AREAS:
+        return False
+    return not re.fullmatch(r'(?:greater\s+|central\s+)?london(?:,?\s*uk)?', area_key)
 
 
 def _extract_area(text: str) -> str | None:
@@ -1430,11 +1565,21 @@ def _extract_area(text: str) -> str | None:
     # actually asked for — a Camden request then searched all of London. A London
     # area/borough beats a bare city; within a level the longest key wins.
     _zh_london = _zh_city = None
+
+    def _zh_place_skipped(start: int, end: int) -> bool:
+        prefix = re.split(r'[。！？!?;；\n，,:：]', text[:start])[-1][-45:]
+        if is_hypothetical(clause_at(text, start, end)) or re.search(
+                r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix):
+            return True
+        # A workplace / school named in the same clause is a destination, not a home
+        # area: "我在金丝雀码头上班，想在伦敦找房" must not search Canary Wharf.
+        suffix = re.split(r'[。！？!?;；\n，,:：]', text[end:])[0][:10]
+        return bool(re.match(r'\s*(?:附近)?(?:找(?=工作|实习))?(?:上班|工作|实习|上学|读书|上课|办公|通勤)', suffix)
+                    or re.search(r'(?:通勤|上班|上学)(?:到|去)\s*$', prefix))
+
     for zh, canon in _ZH_AREA_MAP.items():
         for match in re.finditer(re.escape(zh), text):
-            prefix = re.split(r'[。！？!?;；\n，,:：]', text[:match.start()])[-1][-45:]
-            if is_hypothetical(clause_at(text, match.start(), match.end())) or re.search(
-                    r'(?:不(?:要|是|需要|想|考虑)|取消|删除|移除|去掉|排除)[^，。；;!?]{0,14}$', prefix):
+            if _zh_place_skipped(match.start(), match.end()):
                 continue
             if re.sub(r"[\u2019']", "", canon.lower()) in LONDON_AREAS:
                 if _zh_london is None or len(zh) > len(_zh_london[0]):
@@ -1442,6 +1587,16 @@ def _extract_area(text: str) -> str | None:
             elif _zh_city is None or len(zh) > len(_zh_city[0]):
                 _zh_city = (zh, canon)
             break
+    if _zh_city and not _zh_london:
+        # An English neighbourhood written inside Chinese text ("伦敦Camden Town附近",
+        # "伦敦Shoreditch附近一居室") is more specific than the city around it; returning
+        # the bare city searched all of London (R1-01). The lookarounds are [a-z]-only
+        # because \b sees no boundary between a CJK character and a Latin letter.
+        plain = re.sub(r"[\u2019']", "", text)
+        for key in sorted(LONDON_AREAS, key=len, reverse=True):
+            for match in re.finditer(r'(?<![a-z])' + re.escape(key) + r'(?![a-z])', plain, re.I):
+                if not _zh_place_skipped(match.start(), match.end()):
+                    return LONDON_AREAS[key]
     if _zh_london or _zh_city:
         return (_zh_london or _zh_city)[1]
     t = text.lower().strip()
@@ -2548,7 +2703,10 @@ async def search_properties_impl(
                 req_areas.append(_ca)
         if not search_area and req_areas:
             search_area = req_areas[0]
-        fresh_areas = _extract_areas(msg_for_extraction)
+        edited_areas = area_list_edit(msg_for_extraction, req_areas or ([search_area] if search_area else []))
+        fresh_areas = edited_areas if edited_areas is not None else _extract_areas(msg_for_extraction)
+        if len(fresh_areas) == 1 and bare_city_downgrades(fresh_areas[0], search_area):
+            fresh_areas = []    # a bare "London" never widens a finer requested area (R1-01)
         if fresh_areas:
             req_areas = fresh_areas
             search_area = fresh_areas[0]

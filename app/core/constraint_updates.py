@@ -210,7 +210,10 @@ def restore_saved_criteria(accumulated: dict, memories: list, message: str) -> d
             r'搜|找|恢复|使用|按|\b(?:use|apply|restore|find|search|show)\b', message, re.I):
         return accumulated
     from core.langgraph_agent import _apply_explicit_criteria_updates
-    candidates = sorted(memories or [], key=lambda m: str(m.get('created_at') or ''), reverse=True)
+    # A reflection is the assistant's inference ("fixed budget of around £2,300/month"),
+    # never a saved criterion (R2-06).
+    candidates = sorted((m for m in memories or [] if m.get('mtype') != 'reflection'),
+                        key=lambda m: str(m.get('created_at') or ''), reverse=True)
     candidates.sort(key=lambda m: (m.get('mtype') != 'semantic',
         not bool(re.search(r'默认|长期|\bdefaults?\b|saved preferences', str(m.get('text') or ''), re.I))))
     for memory in candidates:

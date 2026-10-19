@@ -442,6 +442,34 @@ _SENSITIVE_INFERENCE_RE = re.compile(
     r"行动不便|残疾|身体状况", re.I)
 
 
+_RATIONALE_PAREN = re.compile(r"\s*\(([^()]{1,160})\)")
+_RATIONALE_TAIL = re.compile(
+    r"\s*[,;:–—-]?\s*\b(?:because|since|so\s+that|in\s+order\s+to|as\s+(?:they|she|he|the\s+user)|"
+    r"which\s+(?:is|makes)|to\s+(?:live|be|stay|avoid|keep|save|reduce|minimi[sz]e))\b[^.;]{0,200}$",
+    re.I)
+_RATIONALE_WORD = re.compile(r"[a-z\u4e00-\u9fff]{4,}", re.I)
+
+
+def strip_unstated_rationale(fact: str, user_msg: str) -> str:
+    """``fact`` without a reason/aside the user did not state.
+
+    "Wants no commute (to live very close to their destination)" was stored for a user who
+    said only "no commute", and repeated to them as their preference (R2-20). An aside or a
+    because/so-that tail is kept only when its words come from the user's message."""
+    text = str(fact or "").strip()[:400]
+    said = str(user_msg or "").lower()
+
+    def stated(part: str) -> bool:
+        words = _RATIONALE_WORD.findall(part.lower())
+        return bool(words) and all(word in said or word.rstrip("s") in said for word in words)
+
+    text = _RATIONALE_PAREN.sub(lambda m: m.group(0) if stated(m.group(1)) else "", text)
+    tail = _RATIONALE_TAIL.search(text)
+    if tail and not stated(tail.group(0)):
+        text = text[:tail.start()]
+    return text.strip(" \t,;:–—-")
+
+
 def contains_sensitive(text: str) -> bool:
     """True when an extracted fact or insight states a category auto-memory never keeps."""
     return bool(redact_sensitive(text)[1])
@@ -700,23 +728,38 @@ class AgentMemory:
         except Exception:
             return 5
 
-    def _extract_facts(self, user_msg, assistant_msg) -> list:
+    def _extract_facts(self, user_msg, assistant_msg="") -> list:
+        """Durable facts the USER stated, from the user's own message only.
+
+        ``assistant_msg`` is accepted for call compatibility and never read: an answer to
+        "What do you remember about me?" restates memory, and extracting from it wrote the
+        recall (and the reflections it quoted) back as new semantic "facts" — "Pet-
+        friendliness is a non-negotiable dealbreaker for the user" — which the next search
+        then applied (R2-06)."""
         prompt = (
-            "You extract durable facts about a user from a rental-assistant conversation. "
-            'Return STRICT JSON: {"facts": ["..."]}. Each fact is an atomic, self-contained '
-            "statement about the user's preferences, constraints, or situation worth remembering "
-            "for future turns (budget, destination/university, commute limit, must-have amenities, "
-            "areas to avoid, lifestyle, who they live with, etc.). Do NOT include greetings, the "
-            'assistant\'s suggestions, or ephemeral chit-chat. If nothing is worth remembering, return {"facts": []}.\n\n'
-            f"User: {user_msg}\nAssistant: {assistant_msg}\n\nJSON: "
+            "You extract durable facts that the USER STATED about themselves in this message to "
+            'a rental assistant. Return STRICT JSON: {"facts": ["..."]}. Each fact is an atomic, '
+            "self-contained statement of the user's own preference, constraint, or situation "
+            "(budget, destination/university, commute limit, must-have amenities, areas to avoid, "
+            "who they live with, etc.), worded as close to the user's words as possible. Never add "
+            "a reason, priority or rationale the user did not say (no 'to live close to work', "
+            "no 'dealbreaker', no 'key requirement'). Do NOT include greetings, questions, or "
+            'chit-chat. If the user stated nothing durable, return {"facts": []}.\n\n'
+            f"User: {user_msg}\n\nJSON: "
         )
         try:
             data = _extract_json(call_ollama(prompt, timeout=60) or "")
             facts = data.get("facts", []) if isinstance(data, dict) else []
             # A fact the extractor inferred despite the redaction ("user has asthma",
             # "on a work visa") is dropped, never stored (A-09).
-            return [f.strip() for f in facts if isinstance(f, str) and f.strip()
-                    and not contains_sensitive(f)][:8]
+            out = []
+            for fact in facts:
+                if not isinstance(fact, str) or not fact.strip() or contains_sensitive(fact):
+                    continue
+                cleaned = strip_unstated_rationale(fact, user_msg)
+                if cleaned:
+                    out.append(cleaned)
+            return out[:8]
         except Exception:
             return []
 
@@ -833,11 +876,11 @@ class AgentMemory:
             # Triviality gate: skip the LLM extract+consolidate for greetings/acks/
             # bypass commands and very short messages — they carry nothing durable.
             if not _is_trivial_for_extraction(user_msg):
-                # Taint A+: on a tainted turn the assistant text is untrusted; feed
-                # the extractor the user message ONLY so external content cannot
-                # seed a durable semantic fact.
-                extract_assistant = "" if context_tainted else assistant_msg
-                self._consolidate(self._extract_facts(user_msg, extract_assistant), session_id, user_id)
+                # Semantic facts come from the USER message only, on every turn (R2-06):
+                # the assistant's text — a recall answer, a reflection it quoted, a
+                # suggestion — is never a statement by the user. (Taint A+ asked for this
+                # on tainted turns only; it now holds everywhere.)
+                self._consolidate(self._extract_facts(user_msg, ""), session_id, user_id)
             self.maybe_reflect(session_id, user_id)
             return True
         except Exception as e:
@@ -892,6 +935,13 @@ class AgentMemory:
             recent = self.col.get(where={"user_id": user_id})
             docs = recent.get("documents", []) or []
             metas = recent.get("metadatas", []) or []
+            # Reflections are built from what the user said and asked, never from earlier
+            # reflections: feeding them back escalated "pet-friendliness is a key
+            # requirement" to "a non-negotiable dealbreaker" in two minutes (R2-06).
+            own = [i for i in range(len(docs))
+                   if ((metas[i] if i < len(metas) else None) or {}).get("mtype") != "reflection"]
+            docs = [docs[i] for i in own]
+            metas = [(metas[i] if i < len(metas) else None) or {} for i in own]
             if len(docs) < 4:
                 return
             # Collection .get() has NO ordering guarantee, so "recent" must be derived
@@ -1039,11 +1089,22 @@ class AgentMemory:
             pass
 
     def format_for_prompt(self, mems) -> str:
+        """The memory block. Reflections are the assistant's own INFERENCES and are labelled
+        and listed apart: they were recalled as "everything I have saved" and applied as
+        search preferences (R2-06/R2-20)."""
         if not mems:
             return ""
-        tag = {"semantic": "FACT", "reflection": "INSIGHT", "episodic": "PAST"}
-        lines = [f"[{tag.get(m.get('mtype'), 'MEM')}] {m['text']}" for m in mems]
-        return "What I remember about this user:\n" + "\n".join(lines)
+        tag = {"semantic": "FACT", "episodic": "PAST"}
+        stated = [f"[{tag.get(m.get('mtype'), 'MEM')}] {m['text']}" for m in mems
+                  if m.get("mtype") != "reflection"]
+        inferred = [f"[INFERENCE] {m['text']}" for m in mems if m.get("mtype") == "reflection"]
+        block = "What I remember about this user:\n" + "\n".join(stated) if stated else ""
+        if inferred:
+            block = (block + "\n" if block else "") + (
+                "The assistant's own inferences (NOT said or saved by the user; never apply them "
+                "as search filters or preferences, never present them as things the user told "
+                "you or asked to save):\n" + "\n".join(inferred))
+        return block
 
     def stats(self) -> dict:
         try:

@@ -3078,6 +3078,16 @@ def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
     })
 
 
+_REMEMBERED_QUESTION = re.compile(
+    r"\b(?:what|anything|everything|which)\b[^.?!]{0,40}\b(?:remember|saved|stored|kept|know)\b"
+    r"[^.?!]{0,25}\b(?:about\s+me|me|my)\b|\bdo\s+you\s+(?:remember|store|keep|save)\b|"
+    r"记得.{0,12}我|记住了.{0,8}(?:什么|哪些)|(?:保存|存储|存)了.{0,10}(?:什么|哪些|我)", re.I)
+
+
+def _asks_what_is_remembered(message: str) -> bool:
+    return bool(_REMEMBERED_QUESTION.search(str(message or "")[:2000]))
+
+
 def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
                      recommendations, *, user_preferences=_UNSET,
                      accumulated_search_criteria=_UNSET, criteria_overwrite=None,
@@ -3333,6 +3343,13 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         from core.constraint_updates import references_saved_criteria
         if references_saved_criteria(user_message):
             _semantic_defaults = _am.semantic_records(user_id=user_id)
+        if _asks_what_is_remembered(user_message):
+            # "What do you remember about me?" is answered from EVERY saved fact, not the six
+            # most relevant mixed records: a recall of 12 saved facts merged, dropped and
+            # miscounted them, and filled the gap with inferences (R2-20).
+            _seen = {m.get('id') for m in _mems}
+            _mems = [m for m in _am.semantic_records(user_id=user_id)[:20]
+                     if m.get('id') not in _seen] + _mems
         _mem_block = _am.format_for_prompt(_mems)
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")

@@ -632,6 +632,7 @@ def _inject_poi_coords(params: dict, state: AgentState) -> dict:
     coords = _listing_coords_for(p.get("address"), state.get("extracted_context") or {})
     if coords:
         p["latitude"], p["longitude"] = coords[0], coords[1]
+        p["_coordinate_source"] = "listing"
     return p
 
 

@@ -141,3 +141,20 @@ def test_a_merged_multi_type_poi_call_keeps_its_nulls_stripped():
     for _, params in provider.calls:
         assert "latitude" not in params and "longitude" not in params
         assert {"supermarket", "gp"} <= set(params["poi_type"].split(","))
+
+
+def test_only_listing_coordinates_are_labelled_as_the_listings_own(monkeypatch):
+    """B-06 (second half): after the null-stripped retry the MODEL supplied coordinates of
+    its own (~250 m off) and the tool labelled them listing_coordinates/is_specific_address."""
+    from core.tools import search_nearby_pois as poi
+
+    monkeypatch.setattr(poi, "query_osm_pois", lambda *a, **k: [])
+    supplied = poi.search_nearby_pois_impl("NW1 8NH", poi_type="supermarket",
+                                           latitude=51.5415, longitude=-0.1445)
+    ref = supplied["reference_point"]
+    assert ref["precision"] == "caller_supplied_coordinates"
+    assert ref["is_specific_address"] is False
+    listing = poi.search_nearby_pois_impl("NW1 8NH", poi_type="supermarket",
+                                          latitude=51.5397, longitude=-0.1425,
+                                          _coordinate_source="listing")
+    assert listing["reference_point"]["precision"] == "listing_coordinates"

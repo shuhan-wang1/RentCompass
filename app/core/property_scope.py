@@ -192,5 +192,6 @@ def grounded_property_read_args(tool_name, args, message, extracted_context) -> 
         params['from_location'] = _address(target)
         return params
     lat, lon = _coordinates(target)
-    params.update(address=_address(target), latitude=lat, longitude=lon)
+    params.update(address=_address(target), latitude=lat, longitude=lon,
+                  _coordinate_source="listing")
     return params

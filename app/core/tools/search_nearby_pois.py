@@ -938,8 +938,13 @@ def search_nearby_pois_impl(
     user_query: str = "",
     latitude: float = None,
     longitude: float = None,
+    _coordinate_source: str = None,
 ) -> dict:
     """One bounded lookup with explicit execution, failure and spatial evidence.
+
+    ``_coordinate_source`` is a harness-injected marker (never model-visible): "listing"
+    when the coordinates came from the listing record itself. Only those are labelled
+    ``listing_coordinates``; coordinates the MODEL supplied are not a property's own.
 
     A missing category is never an empty answer. Explicit poi_type controls what
     runs; categories mentioned only in user_query are reported as unqueried.
@@ -1029,12 +1034,20 @@ def search_nearby_pois_impl(
         ref = dict(query_reference(address))
         ref.update(lat=lat, lon=lon,
                    coordinate_source='caller_supplied' if exact else 'address_geocoding')
-        if exact:
+        if exact and _coordinate_source == 'listing':
             ref.update(precision='listing_coordinates', is_specific_address=True,
                        coordinate_identity_verified=False,
                        measured_from=(f'the supplied coordinates for {address!r}, supplied with the request '
                                       'rather than geocoded. Their property identity is not independently '
                                       'verified. Distances are straight-line, not walking distance.'))
+        elif exact:
+            # The model filled in coordinates itself (observed: ~250 m from the postcode
+            # centroid, then labelled the listing's own position — 2026-10-19 B-06).
+            ref.update(precision='caller_supplied_coordinates', is_specific_address=False,
+                       coordinate_identity_verified=False,
+                       measured_from=(f'coordinates supplied with the request for {address!r}; they '
+                                      'were not taken from a listing record or geocoded here, so they '
+                                      'may not be the exact location. Distances are straight-line.'))
         else:
             # The ladder can fall back to a street/postcode; string specificity
             # does not establish the precision of the geocoding hit it actually used.

@@ -44,7 +44,8 @@ def test_exact_family_r3_binds_cached_listing_and_preserves_other_arguments(monk
     monkeypatch.setattr(scope, '_cached_records', lambda: [OTHER, cached])
     original = deepcopy(args)
     result = scope.grounded_property_read_args(tool, args, FAMILY_R3, {})
-    assert result == dict(args, address=RECORD['address'], latitude=51.5401, longitude=0.0102)
+    assert result == dict(args, address=RECORD['address'], latitude=51.5401, longitude=0.0102,
+                          _coordinate_source='listing')
     assert args == original
 
 

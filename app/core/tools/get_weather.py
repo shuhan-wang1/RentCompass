@@ -21,6 +21,56 @@ _WEATHER_CODE = {
 }
 
 
+_UK_SUFFIXES = {"uk", "u.k.", "united kingdom", "gb", "great britain", "britain", "england",
+                "scotland", "wales", "northern ireland"}
+_FOREIGN_COUNTRIES = {"usa", "us", "united states", "america", "canada", "australia", "ireland",
+                      "france", "spain", "germany", "italy", "china", "india", "japan",
+                      "new zealand", "south africa", "jamaica", "netherlands", "portugal"}
+
+
+def _split_place_query(location: str) -> tuple[str, list[str], bool]:
+    """("Boston, Lincolnshire, UK") -> ("Boston", ["lincolnshire"], False).
+
+    Returns the bare name the geocoder matches, the remaining qualifiers (county, city,
+    "London") used to choose among candidates, and whether the user named a non-UK country
+    explicitly ("Richmond, Virginia, USA"), which is the only case searched worldwide."""
+    parts = [p.strip() for p in str(location or "").split(",") if p.strip()]
+    if not parts:
+        return str(location or "").strip(), [], False
+    name, rest = parts[0], [p.lower() for p in parts[1:]]
+    foreign = any(p in _FOREIGN_COUNTRIES for p in rest)
+    hints = [p for p in rest if p not in _UK_SUFFIXES and p not in _FOREIGN_COUNTRIES]
+    words = name.split()
+    if not rest and len(words) > 1 and words[-1].lower() in {"uk", "london"}:
+        # "Richmond London" / "Reading UK" without a comma.
+        hints = [words[-1].lower()] if words[-1].lower() == "london" else []
+        name = " ".join(words[:-1])
+    return name, hints, foreign
+
+
+def _choose_place(results: list, hints: list[str], *, uk_only: bool):
+    """The candidate matching every qualifier (admin areas or name), preferring GB; else the
+    first GB candidate when there are no qualifiers. None when nothing fits."""
+    pool = [r for r in results if isinstance(r, dict) and "latitude" in r and "longitude" in r]
+    if uk_only:
+        pool = [r for r in pool if str(r.get("country_code") or "GB").upper() == "GB"]
+    if not pool:
+        return None
+    if not hints:
+        return pool[0]
+
+    def _matches(candidate, hint):
+        fields = " | ".join(str(candidate.get(k) or "") for k in
+                            ("name", "admin1", "admin2", "admin3", "admin4")).lower()
+        if hint == "london":
+            return "london" in fields
+        return hint in fields
+    for candidate in pool:
+        if all(_matches(candidate, hint) for hint in hints):
+            return candidate
+    return None
+
+
 def get_weather_impl(
     location: str,
     latitude: Optional[float] = None,
@@ -70,6 +120,7 @@ def get_weather_impl(
         )
 
         canonical_location = location
+        resolved_place = None
         # The product's bare Stratford area means east London. Resolve that
         # canonical UK query before asking for weather; the global geocoder's
         # first bare-name hit can be Stratford, Texas.
@@ -87,15 +138,37 @@ def get_weather_impl(
                         'retryable': True}
             latitude, longitude = geo['lat'], geo['lng']
         elif latitude is None or longitude is None:
-            g = requests.get(
-                "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": location, "count": 1, "language": "en"}, timeout=http_timeout(2),
-            )
-            results = (g.json() or {}).get("results") if g.status_code == 200 else None
-            if not results:
-                return {"success": False, "error": "无法解析地点"}
-            latitude = results[0]["latitude"]
-            longitude = results[0]["longitude"]
+            # UK first (R1-12): the global geocoder's first hit for "Richmond" was Richmond,
+            # Virginia, returned with success=true, while "Reading, UK", "Newcastle upon
+            # Tyne, UK" and "Boston, Lincolnshire, UK" did not resolve at all — the API
+            # matches a bare place NAME, so the qualifiers have to be taken off and used
+            # to choose among the GB candidates instead.
+            name, hints, explicit_foreign = _split_place_query(location)
+            chosen = None
+            # GB first; a qualifier that no GB candidate carries ("Stratford, Texas") or an
+            # explicit foreign country is then looked up worldwide, still by bare name.
+            for uk_only in ((False,) if explicit_foreign else ((True, False) if hints else (True,))):
+                g = requests.get(
+                    "https://geocoding-api.open-meteo.com/v1/search",
+                    params={"name": name, "count": 10, "language": "en",
+                            **({"countryCode": "GB"} if uk_only else {})},
+                    timeout=http_timeout(2),
+                )
+                results = (g.json() or {}).get("results") if g.status_code == 200 else None
+                chosen = _choose_place(results or [], hints, uk_only=uk_only)
+                if chosen is not None:
+                    break
+            if chosen is None:
+                return {"success": False, "requested_location": location,
+                        "error": f"Could not resolve {location} to a UK place for weather.",
+                        "error_code": "location_unresolved", "retryable": False}
+            latitude = chosen["latitude"]
+            longitude = chosen["longitude"]
+            resolved_place = ", ".join(dict.fromkeys(
+                str(part) for part in (chosen.get("name"), chosen.get("admin2") or chosen.get("admin1"),
+                                       "UK" if str(chosen.get("country_code") or "").upper() == "GB"
+                                       else chosen.get("country"))
+                if part)) or None
 
         params = {
             "latitude": latitude, "longitude": longitude,
@@ -153,6 +226,9 @@ def get_weather_impl(
             "location": canonical_location,
             'requested_location': location,
             'canonical_location': canonical_location,
+            # Which place the geocoder actually resolved (R1-12): "Richmond, Greater London,
+            # UK", so an answer can say which Richmond it is reporting.
+            'resolved_place': resolved_place,
             "latitude": latitude,
             "longitude": longitude,
             "temperature": c.get("temperature_2m"),

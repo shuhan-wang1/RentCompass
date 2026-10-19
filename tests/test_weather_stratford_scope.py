@@ -63,12 +63,21 @@ def test_explicit_other_stratford_keeps_its_geocoding_query(monkeypatch, locatio
     def get(url, params, **kwargs):
         if 'geocoding-api' in url:
             queried.append(params['name'])
-            return Response({'results': [{'latitude': 36.33614, 'longitude': -102.07212}]})
+            # R1-12: the geocoder is asked for the bare NAME, GB first; the Texas qualifier
+            # then selects the worldwide candidate that carries it.
+            texas = {'latitude': 36.33614, 'longitude': -102.07212, 'name': 'Stratford',
+                     'country_code': 'US', 'admin1': 'Texas'}
+            avon = {'latitude': 36.33614, 'longitude': -102.07212, 'name': location,
+                    'country_code': 'GB', 'admin1': 'England'}
+            pool = [texas, avon] if location == 'Stratford, Texas' else [avon]
+            if params.get('countryCode'):
+                pool = [r for r in pool if r['country_code'] == params['countryCode']]
+            return Response({'results': pool})
         return Response(CURRENT)
 
     monkeypatch.setattr(weather.requests, 'get', get)
     result = weather.get_weather_impl(location)
-    assert result['success'] and queried == [location]
+    assert result['success'] and queried[-1] == location.split(',')[0]
     assert result['location'] == result['canonical_location'] == location
     assert result['latitude'] == 36.33614
 

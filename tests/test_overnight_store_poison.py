@@ -46,7 +46,7 @@ def _victim_turn_starts(store, user="victim"):
 
 
 _BIND_FAILURES = [
-    ("rename to a list", lambda s, cid: s.rename_conversation("attacker", cid, ["x"])),
+    ("rename a list id", lambda s, cid: s.rename_conversation("attacker", [cid], "x")),
     ("favorite url list", lambda s, cid: s.add_favorite("attacker", ["u"], {"url": "u"})),
     ("message content dict", lambda s, cid: s.add_message("attacker", cid, "user", {"a": 1})),
     ("assignment arch list", lambda s, cid: s.set_agent_assignment(
@@ -191,3 +191,13 @@ def test_an_idempotency_key_is_bound_to_its_source_and_endpoint(client):
     other_endpoint = _raw(c, "POST", f"/api/conversations/{a}/edit_turn",
                           json.dumps({"turn_id": first["id"]}), headers=key)
     assert other_endpoint.status_code == 409
+
+
+def test_titles_are_bounded(store):
+    """C-13: a 250 KB title was accepted and replayed by every conversation listing."""
+    huge = "x" * 250_000
+    created = store.create_conversation("u_title", huge)
+    assert len(created["title"]) <= 200
+    store.rename_conversation("u_title", created["id"], "y" * 5_000)
+    assert len(store.get_conversation("u_title", created["id"])["title"]) <= 200
+    assert store.create_conversation("u_title", "   ")["title"] == "New chat"

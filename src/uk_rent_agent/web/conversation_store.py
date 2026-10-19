@@ -261,6 +261,16 @@ class PrivacyErasureInProgress(RuntimeError):
     """New turns are blocked while the user's cross-store deletion is running."""
 
 
+# A title is a label, not a document: a 250 KB title was accepted and then returned by
+# every GET /api/conversations for that user (2026-10-19 C-13).
+TITLE_MAX_CHARS = 200
+
+
+def _bounded_title(value, fallback: str) -> str:
+    text = " ".join(str(value or "").split())
+    return (text[:TITLE_MAX_CHARS].rstrip() or fallback[:TITLE_MAX_CHARS])
+
+
 class _TransactionGuardLock:
     """The store's re-entrant lock, plus the one invariant a SHARED connection needs.
 
@@ -410,7 +420,7 @@ class ConversationStore:
         """
         cid = uuid.uuid4().hex
         now = _now_iso()
-        title = (title or "").strip() or "New chat"
+        title = _bounded_title(title, "New chat")
         with self._lock:
             self._conn.execute(
                 """INSERT INTO conversations
@@ -481,6 +491,7 @@ class ConversationStore:
 
     def rename_conversation(self, user_id: str, cid: str, title: str) -> dict | None:
         now = _now_iso()
+        title = _bounded_title(title, "New chat")
         with self._lock:
             cur = self._conn.execute(
                 "UPDATE conversations SET title=?, updated_at=? WHERE user_id=? AND id=?",
@@ -813,7 +824,7 @@ class ConversationStore:
                         raise ConversationNotFound(cid)
                 else:
                     cid = uuid.uuid4().hex
-                    title = (create_title or "").strip() or "New chat"
+                    title = _bounded_title(create_title, "New chat")
                     self._conn.execute(
                         """INSERT INTO conversations
                            (user_id, id, title, created_at, updated_at,
@@ -865,7 +876,7 @@ class ConversationStore:
                     self._conn.execute("""UPDATE conversations SET title=?
                         WHERE user_id=? AND id=? AND title IN ('New chat','新会话','New conversation')
                         AND NOT EXISTS (SELECT 1 FROM messages WHERE user_id=? AND conversation_id=?)""",
-                        (create_title, user_id, cid, user_id, cid))
+                        (_bounded_title(create_title, "New chat"), user_id, cid, user_id, cid))
 
                 cur = self._conn.execute(
                     """INSERT INTO messages
@@ -1608,7 +1619,7 @@ class ConversationStore:
                 # 4. Create the child conversation row.
                 child_cid = uuid.uuid4().hex
                 now = _now_iso()
-                child_title = (title or "").strip() or f"{src['title']} (branch)"
+                child_title = _bounded_title(title, f"{src['title']} (branch)")
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
                 # A branch starts with the source conversation's architecture provenance;
@@ -1900,7 +1911,7 @@ class ConversationStore:
                 self._conn.execute("BEGIN")
                 child_cid = uuid.uuid4().hex
                 now = _now_iso()
-                child_title = (title or "").strip() or f"{src['title']} (edit)"
+                child_title = _bounded_title(title, f"{src['title']} (edit)")
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
                 # Edit branches inherit the source's architecture provenance.

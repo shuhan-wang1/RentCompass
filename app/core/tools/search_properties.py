@@ -159,7 +159,7 @@ def _extract_room_type(text: str):
     # "1 bed Flat share" room satisfied bedrooms=1 and was presented under "Meets all
     # declared conditions (verified)" for a 1-bed-flat request (2026-10-19 C-11, 5/5).
     # A share/room phrasing never reaches here: the "shared" needles above win first.
-    if re.search(r"\b(?:a|one|single|double|twin)\s+room\b|\broom\s+in\s+(?:a|an|the)\b", t):
+    if re.search(r"\b(?:a|one|single|double|twin)\s+room\b|\brooms?\s+in\s+(?:a|an|the)\b", t):
         return None          # "a room in a 3-bed flat" is a room, not a whole flat
     for match in _WHOLE_HOME_REQUEST.finditer(t):
         if mention_is_requirement(t, match.start(), match.end()):
@@ -167,10 +167,15 @@ def _extract_room_type(text: str):
     return None
 
 
+# "a 1-bed" / "2 bedrooms" / "一居室" ask for that many bedrooms of one's own, i.e. a whole
+# home: without the word "flat" the room type stayed unknown and a "1 bed Flat share" room
+# was listed under the verified header for "Find a 1-bed in Hackney" (R1-06b).
 _WHOLE_HOME_REQUEST = re.compile(
     r"\b(?:\d+|one|two|three|four|five)[\s-]*(?:bed(?:room)?s?|br)[\s-]+"
     r"(?:flat|apartment|house|maisonette|bungalow|home)\b(?![\s-]*(?:share|shares|mate))"
-    r"|[一二三四两1-5][室居](?:室)?(?:公寓|整套|住宅)", re.I)
+    r"|\b(?:[1-5]|one|two|three|four|five)[\s-]*(?:bed(?:room)?s?|br)\b"
+    r"(?![\s-]*(?:flat|apartment|house|home)?[\s-]*(?:share|shares|mate|room|in\s+(?:a|an|the)\b|hmo))"
+    r"|[一二三四两1-5][室居](?:室)?(?:公寓|整套|住宅)|[一二三四两1-5]居室(?!.{0,4}合租)", re.I)
 
 
 def _normalize_room_type(value):
@@ -516,6 +521,31 @@ def _corrects_a_budget(t: str, correction) -> bool:
     return not is_hypothetical(clause_at(t, start, end))
 
 
+# A calendar year is not a rent figure (R1-03): "Search web for average rent in Hackney
+# 2026" stored max_budget=2026 and the reply offered listings "within your £2,026 budget".
+# A 19xx/20xx number is money only when the words AT it say so: a £ sign, a period/currency
+# unit or ceiling word after it, or a budget/ceiling word immediately before it.
+_YEAR_TOKEN = re.compile(r'(?<![\d.£])(?:19|20)\d\d(?![\d])(?!\.\d)')
+_YEAR_MONEY_BEFORE = re.compile(
+    r'(?:£|\b(?:budget|ceiling|max(?:imum)?|under|below|up\s+to|no\s+more\s+than|less\s+than|'
+    r'around|about|rent(?:al)?|pay(?:ing)?|afford|spend)\b(?:\s+(?:is|of|at|now|to|around|about|be))*'
+    r'\s*[=:]?|预算|月租|租金|房租|上限|最多|最高|不超过)\s*$', re.I)
+_YEAR_MONEY_AFTER = re.compile(
+    r'\s*(?:pcm|pm|pw|p/?m|per\b|a\s+(?:month|week)|/|镑|英镑|块|元|以内|以下|左右|'
+    r'max(?:imum)?\b|budget\b|ceiling\b|pounds?\b|gbp\b|or\s+(?:less|under|below)\b)', re.I)
+
+
+def _mask_years(t: str) -> str:
+    """Blank out calendar years (same length, so offsets stay valid)."""
+    def _mask(match):
+        if _YEAR_MONEY_BEFORE.search(t[max(0, match.start() - 40):match.start()]) or (
+                _YEAR_MONEY_AFTER.match(t, match.end())
+                and not re.match(r'\s*年', t[match.end():])):
+            return match.group()
+        return 'y' * len(match.group())
+    return _YEAR_TOKEN.sub(_mask, t)
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
@@ -525,6 +555,7 @@ def _extract_budget(text: str):
         return None, None
     t = scoped_update_text(text).lower()
     t = re.sub(r'(?<=\d),(?=\d{3}\b)', '', t)
+    t = _mask_years(t)
     if (re.search(r'not\s+(?:yet\s+)?(?:chosen|decided)|haven.t (?:yet )?chosen|尚未(?:选择|决定)|还没选|未确定', t, re.I)
             and re.search(r'\bor\b|还是|或者', t, re.I)
             and len(re.findall(r'£\s*\d{3,5}', t)) >= 2):

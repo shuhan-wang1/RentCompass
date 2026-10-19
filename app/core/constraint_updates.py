@@ -324,6 +324,54 @@ def cat_permission_update(text: str) -> bool | None:
     return None
 
 
+_PET_WORD = r'\b(?:cats?|kittens?|pets?|dogs?|pupp(?:y|ies))\b|猫|狗|宠物'
+_PET_WITHDRAWAL = re.compile(
+    r'\b(?:forget|never\s*mind|ignore|drop|remove|scrap|skip|disregard|cancel)\b[^.!?;]{0,30}'
+    r'(?:\b(?:cats?|pets?|dogs?)\b|pet[- ]friendly)'
+    r'|\bno\s+longer\s+(?:have|own|got|need|require|want|keep)\b[^.!?;]{0,25}\b(?:cats?|pets?|dogs?|kittens?)\b'
+    r'|\b(?:don.t|do\s+not)\s+(?:have|own)\s+(?:a\s+|any\s+|the\s+)?(?:cats?|pets?|dogs?)\s+any\s*(?:more|longer)\b'
+    r'|\b(?:cats?|pets?|dogs?)\b[^.!?;]{0,25}\b(?:doesn.t|does\s+not|don.t|do\s+not|no\s+longer)\s+matter'
+    r'|\b(?:the\s+)?(?:cat|pet|dog)\s+(?:is|has)\s+(?:gone|rehomed|no\s+longer\s+with\s+me)\b'
+    r'|\bno\s+(?:need\s+for\s+)?pets?\s+(?:needed|required|requirement)\b'
+    r'|不再养|不养(?:猫|狗|宠物)了|没有(?:猫|狗|宠物)了'
+    r'|(?:猫|狗|宠物)(?:的事|的要求|的条件|这个条件)?(?:不用|不需要|算了|不重要了|取消)'
+    r'|(?:取消|去掉|删除|忽略)[^。；]{0,10}(?:猫|狗|宠物)', re.I)
+
+
+def pet_requirement_update(text: str) -> bool | None:
+    """A pet-permission requirement or its withdrawal, in the user's own words.
+
+    True: "It must allow pets." / "Find a 1-bed in Hackney that allows pets" — the home
+    has to permit pets, so a listing without that evidence is unverified, never a
+    verified match (R1-06). False: "Actually forget the pets thing, I no longer have a
+    cat." — every pet requirement and pet preference goes (R1-05). None: unchanged.
+    Cats keep their own, stricter slot (``cat_permission_update``)."""
+    for match in re.finditer(r'[^。.!?;；\n]+[。.!?;；\n]*', text or ''):
+        clause = match.group()
+        if not re.search(_PET_WORD, clause, re.I):
+            continue
+        if _PET_WITHDRAWAL.search(clause):
+            return False
+        if is_hypothetical(clause) or re.search(
+                r'[?？]|是否|吗|\b(?:do not assume|don.t assume|unknown|whether)\b', clause, re.I):
+            continue
+        if re.search(r'\b(?:no|without|don.t want|do not want)\s+(?:any\s+)?(?:pets?|dogs?|cats?)\b', clause, re.I):
+            continue    # "no pets in the building please" is not a permission requirement
+        permission = re.search(r'\b(?:allow(?:s|ed|ing)?|accept(?:s|ed|ing)?|permit(?:s|ted)?|friendly|ok(?:ay)?\s+with)\b'
+                               r'|允许|可以养|能养|接受|可养', clause, re.I)
+        if not permission:
+            continue
+        hard = re.search(r'\b(?:must|needs?\s+to|has\s+to|have\s+to|required?|requires|essential|mandatory|only)\b'
+                         r'|必须|一定要|需要|要求', clause, re.I)
+        restrictive = (re.search(r'\b(?:that|which|where)\s+(?:allows?|accepts?|permits?)\s+(?:pets?|cats?|dogs?)\b'
+                                 r'|\bpet[- ]friendly\s+(?:flat|home|place|property|apartment|studio|house|\d|one|two)'
+                                 r'|允许养|可以养|能养|可养', clause, re.I)
+                       and re.search(r'\b(?:find|search|show|look(?:ing)?\s+for|want|need)\b|找|搜|要', clause, re.I))
+        if hard or restrictive:
+            return True
+    return None
+
+
 def precise_property_requirements(text: str, required: list[str]) -> list[str]:
     """Keep explicitly stated fit/written-permission requirements independently.
 

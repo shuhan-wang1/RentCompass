@@ -782,7 +782,13 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                          r'find|looking|search|show|please)'
                          r'|\s+(?:so|but|because|since|which|where|while)\s+'
                          r'|\s+for\s+|\s+(?:arriving|leaving|departing)\b'
-                         r'|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)',
+                         r'|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)'
+                         # "King's Cross, max 30 minutes" / "Soho, no more than 35 minutes" /
+                         # "Shoreditch - 30 min max" / "King's Cross (max 30 minutes)": the time
+                         # limit is not part of the place (R1-04, variant of A-03).
+                         r'|\s*,\s*(?=(?:max(?:imum)?|at\s+most|no\s+more\s+than|up\s+to|under|within|'
+                         r'less\s+than|about|around|roughly|ideally|preferably|door)\b|\d)'
+                         r'|\s*[(\[]|\s+[-–—]\s+',
                          labelled_destination.group(1), maxsplit=1, flags=re.I)[0].strip(" ,")
         if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I) \
                 and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
@@ -914,6 +920,30 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                     if feature not in ('cats allowed', 'pets allowed', 'pet-friendly')]
         if filtered != existing:
             result['property_features'] = filtered
+            changed = True
+    from core.constraint_updates import pet_requirement_update
+    pet_need = pet_requirement_update(original_message)
+    _pet_soft = re.compile(r'\b(?:pets?|cats?|dogs?)\b|pet[- ]friendly|宠物|猫|狗', re.I)
+    if pet_need is False:
+        # "Actually forget the pets thing, I no longer have a cat." withdrew the hard filter
+        # AND the soft copy the search had stored (R1-05: the soft one survived A-07).
+        existing = result.get('property_features') or []
+        kept = [f for f in existing
+                if f not in ('cats allowed', 'pets allowed', 'pet-friendly', 'cat_written_consent')]
+        if kept != existing:
+            result['property_features'] = kept
+            changed = True
+    elif pet_need is True and pet_requirement is not True:
+        existing = result.setdefault('property_features', [])
+        if 'pets allowed' not in existing and 'cats allowed' not in existing:
+            existing.append('pets allowed')
+            changed = True
+    if pet_need is not None or pet_requirement is not None:
+        # A requirement replaces its soft copy; a withdrawal removes it.
+        previous_soft = result.get('soft_preferences') or []
+        soft = [v for v in previous_soft if not _pet_soft.search(str(v))]
+        if soft != previous_soft:
+            result['soft_preferences'] = soft
             changed = True
     from core.constraint_updates import precise_property_requirements
     precise_required = list(accessibility['required'])

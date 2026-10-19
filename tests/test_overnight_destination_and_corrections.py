@@ -126,3 +126,15 @@ def test_a_cat_permission_requirement_is_unchanged():
     assert "cats allowed" in _apply_explicit_criteria_updates(
         {}, "I have a cat, the landlord must allow cats")["property_features"]
     assert _apply_explicit_criteria_updates({}, "Do they allow pets?").get("property_features") is None
+
+
+def test_forgetting_the_workplace_clears_it_instead_of_setting_it():
+    """A-11: "forget that I work at Canary Wharf" SET the destination to Canary Wharf."""
+    prior = {"commute_destination": "Canary Wharf, London E14 5AB",
+             "destination": "Canary Wharf, London E14 5AB"}
+    cleared = _apply_explicit_criteria_updates(dict(prior), "Forget that I work at Canary Wharf.")
+    assert cleared.get("commute_destination") is None
+    other = _apply_explicit_criteria_updates(dict(prior), "forget about my office in Shoreditch")
+    assert other.get("commute_destination") == prior["commute_destination"]
+    assert _apply_explicit_criteria_updates({}, "Forget that I work at Canary Wharf.").get(
+        "commute_destination") is None

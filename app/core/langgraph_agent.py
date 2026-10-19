@@ -745,6 +745,23 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             labelled_destination.string[:labelled_destination.end()], re.I):
         # "I work from home so I don't commute at all" names no destination ("all").
         labelled_destination = None
+    # "Forget that I work at Canary Wharf" asks to DROP the destination; it used to SET it
+    # (2026-10-19 A-11). The cue must sit in the same sentence, before the destination.
+    forget_destination = bool(labelled_destination and re.search(
+        r"\b(?:forget|disregard|never mind)\b[^.!?;\n]*$",
+        _dest_source[:labelled_destination.start()], re.I))
+    if forget_destination:
+        def _key(value):
+            return ' '.join(re.sub(r"[^a-z0-9]+", ' ', str(value or '').lower()).split())
+        forgotten = _key(re.split(r'[,;]', labelled_destination.group(1))[0])
+        current = _key(result.get('commute_destination') or result.get('destination'))
+        labelled_destination = None
+        message_destination = None
+        # Only the destination the user named is forgotten; another one stays.
+        if forgotten and current and (forgotten in current or current in forgotten):
+            result['commute_destination'] = None
+            result['destination'] = None
+            changed = True
     if labelled_destination:
         # The place ends where the clause about it ends: "King's Cross, so I'd like a
         # commute of under 30 minutes" stored the whole fragment as the destination, and
@@ -758,7 +775,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
                 and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
                                      named, re.I):
             message_destination = {'address': named, 'name': named}
-    known_destination = _known_destination_address(named if labelled_destination else current_message)
+    known_destination = (None if forget_destination else
+                         _known_destination_address(named if labelled_destination else current_message))
     if message_destination or known_destination:
         destination = (
             (known_destination if (labelled_destination or (known_destination and re.search(

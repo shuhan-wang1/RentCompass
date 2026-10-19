@@ -158,6 +158,13 @@ CREATE TABLE IF NOT EXISTS conversation_turn_leases (
     expires_at      TEXT NOT NULL,
     PRIMARY KEY (user_id, conversation_id)
 );
+CREATE TABLE IF NOT EXISTS store_owners (
+    owner_id     TEXT PRIMARY KEY,
+    host         TEXT NOT NULL,
+    pid          INTEGER NOT NULL,
+    started_at   TEXT NOT NULL,
+    heartbeat_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS privacy_erasure_locks (
     user_id    TEXT PRIMARY KEY,
     started_at TEXT NOT NULL
@@ -348,6 +355,65 @@ _NOW_LOCK = threading.Lock()
 _LAST_NOW = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
 
+# ── Turn-lease ownership (R1-11) ─────────────────────────────────────────────────
+# A process restart during an in-flight turn left turns.status='running' with a 900 s lease,
+# and POST /api/alex, DELETE, clear_history and POST /api/forget_me all answered 409
+# turn_in_progress for ~15 minutes. Every lease now names the process that holds it; a lease
+# whose owner is gone does not block. An owner is gone when its row is missing, when it is a
+# previous process on this host (same pid now ours, or a pid that no longer exists), or when
+# its heartbeat is older than LEASE_OWNER_STALE_SECONDS (another host/container). Leases
+# written before this column existed (owner NULL) keep the old expiry rule.
+_PROCESS_OWNER_ID = uuid.uuid4().hex
+LEASE_OWNER_HEARTBEAT_SECONDS = 20
+LEASE_OWNER_STALE_SECONDS = 90
+_HEARTBEAT_STORES: "weakref.WeakSet" = None  # type: ignore[assignment]
+_HEARTBEAT_LOCK = threading.Lock()
+_HEARTBEAT_THREAD: threading.Thread | None = None
+
+
+def _host_name() -> str:
+    import socket
+    try:
+        return socket.gethostname() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _pid_alive(pid: int) -> bool:
+    import os
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except Exception:
+        return True          # exists but not ours (EPERM), or cannot tell: assume alive
+    return True
+
+
+def _heartbeat_loop() -> None:
+    import time
+    while True:
+        time.sleep(LEASE_OWNER_HEARTBEAT_SECONDS)
+        for store in list(_HEARTBEAT_STORES or ()):
+            try:
+                store._heartbeat()
+            except Exception:
+                pass
+
+
+def _register_heartbeat(store) -> None:
+    global _HEARTBEAT_STORES, _HEARTBEAT_THREAD
+    import weakref
+    with _HEARTBEAT_LOCK:
+        if _HEARTBEAT_STORES is None:
+            _HEARTBEAT_STORES = weakref.WeakSet()
+        _HEARTBEAT_STORES.add(store)
+        if _HEARTBEAT_THREAD is None or not _HEARTBEAT_THREAD.is_alive():
+            _HEARTBEAT_THREAD = threading.Thread(
+                target=_heartbeat_loop, name="conversation-lease-heartbeat", daemon=True)
+            _HEARTBEAT_THREAD.start()
+
+
 def _now_iso() -> str:
     # ISO-8601 UTC with microseconds → lexicographically sortable for updated_at DESC.
     # Strictly monotonic within the process: Windows clock granularity can return the
@@ -378,6 +444,9 @@ class ConversationStore:
             self._conn.executescript(_SCHEMA)
             self._conn.commit()
             self._migrate()
+            self._owner_id = _PROCESS_OWNER_ID
+            self._register_owner()
+        _register_heartbeat(self)
 
     def _migrate(self) -> None:
         """Bring an existing DB up to the current schema in place. Idempotent:
@@ -406,6 +475,8 @@ class ConversationStore:
             # What the idempotency key was used FOR (endpoint, source, fork point), so a
             # replay of the same key for a different request is refused (C-07).
             self._conn.execute("ALTER TABLE fork_requests ADD COLUMN request_fingerprint TEXT")
+        if "owner_id" not in _cols("conversation_turn_leases"):
+            self._conn.execute("ALTER TABLE conversation_turn_leases ADD COLUMN owner_id TEXT")
         if "turn_id" not in _cols("messages"):
             self._conn.execute("ALTER TABLE messages ADD COLUMN turn_id TEXT")
         if 'response_metadata_json' not in _cols('messages'):
@@ -415,6 +486,53 @@ class ConversationStore:
             "UPDATE conversations SET root_conversation_id=id WHERE root_conversation_id IS NULL"
         )
         self._conn.commit()
+
+    def _register_owner(self) -> None:
+        """Record this process as a lease owner; forget previous processes on this host."""
+        now = _now_iso()
+        host, pid = _host_name(), __import__("os").getpid()
+        try:
+            for row in self._conn.execute(
+                    "SELECT owner_id, pid FROM store_owners WHERE host=? AND owner_id<>?",
+                    (host, self._owner_id)).fetchall():
+                if int(row["pid"]) == pid or not _pid_alive(row["pid"]):
+                    self._conn.execute("DELETE FROM store_owners WHERE owner_id=?",
+                                       (row["owner_id"],))
+            self._conn.execute(
+                """INSERT INTO store_owners (owner_id, host, pid, started_at, heartbeat_at)
+                   VALUES (?,?,?,?,?)
+                   ON CONFLICT(owner_id) DO UPDATE SET heartbeat_at=excluded.heartbeat_at""",
+                (self._owner_id, host, pid, now, now))
+            self._conn.commit()
+        except sqlite3.Error:
+            self._conn.rollback()
+
+    def _heartbeat(self) -> None:
+        with self._lock:
+            try:
+                self._conn.execute("UPDATE store_owners SET heartbeat_at=? WHERE owner_id=?",
+                                   (_now_iso(), self._owner_id))
+                self._conn.commit()
+            except sqlite3.Error:
+                try:
+                    self._conn.rollback()
+                except sqlite3.Error:
+                    pass
+
+    def _lease_blocks(self, lease, now: str) -> bool:
+        """True while ``lease`` belongs to a turn that can still be running somewhere."""
+        if lease["status"] != "running" or lease["expires_at"] <= now:
+            return False
+        owner = lease["owner_id"] if "owner_id" in lease.keys() else None
+        if owner is None or owner == self._owner_id:
+            return True
+        row = self._conn.execute("SELECT heartbeat_at FROM store_owners WHERE owner_id=?",
+                                 (owner,)).fetchone()
+        if row is None:
+            return False                        # a previous process: its turn cannot write
+        stale = (datetime.datetime.fromisoformat(now)
+                 - datetime.timedelta(seconds=LEASE_OWNER_STALE_SECONDS)).isoformat()
+        return row["heartbeat_at"] > stale
 
     def close(self):
         with self._lock:
@@ -530,7 +648,7 @@ class ConversationStore:
         no longer write, and the delete removes it.
         """
         now = _now_iso()
-        query = ("""SELECT l.turn_id, l.expires_at, t.status
+        query = ("""SELECT l.turn_id, l.expires_at, l.owner_id, t.status
                     FROM conversation_turn_leases l
                     LEFT JOIN turns t ON t.id=l.turn_id AND t.user_id=l.user_id
                     WHERE l.user_id=?""")
@@ -539,7 +657,7 @@ class ConversationStore:
             query += " AND l.conversation_id=?"
             params = (user_id, cid)
         for lease in self._conn.execute(query, params).fetchall():
-            if lease["status"] == "running" and lease["expires_at"] > now:
+            if self._lease_blocks(lease, now):
                 remaining = (
                     datetime.datetime.fromisoformat(lease["expires_at"])
                     - datetime.datetime.fromisoformat(now)
@@ -861,14 +979,14 @@ class ConversationStore:
                     conversation_created = True
 
                 lease = self._conn.execute(
-                    """SELECT l.turn_id, l.expires_at, t.status
+                    """SELECT l.turn_id, l.expires_at, l.owner_id, t.status
                        FROM conversation_turn_leases l
                        LEFT JOIN turns t ON t.id=l.turn_id
                        WHERE l.user_id=? AND l.conversation_id=?""",
                     (user_id, cid),
                 ).fetchone()
                 if lease is not None:
-                    active = lease["status"] == "running" and lease["expires_at"] > now
+                    active = self._lease_blocks(lease, now)
                     if active:
                         remaining = (
                             datetime.datetime.fromisoformat(lease["expires_at"])
@@ -915,9 +1033,9 @@ class ConversationStore:
                 )
                 self._conn.execute(
                     """INSERT INTO conversation_turn_leases
-                       (user_id, conversation_id, turn_id, acquired_at, expires_at)
-                       VALUES(?,?,?,?,?)""",
-                    (user_id, cid, tid, now, expires),
+                       (user_id, conversation_id, turn_id, acquired_at, expires_at, owner_id)
+                       VALUES(?,?,?,?,?,?)""",
+                    (user_id, cid, tid, now, expires, self._owner_id),
                 )
                 self._conn.execute(
                     "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
@@ -956,14 +1074,14 @@ class ConversationStore:
                     raise PrivacyErasureInProgress("privacy erasure already in progress")
 
                 leases = self._conn.execute(
-                    """SELECT l.turn_id, l.expires_at, t.status
+                    """SELECT l.turn_id, l.expires_at, l.owner_id, t.status
                        FROM conversation_turn_leases l
                        LEFT JOIN turns t ON t.id=l.turn_id
                        WHERE l.user_id=?""",
                     (user_id,),
                 ).fetchall()
                 for lease in leases:
-                    if lease["status"] == "running" and lease["expires_at"] > now:
+                    if self._lease_blocks(lease, now):
                         remaining = (
                             datetime.datetime.fromisoformat(lease["expires_at"])
                             - datetime.datetime.fromisoformat(now)

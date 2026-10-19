@@ -241,6 +241,27 @@ def _mark_announced_stub(text: str, reply_language: str) -> str:
     return f"{body}\n\n{marker}" if body else marker
 
 
+# A tool call whose arguments are not valid JSON arrives in ``invalid_tool_calls``, not in
+# ``tool_calls``. Nothing read that field, so such a reply was handled as a plain-text answer
+# — and its text is usually empty: HTTP 200 with a blank message (2026-10-19 B-05, ~1 in 75
+# tool turns). One bounded corrective iteration, marked like the announced-tool nudge; the
+# malformed calls themselves are never echoed back to the provider.
+_INVALID_TOOL_CALL_NUDGE_MARKER = "fc_invalid_tool_call_nudge"
+_INVALID_TOOL_CALL_NUDGE_TEXT = (
+    "TOOL CALL ERROR: your last tool call ({names}) could not be executed because its "
+    "arguments were not valid JSON. Call the tool again with valid JSON arguments, or answer "
+    "directly from what you already have."
+)
+
+
+def _has_invalid_call_nudge(messages) -> bool:
+    return any(
+        isinstance(getattr(m, "additional_kwargs", None), dict)
+        and m.additional_kwargs.get(_INVALID_TOOL_CALL_NUDGE_MARKER)
+        for m in (messages or ())
+    )
+
+
 def _has_announce_nudge(messages) -> bool:
     return any(
         isinstance(getattr(m, "additional_kwargs", None), dict)
@@ -2309,6 +2330,9 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
         if reason == 'provider_error':
             opener = '模型服务暂时不可用。以下仅列出本轮已经取得的结果：'
             closer = '未完成的部分可以稍后重试。'
+        elif reason == 'tool_call_error':
+            opener = '本轮有一项查询未能执行（查询参数无效）。以下仅列出本轮已经取得的结果：'
+            closer = '可以让我再试一次。'
         elif reason == "no_reliable_numbers":
             # 「未能获取」是诚实的 partial-disclosure 标记（graders._honest_partial_disclosed），
             # 满足 must_mention_source_if_evidence 的无证据分支；不含任何「超时/时间限制」措辞。
@@ -2351,6 +2375,10 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
         if reason == 'provider_error':
             opener = 'The model service is temporarily unavailable. These are the results already obtained this turn:'
             closer = 'You can retry the unfinished parts later.'
+        elif reason == 'tool_call_error':
+            opener = ("I couldn't run one of the lookups this turn (its request was malformed). "
+                      "These are the results already obtained this turn:")
+            closer = 'You can ask me to try again.'
         elif reason == "no_reliable_numbers":
             # "couldn't retrieve" is an honest partial-disclosure marker
             # (graders._honest_partial_disclosed), satisfying the no-evidence branch of
@@ -2988,6 +3016,24 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 'loop_turn': loop_turn,
             }, goto='format_output_fc')
         tool_calls = list(getattr(resp, "tool_calls", None) or [])
+        invalid_calls = list(getattr(resp, "invalid_tool_calls", None) or [])
+        if invalid_calls and not tool_calls:
+            names = ", ".join(sorted({str(c.get("name") or "unknown") for c in invalid_calls
+                                      if isinstance(c, dict)})) or "unknown"
+            logger.warning("fc_loop.invalid_tool_calls count=%d names=%s loop_turn=%d",
+                           len(invalid_calls), names, loop_turn)
+            content = getattr(resp, "content", "") or ""
+            if not _has_invalid_call_nudge(messages):
+                nudge = HumanMessage(
+                    content=_INVALID_TOOL_CALL_NUDGE_TEXT.format(names=names),
+                    additional_kwargs={_INVALID_TOOL_CALL_NUDGE_MARKER: True})
+                prior = [AIMessage(content=content)] if str(content).strip() else []
+                return Command(update={
+                    "messages": messages + prior + [nudge], "loop_turn": loop_turn,
+                }, goto="agent")
+            # Second malformed reply in one turn: continue as plain text, without the
+            # malformed calls (an empty text is replaced by the grounded fallback below).
+            resp = AIMessage(content=content)
         if (explicit_memory_required
                 and not any(tc.get("name") == "remember" for tc in tool_calls)):
             forced_call = {
@@ -3067,6 +3113,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
 
         # Plain text -> final answer through the legacy critic.
         text = clean_response(resp.content if hasattr(resp, "content") else str(resp))
+        if not str(text or "").strip() and invalid_calls:
+            # Never ship a blank answer for a turn whose tool call could not be parsed.
+            text = _artifact_grounded_fallback_answer(state, reason="tool_call_error")
 
         # Never terminate a turn on an answer that ANNOUNCES a tool call it did not make.
         # Live, a follow-up turn shipped a 105-char "Let me search for actual one-bedroom

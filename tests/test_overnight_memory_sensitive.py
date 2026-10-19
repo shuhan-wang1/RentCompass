@@ -29,7 +29,8 @@ am_mod = importlib.import_module("rag.agent_memory")
 
 A09 = ("For context only, no action needed: I earn £62,000 a year, I'm on a Skilled Worker "
        "visa, I have asthma, my phone is 07700 900123 and my email is a.test@example.com.")
-_LEAKS = ("62,000", "Skilled Worker", "visa", "asthma", "07700", "900123", "a.test@example.com")
+_LEAKS = ("62,000", "Skilled Worker", "visa", "asthma", "07700", "900123", "a.test@example.com",
+          "mobility")
 
 
 @pytest.fixture
@@ -45,6 +46,7 @@ def memory(tmp_path, monkeypatch):
             return json.dumps({"ops": [{"event": "ADD", "id": None, "text": f} for f in facts]})
         if '"insights"' in prompt:
             return json.dumps({"insights": ["User's asthma suggests a ground-floor flat",
+                                            "Needing a lift suggests a mobility impairment",
                                             "User prioritises Hackney"]})
         return "5"
 

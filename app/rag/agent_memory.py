@@ -353,6 +353,15 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
         return "", ["unparsed"]
 
 
+# A reflection is an INFERENCE about the person, not something they said. "Needs a lift ->
+# probably has a mobility impairment" turned a stated housing requirement into a stored
+# health inference (2026-10-19 A-10). Reflections never keep inferences of this kind; the
+# stated requirement itself stays in the semantic layer as a property fact.
+_SENSITIVE_INFERENCE_RE = re.compile(
+    r"\b(?:mobility|disab\w*|impair\w*|medical|health|illness|elderly|frail|condition)\b|"
+    r"行动不便|残疾|健康|身体状况", re.I)
+
+
 def contains_sensitive(text: str) -> bool:
     """True when an extracted fact or insight states a category auto-memory never keeps."""
     return bool(redact_sensitive(text)[1])
@@ -821,7 +830,8 @@ class AgentMemory:
             )
             data = _extract_json(call_ollama(prompt, timeout=60) or "") or {}
             for ins in (data.get("insights") or [])[:3]:
-                if isinstance(ins, str) and ins.strip() and not contains_sensitive(ins):
+                if (isinstance(ins, str) and ins.strip() and not contains_sensitive(ins)
+                        and not _SENSITIVE_INFERENCE_RE.search(ins)):
                     self.add(ins.strip(), "reflection", session_id, user_id, importance=8)
         except Exception as e:
             print(f"[memory] reflect error_type={type(e).__name__}")

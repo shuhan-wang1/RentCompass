@@ -125,102 +125,58 @@ def _get_zone_from_address(address: str) -> Optional[int]:
         return None
 
 
+# Fare zone by London postcode DISTRICT, from the zone of the district's own stations.
+#
+# The previous rule derived the zone from the district NUMBER ("E 9-12 -> zone 4"), which
+# is not how either system works: postcode districts are numbered alphabetically by post
+# town, not by distance. 11 of 18 tested districts came out 1-3 zones wrong — E14 (Canary
+# Wharf, zone 2) read as zone 5, E17 (Walthamstow, zone 3) as zone 6 — and a Stratford ->
+# Waterloo commute was priced as a Zone 1-5 Travelcard, £293.40 instead of £201.60
+# (2026-10-19 B-03).
+#
+# Where a district's stations straddle a boundary the HIGHER zone is used, so a
+# recommended Travelcard is never too narrow to cover the journey. A district not listed
+# here returns None and stays unpriced — the honest outcome the tool already reports
+# ("Unable to determine zones"), rather than a number invented from arithmetic.
+_DISTRICT_ZONES = {
+    **{d: 1 for d in ("W1", "SW1", "SE1", "SW3", "SW7")},
+    **{d: 2 for d in (
+        "N1", "N4", "N5", "N7", "N16",
+        "NW1", "NW3", "NW5", "NW6", "NW8",
+        "E1", "E2", "E3", "E5", "E8", "E9", "E14",
+        "SE4", "SE5", "SE8", "SE11", "SE14", "SE15", "SE16", "SE17", "SE22", "SE24",
+        "SW2", "SW4", "SW5", "SW6", "SW8", "SW9", "SW10", "SW11",
+        "W2", "W6", "W8", "W9", "W10", "W11", "W12", "W14")},
+    **{d: 3 for d in (
+        "N2", "N6", "N8", "N15", "N17", "N19", "N22",
+        "NW2", "NW4", "NW10", "NW11",
+        "E7", "E10", "E13", "E15", "E16", "E17", "E20",
+        "SE3", "SE6", "SE10", "SE13", "SE23", "SE26", "SE27",
+        "SW12", "SW13", "SW14", "SW15", "SW16", "SW17", "SW18", "SW19",
+        "W3", "W4", "W5")},
+    **{d: 4 for d in ("N3", "N11", "N12", "N14", "NW7", "NW9", "E6", "E11", "E12", "SW20", "W7")},
+}
+
+
 def _get_zone_from_postcode(postcode: str) -> Optional[int]:
+    """Fare zone for a London postcode, or None when it cannot be established.
+
+    Only the outward district is read ("N7 0EG" -> "N7"; without a space the 3-character
+    inward code is dropped: "N70EG" -> "N7"). EC and WC districts are zone 1 throughout;
+    every other district is looked up in ``_DISTRICT_ZONES``, and an unlisted one (outer
+    London, Watford, anywhere outside TfL zones) is None, never a guess.
     """
-    根据 postcode 判断所在的 Zone
-
-    简化版规则 (基于伦敦主要邮编区域):
-    - Zone 1: WC, EC, SW1, W1, SE1
-    - Zone 2: N1-N7, E1-E3, SE5, SE8, SE10, SW3-SW10, W2-W6, NW1-NW3
-    - Zone 3: N8-N12, E4-E8, SE11-SE16, SW11-SW15, W7-W9, NW4-NW6
-    - Zone 4: N13-N16, E9-E12, SE17-SE22, SW16-SW19, W10-W12, NW7-NW9
-    - Zone 5: N17-N20, E13-E15, SE23-SE26, SW20, W13-W14, NW10-NW11
-    - Zone 6: N21-N22, E16-E18, SE27-SE28, UB (Uxbridge), HA (Harrow), EN (Enfield)
-
-    注意: 这是简化版，实际 Zone 划分非常复杂
-    """
-    # 只取 outward district（空格前部分），避免把内码数字并进区号
-    # 例: "N7 0EG" -> "N7"；无空格时去掉末尾 3 位内码: "N70EG" -> "N7"
-    pc = postcode.upper().strip()
-    postcode = pc.split(' ')[0] if ' ' in pc else (pc[:-3] if len(pc) > 3 else pc)
-
-    # Zone 1 - 伦敦市中心
-    if postcode.startswith(('WC', 'EC')) or re.fullmatch(r'(?:SW1|W1|SE1)[A-Z]?', postcode):
+    pc = str(postcode or "").upper().strip()
+    if not pc:
+        return None
+    district = pc.split(' ')[0] if ' ' in pc else (pc[:-3] if len(pc) > 3 else pc)
+    if re.fullmatch(r'(?:EC|WC)\d[A-Z]?', district):
         return 1
-
-    # 提取邮编的区域代码和数字
-    match = re.match(r'([A-Z]+)(\d+)', postcode)
+    match = re.fullmatch(r'([A-Z]{1,2}\d{1,2})([A-Z]?)', district)
     if not match:
         return None
-
-    area_code = match.group(1)  # 如: N, E, SE, SW, W, NW
-    area_num = int(match.group(2))  # 如: 1, 7, 12
-
-    # Zone 2
-    zone2_ranges = {
-        'N': (1, 7),
-        'E': (1, 3),
-        'SE': [5, 8, 10],
-        'SW': (3, 10),
-        'W': (2, 6),
-        'NW': (1, 3)
-    }
-
-    # Zone 3
-    zone3_ranges = {
-        'N': (8, 12),
-        'E': (4, 8),
-        'SE': (11, 16),
-        'SW': (11, 15),
-        'W': (7, 9),
-        'NW': (4, 6)
-    }
-
-    # Zone 4
-    zone4_ranges = {
-        'N': (13, 16),
-        'E': (9, 12),
-        'SE': (17, 22),
-        'SW': (16, 19),
-        'W': (10, 12),
-        'NW': (7, 9)
-    }
-
-    # Zone 5
-    zone5_ranges = {
-        'N': (17, 20),
-        'E': (13, 15),
-        'SE': (23, 26),
-        'SW': [20],
-        'W': (13, 14),
-        'NW': (10, 11)
-    }
-
-    # Zone 6
-    zone6_ranges = {
-        'N': (21, 22),
-        'E': (16, 18),
-        'SE': (27, 28),
-    }
-
-    # 特殊邮编区域 (通常在 Zone 5-6)
-    if area_code in ['UB', 'HA', 'EN', 'TW', 'KT', 'CR', 'BR', 'DA', 'RM', 'IG']:
-        return None  # a broad postal area does not establish a station's fare zone
-
-    # 检查每个 Zone
-    for zone_num, ranges in [(2, zone2_ranges), (3, zone3_ranges), (4, zone4_ranges),
-                             (5, zone5_ranges), (6, zone6_ranges)]:
-        if area_code in ranges:
-            zone_range = ranges[area_code]
-            if isinstance(zone_range, list):
-                if area_num in zone_range:
-                    return zone_num
-            elif isinstance(zone_range, tuple):
-                if zone_range[0] <= area_num <= zone_range[1]:
-                    return zone_num
-
-    # Unknown districts (including WD/Watford) must not become an invented Zone 6.
-    return None
+    # A sub-district letter ("W1F", "SW1A", "SE1P") belongs to its district.
+    return _DISTRICT_ZONES.get(match.group(1))
 
 
 def _commute_time_text(measured_minutes: Optional[int], details: dict) -> str:

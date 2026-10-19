@@ -4265,6 +4265,9 @@ def create_conversation():
     """Create a new conversation. Body: {user_id, title?}."""
     data = get_json_or_400()
     user_id, _ = resolve_identity(data)
+    if data.get('title') is not None and not isinstance(data.get('title'), str):
+        # A list/number/object title reached `.strip()` in the store and 500'd (C-09).
+        raise ApiError(400, "title must be a string")
     # Stamp architecture provenance at creation (this process's constants).
     conv = conversation_store.create_conversation(
         user_id, title=data.get('title'),
@@ -4337,6 +4340,9 @@ def fork_conversation(cid):
     replay. Fork validation failures return {"error", "code"} at 404/400 (see _FORK_ERROR_MAP).
     """
     data = _request_body() or {}
+    # Same request-boundary rule as get_json_or_400: the optional body is still stored
+    # (title, idempotency key), so unstorable text is a 400 here too (C-02).
+    _reject_unstorable_text(data)
     user_id, _ = resolve_identity(data)
 
     after_turn_id = data.get('after_turn_id')
@@ -4384,6 +4390,7 @@ def edit_turn(cid):
     edited_slot_turn_id...}, "idempotent": bool}: 201 on create, 200 on idempotent replay.
     Validation failures return {"error", "code"} at 404/400 (shared _FORK_ERROR_MAP)."""
     data = _request_body() or {}
+    _reject_unstorable_text(data)   # see fork_conversation (C-02)
     user_id, _ = resolve_identity(data)
 
     turn_id = data.get('turn_id')
@@ -4643,7 +4650,10 @@ def add_favorite():
     url = data.get('url') or data.get('URL')
     if not url:
         raise ApiError(400, "Property URL is required")
-    conversation_store.add_favorite(user_id, str(url), data)
+    if not isinstance(url, str):
+        # str() of a list/dict used to be stored as the favourite's key (C-16).
+        raise ApiError(400, "Property URL must be a string")
+    conversation_store.add_favorite(user_id, url, data)
     return jsonify({"success": True, "message": "Added to favorites"})
 
 

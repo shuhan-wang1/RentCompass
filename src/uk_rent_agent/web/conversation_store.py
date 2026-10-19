@@ -10,17 +10,22 @@ All state is keyed by (user_id[, conversation_id]); favorites are per-USER. The 
 is the source of truth — SessionStore is only a hot cache rehydrated from here on miss.
 
 Thread-safety: one connection guarded by an RLock. Every op is short (no LLM calls), so a
-single lock is simpler and correct under Flask's per-request worker threads.
+single lock is simpler and correct under Flask's per-request worker threads. Because that
+one connection is SHARED by every user, the lock also owns the transaction invariant (see
+``_TransactionGuardLock``): no transaction outlives the critical section that opened it.
 """
 from __future__ import annotations
 
 import datetime
 import json
+import logging
 import re
 import sqlite3
 import threading
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 # Bind-parameter text safety                                                   #
@@ -248,6 +253,69 @@ class PrivacyErasureInProgress(RuntimeError):
     """New turns are blocked while the user's cross-store deletion is running."""
 
 
+class _TransactionGuardLock:
+    """The store's re-entrant lock, plus the one invariant a SHARED connection needs.
+
+    Python's sqlite3 opens an implicit transaction before the first DML statement. When
+    that statement then fails at bind time (an unencodable string, a list where TEXT was
+    expected) and the method has no rollback of its own, the transaction stays OPEN on the
+    one connection every user shares. The next writer's ``BEGIN IMMEDIATE`` then raised
+    "cannot start a transaction within a transaction" — for every chat turn of every user
+    and every outbox claim — until some unrelated call happened to ``commit()``, which
+    also committed the failed request's partial writes (2026-10-19 C-01: one anonymous
+    request, 40/40 other users' turns failing for 20 s).
+
+    So the OUTERMOST exit of every critical section closes what it opened: a failure rolls
+    back, and a section that returns normally but left a transaction open (a method that
+    forgot its commit) is committed exactly as its author intended, with an error logged.
+    Entry heals a transaction leaked by anything that bypassed this lock. Methods keep
+    their own explicit commit/rollback; this is the backstop that holds for every
+    statement, including the one somebody adds next.
+    """
+
+    def __init__(self, store: "ConversationStore"):
+        self._rlock = threading.RLock()
+        self._store = store
+        self._depth = 0          # mutated only by the thread holding _rlock
+
+    def _connection(self):
+        return getattr(self._store, "_conn", None)
+
+    def _in_transaction(self) -> bool:
+        conn = self._connection()
+        try:
+            return bool(conn is not None and conn.in_transaction)
+        except sqlite3.ProgrammingError:   # closed connection
+            return False
+
+    def __enter__(self):
+        self._rlock.acquire()
+        self._depth += 1
+        if self._depth == 1 and self._in_transaction():
+            logger.error("conversation_store.leaked_transaction_rolled_back at=entry")
+            try:
+                self._connection().rollback()
+            except Exception:
+                self._depth -= 1
+                self._rlock.release()
+                raise
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            if self._depth == 1 and self._in_transaction():
+                conn = self._connection()
+                if exc_type is not None:
+                    conn.rollback()
+                else:
+                    logger.error("conversation_store.open_transaction_committed at=exit")
+                    conn.commit()
+        finally:
+            self._depth -= 1
+            self._rlock.release()
+        return False
+
+
 _NOW_LOCK = threading.Lock()
 _LAST_NOW = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
@@ -270,7 +338,7 @@ class ConversationStore:
     def __init__(self, db_path):
         self.db_path = str(db_path)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
+        self._lock = _TransactionGuardLock(self)
         self._conn = sqlite3.connect(
             self.db_path, check_same_thread=False, factory=_EncodeSafeConnection)
         self._conn.row_factory = sqlite3.Row
@@ -498,8 +566,8 @@ class ConversationStore:
         delete and verify those layers without first querying content.
         """
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 before = self._privacy_inventory_unlocked(user_id)
                 rows = self._conn.execute(
                     "SELECT id FROM conversations WHERE user_id=?",
@@ -682,8 +750,8 @@ class ConversationStore:
         conversation_created = False
 
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 erasing = self._conn.execute(
                     "SELECT 1 FROM privacy_erasure_locks WHERE user_id=?",
                     (user_id,),
@@ -820,8 +888,8 @@ class ConversationStore:
         """Block new turns after proving no active conversation turn can write back."""
         now = _now_iso()
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 existing = self._conn.execute(
                     "SELECT 1 FROM privacy_erasure_locks WHERE user_id=?",
                     (user_id,),
@@ -975,8 +1043,8 @@ class ConversationStore:
             else None
         )
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 turn = self._conn.execute(
                     "SELECT * FROM turns WHERE user_id=? AND id=?",
                     (user_id, turn_id),
@@ -1102,8 +1170,8 @@ class ConversationStore:
             + datetime.timedelta(seconds=max(1, int(lease_seconds)))
         ).isoformat()
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 self._conn.execute(
                     """UPDATE background_jobs
                        SET status='pending', claimed_by=NULL, lease_expires=NULL,
@@ -1211,8 +1279,8 @@ class ConversationStore:
     ) -> bool:
         """Idempotently persist an outbox-produced summary into the latest snapshot."""
         with self._lock:
-            self._conn.execute("BEGIN IMMEDIATE")
             try:
+                self._conn.execute("BEGIN IMMEDIATE")
                 row = self._conn.execute(
                     """SELECT s.turn_id, s.snapshot_json FROM turn_snapshots s
                        JOIN turns t ON t.id=s.turn_id AND t.user_id=s.user_id

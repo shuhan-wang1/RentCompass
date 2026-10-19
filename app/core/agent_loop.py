@@ -292,6 +292,15 @@ _CARD_FORMATTERS = {
 _SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar", "no_results"})
 
 
+def _asks_for_listings(message: str) -> bool:
+    """True when the user's own message is about finding homes or changing search criteria."""
+    return bool(re.search(
+        r"\b(?:find|search|show|look(?:ing)?\s+for|listings?|flats?|homes?|houses?|apartments?|"
+        r"properties|property|rent|budget|bed(?:room)?s?|studio|area|commute|move[- ]in|"
+        r"cheaper|cheapest|again|results?)\b|\d[\s-]*bed|£\s*\d|"
+        r"找|搜|房源|房子|公寓|预算|租|居室|通勤|区域|结果", str(message or ""), re.I))
+
+
 # ─── ToolSpec (contract D fallback) ─────────────────────────────────
 # Agent T owns the canonical ToolSpec + tool_provider.list_specs(). We prefer the shared
 # definition when present and fall back to this identically-shaped one so the loop (and its
@@ -4983,6 +4992,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if search_found.get('status') == 'no_results':
                 response = search_found.get('message') or search_found.get('summary') or (
                     '当前检索数据中没有匹配项。' if language == 'zh' else 'No matches in the retrieved data.')
+                # A turn that asked something else ("What exactly have you kept about me…")
+                # keeps its own answer; the empty search is reported after it instead of
+                # replacing it (R1-13).
+                _asked = str(ec.get('current_message') or '').strip()
+                if (str(final_response or '').strip() and _asked
+                        and not _asks_for_listings(_asked)):
+                    response = (final_response if response in final_response
+                                else f"{final_response}\n\n{response}")
             elif similar_only and search_found.get("status") == "no_exact_match_but_similar":
                 # A similar-recall result failed no stated constraint — the exact-match pool
                 # was simply empty. render_candidate_status would file every row under

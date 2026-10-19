@@ -2090,14 +2090,58 @@ def _commute_note(is_cjk: bool) -> str:
             "A narrower area or a specific destination can help complete that check.")
 
 
-def _no_results_message(area: str, is_cjk: bool) -> str:
-    """Honest 'nothing found' text, language-aware, always pointing at the form."""
+def _applied_filters_text(criteria: dict | None, is_cjk: bool) -> str:
+    """The filters a search actually applied, in the user's language ('' when none)."""
+    c = criteria if isinstance(criteria, dict) else {}
+    parts: list[str] = []
+    budget = c.get('max_budget')
+    if isinstance(budget, (int, float)) and not isinstance(budget, bool) and budget > 0:
+        parts.append(f"月租不超过 £{budget:,.0f}" if is_cjk else f"up to £{budget:,.0f}/month")
+    beds = c.get('bedrooms')
+    if isinstance(beds, int) and not isinstance(beds, bool):
+        if beds == 0:
+            parts.append("studio" if not is_cjk else "单间(studio)")
+        else:
+            plus = "+" if c.get('bedrooms_minimum') else ""
+            parts.append(f"{beds}{plus} 居室" if is_cjk else
+                         f"{beds}{plus} bedroom{'s' if beds != 1 or plus else ''}")
+    room_type = c.get('room_type')
+    if room_type:
+        parts.append(_room_type_label(room_type, is_cjk))
+    for feature in c.get('property_features') or []:
+        if isinstance(feature, str) and feature.strip():
+            parts.append(feature.strip())
+    minutes, destination = c.get('max_travel_time'), c.get('commute_destination')
+    if minutes and destination and not c.get('no_commute'):
+        parts.append(f"到 {destination} 通勤不超过 {minutes} 分钟" if is_cjk
+                     else f"within {minutes} min of {destination}")
+    if c.get('move_in_date'):
+        parts.append(f"{c['move_in_date']} 前可入住" if is_cjk else f"available by {c['move_in_date']}")
+    return ("、" if is_cjk else ", ").join(parts)
+
+
+def _no_results_message(area: str, is_cjk: bool, *, criteria: dict | None = None,
+                        area_unresolved: bool = False) -> str:
+    """Honest 'nothing found' text naming the filters that were applied (R1-13).
+
+    "Please check the area spelling" is said only when the area itself could not be
+    resolved; a zero result caused by the budget, a room type or a commute limit used to
+    send the user off to re-spell a perfectly good area."""
+    filters = _applied_filters_text(criteria, is_cjk)
     if is_cjk:
-        return (f"本次检索数据中，在 {area} 附近没有找到符合条件的房源。"
-                f"请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。")
-    return (f"I couldn't find listings matching your criteria near {area} "
-            f"in the retrieved data. Please check the area spelling, or adjust the budget/area and "
-            f"try again (you can also use the search form on the right).")
+        lead = (f"本次检索数据中，在 {area} 附近没有找到符合以下条件的房源：{filters}。" if filters
+                else f"本次检索数据中，在 {area} 附近没有找到符合条件的房源。")
+        tail = ("请检查区域拼写，或换一个附近区域后重试（可使用右侧搜索表单）。" if area_unresolved
+                else "放宽其中一个条件（例如预算或通勤时间）可能会有结果，也可使用右侧搜索表单。")
+        return lead + tail
+    lead = (f"I couldn't find listings near {area} in the retrieved data that match: {filters}."
+            if filters else
+            f"I couldn't find listings matching your criteria near {area} in the retrieved data.")
+    tail = (" Please check the area spelling, or try a nearby area (you can also use the search "
+            "form on the right)." if area_unresolved else
+            " Loosening one of these (for example the budget or the commute limit) may help; you "
+            "can also use the search form on the right.")
+    return lead + tail
 
 
 def _clean_explanation(desc, travel_min, location, travel_source=None):
@@ -3518,6 +3562,7 @@ async def search_properties_impl(
         # Validate every listing against the requested area's centroid before it
         # can enter RAG, ranking, the similar fallback, or the UI.
         geo_rejected = []
+        area_centres: dict = {}
         geo_validation_enabled = os.getenv("SEARCH_GEO_VALIDATION_ENABLED", "1") != "0"
         if live_rows and geo_validation_enabled and not degraded:
             from core.geography import (
@@ -3527,7 +3572,6 @@ async def search_properties_impl(
             )
             from core.maps_service import geocode_address
 
-            area_centres = {}
             for _idx, _a in enumerate(search_areas):
                 _centre = known_area_centroid(_a)
                 if _centre is None:
@@ -3605,7 +3649,9 @@ async def search_properties_impl(
             # the message must NOT claim "no listings" for them (H2 honesty) — surface the
             # partial note instead. A genuinely-searched empty stays the honest no-results.
             _empty_msg = (_partial_note(incomplete_areas, is_cjk) if incomplete_areas
-                          else _no_results_message(search_area, is_cjk))
+                          else _no_results_message(
+                              search_area, is_cjk, criteria=_criteria(),
+                              area_unresolved=bool(area_centres) and not any(area_centres.values())))
             return _augment({
                 'success': True,
                 'status': 'no_results',
@@ -3739,7 +3785,7 @@ async def search_properties_impl(
             return _augment({
                 'success': True,
                 'status': 'no_results',
-                'message': _no_results_message(search_area, is_cjk),
+                'message': _no_results_message(search_area, is_cjk, criteria=_criteria()),
                 'recommendations': [],
                 'data_source': data_source,
                 'search_criteria': _criteria(),
@@ -4066,7 +4112,7 @@ async def search_properties_impl(
 
             # 无预算，或相似回退也没结果 —— 诚实的 no_results（语言感知，提示表单）。
             _empty_msg = (_partial_note(incomplete_areas, is_cjk) if incomplete_areas
-                          else _no_results_message(search_area, is_cjk))
+                          else _no_results_message(search_area, is_cjk, criteria=_criteria()))
             return _augment({
                 'success': True,
                 'status': 'no_results',

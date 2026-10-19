@@ -10,7 +10,11 @@ Strict requires, at every object level:
   * every property listed in ``required``;
   * ``additionalProperties: false``;
   * the unsupported keywords ``minLength`` / ``maxLength`` / ``minItems`` /
-    ``maxItems`` stripped (``enum`` / ``anyOf`` / ``$ref`` / ``$defs`` are supported).
+    ``maxItems`` stripped (``enum`` / ``anyOf`` / ``$ref`` / ``$defs`` are supported);
+  * a string ``format`` only from the server's own list (``email`` / ``hostname`` /
+    ``ipv4`` / ``ipv6`` / ``uuid``). Any other value is dropped from the WIRE schema —
+    the authored schema still carries it, so ``core.tool_system`` keeps validating it on
+    the executor side, and the property description states the expected shape.
 
 Because strict forces every property into ``required``, an originally-optional
 property must instead be made *nullable* so the model can still omit it (it emits
@@ -46,6 +50,17 @@ __all__ = [
 
 # Keywords DeepSeek strict does not support; stripped everywhere.
 _BANNED_KEYWORDS = ("minLength", "maxLength", "minItems", "maxItems")
+
+# The only string ``format`` values DeepSeek strict accepts. Anything else is rejected on
+# the request path for the WHOLE request — HTTP 400 "unknown variant `date`, expected one
+# of `email`, `hostname`, `ipv4`, `ipv6`, `uuid`" — so one ``"format": "date"`` on one
+# tool took down every tool-bearing turn under DEEPSEEK_STRICT=1 (2026-10-19 P0-1).
+_SUPPORTED_FORMATS = frozenset({"email", "hostname", "ipv4", "ipv6", "uuid"})
+
+
+def _is_unsupported_format(key: str, val: Any) -> bool:
+    """True for a ``format`` keyword the strict server would reject."""
+    return key == "format" and not (isinstance(val, str) and val in _SUPPORTED_FORMATS)
 
 # Property-level annotations that stay a sibling of the (possibly nullable) value
 # schema rather than describing the value's type; kept out of the anyOf branch.
@@ -149,7 +164,7 @@ def _split_property(pv: Dict[str, Any]):
     null_present = False
 
     for key, val in pv.items():
-        if key in _BANNED_KEYWORDS:
+        if key in _BANNED_KEYWORDS or _is_unsupported_format(key, val):
             continue
         if key in _META_KEYWORDS:
             meta[key] = val
@@ -231,7 +246,7 @@ def _transform(node: Any, root: bool = False) -> Any:
     out: Dict[str, Any] = {}
 
     for key, val in node.items():
-        if key in _BANNED_KEYWORDS:
+        if key in _BANNED_KEYWORDS or _is_unsupported_format(key, val):
             continue
         if key == "properties" and isinstance(val, dict):
             out["properties"] = {
@@ -362,9 +377,10 @@ def validate_strict_compliance(schema: Dict[str, Any]) -> List[str]:
     """Return a list of strict-compliance violations (empty == compliant).
 
     Checks, at every object level: all properties listed in ``required``,
-    ``additionalProperties: false``, no banned keywords anywhere, and — at every
-    ``anyOf`` union — that each branch carries one of ``type`` / ``anyOf`` / ``$ref``
-    (DeepSeek strict rejects an enum-only or metadata-only branch on the request path).
+    ``additionalProperties: false``, no banned keywords anywhere, no string ``format``
+    outside the server's accepted list, and — at every ``anyOf`` union — that each branch
+    carries one of ``type`` / ``anyOf`` / ``$ref`` (DeepSeek strict rejects an enum-only or
+    metadata-only branch on the request path).
     """
     violations: List[str] = []
 
@@ -374,6 +390,10 @@ def validate_strict_compliance(schema: Dict[str, Any]) -> List[str]:
         for banned in _BANNED_KEYWORDS:
             if banned in node:
                 violations.append(f"{path}: banned keyword '{banned}'")
+        if "format" in node and _is_unsupported_format("format", node["format"]):
+            violations.append(
+                f"{path}: unsupported format {node['format']!r} "
+                f"(strict accepts only {sorted(_SUPPORTED_FORMATS)})")
         if _is_object_node(node):
             if node.get("additionalProperties", None) is not False:
                 violations.append(f"{path}: additionalProperties must be false")

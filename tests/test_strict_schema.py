@@ -314,3 +314,75 @@ def test_strict_base_url_already_beta_unchanged(monkeypatch):
 def test_strict_base_url_trailing_slash(monkeypatch):
     monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/")
     assert strict_base_url() == "https://api.deepseek.com/beta"
+
+
+# ─── string `format` (2026-10-19 P0-1) ──────────────────────────────
+# DeepSeek strict accepts only email/hostname/ipv4/ipv6/uuid and rejects the WHOLE request
+# otherwise ("unknown variant `date`"). 7483f77 added `format: date` to two tools, and under
+# DEEPSEEK_STRICT=1 every tool-bearing request then 400'd.
+_STRICT_FORMATS = {"email", "hostname", "ipv4", "ipv6", "uuid"}
+
+
+def _formats(node):
+    found = []
+    if isinstance(node, dict):
+        if isinstance(node.get("format"), str):
+            found.append(node["format"])
+        for k, v in node.items():
+            if k == "properties" and isinstance(v, dict):
+                for pv in v.values():
+                    found.extend(_formats(pv))
+            elif isinstance(v, (dict, list)):
+                found.extend(_formats(v))
+    elif isinstance(node, list):
+        for it in node:
+            found.extend(_formats(it))
+    return found
+
+
+@pytest.mark.parametrize("name", _TOOL_NAMES)
+def test_wire_schema_carries_only_strict_formats(name):
+    """Every registered tool, exactly as the strict request carries it."""
+    wire = to_strict_function_calling_format(_SPEC_BY_NAME[name])["function"]["parameters"]
+    assert set(_formats(wire)) <= _STRICT_FORMATS, (name, _formats(wire))
+    assert validate_strict_compliance(wire) == []
+
+
+def test_date_format_is_dropped_but_still_validated_by_the_executor():
+    weather = _SPEC_BY_NAME["get_weather"].input_schema
+    assert _formats(weather["properties"]["target_date"]) == ["date"]   # authored
+    strict = to_strict_schema(weather)
+    target = strict["properties"]["target_date"]
+    assert "format" not in target and all("format" not in b for b in target.get("anyOf", []))
+    # The authored contract is untouched, so the executor still refuses a non-date.
+    from core.tool_system import create_tool_registry as _registry
+    import asyncio
+    tool = _registry().get("get_weather")
+    result = asyncio.run(tool.execute(location="London", target_date="tomorrow"))
+    assert not result.success and "ValidationError" in (result.error or "")
+
+
+def test_supported_formats_survive_and_unknown_ones_are_flagged():
+    schema = {"type": "object", "properties": {
+        "mail": {"type": "string", "format": "email"},
+        "when": {"type": "string", "format": "date-time"},
+        "odd": {"type": "string", "format": ["date"]},
+    }, "required": ["mail", "when", "odd"]}
+    strict = to_strict_schema(schema)
+    assert strict["properties"]["mail"]["format"] == "email"
+    assert "format" not in strict["properties"]["when"]
+    assert "format" not in strict["properties"]["odd"]
+    assert validate_strict_compliance(strict) == []
+    # The validator is what failed to catch the live 400: it must name the bad format.
+    raw = {"type": "object", "additionalProperties": False, "required": ["when"],
+           "properties": {"when": {"type": "string", "format": "date"}}}
+    violations = validate_strict_compliance(raw)
+    assert any("unsupported format 'date'" in v for v in violations), violations
+
+
+def test_a_property_named_format_is_not_mistaken_for_the_keyword():
+    schema = {"type": "object", "properties": {
+        "format": {"type": "string", "enum": ["pdf", "html"]}}, "required": ["format"]}
+    strict = to_strict_schema(schema)
+    assert strict["properties"]["format"]["enum"] == ["pdf", "html"]
+    assert validate_strict_compliance(strict) == []

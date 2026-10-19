@@ -17,6 +17,7 @@ status ``no_data`` (suggesting a search first) instead of scraping in-line.
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import List, Optional
 
 from core.tool_system import Tool
@@ -295,11 +296,15 @@ async def compare_or_rank_areas_impl(
 
         # Per-area total: weighted sum over the components PRESENT for this area,
         # renormalised by their weights so a no-data area can still rank on commute.
+        # Such a total is PARTIAL: it answers a different question from a full one, and
+        # sorting the two together put Finsbury Park (no rent data, 85.2 on commute alone)
+        # above Bloomsbury (76.1 on value AND commute) — 2/3 live (2026-10-19 B-07).
         total = None
         present = {k: v for k, v in components.items() if k in weights}
         wsum = sum(weights[k] for k in present)
         if present and wsum > 0:
             total = round(sum(weights[k] * present[k] for k in present) / wsum, 1)
+        partial = total is not None and any(k not in present for k in weights)
 
         sources: list = []
         if rent is not None:
@@ -313,14 +318,26 @@ async def compare_or_rank_areas_impl(
             "rent": rent,
             "commute_minutes": c["commute_minutes"],
             "budget_match_rate": st["budget_match_rate"],
-            "score": {"total": total, "components": components, "weights": weights},
+            "score": {"total": total, "components": components, "weights": weights,
+                      "partial": partial},
             "sources": sources,
             "no_data": rent is None,
         })
 
-    # ---- 6) Sort by total desc (None last), cap at limit -----------------
-    areas.sort(key=lambda a: (a["score"]["total"] is None, -(a["score"]["total"] or 0.0)))
+    # ---- 6) Sort: full scores first, then partial, then unscored; cap ----
+    areas.sort(key=lambda a: (a["score"]["total"] is None, bool(a["score"].get("partial")),
+                              -(a["score"]["total"] or 0.0)))
+    beyond_limit = [a["name"] for a in areas[limit:]]
     areas = areas[:limit]
+    for rank, area in enumerate(areas, start=1):
+        area["rank"] = rank
+    # Requested areas that never reached the ranking are NAMED, never silently dropped:
+    # 8 requested / 5 returned with no word about Euston, Hackney or Stratford (B-07).
+    requested = [str(a).strip() for a in (candidate_areas or []) if str(a or "").strip()]
+    returned_keys = {re.sub(r"[^a-z0-9]+", "", str(v).lower())
+                     for c in candidates for v in (c["name"], c["slug"])}
+    not_evaluated = [name for name in requested
+                     if re.sub(r"[^a-z0-9]+", "", name.lower()) not in returned_keys]
 
     # ---- 7) Explanation notes (formula + weights + caveats) --------------
     notes.insert(0, _L(
@@ -354,6 +371,32 @@ async def compare_or_rank_areas_impl(
             % "、".join(no_data_names),
         ))
 
+    if any(a["score"].get("partial") for a in areas):
+        notes.append(_L(
+            is_zh,
+            "Areas without cached rent data are scored on commute alone and are ranked "
+            "AFTER every fully scored area; their score is not comparable with the others.",
+            "没有缓存租金数据的区域只按通勤计分，排在所有完整计分的区域之后；其分数与其他区域不可直接比较。"))
+    if areas:
+        notes.append(_L(
+            is_zh,
+            "Ranked order (present the areas in this order; #1 is the top recommendation): "
+            + ", ".join(f"#{a['rank']} {a['name']}" for a in areas) + ".",
+            "排名顺序（请按此顺序介绍，第 1 名为首选）："
+            + "、".join(f"第{a['rank']}名 {a['name']}" for a in areas) + "。"))
+    if not_evaluated:
+        notes.append(_L(
+            is_zh,
+            "Requested but NOT evaluated (no commute route or no area match), so not ranked: "
+            + ", ".join(not_evaluated) + ". Say so; do not rank or describe them.",
+            "以下请求的区域未能评估（无法计算通勤或无法匹配区域），因此未参与排名："
+            + "、".join(not_evaluated) + "。请如实说明，不要对其排名或描述。"))
+    if beyond_limit:
+        notes.append(_L(
+            is_zh,
+            "Also evaluated but below the top %d: %s." % (limit, ", ".join(beyond_limit)),
+            "另有评估但未进入前 %d 名的区域：%s。" % (limit, "、".join(beyond_limit))))
+
     status = "ok" if value_available else "no_data"
     if not value_available:
         notes.append(_L(
@@ -371,6 +414,7 @@ async def compare_or_rank_areas_impl(
         "priorities": priorities,
         "weights": weights,
         "evidence_scope": evidence_scope,
+        "not_evaluated": not_evaluated,
     }
 
 

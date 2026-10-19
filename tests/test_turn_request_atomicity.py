@@ -25,7 +25,12 @@ def test_request_start_is_atomic_and_duplicate_is_replayed(store):
     cid = _conversation(store)
 
     first = store.start_request_turn("u1", cid, "req-1", "hello")
-    replay = store.start_request_turn("u1", cid, "req-1", "must not be stored")
+    replay = store.start_request_turn("u1", cid, "req-1", "hello")
+    # R1-15: the same request id with a different message is a misuse, refused (409 at the
+    # route), never replayed as if it were a retry; either way nothing new is stored.
+    from uk_rent_agent.web.conversation_store import IdempotencyKeyReused
+    with pytest.raises(IdempotencyKeyReused):
+        store.start_request_turn("u1", cid, "req-1", "must not be stored")
 
     assert replay["id"] == first["id"]
     assert replay["replayed"] is True

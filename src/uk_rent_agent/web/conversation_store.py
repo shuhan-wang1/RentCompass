@@ -942,6 +942,16 @@ class ConversationStore:
                     (user_id, request_id),
                 ).fetchone()
                 if replay is not None:
+                    stored = self._conn.execute(
+                        "SELECT content FROM messages WHERE user_id=? AND id=?",
+                        (user_id, replay["user_message_id"]),
+                    ).fetchone()
+                    if stored is not None and (stored["content"] or "") != (user_content or ""):
+                        # The same X-Request-Id with a DIFFERENT message is a new request,
+                        # not a retry: replaying the old answer with 200 answered a question
+                        # the user did not ask (R1-15). Same rule as the fork routes (C-07).
+                        self._conn.rollback()
+                        raise IdempotencyKeyReused(request_id)
                     self._conn.commit()
                     out = self._turn_dict(replay)
                     out["replayed"] = True
@@ -1153,6 +1163,17 @@ class ConversationStore:
                 (user_id, request_id),
             ).fetchone()
         return self._turn_dict(row) if row else None
+
+    def request_message_differs(self, user_id: str, turn: dict, user_content: str) -> bool:
+        """True when a replayed request id carries a DIFFERENT user message (R1-15)."""
+        message_id = (turn or {}).get("user_message_id")
+        if message_id is None:
+            return False
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT content FROM messages WHERE user_id=? AND id=?", (user_id, message_id),
+            ).fetchone()
+        return row is not None and (row["content"] or "") != (user_content or "")
 
     def get_turn_response(self, user_id: str, turn_id: str) -> dict | None:
         """Rebuild the persisted HTTP payload for an idempotent completed retry."""

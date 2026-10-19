@@ -1975,6 +1975,15 @@ def auth_me():
 # 3. search_properties 工具内部整合了 Fine-tuned Model
 # ============================================================================
 
+def _request_id_reused_response(request_id: str):
+    """409 for an X-Request-Id reused with a different message (R1-15, mirrors C-07)."""
+    response = jsonify({"error": "this request id was already used for a different message",
+                        "code": "idempotency_key_reused"})
+    response.status_code = 409
+    response.headers["X-Request-Id"] = request_id
+    return response
+
+
 def _request_replay_response(user_id: str, request_id: str, turn: dict):
     """Return a durable response for a duplicate request without running the agent again."""
     if turn.get("status") == "running":
@@ -2067,6 +2076,8 @@ async def api_alex():
     # before it has received that conversation id.
     existing_turn = conversation_store.get_request_turn(user_id, request_id)
     if existing_turn is not None:
+        if conversation_store.request_message_differs(user_id, existing_turn, user_message):
+            return _request_id_reused_response(request_id)
         return _request_replay_response(user_id, request_id, existing_turn)
 
     # --- resolve / implicitly create the conversation --------------------------
@@ -2123,6 +2134,8 @@ async def api_alex():
         response.headers["Retry-After"] = "1"
         response.headers["X-Request-Id"] = request_id
         return response
+    except IdempotencyKeyReused:
+        return _request_id_reused_response(request_id)
 
     if turn.get("replayed"):
         return _request_replay_response(user_id, request_id, turn)
@@ -3951,6 +3964,8 @@ async def api_search_direct():
     request_id = new_request_id(request.headers.get("X-Request-Id"))
     existing_turn = conversation_store.get_request_turn(user_id, request_id)
     if existing_turn is not None:
+        if conversation_store.request_message_differs(user_id, existing_turn, readable):
+            return _request_id_reused_response(request_id)
         return _request_replay_response(user_id, request_id, existing_turn)
 
     # --- resolve / implicitly create the conversation (mirrors /api/alex) -------
@@ -3987,6 +4002,8 @@ async def api_search_direct():
         response.headers["Retry-After"] = "1"
         response.headers["X-Request-Id"] = request_id
         return response
+    except IdempotencyKeyReused:
+        return _request_id_reused_response(request_id)
 
     if turn.get("replayed"):
         return _request_replay_response(user_id, request_id, turn)

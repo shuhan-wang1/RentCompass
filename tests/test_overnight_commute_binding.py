@@ -174,3 +174,30 @@ def test_many_clauses_against_a_many_leg_route_stay_linear():
     started = time.perf_counter()
     validate_commute_response(answer, _state("calculate_commute", raw))
     assert time.perf_counter() - started < 2.0     # was 34.9 s at this size
+
+
+_BRIXTON_VICTORIA = {
+    "success": True, "from_address": "Brixton", "to_address": "Victoria",
+    "duration_minutes": 15, "route_source": "TfL Unified API Journey Planner",
+    "route_legs": [
+        {"mode": "walking", "lines": [], "duration_minutes": 4, "summary": "Walk to Brixton",
+         "from": "", "to": "Brixton Underground Station"},
+        {"mode": "tube", "lines": ["Victoria"], "duration_minutes": 8,
+         "summary": "Victoria line to Victoria", "from": "Brixton Underground Station",
+         "to": "Victoria Underground Station"},
+        {"mode": "walking", "lines": [], "duration_minutes": 3, "summary": "Walk to Victoria",
+         "from": "Victoria Underground Station", "to": "Victoria"},
+    ]}
+
+
+@pytest.mark.parametrize("raw,answer,gone", [
+    (_STRATFORD_CW, "It takes 17 minutes on the Jubilee line to Canary Wharf.", "17 minutes"),
+    (_STRATFORD_CW, "Canary Wharf is 17 minutes away by Jubilee line.", "17 minutes"),
+    (_STRATFORD_CW, "Stratford: 17 minutes (Jubilee)", "17 minutes"),
+    (_STRATFORD_CW, "Commute: 17 minutes (Jubilee line).", "17 minutes"),
+    (_BRIXTON_VICTORIA, "It takes 8 minutes to Victoria.", "8 minutes"),
+    (_BRIXTON_VICTORIA, "Victoria is 8 minutes away.", "8 minutes"),
+])
+def test_one_end_or_a_line_named_like_a_place_is_still_the_whole_trip(raw, answer, gone):
+    out = validate_commute_response(answer, _state("calculate_commute", raw))
+    assert gone not in out

@@ -102,3 +102,13 @@ def test_a_tenancy_length_is_not_income_and_bracketed_phones_are_caught():
         "I want to rent for a year in Hackney, budget £1,800", [])
     redacted, found = am_mod.redact_sensitive("call (020) 7946 0958 please")
     assert "7946" not in redacted and found == ["contact"]
+
+
+@pytest.mark.parametrize("text", ["a" * 60_000, "flat number " + "9" * 60_000, " " * 40_000 + "and I x",
+                                  ("word " * 12_000) + "@"])
+def test_redaction_is_linear_and_bounded(text):
+    import time
+
+    started = time.perf_counter()
+    am_mod.redact_sensitive(text)
+    assert time.perf_counter() - started < 0.5      # was 10.4 s for 60k chars

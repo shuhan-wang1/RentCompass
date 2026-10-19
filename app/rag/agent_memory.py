@@ -308,14 +308,19 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"chronic (?:illness|pain|condition)|diagnos\w*|medication|therapy|chemo\w*|"
         r"illness|allerg\w*)\b|哮喘|糖尿病|癫痫|癌|怀孕|抑郁|焦虑|病情|疾病|过敏", re.I)),
 )
-_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# Anchored and bounded: unanchored, a long word or digit run was re-scanned from every
+# position looking for an "@" (O(n²) in one C call, holding the GIL — 10 s for 60k chars).
+_EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}")
 _PHONE_RE = re.compile(
     r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?\d|\(0\d|\b0\d)(?:[\s)-]{0,2}\d){8,9}(?!\d)")
 # Clause boundaries: sentence/clause punctuation (a comma or full stop between digits is a
 # thousands separator or a decimal point, never a boundary), or "and/but" introducing a new
 # first-person clause ("... a year and I'm on a visa").
 _CLAUSE_BOUNDARY = re.compile(
-    r"[;:!?，；：。！？]\s*|[,.](?!\d)\s*|\s+(?:and|but)\s+(?=(?:i|i'm|i am|my)\b)", re.I)
+    r"[;:!?，；：。！？]\s*|[,.](?!\d)\s*|(?<!\s)\s+(?:and|but)\s+(?=(?:i|i'm|i am|my)\b)", re.I)
+# Auto-memory stores 300 characters of the user message and extracts facts from a turn;
+# nothing past this bound is needed, and redaction must never be the expensive step.
+_REDACT_MAX_CHARS = 8_000
 _SENSITIVE_MARKER = "[personal detail not stored]"
 
 
@@ -328,7 +333,7 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
     Returns the redacted text and the categories found (for the ``pii_categories``
     metadata). Never raises."""
     try:
-        value = str(text or "")
+        value = str(text or "")[:_REDACT_MAX_CHARS]
         found: list[str] = []
         if _EMAIL_RE.search(value) or _PHONE_RE.search(value):
             found.append("contact")
@@ -361,8 +366,9 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
 # health inference (2026-10-19 A-10). Reflections never keep inferences of this kind; the
 # stated requirement itself stays in the semantic layer as a property fact.
 _SENSITIVE_INFERENCE_RE = re.compile(
-    r"\b(?:mobility|disab\w*|impair\w*|medical|health|illness|elderly|frail|condition)\b|"
-    r"行动不便|残疾|健康|身体状况", re.I)
+    r"\b(?:mobility|disab\w*|impair\w*|medical|illness|elderly|frail|"
+    r"health (?:condition|issue|problem|need)s?|(?:medical|health|physical) condition)\b|"
+    r"行动不便|残疾|身体状况", re.I)
 
 
 def contains_sensitive(text: str) -> bool:

@@ -1356,13 +1356,40 @@ def _route_legs(journey: dict) -> list[dict]:
     return legs
 
 
+def _endpoint_keys(binding: dict | None) -> list[str]:
+    return [k for k in (_label_key(label) for label in
+                        list((binding or {}).get("labels") or [])
+                        + list((binding or {}).get("destinations") or [])) if k]
+
+
 def _named_legs(text: str, binding: dict | None) -> list[dict]:
-    """The route legs whose line or mode ``text`` names."""
+    """The route legs whose line or mode ``text`` names.
+
+    A line named like an endpoint does not count: on Brixton -> Victoria "It takes 8
+    minutes to Victoria" names the destination, not the Victoria line's 8-minute leg."""
     legs = (binding or {}).get("legs") or []
     if not legs:
         return []
     hay = _label_key(text)
-    return [leg for leg in legs if any(_key_in(mode, hay) for mode in leg["modes"])]
+    endpoints = _endpoint_keys(binding)
+    return [leg for leg in legs
+            if any(_key_in(mode, hay) and not any(mode == e or _key_in(mode, e) for e in endpoints)
+                   for mode in leg["modes"])]
+
+
+def _arrives_at_destination(leg: dict, binding: dict) -> bool:
+    destinations = [k for k in (_label_key(d) for d in binding.get("destinations") or []) if k]
+    return any(d in place or place in d for place in leg["places"] for d in destinations)
+
+
+def _itinerary_bindings(text: str, bindings: list[dict]) -> set:
+    """ids of the routes whose legs ``text`` ENUMERATES (two or more named by line/mode).
+
+    Only inside such an itinerary may a leg that ends at the destination quote its own
+    figure ("..., Elizabeth line to Canary Wharf (7 min), then walk (5 min)"). Alone,
+    "It takes 17 minutes on the Jubilee line to Canary Wharf" is a whole-trip claim."""
+    return {id(binding) for binding in bindings
+            if len(_named_legs(text, binding)) >= 2}
 
 
 def _estimate_minutes(journey: dict) -> list[float]:
@@ -1637,7 +1664,8 @@ def _estimate_is_quoted_as_estimate(fragment: str, binding: dict, caps: set,
 
 
 def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
-                        context: str = "") -> bool:
+                        context: str = "", heading: str = "",
+                        itinerary: frozenset | set = frozenset()) -> bool:
     """True when this fragment's commute claim — figure AND conclusion — follows the evidence.
 
     Three separate things have to hold, and each one was a way through on its own:
@@ -1675,11 +1703,18 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     # about the WHOLE trip may not borrow one: a whole-trip word ("the journey takes 6
     # minutes"), or naming both the route's origin and its destination ("Stratford to
     # Canary Wharf takes 17 minutes on the Jubilee line").
+    # ``heading`` is the line's label before a colon: "Commute: 17 minutes (Jubilee line)"
+    # is a whole-trip claim even though the clause split leaves only "17 minutes".
     hay = _label_key(scope)
     end_to_end = (any(_key_in(_label_key(l), hay) for l in binding.get("labels") or [])
                   and any(_key_in(_label_key(l), hay) for l in destinations))
-    if not _WHOLE_TRIP_WORD.search(fragment) and not end_to_end:
-        allowed |= {leg["minutes"] for leg in _named_legs(scope, binding)}
+    if not (_WHOLE_TRIP_WORD.search(fragment) or _WHOLE_TRIP_WORD.search(heading)
+            or end_to_end):
+        for leg in _named_legs(scope, binding):
+            # A leg ending at an intermediate stop is unambiguous; one ending at the
+            # destination only inside an enumerated itinerary.
+            if not _arrives_at_destination(leg, binding) or id(binding) in itinerary:
+                allowed.add(leg["minutes"])
     values = _minute_claim_values(fragment)
     if any(not any(abs(value - permitted) < 1e-9 for permitted in allowed)
            for value in values):
@@ -1724,6 +1759,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     """
     bindings = list(bindings or [])
     caps = set(caps or ())
+    itinerary = _itinerary_bindings(text, bindings + ([default_binding] if default_binding else []))
     lines: list[str] = []
     for line in str(text or "").split("\n"):
         bullet = _BULLET_PREFIX.match(line)
@@ -1742,6 +1778,13 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             lines.append(line)
             continue
 
+        # A pure LABEL before a colon ("Commute: 17 minutes") qualifies what follows; a
+        # heading that carries its own figure ("The trip takes 30 minutes: walk (5 min),
+        # ...") is a claim of its own and labels nothing.
+        heading = line.split(":", 1)[0] if ":" in line[:60] else ""
+        if _MINUTE_TOKEN.search(heading):
+            heading = ""
+
         def _evidenced(fragment: str, _binding=None, context: str = "") -> bool:
             """True when this fragment's commute claim is backed for THIS line's listing.
 
@@ -1751,7 +1794,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             if _preference_commute_reference(fragment, caps, context=preference_line):
                 return True
             return _claim_is_evidenced(fragment, _binding if _binding is not None else binding,
-                                       caps, context=context)
+                                       caps, context=context, heading=heading,
+                                       itinerary=itinerary)
 
         # A parenthetical commute aside ("(17 min to Canary Wharf)") is an attachment to a
         # clause, not a clause of its own; remove it before clause splitting.

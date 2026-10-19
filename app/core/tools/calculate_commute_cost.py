@@ -95,6 +95,11 @@ def _get_zone_from_address(address: str) -> Optional[int]:
         int: Zone 编号 (1-6)，如果无法判断则返回 None
     """
     try:
+        # A named Zone 1 station is its own evidence, before any postcode or geocoder
+        # (R1-09: "Euston Station, London NW1 2RT" and geocoded King's Cross read as Zone 2).
+        station_zone = _zone_from_station_name(address)
+        if station_zone is not None:
+            return station_zone
         # 先尝试从地址中提取 postcode (英国邮编格式: XX## #XX)
         postcode_pattern = r'([A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2})'
         match = re.search(postcode_pattern, address.upper())
@@ -142,15 +147,21 @@ def _get_zone_from_address(address: str) -> Optional[int]:
 # Wood Street in E17). A district not listed here returns None and stays unpriced — the
 # honest outcome the tool already reports ("Unable to determine zones"), rather than a
 # number invented from arithmetic.
+#
+# N1, NW1 and W2 hold Zone 1 termini (King's Cross/St Pancras in N1C/N1 9, Euston and
+# Marylebone/Baker Street in NW1, Paddington in W2) beside Zone 2 stations. A district that
+# straddles Zones 1/2 answers 1: a Zone 1-N pass also covers Zone 2, while the Zone 2 pass
+# these districts used to produce does not cover the Zone 1 terminus — King's Cross ->
+# Canary Wharf was recommended a "Zone 2 Monthly Travelcard" (R1-09).
 _DISTRICT_ZONES = {
-    **{d: 1 for d in ("W1", "SW1", "SE1", "SW3", "SW7")},
+    **{d: 1 for d in ("W1", "SW1", "SE1", "SW3", "SW7", "N1", "NW1", "W2")},
     **{d: 2 for d in (
-        "N1", "N4", "N5", "N7", "N16",
-        "NW1", "NW3", "NW5", "NW6", "NW8",
+        "N4", "N5", "N7", "N16",
+        "NW3", "NW5", "NW6", "NW8",
         "E1", "E2", "E3", "E5", "E8", "E9", "E14",
         "SE4", "SE5", "SE8", "SE11", "SE14", "SE15", "SE16", "SE17", "SE22", "SE24",
         "SW2", "SW4", "SW5", "SW6", "SW8", "SW9", "SW10", "SW11",
-        "W2", "W6", "W8", "W9", "W10", "W11", "W12", "W14")},
+        "W6", "W8", "W9", "W10", "W11", "W12", "W14")},
     **{d: 3 for d in (
         "N2", "N6", "N8", "N15", "N17", "N19", "N22",
         "NW2", "NW10", "NW11",
@@ -161,6 +172,48 @@ _DISTRICT_ZONES = {
     **{d: 4 for d in ("N3", "N11", "N12", "N14", "NW4", "NW7", "NW9", "E6", "E11", "E12", "SW20",
                       "W7")},
 }
+
+
+# Named Zone 1 stations (fare zone 1, or a Zone 1/2 boundary station, where 1 is the zone
+# whose pass covers it). Matched only as a STATION — the whole place ("King's Cross",
+# "Paddington, London") or a name followed by "station" — never as a street name:
+# "Victoria Road, Ilford" and "Euston Road" are not stations.
+_ZONE_ONE_STATIONS = (
+    "king's cross st pancras", "king's cross", "st pancras", "st pancras international",
+    "euston", "euston square", "paddington", "marylebone", "baker street",
+    "liverpool street", "waterloo", "waterloo east", "victoria", "london bridge",
+    "charing cross", "fenchurch street", "cannon street", "blackfriars", "city thameslink",
+    "moorgate", "bank", "monument", "oxford circus", "tottenham court road", "holborn",
+    "angel", "old street", "farringdon", "barbican", "bond street", "green park",
+    "piccadilly circus", "leicester square", "covent garden", "westminster", "embankment",
+    "temple", "aldgate", "aldgate east", "tower hill", "tower gateway", "borough",
+    "lambeth north", "russell square", "goodge street", "warren street",
+    "great portland street", "regent's park", "edgware road", "lancaster gate",
+    "marble arch", "hyde park corner", "knightsbridge", "south kensington", "sloane square",
+    "st james's park", "chancery lane", "st paul's", "mansion house",
+    "elephant and castle", "elephant & castle", "vauxhall", "pimlico", "earl's court",
+    "gloucester road", "high street kensington", "notting hill gate", "queensway",
+    "bayswater", "southwark",
+)
+_STATION_SUFFIX = r"(?:\s+(?:(?:underground|tube|rail|railway|mainline|overground|national rail|dlr)\s+)?(?:station|stn))?"
+
+
+def _zone_from_station_name(address: str) -> Optional[int]:
+    """1 when ``address`` names a Zone 1 station as a station, else None."""
+    text = " ".join(re.sub(r"[\u2019']", "'", str(address or "")).lower().split())
+    if not text:
+        return None
+    text = re.sub(r"\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b", " ", text)          # postcode
+    text = re.sub(r"\bst\.\s*", "st ", text)
+    text = re.sub(r"^(?:london\s+)|[,\s]+(?:london|uk|united kingdom|england)\b", " ", text)
+    text = " ".join(text.replace(",", " ").split()).strip(" .")
+    for name in sorted(_ZONE_ONE_STATIONS, key=len, reverse=True):
+        stem = re.escape(name).replace("'", "'?")
+        if re.fullmatch(stem + _STATION_SUFFIX, text) or re.search(
+                r"(?<![a-z])" + stem + r"\s+(?:(?:underground|tube|rail|railway|mainline|overground|"
+                r"national rail|dlr)\s+)?(?:station|stn)\b", text):
+            return 1
+    return None
 
 
 def _get_zone_from_postcode(postcode: str) -> Optional[int]:

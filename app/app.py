@@ -2012,9 +2012,14 @@ def _prepare_chat_request():
         message = normalize_message(data.get('message'))
     except InvalidMessage as exc:
         raise ApiError(400, str(exc))
+    context = data.get('context') or {}
+    if not isinstance(context, dict):
+        # A list/string/number context crashed deep in the turn and answered 502 "Sorry,
+        # something went wrong", after persisting a failed turn (2026-10-19 C-06).
+        raise ApiError(400, "context must be a JSON object")
     prepared = ChatRequest(
         data=data, user_id=user_id, message=message,
-        context=data.get('context', {}) or {},
+        context=context,
         is_continuation=data.get('is_continuation', False),
         ui_language=_normalize_ui_language(data.get('ui_language')),
         request_id=new_request_id(request.headers.get("X-Request-Id")),

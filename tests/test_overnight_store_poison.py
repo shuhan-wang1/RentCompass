@@ -164,3 +164,12 @@ def test_a_non_string_favorite_url_is_refused(client, url):
     r = _raw(c, "POST", "/api/favorites", json.dumps({"url": url}))
     assert r.status_code == 400
     assert store.list_favorites("attacker") == []
+
+
+@pytest.mark.parametrize("context", [["a"], "text", 7, True])
+def test_a_non_object_context_is_a_400_before_any_turn_is_stored(client, context):
+    """C-06: these used to answer 502 after persisting a failed turn and a junk conversation."""
+    c, store = client
+    r = _raw(c, "POST", "/api/alex", json.dumps({"message": "hi", "context": context}))
+    assert r.status_code == 400
+    assert store.list_conversations("attacker") == []

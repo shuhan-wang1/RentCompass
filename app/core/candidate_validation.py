@@ -1309,6 +1309,20 @@ def _render_end(end: tuple[str, str | None], zh: bool) -> str:
     return f"{station}（{asked} 的就近车站）" if zh else f"{station} (nearest station to {asked})"
 
 
+# A destination the answer names by its usual short form. "从 Limes Avenue 到 UCL 约 70 分钟"
+# quoted calculate_commute's measured 70 minutes to "University College London, Gower
+# Street …", but "UCL" was no label of that binding, so the evidenced total was withdrawn
+# and the answer said only "较长通勤" (R1-10).
+_PLACE_ALIASES = (
+    ("university college london", ("UCL", "伦敦大学学院")),
+    ("king's college london", ("KCL", "伦敦国王学院", "国王学院")),
+    ("london school of economics", ("LSE", "伦敦政经", "伦敦政治经济学院")),
+    ("imperial college london", ("Imperial College", "帝国理工", "帝国理工学院")),
+    ("queen mary university of london", ("QMUL", "Queen Mary", "伦敦玛丽女王大学")),
+    ("school of oriental and african studies", ("SOAS", "亚非学院")),
+)
+
+
 def _place_labels(value: Any) -> list[str]:
     if isinstance(value, dict):
         values = [value.get("input"), value.get("resolved_station"), value.get("name")]
@@ -1319,6 +1333,10 @@ def _place_labels(value: Any) -> list[str]:
         text = str(item or "").strip()
         if text:
             labels.extend([text, text.split(",", 1)[0].strip()])
+            key = _label_key(text)
+            for full, short in _PLACE_ALIASES:
+                if _label_key(full) in key or any(_label_key(s) == key for s in short):
+                    labels.extend((full.title(),) + short)
     for label in list(labels):
         bare = _TRANSPORT_SUFFIX.sub("", label).strip()
         if bare != label and len(bare) >= 4:

@@ -65,3 +65,22 @@ def test_r1_10_no_dangling_fragments():
                                   zh=False, removed=removed)
     assert kept == "Flat A, NW1 - £1,500/month, it has a garden."
     assert removed
+
+
+def test_r1_10_evidenced_total_named_by_its_abbreviation_is_kept():
+    """calculate_commute measured 70 min to "University College London, Gower Street …"; the
+    answer wrote "从 Limes Avenue 到 UCL 约 70 分钟" and the figure was withdrawn because "UCL"
+    was not a label of that route."""
+    raw = {"from_address": "Limes Avenue, Chigwell IG7",
+           "to_address": "University College London, Gower Street, London WC1E 6BT",
+           "mode": "transit", "duration_minutes": 70, "basis": "tfl_journey_plan",
+           "route_summary": "Tube Central to Liverpool Street (25 min) -> Tube Metropolitan to "
+                            "Euston Square (9 min)"}
+    state = {"extracted_context": {"current_message": "最便宜的那套到UCL通勤要多久？",
+                                   "reply_language": "zh"},
+             "tool_artifacts": [{"tool": "calculate_commute", "success": True, "raw_data": raw}]}
+    answer = ("最便宜的一套是 Limes Avenue, Chigwell IG7（£1400/月）。根据 TfL 行程规划（官方数据），"
+              "从 Limes Avenue 到 UCL 约 70 分钟，属于较长通勤。")
+    out = validate_commute_response(answer, state)
+    assert "70 分钟" in out
+    assert "注：部分通勤结论" not in out

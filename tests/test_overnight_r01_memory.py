@@ -9,6 +9,7 @@ as a refusal.
 from __future__ import annotations
 
 import asyncio
+import uuid
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -19,6 +20,15 @@ from core.memory_contract import memory_contract_from_artifact, memory_notice
 from tests.test_agent_contract_guards import Provider, Result, Spec, _state, _tc
 
 MESSAGE = "Hi, I want a 1-bed flat in Camden under £2,200 pcm. Please remember that I have a cat."
+
+
+def _isolated_state(message):
+    """A session of its own: a refused write is FROZEN as a pending write for the session,
+    and a shared synthetic session id would let a later test's "Please remember ..." confirm
+    and replay it (an order-dependent second write)."""
+    state = _state(message)
+    state["session_id"] = f"r107-{uuid.uuid4().hex}"
+    return state
 
 
 @pytest.mark.parametrize("message, fact", [
@@ -46,7 +56,7 @@ def test_r1_07_tainted_batch_saves_the_users_own_clause(proposed):
         {"search_properties": Result(True, {"status": "found", "recommendations": []}),
          "remember": lambda **kw: Result(True, {"success": True, "stored": kw.get("content")})})
     nodes = build_fc_nodes(provider)
-    state = _state(MESSAGE)
+    state = _isolated_state(MESSAGE)
     state["messages"] = [AIMessage(content="", tool_calls=[
         _tc("search_properties", {"area": "Camden", "max_budget": 2200}, "c0"),
         _tc("remember", {"content": proposed, "kind": "semantic"}, "c1")])]
@@ -62,7 +72,7 @@ def test_r1_07_matching_model_content_is_left_alone():
         [Spec("search_properties"), Spec("remember", side_effect="write", retry_safe=False)],
         {"remember": lambda **kw: Result(True, {"success": True, "stored": kw.get("content")})})
     nodes = build_fc_nodes(provider)
-    state = _state(MESSAGE)
+    state = _isolated_state(MESSAGE)
     state["messages"] = [AIMessage(content="", tool_calls=[
         _tc("search_properties", {"area": "Camden"}, "c0"),
         _tc("remember", {"content": "User has a cat"}, "c1")])]
@@ -74,7 +84,7 @@ def test_r1_07_tool_derived_content_without_a_remember_cue_is_still_refused():
     provider = Provider(
         [Spec("search_properties"), Spec("remember", side_effect="write", retry_safe=False)])
     nodes = build_fc_nodes(provider)
-    state = _state("Show me flats in Camden under £2,200")
+    state = _isolated_state("Show me flats in Camden under £2,200")
     state["messages"] = [AIMessage(content="", tool_calls=[
         _tc("search_properties", {"area": "Camden"}, "c0"),
         _tc("remember", {"content": "landlord prefers a bank transfer"}, "c1")])]

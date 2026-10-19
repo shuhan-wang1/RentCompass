@@ -173,3 +173,21 @@ def test_a_non_object_context_is_a_400_before_any_turn_is_stored(client, context
     r = _raw(c, "POST", "/api/alex", json.dumps({"message": "hi", "context": context}))
     assert r.status_code == 400
     assert store.list_conversations("attacker") == []
+
+
+def test_an_idempotency_key_is_bound_to_its_source_and_endpoint(client):
+    """C-07: (user, key) alone used to replay the first child for ANY source or endpoint."""
+    c, store = client
+    first = _victim_turn_starts(store, user="attacker")
+    second = _victim_turn_starts(store, user="attacker")
+    a, b = first["conversation_id"], second["conversation_id"]
+    key = {"Idempotency-Key": "k-1"}
+    made = _raw(c, "POST", f"/api/conversations/{a}/fork", "{}", headers=key)
+    assert made.status_code == 201
+    replay = _raw(c, "POST", f"/api/conversations/{a}/fork", "{}", headers=key)
+    assert replay.status_code == 200 and replay.get_json()["idempotent"] is True
+    other_source = _raw(c, "POST", f"/api/conversations/{b}/fork", "{}", headers=key)
+    assert other_source.status_code == 409
+    other_endpoint = _raw(c, "POST", f"/api/conversations/{a}/edit_turn",
+                          json.dumps({"turn_id": first["id"]}), headers=key)
+    assert other_endpoint.status_code == 409

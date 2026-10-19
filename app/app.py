@@ -35,7 +35,7 @@ from uk_rent_agent.web.background_jobs import OutboxWorker
 from uk_rent_agent.web.conversation_store import (
     ConversationStore, ConversationNotFound, NoCompletedTurn, TurnNotFound,
     TurnNotInConversation, TurnNotCompleted, ConversationBusy,
-    PrivacyErasureInProgress,
+    PrivacyErasureInProgress, IdempotencyKeyReused,
 )
 from uk_rent_agent.web.identity import (
     resolve_user_id, normalize_message, valid_user_id, InvalidUserId, InvalidMessage,
@@ -4356,6 +4356,8 @@ _FORK_ERROR_MAP = (
     (TurnNotInConversation, 400, "turn_not_in_conversation",
      "turn does not belong to this conversation"),
     (TurnNotCompleted, 400, "turn_not_completed", "turn is not completed"),
+    (IdempotencyKeyReused, 409, "idempotency_key_reused",
+     "this idempotency key was already used for a different request"),
 )
 
 

@@ -224,6 +224,14 @@ class ConversationNotFound(ForkError):
     """Source conversation does not exist for this user."""
 
 
+class IdempotencyKeyReused(ForkError):
+    """The idempotency key already names a branch of a DIFFERENT source or kind.
+
+    The key used to be matched on (user, key) alone, so replaying it against another
+    conversation, or on the other endpoint, silently returned the first child
+    (2026-10-19 C-07)."""
+
+
 class NoCompletedTurn(ForkError):
     """No completed turn is available to fork from (after_turn_id omitted)."""
 
@@ -1552,6 +1560,9 @@ class ConversationStore:
                 if existing:
                     child = self.get_conversation(user_id, existing["conversation_id"])
                     if child is not None:
+                        if (child.get("parent_conversation_id") != source_cid
+                                or child.get("fork_reason") == "edit"):
+                            raise IdempotencyKeyReused(idempotency_key)
                         child = dict(child)
                         child["idempotent"] = True
                         return child
@@ -1831,6 +1842,9 @@ class ConversationStore:
                 if existing:
                     child = self.get_conversation(user_id, existing["conversation_id"])
                     if child is not None:
+                        if (child.get("parent_conversation_id") != source_cid
+                                or child.get("fork_reason") != "edit"):
+                            raise IdempotencyKeyReused(idempotency_key)
                         child = dict(child)
                         child["idempotent"] = True
                         return child

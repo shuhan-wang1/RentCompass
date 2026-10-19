@@ -625,11 +625,16 @@ def _canonical_poi_args(batch: list) -> dict:
     union of types (comma-separated), widest radius. Every merged call gets the SAME digest,
     so the existing no-progress guard runs the first and answers the rest with its result
     instead of paying for them again."""
+    from core.strict_schema import strip_null_args
     groups: dict = {}
     for tc in batch:
         if (tc.get("name") or "") != "search_nearby_pois":
             continue
-        args = tc.get("args") or {}
+        # The merged call REPLACES the per-call args the dispatch loop has already
+        # null-stripped, so it must be built from null-stripped args too: a strict-mode
+        # call carries "latitude": null / "longitude": null, and copying the raw args back
+        # failed every merged POI call with "ValidationError: invalid parameters" (B-06).
+        args = strip_null_args(tc.get("args") or {})
         address = str(args.get("address") or "").strip()
         if not address:
             continue
@@ -3190,10 +3195,15 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                     p[argument] = acc[stored]
         if acc.get('area') and not acc.get('areas'):
             p['areas'] = [acc['area']]
-        if cd:
+        if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd
         if acc.get('no_commute'):
-            p['max_commute_time'] = None
+            # REMOVE the commute filters; never set them to None. SearchPropertiesInput is
+            # strict and validates against the authored schema, where max_commute_time is
+            # an integer and commute_destination a string, so an explicit null failed
+            # every no-commute search with "ValidationError: invalid parameters" (A-02).
+            p.pop('max_commute_time', None)
+            p.pop('commute_destination', None)
         total_budget = acc.get('monthly_total_budget')
         if isinstance(total_budget, (int, float)) and total_budget > 0:
             # Rent alone cannot exceed the entire rent+transport allowance. This
@@ -3204,7 +3214,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         if commute_query_forbidden(p['current_message']):
             p['no_commute'] = True
             p.pop('max_commute_time', None)
-        return p
+        # Harness-supplied params cross the same strict input contract as the model's: an
+        # explicit None is a validation failure there, not "unset". strip_null_args already
+        # ran on the MODEL's arguments; this covers every value injected after it.
+        from core.strict_schema import strip_null_args
+        return strip_null_args(p)
 
     def _derived_toolmsg(tool: str, result) -> tuple[str, bool]:
         """Dual-channel model-facing view (design §2.3): {"success","data","error"} JSON,
@@ -3337,6 +3351,11 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if name in ('check_safety', 'search_nearby_pois', 'get_transport_info'):
                 from core.property_scope import grounded_property_read_args
                 args = grounded_property_read_args(name, args, cur_msg, ec)
+            # Every tool input model is strict and validates the authored schema, where an
+            # optional parameter is absent, never null. Whatever the injections above wrote
+            # (a cleared criterion, a merged POI call), null means "not supplied".
+            from core.strict_schema import strip_null_args
+            args = strip_null_args(args)
             digest = _params_digest(name, args)
             if (name, digest) in seen:
                 plan.append((tc, digest, "skip_dup", args))

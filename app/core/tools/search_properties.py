@@ -1538,7 +1538,7 @@ def ground_hard_constraints(params: dict, accumulated: dict = None,
     if fresh_rt or acc_rt:
         p['room_type'] = fresh_rt or acc_rt
     if date_is_cleared(message) or ('move_in_date' in acc and acc['move_in_date'] is None):
-        p['move_in_date'] = None
+        p.pop('move_in_date', None)
     if p.get('property_features'):
         from core.langgraph_agent import _extract_accessibility_requirements
         required = set(_extract_accessibility_requirements(message)['required'])
@@ -1561,7 +1561,11 @@ def ground_hard_constraints(params: dict, accumulated: dict = None,
         p['areas'], p['area'] = protected.get('areas', []), protected.get('area')
     if 'commute_destination' in (acc.get('constraint_sources') or {}):
         p['commute_destination'] = protected.get('commute_destination')
-    return p, dropped
+    # A cleared criterion (no_commute's commute_destination, a removed budget, a cleared
+    # move-in date) is ABSENT, never None: the tool's input contract is strict and checks
+    # the authored schema, so an explicit null failed the whole search (A-02).
+    from core.strict_schema import strip_null_args
+    return strip_null_args(p), dropped
 
 
 def _strip_memory_block(text: str) -> str:

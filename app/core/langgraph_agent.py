@@ -3972,6 +3972,10 @@ def _make_execute_tool_node(tool_registry):
                 _rl = extracted_context.get('reply_language')
                 if _rl and not params.get('reply_language'):
                     params['reply_language'] = _rl
+                # A protected-but-cleared criterion arrives here as None; the strict input
+                # contract rejects an explicit null, so a cleared value is sent as absent.
+                from core.strict_schema import strip_null_args
+                params = strip_null_args(params)
 
                 invocation = ToolInvocation.create(
                     run_id=state.get("run_id", "legacy"), node_id="execute_tool",

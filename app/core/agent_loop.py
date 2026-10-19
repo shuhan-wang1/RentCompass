@@ -3327,6 +3327,25 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         rl = ec.get("reply_language")
         if rl and not p.get("reply_language"):
             p["reply_language"] = rl
+        # A place the user's own follow-up names ("and Newcastle?", "how about Kew?") that the
+        # model put in the area slot is the user's choice, even when the parser does not know
+        # the name: the accumulated area used to overwrite it and the OLD area was searched
+        # again under a "verified" header (R2-14).
+        keep_model_area = False
+        try:
+            from core.tools.search_properties import names_follow_up_area
+            _model_area = p.get("area")
+            keep_model_area = bool(
+                isinstance(_model_area, str) and _model_area.strip() and acc.get("area")
+                and _model_area.strip().lower() != str(acc.get("area")).strip().lower()
+                and names_follow_up_area(p.get("current_message") or "", _model_area))
+        except Exception:
+            keep_model_area = False
+        if keep_model_area:
+            logger.info("fc_loop.kept_user_named_area")
+            if not any(str(a).strip().lower() == p["area"].strip().lower()
+                       for a in p.get("areas") or []):
+                p["areas"] = [p["area"]]
         # Known user constraints are authoritative, including explicit clearing (None)
         # and zero-bedroom studios. The model may supply only genuinely unknown slots.
         for stored, argument in (
@@ -3339,11 +3358,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             if stored in acc:
                 if kept_city and stored in ('area', 'areas') and acc.get('area') == kept_city:
                     continue    # the bare city this turn named; the model's area is finer
+                if keep_model_area and stored in ('area', 'areas'):
+                    continue    # the place the user's follow-up named (R2-14)
                 if acc[stored] is None:
                     p.pop(argument, None)
                 else:
                     p[argument] = acc[stored]
-        if acc.get('area') and not acc.get('areas') and not (kept_city and acc.get('area') == kept_city):
+        if (acc.get('area') and not acc.get('areas') and not keep_model_area
+                and not (kept_city and acc.get('area') == kept_city)):
             p['areas'] = [acc['area']]
         if cd and not acc.get('no_commute'):
             p['commute_destination'] = cd

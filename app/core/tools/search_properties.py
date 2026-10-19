@@ -104,6 +104,13 @@ _NO_COMMUTE_PHRASES = (
     "work from home", "working from home", "wfh", "remote work", "fully remote",
     "不通勤", "不用通勤", "不需要通勤", "无需通勤",
     "单纯住", "就是住", "只是住", "不上班", "在家办公", "居家办公", "远程工作",
+    # Retractions (R2-15): "Never mind about commute." kept the destination and the 30-minute
+    # limit, and results were still excluded for "measured commute 41 min exceeds limit 30".
+    "never mind about commute", "never mind about the commute", "never mind the commute",
+    "nevermind the commute", "forget about the commute", "forget the commute",
+    "forget about commute", "cancel the commute", "remove commute", "drop commute",
+    "ignore the commute", "commute doesn't matter", "commute does not matter",
+    "不考虑通勤", "通勤无所谓", "通勤不重要", "别管通勤",
 )
 
 
@@ -270,7 +277,8 @@ _ACCESSIBILITY_FEATURE_PATTERNS = (
 )
 
 _ACCESSIBILITY_FEATURES = frozenset(name for name, _ in _ACCESSIBILITY_FEATURE_PATTERNS)
-_EVIDENCE_ONLY_FEATURES = _ACCESSIBILITY_FEATURES | {'cats allowed', 'pets allowed', 'cat_written_consent'}
+_EVIDENCE_ONLY_FEATURES = _ACCESSIBILITY_FEATURES | {'cats allowed', 'pets allowed', 'cat_written_consent',
+                                                     'furnished'}
 
 
 def _requires_explicit_feature_evidence(feature: str) -> bool:
@@ -395,6 +403,24 @@ def _property_feature_evidence(prop: dict, feature: str) -> str:
         blob = f"{room_type} {amenities}".lower()
         return ("verified" if any(token in blob for token in ("en-suite", "ensuite", "en suite"))
                 else "unverified")
+    if canonical == 'furnished':
+        # Structured furnishing only (R2-16): "Furnished" in the amenities verifies it,
+        # "Unfurnished" denies it; "furnished or unfurnished" / "part furnished" and silence
+        # stay unknown.
+        blob = " ".join(str(v) for v in (amenities, prop.get("Furnishing"), prop.get("Furnished"),
+                                         prop.get("furnish_type")) if v not in (None, "")).lower()
+        if prop.get("Furnished") is True:
+            return 'verified'
+        if prop.get("Furnished") is False:
+            return 'absent'
+        if re.search(r"furnished\s+or\s+unfurnished|unfurnished\s+or\s+furnished|part[\s-]*furnished|"
+                     r"flexible", blob):
+            return 'unverified'
+        if re.search(r"\bunfurnished\b", blob):
+            return 'absent'
+        if re.search(r"\b(?:fully\s+)?furnished\b", blob):
+            return 'verified'
+        return 'unverified'
     if canonical in {'cats allowed', 'pets allowed'}:
         keys = ('Cats_Allowed', 'Pets_Allowed') if canonical == 'cats allowed' else ('Pets_Allowed',)
         for key in keys:
@@ -1403,7 +1429,11 @@ _AREA_REMOVE_AFTER = re.compile(
     r"|(?:也)?(?:去掉|删掉|删除|移除|排除|不要了|不看了))", re.I)
 _AREA_ONLY_BEFORE = re.compile(
     r"(?:\b(?:just|only|stick\s+(?:to|with))(?:\s+(?:search|look|show)(?:\s+(?:in|at))?)?"
-    r"|(?:只看|只要|只搜(?:索)?|只在|仅看|仅在|只考虑))\s*$", re.I)
+    # A switch REPLACES the list: "Switch to Clapham, drop Camden." left no area at all,
+    # because only the removal was read (R2-13).
+    r"|\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to|change\s+(?:it\s+|the\s+(?:area|search)\s+)?to"
+    r"|move\s+(?:it\s+|the\s+search\s+)?to|go(?:ing)?\s+back\s+to|back\s+to)"
+    r"|(?:只看|只要|只搜(?:索)?|只在|仅看|仅在|只考虑|换成|改成|改为|切换到|回到))\s*$", re.I)
 _AREA_ONLY_AFTER = re.compile(r"\s*(?:only\b|就好|就行|就可以)", re.I)
 _AREA_NAMED_ADD = re.compile(
     r"\b(?i:add)\s+((?:[A-Z][a-z’'\-]+)(?:\s+[A-Z][a-z’'\-]+){0,2})\s+"
@@ -1423,7 +1453,7 @@ def area_list_edit(text: str, current: list | None) -> list[str] | None:
     if not source or not source.strip():
         return None
     current = [a for a in (current or []) if isinstance(a, str) and a.strip()]
-    names = {**_KNOWN_AREAS, **_ZH_AREA_MAP}
+    names = {**_KNOWN_AREAS, **_ZH_AREA_MAP, **_CUE_ONLY_AREAS}
     for area in current:
         names.setdefault(re.sub(r"[’']", '', area.lower()), area)
     alternatives = '|'.join(re.escape(n) for n in sorted(names, key=len, reverse=True))
@@ -1693,7 +1723,81 @@ def _extract_area(text: str) -> str | None:
         canon = _KNOWN_AREAS.get(bare)
         if canon:
             return canon
-    return None
+    return _follow_up_switch_area(text)
+
+
+# Areas the listing snapshot covers but the curated table deliberately leaves out because
+# the name is also a common word ("angel", "bow") or rarely a home area. They count ONLY after
+# an explicit switch cue, never as a bare word: "Switch to Angel instead." searched the OLD
+# area again under a "verified" header (R2-14, 17/17).
+_CUE_ONLY_AREAS = {
+    "angel": "Angel", "bow": "Bow", "bloomsbury": "Bloomsbury", "euston": "Euston",
+    "fitzrovia": "Fitzrovia", "holborn": "Holborn", "south bank": "South Bank",
+    "south kensington": "South Kensington", "knightsbridge": "Knightsbridge",
+    "canning town": "Canning Town", "poplar": "Poplar", "chessington": "Chessington",
+    "inverness": "Inverness",
+}
+# An explicit switch / short follow-up: "switch to X", "make that X", "how about X?", "what
+# about X?", "go back to X", "and X?", "X instead". Clause-local, read on lower-cased text.
+_FOLLOW_UP_CUE_BEFORE = re.compile(
+    r"(?:\b(?:switch(?:ing)?\s+(?:the\s+search\s+|it\s+|over\s+)?to|change\s+(?:it\s+|the\s+(?:area|search)\s+)?to"
+    r"|move\s+(?:it\s+|the\s+search\s+)?to|make\s+(?:it|that)|how\s+about|what\s+about"
+    r"|go(?:ing)?\s+back\s+to|back\s+to|let'?s\s+(?:try|do)|try|search\s+in|look\s+in)\s+$)")
+# A bare follow-up ("and Chelsea?", "Bow?") is the WHOLE clause: "Angel investors are nice"
+# names no area.
+_FOLLOW_UP_BARE_BEFORE = re.compile(r"^\s*(?:and|or|ok(?:ay)?|actually|then)?\s*$")
+_FOLLOW_UP_BARE_AFTER = re.compile(r"\s*(?:instead|please|then|too|as\s+well)?\s*[?.!]*\s*(?:$|[,;\n])")
+
+
+def _follow_up_cue(text: str, start: int, end: int) -> bool:
+    before = re.split(r"[.;!?,，。；！？\n]", text[max(0, start - 40):start])[-1]
+    after = text[end:end + 30]
+    if _FOLLOW_UP_CUE_BEFORE.search(before) or re.match(r"\s+instead\b", after):
+        return True
+    return bool(_FOLLOW_UP_BARE_BEFORE.match(before) and _FOLLOW_UP_BARE_AFTER.match(after))
+
+
+def _follow_up_switch_area(text: str) -> str | None:
+    """The area an explicit switch cue or a short follow-up names, else None.
+
+    Covers the snapshot's cue-only areas and the curated ones a follow-up names without the
+    cues ``_AREA_CUE_RE`` knows ("and Chelsea?", "go back to Camden"). The last such mention
+    wins; a name inside a street/station address never counts (R2-05)."""
+    t = re.sub(r"[’']", "", str(text or "").lower())[:2000]
+    if not t.strip():
+        return None
+    names = {**_KNOWN_AREAS, **_CUE_ONLY_AREAS}
+    best = None
+    for key, canon in names.items():
+        for found in re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", t):
+            if _STREET_AFTER_NAME.match(t, found.end()):
+                continue
+            if not _follow_up_cue(t, found.start(), found.end()):
+                continue
+            rank = (found.start(), len(key))
+            if best is None or rank > best[0]:
+                best = (rank, canon)
+    return best[1] if best else None
+
+
+def names_follow_up_area(text: str, candidate: str) -> bool:
+    """True when ``text`` names ``candidate`` (a place the model chose) right after an explicit
+    switch cue or a short follow-up ("and Newcastle?" -> "Newcastle upon Tyne")."""
+    t = re.sub(r"[’']", "", str(text or "").lower())[:2000]
+    value = re.sub(r"[’']", "", str(candidate or "").lower()).strip()
+    if not t or not value:
+        return False
+    keys = {value, value.split(",")[0].strip()}
+    first = value.split()[0] if value.split() else ""
+    if len(first) >= 4:
+        keys.add(first)
+    for key in keys:
+        if not key:
+            continue
+        for found in re.finditer(r"(?<![a-z])" + re.escape(key) + r"(?![a-z])", t):
+            if _follow_up_cue(t, found.start(), found.end()):
+                return True
+    return False
 
 
 # Phrases meaning "remove/clear any budget limit" — English + Chinese. Distinct from
@@ -1713,6 +1817,11 @@ _BUDGET_CLEAR_PHRASES = (
     "价格不限", "不限价格", "不限价", "预算无所谓", "预算不是问题",
     "多少钱都行", "多少钱都可以", "价格无所谓", "不在乎预算", "不在乎价格",
     "预算没有限制",
+    # Retractions (R2-15): the criteria answer said "No maximum" while max_budget stayed 2600.
+    "cancel the budget", "cancel budget", "cancel my budget", "never mind the budget",
+    "never mind about the budget", "nevermind the budget", "ignore the budget",
+    "remove the budget limit", "drop the budget limit", "no budget cap",
+    "取消预算", "去掉预算", "删除预算", "不要预算限制", "预算取消",
 )
 
 # Regex forms carrying an apostrophe / word gap ("budget doesn't matter",
@@ -1722,6 +1831,9 @@ _BUDGET_CLEAR_PATTERNS = (
     r"\b(?:budget|price|cost)\s+(?:is\s+not|isn[’']?t|is\s+n[’']?t)\s+(?:a\s+)?(?:concern|issue|problem)\b",
     r"\bno\s+(?:budget|price|spending|cost)\s+(?:limit|cap|maximum|max)\b",
     r"\bdo\s*n[’']?t\s+(?:care|worry)\s+about\s+(?:the\s+|my\s+)?(?:budget|price|cost)\b",
+    # "no maximum" / "no max" only beside a budget word in the same message.
+    r"\bno\s+(?:maximum|max|upper\s+limit|ceiling)\b(?=[^.!?]*\b(?:budget|price|rent)\b)|"
+    r"\b(?:budget|price|rent)\b[^.!?]*\bno\s+(?:maximum|max|upper\s+limit|ceiling)\b(?!\s+(?:commute|travel))",
 )
 
 

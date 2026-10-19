@@ -341,6 +341,38 @@ _PET_WITHDRAWAL = re.compile(
     r'|(?:取消|去掉|删除|忽略)[^。；]{0,10}(?:猫|狗|宠物)', re.I)
 
 
+def furnished_requirement_update(text: str) -> bool | None:
+    """An explicit FURNISHED requirement (True), its withdrawal (False), else None (R2-16).
+
+    "Furnished only please - I don't want anything unfurnished." and "It must be furnished."
+    stayed a soft preference, so an Eden Grove listing with no furnishing evidence was shown
+    under "Meets all declared conditions (verified)". Like a pet requirement (R1-06), the
+    requirement needs evidence. Wanting UNfurnished is a different requirement and is not
+    read here."""
+    for match in re.finditer(r'[^。.!?;；\n]+[。.!?;；\n]*', text or ''):
+        clause = match.group()
+        if not re.search(r'furnish|家具|家私', clause, re.I):
+            continue
+        if re.search(r"\b(?:unfurnished|furnished)\s+(?:is\s+)?(?:fine|ok(?:ay)?)\b|"
+                     r"\b(?:furnish\w*|furniture)\b[^.!?]{0,25}\b(?:doesn.t|does not|don.t|do not)\s+"
+                     r"(?:matter|need|mind)|\b(?:don.t|do not|no longer)\s+(?:need|require|care about)\s+"
+                     r"(?:it\s+(?:to\s+be\s+)?)?furnish|家具无所谓|不需要家具|不用带家具|不必带家具", clause, re.I):
+            return False
+        if is_hypothetical(clause) or re.search(r'[?？]|是否|吗|\bwhether\b', clause, re.I):
+            continue
+        wants_unfurnished = re.search(r'\b(?:want|need|prefer|must\s+be|only)\s+(?:an?\s+)?unfurnished\b|'
+                                      r'\bunfurnished\s+only\b', clause, re.I)
+        if wants_unfurnished:
+            continue
+        if re.search(r"\bfurnished\s+only\b|\bonly\s+(?:fully\s+)?furnished\b|"
+                     r"\b(?:must|has\s+to|have\s+to|needs?\s+to|should)\s+be\s+(?:fully\s+)?furnished\b|"
+                     r"\b(?:don.t|do\s+not)\s+want\s+(?:anything\s+|an?\s+)?unfurnished\b|"
+                     r"\bno\s+unfurnished\b|\b(?:need|require)s?\s+(?:an?\s+)?(?:fully\s+)?furnished\b|"
+                     r"必须(?:带|有)家具|(?:要|需要)(?:带|有)家具|只要(?:带)?家具", clause, re.I):
+            return True
+    return None
+
+
 def pet_requirement_update(text: str) -> bool | None:
     """A pet-permission requirement or its withdrawal, in the user's own words.
 

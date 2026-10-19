@@ -233,7 +233,10 @@ class JsonFormatter(logging.Formatter):
                 getattr(record, "user_id", user_id_var.get())
             ),
         }
-        for key in ("node", "tool", "latency_ms", "cache_hit", "input_tokens", "output_tokens"):
+        # error_type is an exception CLASS name: "agent.turn.execution_failed" was logged
+        # without it, so a deterministic RecursionError looked like an unknown 502 (R2-12).
+        for key in ("node", "tool", "latency_ms", "cache_hit", "input_tokens", "output_tokens",
+                    "error_type"):
             if hasattr(record, key):
                 data[key] = getattr(record, key)
         active_agent_context = current_agent_context()

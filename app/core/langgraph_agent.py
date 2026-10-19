@@ -473,7 +473,10 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
     }
     for amenity, keywords in amenity_patterns.items():
         for keyword in keywords:
-            for match in re.finditer(re.escape(keyword), user_message, re.I):
+            # Whole words only: 'pool' inside "Liverpool Street" became "Would like pool" and
+            # the answer told the user "You mentioned liking a pool" (R2-17).
+            for match in re.finditer(r"(?<![A-Za-z])" + re.escape(keyword) + r"(?![A-Za-z])",
+                                     user_message, re.I):
                 from core.constraint_updates import mention_is_requirement
                 if not mention_is_requirement(user_message, match.start(), match.end()):
                     continue
@@ -613,7 +616,8 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
 
 
 def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
-                                     apply_relative_budget: bool = True) -> dict:
+                                     apply_relative_budget: bool = True,
+                                     _reaffirmed: bool = False) -> dict:
     """D2: fold an explicit budget/commute change stated in THIS turn's raw message
     into the accumulated criteria (raise OR lower), so the update survives even when
     the turn produces no search. Returns the SAME object when nothing changed so the
@@ -635,14 +639,19 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     if not current_message:
         return accumulated
     from core.constraint_updates import housing_update_text
-    housing_message = housing_update_text(current_message)
+    # ``_reaffirmed``: the text is already the explicit feature requirement extracted below.
+    # Gating it through housing_update_text AGAIN can return '' again and recurse forever:
+    # "My favourite area is Angel and I need a lift." crashed every turn with a RecursionError
+    # (502, 0 LLM calls, 12/12 — R2-12).
+    housing_message = current_message if _reaffirmed else housing_update_text(current_message)
     if not housing_message:
         from core.constraint_updates import explicit_feature_requirement_text
         reaffirmed = explicit_feature_requirement_text(current_message)
         if not reaffirmed:
             return accumulated
         amended = _apply_explicit_criteria_updates(
-            accumulated, reaffirmed, apply_relative_budget=apply_relative_budget)
+            accumulated, reaffirmed, apply_relative_budget=apply_relative_budget,
+            _reaffirmed=True)
         result = dict(accumulated)
         sources = dict(accumulated.get('constraint_sources') or {})
         changed = False
@@ -942,6 +951,22 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         # A requirement replaces its soft copy; a withdrawal removes it.
         previous_soft = result.get('soft_preferences') or []
         soft = [v for v in previous_soft if not _pet_soft.search(str(v))]
+        if soft != previous_soft:
+            result['soft_preferences'] = soft
+            changed = True
+    from core.constraint_updates import furnished_requirement_update
+    furnished_need = furnished_requirement_update(original_message)
+    if furnished_need is not None:
+        existing = list(result.get('property_features') or [])
+        if furnished_need and 'furnished' not in existing:
+            result['property_features'] = existing + ['furnished']
+            changed = True
+        elif not furnished_need and 'furnished' in existing:
+            result['property_features'] = [f for f in existing if f != 'furnished']
+            changed = True
+        # A requirement replaces its soft copy ("furnished only"); a withdrawal removes it.
+        previous_soft = result.get('soft_preferences') or []
+        soft = [v for v in previous_soft if not re.search(r'furnish|家具', str(v), re.I)]
         if soft != previous_soft:
             result['soft_preferences'] = soft
             changed = True

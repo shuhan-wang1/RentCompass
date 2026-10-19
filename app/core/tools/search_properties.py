@@ -1268,19 +1268,65 @@ _AREA_BARE_FILLER = re.compile(
 )
 
 
+# A place name that is part of a STREET, STATION or other address is not an area (R2-05):
+# "near Gloucester Avenue, London NW1" switched a Camden search to the city of Gloucester and
+# "I work near Liverpool Street" to Liverpool. A known name followed by one of these words,
+# and every comma-joined component of the address after it ("…Avenue, London NW1"), is part
+# of that address. One exception: a London area's own station ("near King's Cross station")
+# still locates that area.
+_STREET_WORD = (
+    r"(?:high\s+)?(?:street|road|avenue|lane|place|square|park|gardens|terrace|crescent|close|"
+    r"way|drive|grove|mews|row|court|walk|parade|yard|station|bridge|airport|rd|ave|ln|sq|gdns|"
+    r"st(?!\.?\s+(?:pancras|james|johns?|albans|helens|katharine|pauls?|marys?|giles|lukes?|"
+    r"georges?|margarets?|leonards|ives|neots|andrews)\b))(?![a-z])")
+_STREET_AFTER_NAME = re.compile(r"\.?\s+" + _STREET_WORD, re.I)
+_STREET_NAME = re.compile(r"(?<![a-z])[a-z][a-z\-]*\s+" + _STREET_WORD, re.I)
+_ADDRESS_JOIN = re.compile(r"\s*,\s*(?:\d+\s*)?$")
+_POSTCODE_TAIL = re.compile(r"\s*,?\s*[a-z]{1,2}\d{1,2}[a-z]?(?:\s*\d[a-z]{2})?(?![a-z\d])", re.I)
+
+
+def _area_mentions(text: str):
+    """``(key, start, end)`` for every known-area mention in ``text`` (already lower-cased and
+    apostrophe-free) that names an AREA — not part of a street or station address."""
+    mentions = []
+    for key in _KNOWN_AREAS:
+        for found in re.finditer(r"\b" + re.escape(key) + r"\b", text):
+            mentions.append((key, found.start(), found.end()))
+    if not mentions:
+        return []
+    address_ends = [m.end() for m in _STREET_NAME.finditer(text)]
+    mentions.sort(key=lambda item: (item[1], -(item[2] - item[1])))
+    kept = []
+    for key, start, end in mentions:
+        street = _STREET_AFTER_NAME.match(text, end)
+        if street and not (key in LONDON_AREAS
+                           and re.fullmatch(r"\.?\s+station", street.group(), re.I)):
+            # "King's Cross station" still locates the King's Cross area; "Liverpool Street",
+            # "Gloucester Avenue" and "London Bridge" never locate the city they start with.
+            address_ends.append(street.end())
+            continue
+        # A comma-joined component right after an address ("Gloucester Avenue, London NW1",
+        # "10 Downing Street, Westminster") belongs to that address.
+        if any(a <= start and _ADDRESS_JOIN.fullmatch(text[a:start]) for a in address_ends):
+            tail = _POSTCODE_TAIL.match(text, end)
+            address_ends.append(tail.end() if tail else end)
+            continue
+        kept.append((key, start, end))
+    return kept
+
+
 def _match_known_area(fragment: str):
     """Canonical name of the LONGEST known UK city / London area that appears as a
     whole word in ``fragment``, else None. Apostrophes are normalised away so
     "shepherd's bush" matches; longest match wins so "notting hill" beats a stray
-    partial."""
+    partial. A name that is part of a street or station address does not count."""
     if not fragment:
         return None
     t = re.sub(r"[’']", "", fragment.lower())
     best_key = None
-    for key in _KNOWN_AREAS:
-        if re.search(r"\b" + re.escape(key) + r"\b", t):
-            if best_key is None or len(key) > len(best_key):
-                best_key = key
+    for key, _start, _end in _area_mentions(t):
+        if best_key is None or len(key) > len(best_key):
+            best_key = key
     return _KNOWN_AREAS[best_key] if best_key else None
 
 
@@ -1493,9 +1539,7 @@ def most_specific_known_area(text: str) -> str | None:
             return None
         t = re.sub(r"[\u2019']", "", str(text).lower())
         best_london = best_city = None
-        for key in _KNOWN_AREAS:
-            if not re.search(r"\b" + re.escape(key) + r"\b", t):
-                continue
+        for key in dict.fromkeys(key for key, _s, _e in _area_mentions(t)):
             if key in LONDON_AREAS:
                 if best_london is None or len(key) > len(best_london):
                     best_london = key

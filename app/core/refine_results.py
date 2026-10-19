@@ -420,8 +420,12 @@ def parse_refinement(message: str, previous: List[dict]) -> Optional[Dict[str, A
     # Repeating the current area while asking for another tool is not a subset
     # instruction. Let the normal graph execute every independent read.
     for clause in re.split(r'[.!?。！？;；\n]+', text):
+        # A question about what is near a place ("What supermarkets and parks are near
+        # Gloucester Avenue?") is a nearby-places question, never a filter (R2-05).
         if re.search(r'\b(?:weather|forecast|schools?|gps?|surgeries|crime|safety|'
-                     r'nearby|amenities|journey|route|tfl|fare)\b|天气|预报|学校|诊所|治安|周边|路线|票价',
+                     r'nearby|amenities|journey|route|tfl|fare|supermarkets?|parks?|shops?|gyms?|'
+                     r'pubs?|restaurants?|caf(?:e|é)s?|pharmac(?:y|ies))\b|'
+                     r'天气|预报|学校|诊所|治安|周边|路线|票价|超市|公园|商店|健身房|餐厅',
                      clause, re.I) and not re.search(
                          r'\b(?:do not|don.t|no need to|skip|without checking)\b|不要|不用|无需',
                          clause, re.I):

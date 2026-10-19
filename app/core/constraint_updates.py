@@ -8,11 +8,25 @@ from __future__ import annotations
 import re
 
 
+_CLAUSE_START = r'(?<![^。.!?;；\n])'
+_WITHDRAWN_CLAUSE = re.compile(
+    _CLAUSE_START + r'[^。.!?;；\n]*(?:\b(?:discard|disregard|ignore|withdraw)\b|作废|撤销|丢弃)'
+    r'[^。.!?;；\n]*(?:[。.!?;；\n]|$)', re.I)
+_KEPT_OUT_CLAUSE = re.compile(
+    _CLAUSE_START + r'[^。.!?;；\n]*\bkeep\b[^。.!?;；\n]*\bout of (?:this|the) (?:decision|search)\b'
+    r'[^。.!?;；\n]*(?:[。.!?;；\n]|$)', re.I)
+
+
 def scoped_update_text(text: str) -> str:
     text = str(text or '')
     # Withdrawn experiments and other people's plans are references, not updates.
-    text = re.sub(r'[^。.!?;；\n]*(?:\b(?:discard|disregard|ignore|withdraw)\b|作废|撤销|丢弃)[^。.!?;；\n]*(?:[。.!?;；\n]|$)', '', text, flags=re.I)
-    text = re.sub(r'[^。.!?;；\n]*\bkeep\b[^。.!?;；\n]*\bout of (?:this|the) (?:decision|search)\b[^。.!?;；\n]*(?:[。.!?;；\n]|$)', '', text, flags=re.I)
+    # Each clause pattern is anchored at a clause START (``_CLAUSE_START``). Unanchored, the
+    # leading ``[^…]*`` let the engine retry from every character of a long clause, each
+    # attempt re-scanning to its end: O(n²) on a long paste with no full stop, run several
+    # times per turn on the event loop (2026-10-19, B-01 class). Leftmost-match semantics
+    # already started every real match at a clause start, so the result is unchanged.
+    text = _WITHDRAWN_CLAUSE.sub('', text)
+    text = _KEPT_OUT_CLAUSE.sub('', text)
     # A comparison can quote another plan without changing it. Keep the explicit
     # modification, excluding the clause marked as unchanged.
     parts = re.split(r'[;；\n]', text)
@@ -68,10 +82,20 @@ def is_criteria_consultation(text: str) -> bool:
     return bool(re.search(r'^\s*(?:is|does|has)\b', text, re.I) and not update)
 
 
+_CLAUSE_BOUNDARY = re.compile(r'[。！？!?;；\n，,:：]|(?<!\d)\.(?!\d)')
+# How far a clause may extend either side of a mention. Every caller runs once per MENTION,
+# and scanning the whole prefix each time made a long unpunctuated paste O(mentions x
+# length) — 11 s for 28 000 characters of repeated Chinese criteria, on the event loop
+# (2026-10-19, B-01 class). No real clause is longer than this.
+_CLAUSE_WINDOW = 400
+
+
 def clause_at(text: str, start: int, end: int) -> str:
-    left = max([m.end() for m in re.finditer(r'[。！？!?;；\n，,:：]|(?<!\d)\.(?!\d)', text[:start])] or [0])
-    tail = re.search(r'[。！？!?;；\n，,:：]|(?<!\d)\.(?!\d)', text[end:])
-    right = end + tail.start() if tail else len(text)
+    lo = max(0, start - _CLAUSE_WINDOW)
+    # finditer(text, pos, endpos) reports absolute offsets.
+    left = max([m.end() for m in _CLAUSE_BOUNDARY.finditer(text, lo, start)] or [lo])
+    tail = _CLAUSE_BOUNDARY.search(text, end, min(len(text), end + _CLAUSE_WINDOW))
+    right = tail.start() if tail else min(len(text), end + _CLAUSE_WINDOW)
     return text[left:right]
 
 
@@ -79,7 +103,9 @@ def mention_is_requirement(text: str, start: int, end: int) -> bool:
     clause = clause_at(text, start, end)
     # Negation belongs to this clause. In particular, "not all London: a whole
     # one-bedroom flat" negates the area, not the room type or bedroom count.
-    before = re.split(r'[。！？!?;；\n，,:：]|(?<!\d)\.(?!\d)', text[:start])[-1][-45:]
+    # Only the last 45 characters are read, so a bounded window is exactly equivalent.
+    window = text[max(0, start - _CLAUSE_WINDOW):start]
+    before = _CLAUSE_BOUNDARY.split(window)[-1][-45:]
     if is_hypothetical(clause):
         return False
     if re.search(r'\b(?:don.t|do not) assume\b|不要假设|不能假设|out of (?:this|the) decision', clause, re.I):

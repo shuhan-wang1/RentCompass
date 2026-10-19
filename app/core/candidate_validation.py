@@ -934,11 +934,19 @@ def validate_search_payload(payload: dict, *, commute_evidence: list[dict] | Non
     return out
 
 
+# A minute figure starts where a number starts. Without the look-behind the engine retried
+# the match at EVERY digit of a long run, each attempt re-scanning the rest of the run before
+# failing to find "minutes" — O(n²) on a degenerate digit string, which is what the model
+# emitted (8 192 tokens of 9s) for a message carrying a 1 500-digit "flat number". Two passes
+# over that answer stalled the whole process for ~100 s (2026-10-19 B-01). Anchored, each run
+# is scanned once. Python 3.10 has no possessive quantifiers, hence the look-behind.
+_MINUTE_VALUE = re.compile(
+    r"(?<![\d.])(\d+(?:\.\d+)?)[\s\-–]*(?:minutes?|mins?|分钟)", re.IGNORECASE)
+
+
 def _minute_claim_values(text: str) -> list[float]:
     values = []
-    for match in re.finditer(
-        r"(\d+(?:\.\d+)?)[\s\-–]*(?:minutes?|mins?|分钟)", str(text or ""), re.IGNORECASE
-    ):
+    for match in _MINUTE_VALUE.finditer(str(text or "")):
         try:
             values.append(float(match.group(1)))
         except ValueError:
@@ -1049,8 +1057,9 @@ def _area_ranking_commute_supported(text: str, state: dict) -> bool:
 # "your 45-minute limit" are the same figure. Missing the hyphenated form left a cap quoted
 # inside a verdict invisible to the clause check, so the whole-line guard had to fail closed
 # on answers that were otherwise fine.
+# Anchored at the start of a number for the same reason as ``_MINUTE_VALUE`` (B-01).
 _MINUTE_TOKEN = re.compile(
-    r"\d+(?:\.\d+)?[\s\-–]*(?:minutes?|mins?\b|分钟|分鐘)", re.IGNORECASE)
+    r"(?<![\d.])\d+(?:\.\d+)?[\s\-–]*(?:minutes?|mins?\b|分钟|分鐘)", re.IGNORECASE)
 _COMMUTE_WORD = re.compile(
     r"commute|travel\s*time|journey|通勤|路程|车程|車程", re.IGNORECASE)
 # A commute VERDICT needs no number to be a claim: "this one exceeds your commute limit" is
@@ -1067,9 +1076,11 @@ _FIT_WORD = re.compile(
     re.IGNORECASE)
 # A comma between digits is a thousands separator, never a clause boundary — splitting there
 # would cut "£1,733" in half.
+# The spaced-dash separator is anchored at the FIRST whitespace of a run: unanchored, a long
+# run of spaces was re-scanned from every position (O(n²), same class as B-01).
 _FRAGMENT_SPLIT = re.compile(
     r"((?<!\d),|,(?!\d)|(?<!\d):|:(?!\d)|[，；;、。！？：|]|\.(?=\s|$)|[!?](?=\s|$)"
-    r"|\s+[–—-]\s+)")
+    r"|(?<!\s)\s+[–—-]\s+)")
 _SCOPE_SENTENCE_SPLIT = re.compile(r"(?<=[.!?。！？])\s+|\n|[；;]")
 _NAME_ABBREVIATION = r"(?:St|Dr|Mr|Mrs|Ms|Prof|Sr|Jr)"
 
@@ -1112,7 +1123,9 @@ def _guard_text_parts(text: str, *, sentences: bool = False) -> list[str]:
     return parts
 
 
-_PARENTHETICAL = re.compile(r"\s*[（(][^()（）]*[)）]")
+# Anchored at the first whitespace of a run (see ``_FRAGMENT_SPLIT``); leftmost-match
+# semantics already started every real match there, so the result is unchanged.
+_PARENTHETICAL = re.compile(r"(?<!\s)\s*[（(][^()（）]*[)）]")
 _BULLET_PREFIX = re.compile(r"^(\s*(?:[-*•]|\d+\s*[.)、]|[（(]\d+[)）])\s*)")
 _HAS_CONTENT = re.compile(r"[0-9A-Za-z一-鿿]")
 # A trailing clause that leans on the one before it: "…24 minutes, which is well within your
@@ -1569,12 +1582,16 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
         labels = sorted({label for item in bindings for label in item["labels"] if label},
                         key=len, reverse=True)
         if labels:
-            coordinated = re.compile(r"\s+(?:and|while|but)\s+(?=(?:" +
+            coordinated = re.compile(r"(?<!\s)\s+(?:and|while|but)\s+(?=(?:" +
                                      "|".join(re.escape(label) for label in labels) + r"))", re.I)
             # "A takes 18 minutes and B takes 99 minutes" contains two independent claims.
             # "A and B are within 30 minutes" is one shared verdict and stays together.
-            body = coordinated.sub(lambda m: "; " if _MINUTE_TOKEN.search(body[:m.start()])
-                                   else m.group(0), body)
+            # The first figure is located ONCE: re-searching the prefix for every
+            # conjunction was quadratic in the number of conjunctions.
+            first_minute = _MINUTE_TOKEN.search(body)
+            body = coordinated.sub(
+                lambda m: "; " if first_minute is not None and first_minute.end() <= m.start()
+                else m.group(0), body)
 
         parts = _guard_text_parts(body)
         kept: list[str] = []
@@ -2000,6 +2017,30 @@ def validate_evidence_scope(response: str, state: dict) -> str:
     return "\n".join(part for part in kept + notes if part.strip()).strip()
 
 
+# Input bound for the commute validator (B-01). The regexes above are linear, but this runs
+# on every final answer, so a degenerate model output must not be able to make it the
+# expensive part of a turn. A digit run this long is not a figure, a postcode, a phone number
+# or a price; a run of blanks this long is not layout. Either is collapsed before validation,
+# and an answer still longer than the cap (no real reply comes close: 8 192 output tokens of
+# prose is ~30 000 characters) is cut at a line boundary.
+_DEGENERATE_DIGIT_RUN = re.compile(r"\d{65,}")
+_DEGENERATE_BLANK_RUN = re.compile(r"[ \t]{65,}")
+VALIDATOR_MAX_CHARS = 32_000
+
+
+def bound_validator_input(text: str) -> str:
+    """``text`` with degenerate runs collapsed and its length capped. Linear, never raises."""
+    value = str(text or "")
+    if len(value) < 65:
+        return value
+    value = _DEGENERATE_DIGIT_RUN.sub(lambda m: m.group()[:12] + "…", value)
+    value = _DEGENERATE_BLANK_RUN.sub(" ", value)
+    if len(value) > VALIDATOR_MAX_CHARS:
+        cut = value.rfind("\n", 0, VALIDATOR_MAX_CHARS)
+        value = value[:cut if cut > VALIDATOR_MAX_CHARS // 2 else VALIDATOR_MAX_CHARS].rstrip() + "\n…"
+    return value
+
+
 def validate_commute_response(response: str, state: dict) -> str:
     """Remove only unsupported journey assertions; keep independent evidence and caveats.
 
@@ -2007,8 +2048,10 @@ def validate_commute_response(response: str, state: dict) -> str:
     override an independently executed station/area route, and one such route never
     licenses another listing's duration. Structured fallback is used only when no prose
     survives, or when an earlier validation pass already replaced the answer entirely.
+    The input is bounded first (``bound_validator_input``), so the cost is linear in a
+    capped length whatever the model emitted.
     """
-    original = _repair_abbreviation_breaks(str(response or ""))
+    original = _repair_abbreviation_breaks(bound_validator_input(response))
     text, previous_fragments = _clean_commute_fragments(original)
     language = str((state.get("extracted_context") or {}).get("reply_language") or "")
     zh = language.lower().startswith("zh")

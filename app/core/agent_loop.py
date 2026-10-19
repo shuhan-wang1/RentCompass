@@ -1456,6 +1456,31 @@ def _loop_soft_cap() -> int:
         return 6
 
 
+# The commute validator runs on every final answer. In the async agent node it used to run
+# ON the event loop, so one pathological answer (8 192 tokens of digits, then two
+# superlinear regex passes) froze every request in the process for ~100 s — /health timed
+# out and another user's 1.3 s tool turn took 83 s (2026-10-19 B-01). The regexes are linear
+# and the input is bounded now; this keeps the remaining work off the loop as well, and a
+# bounded wait means even an unforeseen slow path degrades ONE answer, fail-closed, instead
+# of the process.
+_COMMUTE_VALIDATION_TIMEOUT_S = float(os.getenv("COMMUTE_VALIDATION_TIMEOUT_S", "5"))
+
+
+async def _validate_commute_off_loop(text: str, state: dict) -> str:
+    """``validate_commute_response`` in a worker thread, bounded in time."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(validate_commute_response, text, state),
+            timeout=_COMMUTE_VALIDATION_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        logger.error("fc_loop.commute_validation_timeout chars=%d", len(str(text or "")))
+        zh = str((state.get("extracted_context") or {}).get("reply_language") or "") \
+            .lower().startswith("zh")
+        # Fail closed: nothing unvalidated ships.
+        return ("本轮无法核实该房源的通勤条件。" if zh
+                else "The commute condition could not be verified for the listing this round.")
+
+
 def _turn_ceiling_s() -> float:
     """The whole-turn ceiling a wrapped turn must close inside (FC_TURN_CEILING_S).
 
@@ -3069,7 +3094,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             logger.warning("fc_loop.announced_tool_stub_shipped loop_turn=%d", loop_turn)
             text = _mark_announced_stub(text, reply_language)
 
-        text = validate_commute_response(text, state)
+        text = await _validate_commute_off_loop(text, state)
         memory_contract = state.get("memory_write_contract") or {}
         if memory_contract.get("requested"):
             lang = _reply_language_from_ctx(

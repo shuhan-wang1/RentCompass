@@ -122,7 +122,10 @@ SEARCH_TOOL_DESCRIPTION = (
 # 「提高」「多」「少」…) must be present AND the amount must not be introduced by an
 # absolute preposition ("to £2400" / 「提高到 2400」), which is a new ceiling, not a delta.
 
-_AMOUNT = r"(\d[\d,]*(?:\.\d+)?)"
+# Anchored at the start of a number: unanchored, every pattern that can BEGIN at the amount
+# was retried at every digit of a long run, each attempt re-scanning the rest of it — O(n²)
+# per pattern on a pasted digit string, on the event loop (2026-10-19, B-01 class).
+_AMOUNT = r"(?<![\d,.])(\d[\d,]*(?:\.\d+)?)"
 
 # An absolute restatement dressed in raise/lower language: "raise the budget TO £2400",
 # 「把预算提高到2400」. Checked first; when it matches, this is NOT a relative edit.

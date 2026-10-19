@@ -174,7 +174,25 @@ def announces_unexecuted_tool(text, artifacts=None) -> bool:
     body = str(text or "")
     if not body.strip():
         return False
-    return any(pattern.search(body) for pattern in _ANNOUNCED_TOOL_RE)
+    for pattern in _ANNOUNCED_TOOL_RE:
+        for match in pattern.finditer(body):
+            # An OFFER conditional on the user is not an announcement: "If you'd rather skip
+            # those, say 'go ahead' and I'll search Stratford" promised nothing for this turn,
+            # yet earned the "I was not able to run that lookup" footer on an out-of-scope
+            # refusal (R1-16).
+            start = max(body.rfind(mark, 0, match.start()) for mark in ".!?\n。！？")
+            ends = [i for i in (body.find(mark, match.end()) for mark in ".!?\n。！？") if i >= 0]
+            sentence = body[start + 1:min(ends) + 1 if ends else len(body)]
+            if _OFFER_SENTENCE.search(sentence) or sentence.rstrip().endswith(("?", "？")):
+                continue
+            return True
+    return False
+
+
+_OFFER_SENTENCE = re.compile(
+    r"\b(?:if|once|whenever|when you|say|tell me|let me know|would you like|do you want|"
+    r"want me to|shall i|should i|happy to|i can(?!['’]t|not)|i could(?!n['’]t| not))\b"
+    r"|如果|若是|若你|假如|告诉我|需要的话|要不要|是否需要|你想|想要我|可以帮你|我可以", re.IGNORECASE)
 
 
 # ─── Internal vocabulary must not reach the user ────────────────────

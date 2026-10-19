@@ -259,6 +259,7 @@ def _areas_state():
     "3. **Hackney** (score 5.5): median rent £2,400, commute 41 minutes.",
     "Camden (31 min) and Islington (14 min) are both closer than Hackney (41 min).",
     "Camden and Islington are 31 and 14 minutes away respectively.",
+    "Camden, Islington and Hackney are 31, 14 and 41 minutes away.",
     "| Area | Score | Median rent | Commute |\n|---|---|---|---|\n"
     "| Camden | 67.2 | £2,100 | 31 min |\n| Islington | 62.5 | £2,150 | 14 min |\n"
     "| Hackney | 5.5 | £2,400 | 41 min |",
@@ -275,7 +276,8 @@ def test_r2_01d_a_withdrawn_heading_clause_leaves_balanced_markdown():
     assert "30 minutes" not in out and NOTE in out
 
 
-@pytest.mark.parametrize("answer", ["Hackney: 25 minutes.", "Camden is 41 minutes from King's Cross."])
+@pytest.mark.parametrize("answer", ["Hackney: 25 minutes.", "Camden is 41 minutes from King's Cross.",
+                                    "Camden and Islington are both 31 minutes away."])
 def test_r2_01d_a_figure_from_another_area_still_goes(answer):
     assert validate_commute_response(answer, _areas_state()) != answer
 
@@ -302,10 +304,20 @@ def test_r2_01e_no_commute_over_a_figure_is_still_a_claim():
     assert "30 minutes" not in out
 
 
+@pytest.mark.parametrize("answer", [
+    "Flat A (£1,500/month) is within your commute limit.",
+    "Flat A at £1,500/month is within your commute limit.",
+])
+def test_r2_01e_a_price_beside_an_unevidenced_commute_verdict_does_not_excuse_it(answer):
+    out = validate_commute_response(answer, _state("Find me a flat in Camden"))
+    assert "within your commute limit" not in out
+
+
 # ── (f) weather ───────────────────────────────────────────────────────────────────────
 def test_r2_01f_weather_for_the_commute_is_not_a_commute_claim():
     answer = ("Tomorrow in London: around 12°C with light rain in the morning.\n"
-              "For your commute, it will be about 12°C and wet, so take an umbrella.")
+              "For your commute, it will be about 12°C and wet, so take an umbrella.\n"
+              "Your commute home: temperatures below average, take a coat.")
     state = _state("What's the weather like tomorrow for my commute?",
                    _artifact("get_weather", {"success": True, "location": "London",
                                              "weather_type": "forecast", "temperature": 12,
@@ -322,3 +334,29 @@ def test_r2_01f_weather_for_the_commute_is_not_a_commute_claim():
 def test_r2_01_a_stub_left_by_a_withdrawn_claim_goes_with_it(answer, kept):
     out = validate_commute_response(answer, _state("Show me flats near UCL"))
     assert out == f"{kept}\n\n{NOTE}"
+
+
+def test_r2_01d_a_withdrawn_table_cell_keeps_its_column():
+    answer = ("| Area | Score | Median rent | Commute |\n|---|---|---|---|\n"
+              "| Camden | 67.2 | £2,100 | 31 min |\n| Hackney | 5.5 | £2,400 | 25 min |")
+    out = validate_commute_response(answer, _areas_state())
+    assert "| Camden | 67.2 | £2,100 | 31 min |" in out
+    assert "| Hackney | 5.5 | £2,400 | — |" in out and "25 min" not in out
+
+
+def test_r2_01_sentence_scope_and_route_fallback_stay_linear():
+    """The sentence-wide estimate marker and the any-route fallback must not make one long
+    sentence quadratic (the B-01 class)."""
+    import time
+
+    state = _state("How long is the commute from Highgate West Hill, London N6 to UCL?",
+                   _artifact("calculate_commute", _straight_line(
+                       "Highgate West Hill, London N6", "UCL, London",
+                       estimate=27, low=23, high=33, km=5.6)),
+                   _artifact("get_transport_info", _HIGHGATE_UCL_JOURNEY),
+                   _artifact("compare_or_rank_areas", _AREAS))
+    answer = "Roughly, " + ", ".join(["it is 99 minutes"] * 1_500) + "."
+    started = time.perf_counter()
+    out = validate_commute_response(answer, state)
+    assert time.perf_counter() - started < 2.0
+    assert "99 minutes" not in out

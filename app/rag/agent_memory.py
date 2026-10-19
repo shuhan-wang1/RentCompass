@@ -373,11 +373,13 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
 # indirectly" (R2-04). The reason is cut at its connector, or as a parenthetical aside; what is
 # left that still names a health condition goes through the same clause redaction as memory.
 _HEALTH_TERMS = dict(_SENSITIVE_CLAUSE_PATTERNS)["health"]
+# Anchored at the first separator of a run, so a long blank run is scanned once (B-01 class).
 _HEALTH_REASON_START = re.compile(
-    r"\s*[,;:–—-]?\s*\b(?:due\s+to|because(?:\s+of)?|owing\s+to|on\s+account\s+of|as|since|"
-    r"for|given)\b|\s*[，,]?\s*(?:因为|由于)", re.I)
-_HEALTH_REASON_END = re.compile(r"\s+(?:and|but|plus)\s+|[,;.，；。]")
-_PARENTHETICAL_ASIDE = re.compile(r"\s*[(（\[][^()（）\[\]]{0,120}[)）\]]")
+    r"(?<![\s,;:–—-])[\s,;:–—-]*\b(?:due\s+to|because(?:\s+of)?|owing\s+to|on\s+account\s+of|"
+    r"as|since|for|given)\b|(?<![\s，,])[\s，,]*(?:因为|由于)", re.I)
+_HEALTH_REASON_END = re.compile(r"(?<!\s)\s+(?:and|but|plus)\s+|[,;.，；。]")
+_PARENTHETICAL_ASIDE = re.compile(r"(?<!\s)\s*[(（\[][^()（）\[\]]{0,120}[)）\]]")
+_PREFERENCE_MAX_CHARS = 500
 
 
 def strip_health_reason(text: str) -> str | None:
@@ -387,7 +389,7 @@ def strip_health_reason(text: str) -> str | None:
     flat"; "I have asthma" -> None. Text naming no health condition is returned unchanged.
     Never raises."""
     try:
-        value = str(text or "").strip()
+        value = str(text or "").strip()[:_PREFERENCE_MAX_CHARS]
         if not _HEALTH_TERMS.search(value):
             return value or None
         value = _PARENTHETICAL_ASIDE.sub(

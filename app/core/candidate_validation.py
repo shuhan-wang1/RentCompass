@@ -1069,7 +1069,11 @@ _COMMUTE_WORD = re.compile(
 _FIT_WORD = re.compile(
     r"符合|满足|不满足|未满足|超过|超出|超标|未超过|以内|之内|范围内|达标|未达|"
     r"更远|更近|太远|够近|不远|"
-    r"\b(?:meets?|met|within|under|over|about|around|takes?|took|"
+    r"\b(?:meets?|met|within|under|over|about|around|"
+    # "takes about 40 minutes" / "takes an hour" — never "take an umbrella" (R2-01 f).
+    r"(?:takes?|took)(?=\s+(?:about|around|roughly|approximately|over|under|less|more|an?\s+"
+    r"(?:hour|while|bit|long)|\d|just|only|at\s+least|up\s+to|nearly|almost|half|longer|"
+    r"ages|forever|too\s+long))|"
     r"exceeds?|exceeded|exceeding|beyond|outside|inside|above|below|longer|shorter|"
     r"further|farther|closer|nearer|faster|slower|fits?|satisf(?:y|ies|ied)|"
     r"qualifies|violates?|breaches?|misses|fails?)\b",
@@ -1154,12 +1158,26 @@ _FAIL_VERDICT = re.compile(
 # it compares is time. "a studio in Hackney under £1,500 with no commute" compares money, and
 # "for your commute it will be about 12°C" compares the weather; both were withdrawn as
 # unverified commute claims, with the footnote, on a refusal and a weather turn (R2-01 e/f).
-_NOT_A_TIME_COMPARISON = re.compile(
-    r"£|\$|€|\bpcm\b|\bpw\b|per\s+(?:month|week)|/\s*(?:month|week|mo)\b|\brent\b|\bbudget\b|"
-    r"\bdeposit\b|\bbills?\b|月租|租金|预算|押金|"
-    r"°|℃|\bdegrees?\b|\bweather\b|\bforecast\b|\btemperature\b|\brain(?:y|ing|fall)?\b|"
-    r"\bumbrella\b|\bsunny\b|\bcloudy\b|\bwindy\b|\bshowers?\b|天气|气温|下雨|降雨|晴天|阴天",
+# The money/temperature SPAN is taken out before the comparative is looked for, so a clause
+# that also carries a price still counts: "Flat A (£1,500/month) is within your commute limit"
+# is a commute verdict. Every number is anchored at its first digit (the B-01 class).
+_MONEY_OR_WEATHER_SPAN = re.compile(
+    r"(?:\b(?:under|within|below|over|above|about|around|roughly|up\s+to|at\s+most|less\s+than|"
+    r"more\s+than|no\s+more\s+than)\s+)?(?:£|\$|€)\s*\d[\d,.]*\s*k?"
+    r"(?:\s*(?:pcm|pw|p/?m|/\s*(?:month|week|mo)\b|per\s+(?:month|week)|a\s+(?:month|week)))?|"
+    r"\b(?:within|under|over|above|below|inside|outside|beyond)\s+(?:your\s+|the\s+|my\s+)?"
+    r"(?:budget|price\s+range|rent\s+(?:limit|cap|ceiling))\b|"
+    r"(?:\b(?:about|around|roughly|over|under|above|below)\s+)?(?<![\d.])-?\d+(?:\.\d+)?\s*"
+    r"(?:°\s*[CF]?|℃|degrees?(?:\s+[CF]\b)?)|"
+    r"\btemperatures?\s+(?:\w+\s+){0,2}(?:above|below|around|about|over|under)\s+\w+|"
+    r"(?:预算|租金|月租)(?:以内|之内|范围内|内)|(?<![\d.])\d+\s*(?:度|℃)",
     re.IGNORECASE)
+
+
+def _without_money_or_weather(text: str) -> str:
+    return _MONEY_OR_WEATHER_SPAN.sub(" ", str(text or ""))
+
+
 # A clause that says there IS no commute (none was set, none applies) asserts nothing about one.
 # "your earlier search was a studio in Hackney with no commute." was deleted whole (R2-01 e).
 # "no commute over 30 minutes" is NOT a denial: a comparative after it makes it a claim.
@@ -1190,7 +1208,8 @@ def _asserts_commute(fragment: str) -> bool:
     # A travel expense within a monetary budget is not a travel-time verdict.
     if re.search(r"fare|\bcost\b|\bprice\b|票价|费用|交通费", text, re.I):
         return False
-    if _NOT_A_TIME_COMPARISON.search(text) or _denies_commute(text):
+    text = _without_money_or_weather(text)
+    if _denies_commute(text):
         return False
     return bool(_COMMUTE_WORD.search(text) and _FIT_WORD.search(text))
 
@@ -1664,10 +1683,8 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
         return {"labels": [], "minutes": None, "destinations": []}
     if best is not None:
         return best
-    # A single returned route can support "It takes …", never a newly named place. It also
-    # must not silently switch the destination even in an otherwise implicit sentence.
-    # "Journey time: 23 minutes", "The fastest route takes 23 minutes" and a line naming one
-    # of the route's own legs ("Northern line to Moorgate (6 min)") are that same route.
+    # A single returned route never licenses a figure for a newly named place or a switched
+    # destination; those checks run per clause ("It takes 23 minutes to Stratford" fails).
     if default is not None:
         # The turn returned ONE route and this line names no other entity, so the line is
         # about that route — whatever its grammatical subject. Requiring an "It takes…" or
@@ -1696,14 +1713,6 @@ _TARGET_WITH_FROM = re.compile(
     r"(?:\bto\b" + _NOT_A_PLACE_AFTER_TO + r"|\bfrom\b(?=\s+\S)|至|到)\s*([^,.;，。；\n]+)", re.I)
 
 
-_IMPLICIT_ROUTE_SUBJECT = re.compile(
-    r"\s*[*#>•\-\s]*(?:\d+[.)]\s*)?(?:it\b|this\s+(?:trip|journey|commute|route)\b|"
-    r"(?:the\s+)?(?:(?:fastest|quickest|best|recommended|returned|total|whole|overall|direct|"
-    r"estimated|typical|door[-\s]to[-\s]door|public\s+transport)\s+)*"
-    r"(?:trip|journey|commute|route|travel|public\s+transport)(?:\s+time)?\b|"
-    r"该(?:行程|路线|通勤)|通勤|行程|总行程|预计)", re.I)
-
-
 def _names_route_place(target_text: str, binding: dict, scope: str) -> bool:
     """True when ``target_text`` (what a clause travels TO) is a place this route reaches.
 
@@ -1722,7 +1731,7 @@ def _names_route_place(target_text: str, binding: dict, scope: str) -> bool:
 def _names_a_place(text: str) -> bool:
     """A travel target is a NAMED place: a capitalised word or CJK. "Walk to the exit (5
     min)" and "walk to your office" travel to no place a route could fail to reach."""
-    plain = re.sub(r"[（(][^()（）]*[)）]", " ", str(text or ""))
+    plain = re.sub(r"[（(][^()（）]{0,200}[)）]", " ", str(text or ""))
     return bool(re.search(r"(?<![A-Za-z'’])[A-Z]|[\u4e00-\u9fff]", plain))
 
 
@@ -1770,7 +1779,7 @@ _ESTIMATE_MARKER = re.compile(
 
 
 def _estimate_is_quoted_as_estimate(fragment: str, binding: dict, caps: set,
-                                    context: str = "", sentence: str = "") -> bool:
+                                    context: str = "", sentence_marked: bool = False) -> bool:
     """An unmeasured route's ESTIMATE may be quoted only as an estimate, never as a verdict.
 
     The tool says exactly this ("give it as an estimated 16-24 minute range ... never state
@@ -1780,26 +1789,36 @@ def _estimate_is_quoted_as_estimate(fragment: str, binding: dict, caps: set,
     attached to), and only the tool's own figures are quotable — a user's cap is not an
     estimate.
 
-    ``sentence`` is the whole sentence the claim sits in. "What I can give you is an
-    estimate: 34 to 51 minutes" says it is an estimate one clause earlier, in the same
-    sentence; that is still quoting it as one (R2-01 c). A marker in ANOTHER sentence
-    ("The commute takes 19 minutes. Rent is approximately £1,500.") still licenses nothing."""
+    ``sentence_marked`` says the SENTENCE the claim sits in carries a marker. "What I can give
+    you is an estimate: 34 to 51 minutes" says it is an estimate one clause earlier, in the
+    same sentence; that is still quoting it as one (R2-01 c). A marker in ANOTHER sentence
+    ("The commute takes 19 minutes. Rent is approximately £1,500.") still licenses nothing.
+    It is a flag, computed once per sentence: searching the sentence again for each of its
+    clauses would be quadratic in a long one (the B-01 class)."""
     estimate = binding.get("estimate") or []
     values = _minute_claim_values(fragment)
     if not estimate or not values:
         return False
-    if not (_ESTIMATE_MARKER.search(fragment) or _ESTIMATE_MARKER.search(context)
-            or _ESTIMATE_MARKER.search(sentence)):
+    if not (sentence_marked or _ESTIMATE_MARKER.search(fragment)
+            or _ESTIMATE_MARKER.search(context)):
         return False
     if _PASS_VERDICT.search(fragment) or _FAIL_VERDICT.search(fragment):
         return False      # an estimate cannot establish that a limit is met or missed
     return all(any(abs(value - permitted) < 1e-9 for permitted in estimate) for value in values)
 
 
+# Each figure of a minute LIST: "31 and 14 minutes", "31, 14 or 41 min". ``_MINUTE_VALUE`` sees
+# only the last one, the one the unit is attached to.
+# Every gap is bounded, so a long blank run costs O(1) per figure (the B-01 class).
+_MINUTE_LIST_VALUE = re.compile(
+    r"(?<![\d.£$])(\d{1,3}(?:\.\d{1,2})?)(?=(?:[ \t]{0,3}(?:,|and|&|/|or)[ \t]{0,3}"
+    r"\d{1,3}(?:\.\d{1,2})?){0,8}[ \t]{0,3}[-–]?[ \t]{0,3}(?:minutes?|mins?\b|分钟))", re.IGNORECASE)
+
+
 def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
                         context: str = "", heading: str = "",
                         itinerary: frozenset | set = frozenset(),
-                        sentence: str = "") -> bool:
+                        sentence_marked: bool = False) -> bool:
     """True when this fragment's commute claim — figure AND conclusion — follows the evidence.
 
     Three separate things have to hold, and each one was a way through on its own:
@@ -1817,11 +1836,12 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
         # quoting the evidence: "Camden and Islington are 31 and 14 minutes away
         # respectively" lost both area-comparison figures (R2-01 d). Each figure must be one
         # of the named entities' measurements.
-        values = _minute_claim_values(fragment)
-        if (values and not (_PASS_VERDICT.search(fragment) or _FAIL_VERDICT.search(fragment))
-                and all(any(member.get("minutes") is not None
-                            and abs(value - member["minutes"]) < 1e-9
-                            for member in binding["members"]) for value in values)):
+        listed = {float(value) for value in _MINUTE_LIST_VALUE.findall(fragment)}
+        measured = {member.get("minutes") for member in binding["members"]}
+        if (listed and None not in measured and listed == measured
+                and not (_PASS_VERDICT.search(fragment) or _FAIL_VERDICT.search(fragment))):
+            # Every named entity's own figure, and nothing else: "both 31 minutes" for areas
+            # measured at 31 and 14 is NOT this, and still has to pass the shared check.
             return True
         # A shared verdict can be checked for each named entity. Different measured times
         # in one clause cannot be pooled and freely reassigned between those entities.
@@ -1836,7 +1856,7 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     if destinations and not _targets_on_route(fragment, binding, scope):
         return False
     if binding.get("minutes") is None:
-        return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence)
+        return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence_marked)
     if re.search(r"wheelchair|step.free|accessible|轮椅|无障碍|无台阶", fragment, re.I):
         # A fastest itinerary is not an accessibility audit or a personalised travel time.
         return False
@@ -1863,7 +1883,7 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
            for value in values):
         # A measured pair may also carry the straight-line estimate another tool returned;
         # quoting THAT as an estimate is still honest.
-        return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence)
+        return _estimate_is_quoted_as_estimate(fragment, binding, caps, context, sentence_marked)
 
     asserts_pass = bool(_PASS_VERDICT.search(fragment))
     asserts_fail = bool(_FAIL_VERDICT.search(fragment))
@@ -1952,20 +1972,20 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             heading = ""
 
         def _evidenced(fragment: str, _binding=None, context: str = "",
-                       sentence: str = "") -> bool:
+                       sentence_marked: bool = False) -> bool:
             """True when this fragment's commute claim is backed for THIS line's listing.
 
             ``context`` is only ever the clause a parenthetical is attached to — never the
             whole line: line-wide scope let one clause license another's figure, and cost
-            O(fragments x line) (the B-01 class again). ``sentence`` is read only for an
-            estimate's "estimated"/"roughly" marker."""
+            O(fragments x line) (the B-01 class again). ``sentence_marked``: the sentence
+            carries an estimate marker ("estimated", "roughly")."""
             if _preference_commute_reference(fragment, caps, context=preference_line):
                 return True
             if _quotes_source_text(fragment, source_texts):
                 return True
             effective = _binding if _binding is not None else binding
             if _claim_is_evidenced(fragment, effective, caps, context=context, heading=heading,
-                                   itinerary=itinerary, sentence=sentence):
+                                   itinerary=itinerary, sentence_marked=sentence_marked):
                 return True
             if effective is not None or not pool:
                 return False
@@ -1975,7 +1995,7 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 return False          # cheap reject before trying each route (B-01 class)
             return any(_claim_is_evidenced(fragment, candidate, caps, context=context,
                                            heading=heading, itinerary=itinerary,
-                                           sentence=sentence)
+                                           sentence_marked=sentence_marked)
                        for candidate in pool)
 
         # A parenthetical commute aside ("(17 min to Canary Wharf)") is an attachment to a
@@ -2015,7 +2035,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 if local is not None and local.get("labels") and not local.get("members"):
                     own = local
             if not _evidenced(m.group(0), own, context=attached,
-                              sentence=_sentence_around(m.start(), m.end())):
+                              sentence_marked=bool(_ESTIMATE_MARKER.search(
+                                  _sentence_around(m.start(), m.end())))):
                 removed.append(m.group(0))
                 return ""
             vetted.append(m.group(0))
@@ -2038,15 +2059,17 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                 else m.group(0), body)
 
         parts = _guard_text_parts(body)
-        # The sentence each fragment belongs to (read only for an estimate marker).
-        sentence_of: dict[int, str] = {}
+        # Whether the sentence each fragment belongs to carries an estimate marker, computed
+        # once per sentence (linear in the line).
+        marked_at: dict[int, bool] = {}
         opened = 0
         for index in range(0, len(parts), 2):
             separator = parts[index + 1] if index + 1 < len(parts) else ""
             if _SENTENCE_END.search(separator) or index + 2 >= len(parts):
-                sentence = "".join(parts[opened:index + 2])
+                marked = any(_ESTIMATE_MARKER.search(parts[member])
+                             for member in range(opened, index + 1, 2))
                 for member in range(opened, index + 1, 2):
-                    sentence_of[member] = sentence
+                    marked_at[member] = marked
                 opened = index + 2
         kept: list[str] = []
         dropped_in_sentence = False
@@ -2088,19 +2111,19 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             monetary_or_independent = (re.search(
                 r"\brent\b|\bbudget\b|\bfare\b|\bcost\b|\bweather\b|\btemperature\b|"
                 r"\bfurniture\b|\bbills?\b|\bdeposit\b|月租|租金|预算|票价|费用|天气|气温|家具|账单|押金",
-                fragment, re.I) or _NOT_A_TIME_COMPARISON.search(fragment)
-                or _denies_commute(fragment))
+                fragment, re.I) or _denies_commute(fragment))
             asserts = (_asserts_commute(claim) or
-                       (commute_context and _FIT_WORD.search(claim)
+                       (commute_context and _FIT_WORD.search(_without_money_or_weather(claim))
                         and not monetary_or_independent))
-            sentence = sentence_of.get(index, "")
-            drop = fragment.strip() and asserts and not _evidenced(claim, inherited,
-                                                                   sentence=sentence)
+            sentence_marked = marked_at.get(index, False)
+            drop = fragment.strip() and asserts and not _evidenced(
+                claim, inherited, sentence_marked=sentence_marked)
             # A dependent clause after a redacted one restates its verdict without repeating
             # its subject ("…, which is well within your limit"), so it goes with it.
             if (not drop and dropped_in_sentence and fragment.strip()
                     and ((_CONTINUATION.match(fragment) and _FIT_WORD.search(fragment)
-                          and not _evidenced(fragment, inherited, sentence=sentence))
+                          and not _evidenced(fragment, inherited,
+                                             sentence_marked=sentence_marked))
                          or _dependent_commute_aside(fragment))):
                 drop = True
             if (not drop and dropped_in_sentence and fragment.strip()
@@ -2120,6 +2143,9 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                     _close_sentence()
                     if len(kept) > opened_at:
                         kept[-1] = re.sub(r"[\s,，；;、:：–—-]+$", "", kept[-1]) + separator
+                elif separator.strip() == "|" and line.lstrip().startswith("|"):
+                    # A table cell keeps its column: the row would otherwise shift left.
+                    kept.append(" — " + separator)
                 continue  # its trailing separator goes with it
             if dropped_in_sentence:
                 # "Features: and the listing says ..." - a coordinator left at the front.
@@ -2191,7 +2217,7 @@ def _stub_remnant(text: str) -> bool:
 
 _LEAD_IN_TAIL = re.compile(
     r"(?:\bfor\s+example|\bfor\s+instance|\be\.g\.?|\bsuch\s+as|\bnamely|\bi\.e\.?|"
-    r"\bin\s+particular|\bspecifically|\bincluding|例如|比如)\s*[,，:：]?\s*$", re.I)
+    r"\bin\s+particular|\bspecifically|\bincluding|例如|比如)[\s,，:：]*$", re.I)
 
 
 def _balance_emphasis(rebuilt: str, original: str) -> str:
@@ -2202,8 +2228,11 @@ def _balance_emphasis(rebuilt: str, original: str) -> str:
     if rebuilt.count("**") % 2 == 0 or original.count("**") % 2 == 1:
         return rebuilt
     if original.rstrip().rstrip(".:：。").endswith("**"):
-        match = re.search(r"[.:：。]?\s*$", rebuilt)
-        return rebuilt[:match.start()].rstrip() + "**" + rebuilt[match.start():]
+        body = rebuilt.rstrip()
+        trailing = rebuilt[len(body):]
+        stop = body[-1] if body and body[-1] in ".:：。" else ""
+        body = body[:len(body) - len(stop)].rstrip()
+        return body + "**" + stop + trailing
     position = rebuilt.rfind("**")
     return (rebuilt[:position] + rebuilt[position + 2:]).replace("  ", " ")
 

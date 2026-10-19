@@ -354,6 +354,41 @@ def content_is_user_stated(content: str, current_message: str) -> bool:
     return (present / len(significant)) >= _SHARE_THRESHOLD
 
 
+_REMEMBER_CLAUSE_EN = re.compile(
+    r"\b(?:please\s+)?(?:remember|note|keep\s+in\s+mind|don'?t\s+forget)\s+(?:that\s+|this\s*:\s*)?"
+    r"(?P<fact>[^.!?;\n]{3,300})", re.IGNORECASE)
+_REMEMBER_CLAUSE_ZH = re.compile(
+    r"(?:请|帮我)?(?:记住|记一下|记下|别忘了|不要忘记)[：:，,\s]*(?P<fact>[^。！？!?；;\n]{2,200})")
+
+
+def explicit_remember_clause(current_message: str) -> str:
+    """The fact the user explicitly asked to be remembered, in their own words, else ''.
+
+    "Hi, I want a 1-bed flat in Camden under £2,200 pcm. Please remember that I have a
+    cat." -> "I have a cat". The text comes verbatim from the user's current message, so
+    it is user-stated by construction; a model's paraphrase that adds inferences ("pet
+    owner, needs a pet-friendly property") or the whole search request is not (R1-07)."""
+    text = (current_message or "").strip()
+    if not text or not user_authorizes_memory(text):
+        return ""
+    for pattern in (_REMEMBER_CLAUSE_EN, _REMEMBER_CLAUSE_ZH):
+        for match in pattern.finditer(text):
+            fact = match.group("fact")
+            # The fact ends where the next request starts: "记住我有一只猫，然后帮我找房",
+            # "remember that I have a cat, and find me a flat in Camden".
+            fact = re.split(r"[，,、]\s*(?=然后|再|并且?|另外|帮我|请|顺便|同时|接着|还有|找|搜|看看)"
+                            r"|,?\s+(?:and|then|but)\s+(?:then\s+)?(?:please\s+)?"
+                            r"(?:find|search|show|look|tell|check|give|get|list|compare)\b",
+                            fact, maxsplit=1, flags=re.IGNORECASE)[0]
+            fact = fact.strip(" ,，:：\"'“”")
+            # "remember to ..." asks the agent to do something; "remember what/when" recalls.
+            if re.match(r"(?:to|what|when|who|where|why|how|if)\b", fact, re.IGNORECASE):
+                continue
+            if len(fact) >= 2:
+                return fact
+    return ""
+
+
 def write_authorization(current_message: str, content: str) -> bool:
     """A+ rule-2 authorization the loop MUST use for a model-initiated ``remember``.
 

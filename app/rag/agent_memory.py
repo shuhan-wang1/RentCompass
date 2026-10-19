@@ -307,6 +307,12 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"adhd|autis\w*|bipolar|schizo\w*|mental health|medical condition|health condition|"
         r"chronic (?:illness|pain|condition)|diagnos\w*|medication|therapy|chemo\w*|"
         r"illness|allerg\w*)\b|哮喘|糖尿病|癫痫|癌|怀孕|抑郁|焦虑|病情|疾病|过敏", re.I)),
+    # A self-identifying name (R1-08): "Hi. My name is Priya Raman, ..." stayed in the
+    # episodic layer while the assistant told the user "I don't have your name".
+    ("identity", re.compile(
+        r"\b(?:my|user'?s?|the user'?s|his|her|their)\s+(?:full\s+|first\s+|last\s+|sur|given\s+|family\s+)?"
+        r"name\b|\b(?:i\s+am|i'm|user\s+is|they\s+are|he\s+is|she\s+is)\s+(?:called|named)\b|"
+        r"\bcall\s+me\s+(?-i:[A-Z])|我叫|我的名字|名字(?:是|叫)|我姓|用户(?:名叫|叫|的名字)", re.I)),
 )
 # Anchored and bounded: unanchored, a long word or digit run was re-scanned from every
 # position looking for an "@" (O(n²) in one C call, holding the GIL — 10 s for 60k chars).

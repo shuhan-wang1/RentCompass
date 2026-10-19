@@ -3444,6 +3444,23 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # 'default' memory bucket.
                 args["user_id"] = state.get("user_id") or ""
                 args["session_id"] = state.get("session_id", "default")
+                clause_fn = getattr(mem_gate, "explicit_remember_clause", None) if mem_gate else None
+                stated_fn = getattr(mem_gate, "content_is_user_stated", None) if mem_gate else None
+                clause = clause_fn(cur_msg) if (name == "remember" and clause_fn) else ""
+                proposed = str(args.get("content") or args.get("fact") or "")
+                if (clause and stated_fn is not None and not stated_fn(proposed, clause)
+                        and stated_fn(clause, proposed)):
+                    # "… Please remember that I have a cat." with a search in the same batch:
+                    # the model's paraphrase ("pet owner, needs a pet-friendly property") or
+                    # the whole request is not the user's own statement, so the tainted-turn
+                    # gate refused it and the answer blamed a tool failure (R1-07). When the
+                    # proposal RESTATES the user's clause (plus additions), save the fact
+                    # exactly as the user worded it instead. Unrelated content (H13: a
+                    # tool-derived "flat viewing at 1400 Camden Road") is not substituted and
+                    # meets the gate as before.
+                    logger.info("fc_loop.remember_content_from_user_clause")
+                    args["content"] = clause
+                    args.pop("fact", None)
             if name in ('calculate_commute_cost', 'check_transport_cost'):
                 office_days = (state.get('accumulated_search_criteria') or {}).get('office_days_per_week')
                 spec = specs.get(name)

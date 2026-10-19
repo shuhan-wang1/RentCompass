@@ -4097,6 +4097,10 @@ def _make_execute_tool_node(tool_registry):
                     _inv_key = None
                 if not _policy_allowed:
                     raise PermissionError("memory write denied by authorization policy")
+                # Strict input models: an unset optional parameter is absent, never null
+                # (same rule as the fc dispatch; A-02 / B-06 class).
+                from core.strict_schema import strip_null_args
+                params = strip_null_args(params)
                 invocation = ToolInvocation.create(
                     run_id=state.get("run_id", "legacy"), node_id="execute_tool",
                     tool=tool_name, params=params, version=getattr(tool, "version", "1"),
@@ -5625,6 +5629,8 @@ def _make_task_worker_node(tool_registry):
             pass
         _started = time.monotonic()
         _ended = None
+        from core.strict_schema import strip_null_args
+        params = strip_null_args(params)   # absent, never null (A-02 / B-06 class)
         try:
             from core.agent_loop import _offload_tool_call
             result = await asyncio.wait_for(

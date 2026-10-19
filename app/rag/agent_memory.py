@@ -367,6 +367,69 @@ def redact_sensitive(text: str) -> tuple[str, list[str]]:
         return "", ["unparsed"]
 
 
+# A stored search preference keeps the HOUSING requirement and drops the health reason given
+# for it: "mould-free due to asthma" sat in the conversation's criteria (and view_state) while
+# the memory layer redacted the same clause and the assistant said asthma was "only reflected
+# indirectly" (R2-04). The reason is cut at its connector, or as a parenthetical aside; what is
+# left that still names a health condition goes through the same clause redaction as memory.
+_HEALTH_TERMS = dict(_SENSITIVE_CLAUSE_PATTERNS)["health"]
+_HEALTH_REASON_START = re.compile(
+    r"\s*[,;:–—-]?\s*\b(?:due\s+to|because(?:\s+of)?|owing\s+to|on\s+account\s+of|as|since|"
+    r"for|given)\b|\s*[，,]?\s*(?:因为|由于)", re.I)
+_HEALTH_REASON_END = re.compile(r"\s+(?:and|but|plus)\s+|[,;.，；。]")
+_PARENTHETICAL_ASIDE = re.compile(r"\s*[(（\[][^()（）\[\]]{0,120}[)）\]]")
+
+
+def strip_health_reason(text: str) -> str | None:
+    """``text`` without a stated health reason; None when nothing but health is left.
+
+    "mould-free due to asthma" -> "mould-free"; "quiet flat (I have anxiety)" -> "quiet
+    flat"; "I have asthma" -> None. Text naming no health condition is returned unchanged.
+    Never raises."""
+    try:
+        value = str(text or "").strip()
+        if not _HEALTH_TERMS.search(value):
+            return value or None
+        value = _PARENTHETICAL_ASIDE.sub(
+            lambda m: "" if _HEALTH_TERMS.search(m.group()) else m.group(), value)
+        position = 0
+        for _guard in range(20):
+            match = _HEALTH_REASON_START.search(value, position)
+            if not match:
+                break
+            end = _HEALTH_REASON_END.search(value, match.end())
+            stop = end.start() if end else len(value)
+            if _HEALTH_TERMS.search(value[match.start():stop]):
+                # "mould-free due to asthma and close to a GP" -> "mould-free and close to a GP"
+                value = value[:match.start()] + value[stop:]
+                position = match.start()
+            else:
+                position = match.end()
+        value = value.strip(" \t,;:–—-，；：。")
+        if _HEALTH_TERMS.search(value):
+            value, _found = redact_sensitive(value)
+            value = value.replace(_SENSITIVE_MARKER, " ")
+            value = re.sub(r"\s+([,;.])", r"\1", " ".join(value.split())).strip(" \t,;:.–—-，；：。")
+        return value if re.search(r"[0-9A-Za-z\u4e00-\u9fff]", value) else None
+    except Exception:
+        return None
+
+
+def sanitize_soft_preferences(values) -> list:
+    """Each stored soft preference with any health reason removed (order kept, empties gone)."""
+    if isinstance(values, str):
+        values = [values]
+    out: list = []
+    for item in values or []:
+        if not isinstance(item, str):
+            out.append(item)
+            continue
+        cleaned = strip_health_reason(item)
+        if cleaned and cleaned not in out:
+            out.append(cleaned)
+    return out
+
+
 # A reflection is an INFERENCE about the person, not something they said. "Needs a lift ->
 # probably has a mobility impairment" turned a stated housing requirement into a stored
 # health inference (2026-10-19 A-10). Reflections never keep inferences of this kind; the

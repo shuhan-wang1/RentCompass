@@ -3108,6 +3108,13 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
         if user_preferences is not _UNSET:
             _sess.persistent_state['user_preferences'] = user_preferences
         if accumulated_search_criteria is not _UNSET:
+            if (isinstance(accumulated_search_criteria, dict)
+                    and accumulated_search_criteria.get('soft_preferences')):
+                # Stored criteria keep the housing requirement, not a health reason (R2-04).
+                from rag.agent_memory import sanitize_soft_preferences
+                accumulated_search_criteria = dict(accumulated_search_criteria)
+                accumulated_search_criteria['soft_preferences'] = sanitize_soft_preferences(
+                    accumulated_search_criteria['soft_preferences'])
             _sess.persistent_state['accumulated_search_criteria'] = accumulated_search_criteria
         if criteria_overwrite:
             _sess.persistent_state.setdefault('accumulated_search_criteria', {})

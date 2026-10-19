@@ -3035,6 +3035,12 @@ async def search_properties_impl(
             else:
                 resolved_bedrooms = None
 
+        # A soft preference keeps its housing requirement, never the health reason given for
+        # it ("mould-free due to asthma" -> "mould-free"), consistent with memory redaction
+        # (R2-04). It is echoed into the conversation's criteria from here.
+        from rag.agent_memory import sanitize_soft_preferences
+        all_soft_preferences = sanitize_soft_preferences(all_soft_preferences)
+
         # 供两种载荷统一复用的 search_criteria 构造器（同时带 canonical + legacy 键）。
         def _criteria():
             return {

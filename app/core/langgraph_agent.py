@@ -5162,23 +5162,32 @@ def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
                      for state in validation.get("excluded") or []])
     panel_recs = recs
     if not panel_recs:
+        # In-budget listings whose commute (or another condition) could not be verified
+        # come FIRST. They used to be shown only when there was no over-budget alternative,
+        # so "1-bed in Islington under £2,600" lost King Square at £1,800 and St Clements
+        # Street at £2,500 — both unverified, both in budget — and the panel, and the ledger
+        # app.py rebuilds from it, showed only a £2,701 alternative under "no listing
+        # satisfies" (2026-10-19 B-04).
+        unverified_rows = apply_preference_filter([dict(row) for row in unverified], prefs)
+        for row in unverified_rows:
+            row.setdefault("candidate_status", "unknown")
+            row.setdefault("status_reason", "required conditions are not fully verified")
         # Near-misses stay visible as explicitly excluded alternatives; they never join
         # the deterministic eligible collection. `similar_properties` is the same class of
         # row from the closest-recall fallback (status `no_exact_match_but_similar`).
-        panel_recs = apply_preference_filter(
+        alternatives = apply_preference_filter(
             search_payload.get("over_budget_alternatives")
             or search_payload.get("similar_properties") or [], prefs)
-        for row in panel_recs:
+        for row in alternatives:
             row.setdefault("candidate_status", "excluded")
             row.setdefault("status_reason",
                            "similar_suggestion"
                            if row.get("match_type") == "similar_suggestion"
                            else "over_budget")
-    if not panel_recs and unverified:
-        panel_recs = apply_preference_filter([dict(row) for row in unverified], prefs)
-        for row in panel_recs:
-            row.setdefault("candidate_status", "unknown")
-            row.setdefault("status_reason", "required conditions are not fully verified")
+        from core.candidate_validation import candidate_key as _key
+        seen_keys = {_key(row) for row in unverified_rows}
+        panel_recs = unverified_rows + [row for row in alternatives
+                                        if _key(row) not in seen_keys]
     if not panel_recs and excluded:
         panel_recs = apply_preference_filter([dict(row) for row in excluded], prefs)
         for row in panel_recs:

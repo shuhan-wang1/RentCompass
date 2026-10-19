@@ -8,7 +8,11 @@
   a figure followed by a sentence-final full stop ("£1,700.") was invisible to the amount
   patterns, whose ``(?![\\d.])`` guard was meant for decimals.
 
-The lift retraction and "go back to my original plan" from A-05 are NOT addressed here.
+* A-05 — "I changed my mind about the lift, not needed anymore" kept ``property_features =
+  ["lift"]``: the retraction vocabulary lacked "not needed", and the same message then re-added
+  the feature as a requirement.
+
+"Go back to my original plan" and "also search in Hackney" from A-05 are NOT addressed here.
 """
 from __future__ import annotations
 
@@ -54,3 +58,23 @@ def test_the_last_correction_wins(message, expected):
 
 def test_a_question_between_two_prices_is_still_not_a_budget():
     assert _extract_budget("flat at £1500 or £1700?") == (None, None)
+
+
+@pytest.mark.parametrize("message", [
+    "I changed my mind about the lift, not needed anymore.",
+    "lift not needed anymore",
+    "forget the lift",
+    "drop the lift requirement",
+    "I no longer need a lift",
+])
+def test_a_retracted_feature_is_removed_and_not_re_added(message):
+    updated = _apply_explicit_criteria_updates({"area": "Camden", "property_features": ["lift"]},
+                                               message)
+    assert "lift" not in (updated.get("property_features") or [])
+
+
+@pytest.mark.parametrize("message", [
+    "I need a lift", "I can't do stairs any more, so I need a lift", "a lift is essential",
+])
+def test_a_stated_feature_is_still_required(message):
+    assert "lift" in (_apply_explicit_criteria_updates({}, message).get("property_features") or [])

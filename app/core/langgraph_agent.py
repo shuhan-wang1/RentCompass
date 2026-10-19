@@ -309,9 +309,31 @@ _ACCESSIBILITY_SOFT_CUE_RE = re.compile(
 )
 _ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
     r"\b(?:do not|don't|dont|does not|doesn't|doesnt) need\b|"
-    r"\b(?:not required|no need for)\b|不需要|不必|无需|不要",
+    r"\b(?:not required|no need for)\b|不需要|不必|无需|不要|"
+    # A retraction is not a requirement either: "the lift, not needed anymore" kept
+    # property_features=["lift"] as a hard filter (2026-10-19 A-05).
+    r"\b(?:(?:is|are|it's|its)\s+)?not\s+(?:needed|necessary|essential)\b|"
+    r"\bno longer\s+(?:needed|necessary|required|need)\b|"
+    r"\b(?:forget|scrap|drop|remove|ditch)\s+(?:about\s+)?(?:the|that|my)\b",
     re.IGNORECASE,
 )
+
+# "I changed my mind about the lift, not needed anymore": the retraction sits in the NEXT
+# clause of the same sentence, after the comma that ends the feature's own clause.
+_RETRACTION_TAIL_RE = re.compile(
+    r"[^.!?;。！？]{0,40}?[,，:：–—-]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
+    r"(?:(?:not|no longer)\s+(?:needed|necessary)|no longer\s+required)\b", re.I)
+
+
+def _retraction_follows(text: str, end: int) -> bool:
+    return bool(_RETRACTION_TAIL_RE.match(str(text or "")[end:end + 80]))
+
+
+# The same retraction vocabulary, for removing an ACCUMULATED feature.
+_FEATURE_RETRACTION_RE = re.compile(
+    r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|scrap|forget|ditch|no longer|'
+    r'don.t need|not needed|not necessary|optional|not required|'
+    r'not (?:a )?requirement|(?:is|would be) (?:a )?preference', re.I)
 _ACCESSIBILITY_PROPERTY_CONTEXT_RE = re.compile(
     r"\b(?:flat|apartment|property|home|house|room|accommodation|listing|building|"
     r"entrance|entry|front door|doors?|doorways?|corridors?|bathroom)\b|\broute in\s*$|房源|房子|住房|住宅|公寓|房间|楼房|大楼|入口|卫生间|浴室",
@@ -370,7 +392,7 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
 
     for feature, start, end in mentions:
         from core.constraint_updates import mention_is_requirement
-        if not mention_is_requirement(source, start, end):
+        if not mention_is_requirement(source, start, end) or _retraction_follows(source, end):
             continue
         left = max(source.rfind(mark, 0, start) for mark in (";", "；", ",", "，", ".", "。", "!", "！", "?", "？"))
         right_candidates = [source.find(mark, end) for mark in
@@ -413,8 +435,7 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
     from core.tools.search_properties import _accessibility_feature_mentions
     from core.constraint_updates import clause_at
     for feature, start, end in _accessibility_feature_mentions(user_message):
-        if re.search(r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|no longer|don.t need|optional|not required|not (?:a )?requirement|(?:is|would be) (?:a )?preference',
-                     clause_at(user_message, start, end), re.I):
+        if _FEATURE_RETRACTION_RE.search(clause_at(user_message, start, end)):
             for key in ('hard_preferences', 'required_amenities', 'soft_preferences'):
                 if key in prefs:
                     prefs[key] = [value for value in prefs[key] if feature not in str(value).lower()]
@@ -847,15 +868,19 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         if feature not in existing:
             existing.append(feature)
             changed = True
+    retracted: set = set()
     for feature, start, end in _accessibility_feature_mentions(current_message):
         from core.constraint_updates import clause_at
         clause = clause_at(current_message, start, end)
-        if re.search(r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|no longer|don.t need|optional|not required|not (?:a )?requirement|(?:is|would be) (?:a )?preference', clause, re.I):
+        if _FEATURE_RETRACTION_RE.search(clause) or _retraction_follows(current_message, end):
+            retracted.add(feature)
             for key in ('property_features', 'soft_preferences'):
                 previous = result.get(key) or []
                 result[key] = [v for v in previous if feature not in str(v)]
                 changed = changed or previous != result[key]
     for feature in accessibility["required"]:
+        if feature in retracted:
+            continue     # retracted in this very message; never re-added from it (A-05)
         # Promotion to hard removes the same feature's historical soft copy.
         previous_soft = result.get('soft_preferences') or []
         result['soft_preferences'] = [v for v in previous_soft if feature not in str(v).lower()]

@@ -118,3 +118,59 @@ def test_a_fit_verdict_against_the_users_limit_is_not_a_mere_reference():
     out = validate_commute_response(
         "Oak Row: the commute is well inside your 30 minute limit.", state)
     assert "well inside" not in out
+
+
+# ── review follow-ups: a leg never licenses a whole-trip figure ──────────────
+_STRATFORD_CW = {
+    "success": True, "from_address": "Stratford", "to_address": "Canary Wharf",
+    "duration_minutes": 30, "route_source": "TfL Unified API Journey Planner",
+    "route_legs": [
+        {"mode": "walking", "lines": [], "duration_minutes": 5, "summary": "Walk to Stratford",
+         "from": "", "to": "Stratford Underground Station"},
+        {"mode": "tube", "lines": ["Jubilee"], "duration_minutes": 17,
+         "summary": "Jubilee line to Canary Wharf", "from": "Stratford Underground Station",
+         "to": "Canary Wharf Underground Station"},
+        {"mode": "walking", "lines": [], "duration_minutes": 8, "summary": "Walk to Canary Wharf",
+         "from": "Canary Wharf Underground Station", "to": "Canary Wharf"},
+    ]}
+
+
+@pytest.mark.parametrize("answer,gone", [
+    ("From Stratford it takes 17 minutes to Canary Wharf.", "17 minutes"),
+    ("Stratford to Canary Wharf: 8 minutes.", "8 minutes"),
+    ("Stratford to Canary Wharf takes 5 minutes, with a short walk at each end.", "5 minutes"),
+    ("Stratford to Canary Wharf takes 17 minutes on the Jubilee line.", "17 minutes"),
+    ("It is 30 minutes to Moorgate.", "to Moorgate"),          # an interchange is not a leg
+])
+def test_a_leg_figure_never_becomes_the_trip(answer, gone):
+    out = validate_commute_response(answer, _state("calculate_commute", _STRATFORD_CW))
+    assert gone not in out
+
+
+def test_a_leg_described_by_its_line_keeps_its_figure():
+    answer = "The trip takes 30 minutes: walk (5 min), Jubilee line to Canary Wharf (17 min)."
+    assert validate_commute_response(answer, _state("calculate_commute", _STRATFORD_CW)) == answer
+
+
+@pytest.mark.parametrize("answer", [
+    "The commute takes 19 minutes. Rent is approximately £1,500.",   # marker elsewhere
+    "The commute is an estimated 30 minutes.",                        # a cap, not the estimate
+])
+def test_an_estimate_marker_elsewhere_does_not_license_a_figure(answer):
+    state = _state("calculate_commute", _CAMDEN_KX_ESTIMATE, "commute under 30 minutes?")
+    state["accumulated_search_criteria"] = {"max_travel_time": 30}
+    out = validate_commute_response(answer, state)
+    assert "19 minutes" not in out and "estimated 30 minutes" not in out
+
+
+def test_many_clauses_against_a_many_leg_route_stay_linear():
+    import time
+
+    legs = [{"mode": "tube", "lines": [f"Line{i}"], "duration_minutes": 3 + i,
+             "summary": f"Line{i} to Stop{i}", "from": "",
+             "to": f"Stop Number {i} Underground Station"} for i in range(8)]
+    raw = dict(_STRATFORD_CW, route_legs=legs)
+    answer = "Stratford to Canary Wharf: " + ", ".join(["it is 30 minutes"] * 1_800)
+    started = time.perf_counter()
+    validate_commute_response(answer, _state("calculate_commute", raw))
+    assert time.perf_counter() - started < 2.0     # was 34.9 s at this size

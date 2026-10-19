@@ -1481,10 +1481,15 @@ def _loop_soft_cap() -> int:
 # The commute validator runs on every final answer. In the async agent node it used to run
 # ON the event loop, so one pathological answer (8 192 tokens of digits, then two
 # superlinear regex passes) froze every request in the process for ~100 s — /health timed
-# out and another user's 1.3 s tool turn took 83 s (2026-10-19 B-01). The regexes are linear
-# and the input is bounded now; this keeps the remaining work off the loop as well, and a
-# bounded wait means even an unforeseen slow path degrades ONE answer, fail-closed, instead
-# of the process.
+# out and another user's 1.3 s tool turn took 83 s (2026-10-19 B-01).
+#
+# THE REAL PROTECTION is upstream: linear regexes and a bounded input
+# (candidate_validation.bound_validator_input). This wrapper is the second line. It keeps
+# the validator's many short Python steps off the loop, and its bounded wait turns a slow
+# path made of such steps into ONE fail-closed answer. It cannot pre-empt a single
+# long-running C-level regex call: CPython's `re` holds the GIL for the whole call, so the
+# loop (and the timeout) only run again when that call returns, and an abandoned worker
+# keeps its executor thread until it finishes.
 _COMMUTE_VALIDATION_TIMEOUT_S = float(os.getenv("COMMUTE_VALIDATION_TIMEOUT_S", "5"))
 
 

@@ -1316,9 +1316,8 @@ def _label_key(text: Any) -> str:
     return " ".join(re.sub(r"[^a-z0-9\u4e00-\u9fff]+", " ", lowered).split())
 
 
-def _label_in(label: Any, text: Any) -> bool:
-    """True when ``label`` occurs in ``text`` as whole words (CJK: as a substring)."""
-    key, hay = _label_key(label), _label_key(text)
+def _key_in(key: str, hay: str) -> bool:
+    """Whole-word containment of two ``_label_key`` forms (CJK: substring)."""
     if not key:
         return False
     if re.search(r"[\u4e00-\u9fff]", key):
@@ -1326,12 +1325,19 @@ def _label_in(label: Any, text: Any) -> bool:
     return f" {key} " in f" {hay} "
 
 
+def _label_in(label: Any, text: Any) -> bool:
+    """True when ``label`` occurs in ``text`` as whole words (CJK: as a substring)."""
+    return _key_in(_label_key(label), _label_key(text))
+
+
 def _route_legs(journey: dict) -> list[dict]:
-    """``[{minutes, labels}]`` for each measured leg of a TfL itinerary.
+    """``[{minutes, modes, places}]`` for each measured leg of a TfL itinerary.
 
     A leg's own duration is part of the same measurement as the total; an answer that lists
     "Northern line to Moorgate (6 min)" under a 23-minute journey is quoting the evidence,
-    not inventing a figure."""
+    not inventing a figure. A leg is identified by its LINE or MODE ("Northern", "walk"),
+    never by its arrival place alone: the last leg arrives at the destination, so a place
+    label would let "Stratford to Canary Wharf: 8 minutes" borrow the final walk."""
     legs = []
     for leg in journey.get("route_legs") or []:
         if not isinstance(leg, dict):
@@ -1339,15 +1345,24 @@ def _route_legs(journey: dict) -> list[dict]:
         value = leg.get("duration_minutes")
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             continue
-        labels = [str(line) for line in leg.get("lines") or [] if str(line or "").strip()]
-        labels += _place_labels(leg.get("to"))
+        modes = [str(line) for line in leg.get("lines") or [] if str(line or "").strip()]
         if str(leg.get("mode") or "").lower() == "walking":
-            labels.append("walk")
-        summary = str(leg.get("summary") or "")
-        if summary:
-            labels.append(summary)
-        legs.append({"minutes": float(value), "labels": list(dict.fromkeys(labels))})
+            modes.append("walk")
+        if not modes:
+            continue
+        legs.append({"minutes": float(value),
+                     "modes": [_label_key(m) for m in dict.fromkeys(modes)],
+                     "places": [_label_key(p) for p in _place_labels(leg.get("to"))]})
     return legs
+
+
+def _named_legs(text: str, binding: dict | None) -> list[dict]:
+    """The route legs whose line or mode ``text`` names."""
+    legs = (binding or {}).get("legs") or []
+    if not legs:
+        return []
+    hay = _label_key(text)
+    return [leg for leg in legs if any(_key_in(mode, hay) for mode in leg["modes"])]
 
 
 def _estimate_minutes(journey: dict) -> list[float]:
@@ -1519,8 +1534,7 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
         destinations = binding.get("destinations") or []
         explicit_destination = _TARGET_WITH_FROM.search(_without_abbreviation_dots(line))
         if destinations and explicit_destination:
-            destination_text = explicit_destination.group(1)
-            if not any(_label_in(label, destination_text) for label in _route_places(binding)):
+            if not _names_route_place(explicit_destination.group(1), binding, line):
                 continue
         # Origin specificity comes first. A long destination name must never let a town
         # route outrank an unmeasured, more specific property address in that town.
@@ -1546,13 +1560,12 @@ def _line_binding(line: str, bindings: list[dict], default: dict | None = None) 
         # The legacy NAMELESS result: one measurement and no place to compare a line
         # against. The claim check still requires the quoted figure to equal it exactly.
         return default
-    if default is not None and (_IMPLICIT_ROUTE_SUBJECT.match(line) or any(
-            _label_in(label, line) for leg in default.get("legs") or []
-            for label in leg["labels"])):
+    if default is not None and (_IMPLICIT_ROUTE_SUBJECT.match(line)
+                                or _named_legs(line, default)):
         destinations = default.get("destinations") or []
         target = _TARGET.search(_without_abbreviation_dots(line))
-        if not target or not destinations or any(
-                _label_in(label, target.group(1)) for label in _route_places(default)):
+        if not target or not destinations or _names_route_place(
+                target.group(1), default, line):
             return default
     return None
 
@@ -1579,15 +1592,19 @@ _IMPLICIT_ROUTE_SUBJECT = re.compile(
     r"该(?:行程|路线|通勤)|通勤|行程|总行程|预计)", re.I)
 
 
-def _route_places(binding: dict) -> list[str]:
-    """Every place a route may be said to travel TO: its destination and each leg's end.
+def _names_route_place(target_text: str, binding: dict, scope: str) -> bool:
+    """True when ``target_text`` (what a clause travels TO) is a place this route reaches.
 
-    Not the origin: "from King's Cross it is 23 minutes to Stratford" names the origin and
-    a DIFFERENT destination, and must not pass because the origin is a known place."""
-    places = list(binding.get("destinations") or [])
-    for leg in binding.get("legs") or []:
-        places += leg["labels"]
-    return places
+    That is the route's destination, or the arrival of a leg that ``scope`` itself
+    describes by line or mode ("Northern line ... to Moorgate"). Never the origin: "from
+    King's Cross it is 23 minutes to Stratford" names the origin and a DIFFERENT
+    destination. Never an interchange on its own: "30 minutes to Moorgate" is not a leg.
+    """
+    hay = _label_key(target_text)
+    if any(_key_in(_label_key(label), hay) for label in binding.get("destinations") or []):
+        return True
+    return any(_key_in(place, hay) for leg in _named_legs(scope, binding)
+               for place in leg["places"])
 
 
 _WHOLE_TRIP_WORD = re.compile(
@@ -1604,17 +1621,19 @@ def _estimate_is_quoted_as_estimate(fragment: str, binding: dict, caps: set,
 
     The tool says exactly this ("give it as an estimated 16-24 minute range ... never state
     '19 minutes' as the commute"), and deleting the range left a heading with no figure and
-    "the lower end of that range" pointing at nothing (2026-10-19 C-08)."""
+    "the lower end of that range" pointing at nothing (2026-10-19 C-08). The estimate
+    marker must be in the claim itself (``context`` is only the clause a parenthetical is
+    attached to), and only the tool's own figures are quotable — a user's cap is not an
+    estimate."""
     estimate = binding.get("estimate") or []
     values = _minute_claim_values(fragment)
     if not estimate or not values:
         return False
-    if not _ESTIMATE_MARKER.search(f"{fragment} {context}"):
+    if not (_ESTIMATE_MARKER.search(fragment) or _ESTIMATE_MARKER.search(context)):
         return False
     if _PASS_VERDICT.search(fragment) or _FAIL_VERDICT.search(fragment):
         return False      # an estimate cannot establish that a limit is met or missed
-    allowed = set(estimate) | caps
-    return all(any(abs(value - permitted) < 1e-9 for permitted in allowed) for value in values)
+    return all(any(abs(value - permitted) < 1e-9 for permitted in estimate) for value in values)
 
 
 def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
@@ -1643,21 +1662,24 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
     if binding.get("minutes") is None:
         return _estimate_is_quoted_as_estimate(fragment, binding, caps, context)
     destinations = binding.get("destinations") or []
+    scope = f"{fragment} {context}"
     target = _TARGET_WITH_FROM.search(_without_abbreviation_dots(fragment))
-    if destinations and target and not any(_label_in(label, target.group(1))
-                                           for label in _route_places(binding)):
+    if destinations and target and not _names_route_place(target.group(1), binding, scope):
         return False
     if re.search(r"wheelchair|step.free|accessible|轮椅|无障碍|无台阶", fragment, re.I):
         # A fastest itinerary is not an accessibility audit or a personalised travel time.
         return False
     allowed = {binding["minutes"]} | caps
-    # A leg's own duration is part of the same measurement, but only for a leg the line
-    # actually names — "(6 min)" beside "Northern line to Moorgate".
-    # A fragment about the WHOLE trip ("the journey takes 6 minutes") may not borrow a leg.
-    scope = f"{fragment} {context}"
-    if not _WHOLE_TRIP_WORD.search(fragment):
-        allowed |= {leg["minutes"] for leg in binding.get("legs") or []
-                    if any(_label_in(label, scope) for label in leg["labels"])}
+    # A leg's own duration is part of the same measurement, but only for a leg this claim
+    # names by line or mode — "(6 min)" attached to "Northern line to Moorgate". A claim
+    # about the WHOLE trip may not borrow one: a whole-trip word ("the journey takes 6
+    # minutes"), or naming both the route's origin and its destination ("Stratford to
+    # Canary Wharf takes 17 minutes on the Jubilee line").
+    hay = _label_key(scope)
+    end_to_end = (any(_key_in(_label_key(l), hay) for l in binding.get("labels") or [])
+                  and any(_key_in(_label_key(l), hay) for l in destinations))
+    if not _WHOLE_TRIP_WORD.search(fragment) and not end_to_end:
+        allowed |= {leg["minutes"] for leg in _named_legs(scope, binding)}
     values = _minute_claim_values(fragment)
     if any(not any(abs(value - permitted) < 1e-9 for permitted in allowed)
            for value in values):
@@ -1720,17 +1742,27 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             lines.append(line)
             continue
 
-        def _evidenced(fragment: str, _binding=None) -> bool:
-            """True when this fragment's commute claim is backed for THIS line's listing."""
+        def _evidenced(fragment: str, _binding=None, context: str = "") -> bool:
+            """True when this fragment's commute claim is backed for THIS line's listing.
+
+            ``context`` is only ever the clause a parenthetical is attached to — never the
+            whole line: line-wide scope let one clause license another's figure, and cost
+            O(fragments x line) (the B-01 class again)."""
             if _preference_commute_reference(fragment, caps, context=preference_line):
                 return True
             return _claim_is_evidenced(fragment, _binding if _binding is not None else binding,
-                                       caps, context=line)
+                                       caps, context=context)
 
         # A parenthetical commute aside ("(17 min to Canary Wharf)") is an attachment to a
         # clause, not a clause of its own; remove it before clause splitting.
+        def _attached_clause(match) -> str:
+            """The clause a parenthetical belongs to: "Northern line to Moorgate (6 min)"."""
+            lead = _without_abbreviation_dots(body[max(0, match.start() - 200):match.start()])
+            return re.split(r"[,;:!?，；：。！？]|\.(?=\s|$)", lead)[-1]
+
         body = _PARENTHETICAL.sub(
-            lambda m: "" if (_asserts_commute(m.group(0)) and not _evidenced(m.group(0)))
+            lambda m: "" if (_asserts_commute(m.group(0))
+                             and not _evidenced(m.group(0), context=_attached_clause(m)))
             else m.group(0), body)
 
         labels = sorted({label for item in bindings for label in item["labels"] if label},

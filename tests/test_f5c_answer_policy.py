@@ -62,7 +62,6 @@ def test_a_mixed_answer_keeps_everything_except_the_unverified_commute():
     assert len(out) > len(FIXED_EN)
 
 
-@pytest.mark.xfail(strict=True, reason="7483f77 rewrote validate_commute_response; the line-binding defect is B-02, fixed in a later commit")
 def test_a_pure_commute_answer_still_ships_the_listing_evidence_it_produced():
     """The worst live outcome: a 1086-char answer replaced by one sentence. The validated
     candidate ledger is structured tool output, so it can ship when the prose cannot."""
@@ -114,7 +113,6 @@ def test_the_zh_path_behaves_the_same():
     assert out == FIXED_ZH
 
 
-@pytest.mark.xfail(strict=True, reason="7483f77 rewrote validate_commute_response; the line-binding defect is B-02, fixed in a later commit")
 def test_an_evidenced_commute_answer_is_untouched():
     state = _commute_state()
     state["tool_artifacts"] = [{

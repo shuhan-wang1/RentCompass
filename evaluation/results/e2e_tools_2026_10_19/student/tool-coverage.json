@@ -1,0 +1,43 @@
+{
+  "evidence_basis": "Matching response conversation_id completed executor canary ledgers plus per-tool Tool.execute dispatch; terminal ask_user bypasses Tool.execute.",
+  "matched_completed_turns": 13,
+  "executor_observed_counts": {
+    "search_properties": 7,
+    "calculate_commute": 2,
+    "get_property_details": 4,
+    "search_nearby_pois": 3,
+    "remember": 1,
+    "ask_user": 1
+  },
+  "tool_execute_observed_counts": {
+    "calculate_commute": 2,
+    "search_properties": 7,
+    "get_property_details": 4,
+    "search_nearby_pois": 3,
+    "remember": 1
+  },
+  "ask_user": {
+    "called": true,
+    "turns": [
+      14
+    ],
+    "path": "executor terminal artifact, canary tool_latency.ask_user.count=1",
+    "note": "公开响应是澄清；UI仅A/B/C纯文本，没有可点选择控件。第1轮只有自然语言澄清，无工具。"
+  },
+  "recall_memory": {
+    "called": false,
+    "tested_turns": [
+      12
+    ],
+    "note": "新会话能复述已保存偏好，Tool.execute与完整executor ledger均无显式recall_memory；无法黑盒确认上下文注入机制。"
+  },
+  "multi_tool_chain": {
+    "turn": 13,
+    "sequence": [
+      "search_nearby_pois",
+      "search_properties",
+      "get_property_details"
+    ],
+    "note": "搜索后查最便宜详情实际触发；search args丢失预算/卧室/整租。"
+  }
+}

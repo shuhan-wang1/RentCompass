@@ -1,0 +1,10 @@
+{
+  "checks": {
+    "saved_criteria_label": true,
+    "saved_original_commute_limit_visible": true,
+    "sequential_ranks": true,
+    "no_current_criteria_eligible_label": true
+  },
+  "all_passed": true,
+  "no_model_requests": true
+}

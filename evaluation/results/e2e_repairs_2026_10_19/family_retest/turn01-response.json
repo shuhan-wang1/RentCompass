@@ -1,0 +1,1698 @@
+{
+  "time": 1792400212.7064655,
+  "message": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement; a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.\n",
+  "seconds": 16.187,
+  "error": null,
+  "result": {
+    "status": 200,
+    "payload": {
+      "area_recommendations": [],
+      "conversation_id": "83b3c2a05bac40949776659286bdc6ee",
+      "message": "- No listing is both fully eligible and verified.\nNot verified:\n- Croxley View, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\n- Nevill Grove, Watford, WD24: required features are not verified: step-free, lift, wheelchair-accessible\n- Raven Close, Watford WD18: required features are not verified: step-free, lift, wheelchair-accessible\n- Regent Street, Watford WD24: required features are not verified: step-free, lift, wheelchair-accessible\n- Sutton Road WD17, Watford, WD17: required features are not verified: step-free, lift, wheelchair-accessible\n- Chester Road, WD18 0LJ, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\n- Villiers Road, Watford, WD19: required features are not verified: step-free, lift, wheelchair-accessible\n- St. Albans Road, Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\n- Rickmansworth Road, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\n- The Clarendon, Watford | Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nReturned journey: Nevill Grove, Watford, WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Raven Close, Watford WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Regent Street, Watford WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Sutton Road WD17, Watford, WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Villiers Road, Watford, WD19 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: St. Albans Road, Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Rickmansworth Road, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Watford → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned listing details: Croxley View, Watford, WD18; £1600 pcm; 2 bed Flat.\nReported features: No Agent Fees, Students Can Enquire.\nAvailability: Contact agent. Confirm current availability with the agent.\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\nReturned listing details: Nevill Grove, Watford, WD24; £1600 pcm; 2 bed Terraced house.\nReported features: Terrace.\nThese listings are cached; prices and availability may have changed. Confirm with the agent.",
+      "recommendations": [
+        {
+          "absent_features": [],
+          "address": "Croxley View, Watford, WD18",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Croxley View, Watford, WD18",
+          "geo_location": "51.646597, -0.423485",
+          "images": [
+            "https://media.onthemarket.com/properties/20472490/1649561819/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20472490/1649561819/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20472490/1649561819/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20472490/1649561819/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20472490/1649561819/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1600/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 1,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20472490/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Nevill Grove, Watford, WD24",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom terraced house to rent in Nevill Grove, Watford, WD24",
+          "geo_location": "51.668487, -0.399732",
+          "images": [
+            "https://media.onthemarket.com/properties/19903982/1635983483/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/19903982/1635983483/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/19903982/1635983483/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/19903982/1628413998/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/19903982/1628413998/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1600/month",
+          "property_type": "2 bed Terraced house",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 2,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/19903982/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Raven Close, Watford WD18",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Raven Close, Watford WD18",
+          "geo_location": "51.6523323059082, -0.42508623003959656",
+          "images": [
+            "https://media.onthemarket.com/properties/20471436/1649493348/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20471436/1649493348/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20471436/1649493348/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20471436/1649493348/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20471436/1649493348/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1650/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 3,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20471436/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Regent Street, Watford WD24",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom terraced house to rent in Regent Street, Watford WD24",
+          "geo_location": "51.670841, -0.399673",
+          "images": [
+            "https://media.onthemarket.com/properties/20486205/1650001495/image-0-480x320.png",
+            "https://media.onthemarket.com/properties/20486205/1650001495/image-1-480x320.png",
+            "https://media.onthemarket.com/properties/20486205/1650001495/image-2-480x320.png",
+            "https://media.onthemarket.com/properties/20486205/1650001495/image-3-480x320.png",
+            "https://media.onthemarket.com/properties/20486205/1650001495/image-4-480x320.png"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1700/month",
+          "property_type": "2 bed Terraced house",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 4,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20486205/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Sutton Road WD17, Watford, WD17",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom terraced house to rent in Sutton Road WD17, Watford, WD17",
+          "geo_location": "51.659449, -0.393154",
+          "images": [
+            "https://media.onthemarket.com/properties/20484057/1649961100/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20484057/1649961100/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20484057/1649961100/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20484057/1649961100/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20484057/1649961100/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1700/month",
+          "property_type": "2 bed Terraced house",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 5,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20484057/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Chester Road, WD18 0LJ, Watford, WD18",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom terraced house to rent in Chester Road, WD18 0LJ, Watford, WD18",
+          "geo_location": "51.651384, -0.409037",
+          "images": [
+            "https://media.onthemarket.com/properties/20481144/1649903236/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20481144/1649903236/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20481144/1649903236/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20481144/1649903236/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20481144/1649903236/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1700/month",
+          "property_type": "2 bed Terraced house",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 6,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20481144/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Villiers Road, Watford, WD19",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 3,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "3 bedroom flat to rent in Villiers Road, Watford, WD19",
+          "geo_location": "51.644903, -0.381333",
+          "images": [
+            "https://media.onthemarket.com/properties/20132874/1649718104/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20132874/1649718104/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20132874/1649718104/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20132874/1649718104/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20132874/1649718104/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1800/month",
+          "property_type": "3 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 7,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20132874/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "St. Albans Road, Hertfordshire WD17",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in St. Albans Road, Hertfordshire WD17",
+          "geo_location": "51.661107, -0.400599",
+          "images": [
+            "https://media.onthemarket.com/properties/15630770/1649661949/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/15630770/1649661949/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/15630770/1649661949/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/15630770/1649661949/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/15630770/1649661949/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1850/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 8,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/15630770/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Rickmansworth Road, Watford, WD18",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Rickmansworth Road, Watford, WD18",
+          "geo_location": "51.656235, -0.410009",
+          "images": [
+            "https://media.onthemarket.com/properties/20480605/1649816181/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20480605/1649816181/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20480605/1649816181/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20480605/1649816181/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20480605/1649816181/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£1900/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 9,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20480605/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "The Clarendon, Watford | Hertfordshire WD17",
+          "area": "Watford",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 2500,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: step-free, lift, wheelchair-accessible"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in The Clarendon, Watford | Hertfordshire WD17",
+          "geo_location": "51.66006, -0.396973",
+          "images": [
+            "https://media.onthemarket.com/properties/20475691/1649696149/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20475691/1649696149/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20475691/1649696149/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20475691/1649696149/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20475691/1649696149/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2250/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "watford"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 2500,
+              "max_commute_minutes": 50,
+              "move_in_date": null,
+              "no_commute": false,
+              "property_features": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ],
+              "room_type": "whole"
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ]
+          },
+          "rank": 10,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "url": "https://www.onthemarket.com/details/20475691/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        }
+      ],
+      "response_type": "search",
+      "search_criteria": {
+        "amenities_of_interest": [],
+        "area": "Watford",
+        "areas": [
+          "Watford"
+        ],
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "area": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": "Watford"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": true
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 2500
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 50
+          },
+          "property_features": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ]
+          },
+          "room_type": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": "whole"
+          }
+        },
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 2500,
+        "max_travel_time": 50,
+        "move_in_date": null,
+        "no_commute": false,
+        "property_features": [
+          "step-free",
+          "lift",
+          "wheelchair-accessible"
+        ],
+        "room_type": "whole",
+        "soft_preferences": []
+      },
+      "turn_id": "afbebef060614e368f1fde59ec174b32",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "Watford",
+          "areas": [
+            "Watford"
+          ],
+          "bedrooms": 2,
+          "bedrooms_minimum": true,
+          "budget_period": "month",
+          "commute_destination": "Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "area": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": "Watford"
+            },
+            "bedrooms": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": 2
+            },
+            "bedrooms_minimum": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": true
+            },
+            "max_budget": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": 2500
+            },
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": 50
+            },
+            "property_features": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": [
+                "step-free",
+                "lift",
+                "wheelchair-accessible"
+              ]
+            },
+            "room_type": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": "whole"
+            }
+          },
+          "destination": "Gower Street, London WC1E 6BT",
+          "max_budget": 2500,
+          "max_travel_time": 50,
+          "property_features": [
+            "step-free",
+            "lift",
+            "wheelchair-accessible"
+          ],
+          "room_type": "whole",
+          "soft_preferences": []
+        },
+        "operation": "replace",
+        "results": [
+          {
+            "absent_features": [],
+            "address": "Croxley View, Watford, WD18",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in Croxley View, Watford, WD18",
+            "geo_location": "51.646597, -0.423485",
+            "images": [
+              "https://media.onthemarket.com/properties/20472490/1649561819/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20472490/1649561819/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20472490/1649561819/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20472490/1649561819/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20472490/1649561819/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1600/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 1,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20472490/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Nevill Grove, Watford, WD24",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom terraced house to rent in Nevill Grove, Watford, WD24",
+            "geo_location": "51.668487, -0.399732",
+            "images": [
+              "https://media.onthemarket.com/properties/19903982/1635983483/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/19903982/1635983483/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/19903982/1635983483/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/19903982/1628413998/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/19903982/1628413998/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1600/month",
+            "property_type": "2 bed Terraced house",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 2,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/19903982/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Raven Close, Watford WD18",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in Raven Close, Watford WD18",
+            "geo_location": "51.6523323059082, -0.42508623003959656",
+            "images": [
+              "https://media.onthemarket.com/properties/20471436/1649493348/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20471436/1649493348/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20471436/1649493348/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20471436/1649493348/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20471436/1649493348/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1650/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 3,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20471436/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Regent Street, Watford WD24",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom terraced house to rent in Regent Street, Watford WD24",
+            "geo_location": "51.670841, -0.399673",
+            "images": [
+              "https://media.onthemarket.com/properties/20486205/1650001495/image-0-480x320.png",
+              "https://media.onthemarket.com/properties/20486205/1650001495/image-1-480x320.png",
+              "https://media.onthemarket.com/properties/20486205/1650001495/image-2-480x320.png",
+              "https://media.onthemarket.com/properties/20486205/1650001495/image-3-480x320.png",
+              "https://media.onthemarket.com/properties/20486205/1650001495/image-4-480x320.png"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1700/month",
+            "property_type": "2 bed Terraced house",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 4,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20486205/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Sutton Road WD17, Watford, WD17",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom terraced house to rent in Sutton Road WD17, Watford, WD17",
+            "geo_location": "51.659449, -0.393154",
+            "images": [
+              "https://media.onthemarket.com/properties/20484057/1649961100/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20484057/1649961100/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20484057/1649961100/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20484057/1649961100/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20484057/1649961100/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1700/month",
+            "property_type": "2 bed Terraced house",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 5,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20484057/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Chester Road, WD18 0LJ, Watford, WD18",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom terraced house to rent in Chester Road, WD18 0LJ, Watford, WD18",
+            "geo_location": "51.651384, -0.409037",
+            "images": [
+              "https://media.onthemarket.com/properties/20481144/1649903236/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20481144/1649903236/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20481144/1649903236/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20481144/1649903236/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20481144/1649903236/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1700/month",
+            "property_type": "2 bed Terraced house",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 6,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20481144/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Villiers Road, Watford, WD19",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 3,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "3 bedroom flat to rent in Villiers Road, Watford, WD19",
+            "geo_location": "51.644903, -0.381333",
+            "images": [
+              "https://media.onthemarket.com/properties/20132874/1649718104/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20132874/1649718104/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20132874/1649718104/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20132874/1649718104/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20132874/1649718104/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1800/month",
+            "property_type": "3 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 7,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20132874/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "St. Albans Road, Hertfordshire WD17",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in St. Albans Road, Hertfordshire WD17",
+            "geo_location": "51.661107, -0.400599",
+            "images": [
+              "https://media.onthemarket.com/properties/15630770/1649661949/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/15630770/1649661949/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/15630770/1649661949/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/15630770/1649661949/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/15630770/1649661949/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1850/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 8,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/15630770/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Rickmansworth Road, Watford, WD18",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in Rickmansworth Road, Watford, WD18",
+            "geo_location": "51.656235, -0.410009",
+            "images": [
+              "https://media.onthemarket.com/properties/20480605/1649816181/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20480605/1649816181/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20480605/1649816181/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20480605/1649816181/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20480605/1649816181/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£1900/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 9,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20480605/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "The Clarendon, Watford | Hertfordshire WD17",
+            "area": "Watford",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 2500,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: step-free, lift, wheelchair-accessible"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in The Clarendon, Watford | Hertfordshire WD17",
+            "geo_location": "51.66006, -0.396973",
+            "images": [
+              "https://media.onthemarket.com/properties/20475691/1649696149/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20475691/1649696149/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20475691/1649696149/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20475691/1649696149/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20475691/1649696149/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£2250/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "watford"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 2500,
+                "max_commute_minutes": 50,
+                "move_in_date": null,
+                "no_commute": false,
+                "property_features": [
+                  "step-free",
+                  "lift",
+                  "wheelchair-accessible"
+                ],
+                "room_type": "whole"
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: step-free, lift, wheelchair-accessible"
+              ]
+            },
+            "rank": 10,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "step-free",
+              "lift",
+              "wheelchair-accessible"
+            ],
+            "url": "https://www.onthemarket.com/details/20475691/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          }
+        ],
+        "revision": 1
+      }
+    }
+  },
+  "request": {
+    "url": "/api/alex",
+    "body": "{\"message\": \"We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement; a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\"}",
+    "headers": {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream"
+    }
+  },
+  "dom": "ALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nWe are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement; a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nCroxley View, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nNevill Grove, Watford, WD24: required features are not verified: step-free, lift, wheelchair-accessible\nRaven Close, Watford WD18: required features are not verified: step-free, lift, wheelchair-accessible\nRegent Street, Watford WD24: required features are not verified: step-free, lift, wheelchair-accessible\nSutton Road WD17, Watford, WD17: required features are not verified: step-free, lift, wheelchair-accessible\nChester Road, WD18 0LJ, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nVilliers Road, Watford, WD19: required features are not verified: step-free, lift, wheelchair-accessible\nSt. Albans Road, Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\nRickmansworth Road, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nThe Clarendon, Watford | Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Nevill Grove, Watford, WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Raven Close, Watford WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Regent Street, Watford WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Sutton Road WD17, Watford, WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Villiers Road, Watford, WD19 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: St. Albans Road, Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Rickmansworth Road, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Watford → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned listing details: Croxley View, Watford, WD18; £1600 pcm; 2 bed Flat.\n\nReported features: No Agent Fees, Students Can Enquire.\n\nAvailability: Contact agent. Confirm current availability with the agent.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned listing details: Nevill Grove, Watford, WD24; £1600 pcm; 2 bed Terraced house.\n\nReported features: Terrace.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nBranch from here",
+  "criteria": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nWe are two adults, a six-year-old and a …\njust now\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nWe are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement; a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nCroxley View, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nNevill Grove, Watford, WD24: required features are not verified: step-free, lift, wheelchair-accessible\nRaven Close, Watford WD18: required features are not verified: step-free, lift, wheelchair-accessible\nRegent Street, Watford WD24: required features are not verified: step-free, lift, wheelchair-accessible\nSutton Road WD17, Watford, WD17: required features are not verified: step-free, lift, wheelchair-accessible\nChester Road, WD18 0LJ, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nVilliers Road, Watford, WD19: required features are not verified: step-free, lift, wheelchair-accessible\nSt. Albans Road, Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\nRickmansworth Road, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nThe Clarendon, Watford | Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Nevill Grove, Watford, WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Raven Close, Watford WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Regent Street, Watford WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Sutton Road WD17, Watford, WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Villiers Road, Watford, WD19 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: St. Albans Road, Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Rickmansworth Road, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Watford → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned listing details: Croxley View, Watford, WD18; £1600 pcm; 2 bed Flat.\n\nReported features: No Agent Fees, Students Can Enquire.\n\nAvailability: Contact agent. Confirm current availability with the agent.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned listing details: Nevill Grove, Watford, WD24; £1600 pcm; 2 bed Terraced house.\n\nReported features: Terrace.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nBranch from here\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nArea\n*\nWatford\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\n5\n#1\nWatford\nCroxley View, Watford, WD18\n£1600/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Croxley View, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#2\nWatford\nNevill Grove, Watford, WD24\n£1600/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Nevill Grove, Watford, WD24\nView Deal\nMap\nAsk AI\n5\n#3\nWatford\nRaven Close, Watford WD18\n£1650/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Raven Close, Watford WD18\nView Deal\nMap\nAsk AI\n5\n#4\nWatford\nRegent Street, Watford WD24\n£1700/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Regent Street, Watford WD24\nView Deal\nMap\nAsk AI\n5\n#5\nWatford\nSutton Road WD17, Watford, WD17\n£1700/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Sutton Road WD17, Watford, WD17\nView Deal\nMap\nAsk AI\n5\n#6\nWatford\nChester Road, WD18 0LJ, Watford, WD18\n£1700/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Chester Road, WD18 0LJ, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#7\nWatford\nVilliers Road, Watford, WD19\n£1800/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n3 bedroom flat to rent in Villiers Road, Watford, WD19\nView Deal\nMap\nAsk AI\n5\n#8\nWatford\nSt. Albans Road, Hertfordshire WD17\n£1850/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in St. Albans Road, Hertfordshire WD17\nView Deal\nMap\nAsk AI\n5\n#9\nWatford\nRickmansworth Road, Watford, WD18\n£1900/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Rickmansworth Road, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#10\nWatford\nThe Clarendon, Watford | Hertfordshire WD17\n£2250/month\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, lift, wheelchair access\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in The Clarendon, Watford | Hertfordshire WD17\nView Deal\nMap\nAsk AI",
+  "stages": [
+    {
+      "t": 1792400196590,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792400196613,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792400196640,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792400196668,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792400199148,
+      "text": "Looking up the requested information…"
+    },
+    {
+      "t": 1792400200030,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792400201608,
+      "text": "Looking up the requested information…"
+    },
+    {
+      "t": 1792400201795,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792400205992,
+      "text": "Checking the evidence…"
+    },
+    {
+      "t": 1792400212294,
+      "text": "Saving your results…"
+    }
+  ],
+  "pre": {
+    "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location.",
+    "focus": "",
+    "forms": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "value": "",
+        "checked": false,
+        "aria": "Area"
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "value": "",
+        "checked": false,
+        "aria": "Budget"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "month",
+        "checked": null,
+        "aria": "Budget period"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "",
+        "checked": null,
+        "aria": "Bedrooms"
+      },
+      {
+        "tag": "INPUT",
+        "type": "checkbox",
+        "value": "on",
+        "checked": false,
+        "aria": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "",
+        "checked": null,
+        "aria": "Room type"
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "value": "",
+        "checked": false,
+        "aria": "Commute to"
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "value": "",
+        "checked": false,
+        "aria": "Max commute (min)"
+      },
+      {
+        "tag": "INPUT",
+        "type": "checkbox",
+        "value": "on",
+        "checked": false,
+        "aria": null
+      },
+      {
+        "tag": "INPUT",
+        "type": "date",
+        "value": "",
+        "checked": false,
+        "aria": "Move-in date"
+      }
+    ]
+  }
+}

@@ -1,0 +1,1034 @@
+[
+  {
+    "case": "weather-unavailable",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "weather": "unavailable"
+    },
+    "tool": "get_weather",
+    "args": {
+      "location": "Bloomsbury London"
+    },
+    "seconds": 1.019,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "无法解析地点"
+      },
+      "error": "无法解析地点",
+      "execution_time_ms": 1013.8673782348633,
+      "tool_name": "get_weather",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "weather-timeout",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "weather": "timeout"
+    },
+    "tool": "get_weather",
+    "args": {
+      "location": "Bloomsbury London"
+    },
+    "seconds": 1.005,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "天气查询失败",
+        "retryable": true
+      },
+      "error": "天气查询失败",
+      "execution_time_ms": 1004.8696994781494,
+      "tool_name": "get_weather",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "weather-recovery",
+    "layer": "tool_integration_fault",
+    "modes": {},
+    "tool": "get_weather",
+    "args": {
+      "location": "Bloomsbury London"
+    },
+    "seconds": 0.003,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "location": "Bloomsbury London",
+        "latitude": 51.523,
+        "longitude": -0.127,
+        "current_temp": 14.2,
+        "condition": "Light Rain",
+        "humidity": 72,
+        "wind_speed": 11.5,
+        "uv_index": 1.2,
+        "feels_like": 12.8,
+        "rainfall_chance": null,
+        "recommendation": "可能有雨，看房记得带伞"
+      },
+      "error": null,
+      "execution_time_ms": 2.981424331665039,
+      "tool_name": "get_weather",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "police-unavailable",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "police": "unavailable"
+    },
+    "tool": "check_safety",
+    "args": {
+      "address": "Bloomsbury London"
+    },
+    "seconds": 0.015,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "address": "Bloomsbury London",
+        "safety_score": null,
+        "safety_level": null,
+        "crime_data": {
+          "reference_point": {
+            "query": "Bloomsbury London",
+            "precision": "area",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+            "lat": 51.523,
+            "lon": -0.127,
+            "coordinate_source": "nominatim",
+            "resolved_name": "Bloomsbury London"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "cache_status": "miss",
+          "from_cache": false,
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [],
+          "failed_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "partial": true,
+          "data_months": [],
+          "months_covered": 0,
+          "fetched_at": "2026-10-19T09:36:15.603050+00:00",
+          "total_crimes_6m": "Unknown",
+          "crime_trend": "unknown",
+          "category_breakdown": "Crime data unavailable",
+          "error": "No data returned from UK Police API"
+        },
+        "scoring_explanation": "Crime data unavailable, so no score is given.",
+        "safety_analysis": "Safety could not be assessed because the data was unavailable. Consider visiting in person or asking local residents.",
+        "crimes_per_month": null,
+        "months_covered": 0,
+        "radius_miles": 1.0,
+        "radius_m": 1609.344,
+        "radius_basis": "provider_default_approximately_one_mile",
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "area",
+          "is_specific_address": false,
+          "distance_basis": "straight_line",
+          "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "nominatim",
+          "resolved_name": "Bloomsbury London"
+        },
+        "source": "data.police.uk",
+        "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+        "data_months": [],
+        "queried_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "successful_months": [],
+        "failed_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "partial": true,
+        "from_cache": false,
+        "cache_status": "miss",
+        "possibly_outdated": false,
+        "fetched_at": "2026-10-19T09:36:15.603050+00:00",
+        "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+        "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "recommendation": "Safety could not be scored for this location: data.police.uk returned too few records. That is not evidence of low crime.",
+        "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+      },
+      "error": null,
+      "execution_time_ms": 14.58740234375,
+      "tool_name": "check_safety",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "police-timeout",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "police": "timeout"
+    },
+    "tool": "check_safety",
+    "args": {
+      "address": "Bloomsbury London"
+    },
+    "seconds": 0.008,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "address": "Bloomsbury London",
+        "safety_score": null,
+        "safety_level": null,
+        "crime_data": {
+          "reference_point": {
+            "query": "Bloomsbury London",
+            "precision": "area",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+            "lat": 51.523,
+            "lon": -0.127,
+            "coordinate_source": "nominatim",
+            "resolved_name": "Bloomsbury London"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "cache_status": "miss",
+          "from_cache": false,
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [],
+          "failed_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "partial": true,
+          "data_months": [],
+          "months_covered": 0,
+          "fetched_at": "2026-10-19T09:36:15.614713+00:00",
+          "total_crimes_6m": "Unknown",
+          "crime_trend": "unknown",
+          "category_breakdown": "Crime data unavailable",
+          "error": "No data returned from UK Police API"
+        },
+        "scoring_explanation": "Crime data unavailable, so no score is given.",
+        "safety_analysis": "Safety could not be assessed because the data was unavailable. Consider visiting in person or asking local residents.",
+        "crimes_per_month": null,
+        "months_covered": 0,
+        "radius_miles": 1.0,
+        "radius_m": 1609.344,
+        "radius_basis": "provider_default_approximately_one_mile",
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "area",
+          "is_specific_address": false,
+          "distance_basis": "straight_line",
+          "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "nominatim",
+          "resolved_name": "Bloomsbury London"
+        },
+        "source": "data.police.uk",
+        "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+        "data_months": [],
+        "queried_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "successful_months": [],
+        "failed_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "partial": true,
+        "from_cache": false,
+        "cache_status": "miss",
+        "possibly_outdated": false,
+        "fetched_at": "2026-10-19T09:36:15.614713+00:00",
+        "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+        "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "recommendation": "Safety could not be scored for this location: data.police.uk returned too few records. That is not evidence of low crime.",
+        "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+      },
+      "error": null,
+      "execution_time_ms": 8.084297180175781,
+      "tool_name": "check_safety",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "police-recovery",
+    "layer": "tool_integration_fault",
+    "modes": {},
+    "tool": "check_safety",
+    "args": {
+      "address": "Bloomsbury London"
+    },
+    "seconds": 0.012,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "address": "Bloomsbury London",
+        "safety_score": 99,
+        "safety_level": "Very Safe",
+        "crime_data": {
+          "reference_point": {
+            "query": "Bloomsbury London",
+            "precision": "area",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+            "lat": 51.523,
+            "lon": -0.127,
+            "coordinate_source": "nominatim",
+            "resolved_name": "Bloomsbury London"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "cache_status": "miss",
+          "from_cache": false,
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "failed_months": [],
+          "partial": false,
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "months_covered": 3,
+          "fetched_at": "2026-10-19T09:36:15.626087+00:00",
+          "total_crimes_6m": 135,
+          "crimes_per_month": 45.0,
+          "most_recent_month_count": 45,
+          "crime_trend": "stable",
+          "category_breakdown": {
+            "Anti Social Behaviour": 90,
+            "Burglary": 45
+          }
+        },
+        "scoring_explanation": "**How this score was produced:**\n\n1. **Source**: data.police.uk (official UK police crime data)\n2. **Coverage**: about a 1 mile radius around this point, last 3 months\n3. **Records**: 135 incidents (about 45 per month)\n4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a\n   flat count. This area is **quieter than most areas we sampled**, which maps to **99/100**.\n5. **Important limitation**: Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\n📊 **Trend**: Crime rate is relatively stable.",
+        "safety_analysis": "Location: Bloomsbury London; actual query point: the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool\nData months: 2026-06, 2026-07, 2026-08; 3-month total: 135 incidents; monthly average: 45.\nCoverage: the police endpoint defaults to approximately a 1 mile radius; it does not establish the safety of a walking route or an individual home.\nAnti Social Behaviour: 90 incidents\nBurglary: 45 incidents\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "crimes_per_month": 45.0,
+        "months_covered": 3,
+        "radius_miles": 1.0,
+        "radius_m": 1609.344,
+        "radius_basis": "provider_default_approximately_one_mile",
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "area",
+          "is_specific_address": false,
+          "distance_basis": "straight_line",
+          "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "nominatim",
+          "resolved_name": "Bloomsbury London"
+        },
+        "source": "data.police.uk",
+        "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+        "data_months": [
+          "2026-06",
+          "2026-07",
+          "2026-08"
+        ],
+        "queried_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "successful_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "failed_months": [],
+        "partial": false,
+        "from_cache": false,
+        "cache_status": "miss",
+        "possibly_outdated": false,
+        "fetched_at": "2026-10-19T09:36:15.626087+00:00",
+        "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+        "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "recommendation": "This area has a safety level of Very Safe with a safety score of 99/100 (compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)). Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+      },
+      "error": null,
+      "execution_time_ms": 11.579036712646484,
+      "tool_name": "check_safety",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "tfl-unavailable",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "tfl": "unavailable"
+    },
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "line_status",
+      "line": "Victoria"
+    },
+    "seconds": 1.006,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "Could not reach TfL line-status service. Please try again shortly or check tfl.gov.uk/status."
+      },
+      "error": "Could not reach TfL line-status service. Please try again shortly or check tfl.gov.uk/status.",
+      "execution_time_ms": 1006.0155391693115,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "tfl-timeout",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "tfl": "timeout"
+    },
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "line_status",
+      "line": "Victoria"
+    },
+    "seconds": 1.006,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "Could not reach TfL line-status service. Please try again shortly or check tfl.gov.uk/status."
+      },
+      "error": "Could not reach TfL line-status service. Please try again shortly or check tfl.gov.uk/status.",
+      "execution_time_ms": 1005.8848857879639,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "tfl-recovery",
+    "layer": "tool_integration_fault",
+    "modes": {},
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "line_status",
+      "line": "Victoria"
+    },
+    "seconds": 0.005,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_type": "line_status",
+        "coverage": "london",
+        "line_filter": "Victoria",
+        "lines": [
+          {
+            "name": "Victoria",
+            "status": "Good Service",
+            "severity": 10,
+            "reason": null,
+            "has_disruption": false
+          }
+        ],
+        "summary": "Victoria line: Good Service",
+        "any_disruption": false,
+        "source": "TfL Unified API (live line status)"
+      },
+      "error": null,
+      "execution_time_ms": 4.64630126953125,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "web-unavailable",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "web": "unavailable"
+    },
+    "tool": "web_search",
+    "args": {
+      "query": "London renting fault probe audit fixture"
+    },
+    "seconds": 1.008,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "No search results found",
+        "query_metadata": {
+          "length": 40
+        },
+        "results": "",
+        "detailed_data": {}
+      },
+      "error": "No search results found",
+      "execution_time_ms": 1008.0947875976562,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "web-timeout",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "web": "timeout"
+    },
+    "tool": "web_search",
+    "args": {
+      "query": "London renting fault probe audit fixture"
+    },
+    "seconds": 1.006,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "No search results found",
+        "query_metadata": {
+          "length": 40
+        },
+        "results": "",
+        "detailed_data": {}
+      },
+      "error": "No search results found",
+      "execution_time_ms": 1005.9700012207031,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "web-recovery",
+    "layer": "tool_integration_fault",
+    "modes": {},
+    "tool": "web_search",
+    "args": {
+      "query": "London renting fault probe audit fixture"
+    },
+    "seconds": 0.005,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_metadata": {
+          "length": 40
+        },
+        "results": "[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details.",
+        "detailed_data": {
+          "web_search": "[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 4.491090774536133,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "tfl-no-journey",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "tfl": "empty"
+    },
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "Camden London",
+      "to_address": "UCL London"
+    },
+    "seconds": 0.024,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "from_address": "Camden London",
+        "to_address": "UCL London",
+        "mode": "transit",
+        "route_summary": "No route available: TfL returned no journey for this pair.",
+        "route_legs": [],
+        "route_source": "estimate",
+        "basis": "straight_line_estimate",
+        "basis_note": "Estimated from 1.71 km straight-line distance because TfL returned no journey for this pair, then corrected by the model fitted to 14 measured TfL journeys (t = 3.7 + 11.4 x km^0.58); the raw straight-line formula reads 10 minutes here, which the fit corrects UP by 1.93x. Plausible range 16-24 minutes (0.84x-1.24x, the fit's residual spread). Not a measured journey time.",
+        "success": true,
+        "duration_minutes": null,
+        "estimated_duration_minutes": 19,
+        "estimate_low_minutes": 16,
+        "estimate_high_minutes": 24,
+        "straight_line_km": 1.71,
+        "estimate_model": "calibrated_overhead_plus_power_pace_v1",
+        "is_acceptable": null,
+        "duration_category": null,
+        "caveat": "This is NOT a journey plan. No TfL itinerary was available for this pair, so the figure is a straight-line estimate: the distance is put through a model fitted to 14 real TfL journeys in London (a fixed 3.7-minute access overhead plus a pace of 11.4 x km^-0.42 minutes per km, so short hops are charged the walking, waiting and interchange time the raw formula ignored). Across those 14 journeys the fitted figure ran between 0.84x and 1.24x the true time; quote it with that range, never as a journey time. It is fitted only over 0.47-16.71 km and only for public transport, and only inside London — the case where it actually fires is outside TfL coverage, where no reference exists to check it against.",
+        "recommendation": "There is no journey plan for this pair. If you mention a time at all, give it as an estimated 16-24 minute range and say it is estimated from the straight-line distance, not measured. Never state '19 minutes' as the commute. Basis to disclose: Estimated from 1.71 km straight-line distance because TfL returned no journey for this pair, then corrected by the model fitted to 14 measured TfL journeys (t = 3.7 + 11.4 x km^0.58); the raw straight-line formula reads 10 minutes here, which the fit corrects UP by 1.93x. Plausible range 16-24 minutes (0.84x-1.24x, the fit's residual spread). Not a measured journey time."
+      },
+      "error": null,
+      "execution_time_ms": 23.61321449279785,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "police-empty-not-safe",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "police": "empty"
+    },
+    "tool": "check_safety",
+    "args": {
+      "address": "Bloomsbury London"
+    },
+    "seconds": 0.008,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "address": "Bloomsbury London",
+        "safety_score": null,
+        "safety_level": null,
+        "crime_data": {
+          "reference_point": {
+            "query": "Bloomsbury London",
+            "precision": "area",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+            "lat": 51.523,
+            "lon": -0.127,
+            "coordinate_source": "nominatim",
+            "resolved_name": "Bloomsbury London"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "cache_status": "miss",
+          "from_cache": false,
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "failed_months": [],
+          "partial": false,
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "months_covered": 3,
+          "fetched_at": "2026-10-19T09:36:19.718751+00:00",
+          "total_crimes_6m": "Unknown",
+          "crime_trend": "unknown",
+          "category_breakdown": "Crime data unavailable",
+          "error": "No data returned from UK Police API"
+        },
+        "scoring_explanation": "Crime data unavailable, so no score is given.",
+        "safety_analysis": "Safety could not be assessed because the data was unavailable. Consider visiting in person or asking local residents.",
+        "crimes_per_month": null,
+        "months_covered": 3,
+        "radius_miles": 1.0,
+        "radius_m": 1609.344,
+        "radius_basis": "provider_default_approximately_one_mile",
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "area",
+          "is_specific_address": false,
+          "distance_basis": "straight_line",
+          "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "nominatim",
+          "resolved_name": "Bloomsbury London"
+        },
+        "source": "data.police.uk",
+        "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+        "data_months": [
+          "2026-06",
+          "2026-07",
+          "2026-08"
+        ],
+        "queried_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "successful_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "failed_months": [],
+        "partial": false,
+        "from_cache": false,
+        "cache_status": "miss",
+        "possibly_outdated": false,
+        "fetched_at": "2026-10-19T09:36:19.718751+00:00",
+        "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+        "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "recommendation": "Safety could not be scored for this location: data.police.uk returned too few records. That is not evidence of low crime.",
+        "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+      },
+      "error": null,
+      "execution_time_ms": 7.799863815307617,
+      "tool_name": "check_safety",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "web-empty-not-evidence",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "web": "empty"
+    },
+    "tool": "web_search",
+    "args": {
+      "query": "audit empty search"
+    },
+    "seconds": 1.008,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "No search results found",
+        "query_metadata": {
+          "length": 18
+        },
+        "results": "",
+        "detailed_data": {}
+      },
+      "error": "No search results found",
+      "execution_time_ms": 1007.6315402984619,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "unknown-geocode",
+    "layer": "tool_integration_fault",
+    "modes": {},
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "UnknownAuditPlaceXYZ",
+      "to_address": "UnknownAuditPlaceABC"
+    },
+    "seconds": 1.008,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "error": "无法计算通勤时间（地址解析失败）"
+      },
+      "error": "无法计算通勤时间（地址解析失败）",
+      "execution_time_ms": 1007.9278945922852,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "osm-unavailable-not-zero",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "osm": "unavailable"
+    },
+    "tool": "search_nearby_pois",
+    "args": {
+      "address": "Bloomsbury London",
+      "poi_type": "pharmacy",
+      "radius": 300,
+      "latitude": 51.523,
+      "longitude": -0.127
+    },
+    "seconds": 19.348,
+    "passed": true,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "address": "Bloomsbury London",
+        "pois": {},
+        "source": "OpenStreetMap Overpass",
+        "requested_radius_m": 300,
+        "radius_m": 300,
+        "user_requested_radius_m": null,
+        "radius_clamped": false,
+        "requested_types": [
+          "pharmacy"
+        ],
+        "executed_types": [
+          "pharmacy"
+        ],
+        "completed_types": [],
+        "empty_types": [],
+        "failed_types": [
+          "pharmacy"
+        ],
+        "skipped_types": [],
+        "unsupported_types": [],
+        "unqueried_types": [],
+        "category_status": {
+          "pharmacy": {
+            "status": "failed",
+            "error": "POI lookup failed",
+            "error_type": "RuntimeError",
+            "retryable": true,
+            "radius_m": 300,
+            "source": "OpenStreetMap Overpass"
+          }
+        },
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "listing_coordinates",
+          "is_specific_address": true,
+          "distance_basis": "straight_line",
+          "measured_from": "the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "caller_supplied",
+          "coordinate_identity_verified": false
+        },
+        "partial": true,
+        "search_status": "failed",
+        "error": "Nearby POI lookup failed",
+        "failure_note": "No requested category completed; do not report this as no nearby places.",
+        "retryable": true,
+        "message": "Nearby POI lookup failed",
+        "note": "Lookup FAILED (not an empty result): pharmacy.",
+        "summary": "Found 0 places in completed categories within the actual 300m straight-line search radius, measured from the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n\nLookup FAILED (not an empty result): pharmacy."
+      },
+      "error": "Nearby POI lookup failed",
+      "execution_time_ms": 19347.808122634888,
+      "tool_name": "search_nearby_pois",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "osm-recovery",
+    "layer": "tool_integration_fault",
+    "modes": {},
+    "tool": "search_nearby_pois",
+    "args": {
+      "address": "Bloomsbury London",
+      "poi_type": "pharmacy",
+      "radius": 300,
+      "latitude": 51.523,
+      "longitude": -0.127
+    },
+    "seconds": 1.008,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "address": "Bloomsbury London",
+        "pois": {
+          "pharmacy": [
+            {
+              "osm_type": "node",
+              "osm_id": 900001,
+              "source": "OpenStreetMap Overpass",
+              "name": "Pharmacy [audit fixture]",
+              "type": "Pharmacy",
+              "icon": "💊",
+              "lat": 51.524,
+              "lon": -0.126,
+              "distance_m": 131,
+              "distance_display": "130m",
+              "cuisine": null,
+              "brand": "",
+              "opening_hours": "Mo-Su 08:00-20:00",
+              "school_level": null,
+              "healthcare": null
+            }
+          ]
+        },
+        "source": "OpenStreetMap Overpass",
+        "requested_radius_m": 300,
+        "radius_m": 300,
+        "user_requested_radius_m": null,
+        "radius_clamped": false,
+        "requested_types": [
+          "pharmacy"
+        ],
+        "executed_types": [
+          "pharmacy"
+        ],
+        "completed_types": [
+          "pharmacy"
+        ],
+        "empty_types": [],
+        "failed_types": [],
+        "skipped_types": [],
+        "unsupported_types": [],
+        "unqueried_types": [],
+        "category_status": {
+          "pharmacy": {
+            "status": "found",
+            "result_count": 1,
+            "radius_m": 300,
+            "source": "OpenStreetMap Overpass"
+          }
+        },
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "listing_coordinates",
+          "is_specific_address": true,
+          "distance_basis": "straight_line",
+          "measured_from": "the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "caller_supplied",
+          "coordinate_identity_verified": false
+        },
+        "partial": false,
+        "search_status": "complete",
+        "summary": "Found 1 places in completed categories within the actual 300m straight-line search radius, measured from the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n💊 Pharmacy [audit fixture] - 130m"
+      },
+      "error": null,
+      "execution_time_ms": 1007.5526237487793,
+      "tool_name": "search_nearby_pois",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "all-six-nested-one-fails",
+    "layer": "tool_integration_fault",
+    "modes": {
+      "weather": "unavailable"
+    },
+    "tool": "web_search",
+    "args": {
+      "query": "London viewing audit partial upstream",
+      "sub_queries": [
+        {
+          "tool": "get_weather",
+          "params": {
+            "location": "Bloomsbury London"
+          }
+        },
+        {
+          "tool": "web_search_only",
+          "params": {
+            "query": "London audit neighbourhood"
+          }
+        }
+      ]
+    },
+    "seconds": 1.039,
+    "passed": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_metadata": {
+          "length": 37
+        },
+        "results": "### get_weather: FAILED\n---\nError: nested tool returned failure\n---\n\n---\n### Web Search (query length: 26)\n---\n[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details.\n---\n",
+        "detailed_data": {
+          "web_search_2": "[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 1038.7322902679443,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  }
+]

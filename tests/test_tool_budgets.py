@@ -422,7 +422,8 @@ def test_poi_no_deadline_when_fast(monkeypatch):
     res = sp.search_nearby_pois_impl(address="x", poi_type="restaurant")
     assert calls == ["restaurant"]
     assert res.get("partial") is not True
-    assert "skipped_types" not in res
+    assert res["skipped_types"] == []
+    assert res["executed_types"] == res["completed_types"] == ["restaurant"]
 
 
 # ─── event-loop non-blocking (THE regression test) ─────────────────

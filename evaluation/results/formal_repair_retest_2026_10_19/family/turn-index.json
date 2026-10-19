@@ -1,0 +1,66 @@
+{
+  "actual_api_alex_count": 7,
+  "rounds": [
+    {
+      "round": 1,
+      "turn_id": "215008be9c00461990528d572904cbfc",
+      "request_id": "e0b7bf30d3c941a8bf3ed3b1b84ac21d",
+      "raw_sse_available": false,
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f"
+    },
+    {
+      "round": 2,
+      "turn_id": "58ef949d568049568333398ea01c714f",
+      "request_id": "1011f25fbccd4830802e2b91444674dd",
+      "seconds": 0.582,
+      "network_request_count": 1,
+      "raw_sse_available": true,
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f"
+    },
+    {
+      "round": 3,
+      "turn_id": "2f6cdaec78b14ec0ac7ef09ca6f3c8cf",
+      "request_id": "84d9baea39b74626927349e6d873e8da",
+      "seconds": 32.824,
+      "network_request_count": 1,
+      "raw_sse_available": true,
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f"
+    },
+    {
+      "round": 4,
+      "turn_id": "b9d48d246eb64f7d841229850b3be626",
+      "request_id": "e8f99de2f9434129b174f190d5c3d3d1",
+      "seconds": 43.566,
+      "network_request_count": 1,
+      "raw_sse_available": true,
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f"
+    },
+    {
+      "round": 5,
+      "turn_id": "ce59e2d771c94864965c7adf12c65686",
+      "request_id": "fc525d53f3c54b8dba0a363e83c1f93f",
+      "seconds": 11.744,
+      "network_request_count": 1,
+      "raw_sse_available": true,
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f"
+    },
+    {
+      "round": 6,
+      "turn_id": "ffe5e79f44504595b4c49f0223753040",
+      "request_id": "6578553bab8844a88e4ae5997e3b758f",
+      "seconds": 0.608,
+      "network_request_count": 1,
+      "raw_sse_available": true,
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f"
+    },
+    {
+      "round": 7,
+      "turn_id": "e36b92b78591464ea999635d2721a57a",
+      "request_id": "b589dc66cf1443ccb822c2a400efa8d2",
+      "seconds": 27.615,
+      "network_request_count": 1,
+      "raw_sse_available": true,
+      "conversation_id": "76e9351df6d1450582bf1576b6e2116f"
+    }
+  ]
+}

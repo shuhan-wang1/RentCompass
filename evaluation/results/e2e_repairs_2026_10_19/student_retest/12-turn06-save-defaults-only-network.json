@@ -1,0 +1,70 @@
+[
+  {
+    "url": "http://127.0.0.1:15008/api/alex",
+    "status": 200,
+    "method": "POST",
+    "request_headers": {
+      "accept": "text/event-stream",
+      "content-type": "application/json",
+      "cookie": "[REDACTED]",
+      "origin": "http://127.0.0.1:15008",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "x-conversation-id": "50644e40a5f84f7f8b2926a5a9252fb0",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": "{\"message\": \"我刷新页面回来了，聊天记录和收藏还在。这条消息只保存长期偏好，不用搜索房源：以后所有新会话默认在伦敦找整租2居室，整套月租上限£2,400，不含账单，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们两人平均分摊，目前住哪个区还没决定。请明确确认这些长期默认是否已保存。\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"zh\", \"ui_language\": \"zh\", \"conversation_id\": \"50644e40a5f84f7f8b2926a5a9252fb0\"}",
+    "response_headers": {
+      "transfer-encoding": "chunked",
+      "x-request-id": "f22c425295b549a8bebecf43d7fbecf4",
+      "cache-control": "no-cache",
+      "x-accel-buffering": "no",
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "date": "Mon, 19 Oct 2026 08:59:56 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "text/event-stream; charset=utf-8",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "event: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"searching\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"checking\"}\n\nevent: step\ndata: {\"stage\":\"saving\"}\n\nevent: final\ndata: {\"status\":200,\"payload\":{\"conversation_id\":\"50644e40a5f84f7f8b2926a5a9252fb0\",\"message\":\"我已经记住了。\\n\\n已确认这次只\\n\\n\\n\\n「长期默认租房偏好：在伦敦找整租2居室（whole flat, 2 bedrooms），整套月租上限 £2,400/月（不含账单），两人平均分摊（每人约 £1,200/月）；坐公共交通到 UCL Bloomsbury 主校区（Gower Street,目前尚未决定居住区域，UCL 只是上课地点。」\\n\\n几点说明\\n\\n- 预算口径已按你的意思记为整套 £2,400/月、不含账单，两人平均分摊即每人约 £1,200/月，不再是之前误设的 £1,200 整套或 3 居室。\\n- 房型记为整租 2 居室，不是 3 居。\\n- 居住区域仍为未定，UCL 只作为上课地点，不代表已经选定住处。\\n\\n这些默认会在以后的新会话中生效。等你决定好区域、想开始找房时告诉我，我就按这套条件检索。\\n\\n注：部分通勤结论缺少可对应的证据，已从回答中移除\",\"response_type\":\"chat\",\"turn_id\":\"b57b412172bf4a6f9f5bc9a049f353bf\",\"view_state\":{\"criteria\":{\"amenities_of_interest\":[],\"area\":\"London\",\"areas\":[\"London\"],\"bedrooms\":2,\"bedrooms_minimum\":false,\"budget_period\":\"month\",\"commute_destination\":\"Gower Street, London WC1E 6BT\",\"constraint_sources\":{\"area\":{\"source\":\"user_message\",\"text\":\"先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。\",\"value\":\"London\"},\"bedrooms\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":2},\"bedrooms_minimum\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":false},\"max_budget\":{\"source\":\"user_message\",\"text\":\"我刷新页面回来了，聊天记录和收藏还在。这条消息只保存长期偏好，不用搜索房源：以后所有新会话默认在伦敦找整租2居室，整套月租上限£2,400，不含账单，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们两人平均分摊，目前住哪个区还没决定。请明确确认这些长期默认是否已保存。\",\"value\":2400},\"max_travel_time\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":30},\"room_type\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":\"whole\"}},\"destination\":\"Gower Street, London WC1E 6BT\",\"max_budget\":2400,\"max_travel_time\":30,\"property_features\":[],\"room_type\":\"whole\",\"soft_preferences\":[]},\"operation\":\"replace\",\"results\":[],\"revision\":6}}}\n\n"
+  },
+  {
+    "url": "http://127.0.0.1:15008/api/conversations",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "674",
+      "date": "Mon, 19 Oct 2026 09:00:00 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"conversations\": [{\"agent_arch\": \"fc_loop\", \"agent_version\": \"e2e-repair-frozen-working-tree\", \"branch_depth\": 0, \"created_at\": \"2026-10-19T08:56:21.123961+00:00\", \"edited_slot_turn_id\": null, \"fork_reason\": null, \"forked_from_turn_id\": null, \"id\": \"50644e40a5f84f7f8b2926a5a9252fb0\", \"message_count\": 12, \"parent_conversation_id\": null, \"root_conversation_id\": \"50644e40a5f84f7f8b2926a5a9252fb0\", \"strict\": false, \"title\": \"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\", \"updated_at\": \"2026-10-19T09:00:00.697911+00:00\"}]}"
+  },
+  {
+    "url": "/api/alex",
+    "request_body": "{\"message\": \"我刷新页面回来了，聊天记录和收藏还在。这条消息只保存长期偏好，不用搜索房源：以后所有新会话默认在伦敦找整租2居室，整套月租上限£2,400，不含账单，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们两人平均分摊，目前住哪个区还没决定。请明确确认这些长期默认是否已保存。\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"zh\", \"ui_language\": \"zh\", \"conversation_id\": \"50644e40a5f84f7f8b2926a5a9252fb0\"}",
+    "status": 200,
+    "response_body": "event: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"understanding\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"searching\"}\n\nevent: step\ndata: {\"stage\":\"writing\"}\n\nevent: step\ndata: {\"stage\":\"checking\"}\n\nevent: step\ndata: {\"stage\":\"saving\"}\n\nevent: final\ndata: {\"status\":200,\"payload\":{\"conversation_id\":\"50644e40a5f84f7f8b2926a5a9252fb0\",\"message\":\"我已经记住了。\\n\\n已确认这次只\\n\\n\\n\\n「长期默认租房偏好：在伦敦找整租2居室（whole flat, 2 bedrooms），整套月租上限 £2,400/月（不含账单），两人平均分摊（每人约 £1,200/月）；坐公共交通到 UCL Bloomsbury 主校区（Gower Street,目前尚未决定居住区域，UCL 只是上课地点。」\\n\\n几点说明\\n\\n- 预算口径已按你的意思记为整套 £2,400/月、不含账单，两人平均分摊即每人约 £1,200/月，不再是之前误设的 £1,200 整套或 3 居室。\\n- 房型记为整租 2 居室，不是 3 居。\\n- 居住区域仍为未定，UCL 只作为上课地点，不代表已经选定住处。\\n\\n这些默认会在以后的新会话中生效。等你决定好区域、想开始找房时告诉我，我就按这套条件检索。\\n\\n注：部分通勤结论缺少可对应的证据，已从回答中移除\",\"response_type\":\"chat\",\"turn_id\":\"b57b412172bf4a6f9f5bc9a049f353bf\",\"view_state\":{\"criteria\":{\"amenities_of_interest\":[],\"area\":\"London\",\"areas\":[\"London\"],\"bedrooms\":2,\"bedrooms_minimum\":false,\"budget_period\":\"month\",\"commute_destination\":\"Gower Street, London WC1E 6BT\",\"constraint_sources\":{\"area\":{\"source\":\"user_message\",\"text\":\"先暂停找房，只单独查一下明天伦敦的天气：会下雨吗，大概多少度，出门看房要带伞吗？这不是修改我的租房条件。\",\"value\":\"London\"},\"bedrooms\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":2},\"bedrooms_minimum\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":false},\"max_budget\":{\"source\":\"user_message\",\"text\":\"我刷新页面回来了，聊天记录和收藏还在。这条消息只保存长期偏好，不用搜索房源：以后所有新会话默认在伦敦找整租2居室，整套月租上限£2,400，不含账单，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们两人平均分摊，目前住哪个区还没决定。请明确确认这些长期默认是否已保存。\",\"value\":2400},\"max_travel_time\":{\"source\":\"user_message\",\"text\":\"刚才我点的是“每人每月£1,200”，可是右边仍然是£1,200和3居，和我的意思不符。请纠正为：两个人、每人每月最多£1,200，整套合计£2,400/月、不含账单; 在伦敦找整租2居室，坐公共交通到UCL Bloomsbury主校区30分钟以内。我们还没决定住哪个区，UCL只是上课地点。请把这些保存为以后所有新对话的长期默认偏好。\",\"value\":30},\"room_type\":{\"source\":\"user_message\",\"text\":\"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。我们想三个人一起整租3居室，每人每月房租最多£1,000，不含账单，希望到学校别太远。能先帮我们找吗？\",\"value\":\"whole\"}},\"destination\":\"Gower Street, London WC1E 6BT\",\"max_budget\":2400,\"max_travel_time\":30,\"property_features\":[],\"room_type\":\"whole\",\"soft_preferences\":[]},\"operation\":\"replace\",\"results\":[],\"revision\":6}}}\n\n"
+  }
+]

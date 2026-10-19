@@ -1,0 +1,16 @@
+{
+  "activeLabel": "Compare side by side",
+  "rect": {
+    "x": 163.078125,
+    "y": 136.5,
+    "width": 26,
+    "height": 26,
+    "top": 136.5,
+    "right": 189.078125,
+    "bottom": 162.5,
+    "left": 163.078125
+  },
+  "centerHit": true,
+  "outline": "rgb(220, 38, 38) solid 2px",
+  "sidebarOpen": "true"
+}

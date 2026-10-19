@@ -1,0 +1,30 @@
+{
+  "phase": "reproduce",
+  "requests": 8,
+  "checks": 8,
+  "passed": 6,
+  "failed": [
+    {
+      "case": "fresh-C-old-cookie-auth-revoked",
+      "actor": "C_PREDELETE_SESSION_COPY",
+      "request_seq": 6,
+      "expected_status": [
+        200
+      ],
+      "actual_status": 200,
+      "passed": false,
+      "detail": null
+    },
+    {
+      "case": "fresh-C-old-cookie-write-revoked",
+      "actor": "C_PREDELETE_SESSION_COPY",
+      "request_seq": 7,
+      "expected_status": [
+        401
+      ],
+      "actual_status": 201,
+      "passed": false,
+      "detail": null
+    }
+  ]
+}

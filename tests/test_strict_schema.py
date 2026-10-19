@@ -94,7 +94,9 @@ def test_search_properties_all_required_and_nullable_after_transform():
     raw = _SPEC_BY_NAME["search_properties"].input_schema
     strict = to_strict_schema(raw)
     props = strict["properties"]
-    assert len(props) == 21, f"expected 21 props, got {len(props)}"
+    assert 'bedrooms_minimum' in props
+    assert len(props) == 25, f"expected 25 props, got {len(props)}"
+    assert {'monthly_total_budget', 'office_days_per_week', 'max_changes'} <= props.keys()
     assert set(strict["required"]) == set(props)
     # Every search_properties field is optional in the source, so all become nullable.
     for pname, pv in props.items():

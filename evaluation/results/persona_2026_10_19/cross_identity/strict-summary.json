@@ -1,0 +1,52 @@
+{
+  "phase": "strict",
+  "requests": 37,
+  "checks": 36,
+  "passed": 32,
+  "failed": [
+    {
+      "case": "logout-revokes-existing-copy",
+      "actor": "B_SESSION_COPY",
+      "request_seq": 27,
+      "expected_status": [
+        401
+      ],
+      "actual_status": 200,
+      "passed": false,
+      "detail": "Controlled copy of synthetic B cookie only; if accepted this is a session-revocation design limitation, not a signature bypass."
+    },
+    {
+      "case": "erased-account-old-session-revoked-auth-state",
+      "actor": "A_SESSION_COPY",
+      "request_seq": 34,
+      "expected_status": [
+        200
+      ],
+      "actual_status": 200,
+      "passed": false,
+      "detail": null
+    },
+    {
+      "case": "erased-account-old-session-revoked-read",
+      "actor": "A_SESSION_COPY",
+      "request_seq": 35,
+      "expected_status": [
+        401
+      ],
+      "actual_status": 200,
+      "passed": false,
+      "detail": null
+    },
+    {
+      "case": "erased-account-old-session-revoked-write",
+      "actor": "A_SESSION_COPY",
+      "request_seq": 36,
+      "expected_status": [
+        401
+      ],
+      "actual_status": 201,
+      "passed": false,
+      "detail": null
+    }
+  ]
+}

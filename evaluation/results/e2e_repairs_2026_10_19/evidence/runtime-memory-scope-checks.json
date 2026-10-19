@@ -1,0 +1,14 @@
+[
+  {
+    "case": "injected-foreign-user-id-overridden-at-dispatch",
+    "passed": true
+  },
+  {
+    "case": "foreign-private-canary-not-returned",
+    "passed": true
+  },
+  {
+    "case": "controlled-injection-was-consumed",
+    "passed": true
+  }
+]

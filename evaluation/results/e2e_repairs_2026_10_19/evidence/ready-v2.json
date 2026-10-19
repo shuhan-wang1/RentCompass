@@ -1,0 +1,190 @@
+{
+  "status": "ready",
+  "runtime": "asgi",
+  "release": {
+    "arch": "fc_loop",
+    "source_sha": "e2e-repair-frozen-working-tree",
+    "image_digest": "unknown",
+    "prompt": {
+      "version": "2.2.0",
+      "schema_sha": "5081a3d489f3b8113a6dc9e5a3e5908fc25ee7a7ce67981f2a528ccc008ee2f9",
+      "runtime_specs": {
+        "en": {
+          "prompt_id": "uk_rent.fc_loop.system",
+          "prompt_version": "2.2.0",
+          "prompt_variant": "en",
+          "prompt_purpose": "fc_loop_system_policy",
+          "prompt_hash": "9607ac88d6bdb23bafc3c335547efad4f17c992bdef854330ececf6300aa9ac5"
+        },
+        "zh": {
+          "prompt_id": "uk_rent.fc_loop.system",
+          "prompt_version": "2.2.0",
+          "prompt_variant": "zh",
+          "prompt_purpose": "fc_loop_system_policy",
+          "prompt_hash": "e8989eb8faa8717c29728cd72d99143340e6eeebbe6c6ca7d8175cb445e97d4b"
+        }
+      }
+    },
+    "routing_mode": "single_pool",
+    "strict": false,
+    "manager_v1_specialists": false
+  },
+  "checks": {
+    "release_metadata": {
+      "status": "degraded",
+      "required": false,
+      "missing_or_invalid": [
+        "source_sha",
+        "image_digest"
+      ]
+    },
+    "runtime_configuration": {
+      "status": "ok",
+      "required": true,
+      "agent_arch": "fc_loop",
+      "manager_v1_specialists": false,
+      "use_mcp_tools": false,
+      "tools_over_mcp": false,
+      "llm_provider": "deepseek",
+      "deepseek_strict": false
+    },
+    "tool_registry": {
+      "status": "ok",
+      "required": true,
+      "tool_count": 14,
+      "strict_schemas": "valid",
+      "runtime_constraints": "valid"
+    },
+    "agent_graph": {
+      "status": "ok",
+      "required": true,
+      "state": "compiled",
+      "arch": "fc_loop"
+    },
+    "conversation_db": {
+      "status": "ok",
+      "required": true
+    },
+    "agent_memory": {
+      "status": "ok",
+      "backend": "sqlite",
+      "schema_version": 2,
+      "records": 92,
+      "native_records": 92,
+      "legacy_records": 0,
+      "legacy_lineage_records": 0,
+      "legacy_source": "absent",
+      "required": true
+    },
+    "background_jobs": {
+      "status": "ok",
+      "required": false,
+      "counts": {
+        "completed": 22,
+        "total": 22
+      }
+    },
+    "canary_sink": {
+      "status": "disabled",
+      "required": false,
+      "failures": 0
+    },
+    "checkpoint_store": {
+      "status": "ok",
+      "required": true,
+      "identity": {
+        "agent_arch": "fc_loop",
+        "manager_v1_specialists": "0"
+      }
+    },
+    "auth_store": {
+      "status": "disabled",
+      "required": false
+    },
+    "llm_configuration": {
+      "status": "ok",
+      "required": false,
+      "provider": "deepseek",
+      "transport": {
+        "timeout_seconds": 20.0,
+        "max_retries": 1
+      },
+      "connectivity": "not_probed"
+    },
+    "rag": {
+      "status": "degraded",
+      "required": false,
+      "detail": "embedding RAG unavailable"
+    },
+    "searxng": {
+      "status": "degraded",
+      "required": false,
+      "process_health": "unavailable",
+      "search_result_capability": "unknown",
+      "detail": "URLError: <urlopen error [Errno 111] Connection refused>"
+    },
+    "onthemarket": {
+      "status": "degraded",
+      "required": false,
+      "provider": "OnTheMarket",
+      "capability": "unknown",
+      "property_source": "csv",
+      "detail": "live scrape/schema compatibility is not probed; cached results may still work"
+    },
+    "tfl": {
+      "status": "degraded",
+      "required": false,
+      "provider": "Transport for London",
+      "capability": "unknown",
+      "tools": [
+        "calculate_commute",
+        "calculate_commute_cost",
+        "get_transport_info"
+      ],
+      "detail": "live provider is intentionally not called by readiness"
+    },
+    "police_data": {
+      "status": "degraded",
+      "required": false,
+      "provider": "data.police.uk",
+      "capability": "unknown",
+      "tools": [
+        "check_safety"
+      ],
+      "detail": "live provider is intentionally not called by readiness"
+    },
+    "openstreetmap": {
+      "status": "degraded",
+      "required": false,
+      "provider": "Nominatim/Overpass",
+      "capability": "unknown",
+      "tools": [
+        "search_nearby_pois"
+      ],
+      "detail": "live provider is intentionally not called by readiness"
+    },
+    "weather": {
+      "status": "degraded",
+      "required": false,
+      "provider": "Open-Meteo",
+      "capability": "unknown",
+      "tools": [
+        "get_weather"
+      ],
+      "detail": "live provider is intentionally not called by readiness"
+    }
+  },
+  "failed": [],
+  "degraded": [
+    "release_metadata",
+    "canary_sink",
+    "auth_store",
+    "rag",
+    "searxng",
+    "onthemarket",
+    "tfl",
+    "police_data",
+    "openstreetmap",
+    "weather"
+  ]
+}

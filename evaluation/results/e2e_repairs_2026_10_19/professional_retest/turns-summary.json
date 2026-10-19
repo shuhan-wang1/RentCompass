@@ -1,0 +1,2536 @@
+[
+  {
+    "turn": 1,
+    "candidate": 1,
+    "time": 1792400180.4463184,
+    "seconds": 8.597,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"I'm moving to London on my own and need a self-contained whole flat, not a room in a shared place. My office is near Bank station and I'll be there three days a week. My maximum is £2,200 a month including rent and my commute. Can you find a few suitable options?\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream"
+      }
+    },
+    "response_message": "I found whole self-contained flats within your rent ceiling, but I need to flag one important thing first: your £2,200 cap includes the commute, and the search tool did not apply a budget filter (it recorded max_budget as null).\n\nHere are the options returned (source: OnTheMarket, cached listings — prices are recorded asking rents, not live-verified availability)\n\n1. Studio, The Vale, London — £1300/month\nhttps://www.onthemarket.com/details/14672649/\n2. 1 bed flat, Limes Avenue, Chigwell IG7 — £1400/month\nhttps://www.onthemarket.com/details/20341047/\n3. 2 bed apartment, Hewitt Quays, Barking IG11 — £1600/month\nhttps://www.onthemarket.com/details/3516503/\n4. 1 bed flat, Grosvenor Road, London E6 — £1800/month\nhttps://www.onthemarket.com/details/20347976/\n5. 2 bed flat, White City Estate, London W12 — £1899/month\n\nThe list was truncated at five of fifteen results, so there are more in the cache if you want the rest.\n\nOn the commute side: I could not calculate journey times or fares for these because the destination was stored as \"My office\" rather than a resolvable address. If you tell me the office address (or confirm Bank station as the destination), I can price the actual door-to-door commute from each flat and check whether rent plus travel stays under £2,200 for three office days a week.\n\nTwo things worth knowing before you shortlist\n- Chigwell (IG7) is outside London fare zones in the usual sense and is a longer rail commute; Barking, E6 and W12 are all well connected toward Bank, but the fares differ meaningfully.\n- None of these listings show availability dates or bills-included status in the cached data, so those need confirming with the agent.\n\nWould you like me to run the commute and fare check against Bank station for these five, or narrow the search to specific areas near Bank first?\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+    "response_type": "search",
+    "criteria": {
+      "amenities_of_interest": [],
+      "area": "London",
+      "areas": [
+        "London"
+      ],
+      "bedrooms": null,
+      "bedrooms_minimum": false,
+      "budget_period": "month",
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "room_type": {
+          "source": "user_message",
+          "text": "I'm moving to London on my own and need a self-contained whole flat, not a room in a shared place. My office is near Bank station and I'll be there three days a week. My maximum is £2,200 a month including rent and my commute. Can you find a few suitable options?",
+          "value": "whole"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "move_in_date": null,
+      "no_commute": false,
+      "office_days_per_week": 3,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Limes Avenue, Chigwell IG7",
+        "price": "£1400/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Hewitt Quays, Barking ig11",
+        "price": "£1600/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Grosvenor Road, London E6",
+        "price": "£1800/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "White City Estate, London W12",
+        "price": "£1899/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "High Street, London N8",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Newmarket Avenue, Northolt UB5",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Caroline Close, London N10",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Times Square, London",
+        "price": "£2250/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Lavender Hill, London, SW11",
+        "price": "£2300/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "River Mill One, London",
+        "price": "£2400/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Barrowgate Road, London W4",
+        "price": "£2450/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Perth Road, London, N22",
+        "price": "£2500/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Church Road, Mitcham CR4",
+        "price": "£2800/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Paddington Street, London W1U",
+        "price": "£3000/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      }
+    ]
+  },
+  {
+    "turn": 2,
+    "candidate": 1,
+    "time": 1792400202.7327745,
+    "seconds": 7.826,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"Yes, use Bank station as the exact commute destination. My total monthly budget is £2200 including rent plus travel, and I commute three days a week. Please compare the best three whole flats: monthly rent, monthly commuting cost, combined total, journey time and how you calculated it.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "I need to be straight with you: I can only give you a complete rent-plus-travel comparison for one of the three, and even that one has no fare figure. Here is exactly what the tools returned.\n\n**1. Studio, The Vale, London — £1300/month**\n- Journey time: measured by the TfL Journey Planner (fastest itinerary returned, including walking legs and interchanges). Basis: real TfL journey plan, not an estimate.\n- Monthly commuting cost: not available. The fare calculation failed because the zones for one or both addresses could not be established, so no zonal price was assigned. I will not guess a figure.\n- Combined total: cannot be stated, because the travel half is unknown. Rent alone is £1300, leaving £900 of your £2,200 for travel — which is a large margin, but that is arithmetic on your budget, not a verified fare.\n\n**2. 1 bed flat, Limes Avenue, Chigwell IG7 — £1400/month**\n- Journey time: not available. The route calculation failed (address could not be resolved or no route found).\n- Monthly commuting cost: not available.\n- Combined total: cannot be stated.\n\n**3. 2 bed apartment, Hewitt Quays, Barking IG11 — £1600/month**\n- Journey time: not available. Same route failure.\n- Monthly commuting cost: not available.\n- Combined total: cannot be stated.\n\n**How the one working figure was calculated: For the fare side it uses zonal PAYG caps multiplied by your commuting days — three office days a week gives 13 commuting days a month (3 × 52 ÷ 12), not the default 22 — but it only does that when both ends have a known London zone, and here they did not.\n\n**What this means for your £2,200 all-in cap:** I cannot currently confirm that any of these three fits rent plus travel. The Vale is the only one where the journey is verified, and its rent leaves the most headroom, but the fare is unverified.\n\nTwo things would unlock a proper comparison\n- Fuller addresses (street number and postcode) for Limes Avenue and Hewitt Quays, so the route planner can resolve them.\n- A postcode for The Vale, so the zone — and therefore the fare — can be established.\n\nIf you give me those, I will re-run all three and give you rent, travel, combined total and journey time side by side. Alternatively, I can search again for whole flats in areas with confirmed Zone 1-3 stations near Bank, where fares are priceable.\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+    "response_type": "search",
+    "criteria": {
+      "amenities_of_interest": [],
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "room_type": {
+          "source": "user_message",
+          "text": "I'm moving to London on my own and need a self-contained whole flat, not a room in a shared place. My office is near Bank station and I'll be there three days a week. My maximum is £2,200 a month including rent and my commute. Can you find a few suitable options?",
+          "value": "whole"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 3,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Limes Avenue, Chigwell IG7",
+        "price": "£1400/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Hewitt Quays, Barking ig11",
+        "price": "£1600/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Grosvenor Road, London E6",
+        "price": "£1800/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "White City Estate, London W12",
+        "price": "£1899/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "High Street, London N8",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Newmarket Avenue, Northolt UB5",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Caroline Close, London N10",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Times Square, London",
+        "price": "£2250/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Lavender Hill, London, SW11",
+        "price": "£2300/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "River Mill One, London",
+        "price": "£2400/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Barrowgate Road, London W4",
+        "price": "£2450/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Perth Road, London, N22",
+        "price": "£2500/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Church Road, Mitcham CR4",
+        "price": "£2800/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Paddington Street, London W1U",
+        "price": "£3000/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      }
+    ]
+  },
+  {
+    "turn": 3,
+    "candidate": 1,
+    "time": 1792400216.378294,
+    "seconds": 4.225,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"My employer has changed the plan: I only need to go to Bank station one day a week now. Keep my £2200 total monthly rent-plus-travel budget and the whole-flat requirement. Does that change which flat you recommend?\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "I have to be honest with you: I don't have the fare figures I'd need to answer that properly, and I won't invent them.\n\nWhat I can tell you factually\n\n**What changed in your criteria**\n- Office attendance is now 1 day/week (the accumulated criteria block records office_days_per_week: 1, sourced from your message).\n- Budget unchanged: £2,200/month total, rent plus travel.\n- Whole self-contained flat, not a shared room.\n\n**Why the recommendation doesn't flip on its own**\nCutting attendance from 3 days to 1 day reduces the travel side of your budget by roughly two-thirds, which frees up rent headroom. That direction is sound. But the size of that headroom depends on the actual monthly fare from each flat to Bank, and I do not have verified fare figures for these listings. The commute fields in the last search results all read \"N/A\", and the one fare calculation I attempted did not return a usable number. So I cannot tell you \"flat X now fits and flat Y doesn't\" without making up numbers, which I won't do.\n\n**What I can say about the three cheapest whole flats on rent alone**\n1. Studio, The Vale, London — £1300/month — leaves £900/month for travel\n2. 1 bed flat, Limes Avenue, Chigwell IG7 — £1400/month — leaves £800/month for travel\n3. 2 bed apartment, Hewitt Quays, Barking IG11 — £1600/month — leaves £600/month for travel\n\nAll three leave substantial room under £2,200 even before the attendance change, so on rent alone none of them is at risk. The attendance change mainly matters for the pricier options further down the list (Times Square at £2,250 is already over your rent ceiling on its own, so it is out regardless).\n\n**What I'd need to actually rank them**\nA verified journey time and monthly fare from each address to Bank station. I can run that now for the three above — it will give you real TfL journey plans and zonal fare figures, and then the combined totals become a genuine comparison rather than a guess.\n\nWant me to run the commute and fare calculation for those three flats to Bank station at one day a week?\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+    "response_type": "search",
+    "criteria": {
+      "amenities_of_interest": [],
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "room_type": {
+          "source": "user_message",
+          "text": "I'm moving to London on my own and need a self-contained whole flat, not a room in a shared place. My office is near Bank station and I'll be there three days a week. My maximum is £2,200 a month including rent and my commute. Can you find a few suitable options?",
+          "value": "whole"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 1,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Limes Avenue, Chigwell IG7",
+        "price": "£1400/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Hewitt Quays, Barking ig11",
+        "price": "£1600/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Grosvenor Road, London E6",
+        "price": "£1800/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "White City Estate, London W12",
+        "price": "£1899/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "High Street, London N8",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Newmarket Avenue, Northolt UB5",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Caroline Close, London N10",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Times Square, London",
+        "price": "£2250/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Lavender Hill, London, SW11",
+        "price": "£2300/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "River Mill One, London",
+        "price": "£2400/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Barrowgate Road, London W4",
+        "price": "£2450/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Perth Road, London, N22",
+        "price": "£2500/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Church Road, Mitcham CR4",
+        "price": "£2800/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      },
+      {
+        "address": "Paddington Street, London W1U",
+        "price": "£3000/month",
+        "room_type": "whole",
+        "candidate_status": "eligible",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "eligible",
+          "unknown_reasons": []
+        }
+      }
+    ]
+  },
+  {
+    "turn": 4,
+    "candidate": 1,
+    "time": 1792400234.2371192,
+    "seconds": 0.396,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "- No listing is both fully eligible and verified.\nExcluded / does not meet:\n- The Vale, London: room type does not match studio\nThese listings are cached; prices and availability may have changed. Confirm with the agent.",
+    "response_type": "search",
+    "criteria": {
+      "amenities_of_interest": [],
+      "bedrooms": 0,
+      "bedrooms_minimum": false,
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "bedrooms": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": 0
+        },
+        "bedrooms_minimum": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": false
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": "studio"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 1,
+      "property_features": [],
+      "room_type": "studio",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "excluded",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": 0,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "studio"
+          },
+          "reasons": [
+            "room type does not match studio"
+          ],
+          "source": "structured_listing",
+          "status": "excluded",
+          "unknown_reasons": [
+            "bedroom count is not verified"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "turn": 5,
+    "candidate": 1,
+    "time": 1792400257.5068393,
+    "seconds": 9.397,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "Here is what the tools actually returned, separated from what I could not verify.\n**Listing details (source: OnTheMarket, cached snapshot fetched 2026-10-19 04:54 UTC, cache status fresh, live_verified = false)**\n- Address: The Vale, London\n- Rent: £1,300 pcm\n- Room type: Studio (confirmed as a studio, not a shared room)\n- Listed features: studio flat, high ceilings, wooden flooring, hot water included, student\n- Availability: \"Contact agent\" — no date given\n- Deposit: not stated in the listing\n- Fees: not stated in the listing\n- Furnishing: not stated.\n\"Wooden flooring\" is a floor finish, not a furnishing status — do not read it as furnished or unfurnished\n- Guest policy: blank\n- Payment rules: blank\nUnknowns to check before viewing: deposit amount and whether it is held in a protection scheme\n any holding fee, admin fee or referencing fee\n whether it is furnished, part-furnished or unfurnished\n exact tenancy start date and minimum term\n what \"hot water included\" covers and whether other bills (electricity, heating, water, council tax, broadband) are extra\n council tax band and any student exemption\n whether the kitchen and bathroom are private to the flat (the listing does not confirm a private kitchen)\n the exact street number and postcode\n and the EPC rating.\n**Journey to Bank station (source: TfL Unified API Journey Planner)**\nImportant caveat: the TfL response for this query came back flagged as synthetic audit fixture data — the origin and destination both resolved to the same placeholder station (\"London [audit fixture]\") and the route is labelled \"Audit fixture line\".\nSo the numbers below are what the tool returned, but they are not a trustworthy description of a real The Vale to Bank journey, and I will not present them as one.\n- Fastest itinerary returned: one tube leg, adult pay-as-you-go single £4.25\n- Cheapest itinerary returned: adult pay-as-you-go single £2.80\n- Fare basis: journey itinerary, adult contactless/Oyster single\nI could not obtain a genuine door-to-door plan for The Vale to Bank from this call.\nThe listing's coordinates are 51.5064537, -0.2518171, but the journey tool did not use them.\n**Arriving 9 am on the next weekday:** the tool did not return an arrival-time-constrained plan, so I cannot confirm a 9 am arrival.\n**Pay-as-you-go versus monthly Travelcard for one office day a week**\nThe Travelcard lookup failed: it could not establish zones for the endpoints (it reported \"My office\" as an unknown zone location), so no Travelcard is claimed to cover this journey.\nI therefore cannot give you a Travelcard price or a like-for-like comparison.\nWhat I can say on method alone, without inventing figures: at one office day a week you make roughly 4 to 5 return journeys a month.\nA monthly Travelcard is priced for near-daily travel, so on that attendance pattern pay-as-you-go is almost always the cheaper structure — but I have no verified fare or Travelcard price for this route, so treat that as reasoning about structure, not a costed recommendation.\n- Central: Severe Delays (reason flagged as synthetic test data)\n- Northern: Good Service\n- Victoria: Good Service\nOnly three lines were returned, so this is not a full network status.\nThe disruption reason is also flagged as synthetic, so treat the Central status as unconfirmed.\n**Bottom line**\nAgainst your £2,200 all-in cap that leaves £900 a month for travel, which is ample for one office day a week on any plausible fare — but I have no verified fare for this specific route, so I am not quoting a combined total.\nWould you like me to retry the journey with the listing's exact coordinates and a 9 am arrival constraint, and price a zone-based Travelcard separately so you can see the comparison?\nNote: some commute claims could not be verified and have been removed from this answer.\nThe listing details are cached; current price and availability were not verified live. Confirm with the agent.\nReturned listing details: The Vale, London; £1,300 pcm; Studio.\nReported features: Studio flat, High ceilings, Wooden Flooring, Hot Water Included, Student.\nAvailability: Contact agent. Confirm current availability with the agent.\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\nReturned journey: The Vale, London → Bank station, London, 32 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nReturned one-way fare (The Vale, London → Bank station, London): £4.25; this is not a return fare or a monthly total.\nReturned line status: Central: Severe Delays.\nReturned line status: Northern: Good Service.\nReturned line status: Victoria: Good Service.",
+    "response_type": "chat",
+    "criteria": {
+      "amenities_of_interest": [],
+      "bedrooms": 0,
+      "bedrooms_minimum": false,
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "bedrooms": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": 0
+        },
+        "bedrooms_minimum": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": false
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.",
+          "value": "whole"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 1,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": 0,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "bedroom count is not verified"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "turn": 6,
+    "candidate": 1,
+    "time": 1792400286.8569803,
+    "seconds": 7.98,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"Now I may need to be in the office five days a week instead. For that same £1300 flat, please use its coordinates 51.5064537, -0.2518171 and Bank station as the destination, not the words My office. Recalculate rent plus monthly travel and compare pay-as-you-go with the relevant monthly Travelcard. Does it still fit my £2200 total monthly budget? Keep estimates separate from returned evidence.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "Here is the split between what the tools actually returned and what I could not establish.\n\n**Actual tool results (evidence)**\n\nJourney time — measured, not estimated\n- basis = tfl_journey_plan. Source: TfL Unified API Journey Planner. This is the fastest itinerary it returned for those two points, including walking legs and interchanges.\n- A slower option was also returned.\n\nAdult pay-as-you-go single fares (source: TfL, journey itinerary fares)\n- Fastest itinerary: £4.25\n- Cheapest itinerary: £2.80\n- These are adult contactless/Oyster singles tied to those specific itineraries.\n\n**What failed — and why this matters**\n\nMonthly travel cost: not available. The fare calculation returned \"Unable to determine zones for one or both addresses. Cannot calculate transport cost.\" Both from_zone and to_zone came back null, coverage_verified = false, zone_basis = not_established. So I have no monthly PAYG total and no monthly Travelcard figure for this flat.\n\nMonthly Travelcard: also not established. The Travelcard lookup failed because zones could not be resolved for the endpoints. No Travelcard is claimed to cover this journey.\n\n**So the PAYG vs Travelcard comparison cannot be made from returned evidence.** I will not manufacture a monthly figure by multiplying £4.25 by 21.67 days — that would be my arithmetic on top of a single fare, not a tool result, and it would ignore daily and weekly capping, which is exactly what determines whether a Travelcard wins.\n\n**Does it fit £2,200?**\n- Rent: £1,300/month (cached listing price, not live-verified).\n- Travel: unknown from the tools.\n- Therefore the combined total is unknown, and I cannot confirm or deny that it fits. What I can say: rent alone leaves £900/month of headroom for travel, not a verified fare conclusion.\n\n*the resolved stations read \"London [audit fixture]\" with a test NaPTAN code, and the route legs are labelled \"SYNTHETIC TEST DATA: audit route\". The 32-minute duration and the £4.25/£2.80 fares are internally consistent and carry a TfL source label, but the station resolution is clearly a placeholder rather than a real The Vale to Bank routing. Treat the 32 minutes and those fares as unconfirmed until a clean lookup resolves real stations.\n\n**What would settle it**\n- A fare lookup that resolves zones for both ends, which would give the monthly PAYG cap and the monthly Travelcard price for the correct zone band.\n- Confirmation of the actual nearest station to that coordinate, since the tool did not return a real one and I will not name one.\n\nWant me to retry the fare and Travelcard lookup using a named station at each end instead of the coordinate and \"Bank station\", so the zones can actually resolve?\n\nNote: some commute claims could not be verified and have been removed from this answer.",
+    "response_type": "chat",
+    "criteria": {
+      "amenities_of_interest": [],
+      "bedrooms": 0,
+      "bedrooms_minimum": false,
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "bedrooms": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": 0
+        },
+        "bedrooms_minimum": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": false
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.",
+          "value": "whole"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 5,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": 0,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "bedroom count is not verified"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "turn": 7,
+    "candidate": 1,
+    "time": 1792400310.020221,
+    "seconds": 10.9,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"What would everyday life near that flat on The Vale be like? Please look up nearby supermarkets, a gym, and somewhere useful for coffee or lunch, with walking distances and sources. Use the listing coordinates 51.5064537, -0.2518171 if the address is too vague, and be clear about what you actually verified.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "Here is what the nearby search actually returned, and what it does not tell us.\n\n**What was verified (source: OpenStreetMap Overpass, cached search run)**\n\nThe search was centred on the coordinates you supplied, 51.5064537, -0.2518171, within an 800m radius. Note two important caveats from the tool itself: the coordinates were caller-supplied rather than geocoded, so the property's identity is not independently verified, and all distances are straight-line, not walking distance.\n\n- Supermarket: \"Tesco Express [audit fixture]\" — 130m straight-line, listed opening hours Mo-Su 08:00-20:00, brand Tesco.\n- Cafe: \"Cafe [audit fixture]\" — 130m straight-line, listed opening hours Mo-Su 08:00-20:00.\n- Gym: \"School [audit fixture]\" — 130m straight-line, listed opening hours Mo-Su 08:00-20:00. This one is worth flagging: the record is tagged as a gym but named \"School\", so it may be a school sports facility rather than a public gym. Treat it as unconfirmed until you check.\n\n**What I could not verify**\n\n- The names carry an \"[audit fixture]\" label, which suggests these are test records rather than confirmed live businesses. I would not rely on them as real places until checked against a live map.\n- Walking distances: the tool only gives straight-line distance, so actual walking routes will be longer. Search results don't cover this; check a mapping service for real walking times.\n- Opening hours are as listed in OpenStreetMap and may be out of date; confirm directly.\n- No other supermarkets, cafes, or gyms were returned within 800m. That does not mean there are none — it means the search returned only these three records.\n\n**Practical takeaway**\n\nOn paper, a supermarket, a coffee/lunch spot, and a possible gym all sit around 130m straight-line from the flat, which would make everyday errands very convenient and would satisfy your gym preference if that facility is genuinely public. Before viewing, I would verify each of the three on a live map, confirm the gym is open to the public and what membership costs, and check actual walking routes rather than straight-line distances.\n\nIf you would like, I can look up live TfL journey and fare details for the flat to Bank station, or you can ask me to re-run the nearby search once you have a confirmed address.\n\nPlease double-check the station name against the source listing — it is not confirmed by the data I retrieved.",
+    "response_type": "chat",
+    "criteria": {
+      "amenities_of_interest": [],
+      "bedrooms": 0,
+      "bedrooms_minimum": false,
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "bedrooms": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": 0
+        },
+        "bedrooms_minimum": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": false
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.",
+          "value": "whole"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 5,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": 0,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "bedroom count is not verified"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "turn": 8,
+    "candidate": 1,
+    "time": 1792400327.2246008,
+    "seconds": 2.975,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"Save The Vale flat, listing 14672649 at £1300/month, as a favourite. Add this note: Comparing five office days a week to Bank station against a £2200 monthly rent-plus-travel budget; travel cost still unverified. Please confirm once it is actually saved.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "I can't confirm that as saved, because I have no tool that saves favourites or notes to a listings list. The only long-term storage I have is a memory tool for durable facts about you, which is a different thing from a favourites list on a listing.\n\nSo, to be clear: nothing has been saved. The Vale flat (listing 14672649, £1300/month) is not marked as a favourite anywhere by me, and your note has not been stored.\n\nWhat I can do instead, if you want it, is save a durable fact about your situation to memory. That would be the exact text below, and I would only store it after you confirm:\n\n\"The Vale flat, listing 14672649 (https://www.onthemarket.com/details/14672649/), £1300/month studio, is a candidate the user is comparing. Open question: five office days a week to Bank station versus a £2200 monthly rent-plus-travel budget; travel cost still unverified.\"\n\nSay the word and I will save that. Otherwise, the practical route is to favourite it yourself on the OnTheMarket listing page, since that is where the listing actually lives.\n\nOne correction worth carrying forward: your criteria block currently records one office day a week, while this note says five. If five days is now the real plan, tell me and I will treat five as the current figure for any further cost work.",
+    "response_type": "chat",
+    "criteria": {
+      "amenities_of_interest": [],
+      "bedrooms": 0,
+      "bedrooms_minimum": false,
+      "commute_destination": "My office",
+      "constraint_sources": {
+        "bedrooms": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": 0
+        },
+        "bedrooms_minimum": {
+          "source": "user_message",
+          "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+          "value": false
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.",
+          "value": "whole"
+        }
+      },
+      "destination": "My office",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 5,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": 0,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "bedroom count is not verified"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "turn": 9,
+    "candidate": 2,
+    "time": 1792401866.2864406,
+    "seconds": 10.409,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"I'm back and want to double-check my shortlist. My commute destination is Bank station, London, and I now attend the office five days per week. My total monthly budget is £2200 for rent plus travel. I still want a self-contained whole flat, not a shared room. Please update my search criteria and compare suitable options, including my saved The Vale flat if it fits. Show monthly rent, monthly travel cost, their combined total and what remains unverified.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "- No listing is both fully eligible and verified.\nNot verified:\n- The Vale, London: monthly travel cost is not verified for this listing, destination and attendance\n- Limes Avenue, Chigwell IG7: monthly travel cost is not verified for this listing, destination and attendance\n- Hewitt Quays, Barking ig11: monthly travel cost is not verified for this listing, destination and attendance\n- Grosvenor Road, London E6: monthly travel cost is not verified for this listing, destination and attendance\n- Acacia House, 51 Kingston Road, New Malden, London: monthly travel cost is not verified for this listing, destination and attendance\n- White City Estate, London W12: monthly travel cost is not verified for this listing, destination and attendance\n- High Street, London N8: monthly travel cost is not verified for this listing, destination and attendance\n- Newmarket Avenue, Northolt UB5: monthly travel cost is not verified for this listing, destination and attendance\n- Caroline Close, London N10: monthly travel cost is not verified for this listing, destination and attendance\n- Fortescue Road, Colliers Wood, Greater London: monthly travel cost is not verified for this listing, destination and attendance\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: The Vale, London, 51.5064537, -0.2518171 → Bank station, London, 32 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nTravel cost remains unverified: Unable to determine zones for one or both addresses. Cannot calculate transport cost..\nAttendance used in the returned calculation: 5 days/week, 21.6667 commuting days/month.\nRoute fare-zone coverage remains unverified. No zonal price is assigned when either address has an unknown zone.\nReturned journey: Limes Avenue, Chigwell IG7, London → Bank station, London, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Hewitt Quays, Barking IG11, London → Bank station, London, 32 minutes (the planner's fastest returned itinerary).",
+    "response_type": "search",
+    "criteria": {
+      "amenities_of_interest": [],
+      "area": "London",
+      "areas": [
+        "London"
+      ],
+      "bedrooms": null,
+      "bedrooms_minimum": null,
+      "budget_period": "month",
+      "commute_destination": "Bank station, London",
+      "constraint_sources": {
+        "bedrooms": {
+          "message_id": null,
+          "original_source": {
+            "source": "user_message",
+            "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+            "value": 0
+          },
+          "reason": "read_only_or_ancillary_source",
+          "source": "criteria_recovery",
+          "value": null
+        },
+        "bedrooms_minimum": {
+          "message_id": null,
+          "original_source": {
+            "source": "user_message",
+            "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+            "value": false
+          },
+          "reason": "read_only_or_ancillary_source",
+          "source": "criteria_recovery",
+          "value": null
+        },
+        "commute_destination": {
+          "message_id": 56,
+          "original_source": null,
+          "reason": "generic_destination_placeholder",
+          "source": "criteria_recovery",
+          "value": "Bank station, London"
+        },
+        "destination": {
+          "message_id": 56,
+          "original_source": null,
+          "reason": "generic_destination_placeholder",
+          "source": "criteria_recovery",
+          "value": "Bank station, London"
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.",
+          "value": "whole"
+        }
+      },
+      "criteria_repair_provenance": [
+        {
+          "field": "bedrooms",
+          "message_id": null,
+          "previous_value": 0,
+          "reason": "read_only_or_ancillary_source",
+          "value": null
+        },
+        {
+          "field": "bedrooms_minimum",
+          "message_id": null,
+          "previous_value": false,
+          "reason": "read_only_or_ancillary_source",
+          "value": null
+        },
+        {
+          "field": "commute_destination",
+          "message_id": 56,
+          "previous_value": "My office",
+          "reason": "generic_destination_placeholder",
+          "value": "Bank station, London"
+        },
+        {
+          "field": "destination",
+          "message_id": 56,
+          "previous_value": "My office",
+          "reason": "generic_destination_placeholder",
+          "value": "Bank station, London"
+        }
+      ],
+      "destination": "Bank station, London",
+      "max_budget": null,
+      "max_budget_monthly": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "move_in_date": null,
+      "no_commute": false,
+      "office_days_per_week": 5,
+      "property_features": [],
+      "rent_filter_ceiling_monthly": null,
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Limes Avenue, Chigwell IG7",
+        "price": "£1400/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Hewitt Quays, Barking ig11",
+        "price": "£1600/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Grosvenor Road, London E6",
+        "price": "£1800/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Acacia House, 51 Kingston Road, New Malden, London",
+        "price": "£1850/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "White City Estate, London W12",
+        "price": "£1899/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "High Street, London N8",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Newmarket Avenue, Northolt UB5",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Caroline Close, London N10",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Fortescue Road, Colliers Wood, Greater London",
+        "price": "£2000/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "turn": 10,
+    "candidate": 2,
+    "time": 1792401916.6406488,
+    "seconds": 8.613,
+    "error": null,
+    "request": {
+      "url": "/api/alex",
+      "body": "{\"message\": \"Can you reopen my saved The Vale studio, listing 14672649, and show its full details: rent, deposit or fees, furnishing, availability and features? Also check today's weather near it, the latest public-transport journey and adult fare to Bank station, and any current line disruptions. I'm still comparing whole homes with five office days a week and a £2200 monthly rent-plus-travel limit. Please clearly mark cached information, estimates and anything unverified.\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"023e76a5ecbb4c04a7b34285b50e1ce5\"}",
+      "headers": {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "X-Conversation-ID": "023e76a5ecbb4c04a7b34285b50e1ce5"
+      }
+    },
+    "response_message": "Here is everything, with each item labelled by how it was obtained.\n**Listing details — CACHED, NOT LIVE-VERIFIED**\nSource: OnTheMarket cached snapshot, fetched 2026-10-19 04:54 UTC (cache status \"fresh\", cache age about 4.5 hours).\nIdentity confirmed by exact listing URL match.\nThe lookup did not contact or refresh the listing, so price and availability are not verified as current.\n- Address: The Vale, London\n- Rent: £1,300 pcm\n- Room type: Studio — confirmed as a studio, not a shared room\n- Description: \"Studio to rent in The Vale, London\"\n- Listed features: studio flat, high ceilings, wooden flooring, hot water included, student\n- Availability: \"Contact agent\" — no date given\n- Coordinates on file: 51.5064537, -0.2518171\n**Unknown / not in the listing — check before viewing**\n- Deposit: not stated\n- Fees or holding deposit: not stated\n- Furnishing: not stated.\n\"Wooden flooring\" is a finish, not a furnishing status, so do not read it as furnished or unfurnished\n- Whether the kitchen is private: the room-type analysis records has_private_kitchen = false, but that is an absence of data, not a confirmed shared kitchen.\nAsk directly\n- Bills: only \"hot water included\" is mentioned.\nCouncil tax, electricity, heating, water and broadband are unstated\n- Tenancy length, minimum term, and whether the \"student\" tag means student-only eligibility\n- Guest policy and payment rules: both fields are empty in the listing\n- Exact street address and postcode: the listing gives only \"The Vale, London\"\nSource: weather lookup at the coordinates above, current date 2026-10-19.\n- 14.2°C, feels like 12.8°C, light rain\n- Humidity 72%, wind 11.5, UV 1.2\n- Rainfall chance: not returned\n- Practical note: light rain, so take an umbrella if you view today\n**Journey to Bank station — TOOL RESULT, BUT THE DATA IS FLAGGED AS SYNTHETIC**\nThis is important and I will not dress it up.\nThe transport tool returned a result, but its own payload marks the content as test/audit data: the resolved stations are literally named \"Holborn [audit fixture]\" and \"London [audit fixture]\", the line is \"Audit fixture line\", and the leg summary reads \"SYNTHETIC TEST DATA: audit route\".\nThe line-status reasons are likewise marked \"SYNTHETIC TEST DATA\".\nSo the numbers below are what the tool returned, but they are not trustworthy as a real journey from The Vale to Bank\n- Fastest itinerary: £4.25 adult pay-as-you-go single\n- Cheapest itinerary: £2.80 adult single\n- Fare basis: journey itinerary fare, contactless or Oyster, adult\n- Source string: TfL Unified API Journey Planner\nbecause the underlying record is a fixture, not a genuine TfL plan for this address pair.\nTreat both figures as unverified.\n**Line disruptions — TOOL RESULT, ALSO FLAGGED SYNTHETIC**\n- Central: Severe Delays (reason marked \"SYNTHETIC TEST DATA: signalling scenario\")\n- Northern: Good Service\n- Victoria: Good Service\n- Summary: disruptions on Central\nSame caveat: the disruption reason is test data, so I would not act on this as today's real service status.\n**Budget position — what can and cannot be concluded**\n- Rent: £1,300 pcm (cached, unverified as current)\n- Monthly travel: not established.\nWith five office days a week, a monthly figure needs a real fare basis, and the only fare data returned is the synthetic fixture above.\nI will not multiply £4.25 by a plausible number of days and call it your travel cost\n- Combined total against your £2,200 cap: cannot be computed reliably.\nOn rent alone you have £900 of headroom, but whether travel fits inside that depends on the unverified fare\n**What I would do next**\nThe blocker is the transport data, not the flat.\nIf you want, I can retry the journey and fare lookup, or price the relevant monthly Travelcard by zone from the official TfL fare table, which is a separate and more reliable source than the itinerary fixture.\nTell me which and I will run it.\nNote: some commute claims could not be verified and have been removed from this answer.\nThe listing details are cached; current price and availability were not verified live. Confirm with the agent.\nReturned listing details: The Vale, London; £1,300 pcm; Studio.\nReported features: Studio flat, High ceilings, Wooden Flooring, Hot Water Included, Student.\nAvailability: Contact agent. Confirm current availability with the agent.\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\nCurrent weather returned for The Vale, London: 14.2°C, Light Rain.\nOnly current conditions were returned; no multi-day forecast is verified.\nA numerical rain probability was not returned.\nReturned journey: 51.5064537, -0.2518171 → Bank station, London, 32 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nReturned one-way fare (51.5064537, -0.2518171 → Bank station, London): £4.25; this is not a return fare or a monthly total.\nReturned line status: Central: Severe Delays.\nReturned line status: Northern: Good Service.\nReturned line status: Victoria: Good Service.",
+    "response_type": "chat",
+    "criteria": {
+      "amenities_of_interest": [],
+      "bedrooms": null,
+      "bedrooms_minimum": null,
+      "commute_destination": "Bank station, London",
+      "constraint_sources": {
+        "bedrooms": {
+          "message_id": null,
+          "original_source": {
+            "source": "user_message",
+            "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+            "value": 0
+          },
+          "reason": "read_only_or_ancillary_source",
+          "source": "criteria_recovery",
+          "value": null
+        },
+        "bedrooms_minimum": {
+          "message_id": null,
+          "original_source": {
+            "source": "user_message",
+            "text": "Tell me more about the £1300/month studio on The Vale, London, listing 14672649: the full rent, deposit or fees if known, furnishing, availability, and anything missing from the listing that I should check before viewing. Please use its actual listing details and mark unknowns.",
+            "value": false
+          },
+          "reason": "read_only_or_ancillary_source",
+          "source": "criteria_recovery",
+          "value": null
+        },
+        "commute_destination": {
+          "message_id": 56,
+          "original_source": null,
+          "reason": "generic_destination_placeholder",
+          "source": "criteria_recovery",
+          "value": "Bank station, London"
+        },
+        "destination": {
+          "message_id": 56,
+          "original_source": null,
+          "reason": "generic_destination_placeholder",
+          "source": "criteria_recovery",
+          "value": "Bank station, London"
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "For the self-contained flat on The Vale, listing 14672649, show me the actual public-transport journey to Bank station arriving at 9 am on the next weekday, the adult fare, whether pay-as-you-go or a monthly Travelcard makes more sense for one office day a week, and any current line disruptions. Please distinguish actual tool results from estimates.",
+          "value": "whole"
+        }
+      },
+      "criteria_repair_provenance": [
+        {
+          "field": "bedrooms",
+          "message_id": null,
+          "previous_value": 0,
+          "reason": "read_only_or_ancillary_source",
+          "value": null
+        },
+        {
+          "field": "bedrooms_minimum",
+          "message_id": null,
+          "previous_value": false,
+          "reason": "read_only_or_ancillary_source",
+          "value": null
+        },
+        {
+          "field": "commute_destination",
+          "message_id": 56,
+          "previous_value": "My office",
+          "reason": "generic_destination_placeholder",
+          "value": "Bank station, London"
+        },
+        {
+          "field": "destination",
+          "message_id": 56,
+          "previous_value": "My office",
+          "reason": "generic_destination_placeholder",
+          "value": "Bank station, London"
+        }
+      ],
+      "destination": "Bank station, London",
+      "max_budget": null,
+      "max_travel_time": null,
+      "monthly_total_budget": 2200,
+      "office_days_per_week": 5,
+      "property_features": [],
+      "room_type": "whole",
+      "soft_preferences": []
+    },
+    "results": [
+      {
+        "address": "The Vale, London",
+        "price": "£1300/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Limes Avenue, Chigwell IG7",
+        "price": "£1400/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Hewitt Quays, Barking ig11",
+        "price": "£1600/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Grosvenor Road, London E6",
+        "price": "£1800/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Acacia House, 51 Kingston Road, New Malden, London",
+        "price": "£1850/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "White City Estate, London W12",
+        "price": "£1899/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "High Street, London N8",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Newmarket Avenue, Northolt UB5",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Caroline Close, London N10",
+        "price": "£1900/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      },
+      {
+        "address": "Fortescue Road, Colliers Wood, Greater London",
+        "price": "£2000/month",
+        "room_type": "whole",
+        "candidate_status": "unknown",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": null,
+            "bedrooms_minimum": false,
+            "commute_destination": "Bank station, London",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "monthly_total_budget": 2200,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": 5,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "monthly travel cost is not verified for this listing, destination and attendance"
+            ],
+            "zh": [
+              "尚未核实该房源、目的地及最新出勤频率对应的月交通费，不能确认符合总预算"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "monthly travel cost is not verified for this listing, destination and attendance"
+          ]
+        }
+      }
+    ]
+  }
+]

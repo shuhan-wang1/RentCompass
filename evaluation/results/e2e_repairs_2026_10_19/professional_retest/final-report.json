@@ -1,0 +1,178 @@
+{
+  "tester": "Independent English-speaking hybrid-working professional",
+  "status": "complete",
+  "total_user_turns": 10,
+  "candidate_split": {
+    "candidate_1": "turns 1-8",
+    "candidate_2_after_parent_confirmed_genuine_service_restart": "turns 9-10"
+  },
+  "origin": "http://127.0.0.1:15008",
+  "user_id": "06dc55bfc4554339ad34a1e2672f9644",
+  "original_conversation_id": "023e76a5ecbb4c04a7b34285b50e1ce5",
+  "additional_empty_ui_conversation_id": "cd7819401058487b9449a9420ad09d9c",
+  "latest_candidate_conclusion": "The targeted corrections pass the final two black-box turns: Bank destination and earlier accidental studio criteria recover, GBP2200 combined-budget qualification stays unknown when monthly travel is unverified, whole-home/five-day criteria survive a studio detail question, and history/favourites survive restart, UI session switching and refresh. A genuine costed monthly PAYG/Travelcard decision remains unverified under these fixtures. Chat-driven saving and notes were not retested on candidate 2.",
+  "latest_candidate_checks": [
+    {
+      "id": "C2-PRO-01",
+      "result": "PASS",
+      "severity": null,
+      "expected": "Existing history and a manually saved listing survive a real service restart and browser reopening.",
+      "actual": "On reopening after the parent-confirmed service restart, the same user and original conversation restore all eight earlier turns and Saved1. GET /api/favorites returns The Vale 14672649 with its unchanged saved_at timestamp. No model request was needed for this check.",
+      "evidence": [
+        "09-post-restart-state.json",
+        "09-post-restart-state.png",
+        "09-post-restart-favorites-api.json"
+      ]
+    },
+    {
+      "id": "C2-PRO-02",
+      "result": "PASS",
+      "severity": null,
+      "expected": "A new conversation can display the user's existing favourite, and returning to the original conversation restores its history.",
+      "actual": "An empty new UI conversation displays Saved1 and The Vale in the Saved tab. Switching back restores eight original user turns. The empty session consumed no real dialogue.",
+      "evidence": [
+        "09-new-conversation-saved-confirmed.json",
+        "09-new-conversation-saved-confirmed.png",
+        "primary-turns.jsonl line 9 original conversation_id"
+      ]
+    },
+    {
+      "id": "C2-PRO-03",
+      "result": "PASS",
+      "severity": null,
+      "expected": "Reasserting Bank station, five office days, whole-home preference and GBP2200 rent-plus-travel budget updates the durable criteria and removes earlier accidental detail-query filters.",
+      "actual": "Turn 9 has commute_destination=Bank station, London; destination matches; office_days_per_week=5; monthly_total_budget=2200; room_type=whole. Earlier bedrooms=0 and bedrooms_minimum=false caused by the studio details request recover to null. The UI destination is Bank station, London after final refresh.",
+      "evidence": [
+        "primary-turns.jsonl line 9",
+        "09-candidate2-analysis.json",
+        "09-candidate2-budget-bank-five.png",
+        "10-final-state.png"
+      ]
+    },
+    {
+      "id": "C2-PRO-04",
+      "result": "PASS_WITH_LIMITATIONS",
+      "severity": null,
+      "expected": "No listing is claimed to meet the combined budget without a monthly travel cost for the actual listing, destination and attendance.",
+      "actual": "Turn 9 returns ten whole-home records priced GBP1300-2000/month, all candidate_status=unknown. Each card displays Conditions need verification and monthly travel cost is not verified for this listing, destination and attendance. The answer explicitly says no listing is fully eligible and verified. Calculation evidence uses 5 days/week and 21.6667 commuting days/month. Monthly travel, combined total and monthly Travelcard are not supplied because fare-zone coverage is unknown.",
+      "evidence": [
+        "primary-turns.jsonl line 9",
+        "09-candidate2-analysis.json",
+        "09-candidate2-after-chat.json",
+        "09-candidate2-after-chat.png"
+      ],
+      "limitation": "This establishes honest qualification and state handling, not a successful real-world affordability calculation or Travelcard recommendation."
+    },
+    {
+      "id": "C2-PRO-05",
+      "result": "PASS",
+      "severity": null,
+      "expected": "Mentioning the saved The Vale studio to request details does not turn that read-only request into a changed studio/bedroom search.",
+      "actual": "Turn 10 successfully answers listing 14672649 details and keeps bedrooms=null, room_type=whole, Bank station, office_days_per_week=5 and monthly_total_budget=2200. It does not exclude the listing as not matching studio.",
+      "evidence": [
+        "primary-turns.jsonl line 10",
+        "10-candidate2-saved-details-weather-transport.png",
+        "turns-summary.json"
+      ]
+    },
+    {
+      "id": "C2-PRO-06",
+      "result": "PASS",
+      "severity": null,
+      "expected": "Show actual frozen listing details and mark missing fields rather than inventing them.",
+      "actual": "Turn 10 returns The Vale, GBP1300 pcm, Studio, high ceilings, wooden flooring, hot water included, student tag, Contact agent availability and coordinates. Deposit/fees/furnishing are explicitly unknown. It distinguishes flooring from furnishing, missing private-kitchen information from a proven shared kitchen, and student tag from confirmed student-only eligibility. It repeatedly marks the snapshot cached and not live-verified.",
+      "evidence": [
+        "primary-turns.jsonl line 10",
+        "10-candidate2-saved-details-weather-transport.png"
+      ]
+    },
+    {
+      "id": "C2-PRO-07",
+      "result": "PASS_FIXTURE_INTEGRATION",
+      "severity": null,
+      "expected": "Exercise weather, journey, adult fare and line-status capabilities with clearly bounded conclusions.",
+      "actual": "Turn 10 surfaces weather fixture 14.2C Light Rain, feels-like 12.8C, humidity72; no rain probability or multi-day forecast is claimed. It surfaces journey fixture32 minutes, adult PAYG singlesGBP4.25 and GBP2.80, Central Severe Delays, Northern/Victoria Good Service. The transport fixture/test station and line identifiers are explicitly disclosed and not treated as genuine current routing. It does not multiply a single fare into a verified monthly total.",
+      "evidence": [
+        "primary-turns.jsonl line 10",
+        "10-candidate2-saved-details-weather-transport.png"
+      ],
+      "limitation": "Weather, TfL, line status and OSM/web inputs in this environment are synthetic HTTP fixtures. These results do not validate London's actual current weather, route, fares, disruptions or businesses."
+    },
+    {
+      "id": "C2-PRO-08",
+      "result": "PASS",
+      "severity": null,
+      "expected": "The final conversation, corrected criteria and favourite survive a further browser refresh.",
+      "actual": "The final refresh restores ten user-turn edit markers, original active conversation, whole-home selection, blank/Any bedroom count, Bank station, London destination and Saved1. The same favourite remains in GET /api/favorites. No page JavaScript errors were recorded.",
+      "evidence": [
+        "10-final-state.json",
+        "10-final-state.png",
+        "10-final-favorites-api.json",
+        "primary-browser-metadata.jsonl"
+      ]
+    }
+  ],
+  "remaining_or_unverified": [
+    {
+      "id": "C2-PRO-R1",
+      "result": "OBSERVED_DATA_INCONSISTENCY",
+      "severity": "P3",
+      "expected": "All response fields agree that affordability is unverified.",
+      "actual": "Turn 9 raw result records still contain Chinese budget_status=✅ 在预算内 while candidate_status=unknown and budget_status_code=unspecified. The visible UI correctly shows Conditions need verification; the green-check Chinese string was not observed in the UI.",
+      "evidence": [
+        "09-candidate2-analysis.json",
+        "09-candidate2-after-chat.json"
+      ],
+      "risk": "A different consumer rendering the legacy budget_status string could overstate affordability. No current visible P1 failure was established by this tester."
+    },
+    {
+      "id": "C2-PRO-R2",
+      "result": "NOT_RETESTED_ON_CANDIDATE_2",
+      "severity": "P2_PREVIOUSLY_OBSERVED",
+      "expected": "A favourite request either saves the listing or accurately directs the user to the in-app heart button and explains any note limitation.",
+      "actual": "Candidate1 turn8 declined to save, offered a further-confirmation memory flow, and directed the user to the external listing site despite the in-app Save button. Manual in-app saving worked; the requested note was not saved. The last two permitted turns were assigned to criteria/details verification, so candidate2 chat-saving guidance and note storage have no retest verdict.",
+      "evidence": [
+        "interim-findings.json PRO-04 and PRO-05",
+        "primary-turns.jsonl line 8",
+        "08-ui-save-favorites-api.json"
+      ]
+    },
+    {
+      "id": "C2-PRO-R3",
+      "result": "UNVERIFIED",
+      "severity": null,
+      "expected": "A complete monthly PAYG versus Travelcard comparison and actual requested arrival-time journey can be confirmed.",
+      "actual": "No verified zone coverage or monthly Travelcard amount was returned; no reliable real-world9am arrival route was established. Candidate2 clearly reports the monthly-cost gap. This run cannot claim the end-to-end costed commute outcome succeeded.",
+      "evidence": [
+        "primary-turns.jsonl lines 5,6,9,10"
+      ]
+    },
+    {
+      "id": "C2-PRO-R4",
+      "result": "PARTIAL_FIXTURE_COVERAGE",
+      "severity": null,
+      "expected": "Neighbourhood research includes sourced nearby daily-life options and correct walking-distance treatment.",
+      "actual": "Candidate1 turn7 exercised OSM fixture supermarket/cafe/gym records, explicitly kept130m as straight-line rather than walking and flagged the School gym-name mismatch. A separate general-web search invocation, actual walking routes and current real businesses are not established by this persona's black-box evidence.",
+      "evidence": [
+        "primary-turns.jsonl line 7",
+        "07-neighborhood-web.png"
+      ]
+    }
+  ],
+  "candidate_1_regression_status": {
+    "PRO-01_total_budget_false_verified": "Targeted candidate2 retest passes honest unknown qualification; actual monthly calculation remains unverified.",
+    "PRO-02_sticky_My_office": "Candidate2 turn9 corrects to Bank and final refresh preserves it.",
+    "PRO-03_studio_detail_exclusion": "Candidate2 turn10 passes and earlier accidental bedroom criteria recover.",
+    "PRO-04_save_guidance_and_note": "Not retested on candidate2.",
+    "PRO-05_stale_one_day_narrative": "Candidate2 turns9-10 consistently use latest five-day attendance."
+  },
+  "evidence_and_scope_notes": [
+    "primary-turns.jsonl preserves all ten exact outgoing /api/alex request bodies, decoded response payloads, visible chat DOM, criteria snapshots, elapsed times and progress labels. Screenshots accompany each turn.",
+    "The optional network listener could not retrieve raw SSE bodies with Playwright Response.text; these capture errors are separately logged in network-errors.jsonl. Helper-level exact decoded response capture completed for all ten turns.",
+    "All non-localhost browser requests, including external fonts and listing images, were aborted. No OnTheMarket or other external link was opened. No production5001/5002/8080 endpoint was accessed.",
+    "No product source, prior report or other tester evidence was inspected, and no product files were edited. Only the supplied public helper and this tester's own evidence were used.",
+    "Persistence represents an approximately22-minute pause plus a parent-confirmed genuine service restart, browser reopening, separate empty UI conversation, switch back and refresh. It does not demonstrate weeks or months of retention.",
+    "Saved favourite metadata retains its historical qualification snapshot, including the original My office destination and bedroom uncertainty. Current conversation criteria are separately corrected; favourite identity and save timestamp remain intact.",
+    "There were no additional model conversations after turn10."
+  ]
+}

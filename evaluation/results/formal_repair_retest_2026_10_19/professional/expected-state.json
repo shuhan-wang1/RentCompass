@@ -1,0 +1,39 @@
+{
+  "conversation_id": "817bd0754098483997d66252c68b338e",
+  "criteria": {
+    "areas": [
+      "Lewisham",
+      "Stratford"
+    ],
+    "max_budget": 2000,
+    "budget_period": "month",
+    "monthly_total_budget": 2150,
+    "office_days_per_week": 2,
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "room_type": "whole",
+    "commute_destination": "Bank station, London",
+    "max_travel_time": 45
+  },
+  "favorites": [
+    {
+      "address": "Bonfield Road, London, SE13",
+      "url": "https://www.onthemarket.com/details/20567130/",
+      "recorded_price_pcm": 1875,
+      "saved_rent_budget": 1850
+    },
+    {
+      "address": "Unex Tower, 7 Station Street, London, E15",
+      "url": "https://www.onthemarket.com/details/14951549/",
+      "recorded_price_pcm": 2300,
+      "saved_rent_budget": 2000
+    }
+  ],
+  "real_model_posts": 7,
+  "non_model_form_searches": 2,
+  "private_storage_filename": "professional-private-storage.json",
+  "final_restart_restore_status": "passed_20_of_20_after_budget_source_repair",
+  "final_restart_evidence": "final-restore-20261019T131557Z.json",
+  "final_restart_assertions": "final-restore-20261019T131557Z-assertions.json",
+  "prior_failed_restore_assertions": "final-restore-20261019T130921Z-assertions.json"
+}

@@ -1,0 +1,211 @@
+............sFF......F...F.F.....................................F       [100%]
+=================================== FAILURES ===================================
+_________________ test_no_data_returns_honest_empty_never_demo _________________
+
+fresh_cache = <core.scraping.on_demand.ListingCache object at 0x7b47bfdc34d0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfdc3620>
+
+    def test_no_data_returns_honest_empty_never_demo(fresh_cache, monkeypatch):
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", lambda *a, **k: [])
+        res = on_demand.get_listings("Nowheresville", 1, 1, 500, 1200)
+        assert res["rows"] == []
+>       assert res["meta"]["source"] == "none"
+E       AssertionError: assert 'scraped' == 'none'
+E         
+E         - none
+E         + scraped
+
+tests/test_on_demand_listings.py:150: AssertionError
+_________________ test_stale_if_error_serves_old_cache_flagged _________________
+
+fresh_cache = <core.scraping.on_demand.ListingCache object at 0x7b47bfdc0830>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfdc0980>
+
+    def test_stale_if_error_serves_old_cache_flagged(fresh_cache, monkeypatch):
+        key = on_demand._query_key("manchester")  # slug-only canonical key
+        fresh_cache.set(key, _fake_rows()[:1])
+        # Age the entry beyond the TTL.
+        with sqlite3.connect(fresh_cache.path) as db:
+            db.execute("UPDATE listings SET fetched = ?", (time.time() - 10_000_000,))
+    
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", lambda *a, **k: [])  # live scrape yields nothing
+    
+        res = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
+>       assert res["meta"]["source"] == "stale-cache"
+E       AssertionError: assert 'scraped' == 'stale-cache'
+E         
+E         - stale-cache
+E         + scraped
+
+tests/test_on_demand_listings.py:141: AssertionError
+_____________ test_band_rescue_failure_keeps_the_canonical_answer ______________
+
+fresh_cache = <core.scraping.on_demand.ListingCache object at 0x7b47bfc046b0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfc04740>
+
+    def test_band_rescue_failure_keeps_the_canonical_answer(fresh_cache, monkeypatch):
+        """A rescue that times out or errors must never downgrade what the canonical pool
+        already said — the caller still gets its (empty) complete answer, not an exception."""
+        calls = {"n": 0}
+    
+        def fake_scrape(slug, radius, min_price, max_price, limit, min_bedrooms, max_bedrooms):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _canon_rows()
+            raise RuntimeError("network down")
+    
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
+    
+        warm = on_demand.get_listings("Manchester", 1, 1, 500, 1200)   # canonical scrape
+        assert warm["rows"] and calls["n"] == 1
+    
+        res = on_demand.get_listings("Manchester", 5, 5, 500, 1200)    # rescue raises
+        assert res["rows"] == [] and res["meta"]["source"] == "hit"
+        assert res["meta"]["band_rescue"] is False
+>       assert calls["n"] == 2
+E       assert 1 == 2
+
+tests/test_on_demand_canonical_cache.py:211: AssertionError
+_______ test_fresh_canonical_empty_band_rescues_once_then_complete_empty _______
+
+fresh_cache = <core.scraping.on_demand.ListingCache object at 0x7b47bfc04590>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfc05e80>
+
+    def test_fresh_canonical_empty_band_rescues_once_then_complete_empty(fresh_cache,
+                                                                         monkeypatch):
+        """The canonical pool is a CAPPED top-slice, so an empty band-filter is not on its
+        own evidence the band is empty (see _band_rescue). It gets ONE band-targeted
+        re-scrape; when that also finds nothing, the empty is served — and the negative is
+        cached, so a repeat of the same band does not scrape again."""
+        calls = _counting_scrape(monkeypatch)
+    
+        # Populate the canonical entry with a matching band.
+        first = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
+        assert first["meta"]["source"] == "scraped" and first["rows"]
+    
+        # A band no row can satisfy (5-bed): the canonical pool never asked for 5-beds, so
+        # the rescue scrapes AT the band before the empty is believed.
+        empty = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
+        assert empty["rows"] == [] and empty["meta"]["count"] == 0
+        assert empty["meta"]["source"] == "hit" and empty["meta"]["band_rescue"] is False
+>       assert calls["n"] == 2                       # 1 canonical + 1 rescue
+        ^^^^^^^^^^^^^^^^^^^^^^
+E       assert 1 == 2
+
+tests/test_on_demand_canonical_cache.py:119: AssertionError
+__________ test_band_rescue_returns_rows_missing_from_canonical_pool ___________
+
+fresh_cache = <core.scraping.on_demand.ListingCache object at 0x7b47bfc06d20>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfc06240>
+
+    def test_band_rescue_returns_rows_missing_from_canonical_pool(fresh_cache, monkeypatch):
+        """The production defect (2026-07-28): slug 'london' scraped at the canonical
+        £100-5000 returned a top-slice whose cheapest row was £1,800, so a £1,742 cap
+        band-filtered to ZERO and the user was told there was nothing in budget — while the
+        same slug scraped AT £1,742 returns listings from £1,250 up."""
+        calls = {"n": 0, "params": []}
+    
+        expensive = [
+            {"Address": "Monarch Square, London, SW11",
+             "URL": "https://www.onthemarket.com/details/900/", "Price": "£3,700 pcm",
+             "Room_Type_Category": "2 bed Flat"},
+            {"Address": "Albert Road, St. Mary Cray BR5",
+             "URL": "https://www.onthemarket.com/details/901/", "Price": "£1,800 pcm",
+             "Room_Type_Category": "1 bed Flat"},
+        ]
+        in_budget = [
+            {"Address": "Burnley Road, London NW10",
+             "URL": "https://www.onthemarket.com/details/902/", "Price": "£1,300 pcm",
+             "Room_Type_Category": "1 bed Flat"},
+            {"Address": "Clapham High Street, Clapham SW4",
+             "URL": "https://www.onthemarket.com/details/903/", "Price": "£1,250 pcm",
+             "Room_Type_Category": "Studio"},
+        ]
+    
+        def fake_scrape(slug, radius, min_price, max_price, limit, min_bedrooms, max_bedrooms):
+            calls["n"] += 1
+            calls["params"].append(dict(min_price=min_price, max_price=max_price))
+            # The real site returns a price-unsorted top-slice for the wide sweep, and the
+            # actual budget stock only when the price cap is pushed down to the site.
+            return list(expensive) if max_price >= on_demand.CANONICAL_MAX_PRICE else list(in_budget)
+    
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
+    
+        res = on_demand.get_listings("London", 0, 2, 100, 1742)
+>       assert [r["URL"] for r in res["rows"]] == [
+            "https://www.onthemarket.com/details/902/",
+            "https://www.onthemarket.com/details/903/",
+        ]
+E       AssertionError: assert [] == ['https://www...details/903/']
+E         
+E         Right contains 2 more items, first extra item: 'https://www.onthemarket.com/details/902/'
+E         Use -v to get more diff
+
+tests/test_on_demand_canonical_cache.py:166: AssertionError
+____________ test_search_failure_logs_do_not_echo_slug_or_exception ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7b4740cfff80>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7b4740cff8f0>
+capsys = <_pytest.capture.CaptureFixture object at 0x7b4740cff4a0>
+
+    def test_search_failure_logs_do_not_echo_slug_or_exception(monkeypatch, caplog, capsys):
+        sentinel = "PRIVATE-AREA-AND-ERROR-9137"
+    
+        class _Sess:
+            headers = {}
+    
+            def get(self, *args, **kwargs):
+                raise om.requests.RequestException(sentinel)
+    
+        monkeypatch.setattr(om, "_new_session", lambda: _Sess())
+        with caplog.at_level("WARNING", logger=om.__name__):
+>           assert om.find_rich_onthemarket(sentinel, 1.0, 500, 2000) == []
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_fix_data_schema_drift.py:122: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/core/scraping/onthemarket.py:486: in find_rich_onthemarket
+    resp = otm_access.get(session, SEARCH_URL.format(slug=slug), params=page_params,
+app/core/scraping/otm_access.py:162: in get
+    validate_url(url, params)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+url = 'https://www.onthemarket.com/to-rent/property/PRIVATE-AREA-AND-ERROR-9137/'
+params = {}
+
+    def validate_url(url: str, params=None) -> None:
+        # Operators may advance this timestamp only after checking the origin's
+        # robots.txt. Expiry is fail-closed; a source request never refreshes it by
+        # surprise. This makes an old allowlist a bounded permission, not forever.
+        try:
+            verified = datetime.fromisoformat(os.getenv("OTM_ROBOTS_VERIFIED_AT", ROBOTS_VERIFIED_AT))
+            if verified.tzinfo is None:
+                verified = verified.replace(tzinfo=timezone.utc)
+            age = time.time() - verified.timestamp()
+            if age < -300 or age > ROBOTS_POLICY_TTL_SECONDS:
+                raise ValueError("expired")
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise OTMSourceError("unavailable", "robots_policy_requires_verification") from exc
+        parts = urlsplit(url)
+        if (parts.scheme != "https" or parts.netloc != "www.onthemarket.com"
+                or parts.fragment or parts.username or parts.password):
+            raise OTMSourceError("unavailable", "url_not_allowed")
+        area = bool(re.fullmatch(r"/to-rent/property/[a-z0-9]+(?:-[a-z0-9]+)*/", parts.path))
+        detail = bool(re.fullmatch(r"/details/[a-zA-Z0-9_-]+/", parts.path))
+        pairs = parse_qsl(parts.query, keep_blank_values=True)
+        pairs.extend((params or {}).items())
+        if not (area or detail) or (detail and pairs):
+>           raise OTMSourceError("unavailable", "robots_path_not_allowed")
+E           core.scraping.otm_access.OTMSourceError: OnTheMarket unavailable: robots_path_not_allowed
+
+app/core/scraping/otm_access.py:84: OTMSourceError
+------------------------------ Captured log call -------------------------------
+WARNING  core.scraping.onthemarket:onthemarket.py:490 onthemarket.search_failed page=1 error_type=OTMSourceError
+=========================== short test summary info ============================
+FAILED tests/test_on_demand_listings.py::test_no_data_returns_honest_empty_never_demo
+FAILED tests/test_on_demand_listings.py::test_stale_if_error_serves_old_cache_flagged
+FAILED tests/test_on_demand_canonical_cache.py::test_band_rescue_failure_keeps_the_canonical_answer
+FAILED tests/test_on_demand_canonical_cache.py::test_fresh_canonical_empty_band_rescues_once_then_complete_empty
+FAILED tests/test_on_demand_canonical_cache.py::test_band_rescue_returns_rows_missing_from_canonical_pool
+FAILED tests/test_fix_data_schema_drift.py::test_search_failure_logs_do_not_echo_slug_or_exception
+6 failed, 59 passed, 1 skipped in 15.42s

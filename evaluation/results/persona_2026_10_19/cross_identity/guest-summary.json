@@ -1,0 +1,7 @@
+{
+  "phase": "guest",
+  "requests": 210,
+  "checks": 205,
+  "passed": 205,
+  "failed": []
+}

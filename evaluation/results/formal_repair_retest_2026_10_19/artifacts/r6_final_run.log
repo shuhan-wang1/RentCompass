@@ -1,0 +1,55 @@
+........................................................................ [  8%]
+........................................................................ [ 17%]
+........................................................................ [ 25%]
+........................................................................ [ 34%]
+........................................................................ [ 42%]
+........................................................................ [ 51%]
+........................................................................ [ 60%]
+........................................................................ [ 68%]
+........................................................................ [ 77%]
+........................................................................ [ 85%]
+........................................................................ [ 94%]
+.............................................F                           [100%]
+=================================== FAILURES ===================================
+_ test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history _
+
+chat = (<starlette.applications.Starlette object at 0x728b2d35f9e0>, <uk_rent_agent.web.chat_transport.NativeChatEndpoint object at 0x728b2d32e480>, <uk_rent_agent.web.conversation_store.ConversationStore object at 0x728b2d33f470>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x728b2d33f320>
+
+    def test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history(chat, monkeypatch):
+        _, _, store = chat
+        owner = 'snapshot-owner'
+        cid = store.create_conversation(owner)['id']
+        message = ('Keep my current £2,000/month rent cap separate from the £2,150/month '
+                   'rent-plus-commute ceiling, based on two office days a week')
+        message_id = store.add_message(owner, cid, 'user', message)
+>       turn_id = store.begin_turn(owner, cid, request_id='read-recovery-test', user_message_id=message_id)['id']
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_formal_snapshot_read_recovery.py:17: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <uk_rent_agent.web.conversation_store.ConversationStore object at 0x728b2d33f470>
+user_id = 'snapshot-owner', cid = 'a48cc9e8fd384c5881b66e018c1431e1'
+request_id = 'read-recovery-test'
+user_message_id = {'id': 1, 'timestamp': '2026-10-19T13:14:49.160233+00:00'}
+
+    def begin_turn(self, user_id: str, cid: str, request_id: str | None = None,
+                   user_message_id: int | None = None) -> dict:
+        """Open a 'running' turn. Returns the turn dict."""
+        tid = uuid.uuid4().hex
+        now = _now_iso()
+        with self._lock:
+>           self._conn.execute(
+                """INSERT INTO turns
+                   (id, user_id, conversation_id, request_id, user_message_id,
+                    assistant_message_id, status, started_at, completed_at)
+                   VALUES(?,?,?,?,?,NULL,'running',?,NULL)""",
+                (tid, user_id, cid, request_id, user_message_id, now),
+            )
+E           sqlite3.ProgrammingError: Error binding parameter 5: type 'dict' is not supported
+
+src/uk_rent_agent/web/conversation_store.py:1202: ProgrammingError
+=========================== short test summary info ============================
+FAILED tests/test_formal_snapshot_read_recovery.py::test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history
+1 failed, 837 passed in 24.20s

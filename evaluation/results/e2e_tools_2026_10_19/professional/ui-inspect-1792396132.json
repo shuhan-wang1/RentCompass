@@ -1,0 +1,322 @@
+{
+  "start": 1792396132.6772504,
+  "end": 1792396132.899916,
+  "action": "inspect",
+  "turn": null,
+  "result": {
+    "dom": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nSearch: Camden | ≤£1500/mo | 0 bed | no …\n1m ago\nNew chat\n2m ago\nI'm a full-time professional, renting al…\n3m ago\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nSearch: Camden | ≤£1500/mo | 0 bed | no commute\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nExcluded / does not meet:\n\nAugustus Street, Regent's Park, London, NW1: alternative is outside the declared hard result set; monthly price 1650 exceeds budget 1500\n\nNot verified:\n\nGrafton Road, London, NW5: bedroom count is not verified\nGrafton Road, London NW5: bedroom count is not verified\nBranch from here\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n1\nSearch criteria\nArea\n*\nCamden\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\n5\n#1\nCamden\nAugustus Street, Regent's Park, London, NW1\n£1650/month\nOver Budget\nDoes not meet these criteria\nalternative is outside the declared hard result set\nmonthly price 1650 exceeds budget 1500\nbedroom count is not verified\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\nStudio to rent in Augustus Street, Regent's Park, London, NW1\nView Deal\nMap\nAsk AI",
+    "elements": [
+      {
+        "tag": "BUTTON",
+        "id": "menuToggle",
+        "cls": "menu-toggle",
+        "text": "\n                \n            ",
+        "aria": "Menu"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "lang-btn active",
+        "text": "EN",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "lang-btn",
+        "text": "中文",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "newChatBtn",
+        "cls": "new-chat-btn",
+        "text": "New",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-item-main",
+        "text": "Search: Camden | ≤£1500/mo | 0 bed | no …\n1m ago",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Compare side by side"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Branch"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Rename"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Delete"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-item-main",
+        "text": "New chat\n2m ago",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Compare side by side"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Branch"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Rename"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Delete"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-item-main",
+        "text": "I'm a full-time professional, renting al…\n3m ago",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Compare side by side"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Branch"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Rename"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "conv-icon-btn",
+        "text": "",
+        "aria": "Delete"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "userMenuBtn",
+        "cls": "user-menu-btn",
+        "text": "G\nGuest",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "loginBtn",
+        "cls": "",
+        "text": "\n                        \n                        Log in / Register\n                    ",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "renameUserBtn",
+        "cls": "",
+        "text": "\n                        \n                        Rename\n                    ",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "switchUserBtn",
+        "cls": "",
+        "text": "\n                        \n                        Switch user\n                    ",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "forgetMeBtn",
+        "cls": "danger",
+        "text": "\n                        \n                        Delete my data\n                    ",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "logoutBtn",
+        "cls": "",
+        "text": "\n                        \n                        Log out\n                    ",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "msg-edit-btn",
+        "text": "Edit message",
+        "aria": "Edit message"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "msg-branch-btn",
+        "text": "Branch from here",
+        "aria": "Branch from here"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "quick-action",
+        "text": "Near UCL",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "quick-action",
+        "text": "Safe areas",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "quick-action",
+        "text": "Rent stats",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "sendBtn",
+        "cls": "send-btn",
+        "text": "",
+        "aria": "Send"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "btn-results",
+        "cls": "toggle-btn active",
+        "text": "Search",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "btn-favorites",
+        "cls": "toggle-btn",
+        "text": "Saved\n1",
+        "aria": null
+      },
+      {
+        "tag": "DIV",
+        "id": "criteriaHeader",
+        "cls": "criteria-header",
+        "text": "Search criteria",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "area-chip-remove",
+        "text": "×",
+        "aria": "Remove area"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "criteria-search-btn",
+        "text": "Search",
+        "aria": null
+      },
+      {
+        "tag": "DIV",
+        "id": "",
+        "cls": "property-card",
+        "text": "5\n#1\nCamden\nAugustus Street, Regent's Park, London, NW1\n£1650/month\nOver Budget\nDoes not meet these criteria\nalternative is outside the declared hard result set\nmonthly price 1650 exceeds budget 1500\nbedroom count is not verified\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\nStudio to rent in Augustus Street, Regent's Park, London, NW1\nView Deal\nMap\nAsk AI",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "favorite-btn",
+        "text": "",
+        "aria": "Save"
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "action-btn",
+        "text": "Map",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "action-btn",
+        "text": "Ask AI",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "modal-close-btn",
+        "text": "\n            \n        ",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "",
+        "text": "",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "",
+        "text": "",
+        "aria": null
+      },
+      {
+        "tag": "BUTTON",
+        "id": "",
+        "cls": "modal-close-btn map-modal-close",
+        "text": "\n                    \n                ",
+        "aria": null
+      }
+    ]
+  },
+  "url": "http://127.0.0.1:15006/",
+  "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nSearch: Camden | ≤£1500/mo | 0 bed | no …\n1m ago\nNew chat\n2m ago\nI'm a full-time professional, renting al…\n3m ago\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nSearch: Camden | ≤£1500/mo | 0 bed | no commute\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nExcluded / does not meet:\n\nAugustus Street, Regent's Park, London, NW1: alternative is outside the declared hard result set; monthly price 1650 exceeds budget 1500\n\nNot verified:\n\nGrafton Road, London, NW5: bedroom count is not verified\nGrafton Road, London NW5: bedroom count is not verified\nBranch from here\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n1\nSearch criteria\nArea\n*\nCamden\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\n5\n#1\nCamden\nAugustus Street, Regent's Park, London, NW1\n£1650/month\nOver Budget\nDoes not meet these criteria\nalternative is outside the declared hard result set\nmonthly price 1650 exceeds budget 1500\nbedroom count is not verified\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\nStudio to rent in Augustus Street, Regent's Park, London, NW1\nView Deal\nMap\nAsk AI",
+  "requests": []
+}

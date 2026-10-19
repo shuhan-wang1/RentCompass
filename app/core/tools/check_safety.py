@@ -29,6 +29,8 @@ def check_safety_impl(
     """
     # 兼容 address 和 area 参数
     location = address or area
+    if not location and (latitude is not None or longitude is not None):
+        location = 'Supplied coordinates'
     if not location:
         raise ValueError("必须提供 address 或 area 参数")
     
@@ -41,8 +43,12 @@ def check_safety_impl(
             f"location_chars={len(location)} language={'zh' if is_chinese else 'en'}"
         )
         
-        # 使用地址调用 get_crime_data_by_location
-        crime_data = get_crime_data_by_location(location)
+        if latitude is not None or longitude is not None:
+            crime_data = get_crime_data_by_location(
+                location, latitude=latitude, longitude=longitude,
+            )
+        else:
+            crime_data = get_crime_data_by_location(location)
         
         # Score against a reference distribution, never against a bare count. The old formula
         # was `max(0, 100 - total_crimes // 2)`: no normalisation, so it measured how many
@@ -110,6 +116,20 @@ def check_safety_impl(
             'crimes_per_month': (crime_data or {}).get('crimes_per_month'),
             'months_covered': (crime_data or {}).get('months_covered'),
             'radius_miles': (crime_data or {}).get('radius_miles'),
+            'radius_m': crime_data.get('radius_m'),
+            'radius_basis': crime_data.get('radius_basis'),
+            'reference_point': crime_data.get('reference_point'),
+            'source': crime_data.get('source'),
+            'source_url': crime_data.get('source_url'),
+            'data_months': crime_data.get('data_months', []),
+            'queried_months': crime_data.get('queried_months', []),
+            'successful_months': crime_data.get('successful_months', []),
+            'failed_months': crime_data.get('failed_months', []),
+            'partial': crime_data.get('partial', False),
+            'from_cache': crime_data.get('from_cache', False),
+            'cache_status': crime_data.get('cache_status', 'unknown'),
+            'possibly_outdated': crime_data.get('possibly_outdated', False),
+            'fetched_at': crime_data.get('fetched_at'),
             'reference_basis': reference_note(),
             'caveat': CAVEAT_ZH if is_chinese else CAVEAT_EN,
             'recommendation': (
@@ -131,6 +151,9 @@ def check_safety_impl(
             'safety_score': None,
             'safety_level': 'Unknown',
             'crime_data': {},
+            'reference_point': None,
+            'source': 'data.police.uk',
+            'queried_months': [],
             'error': "Safety data lookup failed",
             'scoring_explanation': "Safety data lookup failed; no score is available.",
             'safety_analysis': "Unable to perform safety analysis due to an error.",
@@ -203,135 +226,40 @@ def _generate_scoring_explanation(total_crimes: int, safety_score: int, crime_da
 
 
 def _generate_safety_analysis(crime_data: dict, location: str, is_chinese: bool) -> str:
-    """生成详细的安全分析和建议（根据语言生成）"""
-    total_crimes = crime_data.get('total_crimes_6m', 0)
-    category_breakdown = crime_data.get('category_breakdown', {})
-    most_recent_count = crime_data.get('most_recent_month_count', 0)
-    
+    """Describe the actual observation period without inventing personal night-walk risk."""
+    total = crime_data.get('total_crimes_6m', 0)
+    months = crime_data.get('months_covered') or 1
+    per_month = crime_data.get('crimes_per_month')
+    if per_month is None:
+        per_month = total / months
+    ref = crime_data.get('reference_point') or {}
+    period = ', '.join(crime_data.get('data_months') or []) or 'not supplied'
+    origin = ref.get('measured_from') or 'query-point precision was not supplied'
+    categories = crime_data.get('category_breakdown') or {}
+    if not isinstance(categories, dict):
+        categories = {}
     if is_chinese:
-        analysis = f"""
-**详细安全分析:**
-
-📍 **地点**: {location}
-
-📊 **犯罪统计**:
-- 6个月总计: {total_crimes} 起
-- 最近一个月: {most_recent_count} 起  
-- 月均犯罪: {total_crimes // 6 if total_crimes > 0 else 0} 起
-
-🔍 **主要犯罪类型**:
-"""
-        
-        if category_breakdown:
-            for category, count in list(category_breakdown.items())[:3]:
-                percentage = (count / total_crimes * 100) if total_crimes > 0 else 0
-                analysis += f"\n- {category}: {count} 起 ({percentage:.1f}%)"
-        else:
-            analysis += "\n- 数据不可用"
-        
-        # 夜间安全建议
-        analysis += "\n\n🌙 **夜间安全建议**:"
-        
-        if total_crimes < 20:
-            analysis += """
-- ✅ 该区域整体犯罪率较低
-- ✅ 从地铁站步行回家相对安全
-- 💡 仍建议: 走人流较多的主路，避免抄小道
-- 💡 保持警觉，注意周围环境
-"""
-        elif total_crimes < 50:
-            analysis += """
-- ⚠️ 该区域有一定犯罪记录，需保持警惕
-- 💡 建议: 晚上10点后尽量结伴而行
-- 💡 选择光线明亮、有监控的主路
-- 💡 避免在深夜独自行走偏僻街道
-- 💡 考虑使用打车软件（短途也可以）
-"""
-        else:
-            analysis += """
-- ⚠️ 该区域犯罪率较高，需格外注意
-- 🚨 强烈建议: 晚上避免独自步行
-- 🚨 优先选择: 打车/Uber回家
-- 🚨 如必须步行: 走繁华大街，避开小巷
-- 🚨 随时保持警觉，手机充满电备用
-- 💡 考虑选择治安更好的区域居住
-"""
-        
-        # 对比参考
-        analysis += "\n\n📈 **参考对比**:"
-        if total_crimes < 30:
-            analysis += "\n- 该区域安全性 **优于伦敦平均水平**"
-        elif total_crimes < 60:
-            analysis += "\n- 该区域安全性 **接近伦敦平均水平**"
-        else:
-            analysis += "\n- 该区域安全性 **低于伦敦平均水平**，建议谨慎选择"
-    
-    else:  # English
-        analysis = f"""
-**Detailed Safety Analysis:**
-
-📍 **Location**: {location}
-
-📊 **Crime Statistics**:
-- 6-month total: {total_crimes} incidents
-- Most recent month: {most_recent_count} incidents
-- Monthly average: {total_crimes // 6 if total_crimes > 0 else 0} incidents
-
-🔍 **Main Crime Categories**:
-"""
-        
-        if category_breakdown:
-            for category, count in list(category_breakdown.items())[:3]:
-                percentage = (count / total_crimes * 100) if total_crimes > 0 else 0
-                analysis += f"\n- {category}: {count} ({percentage:.1f}%)"
-        else:
-            analysis += "\n- Data not available"
-        
-        # 夜间安全建议
-        analysis += "\n\n🌙 **Night Safety Advice**:"
-        
-        if total_crimes < 20:
-            analysis += """
-- ✅ Overall low crime rate in this area
-- ✅ Walking from tube station is relatively safe
-- 💡 Still recommended: Use main roads with foot traffic, avoid shortcuts
-- 💡 Stay alert and aware of surroundings
-"""
-        elif total_crimes < 50:
-            analysis += """
-- ⚠️ Area has some crime records, stay vigilant
-- 💡 Recommended: Travel with others after 10 PM when possible
-- 💡 Choose well-lit main roads with CCTV
-- 💡 Avoid walking alone on quiet streets late at night
-- 💡 Consider using taxi apps even for short distances
-"""
-        else:
-            analysis += """
-- ⚠️ Higher crime rate area, extra caution required
-- 🚨 Strongly recommended: Avoid walking alone at night
-- 🚨 Priority option: Use taxi/Uber to get home
-- 🚨 If must walk: Use busy main streets, avoid alleys
-- 🚨 Stay alert, keep phone fully charged
-- 💡 Consider choosing a safer neighborhood
-"""
-        
-        # 对比参考
-        analysis += "\n\n📈 **Comparison**:"
-        if total_crimes < 30:
-            analysis += "\n- Safety is **better than London average**"
-        elif total_crimes < 60:
-            analysis += "\n- Safety is **close to London average**"
-        else:
-            analysis += "\n- Safety is **below London average**, consider carefully"
-    
-    return analysis.strip()
+        lines = [f'地点：{location}；实际查询点：{origin}',
+                 f'统计月份：{period}；共{months}个月、{total}条记录，月均{per_month:g}条。',
+                 '覆盖范围：警方接口默认约1英里半径，并非某条步行路线或某套房的个人风险。']
+        lines.extend(f'{name}: {count}条' for name, count in list(categories.items())[:3])
+        lines.append(CAVEAT_ZH)
+    else:
+        lines = [f'Location: {location}; actual query point: {origin}',
+                 f'Data months: {period}; {months}-month total: {total} incidents; '
+                 f'monthly average: {per_month:g}.',
+                 'Coverage: the police endpoint defaults to approximately a 1 mile radius; '
+                 'it does not establish the safety of a walking route or an individual home.']
+        lines.extend(f'{name}: {count} incidents' for name, count in list(categories.items())[:3])
+        lines.append(CAVEAT_EN)
+    return '\n'.join(lines)
 
 
 # 创建工具实例
 check_safety_tool = Tool(
     name="check_safety",
     
-    description="""Check crime/safety data near a place using data.police.uk (last 6 months): safety score (0-100), level and a night-walk assessment. Prefer a FULL address (street + postcode) from the context's shown properties, but a bare area/postcode works too — use it to answer a safety question about an area under discussion ("晚上安全吗"/"犯罪率高吗"). For a generic "is London safe" use web_search.
+    description="""Check crime/safety data near a place using data.police.uk (the returned data_months and months_covered specify the observation period). Prefer a FULL address (street + postcode), or supply both latitude and longitude to query that exact point. A bare area queries its geocoded point, not an individual property. Only this result's reference_point establishes the actual coordinates/precision; never use another tool's coordinates to claim this safety query checked a property. Quote the returned source, approximate provider radius, data_months and cache freshness; counts do not establish a safe walking route. For a generic "is London safe" use web_search.
 检查某地址/区域的治安数据（数据来源 data.police.uk）。""",
     
     func=check_safety_impl,

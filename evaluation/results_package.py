@@ -101,6 +101,18 @@ def probe_git(repo_root: Union[str, Path, None] = None) -> Tuple[Optional[str], 
     return commit, dirty
 
 
+def workspace_source_paths(repo_root: Union[str, Path]) -> List[str]:
+    """Tracked and unignored working files for a frozen evaluation snapshot.
+
+    This inventory includes local changes; it never asserts a clean commit. Without
+    repository metadata, fail explicitly rather than silently omit candidate files.
+    """
+    paths = _git_stdout(['ls-files', '--cached', '--others', '--exclude-standard', '-z'], str(repo_root))
+    if paths is None:
+        raise RuntimeError('Cannot inventory the evaluation source workspace')
+    return [path for path in paths.split('\0') if path]
+
+
 def assert_identity_consistent(rec: Dict[str, Any]) -> None:
     """SOURCE GUARD (not a promise in a docstring): refuse to emit an identity record that
     misrepresents its own provenance. Raises ValueError.

@@ -1,11 +1,14 @@
 # property_embeddings.py
 import hashlib
+import threading
 
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import faiss
 
 class PropertyEmbeddingStore:
+    _fallback_encoder_lock = threading.RLock()
+
     def __init__(self):
         print("    -> [DEBUG] Initializing PropertyEmbeddingStore...")
         # This line downloads or loads the model, which can be a point of failure
@@ -20,7 +23,23 @@ class PropertyEmbeddingStore:
         # fed to the encoder (address/listing id + description + amenities + ...),
         # so identical rows reuse their vector and any content change re-encodes.
         self._embedding_cache = {}
+        self._encoder_lock = threading.RLock()
         print("    -> [DEBUG] PropertyEmbeddingStore initialized successfully.")
+
+    def fork(self):
+        """Create an empty request-local index without loading another model."""
+        store = type(self).__new__(type(self))
+        store.model = self.model
+        store._embedding_cache = self._embedding_cache
+        store._encoder_lock = getattr(self, "_encoder_lock", self._fallback_encoder_lock)
+        store.index = None
+        store.properties = []
+        store.property_name_index = {}
+        return store
+
+    def _encode(self, texts, **kwargs):
+        with getattr(self, "_encoder_lock", self._fallback_encoder_lock):
+            return self.model.encode(texts, **kwargs)
 
     def is_ready(self) -> bool:
         """Cheap, side-effect-free probe: True once the sentence-transformer model is loaded.
@@ -37,6 +56,9 @@ class PropertyEmbeddingStore:
 
     def build_index(self, properties: list[dict]):
         """Create FAISS index from property descriptions"""
+        self.index = None
+        self.properties = []
+        self.property_name_index = {}
         if not properties:
             print("    -> [WARNING] No properties provided for indexing!")
             return
@@ -81,18 +103,14 @@ class PropertyEmbeddingStore:
         # Reuse cached vectors for unchanged rows; only encode texts we haven't
         # embedded before. FAISS is rebuilt from the assembled (cached + new) matrix.
         keys = [self._row_key(t) for t in texts]
-        missing_idx = [i for i, k in enumerate(keys) if k not in self._embedding_cache]
-        if missing_idx:
-            print(f"    -> [DEBUG] Encoding {len(missing_idx)} of {len(texts)} property texts "
-                  f"({len(texts) - len(missing_idx)} reused from cache)...")
-            new_vecs = self.model.encode([texts[i] for i in missing_idx], show_progress_bar=False)
-            new_vecs = np.asarray(new_vecs, dtype=np.float32)
-            for pos, i in enumerate(missing_idx):
-                self._embedding_cache[keys[i]] = new_vecs[pos]
-        else:
-            print(f"    -> [DEBUG] All {len(texts)} property vectors reused from cache.")
-
-        embeddings = np.array([self._embedding_cache[k] for k in keys], dtype=np.float32)
+        with getattr(self, "_encoder_lock", self._fallback_encoder_lock):
+            missing_idx = [i for i, k in enumerate(keys) if k not in self._embedding_cache]
+            if missing_idx:
+                new_vecs = self._encode([texts[i] for i in missing_idx], show_progress_bar=False)
+                new_vecs = np.asarray(new_vecs, dtype=np.float32)
+                for pos, i in enumerate(missing_idx):
+                    self._embedding_cache[keys[i]] = new_vecs[pos]
+            embeddings = np.array([self._embedding_cache[k] for k in keys], dtype=np.float32)
 
         # FAISS index for fast similarity search
         dimension = embeddings.shape[1]
@@ -155,7 +173,7 @@ class PropertyEmbeddingStore:
             
             # 尝试语义搜索
             if self.index is not None:
-                query_embedding = self.model.encode([name])
+                query_embedding = self._encode([name])
                 faiss.normalize_L2(query_embedding)
                 scores, indices = self.index.search(query_embedding, min(top_k_per_name * 2, len(self.properties)))
                 
@@ -189,7 +207,7 @@ class PropertyEmbeddingStore:
         
         print(f"    -> [DEBUG] Searching query_chars={len(str(query))}")
         
-        query_embedding = self.model.encode([query])
+        query_embedding = self._encode([query])
         faiss.normalize_L2(query_embedding)
         
         scores, indices = self.index.search(query_embedding, min(top_k, len(self.properties)))

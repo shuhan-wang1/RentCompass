@@ -1,0 +1,46 @@
+{
+  "status": "passed",
+  "command": "python -m pytest -q",
+  "test_trees": [
+    "tests",
+    "tests_refactor"
+  ],
+  "pytest": {
+    "tests": 4663,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 12,
+    "passed": 4651,
+    "duration_seconds": 212.805
+  },
+  "api": {
+    "requests": 259,
+    "assertions": 253,
+    "passed": 253
+  },
+  "browser": {
+    "checks": 34,
+    "passed": 34,
+    "scopes": [
+      "390x844 mobile and keyboard",
+      "actual SSE and cache-only search",
+      "favorites and guest export",
+      "reload and process restart"
+    ]
+  },
+  "independent_persona_rechecks": "all specified issues passed; read-only pure-function checks",
+  "network": {
+    "container_network": "none",
+    "listing_producer": "cache_only",
+    "description_enrichment": false,
+    "external_browser_requests": "aborted",
+    "blocked_backend_attempts": 3,
+    "onthemarket_backend_attempts": 0,
+    "real_model_calls": 0
+  },
+  "source_matches_workspace": true,
+  "temporary_services_stopped": true,
+  "temporary_credentials_removed": true,
+  "production_deployed": false,
+  "artifacts_contain_credentials": false
+}

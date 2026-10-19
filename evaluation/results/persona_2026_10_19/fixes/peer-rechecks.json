@@ -1,0 +1,34 @@
+{
+  "scope": "Read-only recheck of previously reported issues; no service/model/network calls",
+  "root_fix_history_shared": false,
+  "student": {
+    "status": "passed",
+    "original_issues": 4,
+    "final_original_sentence_checks": 9,
+    "topics": [
+      "low weekly budget",
+      "Chinese correction dates",
+      "bare URL identity",
+      "rent versus bills and totals"
+    ]
+  },
+  "professional": {
+    "status": "passed",
+    "original_issues": 2,
+    "topics": [
+      "comparison leaves budget unchanged",
+      "named-property questions do not refine filters"
+    ]
+  },
+  "family": {
+    "status": "passed",
+    "original_issues": 5,
+    "topics": [
+      "T20 summary",
+      "English hypothetical lift",
+      "minimum-bedroom preservation",
+      "unrelated conditional and date",
+      "T09 cat permission"
+    ]
+  }
+}

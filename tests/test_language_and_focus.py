@@ -458,5 +458,8 @@ def test_alex_chat_path_resolves_focus_from_full_last_results():
 
 def test_api_alex_reads_ui_language():
     src = _func_source("api_alex")
-    assert "_normalize_ui_language(data.get('ui_language'))" in src
+    preparation = _func_source("_prepare_chat_request")
+    assert "_normalize_ui_language(data.get('ui_language'))" in preparation
+    assert "_prepare_chat_request()" in src
+    assert "ui_language = prepared.ui_language" in src
     assert "ui_language=ui_language" in src

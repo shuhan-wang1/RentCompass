@@ -1,0 +1,1 @@
+For a separate day trip, what is the current weather in Islington, London? Don't run a commute calculation this round. This is only a weather lookup: do not change any housing-search area, budget, bedroom, access, pet or other condition, and do not move the housing search to Islington.

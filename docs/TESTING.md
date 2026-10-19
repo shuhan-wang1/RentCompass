@@ -15,6 +15,17 @@ external API during a normal run.
 
 ## Running the tests
 
+The 2026-10-19 persona regressions are part of the default suite:
+`test_revocable_auth.py`, `test_persona_constraint_regressions.py`, and
+`test_persona_behavior_regressions.py`. They cover copied-session revocation,
+explicit changes versus property questions, minimum bedrooms, whole homes,
+unknown qualification, listing identity, and empty-result recovery across replay
+and restart. Search-pipeline tests also cover weekly budget normalization and
+unverified cat permission. Run both test trees with the default command below.
+
+The independent local browser/API evidence and network isolation limits are recorded
+in [the repair report](../evaluation/results/persona_2026_10_19/FIX_REPORT.md).
+
 Create the same Python 3.12, hash-locked environment used by CI:
 
 ```bash
@@ -41,6 +52,19 @@ python -m pytest -q
 ```
 
 ## Live tests (opt-in, OFF by default)
+
+The request-isolation and async chat regressions can be run without external APIs:
+
+```bash
+python -m pytest -q tests/test_listing_retrieval_isolation.py \
+  tests/test_fix_memory_embeddings.py tests/test_native_chat_transport.py \
+  tests/test_evaluation_verdicts.py
+python -m evaluation.fault_injection.run --out /tmp/rentcompass-fault-check
+```
+
+Use an executable pytest temporary directory (`--basetemp`) when testing inside
+a hardened container: deployment tests create executable shell fixtures and
+cannot run those fixtures on a `noexec` `/tmp` mount.
 
 A handful of tests exercise real external services and are **env-gated off** by
 default, so they skip unless you explicitly enable them:

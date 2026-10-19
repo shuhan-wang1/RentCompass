@@ -1,0 +1,146 @@
+{
+  "restore_evidence": "final-restore-20261019T130921Z.json",
+  "overall_pass": false,
+  "passed": 17,
+  "failed": 3,
+  "assertions": [
+    {
+      "name": "original_conversation_loaded",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.max_budget",
+      "expected": 2000,
+      "actual": 2150,
+      "passed": false
+    },
+    {
+      "name": "server_criteria.budget_period",
+      "expected": "month",
+      "actual": "month",
+      "passed": true
+    },
+    {
+      "name": "server_criteria.monthly_total_budget",
+      "expected": 2150,
+      "actual": 2150,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.office_days_per_week",
+      "expected": 2,
+      "actual": 2,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.bedrooms",
+      "expected": 1,
+      "actual": 1,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.bedrooms_minimum",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "name": "server_criteria.room_type",
+      "expected": "whole",
+      "actual": "whole",
+      "passed": true
+    },
+    {
+      "name": "server_criteria.areas",
+      "expected": [
+        "Lewisham",
+        "Stratford"
+      ],
+      "actual": [
+        "Lewisham",
+        "Stratford"
+      ],
+      "passed": true
+    },
+    {
+      "name": "server_criteria.commute_destination",
+      "expected": "Bank station, London",
+      "actual": "Bank station, London",
+      "passed": true
+    },
+    {
+      "name": "server_criteria.max_travel_time",
+      "expected": 45,
+      "actual": 45,
+      "passed": true
+    },
+    {
+      "name": "ui.max_budget",
+      "expected": 2000,
+      "actual": 2150,
+      "passed": false
+    },
+    {
+      "name": "rent_budget_alias_consistency",
+      "expected": 2000,
+      "actual": 2150,
+      "passed": false
+    },
+    {
+      "name": "saved_count",
+      "expected": "Saved\n2",
+      "actual": "Saved\n2",
+      "passed": true
+    },
+    {
+      "name": "saved_card_addresses",
+      "expected": [
+        "Bonfield Road, London, SE13",
+        "Unex Tower, 7 Station Street, London, E15"
+      ],
+      "actual": [
+        "Bonfield Road, London, SE13",
+        "Unex Tower, 7 Station Street, London, E15"
+      ],
+      "passed": true
+    },
+    {
+      "name": "saved_historical_budget1850",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "saved_historical_budget2000",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "saved_criteria_scope_label",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "name": "model_calls",
+      "expected": 0,
+      "actual": 0,
+      "passed": true
+    },
+    {
+      "name": "blocked_model_or_search_attempts",
+      "expected": 0,
+      "actual": 0,
+      "passed": true
+    }
+  ],
+  "attribution": "Budget drift already exists in R06/R07 SSE; final restart retained it. R05 has max_budget2000, R06/R07 have max_budget2150 and max_budget_monthly2000.",
+  "bad_budget_source": {
+    "source": "user_message",
+    "text": " Keep my current £2,000/month rent cap separate from the £2,150/month rent-plus-commute ceiling, based on two office days a week",
+    "value": 2150
+  }
+}

@@ -94,13 +94,14 @@ def build_turn_snapshot(*, turn_id: Any, persistent_state: Dict[str, Any],
     if not isinstance(ec, dict):
         ec = {}
 
-    return {
+    snapshot = {
         "schema_version": CONTEXT_SCHEMA_VERSION,
         "turn_id": turn_id,
         "user_preferences": deepcopy(persistent_state.get("user_preferences", {})),
         "accumulated_search_criteria": deepcopy(
             persistent_state.get("accumulated_search_criteria", {})),
         "last_results": deepcopy(ec.get("last_results")) or [],
+        "view_results": deepcopy(ec.get("view_results", ec.get("last_results"))) or [],
         # 累计推荐注册表：轻量条目（historical recommendations index），随快照存活重启/fork。
         "recommended_registry": deepcopy(ec.get("recommended_registry")) or [],
         "summary": ec.get("rolling_summary") or None,
@@ -109,6 +110,10 @@ def build_turn_snapshot(*, turn_id: Any, persistent_state: Dict[str, Any],
         "active_property": None,  # reserved for v2
         "context_revision": context_revision,
     }
+
+    if isinstance(ec.get("search_retrieval"), dict):
+        snapshot["search_retrieval"] = deepcopy(ec["search_retrieval"])
+    return snapshot
 
 
 def snapshot_to_session_patch(snapshot: Any) -> Dict[str, Any]:
@@ -151,7 +156,7 @@ def snapshot_to_session_patch(snapshot: Any) -> Dict[str, Any]:
     if not (isinstance(summary_through, str) and summary_through.strip()):
         summary_through = None
 
-    return {
+    patch = {
         "user_preferences": deepcopy(user_preferences),
         "accumulated_search_criteria": deepcopy(accumulated),
         "last_results": deepcopy(last_results),
@@ -159,6 +164,10 @@ def snapshot_to_session_patch(snapshot: Any) -> Dict[str, Any]:
         "rolling_summary": summary,
         "rolling_summary_through_turn_id": summary_through,
     }
+
+    if isinstance(snapshot.get("search_retrieval"), dict):
+        patch["search_retrieval"] = deepcopy(snapshot["search_retrieval"])
+    return patch
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +358,7 @@ _QUANTITY_FIELDS = {
 
 # The later statement announces its own change → an UPDATE, never a contradiction.
 _REVISION_MARKERS = (
+    "discard", "restore", "disregard", "withdraw", "作废", "撤销", "恢复", "改回",
     "actually", "instead", "make it", "make that", "change it", "change that",
     "changed my mind", "i meant", "i mean", "correction", "scratch that",
     "let's say", "lets say", "update that", "revise", "no wait", "rather",
@@ -402,9 +412,9 @@ def _unit_for_amount(text: str, start: int, end: int) -> Optional[str]:
     best: Optional[tuple] = None
     for unit, cues in _PERIOD_CUES:
         for cue in cues:
-            at = low.find(cue)
-            if at != -1 and (best is None or at < best[0]):
-                best = (at, unit)
+            match = re.search(r'(?<![a-z])' + re.escape(cue) + r'(?![a-z])', low)
+            if match is not None and (best is None or match.start() < best[0]):
+                best = (match.start(), unit)
     if best:
         return best[1]
 
@@ -428,6 +438,8 @@ def _unit_for_amount(text: str, start: int, end: int) -> Optional[str]:
 
 def _field_of(text: str) -> Optional[str]:
     low = (text or "").casefold()
+    if re.search(r'(?:up to|under|ceiling|最高|上限)\s*£?\s*\d{3,5}', low):
+        return 'budget'
     for field, terms in _QUANTITY_FIELDS.items():
         if any(term in low for term in terms):
             return field
@@ -437,7 +449,8 @@ def _field_of(text: str) -> Optional[str]:
 def _statements(text: str, turn: int) -> List[Dict[str, Any]]:
     """Every quantity statement in one message: ``{field, value, unit, monthly,
     absolute, revision, turn, text}``. Unit ``None`` means the user did not qualify it."""
-    raw = (text or "").strip()
+    from core.constraint_updates import scoped_update_text, explicit_criteria_revision
+    raw = scoped_update_text(text or '').strip()
     if not raw:
         return []
     field = _field_of(raw)
@@ -445,9 +458,15 @@ def _statements(text: str, turn: int) -> List[Dict[str, Any]]:
         return []
     low = raw.casefold()
     absolute = any(mk in low for mk in _ABSOLUTE_MARKERS)
-    revision = any(mk in low for mk in _REVISION_MARKERS)
+    revision = any(mk in low for mk in _REVISION_MARKERS) or explicit_criteria_revision(raw)
     out: List[Dict[str, Any]] = []
     for m in _AMOUNT_RE.finditer(raw):
+        # Use the same amount-local noun-phrase scope as the executor. A rent
+        # ceiling and a combined rent/travel cap are independent quantities even
+        # when their qualifier follows the amount ("£2100 for rent plus travel").
+        from core.tools.search_properties import _amount_role
+        if _amount_role(raw, m.start(), m.end()) in ('total', 'per_person'):
+            continue
         value = _amount_value(m.group(1) or m.group(2))
         if value is None or value < 100:
             # Below £100 a bare number is a bedroom count / minutes / a postcode digit,
@@ -511,6 +530,14 @@ def detect_history_conflicts(history: Optional[List[Dict[str, str]]],
             stmts.extend(_statements(h.get("user") or "", i))
     if current_message:
         stmts.extend(_statements(current_message, len(turns)))
+
+    # A later explicit correction resolves earlier contradictory pairs as well;
+    # those old pairs must not keep blocking every subsequent turn.
+    revision_turns = {}
+    for statement in stmts:
+        if statement['revision']:
+            revision_turns[statement['field']] = statement['turn']
+    stmts = [s for s in stmts if s['turn'] >= revision_turns.get(s['field'], -1)]
 
     conflicts: List[Dict[str, Any]] = []
     seen_fields = set()
@@ -812,6 +839,9 @@ def assemble_messages(*, user_message: str,
         recommendations_index=ctx.get("recommendations_index"),
         discussed_areas=ctx.get("discussed_areas"),
     )
+    if ctx.get('current_date'):
+        context_sections = (f"Current date in Europe/London: {ctx['current_date']}. "
+                            "Distinguish today's date from cached listing dates.\n\n" + context_sections)
     # G11: detected over the FULL history, before any trimming, and pinned to the FRONT
     # of the context sections so the trim ladder (which cuts whole lines from the end)
     # cannot silently drop the one section whose absence caused the defect. Empty string

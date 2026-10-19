@@ -1,0 +1,114 @@
+{
+  "total_real_turns": 12,
+  "new_real_turns": 2,
+  "new_conversation_id": "fe73ac63d23c48bf9bb80c0a86f02257",
+  "unchanged_user_id": true,
+  "turn11_request_message": "我开了一个新会话，继续按我之前已经保存的长期默认帮我找房。请说明本次实际使用的筛选条件，以及有哪些已经核实符合或仍待核实的候选。",
+  "restored_criteria": {
+    "max_budget": 2400,
+    "bedrooms": 2,
+    "room_type": "whole",
+    "commute_destination": "Gower Street, London WC1E 6BT",
+    "max_travel_time": 30
+  },
+  "restored_sources": {
+    "bedrooms": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": 2
+    },
+    "bedrooms_minimum": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": false
+    },
+    "budget_period": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": "month"
+    },
+    "commute_destination": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": "Gower Street, London WC1E 6BT"
+    },
+    "destination": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": "Gower Street, London WC1E 6BT"
+    },
+    "max_budget": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": 2400
+    },
+    "max_travel_time": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": 30
+    },
+    "no_commute": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": false
+    },
+    "room_type": {
+      "memory_id": "semantic_0d7f04738ad93d97f5c671870971093a",
+      "source": "saved_preference",
+      "value": "whole"
+    }
+  },
+  "turn11_messages_identical_after_refresh": true,
+  "turn12_messages_identical_after_refresh": true,
+  "form_fields_unchanged_turn11_to_turn12": true,
+  "form_fields_unchanged_final_refresh": true,
+  "favorites_unchanged": true,
+  "immediate_card_visible": true,
+  "card_status_excluded": true,
+  "turn11_recommendations_commute": [
+    {
+      "address": "Barrowgate Road, London W4",
+      "verified_commute_minutes": 32,
+      "candidate_status": "excluded",
+      "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2450 exceeds budget 2400",
+        "measured commute 32 min exceeds limit 30 min"
+      ],
+      "candidate_unknown_reasons": []
+    }
+  ],
+  "turn11_view_state_commute": [
+    {
+      "address": "Barrowgate Road, London W4",
+      "verified_commute_minutes": null,
+      "candidate_status": "excluded",
+      "candidate_reasons": [
+        "alternative is outside the declared hard result set",
+        "monthly price 2450 exceeds budget 2400"
+      ],
+      "candidate_unknown_reasons": [
+        "commute evidence is missing"
+      ]
+    }
+  ],
+  "turn12_response_type": "chat",
+  "new_turns": [
+    {
+      "turn_number": 11,
+      "turn_id": "d771d4cce1b545e591f0af65e6eaeb1c",
+      "request_ids": [
+        "dc5c75a2347a4689bc9bde2130100ba4"
+      ],
+      "conversation_id": "fe73ac63d23c48bf9bb80c0a86f02257"
+    },
+    {
+      "turn_number": 12,
+      "turn_id": "dd360e324233473caefab6ebbcb50337",
+      "request_ids": [
+        "5d7901f2162a487c9d4e072a07b7bec9"
+      ],
+      "conversation_id": "fe73ac63d23c48bf9bb80c0a86f02257"
+    }
+  ]
+}

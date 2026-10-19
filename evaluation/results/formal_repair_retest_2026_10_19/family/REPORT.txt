@@ -1,0 +1,67 @@
+家庭正式端到端验收：7/7真实请求完成；R7曾观察到P1天气地点归属问题，后续修复未再用模型重放，因此家庭工具链不判全量通过；最终统一重启后状态恢复通过；旧卡通勤说明经读路径修复后无模型复测通过（保留原失败）
+日期：2026-10-19。地址：http://127.0.0.1:15019。
+身份：两个成年人、七岁孩子、猫、68cm手动轮椅的家庭。测试员参与过此前UI修复，因此不是完全盲测；本轮没有读取产品源码、旧报告或其他测试员结果，也没有改产品。
+
+边界与证据：本次使用新的独立guest/profile，浏览器只允许127.0.0.1:15019，房源图、外链、字体和瓦片均拦截。房源来自root低频真实抓取的每区30条有限缓存样本，本测试员不直接访问OTM。真实LLM/本地应用；外部工具调用以root按本conversation/request过滤的执行账本为准，SSE stage不作为实际执行证据。无cookie或密码公开。
+
+实际流程：恰好7次/api/alex，无自动/隐藏重试。R1–R3是初始版本；R4–R5为硬需/比较修复后；R6再次发现路由失败；R7为第二次修复后原样回归。每次turn_id/request_id见turn-index.json。
+R1：Stratford或Leyton、整套至少2卧、£2800/月租不含账单、45分钟到King's Cross、无台阶及68cm轮椅门浴室空间必需、猫须书面许可、阳台花园仅偏好。
+预期：硬条件保留，尺寸/猫许可无证据=未知。
+实际：硬features空数组，轮椅/猫变soft；5卡eligible且回答称全部条件verified。P1。首轮SSE正文采集器失败，未重发，后续通过本地GET恢复完整服务端消息/view_state及UI截图；原SSE缺失会保留为采集局限，不能称原响应完整捕获。
+证据：round01.txt、round01-recovered.json、round01-recovered.png。
+
+R2：点击Tennyson Ask AI（只聚焦，无请求），发送Tennyson vs Borthwick实际细节、68cm尺寸、书面猫许可；明确lift本身不能证明空间。
+预期：两套指定房源比较，无证据保持未知，不能把提到lift变成必须有lift。
+实际：0.582秒返回筛选列表，把lift加入hardfeatures，Tennyson/Three Mill被excluded，未回答Borthwick比较及实际详情。P1。
+证据：round02.txt、round02-response.json、round02-raw-response.txt、round02.png；request=1011f25fbccd4830802e2b91444674dd。
+
+R3：精确Tennyson URL、1km小学/GP和治安参考点/半径/月份，明确住房条件不变。此轮在root暂停消息到达前已提交，完成后立即关闭保存；提交前UI收藏Tennyson和Three Mill共2套。
+预期：具体房源锚点，实际周边查询，不推断学校录取或GP注册。
+实际：学校/GP未给地点，回答称没有数据；本人实际账本确认2次search_nearby_pois均失败：Overpass cooldown、每类attempts=0，非空结果；请求1000m被限制到800m。回答没有明确说明查询故障或800m实际范围。治安初次Stratford误落Stratford-upon-Avon，回答明确排除此处数据；第二次声称用Tennyson坐标，给2026-06至08/~1mile并说明不是1km、不是安全保证。条件未变。部分列表/句子有删除残片。
+证据：round03*；request=84d9baea39b74626927349e6d873e8da。
+
+root修复后实际重放：
+R4=R1逐字。通过核心修复：cats allowed、wheelchair-accessible、wheelchair_space_68cm、cat_written_consent、step-free为hard；历史lift有修复来源并删除；7卡全部unknown，没有虚假verified/failed。仍露机器tag给用户。预算2800、两区、整套、至少2卧、45分钟保留。
+证据：round04*；request=e8f99de2f9434129b174f190d5c3d3d1。
+R5=R2逐字。通过核心修复：准确比较Tennyson/Borthwick，明确无门/浴室尺寸、无书面猫许可；lift不等于可用空间也未被加入要求，其他条件逐字段未变。剩P2：比较表留下空“| Commute |”行，末尾一面暗示两房仍满足commute，一面称未验证通勤语句已删除，说明不连贯。
+证据：round05*；request=fc525d53f3c54b8dba0a363e83c1f93f。
+R6：精确Tennyson URL、明天下午看房、1km小学/GP、治安参考点/半径/月份、天气、到King'sCross公交行程及轮椅步行无台阶证据，明确住房条件不变。
+实际FAIL：0.608秒response_type=search，仅返回3卡筛选名单，完全未回答学校/GP/天气/安全/线路；结构criteria不变但结果从7卡缩到3个Stratford候选。本人实际账本确认本轮零工具执行。P1任务被筛选捷径吞掉。
+证据：round06*；request=6578553bab8844a88e4ae5997e3b758f。
+
+UI无模型初查：390px触屏菜单打开；关闭菜单无屏外Tab；打开菜单Tab局限于sidebar/menu；Escape关闭并返回menu焦点；viewport/scrollWidth=390。8项断言全过，ui-initial.json、ui-initial-assertions.json、ui-01-touch-menu.png。Ask AI只聚焦未自动请求。原会话focus=Tennyson，2套收藏在修复服务重启后依旧可见。ui_final.py已实际完成13项断言全过：2收藏留存，刷新forms/focus/cards一致，New空会话无结果/焦点，切回原会话完整恢复，320/390px菜单Tab受限、Escape还焦、无横溢。Saved卡片明确写保存时条件及原会话来源，因此旧lift错误快照不会被标成当前条件。证据ui-final.json及4张ui-final截图。root最后统一重启后restore_check.py已运行，状态恢复通过，旧卡通勤文案失败，详见报告末尾。
+
+明确局限：为遵守最多7次真实模型预算，最终第7次用于原R6回归，原计划的区域更换和去掉花园偏好未执行；planned-area-update-NOT-SENT.txt仅是计划，不是请求/通过证据。没有数周/数月使用证据，只能模拟刷新、多会话、短期进程重启。真实房源有限缓存样本不代表完整市场，不确认现时可租、猫许可、实际轮椅可用或学校/GP资格。首轮原SSE缺失；一次无模型UI采集脚本猜错sidebar选择器超时，是采集器问题，未发模型，已修为实际DOM已知convSidebar。所有真实请求不重试、不隐藏计数。
+
+私密family-live-storage.json仅供root恢复核验，0600，不应归档公开。
+
+R7=R6逐字，27.615秒，request=b589dc66cf1443ccb822c2a400efa8d2、turn=e36b92b78591464ea999635d2721a57a。路由修复通过：response_type=chat，实际执行详情/天气/治安/路线/POI，全部住房criteria与R6完全一致，没有再次变成筛选名单。精确hardtag在UI变成自然语言：68cm轮椅的门/浴室净宽、猫书面许可。学校/GP未虚构姓名，学校录取/GP注册和无台阶路线均没有被保证。
+但最后版本仍FAIL，原因和严重度如下：
+P1 天气地点错配：首次get_weather仅传Stratford，工具成功返回lat36.33614/lon-102.07212、7.8°C/Clear（美国Stratford），后续get_weather才用房源lat51.54103/lon0.006745和Stratford London UK，得到2026-10-20 14:00的13.1°C/Overcast/55%预报。主文用正确预报，但末尾仍无地理限定地展示“Current weather returned for Stratford: 7.8°C, Clear”，把不同国家的天气并列给伦敦家庭。不是单纯排版问题。复现原文round07.txt，原响应round07-raw-response.txt、round07-response.json，实际两次get_weather见own-tool-ledger.json和actual-tools-summary.json。
+P2 POI故障/范围披露不足：R7实际2次search_nearby_pois都failed/cooldown，school/gp全部failed、completed_types为空，且用户1000m范围被截为800m；每类别attempts=0，没有新的Overpass HTTP。回答仅说没有学校/GP数据并让去官方站，未清楚说明服务不可用及未能完成1km查询。不能算“周边无学校/GP”，也不能算成功查询1km。R7还意外增加restaurant类别，未请求该类，无返回证据也未被显示。
+P2 历史卡片通勤证据不一致：R6筛选捷径保存的3卡在R7保留，Angel Lane/Three Mill显示37/44min、描述写TfL transit，资格同卡又写commute evidence is missing。该问题在历史失败状态恢复后可见；本轮未再次搜索，不声称新搜索也复现。Saved历史卡也显示时间+缺通勤证据，虽有明确保存时条件标签。证据round07.after.cards、ui-final-refresh.png。
+P2 回答仍有编辑/说明不连贯：编号分成“1.”和下一行标题，一些分号后的分句被拆断；先写当前天气没有多日预报，后附正确指定日期预报；路线主文耗时被删后在末尾才返回26min。此前R5空表和inside句修复没有额外真实对话重放，因为已达7轮；不能用root离线测试替代本人实际通过证据。
+
+实际工具账本核查（本persona cid/request严格归属；次数是Tool.execute，不等于外部HTTP次数）：
+R1 search_properties×1、calculate_commute×8、get_property_details×3。
+R2 零工具，证实误走捷径。
+R3 get_property_details×1、check_safety×2、search_nearby_pois×2。
+R4 search_properties×1、calculate_commute×7、get_property_details×2。
+R5 get_property_details×2，正确比较Tennyson/Borthwick。
+R6 零工具，证实混合任务被捷径吞掉。
+R7 get_property_details×1、get_weather×2、check_safety×1、get_transport_info×2、search_nearby_pois×2。
+总计：search_properties2、calculate_commute15、get_property_details9、check_safety3、search_nearby_pois4、get_weather2、get_transport_info2。所有POI调用均失败，没有本轮成功小学/GP结果；不是未调度，也不是已查明没有地点。完整根提供只属于本人的own-tool-ledger.json，精简actual-tools-summary.json。
+
+精确地点、参考点和失败后继续：
+R3首次check_safety确实用裸Stratford地理编码到Stratford-upon-Avon(52.1927803,-1.70634)，回答主动排除这处数据；第二次和R7用caller_supplied房源缓存坐标51.54103,0.006745，工具明确关联未经独立核验。治安给2026-06/07/08、约1609m provider默认半径，3个月4671记录；这不是个人安全/学校通勤路线保证。R7实际首次交通把起点传为字面“this home”导致失败；随后Stratford,London到King'sCross,London成功返回26min，主文明确是区域起点，不是房门、无票价且无无台阶证据。这一轮展示服务/地点失败后继续的有界fallback；不证明房源45min轮椅通勤已经合格。
+
+最终恢复期望已保存expected-state.json：cid76e9351df6d1450582bf1576b6e2116f；areas Stratford/Leyton，£2800/月，整套至少2卧，King'sCross45min，5项精确hardfeatures，focus Tennyson；3张当前历史卡，2收藏Tennyson/ThreeMill。浏览器全部关闭。family-live-storage.json为0600；不要公开归档。无模型恢复入口restore_check.py只访问本机GET/刷新，记录restart-recovery-check.json和截图，并断言没有/api/alex。真正最后统一重启后的无模型检查已完成，结果见下。
+
+最终统一进程重启后的实际无模型恢复（2026-10-19）：
+root明确FINAL RESTART READY后，运行既有restore_check.py，应用访问为本机GET/刷新，没有search或/api/alex，结束已关闭浏览器并保存storage。conversation_readable、criteria_restored、favorite_count_restored(2)、focus_restored(Tennyson)、cards_restored(3)、unknown_qualification_retained、viewport_no_overflow(390)、no_model_requests均通过。
+额外旧通勤文案检查仍FAIL：Angel Lane仍显示37 min to King's Cross，描述含TfL transit:37 min；Three Mill仍44 min和TfL transit，均没有对应的unverified限定，资格却说commute evidence is missing。旧标签移除断言失败；把不严谨的“卡片任意地方含not verified”检查收紧成每一条通勤句必须明确unverified，基于同一份已捕获UI评估也失败。JSON保留original_assertions和assertion_revision，未多发网络/模型冒充新检查。证据restart-recovery-check.json / restart-recovery-check.png。持久化通过，不等于旧卡通勤证据修复通过。
+root另外通知已修裸Stratford地理消歧、天气current/forecast作用域、POI服务故障与1000/800m提示，且有离线回归/独立工具诊断。本测试员已用满7次模型，所以没有新模型重放，不能把这些通知当本人的实际对话验证或抹掉R7美国天气混入失败。
+
+读路径修复后的最终只读复测：root通知已修GET/messages及cold-hydrate并重启后，先把前一次失败JSON/截图完整备份为before-read-path-fix-restart-recovery-check.json/.png，再运行同一restore_check.py。零/api/alex，零search，结束浏览器关闭。
+本次恢复会话/criteria/3卡/2收藏/Tennyson焦点/unknown资格/390px全部PASS；两套旧卡Angel Lane和Three Mill的37/44min以及TfL transit已消失，标签和房源描述逐句改成Commute not verified for current criteria。Folio的~42min仍明确estimated, unverified，描述明确not a verified journey time。不是用设施未核实提示冒充通勤修复。
+最新JSON另保存observed_commute_lines，严格验证所有通勤句均有限定、37/44旧时间不在、至少两卡出现明确通勤未知标签；本机GET/messages的Angel/ThreeMill travel_time也已是Commute not verified for current criteria。10项原断言及新增2项标签断言、2项server读路径断言全部PASS；新增断言基于本次同一捕获UI/JSON离线计算，无额外请求。证据最新restart-recovery-check.json/.png，失败前态仍在before-read-path-fix文件。该成功只覆盖恢复与旧通勤展示修复；R7天气/POI后续修复仍没有新的本人模型对话重放。

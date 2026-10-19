@@ -6,12 +6,23 @@ Web Search Module - 使用 SearXNG 本地实例进行网络搜索
 
 import os
 import requests
+import time
+import threading
 from typing import List, Dict, Optional, Union
 from .cache_service import get_from_cache, set_to_cache, create_cache_key
 
 
 WEB_SEARCH_CACHE_TTL_SECONDS = 6 * 60 * 60
 _WEB_SEARCH_CACHE_VERSION = "web-search-v2"
+
+
+class SearchSnippet(str):
+    """A compatible string carrying diagnostics from this exact search call."""
+
+    def __new__(cls, value: str, service_health: dict):
+        result = super().__new__(cls, value)
+        result.service_health = dict(service_health)
+        return result
 
 
 def _read_search_cache(cache_key: str) -> tuple[str, str | None]:
@@ -74,6 +85,10 @@ class SearXNGSearch:
         self.timeout = timeout
         self.default_max_results = default_max_results
         self.verbose = verbose
+        self._health_local = threading.local()
+        self._health_lock = threading.Lock()
+        self._unavailable_until = 0.0
+        self.cooldown_seconds = 15.0
         
         # 🆕 数据源策略：根据查询类型使用不同的搜索引擎
         # 对于事实性查询（租房信息、政策、学校等），只使用Google以确保结果质量
@@ -81,6 +96,21 @@ class SearXNGSearch:
         
         # 对于评价、反馈类查询，可以包含论坛
         self.forum_engines = "google,reddit"
+
+    @property
+    def last_health(self) -> dict:
+        """Thread-local for compatibility; callers should return it with results."""
+        return dict(getattr(self._health_local, 'value', {'service_status': 'unknown'}))
+
+    def _record_health(self, status: str, attempts: list, **extra) -> None:
+        self._health_local.value = {'provider': 'SearXNG', 'service_status': status,
+                                    'attempt_count': len(attempts), 'attempts': list(attempts),
+                                    **extra}
+        with self._health_lock:
+            if status == 'unavailable':
+                self._unavailable_until = time.monotonic() + self.cooldown_seconds
+            elif status in ('healthy', 'empty', 'filtered_empty', 'degraded'):
+                self._unavailable_until = 0.0
     
     def _detect_query_intent(self, query: str) -> str:
         """
@@ -151,6 +181,15 @@ class SearXNGSearch:
         if max_results is None:
             max_results = self.default_max_results
 
+        with self._health_lock:
+            cooling_down = self._unavailable_until > time.monotonic()
+        if cooling_down:
+            self._health_local.value = {'provider': 'SearXNG', 'service_status': 'unavailable',
+                                       'reason': 'cooldown', 'attempt_count': 0, 'attempts': []}
+            return []
+        deadline = time.monotonic() + min(12.0, max(0.0, float(self.timeout) * 2))
+        diagnostics = []
+
         intent = self._detect_query_intent(query)
         engines = (
             self.forum_engines
@@ -180,6 +219,10 @@ class SearXNGSearch:
         data: Dict = {}
         results: List[Dict] = []
         for attempt, request_params in enumerate(request_variants, 1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._record_health('unavailable', diagnostics, reason='time_budget')
+                return []
             constrained = "engines" in request_params
             print(
                 f"  -> [SearXNG] Searching query_chars={len(query)} "
@@ -189,15 +232,29 @@ class SearXNGSearch:
                 response = requests.get(
                     self.search_endpoint,
                     params=request_params,
-                    timeout=self.timeout,
+                    # A scalar timeout applies once to connect and once to
+                    # read. Split the remaining budget across both phases and
+                    # the remaining retry, so the worker stays bounded.
+                    timeout=min(float(self.timeout), remaining / (2 * (3 - attempt))),
                 )
                 response.raise_for_status()
-                data = response.json() or {}
+                data = response.json()
+                if not isinstance(data, dict) or not isinstance(data.get('results'), list):
+                    raise ValueError('Invalid search response schema')
                 candidate_results = data.get("results", [])
                 results = (
-                    candidate_results if isinstance(candidate_results, list) else []
+                    [result for result in candidate_results if isinstance(result, dict)
+                     and isinstance(result.get('url'), str) and result.get('url')]
                 )
+                unresponsive = data.get('unresponsive_engines') or []
+                diagnostics.append({'attempt': attempt, 'raw_result_count': len(results),
+                                    'unresponsive_engine_count': len(unresponsive),
+                                    'status': 'degraded' if unresponsive and results else
+                                              'unavailable' if unresponsive else
+                                              'healthy' if results else 'empty'})
             except Exception as exc:
+                diagnostics.append({'attempt': attempt, 'status': 'unavailable',
+                                    'error_type': type(exc).__name__})
                 # HTTP exception strings can include the request URL and raw query.
                 print(
                     f"  ⚠️ [SearXNG] Backend failure attempt={attempt} "
@@ -206,6 +263,7 @@ class SearXNGSearch:
                 if attempt == 1:
                     print("  -> [SearXNG] Retrying with default enabled engines")
                     continue
+                self._record_health('unavailable', diagnostics)
                 return []
 
             print(f"  -> [SearXNG] Raw result count: {len(results)}")
@@ -231,6 +289,8 @@ class SearXNGSearch:
                     "  ⚠️ [SearXNG] No results; unresponsive_engine_count="
                     f"{len(unresponsive)}"
                 )
+            status = diagnostics[-1]['status'] if diagnostics else 'unavailable'
+            self._record_health(status, diagnostics, result_count=0)
             return []
 
         pre_filter_count = len(results)
@@ -252,6 +312,10 @@ class SearXNGSearch:
             })
 
         print(f"  ✅ Found {len(formatted_results)} results")
+        status = ('degraded' if any(item['status'] in ('unavailable', 'degraded')
+                                    for item in diagnostics) else
+                  'healthy' if formatted_results else 'filtered_empty')
+        self._record_health(status, diagnostics, result_count=len(formatted_results))
         return formatted_results
 
     def _filter_authoritative_sources(self, results: List[Dict]) -> List[Dict]:
@@ -423,27 +487,30 @@ def get_search_snippets(query: str, max_results: int = 5) -> str:
     cache_status, cached_result = _read_search_cache(cache_key)
     if cache_status == "fresh" and cached_result:
         print(f"  -> [Cache HIT] Web search query_chars={len(query)}")
-        return cached_result
+        return SearchSnippet(cached_result, {'provider': 'SearXNG', 'service_status': 'not_checked',
+                                            'cache_status': 'fresh', 'attempt_count': 0})
     
     print(f"  -> [API Call] Web search query_chars={len(query)}")
     
     # 使用 SearXNG 执行搜索
     results = _searxng_client.search(query, max_results=max_results)
+    health = getattr(_searxng_client, 'last_health', {'service_status': 'unknown'})
     
     if not results:
         print(f"  ⚠️ SearXNG returned no results query_chars={len(query)}")
         if cache_status == "stale" and cached_result:
-            return (
+            return SearchSnippet(
                 "Cached web results (possibly outdated; live refresh returned "
-                "no usable results):\n\n" + cached_result
+                "no usable results):\n\n" + cached_result,
+                {**health, 'cache_status': 'stale'},
             )
-        return "No search results found for this query."
+        return SearchSnippet("No search results found for this query.", health)
     
     # 格式化为 LLM 友好的输出
     full_result = _searxng_client.format_for_llm(results)
     _write_search_cache(cache_key, full_result)
     
-    return full_result
+    return SearchSnippet(full_result, health)
 
 
 def search_web(query: str, max_results: int = 10) -> Union[str, List[Dict[str, str]]]:

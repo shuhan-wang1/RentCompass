@@ -57,6 +57,7 @@ def calculate_commute_impl(
             'mode': mode,
             'route_summary': details.get('route_summary'),
             'route_legs': details.get('route_legs', []),
+            'changes_count': details.get('changes_count'),
             'route_source': details.get('source'),
             'basis': details.get('basis'),
             'basis_note': details.get('basis_note'),

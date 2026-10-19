@@ -1,0 +1,201 @@
+{
+  "calculate_commute": {
+    "calls": 66,
+    "success": 39,
+    "exceptions": {}
+  },
+  "calculate_commute_cost": {
+    "calls": 1,
+    "success": 1,
+    "exceptions": {}
+  },
+  "check_safety": {
+    "calls": 3,
+    "success": 3,
+    "exceptions": {}
+  },
+  "check_transport_cost": {
+    "calls": 1,
+    "success": 1,
+    "exceptions": {}
+  },
+  "compare_or_rank_areas": {
+    "calls": 1,
+    "success": 1,
+    "exceptions": {}
+  },
+  "get_property_details": {
+    "calls": 14,
+    "success": 14,
+    "exceptions": {}
+  },
+  "get_transport_info": {
+    "calls": 6,
+    "success": 2,
+    "exceptions": {}
+  },
+  "get_weather": {
+    "calls": 5,
+    "success": 3,
+    "exceptions": {}
+  },
+  "remember": {
+    "calls": 2,
+    "success": 2,
+    "exceptions": {}
+  },
+  "search_nearby_pois": {
+    "calls": 4,
+    "success": 0,
+    "exceptions": {}
+  },
+  "search_properties": {
+    "calls": 10,
+    "success": 7,
+    "exceptions": {}
+  },
+  "direct_integrations": [
+    {
+      "tool": "search_properties",
+      "seconds": 6.601,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "get_weather",
+      "seconds": 0.953,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "get_property_details",
+      "seconds": 0.02,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "get_transport_info",
+      "seconds": 0.09,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "get_transport_info",
+      "seconds": 4.97,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "calculate_commute",
+      "seconds": 5.564,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "calculate_commute_cost",
+      "seconds": 0.881,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "check_transport_cost",
+      "seconds": 0.0,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "check_safety",
+      "seconds": 8.959,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "search_nearby_pois",
+      "seconds": 9.225,
+      "success": false,
+      "exception": null
+    },
+    {
+      "tool": "web_search",
+      "seconds": 7.013,
+      "success": false,
+      "exception": null
+    },
+    {
+      "tool": "compare_or_rank_areas",
+      "seconds": 3.173,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "remember",
+      "seconds": 0.031,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "recall_memory",
+      "seconds": 0.005,
+      "success": true,
+      "exception": null
+    },
+    {
+      "tool": "ask_user",
+      "seconds": 0.0,
+      "success": false,
+      "exception": null
+    }
+  ],
+  "ask_user_corrected_input": {
+    "tool": "ask_user",
+    "layer": "direct_tool_integration",
+    "args": {
+      "question": "Which budget basis applies?",
+      "clarification_kind": "other",
+      "missing_fields": [
+        "budget_basis"
+      ],
+      "options": [
+        {
+          "label": "Whole home total",
+          "value": "whole_total"
+        },
+        {
+          "label": "Per person",
+          "value": "per_person"
+        }
+      ]
+    },
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "status": "ask_user",
+        "question": "Which budget basis applies?",
+        "clarification_kind": "other",
+        "missing_fields": [
+          "budget_basis"
+        ],
+        "missing_optional_fields": [],
+        "options": [
+          {
+            "label": "Whole home total",
+            "value": "whole_total"
+          },
+          {
+            "label": "Per person",
+            "value": "per_person"
+          }
+        ]
+      },
+      "error": null,
+      "execution_time_ms": 0.1342296600341797,
+      "tool_name": "ask_user",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    },
+    "note": "Corrected the audit input to the declared clarification_kind enum. Initial invalid-input probe remains archived."
+  },
+  "scope_note": "Actual execution, direct integration and persona UI coverage are separate. Tool wrapper success alone does not certify nested provider data. Terminal ask_user is graph-managed and absent from Tool.execute ledger. Initial invalid direct ask_user enum retained as audit input failure."
+}

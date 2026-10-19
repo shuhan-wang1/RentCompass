@@ -94,34 +94,25 @@ def test_in_budget_results_do_not_gain_the_alternatives():
     assert [r["address"] for r in recs] == ["Woburn Place, London WC1H"]
 
 
-def test_a_genuinely_empty_result_still_is_not_a_search_payload():
-    """0 in budget AND 0 alternatives must stay an answer — the relaxed guard must not
-    start emitting empty search payloads."""
+def test_a_genuinely_empty_result_clears_the_previous_search_panel():
+    """A completed empty search replaces old cards with the actual empty result."""
     raw = dict(OVER_BUDGET_ONLY, recommendations=[], over_budget_alternatives=[])
     out = _format_output(raw)
-    assert out["response_type"] != "search"
+    assert out["response_type"] == "search"
     assert not out["tool_data"].get("recommendations")
 
 
 def test_legacy_arch_agrees_with_fc_on_over_budget_only():
-    """Both arches are A/B-compared; a formatter fixed on one side only would show up as an
-    architecture difference rather than the bug it is."""
-    import inspect
-
-    from core.langgraph_agent import (
-        _make_format_output_node,
-        _search_payload_has_candidates,
-    )
-
-    src = inspect.getsource(_make_format_output_node)
-    candidate_predicate_src = inspect.getsource(_search_payload_has_candidates)
-    # All three legacy search-result seams (artifact-ledger recovery, plan-dimension
-    # fan-out, and the plain tool branch) share one candidate predicate. The old
-    # contract counted direct field accesses inside the formatter, but that became
-    # stale when final-evidence preservation centralized the predicate. Assert the
-    # actual invariant: every seam consults the shared predicate, and that predicate
-    # explicitly includes the over-budget channel.
-    assert src.count("_search_payload_has_candidates") >= 3, \
-        "a legacy search formatting seam bypasses the shared candidate predicate"
-    assert "over_budget_alternatives" in candidate_predicate_src, \
-        "the shared candidate predicate drops over-budget-only results (issue #78 B)"
+    """Both formatters preserve near misses and explicitly replace empty searches."""
+    from core.langgraph_agent import _make_format_output_node
+    for raw in (OVER_BUDGET_ONLY, dict(OVER_BUDGET_ONLY, recommendations=[], over_budget_alternatives=[])):
+        legacy = _make_format_output_node()({
+            'tool_decision': {'tool': 'search_properties'}, 'tool_raw_data': raw,
+            'user_preferences': {}, 'accumulated_search_criteria': {},
+            'final_response': 'Search completed.', 'extracted_context': {'reply_language': 'en'},
+        })
+        fc = _format_output(raw)
+        assert legacy['response_type'] == fc['response_type'] == 'search'
+        assert [r.get('address') for r in legacy['tool_data']['recommendations']] == [
+            r.get('address') for r in fc['tool_data']['recommendations']]
+        assert legacy['tool_data']['eligible_recommendations'] == []

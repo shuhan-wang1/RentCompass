@@ -1,0 +1,12 @@
+{
+  "checks": [
+    "English backend messages override machine reasons",
+    "Chinese backend messages replace every machine reason on language switch",
+    "Switching back rerenders English messages",
+    "Legacy raw reasons retain existing localization fallback"
+  ],
+  "passed": 4,
+  "page_errors": [],
+  "real_model_requests": 0,
+  "all_requests_intercepted": true
+}

@@ -1,0 +1,12 @@
+{
+  "conversation_count": 1,
+  "favorite_count": 2,
+  "favorite_addresses": [
+    "Apt 108, Castello Court, 309-311 Harrow Road W9",
+    "Frognal, London NW3"
+  ],
+  "message_counts": [
+    10
+  ],
+  "status": "pass; export contains both bookmarked identities and all 5 user/assistant turns"
+}

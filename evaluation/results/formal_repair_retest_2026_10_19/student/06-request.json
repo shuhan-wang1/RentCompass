@@ -1,0 +1,16 @@
+{
+  "time": 1792412616.3724725,
+  "label": "06",
+  "method": "POST",
+  "url": "http://127.0.0.1:15019/api/alex",
+  "body": {
+    "message": "我准备和同学整租一套，各有一间卧室。请记住并保存我的长期默认租房偏好，替换此前默认：只在Camden，整套住宅whole，正好2间卧室，整套月租最高£2400；坐公共交通到UCL Bloomsbury主校区（Gower Street）30分钟以内。入住日未定。这条消息只保存默认，不要搜索房源。",
+    "context": {
+      "viewed_properties": []
+    },
+    "is_continuation": false,
+    "language": "zh",
+    "ui_language": "zh",
+    "conversation_id": "bd64dd5d9b12410586b93a31b812a6f0"
+  }
+}

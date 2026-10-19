@@ -1,0 +1,43 @@
+Independent black-box persona: English-speaking professional working next to Bank, hybrid Tue-Thu office.
+Date: 2026-10-19. URL: http://127.0.0.1:15009. Profile: professional.
+
+Scope and isolation
+Read only public BRIEF and black-box helper interface. Did not read product source, parent reports, or other personas. Exactly 3 actual chat turns. Only this persona folder/profile written. Did not open external housing links or directly access OnTheMarket. All AuditBrowser instances closed in finally blocks. Browser metadata records no page errors; Google Fonts request blocked by helper.
+
+Overall result
+FAIL for preserving and fulfilling this professional's rent/transport constraints. PASS for not fabricating available flats or claiming the full budget is satisfied without housing evidence. Real successful housing remains EXTERNALLY BLOCKED by the preflight 403 condition described in the brief. No live housing success can be certified.
+
+Turn 1
+Requested a self-contained one-bedroom, whole flat, Bank workplace Tue-Thu, <=35 minutes door-to-door, <=1 change, GBP 2100 monthly rent-plus-commute cap excluding utility bills. Reply gave no recommendations and responsibly said no usable source candidates does not establish an empty market. However search_criteria incorrectly has no_commute=true, null commute destination, null travel limit and null budget. Bedrooms=1 and room_type=whole exist in response but the first view_state/UI lost those fields; form was empty. Request duration 9.357s, HTTP 200.
+
+Turn 2
+Clarified Lewisham, GBP 1900 rent ceiling with GBP 2100 overall cap, Bank/35min/<=1 change. Asked real TfL arrival by 08:45 Tue 20 October, peak single fare, monthly commuting allowance and tomorrow-morning Lewisham weather. Reply stopped at budget clarification even though rent and overall budgets had distinct explicit scopes. Its first option exactly restated the user's distinction. known_criteria was entirely null/empty. No route/weather answer. Duration 3.334s, HTTP 200.
+
+Turn 3
+Selected the first budget option explicitly; repeated core requirements and asked route/weather first even without listings. Reply returned no housing, Lewisham station to Bank 27-minute fastest itinerary, GBP 3.20 one-way fare and CURRENT weather 12.1 C Overcast. It responsibly said station itinerary does not verify another property's travel or reliability/access, fare is not a return/monthly total, and only current conditions are verified. It did not claim budget met. However no usable route lines/legs, change count, requested arrival-time check, peak fare qualification, tomorrow-morning forecast, or requested 6*52/12 monthly cost estimate was supplied. All rent ceiling fields stayed null even after clarification. Commute date was incorrectly assigned move_in_date=2026-10-20. Raw commute_destination is Bank station, London but view_state.destination=null, so saved search form has no destination. Duration 26.965s, HTTP 200.
+
+Persistence
+Reopen/reload preserved six user/assistant messages and final area Lewisham, 1 bedroom, whole property, 35 minutes. It also preserved the defective blank Budget and blank Commute to fields. Captured UI's own GET /api/conversations/{id}/messages confirms the same view_state revision 3. A speculative GET /api/conversations/{id} returned 405 and was not counted as product failure.
+
+Evidence limits
+UI/payload alone cannot certify that transport/weather figures equal raw live-source outputs, or that GBP 3.20 is the requested peak fare for the requested journey time. Parent can correlate tool ledger with turn IDs below. Absence of source evidence is NOT counted as service success. Current weather was not dishonestly called tomorrow's forecast, but tomorrow's request was unfulfilled.
+
+Conditional arithmetic reference, not verified affordability
+Six singles/week * 52/12 = 26 singles/month. If GBP 3.20 were the applicable fare, the requested estimate would be GBP 83.20/month; GBP 1900 rent + GBP 83.20 = GBP 1983.20. The product did not provide this calculation. This conditional arithmetic does not establish a real flat exists or actual peak fare validity.
+
+Artifacts
+turn1_driver_result.json, turn2_driver_result.json, turn3_driver_result.json: raw request bodies and response payloads, UI DOM and stages.
+turn1_message.txt through turn3_message.txt: exact authored prompts.
+01_initial.png through 06_final_reload.png: screenshots.
+after_turn1_reopen.json, after_turn3_reload.json: fields and UI persistence.
+reload_api_responses.json: raw local API responses naturally loaded by UI on final reload, including persisted messages and view_state.
+professional-turns.jsonl / professional-browser-metadata.jsonl: helper raw records.
+assertions.json: explicit PASS/FAIL/BLOCKED/NOT_VERIFIED assertions.
+ids.json: identifiers.
+
+Identifiers
+Conversation: f108b7f2a8d048eca32f83ed764a7135
+Turn 1: 6c604b9d1214480eaf8d191013d798ee
+Turn 2: f736ac6e41234bfda5e5c0cf5aee7a09
+Turn 3: 5515366de4dd4a2e8dcb5d082db8655d
+request_id: not exposed in captured browser /api/alex result or persisted messages endpoint; not invented.

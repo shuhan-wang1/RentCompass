@@ -1,0 +1,22 @@
+{
+  "url": "https://www.onthemarket.com/robots.txt",
+  "method": "GET",
+  "user_agent": "RentCompassBot/1.0",
+  "started": 1792409841.8487725,
+  "reason": "Single identified-client diagnostic after new repair authorization; no identity rotation or retries",
+  "status": 200,
+  "seconds": 0.073,
+  "bytes": 3028,
+  "sha256": "133dbe61f682c0107fc509536b8570586edfa556355aa246d0178f5ff9dfc92f",
+  "headers": {
+    "Content-Type": "text/plain",
+    "X-Cache": "Hit from cloudfront",
+    "Via": "1.1 aeeb25fbc1dcc39846d0f257e045d3be.cloudfront.net (CloudFront)"
+  },
+  "paths_allowed": {
+    "/to-rent/property/camden/": true,
+    "/to-rent/property/manchester/": true,
+    "/details/12345678/": true
+  },
+  "crawl_delay": null
+}

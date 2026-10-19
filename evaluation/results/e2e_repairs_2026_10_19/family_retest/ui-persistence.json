@@ -1,0 +1,123 @@
+{
+  "selected_url": "https://www.onthemarket.com/details/20262177/",
+  "saved_count": "1",
+  "after_ask_focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...",
+  "chat_requests_after_ask": [],
+  "refresh_focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...",
+  "refresh_saved_count": "1",
+  "aux_list_status": 200,
+  "original_conversation_id": "83b3c2a05bac40949776659286bdc6ee",
+  "new_conversation_id": "b0d93d3d0ae4449890c2daf6873d5141",
+  "new_chat_focus": "",
+  "new_chat_forms": [
+    {
+      "type": "text",
+      "value": "",
+      "checked": false
+    },
+    {
+      "type": "number",
+      "value": "",
+      "checked": false
+    },
+    {
+      "type": "select-one",
+      "value": "month",
+      "checked": null
+    },
+    {
+      "type": "select-one",
+      "value": "",
+      "checked": null
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "type": "select-one",
+      "value": "",
+      "checked": null
+    },
+    {
+      "type": "text",
+      "value": "",
+      "checked": false
+    },
+    {
+      "type": "number",
+      "value": "",
+      "checked": false
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "type": "date",
+      "value": "",
+      "checked": false
+    }
+  ],
+  "returned_focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...",
+  "returned_forms": [
+    {
+      "type": "text",
+      "value": "",
+      "checked": false
+    },
+    {
+      "type": "number",
+      "value": "3000",
+      "checked": false
+    },
+    {
+      "type": "select-one",
+      "value": "month",
+      "checked": null
+    },
+    {
+      "type": "select-one",
+      "value": "2",
+      "checked": null
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": true
+    },
+    {
+      "type": "select-one",
+      "value": "whole",
+      "checked": null
+    },
+    {
+      "type": "text",
+      "value": "Gower Street, London WC1E 6BT",
+      "checked": false
+    },
+    {
+      "type": "number",
+      "value": "50",
+      "checked": false
+    },
+    {
+      "type": "checkbox",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "type": "date",
+      "value": "",
+      "checked": false
+    }
+  ],
+  "saved_tab_body": "5\n#1\nSt. Augustine's Road, Camden Square, NW1\n£2400/month\nN/A min\nWithin Budget\nConditions need verification\nRequired features not verified: step-free access, wheelchair access\nCached listing may have changed; confirm with the agent.\nSaved from: We are two adults, a six-year-old and a … 2026-10-19T09:00:44.816Z\nMonthly budget when saved: £3000\nMove-in date: contact agent\n2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1\nView Deal\nMap\nAsk AI",
+  "saved_tab_urls": [
+    "https://www.onthemarket.com/details/20262177/"
+  ],
+  "final_chat_requests": [],
+  "final_focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca..."
+}

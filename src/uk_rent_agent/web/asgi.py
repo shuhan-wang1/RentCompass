@@ -749,6 +749,8 @@ def create_asgi_app(config: Config | None = None) -> Starlette:
     configure_logging()
     runtime = config or Config.from_env(require_secret=True)
     flask_app = create_app(runtime)
+    from uk_rent_agent.web.chat_transport import NativeChatEndpoint
+    chat = NativeChatEndpoint(flask_app)
 
     async def ready(_request):
         body, status_code = await asyncio.to_thread(_readiness, runtime)
@@ -765,6 +767,7 @@ def create_asgi_app(config: Config | None = None) -> Starlette:
             # Backward compatibility for pre-readiness operators. Deployment
             # gates deliberately use /ready.
             Route("/health", live, methods=["GET"]),
+            Route("/api/alex", chat.handle, methods=["POST", "OPTIONS"]),
             Mount("/", app=WSGIMiddleware(flask_app)),
         ]
     )

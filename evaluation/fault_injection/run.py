@@ -89,7 +89,7 @@ async def _run_all(out: Path, timestamp: str) -> dict:
     # says what the scenarios found but not what the process TOLD its caller, so a
     # CI job that swallowed the status leaves no record of the difference — and
     # "the summary looked fine" is not evidence the run passed.
-    summary["exit_code"] = 1 if summary.get("harness_errors", 0) else 0
+    summary["exit_code"] = 0 if summary["gate_passed"] else 1
     (out / "fault_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     (out / "fault_exit_code").write_text(f"{summary['exit_code']}\n", encoding="utf-8")
@@ -122,7 +122,7 @@ def _aggregate(results: List[ScenarioResult], timestamp: str) -> dict:
     idem_scen = [r for r in results if r.idempotency_held is not None]
     surfaced_scen = [r for r in results if r.fault_surfaced is not None]
 
-    return {
+    summary = {
         "framework": "fault_injection",
         "mode": "offline (fake model + REAL tool/graph/idempotency/guardrail code)",
         "note": ("Resilience mechanics are GENUINE: only the LLM is mocked. "
@@ -148,6 +148,21 @@ def _aggregate(results: List[ScenarioResult], timestamp: str) -> dict:
         "timestamp": timestamp,
         "scenarios": [r.to_dict() for r in results],
     }
+    summary["failures"] = [
+        {"scenario_id": r.scenario_id, "reason": reason}
+        for r in results
+        for reason, failed in (
+            ("harness_error", r.error is not None),
+            ("fault_not_surfaced", r.fault_surfaced is False),
+            ("unsupported_answer", r.produced_ungrounded_answer_after_fault),
+            ("duplicate_write", r.duplicate_write_count > 0),
+            ("idempotency_failed", r.idempotency_held is False),
+            ("fallback_failed", r.fallback_succeeded is False),
+        )
+        if failed
+    ]
+    summary["gate_passed"] = bool(results) and not summary["failures"]
+    return summary
 
 
 def _print_summary(s: dict) -> None:
@@ -167,10 +182,11 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
     ts = args.timestamp or time.strftime("%Y-%m-%dT%H:%M:%S")
     summary = asyncio.run(_run_all(Path(args.out), ts))
-    # Non-zero exit only on harness errors (not on scenarios that *expect* a failure).
+    # Expected upstream failures may abort a task; violated fault-handling
+    # invariants and harness errors must still fail the command.
     # Read back from the summary so the value returned and the value on disk cannot
     # drift apart — two independent computations of the same thing is how they do.
-    return int(summary.get("exit_code", 1 if summary.get("harness_errors", 0) else 0))
+    return int(summary.get("exit_code", 1))
 
 
 if __name__ == "__main__":

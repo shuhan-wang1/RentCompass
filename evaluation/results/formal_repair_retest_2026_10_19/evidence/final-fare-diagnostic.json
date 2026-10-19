@@ -1,0 +1,160 @@
+{
+  "layer": "separate_direct_registry_diagnostic_after_professional_local_audit_cap",
+  "args": {
+    "query_type": "fare",
+    "from_location": "Stratford station, London",
+    "to_location": "Bank station, London"
+  },
+  "result": {
+    "success": true,
+    "data": {
+      "success": true,
+      "query_type": "fare",
+      "coverage": "london",
+      "from": {
+        "input": "Stratford station, London",
+        "resolved_station": "E15 1AZ",
+        "naptan": "51.5412507,-0.0022679"
+      },
+      "to": {
+        "input": "Bank station, London",
+        "resolved_station": "EC4N 8BH",
+        "naptan": "51.5133036,-0.0897457"
+      },
+      "duration_minutes": 23,
+      "changes_count": 0,
+      "route_summary": "Walk to Stratford Underground Station (6 min) -> Tube Central to Bank Underground Station (11 min) -> Walk to 1 QUEEN VICTORIA STREET, LONDON (6 min)",
+      "route_legs": [
+        {
+          "mode": "walking",
+          "lines": [],
+          "duration_minutes": 6,
+          "summary": "Walk to Stratford Station",
+          "from": "23 STATION STREET, LONDON",
+          "to": "Stratford Underground Station"
+        },
+        {
+          "mode": "tube",
+          "lines": [
+            "Central"
+          ],
+          "duration_minutes": 11,
+          "summary": "Central line to Bank",
+          "from": "Stratford Underground Station",
+          "to": "Bank Underground Station"
+        },
+        {
+          "mode": "walking",
+          "lines": [],
+          "duration_minutes": 6,
+          "summary": "Walk to 1 QUEEN VICTORIA STREET, LONDON",
+          "from": "Bank Underground Station",
+          "to": "1 QUEEN VICTORIA STREET, LONDON"
+        }
+      ],
+      "selected_itinerary_id": "tfl:27b7f12c2c54c409",
+      "fastest_journey": {
+        "itinerary_id": "tfl:27b7f12c2c54c409",
+        "duration_minutes": 23,
+        "changes_count": 0,
+        "route_summary": "Walk to Stratford Underground Station (6 min) -> Tube Central to Bank Underground Station (11 min) -> Walk to 1 QUEEN VICTORIA STREET, LONDON (6 min)",
+        "route_legs": [
+          {
+            "mode": "walking",
+            "lines": [],
+            "duration_minutes": 6,
+            "summary": "Walk to Stratford Station",
+            "from": "23 STATION STREET, LONDON",
+            "to": "Stratford Underground Station"
+          },
+          {
+            "mode": "tube",
+            "lines": [
+              "Central"
+            ],
+            "duration_minutes": 11,
+            "summary": "Central line to Bank",
+            "from": "Stratford Underground Station",
+            "to": "Bank Underground Station"
+          },
+          {
+            "mode": "walking",
+            "lines": [],
+            "duration_minutes": 6,
+            "summary": "Walk to 1 QUEEN VICTORIA STREET, LONDON",
+            "from": "Bank Underground Station",
+            "to": "1 QUEEN VICTORIA STREET, LONDON"
+          }
+        ],
+        "source": "TfL Unified API Journey Planner",
+        "fare_available": true,
+        "fare_basis": "journey_itinerary",
+        "fare_pence": 310,
+        "fare_gbp": 3.1,
+        "fare_display": "£3.10",
+        "fare_itinerary_id": "tfl:27b7f12c2c54c409"
+      },
+      "cheapest_journey": {
+        "itinerary_id": "tfl:4be80f2b73305271",
+        "duration_minutes": 24,
+        "changes_count": 0,
+        "route_summary": "Walk to Stratford Underground Station (6 min) -> Tube Central to Bank Underground Station (12 min) -> Walk to 1 QUEEN VICTORIA STREET, LONDON (6 min)",
+        "route_legs": [
+          {
+            "mode": "walking",
+            "lines": [],
+            "duration_minutes": 6,
+            "summary": "Walk to Stratford Station",
+            "from": "23 STATION STREET, LONDON",
+            "to": "Stratford Underground Station"
+          },
+          {
+            "mode": "tube",
+            "lines": [
+              "Central"
+            ],
+            "duration_minutes": 12,
+            "summary": "Central line to Bank",
+            "from": "Stratford Underground Station",
+            "to": "Bank Underground Station"
+          },
+          {
+            "mode": "walking",
+            "lines": [],
+            "duration_minutes": 6,
+            "summary": "Walk to 1 QUEEN VICTORIA STREET, LONDON",
+            "from": "Bank Underground Station",
+            "to": "1 QUEEN VICTORIA STREET, LONDON"
+          }
+        ],
+        "source": "TfL Unified API Journey Planner",
+        "fare_available": true,
+        "fare_basis": "journey_itinerary",
+        "fare_pence": 310,
+        "fare_gbp": 3.1,
+        "fare_display": "£3.10",
+        "fare_itinerary_id": "tfl:4be80f2b73305271"
+      },
+      "source": "TfL Unified API Journey Planner",
+      "from_cache": false,
+      "cache_status": "miss",
+      "stations_used": "E15 1AZ -> EC4N 8BH",
+      "fare_available": true,
+      "fare_pence": 310,
+      "fare_gbp": 3.1,
+      "fare_display": "£3.10",
+      "fare_basis": "journey_itinerary",
+      "fare_itinerary_id": "tfl:27b7f12c2c54c409",
+      "fare_matches_itinerary": true,
+      "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard."
+    },
+    "error": null,
+    "execution_time_ms": 908.3549976348877,
+    "tool_name": "get_transport_info",
+    "version": "1",
+    "idempotency_key": null,
+    "outcome": "complete"
+  },
+  "seconds": 0.911,
+  "no_persona_model_requests": true
+}

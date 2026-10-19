@@ -92,6 +92,21 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+@pytest.mark.parametrize('has_candidates', [True, False])
+def test_scope_distinguishes_mixed_cache_sample_from_filtered_live_homes(monkeypatch, has_candidates):
+    async def candidates(*_args, **_kwargs):
+        return [{'name': 'Camden', 'slug': 'camden', 'commute_minutes': None}] if has_candidates else []
+    monkeypatch.setattr(cra, '_resolve_candidates', candidates)
+    monkeypatch.setattr(area_stats, 'aggregate', lambda *_a: {'camden': area_stats._empty()})
+    result = _run(compare_or_rank_areas_impl(city='London', reply_language='en'))
+    assert result['evidence_scope']['rent_sample'] == 'mixed_cached_listings'
+    assert result['evidence_scope']['room_type_filtered'] is False
+    assert result['evidence_scope']['bedrooms_filtered'] is False
+    assert result['evidence_scope']['freshness_basis'] == 'cache_fetch_time'
+    assert result['evidence_scope']['live_verified'] is False
+    assert 'without room-type or bedroom filtering' in ' '.join(result['explanation_notes'])
+
+
 # ==========================================================================
 # area_stats.aggregate — rent math
 # ==========================================================================

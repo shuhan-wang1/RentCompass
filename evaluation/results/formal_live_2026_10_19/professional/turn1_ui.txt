@@ -1,0 +1,65 @@
+RentCompass
+EN
+中文
+CONVERSATIONS
+New
+I'm moving to London for a job next to B…
+just now
+G
+Guest
+AI Assistant
+
+London Rental Intelligence
+
+ALEX
+Hello! I'm Alex. I can help you find apartments in London.
+
+Try asking me:
+"Find a 1-bed near King's Cross under £2000"
+"What is the vibe like in Hackney?"
+"Show me flats with a 20min commute to UCL"
+I'm moving to London for a job next to Bank station. I go into the office Tuesday to Thursday and work from home the other days. My absolute budget is £2,100 a month for rent plus those commuting costs, excluding utility bills. I need a self-contained one-bedroom flat, not a room in a shared house, and a door-to-door commute of at most 35 minutes with no more than one change. Can you find current available flats and show the rent and actual public-transport fare separately so I can tell whether the total fits?
+Edit message
+ALEX
+
+I couldn't find listings matching your criteria near London in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.
+
+Branch from here
+Near UCL
+Safe areas
+Rent stats
+Listings
+Search
+Saved
+0
+Search criteria
+Area
+*
+Budget
+per month
+per week
+Bedrooms
+Any
+Studio
+1
+2
+3
+4
+5
+6
+At least this many bedrooms
+Room type
+Any
+Whole property
+Studio
+En-suite room
+Shared room
+Commute to
+Max commute (min)
+I don't commute
+Move-in date
+YYYY-MM-DD
+Search
+No properties found
+
+Try adjusting your budget or location.

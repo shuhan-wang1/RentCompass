@@ -93,10 +93,13 @@ def test_a_weekly_budget_reaches_the_tool_in_either_unit():
     """"£350 per week" legitimately arrives as 350 or as its monthly conversion."""
     message = "my budget is £350 per week"
     weekly, dropped_w = ground_hard_constraints({"max_budget": 350}, {}, message)
-    assert weekly["max_budget"] == 350 and dropped_w == []
+    from core.tenancy_reference import monthly_from_weekly
+    assert weekly["max_budget"] == monthly_from_weekly(350) and dropped_w == []
+    assert weekly["budget_period"] == "month"
 
     monthly, dropped_m = ground_hard_constraints({"max_budget": 1517}, {}, message)
-    assert monthly["max_budget"] == 1517 and dropped_m == []
+    assert monthly["max_budget"] == monthly_from_weekly(350) and dropped_m == ["max_budget"]
+    assert monthly["budget_period"] == "month"
 
 
 # ══════════════════════════════════════════════════════════════════════════

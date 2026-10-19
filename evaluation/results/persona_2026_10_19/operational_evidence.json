@@ -1,0 +1,95 @@
+{
+  "generated_at_utc": "2026-10-19T05:37:34Z",
+  "product_source_manifest_sha256": "03dfa0aa7078219e373ffb15d33a3102012c25285e70c7a85a30faa31b8fde55",
+  "frozen_source_files": 1651,
+  "source_changed_files": [],
+  "persona_turn_events": 81,
+  "persona_endpoints": {
+    "alex": 79,
+    "search_direct": 2
+  },
+  "unique_persona_request_ids": 81,
+  "persona_turn_http_statuses": {
+    "200": 81
+  },
+  "persona_turn_outcomes": {
+    "ok": 81
+  },
+  "turn_latency_seconds": {
+    "median": 5.14,
+    "p95": 17.91,
+    "max": 27.8202
+  },
+  "latency_seconds_by_endpoint": {
+    "alex": {
+      "count": 79,
+      "median": 5.03,
+      "p95": 17.91,
+      "max": 27.82
+    },
+    "search_direct": {
+      "count": 2,
+      "median": 6.97,
+      "p95": 6.97,
+      "max": 7.49
+    }
+  },
+  "foreground_llm_usage_statuses": {
+    "complete": 75,
+    "no_llm_calls": 6
+  },
+  "foreground_observed_llm_usage": {
+    "calls": 160,
+    "input_tokens": 1819449,
+    "output_tokens": 59962,
+    "cache_read_tokens": 1581056
+  },
+  "model_api_requests_including_background_and_preflight": 380,
+  "model_statuses": {
+    "200": 380
+  },
+  "model_usage": {
+    "prompt_tokens": 1982388,
+    "completion_tokens": 97726,
+    "total_tokens": 2080114
+  },
+  "application_denied_egress_hosts": {
+    "nominatim.openstreetmap.org": 154,
+    "api.tfl.gov.uk": 21,
+    "overpass-api.de": 25,
+    "overpass.kumi.systems": 26,
+    "overpass.osm.ch": 26,
+    "lz4.overpass-api.de": 26,
+    "z.overpass-api.de": 22,
+    "api.postcodes.io": 20,
+    "data.police.uk": 3
+  },
+  "background_jobs": [
+    [
+      "memory_turn",
+      "completed",
+      80
+    ],
+    [
+      "rolling_summary",
+      "completed",
+      10
+    ]
+  ],
+  "browser_metadata": {
+    "student": {
+      "external_requests_blocked": 37,
+      "page_errors": []
+    },
+    "professional": {
+      "external_requests_blocked": 117,
+      "page_errors": []
+    },
+    "family": {
+      "external_requests_blocked": 73,
+      "page_errors": []
+    }
+  },
+  "network_boundary": "Docker --network none; Unix relay fixed upstream api.deepseek.com; browser exact localhost allowlist",
+  "note": "Network denials are attempted local calls, not successful external requests. Preflight calls excluded from persona turn counts; background jobs included in model counts."
+}

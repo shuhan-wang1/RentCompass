@@ -38,12 +38,32 @@ def memory_contract_from_artifact(artifact: dict | None) -> dict:
         and isinstance(raw, dict)
         and raw.get("success", True) is not False
     )
-    return {
+    stored = raw.get('stored') if success else None
+    contract = {
         "requested": True,
         "attempted": not artifact.get("denied"),
         "success": success,
         "error": artifact.get("error"),
     }
+    if isinstance(stored, str) and stored.strip():
+        contract['stored_content'] = stored
+    return contract
+
+
+def saved_content_quote(contract: dict | None, language: str = '') -> str:
+    """Only text acknowledged by the write result may be presented as saved."""
+    content = (contract or {}).get('stored_content')
+    if not (contract or {}).get('success') or not isinstance(content, str) or not content.strip():
+        return ''
+    if str(language).lower().startswith('zh'):
+        return '已保存的原文：\n「' + content + '」'
+    return 'Saved text:\n“' + content + '”'
+
+
+def strip_saved_content_quote(response: str, contract: dict | None, language: str = '') -> str:
+    """User preference text is not a provider claim about a measured journey."""
+    quote = saved_content_quote(contract, language)
+    return str(response or '').replace(quote, '').strip() if quote else str(response or '')
 
 
 def memory_notice(contract: dict | None, language: str = "") -> str:
@@ -68,9 +88,15 @@ def compose_memory_contract_response(response: str, contract: dict | None, *,
     notice = memory_notice(contract, language)
     if not notice:
         return str(response or "")
+    quote = saved_content_quote(contract, language)
+    notice = notice + ('\n\n' + quote if quote else '')
     if not preserve_content:
         return notice
-    remainder = str(response or "")
+    remainder = strip_saved_content_quote(response, contract, language)
+    content = (contract or {}).get('stored_content')
+    if isinstance(content, str):
+        for left, right in (('「', '」'), ('“', '”'), ('"', '"')):
+            remainder = remainder.replace(left + content + right, '')
     for pattern in _MEMORY_CLAIM_PATTERNS:
         remainder = pattern.sub("", remainder)
     remainder = re.sub(r"[ \t]+", " ", remainder)

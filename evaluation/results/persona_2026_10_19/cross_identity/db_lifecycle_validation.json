@@ -1,0 +1,9 @@
+{
+  "fixture_scope": "Only newly created synthetic C account",
+  "C_account_row_exists": false,
+  "C_conversations_after_deletion": [
+    [
+      "SYNTHETIC_FRESH_C_AFTER_DELETE"
+    ]
+  ]
+}

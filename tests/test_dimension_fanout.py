@@ -670,7 +670,9 @@ def test_sweep_never_fires_when_only_a_write_executed():
     st["messages"] = [AIMessage(content="")]
 
     cmd, st = _agent_once(nodes, st)
-    assert cmd.goto == "critic" and provider.calls == []
+    # A completed memory-only turn may now format its receipt without another model
+    # hop. Neither exit may trigger an unrelated safety read.
+    assert cmd.goto in {"critic", "format_output_fc"} and provider.calls == []
 
 
 def test_sweep_runs_at_most_once_so_an_abandoned_fetch_is_never_retried():

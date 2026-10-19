@@ -1,0 +1,31 @@
+........................................................................ [ 35%]
+............F........................................................... [ 71%]
+.........................................................                [100%]
+=================================== FAILURES ===================================
+_ test_positive_ancillary_tasks_remain_independent_of_memory_save[Save the commute preference; do not check the fare or search.-False] _
+
+message = 'Save the commute preference; do not check the fare or search.'
+expected = False
+
+    @pytest.mark.parametrize('message,expected', [
+        ('请记住安静偏好，并查明天Camden天气。', True),
+        ('Remember quiet homes and check the weather.', True),
+        ('保存我的偏好，再查一下明天的天气预报。', True),
+        ('Remember my budget and look up the current peak single fare.', True),
+        ('记住喜欢安静，并查询Central line的线路状态。', True),
+        ('记住公共交通30分钟以内的偏好。', False),
+        ('只保存偏好，不要查明天Camden天气。', False),
+        ('Remember quiet homes. Do not check the weather.', False),
+        ('Save the commute preference; do not check the fare or search.', False),
+        ('不要搜索，也不要查天气，但请解释票价的计算方式。', True),
+    ])
+    def test_positive_ancillary_tasks_remain_independent_of_memory_save(message, expected):
+        from core.constraint_updates import independent_memory_task
+>       assert independent_memory_task(message) is expected
+E       AssertionError: assert True is False
+E        +  where True = <function independent_memory_task at 0x7eabfd150400>('Save the commute preference; do not check the fare or search.')
+
+tests/test_formal_criteria_scope_regressions.py:483: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_formal_criteria_scope_regressions.py::test_positive_ancillary_tasks_remain_independent_of_memory_save[Save the commute preference; do not check the fare or search.-False]
+1 failed, 200 passed in 6.89s

@@ -1,0 +1,78 @@
+[
+  {
+    "number": 1,
+    "started": "2026-10-19T12:24:35.218637+00:00",
+    "url": "http://127.0.0.1:15019/api/alex",
+    "method": "POST",
+    "post_data": "{\"message\":\"I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?\",\"context\":{\"viewed_properties\":[]},\"is_continuation\":false,\"language\":\"en\",\"ui_language\":\"en\"}",
+    "status": 200,
+    "finished": "2026-10-19T12:24:48.286382+00:00",
+    "response_error": "Response.text: Protocol error (Network.getResponseBody): No data found for resource with given identifier\nResponse body is not available for a response that was navigated away from. Read response.body() before triggering any navigation."
+  },
+  {
+    "number": 2,
+    "started": "2026-10-19T12:25:51.117354+00:00",
+    "url": "http://127.0.0.1:15019/api/alex",
+    "method": "POST",
+    "post_data": "{\"message\":\"Please search the rental listings in both Lewisham and Stratford for those requirements. I'd also like to compare the two areas for my three-day-a-week Bank commute: check the journey time, PAYG versus a Travelcard, and weekly and monthly transport cost. Please keep the £1,850 rent limit separate from the £2,150 rent-and-commute limit, and tell me what you could actually verify.\",\"context\":{\"viewed_properties\":[]},\"is_continuation\":false,\"language\":\"en\",\"ui_language\":\"en\",\"conversation_id\":\"817bd0754098483997d66252c68b338e\"}",
+    "status": 200,
+    "finished": "2026-10-19T12:26:14.027722+00:00",
+    "response_path": "/tmp/rentcompass-fix-live-20261019/professional/R02-response.txt",
+    "capture_method": "fetch_response_clone"
+  },
+  {
+    "number": 3,
+    "started": "2026-10-19T12:44:53.021124+00:00",
+    "url": "http://127.0.0.1:15019/api/alex",
+    "method": "POST",
+    "post_data": "{\"message\":\"I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?\",\"context\":{\"viewed_properties\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"}]},\"is_continuation\":false,\"language\":\"en\",\"ui_language\":\"en\",\"conversation_id\":\"817bd0754098483997d66252c68b338e\"}",
+    "status": 200,
+    "finished": "2026-10-19T12:44:56.900755+00:00",
+    "response_path": "/tmp/rentcompass-fix-live-20261019/professional/R03-response.txt",
+    "capture_method": "fetch_response_clone"
+  },
+  {
+    "number": 4,
+    "started": "2026-10-19T12:45:38.765001+00:00",
+    "url": "http://127.0.0.1:15019/api/alex",
+    "method": "POST",
+    "post_data": "{\"message\":\"The rent limit is £1,850 per month, not per year; all my earlier figures were monthly. For the Bonfield Road flat I've selected, please open its recorded listing details and verify the rent, bedroom count and whether it is a self-contained whole flat. Does this exact property meet my current requirements? Please distinguish recorded details from anything you have actually verified as current.\",\"context\":{\"viewed_properties\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"}],\"focus_stack\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"}],\"property\":{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"}},\"is_continuation\":false,\"language\":\"en\",\"ui_language\":\"en\",\"conversation_id\":\"817bd0754098483997d66252c68b338e\"}",
+    "status": 200,
+    "finished": "2026-10-19T12:45:47.229519+00:00",
+    "response_path": "/tmp/rentcompass-fix-live-20261019/professional/R04-response.txt",
+    "capture_method": "fetch_response_clone"
+  },
+  {
+    "number": 5,
+    "started": "2026-10-19T12:46:14.447741+00:00",
+    "url": "http://127.0.0.1:15019/api/alex",
+    "method": "POST",
+    "post_data": "{\"message\":\"My employer now only needs me in the office two days a week, Tuesday and Thursday. Please increase my rent ceiling to £2,000 per month, while keeping the separate rent-plus-commuting ceiling at £2,150 per month. I still want a self-contained whole one-bedroom flat in Lewisham or Stratford, about 45 minutes or less to Bank station. Please update my search and show the actual suitable or clearly labelled unverified listings.\",\"context\":{\"viewed_properties\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"}]},\"is_continuation\":false,\"language\":\"en\",\"ui_language\":\"en\",\"conversation_id\":\"817bd0754098483997d66252c68b338e\"}",
+    "status": 200,
+    "finished": "2026-10-19T12:47:13.261439+00:00",
+    "response_path": "/tmp/rentcompass-fix-live-20261019/professional/R05-response.txt",
+    "capture_method": "fetch_response_clone"
+  },
+  {
+    "number": 6,
+    "started": "2026-10-19T12:49:49.439542+00:00",
+    "url": "http://127.0.0.1:15019/api/alex",
+    "method": "POST",
+    "post_data": "{\"message\":\"Please compare the two homes I saved, Bonfield Road and Unex Tower. Keep my current £2,000/month rent cap separate from the £2,150/month rent-plus-commute ceiling, based on two office days a week. Is either worth pursuing? For Stratford station to Bank, also price 26 one-way trips per month based on the actual current single fare rather than a daily cap; that is an extra-travel what-if, not a change to my normal attendance. I'm considering viewings on Saturday 24 October. Please check the weather in both areas and any relevant public-transport disruption, and explain what you couldn't verify.\",\"context\":{\"viewed_properties\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"},{\"address\":\"Unex Tower, 7 Station Street, London, E15\",\"price\":\"£2300/month\",\"travel_time\":\"25 min to Bank station, London\",\"url\":\"https://www.onthemarket.com/details/14951549/\"}],\"focus_stack\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"},{\"address\":\"Unex Tower, 7 Station Street, London, E15\",\"price\":\"£2300/month\",\"travel_time\":\"25 min to Bank station, London\",\"url\":\"https://www.onthemarket.com/details/14951549/\"}],\"property\":{\"address\":\"Unex Tower, 7 Station Street, London, E15\",\"price\":\"£2300/month\",\"travel_time\":\"25 min to Bank station, London\",\"url\":\"https://www.onthemarket.com/details/14951549/\"}},\"is_continuation\":false,\"language\":\"en\",\"ui_language\":\"en\",\"conversation_id\":\"817bd0754098483997d66252c68b338e\"}",
+    "status": 200,
+    "finished": "2026-10-19T12:50:06.601297+00:00",
+    "response_path": "/tmp/rentcompass-fix-live-20261019/professional/R06-response.txt",
+    "capture_method": "fetch_response_clone"
+  },
+  {
+    "number": 7,
+    "started": "2026-10-19T12:51:10.535260+00:00",
+    "url": "http://127.0.0.1:15019/api/alex",
+    "method": "POST",
+    "post_data": "{\"message\":\"I'm back after opening a new chat and returning here. Please recap my current rent limit, combined rent-and-commute limit, office days, home type, areas and commute requirements, plus the two properties I've saved. Which one should I contact first, and what still needs checking? Please don't change my search.\",\"context\":{\"viewed_properties\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"},{\"address\":\"Unex Tower, 7 Station Street, London, E15\",\"price\":\"£2300/month\",\"travel_time\":\"25 min to Bank station, London\",\"url\":\"https://www.onthemarket.com/details/14951549/\"}],\"focus_stack\":[{\"address\":\"Bonfield Road, London, SE13\",\"price\":\"£1875/month\",\"travel_time\":\"~42 min to Bank station, London (estimated, unverified)\",\"url\":\"https://www.onthemarket.com/details/20567130/\"},{\"address\":\"Unex Tower, 7 Station Street, London, E15\",\"price\":\"£2300/month\",\"travel_time\":\"25 min to Bank station, London\",\"url\":\"https://www.onthemarket.com/details/14951549/\"}],\"property\":{\"address\":\"Unex Tower, 7 Station Street, London, E15\",\"price\":\"£2300/month\",\"travel_time\":\"25 min to Bank station, London\",\"url\":\"https://www.onthemarket.com/details/14951549/\"}},\"is_continuation\":false,\"language\":\"en\",\"ui_language\":\"en\",\"conversation_id\":\"817bd0754098483997d66252c68b338e\"}",
+    "status": 200,
+    "finished": "2026-10-19T12:51:14.168519+00:00",
+    "response_path": "/tmp/rentcompass-fix-live-20261019/professional/R07-response.txt",
+    "capture_method": "fetch_response_clone"
+  }
+]

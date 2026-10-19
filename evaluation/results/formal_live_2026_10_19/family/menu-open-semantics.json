@@ -1,0 +1,27 @@
+{
+  "expanded": "true",
+  "sidebar": {
+    "role": "dialog",
+    "ariaModal": "true",
+    "ariaHidden": "false",
+    "inert": false
+  },
+  "active": {
+    "id": "newChatBtn",
+    "text": "New"
+  },
+  "focusables": [
+    {
+      "id": "menuToggle",
+      "text": ""
+    },
+    {
+      "id": "newChatBtn",
+      "text": "New"
+    },
+    {
+      "id": "userMenuBtn",
+      "text": "G\nGuest"
+    }
+  ]
+}

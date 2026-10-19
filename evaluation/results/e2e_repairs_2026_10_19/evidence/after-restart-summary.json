@@ -1,0 +1,7 @@
+{
+  "phase": "after-restart",
+  "requests": 6,
+  "checks": 6,
+  "passed": 6,
+  "failed": []
+}

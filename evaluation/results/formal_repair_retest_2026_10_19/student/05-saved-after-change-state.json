@@ -1,0 +1,95 @@
+{
+  "time": 1792412580.3816795,
+  "url": "http://127.0.0.1:15019/",
+  "forms": [
+    {
+      "tag": "TEXTAREA",
+      "type": "textarea",
+      "aria": "向 Alex 发送消息",
+      "id": "chatInput",
+      "value": "",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "text",
+      "aria": "区域",
+      "id": "",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "aria": "预算",
+      "id": "",
+      "value": "2400",
+      "checked": false
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "预算周期",
+      "id": "",
+      "value": "month",
+      "checked": null
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "卧室",
+      "id": "",
+      "value": "1",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "checkbox",
+      "aria": null,
+      "id": "",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "aria": "房型",
+      "id": "",
+      "value": "whole",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "text",
+      "aria": "通勤目的地",
+      "id": "",
+      "value": "University College London, Gower Street, London WC1E 6BT",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "aria": "最长通勤（分钟）",
+      "id": "",
+      "value": "30",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "checkbox",
+      "aria": null,
+      "id": "",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "date",
+      "aria": "入住时间",
+      "id": "",
+      "value": "",
+      "checked": false
+    }
+  ],
+  "chat_requests": 5
+}

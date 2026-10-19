@@ -1,0 +1,35 @@
+{
+  "requests": 259,
+  "checks": 253,
+  "passed": 253,
+  "phases": [
+    {
+      "phase": "guest",
+      "requests": 210,
+      "checks": 205,
+      "passed": 205,
+      "failed": []
+    },
+    {
+      "phase": "strict",
+      "requests": 36,
+      "checks": 35,
+      "passed": 35,
+      "failed": []
+    },
+    {
+      "phase": "reproduce",
+      "requests": 7,
+      "checks": 7,
+      "passed": 7,
+      "failed": []
+    },
+    {
+      "phase": "after-restart",
+      "requests": 6,
+      "checks": 6,
+      "passed": 6,
+      "failed": []
+    }
+  ]
+}

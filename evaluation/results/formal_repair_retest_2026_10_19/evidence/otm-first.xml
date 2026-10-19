@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="6" skipped="1" tests="66" time="15.414" timestamp="2026-10-19T12:43:59.963064+01:00" hostname="vmi3266337"><testcase classname="tests.test_fix_data_rate_limiter" name="test_desc_session_is_per_thread" time="0.002" /><testcase classname="tests.test_fix_data_rate_limiter" name="test_rate_limiter_does_not_sleep_or_claim_when_budget_cannot_fit_delay" time="0.001" /><testcase classname="tests.test_fix_data_rate_limiter" name="test_rate_limiter_spaces_calls_with_mock_clock" time="0.001" /><testcase classname="tests.test_fix_data_rate_limiter" name="test_rate_limiter_paces_concurrent_threads" time="0.252" /><testcase classname="tests.test_property_data_boundaries" name="test_scrape_capacity_exhaustion_is_incomplete_without_dispatch" time="0.001" /><testcase classname="tests.test_property_data_boundaries" name="test_csv_mode_is_an_explicit_demo_opt_in" time="0.007" /><testcase classname="tests.test_property_data_boundaries" name="test_auto_mode_never_silently_uses_bundled_demo_rows" time="0.002" /><testcase classname="tests.test_property_data_boundaries" name="test_scraped_snapshot_preserves_staleness_and_provenance" time="0.002" /><testcase classname="tests.test_on_demand_listings" name="test_scrape_exception_with_no_cache_is_honest_empty" time="0.008" /><testcase classname="tests.test_on_demand_listings" name="test_listing_cache_persists_across_instances" time="0.008" /><testcase classname="tests.test_on_demand_listings" name="test_resolve_city_and_landmark" time="0.001" /><testcase classname="tests.test_on_demand_listings" name="test_scrape_on_miss_then_serve_from_cache" time="0.011" /><testcase classname="tests.test_on_demand_listings" name="test_live_manchester_is_city_correct" time="0.000"><skipped type="pytest.skip" message="set RUN_LIVE_SCRAPE=1 to hit the real OnTheMarket site">/home/shuhan/uk_rent_recommendation/tests/test_on_demand_listings.py:166: set RUN_LIVE_SCRAPE=1 to hit the real OnTheMarket site</skipped></testcase><testcase classname="tests.test_on_demand_listings" name="test_no_data_returns_honest_empty_never_demo" time="0.011"><failure message="AssertionError: assert 'scraped' == 'none'&#10;  &#10;  - none&#10;  + scraped">fresh_cache = &lt;core.scraping.on_demand.ListingCache object at 0x7b47bfdc34d0&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfdc3620&gt;
+
+    def test_no_data_returns_honest_empty_never_demo(fresh_cache, monkeypatch):
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", lambda *a, **k: [])
+        res = on_demand.get_listings("Nowheresville", 1, 1, 500, 1200)
+        assert res["rows"] == []
+&gt;       assert res["meta"]["source"] == "none"
+E       AssertionError: assert 'scraped' == 'none'
+E         
+E         - none
+E         + scraped
+
+tests/test_on_demand_listings.py:150: AssertionError</failure></testcase><testcase classname="tests.test_on_demand_listings" name="test_stale_if_error_serves_old_cache_flagged" time="0.013"><failure message="AssertionError: assert 'scraped' == 'stale-cache'&#10;  &#10;  - stale-cache&#10;  + scraped">fresh_cache = &lt;core.scraping.on_demand.ListingCache object at 0x7b47bfdc0830&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfdc0980&gt;
+
+    def test_stale_if_error_serves_old_cache_flagged(fresh_cache, monkeypatch):
+        key = on_demand._query_key("manchester")  # slug-only canonical key
+        fresh_cache.set(key, _fake_rows()[:1])
+        # Age the entry beyond the TTL.
+        with sqlite3.connect(fresh_cache.path) as db:
+            db.execute("UPDATE listings SET fetched = ?", (time.time() - 10_000_000,))
+    
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", lambda *a, **k: [])  # live scrape yields nothing
+    
+        res = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
+&gt;       assert res["meta"]["source"] == "stale-cache"
+E       AssertionError: assert 'scraped' == 'stale-cache'
+E         
+E         - stale-cache
+E         + scraped
+
+tests/test_on_demand_listings.py:141: AssertionError</failure></testcase><testcase classname="tests.test_on_demand_listings" name="test_wrong_city_guard_drops_other_major_cities_only" time="0.004" /><testcase classname="tests.test_on_demand_listings" name="test_wrong_city_rows_filtered_out" time="0.022" /><testcase classname="tests.test_on_demand_listings" name="test_resolve_unknown_location_is_slugified_not_defaulted" time="0.001" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_in_band_missing_beds_kept_under_real_bed_constraint" time="0.001" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_limit_applied_after_filter" time="0.011" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_get_listings_keeps_row_with_unknown_beds" time="0.009" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_band_rescue_failure_keeps_the_canonical_answer" time="0.012"><failure message="assert 1 == 2">fresh_cache = &lt;core.scraping.on_demand.ListingCache object at 0x7b47bfc046b0&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfc04740&gt;
+
+    def test_band_rescue_failure_keeps_the_canonical_answer(fresh_cache, monkeypatch):
+        """A rescue that times out or errors must never downgrade what the canonical pool
+        already said — the caller still gets its (empty) complete answer, not an exception."""
+        calls = {"n": 0}
+    
+        def fake_scrape(slug, radius, min_price, max_price, limit, min_bedrooms, max_bedrooms):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _canon_rows()
+            raise RuntimeError("network down")
+    
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
+    
+        warm = on_demand.get_listings("Manchester", 1, 1, 500, 1200)   # canonical scrape
+        assert warm["rows"] and calls["n"] == 1
+    
+        res = on_demand.get_listings("Manchester", 5, 5, 500, 1200)    # rescue raises
+        assert res["rows"] == [] and res["meta"]["source"] == "hit"
+        assert res["meta"]["band_rescue"] is False
+&gt;       assert calls["n"] == 2
+E       assert 1 == 2
+
+tests/test_on_demand_canonical_cache.py:211: AssertionError</failure></testcase><testcase classname="tests.test_on_demand_canonical_cache" name="test_band_equal_to_canonical_is_never_rescued" time="0.010" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_cache_only_hit_when_fresh_canonical_exists" time="0.010" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_set_cache_path_isolates_namespaces" time="0.015" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_fresh_canonical_empty_band_rescues_once_then_complete_empty" time="0.010"><failure message="assert 1 == 2">fresh_cache = &lt;core.scraping.on_demand.ListingCache object at 0x7b47bfc04590&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfc05e80&gt;
+
+    def test_fresh_canonical_empty_band_rescues_once_then_complete_empty(fresh_cache,
+                                                                         monkeypatch):
+        """The canonical pool is a CAPPED top-slice, so an empty band-filter is not on its
+        own evidence the band is empty (see _band_rescue). It gets ONE band-targeted
+        re-scrape; when that also finds nothing, the empty is served — and the negative is
+        cached, so a repeat of the same band does not scrape again."""
+        calls = _counting_scrape(monkeypatch)
+    
+        # Populate the canonical entry with a matching band.
+        first = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
+        assert first["meta"]["source"] == "scraped" and first["rows"]
+    
+        # A band no row can satisfy (5-bed): the canonical pool never asked for 5-beds, so
+        # the rescue scrapes AT the band before the empty is believed.
+        empty = on_demand.get_listings("Manchester", 5, 5, 500, 1200)
+        assert empty["rows"] == [] and empty["meta"]["count"] == 0
+        assert empty["meta"]["source"] == "hit" and empty["meta"]["band_rescue"] is False
+&gt;       assert calls["n"] == 2                       # 1 canonical + 1 rescue
+        ^^^^^^^^^^^^^^^^^^^^^^
+E       assert 1 == 2
+
+tests/test_on_demand_canonical_cache.py:119: AssertionError</failure></testcase><testcase classname="tests.test_on_demand_canonical_cache" name="test_in_band_missing_price_kept_under_real_price_constraint" time="0.001" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_band_rescue_returns_rows_missing_from_canonical_pool" time="0.009"><failure message="AssertionError: assert [] == ['https://www...details/903/']&#10;  &#10;  Right contains 2 more items, first extra item: 'https://www.onthemarket.com/details/902/'&#10;  Use -v to get more diff">fresh_cache = &lt;core.scraping.on_demand.ListingCache object at 0x7b47bfc06d20&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7b47bfc06240&gt;
+
+    def test_band_rescue_returns_rows_missing_from_canonical_pool(fresh_cache, monkeypatch):
+        """The production defect (2026-07-28): slug 'london' scraped at the canonical
+        £100-5000 returned a top-slice whose cheapest row was £1,800, so a £1,742 cap
+        band-filtered to ZERO and the user was told there was nothing in budget — while the
+        same slug scraped AT £1,742 returns listings from £1,250 up."""
+        calls = {"n": 0, "params": []}
+    
+        expensive = [
+            {"Address": "Monarch Square, London, SW11",
+             "URL": "https://www.onthemarket.com/details/900/", "Price": "£3,700 pcm",
+             "Room_Type_Category": "2 bed Flat"},
+            {"Address": "Albert Road, St. Mary Cray BR5",
+             "URL": "https://www.onthemarket.com/details/901/", "Price": "£1,800 pcm",
+             "Room_Type_Category": "1 bed Flat"},
+        ]
+        in_budget = [
+            {"Address": "Burnley Road, London NW10",
+             "URL": "https://www.onthemarket.com/details/902/", "Price": "£1,300 pcm",
+             "Room_Type_Category": "1 bed Flat"},
+            {"Address": "Clapham High Street, Clapham SW4",
+             "URL": "https://www.onthemarket.com/details/903/", "Price": "£1,250 pcm",
+             "Room_Type_Category": "Studio"},
+        ]
+    
+        def fake_scrape(slug, radius, min_price, max_price, limit, min_bedrooms, max_bedrooms):
+            calls["n"] += 1
+            calls["params"].append(dict(min_price=min_price, max_price=max_price))
+            # The real site returns a price-unsorted top-slice for the wide sweep, and the
+            # actual budget stock only when the price cap is pushed down to the site.
+            return list(expensive) if max_price &gt;= on_demand.CANONICAL_MAX_PRICE else list(in_budget)
+    
+        monkeypatch.setattr(om_mod, "find_rich_onthemarket", fake_scrape)
+    
+        res = on_demand.get_listings("London", 0, 2, 100, 1742)
+&gt;       assert [r["URL"] for r in res["rows"]] == [
+            "https://www.onthemarket.com/details/902/",
+            "https://www.onthemarket.com/details/903/",
+        ]
+E       AssertionError: assert [] == ['https://www...details/903/']
+E         
+E         Right contains 2 more items, first extra item: 'https://www.onthemarket.com/details/902/'
+E         Use -v to get more diff
+
+tests/test_on_demand_canonical_cache.py:166: AssertionError</failure></testcase><testcase classname="tests.test_on_demand_canonical_cache" name="test_cache_only_hit_even_when_band_filter_empty" time="0.008" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_in_band_studio_excluded_under_bed_constraint" time="0.001" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_cache_only_miss_when_absent" time="0.006" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_query_key_is_slug_only_and_versioned" time="0.001" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_same_slug_two_bands_scrapes_once" time="0.009" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_old_format_key_is_ignored_triggers_scrape" time="0.011" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_in_band_expensive_row_excluded_under_price_cap" time="0.001" /><testcase classname="tests.test_on_demand_canonical_cache" name="test_in_band_keeps_rows_missing_fields_when_unconstrained" time="0.001" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_searx_backend_failure_retries_without_leaking_exception" time="0.009" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_get_search_snippets_empty_result_is_truthful_and_query_is_redacted" time="0.002" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_llm_and_support_modules_redact_raw_values" time="0.407" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_provider_zoopla_and_area_compare_errors_are_redacted" time="0.422" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_search_rag_fallback_logs_only_exception_types" time="8.847" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_on_demand_redacts_slug_and_exception_text" time="0.002" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_commute_tools_do_not_log_addresses_or_exception_text" time="0.003" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_searx_empty_constrained_search_retries_without_engines" time="0.001" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_transport_and_place_reference_redact_inputs_and_errors" time="0.005" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_transport_cost_exception_output_is_redacted" time="0.002" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_safety_and_weather_do_not_log_location_or_exception_text" time="0.001" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_area_recommendation_logs_redact_destination_and_errors" time="0.006" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_searx_two_empty_attempts_return_honest_empty_result" time="0.001" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_memory_and_mcp_exception_sinks_are_redacted" time="0.019" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_poi_tool_does_not_log_address_coordinates_query_or_exception" time="0.002" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_generate_map_route_redacts_address_and_provider_errors" time="2.955" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_property_details_request_fields_are_not_logged" time="0.003" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_maps_service_logs_only_safe_metadata" time="0.002" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_area_stats_redacts_slug_and_database_error" time="0.002" /><testcase classname="tests.test_sensitive_logging_and_web_fallback" name="test_global_tool_exception_boundary_redacts_output_and_logs" time="0.006" /><testcase classname="tests.test_fix_data_schema_drift" name="test_live_next_data_tag_allows_extra_attributes_and_attribute_order" time="0.001" /><testcase classname="tests.test_fix_data_schema_drift" name="test_find_rich_honest_empty_does_not_raise" time="0.007" /><testcase classname="tests.test_fix_data_schema_drift" name="test_empty_results_is_honest_empty" time="0.001" /><testcase classname="tests.test_fix_data_schema_drift" name="test_missing_next_data_tag_is_drift" time="0.001" /><testcase classname="tests.test_fix_data_schema_drift" name="test_on_demand_drift_serves_stale_cache" time="0.009" /><testcase classname="tests.test_fix_data_schema_drift" name="test_populated_results_returned" time="0.001" /><testcase classname="tests.test_fix_data_schema_drift" name="test_missing_results_path_is_drift" time="0.001" /><testcase classname="tests.test_fix_data_schema_drift" name="test_unparseable_json_is_drift" time="0.001" /><testcase classname="tests.test_fix_data_schema_drift" name="test_find_rich_propagates_drift_on_first_page" time="1.185" /><testcase classname="tests.test_fix_data_schema_drift" name="test_search_failure_logs_do_not_echo_slug_or_exception" time="0.002"><failure message="core.scraping.otm_access.OTMSourceError: OnTheMarket unavailable: robots_path_not_allowed">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x7b4740cfff80&gt;
+caplog = &lt;_pytest.logging.LogCaptureFixture object at 0x7b4740cff8f0&gt;
+capsys = &lt;_pytest.capture.CaptureFixture object at 0x7b4740cff4a0&gt;
+
+    def test_search_failure_logs_do_not_echo_slug_or_exception(monkeypatch, caplog, capsys):
+        sentinel = "PRIVATE-AREA-AND-ERROR-9137"
+    
+        class _Sess:
+            headers = {}
+    
+            def get(self, *args, **kwargs):
+                raise om.requests.RequestException(sentinel)
+    
+        monkeypatch.setattr(om, "_new_session", lambda: _Sess())
+        with caplog.at_level("WARNING", logger=om.__name__):
+&gt;           assert om.find_rich_onthemarket(sentinel, 1.0, 500, 2000) == []
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_fix_data_schema_drift.py:122: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/core/scraping/onthemarket.py:486: in find_rich_onthemarket
+    resp = otm_access.get(session, SEARCH_URL.format(slug=slug), params=page_params,
+app/core/scraping/otm_access.py:162: in get
+    validate_url(url, params)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+url = 'https://www.onthemarket.com/to-rent/property/PRIVATE-AREA-AND-ERROR-9137/'
+params = {}
+
+    def validate_url(url: str, params=None) -&gt; None:
+        # Operators may advance this timestamp only after checking the origin's
+        # robots.txt. Expiry is fail-closed; a source request never refreshes it by
+        # surprise. This makes an old allowlist a bounded permission, not forever.
+        try:
+            verified = datetime.fromisoformat(os.getenv("OTM_ROBOTS_VERIFIED_AT", ROBOTS_VERIFIED_AT))
+            if verified.tzinfo is None:
+                verified = verified.replace(tzinfo=timezone.utc)
+            age = time.time() - verified.timestamp()
+            if age &lt; -300 or age &gt; ROBOTS_POLICY_TTL_SECONDS:
+                raise ValueError("expired")
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise OTMSourceError("unavailable", "robots_policy_requires_verification") from exc
+        parts = urlsplit(url)
+        if (parts.scheme != "https" or parts.netloc != "www.onthemarket.com"
+                or parts.fragment or parts.username or parts.password):
+            raise OTMSourceError("unavailable", "url_not_allowed")
+        area = bool(re.fullmatch(r"/to-rent/property/[a-z0-9]+(?:-[a-z0-9]+)*/", parts.path))
+        detail = bool(re.fullmatch(r"/details/[a-zA-Z0-9_-]+/", parts.path))
+        pairs = parse_qsl(parts.query, keep_blank_values=True)
+        pairs.extend((params or {}).items())
+        if not (area or detail) or (detail and pairs):
+&gt;           raise OTMSourceError("unavailable", "robots_path_not_allowed")
+E           core.scraping.otm_access.OTMSourceError: OnTheMarket unavailable: robots_path_not_allowed
+
+app/core/scraping/otm_access.py:84: OTMSourceError</failure></testcase></testsuite></testsuites>

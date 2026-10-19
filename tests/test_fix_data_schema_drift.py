@@ -119,7 +119,8 @@ def test_search_failure_logs_do_not_echo_slug_or_exception(monkeypatch, caplog, 
 
     monkeypatch.setattr(om, "_new_session", lambda: _Sess())
     with caplog.at_level("WARNING", logger=om.__name__):
-        assert om.find_rich_onthemarket(sentinel, 1.0, 500, 2000) == []
+        with pytest.raises(om.otm_access.OTMSourceError):
+            om.find_rich_onthemarket(sentinel, 1.0, 500, 2000)
 
     rendered_logs = "\n".join(record.getMessage() for record in caplog.records)
     captured = capsys.readouterr()

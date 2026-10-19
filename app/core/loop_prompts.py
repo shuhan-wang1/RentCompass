@@ -74,7 +74,7 @@ UNTRUSTED_DATA_MARKER = "LOW-PRIVILEGE UNTRUSTED DATA"
 # selected.  ``PromptSpec.content_hash`` records the rendered bytes for each finite locale
 # variant, so prompt-only A/Bs remain attributable even when the application SHA is shared.
 FC_LOOP_SYSTEM_PROMPT_ID = "uk_rent.fc_loop.system"
-FC_LOOP_SYSTEM_PROMPT_VERSION = "2.1.0"
+FC_LOOP_SYSTEM_PROMPT_VERSION = "2.2.0"
 
 # 2.6 soft criteria gate. The gate itself lives inside search_properties; the harness
 # re-injects criteria_gate_shown / confirmed. The model must know the confirmed
@@ -214,6 +214,29 @@ GROUNDED_CITATION_RULE = (
     "user knows where the figures came from."
 )
 
+EVIDENCE_SCOPE_RULE = (
+    'EVIDENCE SCOPE: Bind every fact to the tool that actually checked it. A nearby-places '
+    'query using listing coordinates does not mean a separate safety query used those coordinates. '
+    'Report each reference_point, actual radius, source/date and executed_types. Missing or failed '
+    'school/GP categories are unverified, never a finding of no schools/GPs. A cached listing price '
+    'is a historical recorded price; availability and current asking rent require live_verified=true. '
+    'A lift alone does not establish wheelchair access. Keep a journey time and fare bound to the '
+    'same itinerary; station-pair fares do not prove a door-to-door route price. Explicit requests '
+    'for single fares, Travelcards or line status require get_transport_info, even without a housing search. '
+    'Use the structured rent ceiling and monthly_total_budget separately. Use office_days_per_week '
+    'rather than assuming five working days. Unknown Watford Junction zonal coverage stays unknown. '
+    'If a mixed request has one unknown commute condition, still answer successful weather, details '
+    'and transport subquestions. You can draft an agent enquiry, but cannot contact agents or '
+    'schedule monitoring unless an available tool actually performs that action. '
+    'When ask_user offers choices, supply options with label and value; asking does not select one.'
+    ' Use a complete natural-language reply as each option value, not opaque codes. '
+    'The product has a heart/Save control on listing cards and a Saved view for favourites. '
+    'When asked to save a listing, explain these existing controls; no agent tool can click '
+    'them for the user. Do not send users to an external property portal to use our favourites. '
+    'When summarising current requirements, the latest structured accumulated criteria '
+    'override older chat turns, including office_days_per_week and monthly_total_budget.'
+)
+
 _BEHAVIOUR_RULES_HEADER = "=== BEHAVIOUR RULES (standing instructions) ==="
 _BEHAVIOUR_RULES_FOOTER = "=== END BEHAVIOUR RULES ==="
 
@@ -229,6 +252,7 @@ _BEHAVIOUR_RULES_ORDER = (
     DEICTIC_RULE,
     SAFETY_TARGET_RULE,
     GROUNDED_CITATION_RULE,
+    EVIDENCE_SCOPE_RULE,
     NO_FABRICATION_RULE,
     MEMORY_CONFIRM_RULE,
     NO_EMOJI_RULE,
@@ -312,6 +336,8 @@ def render_accumulated_criteria(criteria: Optional[Dict[str, Any]]) -> str:
         return ""
     body: List[str] = []
     for key, value in criteria.items():
+        if key in ('constraint_sources', 'plans', 'criteria_repair_provenance') or key.startswith('_'):
+            continue
         if value in (None, "", [], {}, ()):
             continue
         body.append(f"{key}: {value}")

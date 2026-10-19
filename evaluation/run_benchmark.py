@@ -2763,10 +2763,19 @@ async def _run_all(args) -> int:
           f"trust={summary['commit_trust']}")
     for w in summary["identity_warnings"]:
         print(f"[identity] WARNING: {w}")
+    from evaluation.verdicts import benchmark_verdict
+    summary["assessment"] = benchmark_verdict(
+        summary, min_pass_rate=getattr(args, "min_pass_rate", 1.0),
+    )
+    summary["exit_code"] = summary["assessment"]["exit_code"]
+    (out / "summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8",
+    )
+    print("assessment=" + json.dumps(summary["assessment"], sort_keys=True))
     # Cleanup temp state (keep results).
     with contextlib.suppress(Exception):
         shutil.rmtree(state_root, ignore_errors=True)
-    return 0
+    return summary["exit_code"]
 
 
 def _runresult_from_dict(d: dict) -> RunResult:
@@ -2814,6 +2823,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=None, help="cap number of cases")
     p.add_argument("--category", default=None, help="filter by category (e.g. A_retrieval or A)")
     p.add_argument("--repeat", type=int, default=1, help="repeat each case K times")
+    p.add_argument("--min-pass-rate", type=float, default=1.0,
+                   help="minimum scored-case pass fraction (default 1.0); offline scores are diagnostic")
     grp = p.add_mutually_exclusive_group()
     grp.add_argument("--offline", action="store_true", help="fake-LLM, unbilled (default)")
     grp.add_argument("--live", action="store_true", help="real DeepSeek (PAID)")
@@ -2849,6 +2860,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if not 0.0 <= args.min_pass_rate <= 1.0:
+        raise SystemExit("--min-pass-rate must be between 0 and 1")
     if not args.live:
         args.offline = True  # default to offline/unbilled
     if args.live and args.offline:

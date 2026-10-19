@@ -1,0 +1,14 @@
+[
+  {
+    "case": "provider-failure-has-honest-typed-error",
+    "passed": true
+  },
+  {
+    "case": "failure-is-not-a-slow-success-claim",
+    "passed": true
+  },
+  {
+    "case": "same-browser-conversation-recovers",
+    "passed": true
+  }
+]

@@ -298,13 +298,13 @@ POI_TYPES = {
 # ═══════════════════════════════════════════════════════════════════
 
 _ACCESSIBILITY_HARD_CUE_RE = re.compile(
-    r"\b(?:must(?: have| be)?|need(?:s|ed)?|require(?:s|d|ment)?|essential|"
+    r"\b(?:must(?: have| be)?|need(?:s|ed)?|require(?:s|d|ments?)?|essential|"
     r"non[- ]negotiable|depend(?:s|ent)? on)\b|必须|需要|必需|刚需|不可缺少|离不开|行动不便",
     re.IGNORECASE,
 )
 _ACCESSIBILITY_SOFT_CUE_RE = re.compile(
-    r"\b(?:would like|prefer(?:red)?|ideally|nice to have|if possible|"
-    r"not essential|optional)\b|希望|最好|偏好|优先|可以的话|可有可无",
+    r"\b(?:would like|prefer(?:red|ence|ences)?|ideally|nice to have|if possible|"
+    r"not essential|not (?:a )?requirement|not required|isn.t (?:essential|required)|would be (?:lovely|nice)|optional)\b|希望|最好|偏好|优先|可以的话|可有可无",
     re.IGNORECASE,
 )
 _ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
@@ -314,7 +314,7 @@ _ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
 )
 _ACCESSIBILITY_PROPERTY_CONTEXT_RE = re.compile(
     r"\b(?:flat|apartment|property|home|house|room|accommodation|listing|building|"
-    r"entrance|bathroom)\b|房源|房子|住房|住宅|公寓|房间|楼房|大楼|入口|卫生间|浴室",
+    r"entrance|entry|front door|doors?|doorways?|corridors?|bathroom)\b|\broute in\s*$|房源|房子|住房|住宅|公寓|房间|楼房|大楼|入口|卫生间|浴室",
     re.IGNORECASE,
 )
 _ACCESSIBILITY_TRANSIT_CONTEXT_RE = re.compile(
@@ -346,6 +346,15 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
     source = str(message or "")
     if not source:
         return {"required": [], "soft": []}
+    from core.constraint_updates import is_criteria_consultation
+    if is_criteria_consultation(source):
+        from core.constraint_updates import explicit_feature_requirement_text
+        source = explicit_feature_requirement_text(source)
+        if not source:
+            return {"required": [], "soft": []}
+    from core.constraint_updates import is_hypothetical
+    if is_hypothetical(source) and not re.search(r'\b(?:must|need|require)\b|必须|需要|要求', source, re.I):
+        return {"required": [], "soft": []}
     from core.tools.search_properties import _accessibility_feature_mentions
 
     mentions = _accessibility_feature_mentions(source)
@@ -360,6 +369,9 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
     soft: list[str] = []
 
     for feature, start, end in mentions:
+        from core.constraint_updates import mention_is_requirement
+        if not mention_is_requirement(source, start, end):
+            continue
         left = max(source.rfind(mark, 0, start) for mark in (";", "；", ",", "，", ".", "。", "!", "！", "?", "？"))
         right_candidates = [source.find(mark, end) for mark in
                             (";", "；", ",", "，", ".", "。", "!", "！", "?", "？")]
@@ -373,7 +385,8 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
         if (_ACCESSIBILITY_TRANSIT_CONTEXT_RE.search(clause)
                 and not _ACCESSIBILITY_PROPERTY_CONTEXT_RE.search(clause)):
             continue
-        if fact_question and not search_action:
+        if _ACCESSIBILITY_FACT_QUESTION_RE.search(clause) and not re.search(
+                r"\b(?:find|search|show|want|looking for)\b|找房|找一|搜索|筛选|想要", clause, re.I):
             continue
 
         # "I don't need a lift" is neither hard nor soft. "Not essential; would
@@ -382,7 +395,7 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
                 and not _ACCESSIBILITY_SOFT_CUE_RE.search(clause)):
             continue
         hard_clause = re.sub(
-            r"\b(?:not essential|not required|no need for)\b|不需要|不必|无需|可有可无",
+            r"\b(?:not essential|not required|isn.t essential|isn.t required|not (?:a )?requirement|no need for)\b|不需要|不必|无需|可有可无",
             "", clause, flags=re.IGNORECASE)
         has_hard = bool(_ACCESSIBILITY_HARD_CUE_RE.search(hard_clause))
         has_soft = bool(_ACCESSIBILITY_SOFT_CUE_RE.search(clause))
@@ -397,6 +410,14 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
     """Extract user preferences from a message. Returns updated prefs dict."""
     prefs = {k: list(v) for k, v in current_prefs.items()}
     user_lower = user_message.lower()
+    from core.tools.search_properties import _accessibility_feature_mentions
+    from core.constraint_updates import clause_at
+    for feature, start, end in _accessibility_feature_mentions(user_message):
+        if re.search(r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|no longer|don.t need|optional|not required|not (?:a )?requirement|(?:is|would be) (?:a )?preference',
+                     clause_at(user_message, start, end), re.I):
+            for key in ('hard_preferences', 'required_amenities', 'soft_preferences'):
+                if key in prefs:
+                    prefs[key] = [value for value in prefs[key] if feature not in str(value).lower()]
 
     def _add(ptype, val):
         if val and val not in prefs.get(ptype, []):
@@ -417,13 +438,18 @@ def extract_preferences_from_message(user_message: str, current_prefs: dict) -> 
         'balcony': ['balcony', 'terrace'], 'concierge': ['concierge', '24/7', 'reception'],
     }
     for amenity, keywords in amenity_patterns.items():
-        if any(kw in user_lower for kw in keywords):
-            strong = any(w in user_lower for w in ['must', 'need', 'require', 'essential'])
-            if strong:
-                _add('required_amenities', amenity)
-                _add('hard_preferences', f"Must have {amenity}")
-            else:
-                _add('soft_preferences', f"Would like {amenity}")
+        for keyword in keywords:
+            for match in re.finditer(re.escape(keyword), user_message, re.I):
+                from core.constraint_updates import mention_is_requirement
+                if not mention_is_requirement(user_message, match.start(), match.end()):
+                    continue
+                clause = clause_at(user_message, match.start(), match.end())
+                hard_clause = re.sub(r"not essential|isn.t essential|not required|isn.t required|不必|可有可无", '', clause, flags=re.I)
+                if _ACCESSIBILITY_HARD_CUE_RE.search(hard_clause):
+                    _add('required_amenities', amenity)
+                    _add('hard_preferences', f"Must have {amenity}")
+                else:
+                    _add('soft_preferences', f"Would like {amenity}")
 
     # Accessibility gets feature-specific strength handling rather than the global
     # substring test above. A required accessible feature is recorded both as an
@@ -497,6 +523,8 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
     # None (the tool sends it under no_commute, where destination merely mirrors the
     # search area) must NOT be overridden by the legacy fallback below.
     cd = new_criteria.get('commute_destination')
+    if 'commute_destination' in new_criteria and cd is None and new_criteria.get('no_commute'):
+        result['commute_destination'] = None
     if cd:
         result['commute_destination'] = cd
         result['destination'] = cd
@@ -518,6 +546,8 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
         result['bedrooms'] = bd
     elif isinstance(bd, str) and bd.isdigit():
         result['bedrooms'] = int(bd)
+    if 'bedrooms_minimum' in new_criteria:
+        result['bedrooms_minimum'] = bool(new_criteria['bedrooms_minimum'])
 
     # room_type: canonical single value ('studio'|'ensuite'|'shared'); a None/blank
     # never clobbers a previously-recorded choice.
@@ -544,7 +574,8 @@ def update_search_criteria(accumulated: dict, new_criteria: dict) -> dict:
         if tag and tag not in result.get('property_features', []):
             result.setdefault('property_features', []).append(tag)
 
-    return result
+    from core.constraint_updates import protect_confirmed_criteria
+    return protect_confirmed_criteria(result, accumulated)
 
 
 def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) -> dict:
@@ -560,6 +591,27 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     """
     if not current_message:
         return accumulated
+    from core.constraint_updates import housing_update_text
+    housing_message = housing_update_text(current_message)
+    if not housing_message:
+        from core.constraint_updates import explicit_feature_requirement_text
+        reaffirmed = explicit_feature_requirement_text(current_message)
+        if not reaffirmed:
+            return accumulated
+        amended = _apply_explicit_criteria_updates(accumulated, reaffirmed)
+        result = dict(accumulated)
+        sources = dict(accumulated.get('constraint_sources') or {})
+        changed = False
+        for field in ('property_features', 'soft_preferences'):
+            if amended.get(field) != accumulated.get(field):
+                result[field] = amended.get(field)
+                if field in (amended.get('constraint_sources') or {}):
+                    sources[field] = amended['constraint_sources'][field]
+                changed = True
+        if changed:
+            result['constraint_sources'] = sources
+            return result
+        return accumulated
     from core.tools.search_properties import (
         _extract_budget, _extract_commute_minutes, _extract_no_commute,
         _extract_room_type, _extract_area, _extract_budget_clear,
@@ -567,12 +619,37 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     from core.scraping.on_demand import extract_destination_from_text
     from core.tenancy_reference import monthly_from_weekly
 
-    result = dict(accumulated)
+    from core.constraint_updates import scoped_update_text, date_is_cleared, mention_is_requirement
+    original_message = current_message
+    current_message = housing_message
+    result = {k: (list(v) if isinstance(v, list) else v) for k, v in accumulated.items()}
     changed = False
+    plans = accumulated.get('plans') or {}
+    if re.search(r'回到|切回|return to|switch back|back to', current_message, re.I):
+        for name, plan in plans.items():
+            if name.lower() in current_message.lower() and isinstance(plan, dict):
+                result.update({k: v for k, v in plan.items() if k != 'plans'})
+                changed = True
+                break
 
     amount, period = _extract_budget(current_message)
+    from core.tools.search_properties import _extract_total_budget
+    total_budget = _extract_total_budget(current_message)
+    if total_budget is not None and total_budget != result.get('monthly_total_budget'):
+        result['monthly_total_budget'] = total_budget
+        changed = True
+    from core.constraint_updates import extract_office_days, extract_max_changes
+    days = extract_office_days(current_message)
+    if days is not None and result.get('office_days_per_week') != days:
+        result['office_days_per_week'] = days
+        changed = True
+    max_changes = extract_max_changes(current_message)
+    if max_changes is not None and result.get('max_changes') != max_changes:
+        result['max_changes'] = max_changes
+        changed = True
     if amount:
-        monthly = int(round(monthly_from_weekly(amount))) if period == 'week' else int(amount)
+        monthly = monthly_from_weekly(amount) if period == 'week' else amount
+        result['budget_period'] = 'month'
         if result.get('max_budget') != monthly:
             result['max_budget'] = monthly
             changed = True
@@ -582,7 +659,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
         # None sticks for the rest of the turn because both update_search_criteria and the
         # param-injection only ever OVERRIDE max_budget on a *truthy* value, so a cleared
         # None can never be re-populated from a stale accumulated/extracted value.
-        if result.get('max_budget') is not None:
+        if 'max_budget' not in result or result.get('max_budget') is not None:
             result['max_budget'] = None
             changed = True
 
@@ -590,10 +667,21 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # Persist that distinction before the LLM plans tools so all calls see the
     # same destination (not only search_properties, which also scans raw text).
     message_destination = extract_destination_from_text(current_message)
-    known_destination = _known_destination_address(current_message)
+    # A labelled workplace is followed by the destination. "My office" itself
+    # is never an address, even if a generic place classifier accepts it.
+    labelled_destination = re.search(
+        r'\b(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)\s+(?:is\s+)?(?:next to|near|at|to|in)\s+([^.!?;\n]{2,90})',
+        current_message, re.I)
+    if labelled_destination:
+        named = re.split(r'\s+and\s+|,\s*(?:and|where|i\b)|\s+for\s+|\s+(?:arriving|leaving|departing)\b|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)', labelled_destination.group(1), maxsplit=1, flags=re.I)[0].strip()
+        if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I):
+            message_destination = {'address': named, 'name': named}
+    known_destination = _known_destination_address(named if labelled_destination else current_message)
     if message_destination or known_destination:
         destination = (
-            (message_destination or {}).get('address')
+            (known_destination if (labelled_destination or (known_destination and re.search(
+                r'\b(?:university|college|school)\b', known_destination, re.I))) else None)
+            or (message_destination or {}).get('address')
             or (message_destination or {}).get('name')
             or known_destination
         )
@@ -609,9 +697,10 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # "switch to Bristol", "actually London", a bare/Chinese city name) overrides the
     # frozen accumulated area even with no search verb. _extract_area returns None for
     # nonsense areas (Mars/火星/Wakanda), so those never clobber the current area.
-    new_area = _extract_area(current_message)
-    # Do not also save the contextual workplace as a chosen home area. A distinct
-    # explicit residence ("work near Canary Wharf, live in Camden") is preserved.
+    from core.tools.search_properties import _extract_areas
+    new_areas = _extract_areas(current_message)
+    new_area = new_areas[0] if new_areas else _extract_area(current_message)
+    # A curated contextual workplace does not also become a home area.
     def _place_key(value):
         return re.sub(r'[^a-z0-9]+', ' ', str(value or '').lower()).strip()
 
@@ -621,15 +710,23 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     } if message_destination else set()
     destination_context.discard('')
     contextual_work_area = _place_key(new_area) in destination_context
-    if new_area and not contextual_work_area and result.get('area') != new_area:
-        result['area'] = new_area
-        changed = True
+    if new_area and not contextual_work_area:
+        new_areas = new_areas or [new_area]
+        if result.get('area') != new_area or result.get('areas') != new_areas:
+            result['area'], result['areas'] = new_area, new_areas
+            changed = True
 
     # Room type stated this turn (e.g. answering the soft gate "我要ensuite") folds into
     # the accumulated criteria even without any find/search verb.
     room_type = _extract_room_type(current_message)
     if room_type and result.get('room_type') != room_type:
         result['room_type'] = room_type
+        changed = True
+
+    from core.tools.search_properties import _extract_bedrooms, _accessibility_feature_mentions
+    beds = _extract_bedrooms(current_message)
+    if beds:
+        result['bedrooms'], result['bedrooms_minimum'] = beds[0], beds[0] != beds[1]
         changed = True
 
     minutes = _extract_commute_minutes(current_message)
@@ -644,9 +741,10 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # the next search never re-applies a filter the user has disowned.
     ml = current_message.lower()
     names_destination = _known_destination_address(ml) is not None
-    commute_intent = bool(minutes) or names_destination or bool(message_destination)
+    commute_intent = (bool(minutes) or names_destination or bool(message_destination)
+                      or bool(days) or bool(re.search(r'\bi do commute\b|我(?:确实|需要)?通勤', current_message, re.I)))
     if commute_intent:
-        if result.get('no_commute'):
+        if result.get('no_commute') is not False:
             result['no_commute'] = False
             changed = True
     elif _extract_no_commute(current_message):
@@ -665,6 +763,9 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     try:
         from core.tools.search_properties import _extract_move_in_date
         move_in = _extract_move_in_date(current_message)
+        if date_is_cleared(current_message):
+            result['move_in_date'] = None
+            changed = True
         if move_in and result.get('move_in_date') != move_in:
             result['move_in_date'] = move_in
             changed = True
@@ -675,19 +776,84 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str) ->
     # user's wording makes them hard. Explicitly soft wording stays in
     # soft_preferences and therefore cannot exclude an otherwise suitable listing.
     accessibility = _extract_accessibility_requirements(current_message)
+    from core.constraint_updates import cat_permission_update
+    pet_requirement = cat_permission_update(current_message)
+    if pet_requirement is True:
+        existing = result.setdefault('property_features', [])
+        if 'cats allowed' not in existing:
+            existing.append('cats allowed')
+            changed = True
+    elif pet_requirement is False:
+        existing = result.get('property_features') or []
+        filtered = [feature for feature in existing if feature != 'cats allowed']
+        if filtered != existing:
+            result['property_features'] = filtered
+            changed = True
+    from core.constraint_updates import precise_property_requirements
+    precise_required = list(accessibility['required'])
+    if pet_requirement is True:
+        precise_required.append('cats allowed')
+    for feature in precise_property_requirements(current_message, precise_required):
+        existing = result.setdefault('property_features', [])
+        if feature not in existing:
+            existing.append(feature)
+            changed = True
+    for feature, start, end in _accessibility_feature_mentions(current_message):
+        from core.constraint_updates import clause_at
+        clause = clause_at(current_message, start, end)
+        if re.search(r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|no longer|don.t need|optional|not required|not (?:a )?requirement|(?:is|would be) (?:a )?preference', clause, re.I):
+            for key in ('property_features', 'soft_preferences'):
+                previous = result.get(key) or []
+                result[key] = [v for v in previous if feature not in str(v)]
+                changed = changed or previous != result[key]
     for feature in accessibility["required"]:
+        # Promotion to hard removes the same feature's historical soft copy.
+        previous_soft = result.get('soft_preferences') or []
+        result['soft_preferences'] = [v for v in previous_soft if feature not in str(v).lower()]
+        changed = changed or previous_soft != result['soft_preferences']
         existing = result.setdefault('property_features', [])
         if feature not in existing:
             existing.append(feature)
             changed = True
     for feature in accessibility["soft"]:
+        if feature in result.get("property_features", []):
+            continue
         text = f"Would like {feature}"
         existing = result.setdefault('soft_preferences', [])
         if text not in existing:
             existing.append(text)
             changed = True
 
-    return result if changed else accumulated
+    from core.constraint_updates import cleared_fields
+    for field in cleared_fields(current_message):
+        result[field] = [] if field == 'property_features' else None
+        if field == 'area':
+            result['areas'] = []
+        if field == 'commute_destination':
+            result['destination'] = None
+        if field == 'bedrooms':
+            result['bedrooms_minimum'] = False
+        changed = True
+
+    if changed:
+        sources = dict(result.get('constraint_sources') or {})
+        for key in ('area', 'areas', 'max_budget', 'budget_period', 'monthly_total_budget', 'office_days_per_week',
+                    'bedrooms', 'bedrooms_minimum', 'room_type', 'commute_destination', 'destination',
+                    'move_in_date', 'max_travel_time', 'max_changes', 'no_commute', 'property_features',
+                    'soft_preferences'):
+            if key in result and (key not in accumulated or result.get(key) != accumulated.get(key)):
+                sources[key] = {'source': 'user_message', 'value': result.get(key), 'text': current_message[:800]}
+        result['constraint_sources'] = sources
+        if current_message != original_message and accumulated.get('area'):
+            plans = dict(result.get('plans') or {})
+            plans[accumulated['area']] = {k: v for k, v in accumulated.items() if k != 'plans'}
+            if result.get('area'):
+                plans[result['area']] = {k: v for k, v in result.items() if k != 'plans'}
+            result['plans'] = plans
+    if changed:
+        from core.criteria_contract import synchronize_monthly_budget_alias
+        return synchronize_monthly_budget_alias(result)
+    return accumulated
 
 
 def get_preferences_context(prefs: dict) -> str:
@@ -713,6 +879,8 @@ def build_context_info(extracted_context: dict, tool_name: str, prefs: dict) -> 
                 "Do NOT reference specific property listings from previous searches.")
 
     info = []
+    if extracted_context.get('current_date'):
+        info.append(f"Current date in Europe/London: {extracted_context['current_date']}")
     prefs_ctx = get_preferences_context(prefs)
     if prefs_ctx:
         info.append("=== USER PREFERENCES ===")
@@ -1113,8 +1281,10 @@ SECURITY_DIRECTIVE = """=== SECURITY & SCOPE — non-negotiable; this OVERRIDES 
 def _make_extract_preferences_node():
     """Create the extract_preferences node."""
     def extract_preferences_node(state: AgentState) -> dict:
+        from core.constraint_updates import housing_update_text
+        current_msg = (state.get("extracted_context") or {}).get("current_message") or ""
         prefs = extract_preferences_from_message(
-            state["user_query"],
+            housing_update_text(current_msg),
             state["user_preferences"]
         )
         update = {"user_preferences": prefs}
@@ -1122,7 +1292,6 @@ def _make_extract_preferences_node():
         # criteria every turn — even when this turn does not trigger a re-search — so
         # a standalone "my budget is now £1000" overrides the old max and propagates
         # to the next search and to budget_status labelling.
-        current_msg = (state.get("extracted_context") or {}).get("current_message") or ""
         accumulated = state.get("accumulated_search_criteria") or {}
         new_accumulated = _apply_explicit_criteria_updates(accumulated, current_msg)
         if new_accumulated is not accumulated:
@@ -2776,6 +2945,7 @@ def _build_refinement_decision(previous, spec, refined) -> dict:
 # Common student/work destinations -> geocodable full addresses. Short tokens like
 # "UCL" alone often fail geocoding, so we expand them to full addresses.
 _KNOWN_DESTINATIONS = {
+    'bank station': 'Bank station, London',
     'university college london': 'University College London, Gower Street, London WC1E 6BT',
     'ucl': 'University College London, Gower Street, London WC1E 6BT',
     'london school of economics': 'London School of Economics, Houghton Street, London WC2A 2AE',
@@ -2802,7 +2972,7 @@ def _known_destination_address(text: str) -> str | None:
     query = str(text or '').lower()
     for keyword, address in _KNOWN_DESTINATIONS.items():
         if keyword.isascii():
-            if re.search(rf'(?<!\w){re.escape(keyword)}(?!\w)', query):
+            if re.search(rf'(?<![a-z0-9_]){re.escape(keyword)}(?![a-z0-9_])', query):
                 return address
         elif keyword in query:
             return address
@@ -3631,10 +3801,20 @@ def _make_execute_tool_node(tool_registry):
                     raw_data = {'property_info': observation}
 
             elif tool_name == 'search_properties':
+                # The deterministic user update already ran for this turn. Preserve its
+                # confirmed slots even if a model issues several narrower tool calls.
+                from core.constraint_updates import protect_confirmed_criteria
+                protected = protect_confirmed_criteria({}, accumulated)
+                parameter_names = {'max_travel_time': 'max_commute_time',
+                                   'soft_preferences': 'accumulated_preferences'}
+                for key, value in protected.items():
+                    if key in (accumulated.get('constraint_sources') or {}) or key in ('area', 'areas', 'commute_destination', 'destination'):
+                        parameter = parameter_names.get(key, key)
+                        if parameter != 'destination' and parameter not in ('constraint_sources', 'plans'):
+                            params[parameter] = value
                 # Raw current message so the tool can let an explicit budget/commute in
                 # THIS message override the accumulated values injected just below.
-                if not params.get('current_message'):
-                    params['current_message'] = extracted_context.get('current_message', '')
+                params['current_message'] = extracted_context.get('current_message', '')
                 # A hard filter the model invented (a plausible budget, a bedroom count,
                 # "shared") narrows the search to nothing while staying invisible to the
                 # user. Drop anything not traceable to the accumulated criteria or to this
@@ -3657,7 +3837,13 @@ def _make_execute_tool_node(tool_registry):
                 # node; re-extract here as defence-in-depth so a freshly-stated area can
                 # never be overridden by a stale injected one.
                 from core.tools.search_properties import _extract_area
-                _switched_area = _extract_area(params.get('current_message') or '')
+                from core.tools.search_properties import _extract_areas
+                _switched_areas = _extract_areas(params.get('current_message') or '')
+                _switched_area = (_switched_areas[0] if len(_switched_areas) == 1 else
+                                  None if len(_switched_areas) > 1 else
+                                  _extract_area(params.get('current_message') or ''))
+                if _switched_areas:
+                    params['area'], params['areas'] = _switched_areas[0], _switched_areas
                 if _switched_area:
                     params['area'] = _switched_area
                 # Inject accumulated criteria under the new area/commute keys.
@@ -3680,6 +3866,7 @@ def _make_execute_tool_node(tool_registry):
                     params['no_commute'] = True
                 if accumulated.get('bedrooms') is not None and not params.get('bedrooms'):
                     params['bedrooms'] = accumulated['bedrooms']
+                params['bedrooms_minimum'] = bool(params.get('bedrooms_minimum', accumulated.get('bedrooms_minimum')))
                 if accumulated.get('room_type') and not params.get('room_type'):
                     params['room_type'] = accumulated['room_type']
                 # Desired move-in date persists across turns like room_type; a date
@@ -4693,8 +4880,9 @@ def _make_critic_node():
 # (normalizeCriteria in unified-ui.html reads exactly these, canonical + legacy names).
 # Internal bookkeeping such as criteria_gate_shown stays server-side.
 _FRONTEND_CRITERIA_KEYS = (
-    'area', 'areas', 'commute_destination', 'no_commute', 'bedrooms',
+    'area', 'areas', 'commute_destination', 'no_commute', 'bedrooms', 'bedrooms_minimum',
     'budget_period', 'room_type', 'move_in_date', 'max_budget', 'max_travel_time',
+    'destination', 'monthly_total_budget', 'office_days_per_week', 'max_changes',
 )
 
 
@@ -4814,6 +5002,18 @@ def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
         for row in panel_recs:
             row.setdefault("candidate_status", "excluded")
             row.setdefault("status_reason", "does not meet a declared hard condition")
+    from core.candidate_validation import candidate_key
+    states_by_key = {s['candidate_key']: s for s in validation.get('statuses') or [] if s.get('candidate_key')}
+    panel_recs = [dict(row) for row in panel_recs]
+    for row in panel_recs:
+        status = states_by_key.get(candidate_key(row))
+        if status:
+            row['qualification'] = {
+                'status': status['status'], 'reasons': status.get('reasons') or [],
+                'unknown_reasons': status.get('unknown_reasons') or [],
+                'constraints': validation.get('constraints') or {}, 'source': 'structured_listing',
+            }
+        row['budget_basis'] = (validation.get('constraints') or {}).get('max_budget_monthly')
     tool_data = {
         "recommendations": panel_recs,
         "eligible_recommendations": recs,
@@ -4825,6 +5025,12 @@ def _structured_search_tool_data(search_payload, prefs, commute_evidence=None):
         "unverified_candidates": unverified,
         "commute_evidence": search_payload.get("commute_evidence", []),
     }
+    # Keep source health distinct from candidate eligibility through every output path.
+    for key in ('source_status', 'source_errors', 'source_message', 'retrieval_complete',
+                'retrieval_outcome', 'data_source', 'partial', 'area_status', 'searched_areas',
+                'incomplete_areas', 'unsearched_areas'):
+        if key in search_payload:
+            tool_data[key] = search_payload[key]
     return search_payload, tool_data
 
 
@@ -4873,6 +5079,8 @@ def _make_format_output_node():
         memory_language = _reply_language_from_ctx(
             ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
         has_other_result = tool_name != "remember" or is_loop_synthesis
+        from core.constraint_updates import independent_memory_task
+        has_other_result = has_other_result or independent_memory_task(ec.get('current_message') or state.get('user_query') or '')
 
         def _apply_memory_contract(text: str) -> str:
             return compose_memory_contract_response(
@@ -4880,7 +5088,7 @@ def _make_format_output_node():
                 preserve_content=has_other_result)
 
         if tool_name == "remember" and not is_loop_synthesis:
-            response = _apply_memory_contract("")
+            response = _apply_memory_contract(response if has_other_result else "")
             return {"final_response": _sanitize_final_response(response),
                     "response_type": "answer", "tool_data": {}}
 
@@ -4942,8 +5150,7 @@ def _make_format_output_node():
                 # ('missing_area') from the soft recommended-criteria gate ('soft_criteria').
                 if raw_data.get('clarification_kind') is not None:
                     tool_data['clarification_kind'] = raw_data.get('clarification_kind')
-            elif (raw_data.get('status') in _SEARCH_RESULT_STATUSES
-                    and _search_payload_has_candidates(raw_data)):
+            elif raw_data.get('status') in (_SEARCH_RESULT_STATUSES | {'no_results'}):
                 raw_data, tool_data = _structured_search_tool_data(
                     raw_data, prefs, commute_evidence=state.get('commute_evidence') or [])
                 recs = tool_data['eligible_recommendations']
@@ -4956,7 +5163,10 @@ def _make_format_output_node():
                 validation = raw_data.get('candidate_validation') or {}
                 requires_status = bool(validation.get('excluded') or validation.get('unknown')
                                         or (validation.get('constraints') or {}).get('max_commute_minutes'))
-                if (raw_data.get('status') == 'no_exact_match_but_similar'
+                response_type = 'search'
+                if raw_data.get('status') == 'no_results':
+                    response = raw_data.get('message') or 'No matches in the retrieved data.'
+                elif (raw_data.get('status') == 'no_exact_match_but_similar'
                         and not raw_data.get('over_budget_alternatives')):
                     # A similar-recall row failed no stated constraint (the exact-match pool
                     # was empty), so render its own honest lead and keep its price rather

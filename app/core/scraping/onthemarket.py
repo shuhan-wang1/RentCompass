@@ -6,10 +6,9 @@ Added 2026-07 after OpenRent put its listing pages behind an AWS WAF
 with a bot-challenge interstitial), which killed the plain-requests OpenRent
 path. OnTheMarket is the replacement primary source:
 
-  * robots.txt permits the /to-rent/property/<area>/ listing pages (it even
-    names ClaudeBot explicitly with Crawl-delay: 1). Only property-type facets
-    (*/flat/, */apartment/, *-bed-*) and agent/image paths are disallowed — we
-    deliberately use only the general "property" area path.
+  * robots.txt permits plain /to-rent/property/<area>/ listing pages, but denies
+    price/bedroom/radius/type query facets. We use only the plain area path and
+    permitted pagination, then apply budget and bedroom filters locally.
   * The search page is a Next.js app whose server-rendered <script
     id="__NEXT_DATA__"> JSON already carries a fully structured list of ~30
     listings per page: price, address, title, property type, beds/baths, exact
@@ -26,7 +25,6 @@ import html
 import json
 import math
 import time
-import random
 import logging
 import sqlite3
 import threading
@@ -35,6 +33,7 @@ from pathlib import Path
 from datetime import date
 
 from .normalize import normalize_property
+from . import otm_access
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +41,10 @@ BASE = "https://www.onthemarket.com"
 SEARCH_URL = BASE + "/to-rent/property/{slug}/"
 
 _HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
+    "User-Agent": otm_access.user_agent(),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-GB,en;q=0.9",
 }
-
-# robots.txt asks for Crawl-delay: 1 — stay above that.
-_CRAWL_DELAY = (1.2, 1.8)
 
 # Shared, process-wide rate limiter for OTM detail-page GETs. The enrichment layer
 # fires several fetch_listing_details calls CONCURRENTLY (executor threads); a
@@ -243,10 +236,7 @@ def _extract_available_from(data: dict, description_text: str = "", *,
     prose and the enriched description text ("available from <date>")."""
     candidates: list[str] = []
     prop = None
-    try:
-        prop = data["props"]["initialReduxState"]["property"]
-    except (KeyError, TypeError):
-        prop = None
+    prop = (_redux_state(data) or {}).get("property")
     if isinstance(prop, dict):
         # lettingDetails.items (primary), plus a couple of same-intent candidate keys
         # so a schema tweak still yields the date.
@@ -283,10 +273,11 @@ def _extract_available_from(data: dict, description_text: str = "", *,
 def _new_session() -> requests.Session:
     s = requests.Session()
     s.headers.update(_HEADERS)
+    s.headers["User-Agent"] = otm_access.user_agent()
     return s
 
 
-class OTMSchemaDriftError(RuntimeError):
+class OTMSchemaDriftError(otm_access.OTMSourceError):
     """A 200 OnTheMarket page no longer matches the expected __NEXT_DATA__ shape:
     the script tag is absent, its JSON does not parse, or the
     props.initialReduxState.results.list path is missing.
@@ -296,6 +287,34 @@ class OTMSchemaDriftError(RuntimeError):
     silently return 0 listings — apart from an honest "0 results for this search".
     on_demand treats the raised error as a scrape FAILURE, composing with its
     stale-if-error path instead of caching a bogus empty result."""
+
+    def __init__(self, reason="unexpected_next_data_shape", *, partial_rows=None):
+        super().__init__("schema_error", "unexpected_next_data_shape", partial_rows=partial_rows)
+
+
+def _redux_state(data: dict) -> dict | None:
+    props = data.get("props") if isinstance(data, dict) else None
+    if not isinstance(props, dict):
+        return None
+    # Current Next.js pages nest the state beneath pageProps. Older saved pages
+    # used props.initialReduxState; both are supported without guessing a tree.
+    for parent in (props.get("pageProps"), props):
+        if isinstance(parent, dict) and isinstance(parent.get("initialReduxState"), dict):
+            return parent["initialReduxState"]
+    return None
+
+
+def _next_data(page: str) -> dict:
+    match = _NEXT_DATA_RE.search(page)
+    if not match:
+        raise OTMSchemaDriftError()
+    try:
+        data = json.loads(match.group(1))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise OTMSchemaDriftError() from exc
+    if not isinstance(data, dict):
+        raise OTMSchemaDriftError()
+    return data
 
 
 def _extract_listings(html: str) -> list[dict]:
@@ -317,14 +336,28 @@ def _extract_listings(html: str) -> list[dict]:
             e.lineno, e.colno)
         raise OTMSchemaDriftError(f"__NEXT_DATA__ JSON parse failed: {e}") from e
     try:
-        listings = data["props"]["initialReduxState"]["results"]["list"]
+        listings = _redux_state(data)["results"]["list"]
     except (KeyError, TypeError) as e:
         logger.error(
             "onthemarket.schema_drift reason=missing_results_path error_type=%s",
             type(e).__name__)
         raise OTMSchemaDriftError(f"results.list path missing: {e}") from e
-    # Path present but null/empty -> honest empty (a real 0-result search).
+    if listings is not None and (not isinstance(listings, list)
+                                 or any(not isinstance(item, dict) for item in listings)):
+        raise OTMSchemaDriftError()
+    # The historical shape permits null for an explicit empty list.
     return listings or []
+
+
+class OTMHarvest(list):
+    """List-compatible bounded harvest, with completeness and sampling evidence."""
+
+    def __init__(self, rows=(), *, pages_fetched=0, rows_sampled=0, exhausted=False):
+        super().__init__(rows)
+        self.coverage = {"scope": "bounded_area_sample", "exhaustive": bool(exhausted),
+                         "pages_fetched": pages_fetched, "rows_sampled": rows_sampled,
+                         "filtering": "local_price_and_bedrooms"}
+        self.retrieval_complete = True
 
 
 def _pcm_price(raw) -> str:
@@ -426,54 +459,50 @@ def find_rich_onthemarket(
     limit: int | None = None,
     min_bedrooms: int = 0,
     max_bedrooms: int = 2,
+    *,
+    budget_s: float | None = None,
 ) -> list[dict]:
     """Search OnTheMarket for an area `slug`, paging as needed, and return
     normalised rich-schema dicts. `radius` is accepted for signature parity with
     the other sources but OnTheMarket area pages already cover a local radius."""
     session = _new_session()
-    params = {
-        "min-price": min_price,
-        "max-price": max_price,
-        "min-bedrooms": min_bedrooms,
-        "max-bedrooms": max_bedrooms,
-        "view": "grid",
-    }
-
+    deadline = None if budget_s is None else time.monotonic() + max(0, float(budget_s))
     results: list[dict] = []
     seen_urls: set[str] = set()
     want = limit if limit else 30
     page = 1
-    max_pages = 4  # politeness cap
-    while len(results) < want and page <= max_pages:
-        page_params = dict(params)
+    max_pages = min(4, max(1, int(os.getenv("OTM_SEARCH_MAX_PAGES", "2"))))
+    sampled = 0
+    pages_fetched = 0
+    exhausted = False
+    # The limit caps the sampled inventory, not a promise that a local budget
+    # filter can cover all stock in the area. Never send robots-disallowed facets.
+    while sampled < want and page <= max_pages:
+        page_params = {}
         if page > 1:
             page_params["page-number"] = page
         try:
-            resp = session.get(SEARCH_URL.format(slug=slug), params=page_params,
-                               timeout=25)
-            resp.raise_for_status()
-        except requests.RequestException as e:
+            remaining = 25 if deadline is None else min(25, deadline - time.monotonic())
+            if remaining <= 0:
+                raise otm_access.OTMSourceError("unavailable", "request_budget_exhausted")
+            resp = otm_access.get(session, SEARCH_URL.format(slug=slug), params=page_params,
+                                  timeout=remaining)
+            pages_fetched += 1
+        except otm_access.OTMSourceError as e:
             logger.warning(
                 "onthemarket.search_failed page=%d error_type=%s",
                 page, type(e).__name__)
-            break
+            e.partial_rows = list(results)
+            raise
 
         try:
             listings = _extract_listings(resp.text)
         except OTMSchemaDriftError:
-            # Drift on the FIRST page (nothing gathered yet) is a hard scrape
-            # failure: propagate so on_demand does stale-if-error rather than
-            # treating a broken page as an honest empty. If we already have rows
-            # from earlier pages, keep those and stop paging.
-            if not results:
-                raise
-            logger.warning(
-                "onthemarket.schema_drift_partial page=%d retained_count=%d",
-                page, len(results))
-            break
+            raise OTMSchemaDriftError(partial_rows=results)
         if not listings:
             if page == 1:
                 logger.info("onthemarket.empty_first_page")
+            exhausted = True
             break
 
         new_this_page = 0
@@ -484,19 +513,23 @@ def find_rich_onthemarket(
                 continue
             if url:
                 seen_urls.add(url)
-            results.append(normalize_property(mapped))
+            normalized = normalize_property(mapped)
+            sampled += 1
+            # Import lazily: on_demand imports this module to resolve areas.
+            from .on_demand import _in_band
+            if _in_band(normalized, min_bedrooms, max_bedrooms, min_price, max_price):
+                results.append(normalized)
             new_this_page += 1
-            if len(results) >= want:
+            if sampled >= want:
                 break
 
         if new_this_page == 0:
             break
         page += 1
-        if len(results) < want and page <= max_pages:
-            time.sleep(random.uniform(*_CRAWL_DELAY))
 
     logger.info("onthemarket.search_complete result_count=%d", len(results))
-    return results
+    return OTMHarvest(results, pages_fetched=pages_fetched, rows_sampled=sampled,
+                      exhausted=exhausted)
 
 
 # ==========================================================================
@@ -640,10 +673,7 @@ def _find_description(data: dict) -> str | None:
     (initialReduxState.property.description, then .summary) and falls back to a
     defensive scan for a description-ish string that is NOT fee/tenancy
     boilerplate, so a schema change still yields the real prose."""
-    try:
-        redux = data["props"]["initialReduxState"]
-    except (KeyError, TypeError):
-        return None
+    redux = _redux_state(data)
     if not isinstance(redux, dict):
         return None
 
@@ -690,6 +720,8 @@ def fetch_listing_description(
     fetch_listing_details can read availability without a second round-trip). Its
     own return value stays the description string for every existing caller.
     Cache-first; never raises."""
+    _DESC_THREAD_LOCAL.last_result = {"source_status": "unavailable", "retrieval_complete": False,
+                                      "cached": False, "stale": False}
     if not isinstance(url, str):
         return None
     url = url.strip()
@@ -726,6 +758,10 @@ def fetch_listing_description(
                 # Fresh hit; an empty string is a real "known no-description".
                 logger.debug(
                     "onthemarket.detail_cache_hit description_chars=%d", len(text))
+                _DESC_THREAD_LOCAL.last_result = {
+                    "source_status": "cached", "retrieval_complete": True, "cached": True,
+                    "stale": False, "fetched_at": fetched,
+                    "cache_age_seconds": max(0, round(time.time() - fetched, 2))}
                 return text
 
     # --- live fetch (cache miss / stale / forced) -----------------------------
@@ -745,11 +781,11 @@ def fetch_listing_description(
         if timeout <= 0:
             logger.info("onthemarket.detail_budget_exhausted_before_request")
             return None
-        resp = session.get(url, timeout=timeout)
-        resp.raise_for_status()
-    except requests.RequestException as e:
+        resp = otm_access.get(session, url, timeout=timeout)
+    except otm_access.OTMSourceError as e:
         logger.warning(
             "onthemarket.detail_fetch_failed error_type=%s", type(e).__name__)
+        _DESC_THREAD_LOCAL.last_result.update(source_status=e.source_status, source_error=e.as_dict())
         return None
     except Exception as e:
         logger.warning(
@@ -757,17 +793,18 @@ def fetch_listing_description(
         return None
 
     try:
-        m = _NEXT_DATA_RE.search(resp.text)
-        if not m:
-            logger.warning("onthemarket.detail_missing_next_data")
-            return None
-        data = json.loads(m.group(1))
+        data = _next_data(resp.text)
+        if not isinstance((_redux_state(data) or {}).get("property"), dict):
+            raise OTMSchemaDriftError()
         raw = _find_description(data)
         text = _strip_html(raw)[:DESC_MAX_CHARS]
         available_from = _extract_available_from(data, text)
         # Cache the outcome either way: "" records a real page with no prose /
         # unknown availability so we don't keep re-fetching it for a week.
         cache.set(url, text, available_from)
+        _DESC_THREAD_LOCAL.last_result = {"source_status": "ok", "retrieval_complete": True,
+                                          "cached": False, "stale": False,
+                                          "fetched_at": time.time(), "cache_age_seconds": 0}
         if text:
             logger.info(
                 "onthemarket.detail_fetched description_chars=%d has_availability=%s",
@@ -778,6 +815,8 @@ def fetch_listing_description(
     except Exception as e:
         logger.warning(
             "onthemarket.detail_parse_error error_type=%s", type(e).__name__)
+        _DESC_THREAD_LOCAL.last_result.update(
+            source_status="schema_error", source_error={"reason": "unexpected_next_data_shape"})
         return None
 
 
@@ -801,16 +840,22 @@ def fetch_listing_details(
     if not isinstance(url, str) or not url.strip():
         return None
     url = url.strip()
+    _DESC_THREAD_LOCAL.last_result = {}
     description = fetch_listing_description(
         url, budget_s=budget_s, force_refresh=force_refresh
     )
     available_from = ""
+    evidence = dict(getattr(_DESC_THREAD_LOCAL, "last_result", {}) or {})
     try:
         hit = _desc_cache().get(url)
         if hit is not None:
             available_from = hit[1] or ""
+            if description is None:
+                description = hit[0] or ""
+                evidence.update(cached=True, stale=True, fetched_at=hit[2],
+                                cache_age_seconds=max(0, round(time.time() - hit[2], 2)))
     except Exception as e:  # a broken cache must never fail the details call
         logger.warning(
             "onthemarket.availability_cache_read_failed error_type=%s",
             type(e).__name__)
-    return {"description": description or "", "available_from": available_from}
+    return {"description": description or "", "available_from": available_from, **evidence}

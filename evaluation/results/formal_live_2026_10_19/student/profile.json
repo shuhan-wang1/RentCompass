@@ -1,0 +1,13 @@
+{
+  "persona": "中文国际学生；UCL Bloomsbury；预算有限；开始时可独居或与一位同学整租，澄清后选择两人整租两居",
+  "interface_language": "zh",
+  "user_id": "b2c519cca16b46a593ea484ba63fd1c0",
+  "conversation_id": "8d6e107e605d4b81af03463111d59118",
+  "requested_move_in": "2026-11-15",
+  "max_commute_minutes": 30,
+  "individual_budget_gbp_per_week": 250,
+  "whole_home_budget_gbp_per_week": 500,
+  "whole_home_budget_gbp_per_month": 2166.67,
+  "chat_count_completed": 2,
+  "browser_closed": true
+}

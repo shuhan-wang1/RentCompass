@@ -202,6 +202,21 @@ async def compare_or_rank_areas_impl(
         }
 
     notes: list = []
+    evidence_scope = {
+        'rent_sample': 'mixed_cached_listings',
+        'room_type_filtered': False,
+        'bedrooms_filtered': False,
+        'budget_match_basis': 'rent_only',
+        'freshness_basis': 'cache_fetch_time',
+        'live_verified': False,
+        'commute_scope': 'area_reference_point',
+    }
+    notes.append(_L(is_zh,
+        'Rent statistics cover mixed cached listings without room-type or bedroom filtering. '
+        'Budget match measures rent only. Freshness is the cache age, not verification of '
+        'current price or availability. Area commute times do not verify individual homes.',
+        '租金统计包含混合房型的缓存样本，未按整租/合租或卧室数筛选；预算匹配比例只计算租金。'
+        '新鲜度是缓存年龄，并未核实当前价格或可租状态；区域通勤时间不能证明逐套房源符合要求。'))
 
     # ---- 1) Candidate areas (with commute) -------------------------------
     candidates = await _resolve_candidates(city, destination, max_commute_minutes, candidate_areas)
@@ -210,7 +225,8 @@ async def compare_or_rank_areas_impl(
             "success": True,
             "status": "no_data",
             "areas": [],
-            "explanation_notes": [_L(
+            "evidence_scope": evidence_scope,
+            "explanation_notes": notes + [_L(
                 is_zh,
                 "I couldn't assemble candidate areas to compare. Try naming a city, a "
                 "commute destination, or specific areas.",
@@ -354,6 +370,7 @@ async def compare_or_rank_areas_impl(
         "explanation_notes": notes,
         "priorities": priorities,
         "weights": weights,
+        "evidence_scope": evidence_scope,
     }
 
 

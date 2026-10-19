@@ -1,0 +1,101 @@
+[
+  {
+    "persona": "student",
+    "before": {
+      "time": 1792386230.785766,
+      "phase": "student-before-restart",
+      "counts": {
+        "conversations": 3,
+        "messages": 28,
+        "favorites": 1,
+        "turns": 14,
+        "turn_snapshots": 13
+      },
+      "jobs": [
+        [
+          "completed",
+          15
+        ]
+      ]
+    },
+    "after": {
+      "phase": "student-after-restart",
+      "time": 1792386247.2850645,
+      "counts": {
+        "conversations": 3,
+        "messages": 28,
+        "favorites": 1,
+        "turns": 14,
+        "turn_snapshots": 13
+      }
+    },
+    "same_counts": true,
+    "seconds_between_checks": 16.5
+  },
+  {
+    "persona": "professional",
+    "before": {
+      "phase": "professional-before-restart",
+      "time": 1792387254.9431334,
+      "counts": {
+        "conversations": 10,
+        "messages": 104,
+        "favorites": 5,
+        "turns": 52,
+        "turn_snapshots": 51
+      },
+      "jobs": [
+        [
+          "completed",
+          57
+        ]
+      ]
+    },
+    "after": {
+      "phase": "professional-after-restart",
+      "time": 1792387272.6190188,
+      "counts": {
+        "conversations": 10,
+        "messages": 104,
+        "favorites": 5,
+        "turns": 52,
+        "turn_snapshots": 51
+      }
+    },
+    "same_counts": true,
+    "seconds_between_checks": 17.68
+  },
+  {
+    "persona": "family",
+    "before": {
+      "phase": "family-before-restart",
+      "time": 1792387761.213047,
+      "counts": {
+        "conversations": 12,
+        "messages": 138,
+        "favorites": 6,
+        "turns": 69,
+        "turn_snapshots": 68
+      },
+      "jobs": [
+        [
+          "completed",
+          76
+        ]
+      ]
+    },
+    "after": {
+      "phase": "family-after-restart",
+      "time": 1792387773.8933246,
+      "counts": {
+        "conversations": 12,
+        "messages": 138,
+        "favorites": 6,
+        "turns": 69,
+        "turn_snapshots": 68
+      }
+    },
+    "same_counts": true,
+    "seconds_between_checks": 12.68
+  }
+]

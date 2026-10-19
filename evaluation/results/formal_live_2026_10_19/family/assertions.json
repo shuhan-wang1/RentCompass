@@ -1,0 +1,48 @@
+{
+  "actual_chat_count": 3,
+  "browser_closed": true,
+  "all_response_status_200": true,
+  "no_search_recommendations_returned": true,
+  "turn1_dual_area_preserved": false,
+  "turn3_dual_area_echo_preserved": true,
+  "turn3_area_in_persisted_view_state": false,
+  "refresh_area_value": "",
+  "refresh_budget_2700": true,
+  "refresh_bedrooms_2": true,
+  "refresh_whole_property": true,
+  "refresh_date_preserved": true,
+  "readonly_criteria_unchanged": true,
+  "advice_refuses_suitability_without_evidence": true,
+  "advice_marks_missing_evidence_unknown": true,
+  "persisted_message_count": 6,
+  "final_stepfree_hard_value": [
+    "step-free"
+  ],
+  "final_soft_preferences": [
+    "Would like lift",
+    "Would like step-free"
+  ],
+  "long_title_actions_initial_center_hit": {
+    "Compare side by side": false,
+    "Branch": false,
+    "Rename": false,
+    "Delete": false
+  },
+  "keyboard_compare_visible_after_tab": true,
+  "page_width_equals_mobile_width": true,
+  "live_housing_success_certification": "blocked by captured CloudFront 403; not certified",
+  "turn_identifiers": [
+    {
+      "turn_id": "3a2d28b70d0b48099428d4658ce43978",
+      "request_id": "f235d076615a4647afc7bf07cd4d4b4c"
+    },
+    {
+      "turn_id": "750328f02f1f440c9d91507a695b50f6",
+      "request_id": "6d4c7f545d074874883d7ba8b9228327"
+    },
+    {
+      "turn_id": "a21aff1cbaef4e0898f542452b006bd6",
+      "request_id": "6b0963c03f074905b5bbb1fbcd8d32d8"
+    }
+  ]
+}

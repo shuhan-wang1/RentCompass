@@ -1,0 +1,52 @@
+{
+  "status": 200,
+  "body": {
+    "favorites": [
+      {
+        "address": "The Vale, London",
+        "availability_status": "",
+        "available_from": "",
+        "budget_basis": null,
+        "budget_status": "",
+        "explanation": "Studio to rent in The Vale, London",
+        "geo_location": "51.5064537, -0.2518171",
+        "images": [
+          "https://media.onthemarket.com/properties/14672649/1644772157/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/14672649/1644772157/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/14672649/1644772157/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/14672649/1644772157/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/14672649/1644772157/image-4-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": true,
+        "price": "£1300/month",
+        "qualification": {
+          "constraints": {
+            "areas": [],
+            "bedrooms": 0,
+            "bedrooms_minimum": false,
+            "commute_destination": "My office",
+            "max_budget_monthly": null,
+            "max_commute_minutes": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "property_features": [],
+            "room_type": "whole"
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "bedroom count is not verified"
+          ]
+        },
+        "rank": 1,
+        "saved_at": "2026-10-19T08:59:08.674Z",
+        "source_conversation_title": "I'm moving to London on my own and need …",
+        "travel_time": "",
+        "url": "https://www.onthemarket.com/details/14672649/",
+        "user_id": "06dc55bfc4554339ad34a1e2672f9644"
+      }
+    ]
+  }
+}

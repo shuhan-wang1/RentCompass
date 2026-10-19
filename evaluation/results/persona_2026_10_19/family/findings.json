@@ -1,0 +1,740 @@
+{
+  "persona": "有儿童、行动无障碍需求、宠物及长期反复核实的家庭",
+  "date": "2026-10-19",
+  "origin": "http://127.0.0.1:15004",
+  "method": "独立黑盒，只读公开brief/snapshot/测试工具及产品交付页面、本测试者证据；未读源码或其他画像输出；无子agent。",
+  "counts": {
+    "actual_chat_submissions_to_api_alex": 26,
+    "chat_status_200": 26,
+    "form_submissions_separate": 1,
+    "conversations_with_chat": 3,
+    "simulated_sessions_with_chat": 4,
+    "read_only_return_session": 1,
+    "longest_chat_sequence_in_one_conversation": 12,
+    "real_service_restarts_in_this_persona": 1,
+    "rejected_cross_identity_api_reads_executed": 0
+  },
+  "duration": {
+    "first_chat_start_london": "2026-10-19T06:23:08.811404+01:00",
+    "last_chat_end_london": "2026-10-19T06:36:23.922063+01:00",
+    "chat_elapsed_seconds": 795.111,
+    "browser_checks_ended_london": "2026-10-19T06:37:19+01:00",
+    "note": "准备及排队等待不计入；加速模拟，不代表真实数周。25次helper发送有时延，手机键盘一次未单独测时；所有聊天提交均走实际服务，不能仅凭黑盒确认每次都调用了模型。"
+  },
+  "conversations": [
+    {
+      "label": "C1",
+      "id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+      "chat_turns": 12,
+      "profile": "primary",
+      "title": "Family A — Watford verification",
+      "extra_form_turns": 1
+    },
+    {
+      "label": "C2",
+      "id": "f5c8dc3380da4ea4a1724880954dd715",
+      "chat_turns": 8,
+      "profile": "primary",
+      "title": "Family A — High Barnet backup"
+    },
+    {
+      "label": "C3",
+      "id": "205170a28d5245538f14f9f421cb7e89",
+      "chat_turns": 6,
+      "profile": "independent, fictional registered account",
+      "title": "Family B — Manchester"
+    }
+  ],
+  "findings": [
+    {
+      "id": "FAM-01",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "硬性卧室数在中文初始请求及需求变更中丢失",
+      "expected": "至少3/4间独立卧室应作为硬过滤；不够卧室的房源应排除，不能只标其他特征未知。",
+      "actual": "T01 bedrooms=null，返回Studio、1卧、2卧及合租；T16“不要改变3卧”后bedrooms=null，3+进入soft_preferences；T19明确六人四卧后仍为null，返回10套Studio至2卧。T22英文3 bedrooms能够正常得到bedrooms=3，说明并非全程无法筛选。",
+      "steps": [
+        "新对话发送T01原文，检查响应search_criteria.bedrooms及卡片卧室。",
+        "在High Barnet备用对话按T13–T16执行，观察3卧变软偏好及字段清空。",
+        "发送T19原文（本备用对话六人、至少4卧、£4000/月、2026-12-01），检查仍出现Studio和1至2卧。"
+      ],
+      "exact_inputs": [
+        "我们一家五口在找长期整租：两位家长、5岁和9岁两个孩子、使用轮椅的奶奶。先看 Watford，最多每月£2500，不含账单，至少3间独立卧室，不是3张床。希望2026年11月15日入住。入口到卧室和卫生间必须没有台阶；未来可能带一只室内猫。请先找候选，并清楚区分房源写明、需要核实和你不知道的条件。请用中文。",
+        "请用中文继续。我刚才只是问“如果楼里有电梯”该怎样评估故障，不是要求每套必须有电梯。只要全程无台阶、卧室和可用卫生间同层，平层独立入口也可以。请去掉“必须有电梯”这一新增条件，不要改变3卧、£3200/月、High Barnet、猫和入住日；并给出看房时测门宽、门槛、回转空间及卫生间的核实清单。",
+        "只修改这个 High Barnet 备用对话：另一位成年亲属也将同住，所以变成六人，至少4间独立卧室，预算上限£4000/月，入住日期改成2026-12-01。猫和无台阶要求不变。Watford主方案的3卧、£2800和11月15日不要跟着改。请重新找备用房，并明确标出卧室是否真的有4间。"
+      ],
+      "evidence": [
+        {
+          "turn": 1,
+          "file": "s1-c1-t01.json",
+          "screenshot": "s1-c1-t01.png",
+          "turn_id": "6952ee949ae94d26a2b17baca5a7787a",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:22.791404+01:00"
+        },
+        {
+          "turn": 16,
+          "file": "s3-c2-t16.json",
+          "screenshot": "s3-c2-t16.png",
+          "turn_id": "3972bdbda56b412fa1711e451074b0ec",
+          "request_id": "c4d69bd01e0f4b9a99049c840cd6e48c",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:35.249832+01:00"
+        },
+        {
+          "turn": 19,
+          "file": "s3-c2-t19.json",
+          "screenshot": "s3-c2-t19.png",
+          "turn_id": "49e5cb52e92546f08b5b5d525ea39ac2",
+          "request_id": "162fee8cdcd44046905c831244e7b680",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:47.762418+01:00"
+        },
+        {
+          "turn": 22,
+          "file": "s4-c3-t22.json",
+          "screenshot": "s4-c3-t22.png",
+          "turn_id": "8e82ff34a5954deeb0e8ff749cb99304",
+          "request_id": "6892e0289224497b9e976d9a2d2d1956",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:34:53.268640+01:00"
+        }
+      ],
+      "reproducibility": "在两个对话中多次观察；未在新部署上重复整套测试。",
+      "impact": "五口或六口之家会反复筛到物理空间已不满足的房子，比较与收藏耗时，并可能遗漏真正适合的房源。",
+      "limits": "不推断内部解析实现；房源卧室仅以交付缓存字段核对，未访问外站核实。"
+    },
+    {
+      "id": "FAM-02",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "否定和假设被误当成筛选指令",
+      "expected": "“不接受合租/Studio”不能增加相应房型；询问“如果有电梯”不能变成每套必须有电梯，明确去掉后应移除。",
+      "actual": "T02纠正“单间和1至2卧合租，不能住我们一家”却筛选shared，只剩£625的一卧合租；T20“Studio和一卧不能满足六人四卧”却只保留3套Studio；T15假设电梯故障新增lift，T16明确去掉仍保留lift。",
+      "steps": [
+        "在T01结果后发送T02原文，观察room_type=shared及单间合租卡片。",
+        "T14得到Woodfall后按T15原文问“如果楼里有电梯”，再T16明确去掉；观察property_features一直含lift。",
+        "T19结果后发送T20原文，观察room_type=studio。"
+      ],
+      "exact_inputs": [
+        "结果里出现了单间和1至2卧合租，不能住我们一家。请纠正：只要 Watford 的整套3卧室或更多，月租不超过£2500；卧室数是硬条件。不要用便宜但卧室不足的房源补齐。无障碍、猫许可、11月15日入住仍需逐项核实。",
+        "For Woodfall Avenue, a 3-bedroom end-of-terrace house may have bedrooms upstairs. Can you prove there is a bedroom and accessible bathroom on the same step-free route, including doorway width, thresholds and turning space?\nIf a building has a lift, how should we assess a lift outage? Please give a practical viewing checklist and keep missing listing facts unknown.",
+        "请用中文继续。我刚才只是问“如果楼里有电梯”该怎样评估故障，不是要求每套必须有电梯。只要全程无台阶、卧室和可用卫生间同层，平层独立入口也可以。请去掉“必须有电梯”这一新增条件，不要改变3卧、£3200/月、High Barnet、猫和入住日；并给出看房时测门宽、门槛、回转空间及卫生间的核实清单。",
+        "请不要搜索，给这个备用对话一个简短的当前有效需求摘要，并明确当前列表里的 Studio 和一卧不能满足六人四卧需求。接下来几周我希望反复回来核查：你是否真的能自动每周检查新房源、价格和无障碍证据并通知我？只有实际支持且已经设置的能力才说已启用，否则给我手动复查流程。"
+      ],
+      "evidence": [
+        {
+          "turn": 2,
+          "file": "s1-c1-t02.json",
+          "screenshot": "s1-c1-t02.png",
+          "turn_id": "f8c1b6cb90524066b04d6230fefefbe2",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:31.879752+01:00"
+        },
+        {
+          "turn": 15,
+          "file": "s3-c2-t15-keyboard.json",
+          "screenshot": "s3-c2-t15-keyboard.png",
+          "turn_id": "7e7676176b04475f8172d146e4ec673e",
+          "request_id": "cb27b4d3176e45918ae3ccf650ee9943",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:12.429000+01:00"
+        },
+        {
+          "turn": 16,
+          "file": "s3-c2-t16.json",
+          "screenshot": "s3-c2-t16.png",
+          "turn_id": "3972bdbda56b412fa1711e451074b0ec",
+          "request_id": "c4d69bd01e0f4b9a99049c840cd6e48c",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:35.249832+01:00"
+        },
+        {
+          "turn": 20,
+          "file": "s3-c2-t20.json",
+          "screenshot": "s3-c2-t20.png",
+          "turn_id": "fcbe4e3968d144ab9f436c5e7dbcb723",
+          "request_id": "604e8726fcb045f99324a8c427d5f2ac",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:33:03.058672+01:00"
+        }
+      ],
+      "reproducibility": "合租、Studio、电梯三个语义场景均出现；一次独立运行。",
+      "impact": "家庭用于排除不合适房型、讨论核实方法时，系统反而缩小到不合格选项或添加不必要条件。",
+      "limits": "T15/T16没有声称房源有电梯；错误在需求与筛选，不是虚构房屋设施。"
+    },
+    {
+      "id": "FAM-03",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "聊天声称空结果或已改条件，搜索面板仍展示旧预算及旧合格标签",
+      "expected": "最新搜索结论、表单和当前搜索列表应同步；已被新硬预算淘汰的旧卡片不应仍显示Within Budget。",
+      "actual": "T03/T04声称修正整租三卧并无结果，右侧仍有一卧合租。T24降至£1500并回答空结果，表单仍£2000，当前Search标签下仍显示£1820 Granby Row和Within Budget；T25确认该标签错且£320超预算，但界面仍未更新。",
+      "steps": [
+        "按T21–T23建立Manchester三卧£2000搜索并收藏Granby Row。",
+        "发送T24原文，把预算严格降到£1500。",
+        "查看当前Search面板和预算框（不是仅查看Saved标签）；发送T25追问，观察仍未修正。"
+      ],
+      "exact_inputs": [
+        "Our budget is now a strict £1500 per month in Manchester. Keep at least 3 bedrooms and the same 2026-11-30 move-in date. We will not bring the dog, so remove any pet requirement. Wheelchair access remains essential. Refresh the search; please show an empty result if none meet the price and bedroom count rather than substituting smaller homes or higher prices.",
+        "Your text says no results at my new £1500 monthly limit, but the right-hand panel still shows Granby Row at £1820 with a Within Budget label. I need a clear decision record for my family. Is that saved or stale result actually within my current budget, and can you ensure the current search list and criteria reflect the latest limit without treating that property as eligible?"
+      ],
+      "evidence": [
+        {
+          "turn": 3,
+          "file": "s1-c1-t03.json",
+          "screenshot": "s1-c1-t03.png",
+          "turn_id": "3a18cf6ad70d4f898d9c722a9e9aca0d",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:42.630860+01:00"
+        },
+        {
+          "turn": 4,
+          "file": "s1-c1-t04.json",
+          "screenshot": "s1-c1-t04.png",
+          "turn_id": "55a1f48eb6d34837b566b46339a58349",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:24:19.902357+01:00"
+        },
+        {
+          "turn": 24,
+          "file": "s4-c3-t24.json",
+          "screenshot": "s4-c3-t24.png",
+          "turn_id": "4c9e7559b17f4fc9b04028429afc28b9",
+          "request_id": "857ba4258a784f2988c9fa2168c244fd",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:35:41.481444+01:00"
+        },
+        {
+          "turn": 25,
+          "file": "s4-c3-t25.json",
+          "screenshot": "s4-c3-t25.png",
+          "turn_id": "39e77c7d46aa4542b497201941d2ce04",
+          "request_id": "72d639c49a8c41f0a5d66ee0304ca327",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:36:00.493787+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s4-t24-stale-budget-ui.json",
+        "s4-c3-t24.png"
+      ],
+      "reproducibility": "C1和C3两个对话中观察到同类不一致。",
+      "impact": "依赖卡片比较的家庭可能误把超预算或卧室不足的旧房源作为当前合格候选；用户需手动判断哪部分可信。",
+      "limits": "未假定工具确实执行了助手所说的全部重搜；可直接确认的是交付文字、字段和列表不同步。"
+    },
+    {
+      "id": "FAM-04",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "入住日期在保留及跨方案变更时被误改为月初或旧月份",
+      "expected": "已确定2026-11-15应在简写11月15日时保留；只修改备用方案为2026-12-01时应使用新日期。",
+      "actual": "T02、T08提11月15日，响应条件却2026-11-01；T09完整ISO日期能恢复2026-11-15。T19明确备用改2026-12-01，同时说明主方案11月15日不变，备用条件却2026-11-01。",
+      "steps": [
+        "T01设定2026-11-15后发送T02或T08简写日期，查看日期框/响应条件。",
+        "T09用完整ISO纠正。",
+        "备用C2发送T19原文，检查实际move_in_date与新日期不符。"
+      ],
+      "exact_inputs": [
+        "结果里出现了单间和1至2卧合租，不能住我们一家。请纠正：只要 Watford 的整套3卧室或更多，月租不超过£2500；卧室数是硬条件。不要用便宜但卧室不足的房源补齐。无障碍、猫许可、11月15日入住仍需逐项核实。",
+        "需求有变化：月租上限提高到£2800，地点扩大为 Watford 和 High Barnet 两个区域。仍然至少3间独立卧室、五口人整租、11月15日入住、无台阶是硬条件，猫目前只是可能。请重新找，并分清已确认不合格与仍待核实的候选，不要把未知当满足。",
+        "表单日期现在显示11月1日，这是错的；请改回2026-11-15，并不要以后只因我省略年份就改成月初。另外我们决定一定带一只室内猫，所以宠物许可从偏好变成必须核实的硬条件。请更新这两个条件，保留£2800、Watford和High Barnet、3卧室及无台阶，并说明没有宠物证据的候选该怎样处理。",
+        "只修改这个 High Barnet 备用对话：另一位成年亲属也将同住，所以变成六人，至少4间独立卧室，预算上限£4000/月，入住日期改成2026-12-01。猫和无台阶要求不变。Watford主方案的3卧、£2800和11月15日不要跟着改。请重新找备用房，并明确标出卧室是否真的有4间。"
+      ],
+      "evidence": [
+        {
+          "turn": 2,
+          "file": "s1-c1-t02.json",
+          "screenshot": "s1-c1-t02.png",
+          "turn_id": "f8c1b6cb90524066b04d6230fefefbe2",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:31.879752+01:00"
+        },
+        {
+          "turn": 8,
+          "file": "s2-c1-t08.json",
+          "screenshot": "s2-c1-t08.png",
+          "turn_id": "5013d894d97d4c908aa33ef3e8c2d926",
+          "request_id": "d3837fb1e22c49b386da754340f98f90",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:26:57.100517+01:00"
+        },
+        {
+          "turn": 9,
+          "file": "s2-c1-t09.json",
+          "screenshot": "s2-c1-t09.png",
+          "turn_id": "f92eec6444164e019c17922c9d91f6b7",
+          "request_id": "eac91e9f64b342e0bb388075a2ff7312",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:27:24.468544+01:00"
+        },
+        {
+          "turn": 19,
+          "file": "s3-c2-t19.json",
+          "screenshot": "s3-c2-t19.png",
+          "turn_id": "49e5cb52e92546f08b5b5d525ea39ac2",
+          "request_id": "162fee8cdcd44046905c831244e7b680",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:47.762418+01:00"
+        }
+      ],
+      "reproducibility": "两个对话中出现；完整ISO单一日期在T09/T14/T22正常。",
+      "impact": "固定搬家日家庭会基于错误日期判断候选与安排搬家。",
+      "limits": "缓存房源本身没有已核实可入住日期；这是搜索需求记录错误，不是确认该日房源可用。"
+    },
+    {
+      "id": "FAM-05",
+      "classification": "product_defect",
+      "severity": "medium",
+      "priority": "P2",
+      "title": "咨询通勤和学校后原有搜索表单全部清空",
+      "expected": "咨询候选的通勤、学校和活动空间时，应保留已经确定的区域、预算、卧室和入住日。",
+      "actual": "T09条件为Watford/High Barnet、£2800、3卧、2026-11-15。T10咨询通勤和小学，响应search_criteria={}，表单区域、预算、卧室、日期均空；T11/T12继续保持空表单，但文字还能复述原需求。",
+      "steps": [
+        "在C1按T08/T09建立有效条件。",
+        "发送T10原文咨询通勤与学校。",
+        "检查s2-t10-cleared-form.json及T10右侧表单；继续T11比较价格，表单仍空。"
+      ],
+      "exact_inputs": [
+        "再加决策背景：我一周三天要到 King’s Cross，理想门到门40分钟以内；奶奶出行必须有无障碍路线。请比较目前两套的通勤与附近小学、儿童活动空间。你能实际核实哪些数据？如果不能联网，不要给具体分钟、学校名额或保证安全，请给我们可自己核查的步骤。"
+      ],
+      "evidence": [
+        {
+          "turn": 9,
+          "file": "s2-c1-t09.json",
+          "screenshot": "s2-c1-t09.png",
+          "turn_id": "f92eec6444164e019c17922c9d91f6b7",
+          "request_id": "eac91e9f64b342e0bb388075a2ff7312",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:27:24.468544+01:00"
+        },
+        {
+          "turn": 10,
+          "file": "s2-c1-t10.json",
+          "screenshot": "s2-c1-t10.png",
+          "turn_id": "363dddd8a0f34ead9df72a89aaeacd94",
+          "request_id": "c8c24596d8d443f89cadd56fcf5b4cfc",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:03.151447+01:00"
+        },
+        {
+          "turn": 11,
+          "file": "s2-c1-t11.json",
+          "screenshot": "s2-c1-t11.png",
+          "turn_id": "008f9838132c4febbbbc5ca793023d25",
+          "request_id": "b57d0759480a4a64ba9010fe4ed6d93a",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:15.167733+01:00"
+        },
+        {
+          "turn": 12,
+          "file": "s2-c1-t12.json",
+          "screenshot": "s2-c1-t12.png",
+          "turn_id": "c67fc01bfb834f3196b29f48bd587ab8",
+          "request_id": "4cda236dddd64597ab86e66504f3535f",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:40.654026+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s2-t10-cleared-form.json"
+      ],
+      "reproducibility": "一个触发场景，之后连续两轮仍为空；没有另起新对话复测。",
+      "impact": "长期反复核查候选会破坏可见的需求记录，增加重填与误点搜索的风险。",
+      "limits": "不推断后端持久条件是否全部丢失；文字语境仍保存，直接证据仅表单和交付响应字段。"
+    },
+    {
+      "id": "FAM-06",
+      "classification": "design_concern",
+      "severity": "medium",
+      "priority": "P2",
+      "title": "宠物硬条件缺少与其他必需条件一致的可见核实状态",
+      "expected": "猫许可升级为硬条件后，每套候选应明确展示猫许可已证实、已否定或未知，并能在反复查房中看出仍需核实。",
+      "actual": "T09明确一定带猫且升级硬条件，搜索答复和candidate_unknown_reasons只列step-free/lift/availability；T14仍未列猫许可。T16软偏好含indoor cat allowed，T19猫许可也仅在soft_preferences。T12文字能够记住猫已是硬条件，T18能在追问时说明未知。",
+      "steps": [
+        "发送T09原文把猫从偏好升级为硬条件。",
+        "比较T09候选未知项与T12交接中的硬条件。",
+        "在备用C2检查T14/T16/T19未知项及软偏好。"
+      ],
+      "exact_inputs": [
+        "表单日期现在显示11月1日，这是错的；请改回2026-11-15，并不要以后只因我省略年份就改成月初。另外我们决定一定带一只室内猫，所以宠物许可从偏好变成必须核实的硬条件。请更新这两个条件，保留£2800、Watford和High Barnet、3卧室及无台阶，并说明没有宠物证据的候选该怎样处理。",
+        "Keep the 3-bedroom minimum. Change this backup search to £3200 per calendar month, not £3200 per week, and only High Barnet. I am not authorising a smaller home or a different area. Please check whether the stored search criteria now match that correction and try again, preserving 2026-11-15 and the wheelchair and cat requirements."
+      ],
+      "evidence": [
+        {
+          "turn": 9,
+          "file": "s2-c1-t09.json",
+          "screenshot": "s2-c1-t09.png",
+          "turn_id": "f92eec6444164e019c17922c9d91f6b7",
+          "request_id": "eac91e9f64b342e0bb388075a2ff7312",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:27:24.468544+01:00"
+        },
+        {
+          "turn": 12,
+          "file": "s2-c1-t12.json",
+          "screenshot": "s2-c1-t12.png",
+          "turn_id": "c67fc01bfb834f3196b29f48bd587ab8",
+          "request_id": "4cda236dddd64597ab86e66504f3535f",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:40.654026+01:00"
+        },
+        {
+          "turn": 14,
+          "file": "s3-c2-t14.json",
+          "screenshot": "s3-c2-t14.png",
+          "turn_id": "9f45b0127a494afa861c26ec62174d9c",
+          "request_id": "2c978065098245b89fb29c0869a2c934",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:30:29.877157+01:00"
+        },
+        {
+          "turn": 16,
+          "file": "s3-c2-t16.json",
+          "screenshot": "s3-c2-t16.png",
+          "turn_id": "3972bdbda56b412fa1711e451074b0ec",
+          "request_id": "c4d69bd01e0f4b9a99049c840cd6e48c",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:35.249832+01:00"
+        },
+        {
+          "turn": 18,
+          "file": "s3-c2-t18.json",
+          "screenshot": "s3-c2-t18.png",
+          "turn_id": "53d031505678495eb8fdccc55419d17f",
+          "request_id": "235385733a604f00bc6ca4d159d78b71",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:14.900536+01:00"
+        },
+        {
+          "turn": 19,
+          "file": "s3-c2-t19.json",
+          "screenshot": "s3-c2-t19.png",
+          "turn_id": "49e5cb52e92546f08b5b5d525ea39ac2",
+          "request_id": "162fee8cdcd44046905c831244e7b680",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:47.762418+01:00"
+        }
+      ],
+      "reproducibility": "两个对话多轮均见搜索状态未显示猫许可，逐房追问能正确说明未知。",
+      "impact": "家庭无法从列表得知宠物条件是否进入正式核实清单，容易把需要反复追问的未知项遗漏。",
+      "limits": "仅确认缺少可见落实和字段一致性，不据此断言后台从未考虑宠物，也没有发现助手明确谎称允许猫。"
+    },
+    {
+      "id": "FAM-07",
+      "classification": "design_concern",
+      "severity": "medium",
+      "priority": "P2",
+      "title": "收藏卡缺少缓存时效和预算标签基准，长期回看易误解",
+      "expected": "收藏应显示来源/更新时间或明确未知、当前仍在租未知，并说明预算标签沿用哪次条件；家庭硬条件状态应便于回看。",
+      "actual": "保存和恢复的卡片主要显示地址、价格、Within Budget、Contact agent，未看到缓存时间及无障碍/宠物未知摘要。恢复A的C1时，全局收藏同时显示£3000 Woodfall的Within Budget，未标注其来自£3200备用预算；C1预算文字为£2800。T18追问后助手承认不知道抓取日期、当前是否在租，也说明预算和排名不代表满足家庭硬条件。",
+      "steps": [
+        "收藏Villiers Road和备用Woodfall，关闭重开并在C1查看Saved。",
+        "对照s5-original-identity-restored.json中收藏标签与C1交接预算。",
+        "发送T18原文确认缓存日期及标签边界。"
+      ],
+      "evidence": [
+        {
+          "turn": 18,
+          "file": "s3-c2-t18.json",
+          "screenshot": "s3-c2-t18.png",
+          "turn_id": "53d031505678495eb8fdccc55419d17f",
+          "request_id": "235385733a604f00bc6ca4d159d78b71",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:14.900536+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s3-mobile-restored-favorite.png",
+        "s5-original-identity-restored.json",
+        "s5-primary-two-favorites.png"
+      ],
+      "reproducibility": "桌面和390px视口、重启前后均可见同类简化卡片。",
+      "impact": "数次回访后很难在不重读聊天的情况下区分哪套只是旧候选、预算标签基于哪个方案，以及哪些家庭条件未核实。",
+      "limits": "Within Budget本身只声称价格匹配，不将其解读成系统明确保证无障碍。真实数据老化与实时可用性因历史快照环境不能验证。"
+    },
+    {
+      "id": "FAM-08",
+      "classification": "design_concern",
+      "severity": "low",
+      "priority": "P3",
+      "title": "关闭重开后中文界面恢复英文，语言连续性不足",
+      "expected": "中文家庭重复返回时最好保留界面语言，或清楚提供恢复选项。",
+      "actual": "S1使用中文界面；S2关闭重开、S3手机重开、S5返回A均恢复EN，已有中文聊天仍在。可点击中文切回。部分重新渲染历史消息的操作按钮出现英文。",
+      "steps": [
+        "点击中文切换界面，完成对话并保存浏览器存储。",
+        "关闭重开同一profile，观察.lang-btn.active及按钮文本。"
+      ],
+      "evidence": [
+        {
+          "turn": 7,
+          "file": "s2-c1-t07.json",
+          "screenshot": "s2-c1-t07.png",
+          "turn_id": "d180df8ec83b4d34a82a8de9f65927b0",
+          "request_id": "c88bc80c10134ff2ad0c9d13c07a50bd",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:26:29.252882+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s2-reopen-state.json",
+        "s3-restart-ui-state.json",
+        "s5-original-identity-restored.json"
+      ],
+      "reproducibility": "三个返回点均观察到默认EN。",
+      "impact": "中文照护家庭每次回来都需再次切换；历史内容与操作语言混杂。",
+      "limits": "未测试系统浏览器语言偏好，不把宿主CJK字形缺失算作本项缺陷。"
+    }
+  ],
+  "successes": [
+    {
+      "id": "PASS-01",
+      "title": "具体候选核实能诚实保留未知",
+      "evidence": [
+        {
+          "turn": 6,
+          "file": "s1-c1-t06.json",
+          "screenshot": "s1-c1-t06.png",
+          "turn_id": "019aed5bef2746d0b5469a270a4dc3e1",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:25:50.884216+01:00"
+        },
+        {
+          "turn": 18,
+          "file": "s3-c2-t18.json",
+          "screenshot": "s3-c2-t18.png",
+          "turn_id": "53d031505678495eb8fdccc55419d17f",
+          "request_id": "235385733a604f00bc6ca4d159d78b71",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:14.900536+01:00"
+        },
+        {
+          "turn": 23,
+          "file": "s4-c3-t23.json",
+          "screenshot": "s4-c3-t23.png",
+          "turn_id": "4dbb78134d5f498ebc2a6768a4f8793c",
+          "request_id": "3a3ad7d9ac094435897bb3cd265a4d25",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:35:17.767453+01:00"
+        }
+      ],
+      "detail": "猫/狗、家庭入住限制、入住日、费用、无障碍均不因房源沉默而默认满足；Student标签被解释为未确认限制。"
+    },
+    {
+      "id": "PASS-02",
+      "title": "12轮语境、关闭重开及交接摘要有效",
+      "evidence": [
+        {
+          "turn": 7,
+          "file": "s2-c1-t07.json",
+          "screenshot": "s2-c1-t07.png",
+          "turn_id": "d180df8ec83b4d34a82a8de9f65927b0",
+          "request_id": "c88bc80c10134ff2ad0c9d13c07a50bd",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:26:29.252882+01:00"
+        },
+        {
+          "turn": 12,
+          "file": "s2-c1-t12.json",
+          "screenshot": "s2-c1-t12.png",
+          "turn_id": "c67fc01bfb834f3196b29f48bd587ab8",
+          "request_id": "4cda236dddd64597ab86e66504f3535f",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:40.654026+01:00"
+        }
+      ],
+      "detail": "C1连续12次聊天准确复述家庭成员、轮椅、3卧、预算、宠物由可选变必须等变化。"
+    },
+    {
+      "id": "PASS-03",
+      "title": "租金算术及周月换算正确",
+      "evidence": [
+        {
+          "turn": 11,
+          "file": "s2-c1-t11.json",
+          "screenshot": "s2-c1-t11.png",
+          "turn_id": "008f9838132c4febbbbc5ca793023d25",
+          "request_id": "b57d0759480a4a64ba9010fe4ed6d93a",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:15.167733+01:00"
+        },
+        {
+          "turn": 13,
+          "file": "s3-c2-t13.json",
+          "screenshot": "s3-c2-t13.png",
+          "turn_id": "880ed3f10dac45e88d008b277b36eb56",
+          "request_id": "261d1868fc8f4d52918c509f03906459",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:30:08.407243+01:00"
+        },
+        {
+          "turn": 25,
+          "file": "s4-c3-t25.json",
+          "screenshot": "s4-c3-t25.png",
+          "turn_id": "39e77c7d46aa4542b497201941d2ce04",
+          "request_id": "72d639c49a8c41f0a5d66ee0304ca327",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:36:00.493787+01:00"
+        }
+      ],
+      "detail": "1800与2300每年差6000；600/周按52/12换算2600/月；1820较1500超320。"
+    },
+    {
+      "id": "PASS-04",
+      "title": "缺少实时数据时拒绝给确定通勤、学校和安全结论",
+      "evidence": [
+        {
+          "turn": 10,
+          "file": "s2-c1-t10.json",
+          "screenshot": "s2-c1-t10.png",
+          "turn_id": "363dddd8a0f34ead9df72a89aaeacd94",
+          "request_id": "c8c24596d8d443f89cadd56fcf5b4cfc",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:03.151447+01:00"
+        }
+      ],
+      "detail": "说明地址解析、附近设施和治安数据未核实，给手动核查路径；数据不可用本身属环境限制。"
+    },
+    {
+      "id": "PASS-05",
+      "title": "不以未知无障碍条件支持签约，能提供核实草稿",
+      "evidence": [
+        {
+          "turn": 11,
+          "file": "s2-c1-t11.json",
+          "screenshot": "s2-c1-t11.png",
+          "turn_id": "008f9838132c4febbbbc5ca793023d25",
+          "request_id": "b57d0759480a4a64ba9010fe4ed6d93a",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:15.167733+01:00"
+        },
+        {
+          "turn": 12,
+          "file": "s2-c1-t12.json",
+          "screenshot": "s2-c1-t12.png",
+          "turn_id": "c67fc01bfb834f3196b29f48bd587ab8",
+          "request_id": "4cda236dddd64597ab86e66504f3535f",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:40.654026+01:00"
+        },
+        {
+          "turn": 17,
+          "file": "s3-c2-t17.json",
+          "screenshot": "s3-c2-t17.png",
+          "turn_id": "1c1723475bbc4bdba427de25af47b465",
+          "request_id": "ed9a08391b7a4586aa543dc012dd9abb",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:50.936148+01:00"
+        }
+      ],
+      "detail": "不将平层、电梯、价格或口头“应该”当作适用证明，给未发送英文询问草稿。"
+    },
+    {
+      "id": "PASS-06",
+      "title": "实际服务重启后会话与收藏恢复",
+      "detail": "父agent确认一次真实停止/启动；S3独立UI恢复Family A — Watford verification、12轮记录和Villiers收藏；S5返回A仍有两对话两收藏。",
+      "evidence_files": [
+        "restart-confirmation.txt",
+        "s2-pre-restart-state.json",
+        "s3-restart-ui-state.json",
+        "s3-restart-favorites.json",
+        "s5-original-identity-restored.json"
+      ]
+    },
+    {
+      "id": "PASS-07",
+      "title": "两个虚构身份的UI数据归属隔离",
+      "evidence": [
+        {
+          "turn": 21,
+          "file": "s4-c3-t21.json",
+          "screenshot": "s4-c3-t21.png",
+          "turn_id": "86be1ad1c2954f3abb86b19b1a7b51c0",
+          "request_id": "7fe231b1b9cd47e5ab989428ba858a67",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:34:13.847218+01:00"
+        }
+      ],
+      "detail": "新profile空历史0收藏；新注册B仅Manchester/Granby，注销后Guest空白，登录恢复B列表/1收藏；返回A仅两家庭会话和两A收藏。不是越权安全审计结论。",
+      "evidence_files": [
+        "s4-fresh-identity.json",
+        "s4-account-created.json",
+        "s4-b-favorite-isolation.json",
+        "s4-after-logout.json",
+        "s4-after-login.json",
+        "s5-original-identity-restored.json"
+      ]
+    },
+    {
+      "id": "PASS-08",
+      "title": "桌面及390px视口核心操作、基本键盘发送可完成",
+      "evidence": [
+        {
+          "turn": 15,
+          "file": "s3-c2-t15-keyboard.json",
+          "screenshot": "s3-c2-t15-keyboard.png",
+          "turn_id": "7e7676176b04475f8172d146e4ec673e",
+          "request_id": "cb27b4d3176e45918ae3ccf650ee9943",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:12.429000+01:00"
+        }
+      ],
+      "detail": "390px与1440px均无页面横向溢出；手机视口菜单、新建、收藏、会话切换可用。Tab至发送按钮、Enter成功提交；桌面重命名用Tab/Enter完成。捕获的pageerror均空。不是真实移动OS或屏幕阅读器测试。",
+      "evidence_files": [
+        "s3-restart-ui-state.json",
+        "s3-mobile-restored-favorite.png",
+        "s3-c2-t15-keyboard.json",
+        "s5-original-identity-restored.json"
+      ]
+    },
+    {
+      "id": "PASS-09",
+      "title": "自动提醒能力回答克制",
+      "evidence": [
+        {
+          "turn": 26,
+          "file": "s4-c3-t26.json",
+          "screenshot": "s4-c3-t26.png",
+          "turn_id": "68ed683e5efa430fa1fdc4e6e9bd89f1",
+          "request_id": "f856e0bd77834415bb647eec0f676921",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:36:23.922063+01:00"
+        }
+      ],
+      "detail": "明确未启用定期后台检查或通知，并给人工回访核查流程；没有真实时间跨度验证提醒系统。"
+    }
+  ],
+  "limitations": [
+    {
+      "type": "environment",
+      "detail": "历史公开快照，非实时可用房。Watford原抓取2026-10-06、High Barnet2026-07-28、Manchester2026-07-25（仅来自公开snapshot.json）。外链房源/图片/字体/地图和实时POI等被禁，未访问或绕过。"
+    },
+    {
+      "type": "tool_approval",
+      "detail": "辅助跨身份GET /api/conversations/{A的已知会话ID}/messages被自动审批以跨身份私有消息披露风险拒绝；同一write_stdin批次T22也未执行。未重试、改写或绕过GET；T22随后单独发送一次并成功。该辅助探针非必要，不请求额外批准，不算产品缺陷。"
+    },
+    {
+      "type": "coverage",
+      "detail": "只测试390×844手机视口及桌面键盘，未测试真实移动OS、触摸/软键盘、屏幕阅读器、完整WCAG、地图最终结果。地图只短暂进入加载便结束该检查，不能判为地图缺陷。"
+    },
+    {
+      "type": "unverified",
+      "detail": "未验证真实物业条件、真实数周恢复、自动提醒调度、书面许可真实性、签约/支付/联系中介、跨设备账号同步、数据删除/分支/并排功能或越权攻击。"
+    },
+    {
+      "type": "evidence",
+      "detail": "UI-F1的专用HTTP请求ID未被helper记录；其JSON result/request残留T04数据，已在逐字记录中明确标注，不把重复turn_id当新增聊天。所有26次聊天均有唯一turn_id；S2起另有request ID。"
+    }
+  ],
+  "long_use_judgment": "可用来保留家庭讨论和生成核实清单；目前不宜作为可直接依赖的持续筛选及决策台账。持久化和UI身份隔离通过所测范围，但多轮需求更新会丢卧室、误改日期、误读否定并使聊天与列表不同步。实际物业时效/长期提醒未验证。"
+}

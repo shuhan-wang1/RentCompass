@@ -1,0 +1,8 @@
+{
+  "url": "/api/alex",
+  "body": "{\"message\": \"我是 UCL Bloomsbury 校区的留学生，每周预算 250 镑，想在 2026 年 11 月 15 日左右入住。可以一个人住，也可以和一位同学整租两居，去学校最好 30 分钟内。请先帮我明确还需要哪些信息，再开始查房源。\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": false, \"language\": \"zh\", \"ui_language\": \"zh\"}",
+  "headers": {
+    "Content-Type": "application/json",
+    "Accept": "text/event-stream"
+  }
+}

@@ -1,0 +1,105 @@
+RentCompass 独立英文上班族端到端审计，2026-10-19
+
+本次实测完成14个实际产品请求：13次聊天请求（/api/alex，其中12轮调用实际配置模型，R4走0模型捷径）和1次无模型表单搜索（/api/search_direct）。实际浏览器操作包含找房、筛选、收藏、房源Ask AI、刷新、新会话、返回旧会话、关闭重开浏览器，以及根agent实际重启服务后的恢复。没有修改产品代码，没有读取旧报告或其他测试员证据，没有访问外部站点或直连模型。
+
+人物与连续任务：独居英文上班族，寻找Watford整租一居室，租金上限1800 GBP/月，去King's Cross St Pancras上班，9点到达，起初每周3天，租金加交通上限2100 GBP/月，通勤偏好45分钟以内。随后改每周2天、租金上限仍1800、合计上限1950。另开Camden studio、1500/月、无通勤的独立表单会话，再回原Watford会话。
+
+服务为本地 http://127.0.0.1:15006。房源为历史快照，TfL/POI/web等外部边界为标注的固定测试夹具；模型、工具schema、调度、条件提取、算术、存储为实际产品逻辑。报告中的32分钟、2.80 GBP等是工具实测返回值，不能当作现实交通信息。本报告不把synthetic/fixture标记问题推断成生产上游数据造假。
+
+确认的问题共5项。P1表示核心流程被阻断或当前硬条件被错误修改；P2表示明显功能错误但仍有可见恢复路径。
+
+1. P1：提及应排除的另一个studio搜索，仍把当前一居室硬条件改成studio。
+
+复现：R1建立Watford整租一居室；R12新会话表单搜索Camden studio；点回原Watford会话，R13发送：
+“I'm back in my earlier Watford conversation. What are the current requirements here, and which of the previously shown properties fits them? Please keep the separate Camden studio search out of this decision.”
+
+预期：原会话保持bedrooms=1、room_type=whole、Watford；另一个搜索是被明确排除的背景信息。
+实际：英文回答正确重述whole one-bedroom、每周2天、1800/月租金及1950/月总额，但同一响应的search_criteria是bedrooms=0、room_type=studio，area仍Watford；constraint_sources直接把本轮排除性句子记作studio来源。截图显示Bedrooms和Room type均变成Studio，North Approach一居室卡片因此显示“Does not meet these criteria / bedroom count 1 does not equal requested 0 / room type does not match studio”。
+证据：turn-13.json、turn-13.png；return-before-13.stdout.json提供返回原会话的操作证据。原会话cid=e45ca5204571422ca41a305ac1f670a9。
+界限：这证明否定/排除性提及污染当前硬条件；没有证据证明跨会话数据库直接泄漏或共用状态，故不作该根因判断。
+
+2. P1：多工具执行后，最终回答被整段压成一句“无法核验通勤”，连已成功取得的房源详情和票价/线路状态也消失。
+
+复现A，R3自然请求weekday 9am arrival的实际公共交通journey、最快与较便宜路线。真实执行calculate_commute和get_transport_info(query_type=journey)。后者成功返回带fixture标记的32分钟、路线腿和成人PAYG单程fare_gbp=2.8、fare_available=true。
+实际最终回答只有：“The commute condition could not be verified for the listing this round.”
+
+复现B，R10在自然请求未触发查询后，明确要求fare/travelcard/line_status及calculate_commute_cost/check_transport_cost，同时更新为每周2天、总上限1950。实际6次工具执行：
+- get_transport_info travelcard：Zone 1-6，成人weekly 81.60 GBP、monthly 313.40 GBP、daily cap 16.30 GBP，含source_url与effective_date。
+- check_transport_cost：同一Zone 1-6表价。
+- get_transport_info line_status：Lioness Good Service。
+- get_transport_info line_status：Northern Good Service。
+- get_transport_info fare：单程2.80 GBP及32分钟fixture journey。
+- calculate_commute_cost：外层success=true，但transport_cost内明确error：“Unable to determine zones for one or both addresses. Cannot calculate transport cost.”，from_zone/to_zone均null。
+实际最终回答仍只有上述一句话，无任何票价、线路状态、房源租金、最新预算或实际错误。
+
+复现C，R14点North Approach卡片的Ask AI，再明确发送exact property的房型、价格及最新条件核对问题。真实get_property_details成功：match.verdict=exact_url，North Approach、1100 GBP pcm、1 bed Flat、Contact agent；同时calculate_commute成功。最终又只剩上述一句话，未回答已可核验的房型及价格。
+
+预期：可以拒绝把fixture当真实路线，也不能声称Zone 1-6已覆盖Watford；但应分别呈现已返回的带标记结果、未确认的覆盖边界和calculate_commute_cost的真实zone错误，并保留明确取得的1100/月及1 bed Flat详情，给出有依据的下一步。一个通勤条件不能吞掉整轮其他独立结果。
+证据：turn-03.json、turn-10.json、turn-14.json及对应png；dispatch-excerpt.json中R3/R10/R14真实返回。R14请求通过本地服务命中历史快照的精确URL，没有访问OnTheMarket。
+界限：这是响应与工具事实的可复现差异，不定位产品内部哪个模块删除了内容。
+
+3. P2：票价、Travelcard、线路状态的自然请求没有执行查询，却把结果描述成查询已返回空。
+
+复现：R5明确请求成人peak/off-peak single fare，R6请求weekly/monthly Travelcard及Watford覆盖边界，R7请求Lioness/Northern当前line status与时效。
+预期：调用对应可用查询；如果没有执行，应如实说尚未查询，不能声称查询未返回payload。
+实际：三轮tool_dispatches均空，独立completed_turn_ledger均llm_calls=1、tool_batches=0；回答却分别称“no fare result was returned”“no price was returned”“no live status result was returned”，并给出缺失原因。R10明确列工具后，以上查询实际均能执行并返回数据。
+证据：turn-05/06/07.json；dispatch-excerpt.json对应三轮ledger。
+后果：把调度未发生误报为数据源缺失，反复要求用户重试或自行查价，妨碍失败恢复。R11/R13后来还重复“所有查询返回空”，与R10独立工具日志冲突。
+
+4. P2：双预算被合并，租金加交通总额错误写入租金筛选，且明确纠正后仍保留。
+
+复现：R1同时声明租金至多1800/月、租金加交通2100/月；R2明确解释“rent ceiling itself is 1800; 2100 is rent plus travel”；R8再次提出同一组两个约束。R10把最新总额改成1950。
+预期：租金筛选max_budget=1800，总预算另行核算；最新条件与UI一致。
+实际：R1真实search_properties参数max_budget=2100，响应search_criteria及UI Budget均2100；R8后的constraint_sources又把2100写成max_budget；R13与重启后仍是2100，尽管文字回答准确重述1800及1950。收藏保存的快照也写“Monthly budget when saved: £2100”。
+证据：turn-01.json/png、turn-13.json/png、dispatch-excerpt.json、recovery-after-restart.json。
+界限：本轮五套Watford房源实际租金1100–1600，均低于1800，因此没有观测到超1800房源被错误推荐；确认的是筛选允许范围错误及文字/UI状态不一致。
+
+5. P2：通勤总预算问题被无模型的租金周期换算捷径抢答。
+
+复现R4：用户请求Watford Junction到King's Cross每周3次往返的周交通成本、平均月交通成本、cap/season ticket比较，再加North Approach实际1100/月租金，核对2100总额，并说明租金上限仍1800。
+预期：查询/计算交通支出和合计；缺数据时明确缺哪项。
+实际仅答：“£1,100.00 per calendar month = £253.85 per week. Formula: monthly × 12 ÷ 52.”
+独立ledger为llm_calls=0、tool_batches=0，服务耗时约51ms。该换算本身正确，却回答了另一个问题；用户从未要求把租金换成周租。
+证据：turn-04.json/png、dispatch-excerpt.json R4。
+
+逐轮实际执行与最终表现：
+R1 找整租一居室：search_properties×1、calculate_commute×6；返回5套历史快照房源，价格1100/1350/1350/1495/1600每月，租金筛选误为2100。
+R2 精确North Approach通勤：calculate_commute×1；回答32分钟的fixture局限，明确不能当真实door-to-door，给出1100 rent和正确预算headroom。房源/合计两预算在文字中可区分。
+R3 早高峰journey比较：get_transport_info journey×1 + calculate_commute×1；成功数据未进入最终回答。
+R4 周/月通勤+租金总成本：无工具、无模型；误答租金周期换算。
+R5 单程peak/off-peak fare：无工具；声称未返回fare。
+R6 Travelcard及Watford覆盖：无工具；声称未返回价格/覆盖。
+R7 当前Lioness/Northern状态：无工具；声称未返回status。
+R8 四区域排序：compare_or_rank_areas×1 + calculate_commute×1；实际表格保留Watford/Camden/Bloomsbury/Islington的median、sample、budget share和score，也指出所有32分钟来自fixture不可当真实通勤。表格数值与工具一致；工具结果没有确认这些租金统计仅限整租一居室，因此不能把区域总样本直接当该户型准确行情。
+R9 生活配套web证据：web_search×1，内部实际调用search_nearby_pois×1；回答正确识别fixture POI、拒绝当真实商户或步行距离，不编造日期及可用网页链接。本轮证明工具链路，但不能证明真实网页资料的时效或来源引用质量。
+R10 工具补测及改为2天/1950总额：get_transport_info×4（fare/travelcard/line_status两条）+check_transport_cost×1+calculate_commute_cost×1；6次执行后最终回答坍缩，未呈现真实nested zone错误或保留其他独立结果。
+R11 刷新后重述：无工具；正确记住2天、1800租金、1950总额、整租一居室；“Preferred commute.”后无45分钟值，且错误描述此前全部工具为空。
+R12 New独立表单：POST /api/search_direct，HTTP200，服务约5672ms，llm_calls=0，cid=ac715542ea59472abcb1c6877480f0b1，request_id=cd9c2fc16dfb4e9f979c1261c2c71cee；Camden/1500/月/0卧Studio/no commute。UI明确将1650/月Augustus Street标Over Budget、Does not meet，没有伪装成满足1500的房源；另两项未知卧室数明确标未核验。表单独立请求不能计作Tool.execute dispatch。
+R13 回原会话：无工具；文字条件正确，但否定studio提及改变结构化房型，五套原一居室被错误判不符合。
+R14 North Approach Ask AI+精确详情问题：get_property_details×1、calculate_commute×1；精确1100/月/1 bed Flat结果被通勤一句话吞掉。
+
+Tool.execute实际dispatch合计22次：calculate_commute=10，search_properties=1，get_transport_info=5（journey=1、fare=1、travelcard=1、line_status=2），compare_or_rank_areas=1，web_search=1，search_nearby_pois=1，check_transport_cost=1，calculate_commute_cost=1，get_property_details=1。web_search内部POI单独在dispatch可见；completed_turn_ledger只给外层web计工具调用，不能把外层canary次数当所有嵌套执行总数。
+
+UI与恢复的通过项和限制：
+- 初始桌面1440×960、窄屏390×844的document.scrollWidth与视口相同，没有观察到水平溢出。长对话窄屏会纵向滚动；未做完整移动设备/浏览器矩阵。
+- Tab可到主要控件，Enter能打开Search criteria，有可见按钮焦点。完整无障碍审计未执行；图库modal的可见DOM无role/aria-label，相关原始证据保留，未把本轮有限检查写成全面通过。
+- 实际收藏North Approach，Saved从0变1；关闭重开浏览器及刷新后保持1，并显示来源会话和保存时预算。
+- 刷新前后聊天全文相等；独立新会话与返回原会话的导航可用。
+- 根agent真实重启容器并确认健康后，用同一professional-storage.json执行只读resume_ui.py。重启前后聊天全文完全一致，SHA256均为a06bd19ca4db2e069e0d41396cfacc84c63d11618b877a03ce33390314536e39；filters数组相等，saved_cards完整文本相等，Saved均1；恢复探针没有聊天请求。
+- 错误的Studio和2100筛选同样被持久保存，恢复通过不代表保存内容正确。
+- 点击卡片本身不打开独立本地详情页；通过Ask AI可以触发get_property_details精确快照查询。View Deal是OnTheMarket外链，已记录其href但未点击访问。图片由公共浏览器驱动阻断外网而隐藏，不能作为产品图片加载缺陷。点击本地图片容器可以打开图库外壳，本轮不验证远程图片资产。
+
+测试夹具/驱动问题的明确排除：
+- 公共driver.send只观察readChatResponse。R12表单实际走/api/search_direct，不经过该解析器，发生无谓等待；根agent确认请求成功后只停止该等待，没有重发。自己的runner现已改为观察/api/search_direct response。form-12-recovered.stdout.json与ui-inspect证据捕获了已完成的真实UI结果；没有伪造原响应。
+- Ask AI按钮只设定property focus并聚焦空输入，不自动填字或请求模型。首次仅点击而未发送，已独立确认无API请求；request-budget.jsonl将该预留标no_request=true。随后重新选定房源、输入明确问题并点Send，才形成真正R14请求。没有把首次空点击计入请求或工具覆盖，也没有向模型重发同一请求。
+
+可复现文件与运行方式：
+- runner.py：逐轮浏览器执行，须有--start-chat才发送；request-budget.jsonl记录预留及确认未发送项，实际请求总数14。
+- turn-plan.json：初始计划；实际message以turn-XX.json和professional-turns.jsonl为准，R2/R4引用真实1100租金，R10使用turn-10-message.txt，R12走表单，R14走UI选择后的详情问题。
+- turn-01..11、13、14.json/png：每轮请求、SSE解析payload、DOM及截图。R12使用form-12-recovered.stdout.json、对应ui-inspect-json/png和独立server receipt，因公共driver观察器不适配而没有正常turn-12原响应文件。
+- dispatch-excerpt.json：根agent按本测试员时间/cid独立摘录的实际执行参数、返回与completed_turn_ledger；读取时仅限本目录，最终标签已按实际R13/R14修正。
+- inspect_ui.py、ui-inspection.json、ui-detail.json、saved-property-details.png、property-gallery.png：无聊天UI证据。
+- professional-storage.json：同一访客恢复状态；不要把该文件与其他测试员资料混用。
+- python3 /tmp/rentcompass-e2e-tools-20261019/professional/resume_ui.py --label after-restart：只读恢复脚本，不发模型请求。重启前/后证据是recovery-before-restart.json和recovery-after-restart.json及对应截图。
+
+长期模拟局限：本次是一个访客、一条英文上班族主线、13聊天+1表单、分钟级关闭/返回与一次实际进程重启，不能代表数天/数周后再次访问、Cookie到期、多账户隔离、并发、高流量、长历史截断、真实房源下架、实时线路突发变化或最新票价。固定fixture会给多个地点返回相同32分钟并带明显标记，因此无法衡量真实route质量、最便宜路线、9点到达调度、Watford实际票卡覆盖、实时line_status、网页来源质量。没有注入上游HTTP超时/429/断流；实际失败恢复只观察到calculate_commute_cost的nested zone错误及产品对未查询的误报。所有生产根因仍须结合这些复现结果进一步定位；本审计没有根据旧修复记录预设结果。

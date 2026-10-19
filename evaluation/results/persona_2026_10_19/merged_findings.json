@@ -1,0 +1,1777 @@
+{
+  "date": "2026-10-19",
+  "note": "32 original persona observations plus 2 authorized API supplement findings. Repair themes are not asserted distinct root causes. Original severities/classifications retained.",
+  "raw_observations": 34,
+  "raw_classification_counts": {
+    "product_defect": 24,
+    "observed_failure_unattributed": 1,
+    "design_concern": 9
+  },
+  "clusters": [
+    {
+      "id": "C01",
+      "priority": "P1",
+      "title": "硬条件抽取、否定/假设与显式更新",
+      "references": [
+        "STU-04",
+        "PRO-01",
+        "FAM-01",
+        "FAM-02",
+        "FAM-04"
+      ]
+    },
+    {
+      "id": "C02",
+      "priority": "P1",
+      "title": "预算数字的角色、单位与最新覆盖关系",
+      "references": [
+        "STU-02",
+        "PRO-03",
+        "PRO-07"
+      ]
+    },
+    {
+      "id": "C03",
+      "priority": "P1",
+      "title": "用户硬条件与候选资格验证",
+      "references": [
+        "PRO-02",
+        "FAM-06"
+      ]
+    },
+    {
+      "id": "C04",
+      "priority": "P1",
+      "title": "正文链接与房源实体一致性",
+      "references": [
+        "STU-03"
+      ]
+    },
+    {
+      "id": "C05",
+      "priority": "P1",
+      "title": "聊天、表单与当前结果列表的状态一致性",
+      "references": [
+        "STU-05",
+        "PRO-04",
+        "PRO-06",
+        "FAM-03",
+        "FAM-05"
+      ]
+    },
+    {
+      "id": "C06",
+      "priority": "P1",
+      "title": "手机账号入口可达性",
+      "references": [
+        "STU-01"
+      ]
+    },
+    {
+      "id": "C07",
+      "priority": "P2",
+      "title": "记忆写入与同轮其他任务的完整响应",
+      "references": [
+        "STU-08"
+      ]
+    },
+    {
+      "id": "C08",
+      "priority": "P2",
+      "title": "来源、日期与无结果解释的事实约束",
+      "references": [
+        "STU-06",
+        "STU-07",
+        "STU-14"
+      ]
+    },
+    {
+      "id": "C09",
+      "priority": "P2",
+      "title": "故障降级范围与可继续完成的子任务",
+      "references": [
+        "PRO-05",
+        "PRO-D02"
+      ]
+    },
+    {
+      "id": "C10",
+      "priority": "P2",
+      "title": "收藏/卡片的新鲜度、未知项与预算基准",
+      "references": [
+        "STU-12",
+        "PRO-D01",
+        "FAM-07"
+      ]
+    },
+    {
+      "id": "C11",
+      "priority": "P2",
+      "title": "访客注册后的历史处理说明",
+      "references": [
+        "STU-11"
+      ]
+    },
+    {
+      "id": "C12",
+      "priority": "P3",
+      "title": "界面语言、状态标签和会话发现性",
+      "references": [
+        "STU-10",
+        "STU-13",
+        "PRO-08",
+        "FAM-08"
+      ]
+    },
+    {
+      "id": "C13",
+      "priority": "P1",
+      "title": "账号删除后的服务端身份和会话撤销",
+      "references": [
+        "SEC-01"
+      ]
+    },
+    {
+      "id": "C14",
+      "priority": "P2",
+      "title": "普通退出的登录会话撤销策略",
+      "references": [
+        "SEC-02"
+      ]
+    }
+  ],
+  "single_unattributed_failures": [
+    "STU-09"
+  ],
+  "findings": [
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-01",
+      "title": "手机侧栏账号入口整体落在视口外，无法正常点击",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "390×844手机打开菜单后，账号/登录入口应在可视或可滚动到的位置。",
+      "actual": "aside固定在y=60但高844，bottom=904；账号按钮y=846、h=48，超过视口844。页面滚动300后按钮仍y=846。正常Playwright点击因outside viewport超时；桌面同入口可正常点击。",
+      "reproduction_steps": [
+        "以390×844打开网页。",
+        "点左上菜单。",
+        "尝试点击左下Guest；正常滚动300再试。",
+        "对照actions.jsonl中的getBoundingClientRect结果。"
+      ],
+      "evidence": [],
+      "screenshots": [
+        "s2-mobile-menu.png",
+        "s2-mobile-account-below-viewport.png"
+      ],
+      "reproducibility": "两个手机浏览器打开过程中均遇到；一次独立坐标+滚动复核。",
+      "limitations": "未测试真实手机软键盘、其他高度或横屏；并未用强制点击绕过。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-02",
+      "title": "房源编号被当作两千万英镑月预算，打断正常追问",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "“链接编号20037182”仅作为房源身份；沿用上一轮明确£1200/月。",
+      "actual": "T7回答出现£900与£20,037,182/月冲突，并明确自述把链接编号误读成金额；忽略最近£1200预算，要求用户再澄清。",
+      "reproduction_steps": [
+        "同一对话搜到Otter Close，£1200/月。",
+        "发送T7原文，包含“链接编号20037182”和价格换算问题。",
+        "观察预算冲突段落。"
+      ],
+      "evidence": [
+        {
+          "turn": 6,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "fd3141b29790464880bcb87292fcc352",
+          "utc": "2026-10-19T04:58:40.629880+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 6
+        },
+        {
+          "turn": 7,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "be3139c68d77488fb0753fd6073656a7",
+          "utc": "2026-10-19T04:58:49.951939+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 7
+        },
+        {
+          "turn": 8,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "99f1e2672795421bb6d0777a9ec12f8a",
+          "utc": "2026-10-19T04:59:03.750192+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 8
+        }
+      ],
+      "screenshots": [
+        "s1-t07.png",
+        "s1-t08.png"
+      ],
+      "reproducibility": "一次自然追问命中；未额外消耗轮次批量测试其他编号。",
+      "limitations": "可确认响应错误；未直接检查长期存储，不能断言£20,037,182实际写入数据库。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-03",
+      "title": "跟进同一批房源时生成错误的Beverly Road详情链接",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "回复的Beverly Road链接与卡片19909957保持一致。",
+      "actual": "T18正文写details/19643971/，同一响应recommendations和实际卡片href均为details/19909957/。T19在用户指出后撤回错误链接。",
+      "reproduction_steps": [
+        "按T15得到Parrs Wood Road与Beverly Road。",
+        "连续比较、核对第一套，再发送T18原文。",
+        "比较正文链接与同一payload recommendations[1].url/卡片href。"
+      ],
+      "evidence": [
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 18,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "8d0e628a6dae47b2b11ab4a8d8f0bd83",
+          "utc": "2026-10-19T05:06:48.609170+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 18
+        },
+        {
+          "turn": 19,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "dd87dc425f964874be207ef2079a0741",
+          "utc": "2026-10-19T05:07:00.399434+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 19
+        }
+      ],
+      "screenshots": [
+        "s3-t18.png",
+        "s3-t19.png"
+      ],
+      "reproducibility": "一次完整多轮流程复现，正文与结构化结果直接矛盾。",
+      "limitations": "没有打开任一外部链接；不判断错误链接实际指向何物。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-04",
+      "title": "明确取消筛选后仍保留旧通勤，或把今天日期写成入住日期",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "取消通勤硬筛选后max_travel_time应清空；“不要任何入住日期”应为null；历史/current日期不应被当作入住日期。",
+      "actual": "T4已要求取消通勤硬筛选，search_criteria仍45分钟/no_commute=false；T5助手称旧参数残留不影响，但未提供更新。T6说“我不通勤”后才正确null。T14取消入住筛选却自述保留2026-11-01；T15明确“不要任何入住日期”并提到今天2026-10-19，公开search_criteria却写move_in_date=2026-10-19；T22最终可正确清空。",
+      "reproduction_steps": [
+        "按T1设45分钟与入住时间。",
+        "按T4明确取消通勤，检查公开payload。",
+        "在C2设入住2026-11-01，再发T14取消日期。",
+        "发送T15原文，检查move_in_date。"
+      ],
+      "evidence": [
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 5,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "bdf49edf967143d0986bbf8485e1f708",
+          "utc": "2026-10-19T04:58:27.834503+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 5
+        },
+        {
+          "turn": 6,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "fd3141b29790464880bcb87292fcc352",
+          "utc": "2026-10-19T04:58:40.629880+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 6
+        },
+        {
+          "turn": 14,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "23944698c2544bb39c7ef8eebc4bec5e",
+          "utc": "2026-10-19T05:05:52.532605+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 14
+        },
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 22,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9f8b82404a664ff1add5995d76eaf215",
+          "utc": "2026-10-19T05:07:47.331550+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 22
+        }
+      ],
+      "screenshots": [
+        "s1-t04.png",
+        "s1-t06.png",
+        "s3-t14.png",
+        "s3-t15.png"
+      ],
+      "reproducibility": "多个不同条件更改均观察到；有成功恢复对照。",
+      "limitations": "T14内部参数仅根据助手自述，T4/T15有公开payload独立证据；无法确定筛选错误实际排除了哪些缓存房源。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-05",
+      "title": "只请求比较房源后搜索条件面板被整体清空",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "比较结果应保留Fallowfield、£780/月和已选通勤/日期状态。",
+      "actual": "T15公开search_criteria有区域和780预算；T16比较响应search_criteria={}，面板区域与预算变空。T17追问后继续返回{}，助手还虚构成“最新检索无结果、旧房源残留”的来源说明。",
+      "reproduction_steps": [
+        "执行T15显示两套候选。",
+        "执行T16租金与条件比较。",
+        "观察右侧面板及search_criteria。"
+      ],
+      "evidence": [
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 16,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "288599aaa3a543138a493076f0a60485",
+          "utc": "2026-10-19T05:06:21.617228+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 16
+        },
+        {
+          "turn": 17,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "005615fdc18846dca45dab906226eb7b",
+          "utc": "2026-10-19T05:06:36.471620+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 17
+        }
+      ],
+      "screenshots": [
+        "s3-t15.png",
+        "s3-t16.png",
+        "s3-t18.png"
+      ],
+      "reproducibility": "一次比较触发，之后数轮保持空条件。",
+      "limitations": "未点击清空后的表单搜索，未验证其后端默认值。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-06",
+      "title": "助手反复声称存在用户未提供且不能更改的旧入住日期",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "新身份首次输入应从本次内容获取日期；更正后对话与面板应一致。",
+      "actual": "T1首次聊天即声称此前记录2027-10-01。T2显式更正2026-10-25后仍称改不了；T4公开payload已是2026-10-25，T5/T10却继续声称内部仍2027-10-01。",
+      "reproduction_steps": [
+        "全新浏览器身份发送T1原文。",
+        "明确更正日期为2026-10-25。",
+        "比较T4结构化条件与T5/T10正文。"
+      ],
+      "evidence": [
+        {
+          "turn": 1,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "973bf3384b44481bb021645dc629ab20",
+          "utc": "2026-10-19T04:57:20.688750+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 1
+        },
+        {
+          "turn": 2,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "be1cc516ebb94559b6a55a89dfcd1cc4",
+          "utc": "2026-10-19T04:57:38.107097+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 2
+        },
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 5,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "bdf49edf967143d0986bbf8485e1f708",
+          "utc": "2026-10-19T04:58:27.834503+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 5
+        },
+        {
+          "turn": 10,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "152ef572b55e4206b6404a3c92b5e3d3",
+          "utc": "2026-10-19T04:59:56.428308+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 10
+        }
+      ],
+      "screenshots": [
+        "s1-t01.png",
+        "s1-t02.png",
+        "s1-t10.png"
+      ],
+      "reproducibility": "C1多轮持续出现；未在新身份重复最初长提示。",
+      "limitations": "来源未核实。不能将这条异常日期定性为跨用户数据泄漏或数据库污染。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-07",
+      "title": "把筛选无结果说成整个区域无数据，之后又撤回",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "区分缓存不覆盖、筛选无匹配、可租状态未知；不要杜撰检索历史。",
+      "actual": "T2/T3断言Camden等区域级无数据，T5又称Stratford/Islington为空，尽管T4已返回Stratford的Otter Close。T11被追问后更正为筛选无结果。C2 T17又将刚检索出的两套说成更早结果，T18撤回。",
+      "reproduction_steps": [
+        "在预算较低时搜Camden等区域。",
+        "按T3要求明确是无覆盖还是筛选无结果。",
+        "对照后续实际候选与T11更正。",
+        "C2按T15—T18核对房源来源。"
+      ],
+      "evidence": [
+        {
+          "turn": 2,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "be1cc516ebb94559b6a55a89dfcd1cc4",
+          "utc": "2026-10-19T04:57:38.107097+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 2
+        },
+        {
+          "turn": 3,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "b40bf3489483498999f98e932413ce16",
+          "utc": "2026-10-19T04:57:55.235138+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 3
+        },
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 5,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "bdf49edf967143d0986bbf8485e1f708",
+          "utc": "2026-10-19T04:58:27.834503+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 5
+        },
+        {
+          "turn": 10,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "152ef572b55e4206b6404a3c92b5e3d3",
+          "utc": "2026-10-19T04:59:56.428308+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 10
+        },
+        {
+          "turn": 11,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "25eb37c1de7f4f7bb800595fb10c2d47",
+          "utc": "2026-10-19T05:00:11.431651+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 11
+        },
+        {
+          "turn": 17,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "005615fdc18846dca45dab906226eb7b",
+          "utc": "2026-10-19T05:06:36.471620+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 17
+        },
+        {
+          "turn": 18,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "8d0e628a6dae47b2b11ab4a8d8f0bd83",
+          "utc": "2026-10-19T05:06:48.609170+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 18
+        }
+      ],
+      "screenshots": [
+        "s1-t03.png",
+        "s1-t05.png",
+        "s1-t11.png",
+        "s3-t17.png"
+      ],
+      "reproducibility": "两个对话中出现不同形式的来源/无结果解释错误。",
+      "limitations": "没有源码或原始缓存检查；以可见候选、公开响应和助手自行更正为证据。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-08",
+      "title": "保存偏好时吞掉同时提出的复述、摘要和恢复帮助",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "保存完成后还应完成用户同轮的确认复述/摘要/找回操作说明。",
+      "actual": "T8要求列预算地区日期；T12要求下次摘要与如何恢复；T20明确“逐项复述，不要只说记住了”；均只返回“我已经记住了”。T25要求成功/失败也只得到同一句。",
+      "reproduction_steps": [
+        "发送T12或T20原文，将记忆保存与复述/恢复帮助一起提出。",
+        "检查message字段与可见助手回答。"
+      ],
+      "evidence": [
+        {
+          "turn": 8,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "99f1e2672795421bb6d0777a9ec12f8a",
+          "utc": "2026-10-19T04:59:03.750192+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 8
+        },
+        {
+          "turn": 12,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "1f0b22485670466f804ca4e0308f0a86",
+          "utc": "2026-10-19T05:00:27.147278+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 12
+        },
+        {
+          "turn": 20,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "ad43b7e38a3b433592a3b548d42854cf",
+          "utc": "2026-10-19T05:07:16.791824+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 20
+        },
+        {
+          "turn": 25,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "115b0b2839c9449aac261918f3691f5c",
+          "utc": "2026-10-19T05:08:37.855988+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 25
+        }
+      ],
+      "screenshots": [
+        "s1-t12.png",
+        "s3-t20.png",
+        "s3-t25.png"
+      ],
+      "reproducibility": "4次不同自然表达都返回同一简短确认。",
+      "limitations": "后续T21和T26确实成功回忆，故不是“没有保存”的证据，而是任务响应不完整。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-09",
+      "title": "长期偏好更新出现一次保存失败，重试后可恢复",
+      "severity": "medium",
+      "classification": "observed_failure_unattributed",
+      "expected": "最新城市/预算/房型应可靠保存，失败后提供明确重试路径。",
+      "actual": "T22公开回答“记忆保存失败，本轮没有确认写入”。T24解释旧偏好可能仍在；T25确认重试；关闭重开后的新对话T26能正确回忆£1000整套studio。",
+      "reproduction_steps": [
+        "已有£780合租长期偏好。",
+        "发送T22更改为£1000整套studio并搜索。",
+        "保存失败后按T24/T25提示重试，再重开浏览器新建会话核对。"
+      ],
+      "evidence": [
+        {
+          "turn": 22,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9f8b82404a664ff1add5995d76eaf215",
+          "utc": "2026-10-19T05:07:47.331550+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 22
+        },
+        {
+          "turn": 24,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9cf4d336eea94f4ca9f99573d3700a4c",
+          "utc": "2026-10-19T05:08:21.349735+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 24
+        },
+        {
+          "turn": 25,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "115b0b2839c9449aac261918f3691f5c",
+          "utc": "2026-10-19T05:08:37.855988+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 25
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s3-t22.png",
+        "s3-t24.png",
+        "s4-t26.png"
+      ],
+      "reproducibility": "单次保存失败，后续重试恢复。",
+      "limitations": "没有后端根因证据；离线嵌入缓存/模型工具或产品可靠性均可能相关，不认定为已定位的系统性缺陷。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-10",
+      "title": "中文界面语言在浏览器关闭重开后回到英文",
+      "severity": "low",
+      "classification": "product_defect",
+      "expected": "主要中文用户已经切换中文，返回时应保留语言选择。",
+      "actual": "S1选中文并明确中文偏好；S2/S3/S4重开时导航、提示与按钮回英文，需要再次点中文。恢复的原对话内容仍是中文。",
+      "reproduction_steps": [
+        "点右上中文。",
+        "关闭浏览器，保留storage_state，再以同profile打开。",
+        "等待对话/收藏加载后核对静态按钮与导航。"
+      ],
+      "evidence": [
+        {
+          "turn": 12,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "1f0b22485670466f804ca4e0308f0a86",
+          "utc": "2026-10-19T05:00:27.147278+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 12
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s1-00-zh-desktop.png",
+        "s2-c1-restored-mobile.png",
+        "s3-restart-restored-favorites.png"
+      ],
+      "reproducibility": "多个浏览器重开复现。",
+      "limitations": "此处仅评估语言偏好持久化；截图中中文方框由宿主CJK字体缺失导致，另列环境限制。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-11",
+      "title": "从访客注册账号后原对话和收藏消失在当前视图，缺少迁移/恢复说明",
+      "severity": "medium",
+      "classification": "design_concern",
+      "expected": "准备长期使用的访客应在注册前知道原数据是否迁移，以及如何继续原研究。",
+      "actual": "注册前访客有12轮C1和1套Otter收藏。创建账号成功后列表为空、收藏0，UI只提示账号创建成功；无可见迁移或原访客恢复说明。之后账号保存和登录恢复正常。",
+      "reproduction_steps": [
+        "访客查房并收藏Otter Close。",
+        "通过菜单注册虚构测试账号。",
+        "对照注册成功前后对话与收藏。"
+      ],
+      "evidence": [],
+      "screenshots": [
+        "s3-restart-restored-favorites.png",
+        "s3-registration-success.png"
+      ],
+      "reproducibility": "一次注册观察。",
+      "limitations": "不声称访客数据已删除；先前storage已作为证据保留。未使用内部身份标识强制恢复，也未读取其他用户数据；正常UI找回原访客路径未验证。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-12",
+      "title": "历史过期缓存元数据没有在房源卡片/收藏中显著呈现",
+      "severity": "medium",
+      "classification": "design_concern",
+      "expected": "候选卡片与收藏应明显表明历史缓存/可能过期/未核实，并区分预算满足与整体匹配。",
+      "actual": "公开recommendations明确source=OnTheMarket(cached)、possibly_outdated=true、candidate_status=unknown/excluded；卡片只有预算标签、排名和“入住时间请咨询”，没有缓存时间/可能过期/整体未知或排除标签。收藏旧合租房在新studio偏好下仍显示“预算范围内”。助手多数追问中会解释未核实。",
+      "reproduction_steps": [
+        "搜到T6或T15的历史候选。",
+        "对照公开payload与右侧卡片。",
+        "收藏后重开并改变偏好，在收藏页检查标注。"
+      ],
+      "evidence": [
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 6,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "fd3141b29790464880bcb87292fcc352",
+          "utc": "2026-10-19T04:58:40.629880+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 6
+        },
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 22,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9f8b82404a664ff1add5995d76eaf215",
+          "utc": "2026-10-19T05:07:47.331550+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 22
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s1-t06.png",
+        "s3-t15.png",
+        "s4-account-mobile-favorites.png",
+        "s4-login-favorites-restored.png"
+      ],
+      "reproducibility": "多个搜索与收藏卡片一致。",
+      "limitations": "历史数据本身、图片阻断和不能确认实时可租是环境限制；问题仅针对已有过期元数据未直观呈现。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-13",
+      "title": "显式新建的多个长期会话始终同名“新会话”",
+      "severity": "low",
+      "classification": "design_concern",
+      "expected": "多次回来研究不同城市/方案时，应易于识别对话。",
+      "actual": "账号三条有实际内容的会话在多轮结束、关闭重开、重新登录后都叫“新会话”。手动重命名可成功并正确打开该对话。",
+      "reproduction_steps": [
+        "点新建创建账号C2、C3、C4，各发送实际内容。",
+        "退出重开或换浏览器登录。",
+        "观察标题列表，再手动重命名验证可操作。"
+      ],
+      "evidence": [
+        {
+          "turn": 13,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "068c4d771b2a428c988aadda97682896",
+          "utc": "2026-10-19T05:05:34.656465+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 13
+        },
+        {
+          "turn": 21,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "35cd1ff9056049cdb464bf9f8b9f8640",
+          "utc": "2026-10-19T05:07:28.774128+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 21
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s4-login-restores-account.png",
+        "s4-conversation-rename-restored.png"
+      ],
+      "reproducibility": "三条会话一致，手动更名成功。",
+      "limitations": "未假定产品承诺自动命名；作为长期使用发现性问题，而非数据损坏。"
+    },
+    {
+      "persona": "student",
+      "report": "student/REPORT.md",
+      "id": "STU-14",
+      "title": "将13天后的入住日期描述为遥远未来，建议半年内再查",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "使用当前日期2026-10-19，正确识别2026-11-01仅13天后；不能无证据归因“普遍尚未放出”。",
+      "actual": "T13称11月1日距离现在较远，T14称“2026年11月的房源现在普遍还没放出，临近半年内再查命中率会高很多”。用户T15需纠正当前日期。",
+      "reproduction_steps": [
+        "在测试日期2026-10-19请求2026-11-01入住。",
+        "无结果后询问£780/月历史研究并取消日期。",
+        "观察T13/T14的时间解释。"
+      ],
+      "evidence": [
+        {
+          "turn": 13,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "068c4d771b2a428c988aadda97682896",
+          "utc": "2026-10-19T05:05:34.656465+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 13
+        },
+        {
+          "turn": 14,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "23944698c2544bb39c7ef8eebc4bec5e",
+          "utc": "2026-10-19T05:05:52.532605+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 14
+        },
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        }
+      ],
+      "screenshots": [
+        "s3-t13.png",
+        "s3-t14.png"
+      ],
+      "reproducibility": "同一对话两轮出现。",
+      "limitations": "不评价真实市场挂牌节奏；只指出日期关系错误和没有证据的无结果归因。"
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-01",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title_zh": "否定房型被写成要选的房型，明确一居要求连续修正后仍是 Studio",
+      "expected_zh": "whole one-bedroom flat, not a room or studio 应设置1居并排除房间/Studio；后续明确修正应覆盖错误条件。",
+      "actual_zh": "T01 bedrooms=0、room_type=studio；T02明确 exactly 1仍0/studio并额外把办公站名的一部分Liverpool加入住宅地区；T03 bedrooms=1、room type=Any仍0/studio。T09明确exclude shared rooms却room_type=shared。",
+      "impact_zh": "普通英文整租用户被送往错误房型，且自然语言纠错不能可靠恢复。",
+      "reproduction_steps": [
+        "使用C1的T01原文开始伦敦三区一居搜索。",
+        "按T02、T03依次纠正Bedrooms和Room type。",
+        "核对响应search_criteria、可见下拉框及Studio结果。",
+        "T03后用可见表单手动改Bedrooms=1、Room type=Any再搜索，可返回多项一居，证明恢复路径存在。"
+      ],
+      "reproducibility_zh": "同一独立对话内连续3轮观测；T09另见否定shared反向写入。未对每种文案做多次全新对话重复，因此不宣称固定失败率。",
+      "evidence": {
+        "turns": [
+          1,
+          2,
+          3,
+          9
+        ],
+        "turn_ids": [
+          "0122b5c9e3f548818b4c2206e3bb2230",
+          "4a821ed9d5f54118b11369f7fe0d1681",
+          "85fb31fd2d074d44bc9f854ae57b4ba4",
+          "366a4f23666c4121bf3d89e9e104562f"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t01-negated-studio.png",
+          "s1-ui-onebed-results.png"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-02",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title_zh": "明确要求self-contained flats，却将4套house share列为全部条件已验证",
+      "expected_zh": "整租一居搜索应排除明确house share的条目，或至少标为不满足/未验证。",
+      "actual_zh": "重启后的T25要求1-bedroom self-contained flats并flag room shares，响应却在Meets all declared conditions (verified)下列Cassio Road £625、Harwoods Road £695、Princess Avenue £725、Princes Avenue £825。返回条目的explanation均明确1 bedroom in a house share；search_criteria.property_features=[]、room_type=null。",
+      "impact_zh": "低价合租被包装成已验证整租候选，使多区域预算比较失真。",
+      "reproduction_steps": [
+        "先完成T22保存Watford整租偏好，重启后T23在新对话回忆。",
+        "执行T24 Cambridge试查后执行T25原文回到Watford/£1500。",
+        "对照Meets all declared conditions段落与各卡片house share标题。"
+      ],
+      "reproducibility_zh": "该完整回访路径观测1次；T18曾正确说明同类房源是合租，因此表现不一致而非所有回答均无法区分。",
+      "evidence": {
+        "turns": [
+          18,
+          23,
+          25
+        ],
+        "turn_ids": [
+          "f50546e136754be18612c089a0d3298b",
+          "b051f416790146ab8aa78ba2c37171f8",
+          "e8db67a524ca469b81cc805dcd71ca08"
+        ],
+        "request_ids": [
+          "bf06eb53256c43df9125473d934b101f",
+          "ba051566e2a6436d9209bce1f74c910c",
+          "961607efeb9949f4ab302849d2c80114"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s4-t25-back-to-watford-1500.png",
+          "s4-t25-back-to-watford-1500.txt"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-03",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title_zh": "引用候选价格会覆盖明确要求保留的真实预算",
+      "expected_zh": "房源价格引用与用户最高租金应分开；T19明确保留£1800/month就应保持1800。",
+      "actual_zh": "T18上限1800；T19引用Sydney1495与Flanders1350并明确Keep the £1,800 monthly ceiling，响应max_budget却1495，同时room_type=shared、areas缩为Watford。C1的£2000上限在价格/交通比较及身份追问之后也变7362，T05截图可见。",
+      "impact_zh": "用户无意间扩大或收紧预算，后续结果集与长期偏好发生漂移。",
+      "reproduction_steps": [
+        "以T18得到Watford/High Barnet、£1800搜索。",
+        "发送T19完整原文，引用1495和1350并要求保留1800。",
+        "检查返回search_criteria.max_budget=1495。",
+        "辅助路径按C1 T01–T05及UI01执行，T05表单预算可见7362而非2000。"
+      ],
+      "reproducibility_zh": "在两个不同身份/对话中观察到预算被引用数字影响；T19定位明确。C1仅能定位发生于比较/追问链，未证明具体内部换算来源。",
+      "evidence": {
+        "turns": [
+          4,
+          5,
+          18,
+          19
+        ],
+        "turn_ids": [
+          "4c0443a07d9b4ba5bba2bae9ed4b4022",
+          "d551d260b5a94d9e82222f0a887cb251",
+          "f50546e136754be18612c089a0d3298b",
+          "3da1dba4b32249f09d1239782a58a70e"
+        ],
+        "request_ids": [
+          "bf06eb53256c43df9125473d934b101f",
+          "b9ca08fc1afa4633a8054e92fd9a32f4"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t05-question-mutates-results.png",
+          "s3-t19-output.jsonl",
+          "s3-t19-whole-flat-refinement.png"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-04",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "房型身份询问被当成筛选命令，尽管用户明确说不要改条件",
+      "expected_zh": "回答Otter Close是整租还是合租，并保留已有5个结果。",
+      "actual_zh": "T05询问Is Otter Close a whole one-bedroom flat or a room in a shared flat?并说Please don’t change my search criteria，系统却kept only shared listings，删4项留1项。T06承认误把问题当筛选，但未恢复原列表。",
+      "impact_zh": "正常事实核实会破坏候选集，需要用户重新搜索。",
+      "reproduction_steps": [
+        "先用UI01得到5个一居条目。",
+        "发送T05原文。",
+        "观察共享房筛选与4个候选被移除；再用T06请求恢复。"
+      ],
+      "reproducibility_zh": "该事实追问完整路径观测1次；后续T06明确承认行为错误。",
+      "evidence": {
+        "turns": [
+          5,
+          6
+        ],
+        "turn_ids": [
+          "d551d260b5a94d9e82222f0a887cb251",
+          "8174e0d7c158481cad7bdd824e311c90"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t05-question-mutates-results.png"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-05",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "通勤无法验证的兜底答复覆盖无关的房源费用与纯算术问题",
+      "expected_zh": "无法验证交通时仍可回答已知房源字段、标记未知，或完成用户给定的算术。",
+      "actual_zh": "T07要求读取Canning Road费用字段、T08明确Separate calculation, not a search change询问£400/week×52/12及5周押金，均只返回The commute condition could not be verified for the listing this round。此前T05已显示no_commute=true。",
+      "impact_zh": "一个不可用数据源阻断与它无关的正常工作流。",
+      "reproduction_steps": [
+        "按C1 T01–T06及UI01达到现有状态。",
+        "依次发送T07与T08原文。",
+        "核对不同问题收到相同通勤兜底句，而非未知字段或£1733.33/month、£2000押金计算。"
+      ],
+      "reproducibility_zh": "同一对话T04/T07/T08多次出现；T09重设偏好后T10/T11可恢复有意义回答。交通提供方不可用属环境限制，但无法解释无关算术也失效。",
+      "evidence": {
+        "turns": [
+          4,
+          7,
+          8,
+          11
+        ],
+        "turn_ids": [
+          "4c0443a07d9b4ba5bba2bae9ed4b4022",
+          "a3449ae3d8c94e07a69493755df2d567",
+          "26939a0bb49747139c4a4a9c5ab7d23b",
+          "4a7c06631fb047759c507b60e87da475"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t12-long-context-summary.txt"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-06",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "不改搜索的地区比较追问清空搜索条件，回答却称未改条件",
+      "expected_zh": "Manchester/Fallowfield、£1400、1卧、无通勤保持不变。",
+      "actual_zh": "T17问题明确without changing the search；正文说I have not changed your search criteria，却返回search_criteria={}。手机表单地区、预算、卧室等字段变空，结果仍是原来两套。",
+      "impact_zh": "用户对当前搜索状态产生误判，后续回访或点击Search可能丢失真实条件。",
+      "reproduction_steps": [
+        "T15创建Manchester/Fallowfield一居、£1200对话。",
+        "T16提高到£1400得到两套。",
+        "T17只询问哪些在Fallowfield及样本能否支持地区比较。",
+        "检查空criteria响应和表单空值。"
+      ],
+      "reproducibility_zh": "该路径观测1次；已保留真实表单值与截图。",
+      "evidence": {
+        "turns": [
+          16,
+          17
+        ],
+        "turn_ids": [
+          "e50a448ef0144e9f91cc524132b4496d",
+          "d7a75c24d42b4801aa78bae64194cb1e"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s2-t17-criteria-cleared.png",
+          "s2-t17-criteria-cleared.txt",
+          "mechanical-actions.jsonl"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-07",
+      "classification": "product_defect",
+      "severity": "P2",
+      "title_zh": "12轮总结将算术示例当预算，并虚构£1699/year导致不必要冲突",
+      "expected_zh": "识别T09明确替换为£1700/month、T11为独立假设；T12又明确real £1700 ceiling，应能直接总结。",
+      "actual_zh": "T12称预算分别是£400/week和£1699/year，用户尚未指定哪个覆盖哪个，因此拒绝确定1700。前者来自明确独立算术题，后者从未作为annual预算提出。地区缩小与Canning Road身份则记对。",
+      "impact_zh": "长对话中用户已明确的预算仍被反复要求澄清，降低长期信任。",
+      "reproduction_steps": [
+        "完整执行C1 T01–T12及UI01，特别保留T08独立算术、T09新实际预算、T11假设例子。",
+        "发送T12总结原文。",
+        "对照答复的annual预算与所有真实用户输入。"
+      ],
+      "reproducibility_zh": "在一条12轮连续自然对话中观测1次；后续T13明确修正后可恢复，不能据此认定所有持久记忆失效。",
+      "evidence": {
+        "turns": [
+          8,
+          9,
+          11,
+          12,
+          13
+        ],
+        "turn_ids": [
+          "26939a0bb49747139c4a4a9c5ab7d23b",
+          "366a4f23666c4121bf3d89e9e104562f",
+          "4a7c06631fb047759c507b60e87da475",
+          "31aa0b29558b4319bd0c9364585c1cfc",
+          "fe793af0a8dd43f691043dd0a5e257f8"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t12-long-context-summary.png"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-08",
+      "classification": "product_defect",
+      "severity": "P3",
+      "title_zh": "英文界面的超预算状态残留中文",
+      "expected_zh": "EN界面和英语对话中状态标签用英文。",
+      "actual_zh": "T01卡片显示超预算 £300；Manchester T15卡片显示超预算 £150与£155。普通Within Budget标签又是英文，形成混杂。",
+      "impact_zh": "以英文为主的用户不易理解关键预算告警。",
+      "reproduction_steps": [
+        "EN界面执行T01或T15，返回预算外替代项。",
+        "查看卡片上的预算状态。"
+      ],
+      "reproducibility_zh": "跨伦敦和Manchester两次独立搜索均可见。",
+      "evidence": {
+        "turns": [
+          1,
+          15
+        ],
+        "turn_ids": [
+          "0122b5c9e3f548818b4c2206e3bb2230",
+          "d58cf68f8d174394a8aef660c09d1003"
+        ],
+        "request_ids": [],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-t01-negated-studio.png",
+          "s1-t01-negated-studio.txt"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-D01",
+      "classification": "design_concern",
+      "severity": "P2",
+      "title_zh": "过期数据提示未持续出现在浏览和收藏卡片中",
+      "expected_zh": "历史快照房源应在结果/收藏卡片附近持续可见地提示过期、来源或更新时间不详。",
+      "actual_zh": "原始推荐possibly_outdated=true，卡片及Saved视图只见租金、Within Budget、Contact agent等，截图无过期/快照提示。T18回答有明确possibly outdated说明，说明提示主要依赖某次聊天正文。",
+      "impact_zh": "回访只看收藏时容易把旧价格和可租性当作已核实；本测试不证明真实房源已下架。",
+      "reproduction_steps": [
+        "比较T01、UI01或T25响应possibly_outdated=true与对应卡片。",
+        "保存Canning或Sydney，再关闭重开，查看Saved视图。"
+      ],
+      "reproducibility_zh": "桌面和手机、Guest和账户的Saved视图均观察到；是否存在其他未触达提示未全面穷举。",
+      "evidence": {
+        "turns": [
+          1,
+          18,
+          25
+        ],
+        "turn_ids": [
+          "0122b5c9e3f548818b4c2206e3bb2230",
+          "f50546e136754be18612c089a0d3298b",
+          "e8db67a524ca469b81cc805dcd71ca08"
+        ],
+        "request_ids": [
+          "bf06eb53256c43df9125473d934b101f",
+          "961607efeb9949f4ab302849d2c80114"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s1-saved-canning.png",
+          "s2-mobile-return-conversation.png",
+          "s4-after-restart-saved.png"
+        ]
+      }
+    },
+    {
+      "persona": "professional",
+      "report": "professional/REPORT.md",
+      "id": "PRO-D02",
+      "classification": "design_concern",
+      "severity": "P3",
+      "title_zh": "不可验证通勤费用时仅给通用重试，缺少用户要求的预算替代步骤",
+      "expected_zh": "承认无实时路程/票价，再给基于用户自填票价、通勤天数的预算公式或所需字段。",
+      "actual_zh": "T21已明确要求useful way to budget，等待28.183秒后只得到没有可靠数据、稍后重试或改写问题。T11/T26证明使用用户假设完成公式本身可以帮助。",
+      "impact_zh": "用户不知道如何继续比较租金加通勤总成本。",
+      "reproduction_steps": [
+        "在Sydney Road焦点下执行T21原文。",
+        "对照T26用户自填票价后可正确给出的1603总额。"
+      ],
+      "reproducibility_zh": "该完整请求观测1次；实时交通不可用属于已知环境限制，未将缺少真实票价算作产品缺陷。",
+      "evidence": {
+        "turns": [
+          21,
+          26
+        ],
+        "turn_ids": [
+          "12d8b884fb984795ad38769612b406ec",
+          "fad4f721c2d442d68f1416e57ddcbb10"
+        ],
+        "request_ids": [
+          "0464a1d9ae4145bdbf46b55dcdfe2cbb",
+          "d3787dd22e1b4d4d96388b85cdaa08e7"
+        ],
+        "files": [
+          "primary-turns.jsonl",
+          "transcript.json",
+          "s3-t21-commute-unknown.png"
+        ]
+      }
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-01",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "硬性卧室数在中文初始请求及需求变更中丢失",
+      "expected": "至少3/4间独立卧室应作为硬过滤；不够卧室的房源应排除，不能只标其他特征未知。",
+      "actual": "T01 bedrooms=null，返回Studio、1卧、2卧及合租；T16“不要改变3卧”后bedrooms=null，3+进入soft_preferences；T19明确六人四卧后仍为null，返回10套Studio至2卧。T22英文3 bedrooms能够正常得到bedrooms=3，说明并非全程无法筛选。",
+      "steps": [
+        "新对话发送T01原文，检查响应search_criteria.bedrooms及卡片卧室。",
+        "在High Barnet备用对话按T13–T16执行，观察3卧变软偏好及字段清空。",
+        "发送T19原文（本备用对话六人、至少4卧、£4000/月、2026-12-01），检查仍出现Studio和1至2卧。"
+      ],
+      "exact_inputs": [
+        "我们一家五口在找长期整租：两位家长、5岁和9岁两个孩子、使用轮椅的奶奶。先看 Watford，最多每月£2500，不含账单，至少3间独立卧室，不是3张床。希望2026年11月15日入住。入口到卧室和卫生间必须没有台阶；未来可能带一只室内猫。请先找候选，并清楚区分房源写明、需要核实和你不知道的条件。请用中文。",
+        "请用中文继续。我刚才只是问“如果楼里有电梯”该怎样评估故障，不是要求每套必须有电梯。只要全程无台阶、卧室和可用卫生间同层，平层独立入口也可以。请去掉“必须有电梯”这一新增条件，不要改变3卧、£3200/月、High Barnet、猫和入住日；并给出看房时测门宽、门槛、回转空间及卫生间的核实清单。",
+        "只修改这个 High Barnet 备用对话：另一位成年亲属也将同住，所以变成六人，至少4间独立卧室，预算上限£4000/月，入住日期改成2026-12-01。猫和无台阶要求不变。Watford主方案的3卧、£2800和11月15日不要跟着改。请重新找备用房，并明确标出卧室是否真的有4间。"
+      ],
+      "evidence": [
+        {
+          "turn": 1,
+          "file": "s1-c1-t01.json",
+          "screenshot": "s1-c1-t01.png",
+          "turn_id": "6952ee949ae94d26a2b17baca5a7787a",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:22.791404+01:00"
+        },
+        {
+          "turn": 16,
+          "file": "s3-c2-t16.json",
+          "screenshot": "s3-c2-t16.png",
+          "turn_id": "3972bdbda56b412fa1711e451074b0ec",
+          "request_id": "c4d69bd01e0f4b9a99049c840cd6e48c",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:35.249832+01:00"
+        },
+        {
+          "turn": 19,
+          "file": "s3-c2-t19.json",
+          "screenshot": "s3-c2-t19.png",
+          "turn_id": "49e5cb52e92546f08b5b5d525ea39ac2",
+          "request_id": "162fee8cdcd44046905c831244e7b680",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:47.762418+01:00"
+        },
+        {
+          "turn": 22,
+          "file": "s4-c3-t22.json",
+          "screenshot": "s4-c3-t22.png",
+          "turn_id": "8e82ff34a5954deeb0e8ff749cb99304",
+          "request_id": "6892e0289224497b9e976d9a2d2d1956",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:34:53.268640+01:00"
+        }
+      ],
+      "reproducibility": "在两个对话中多次观察；未在新部署上重复整套测试。",
+      "impact": "五口或六口之家会反复筛到物理空间已不满足的房子，比较与收藏耗时，并可能遗漏真正适合的房源。",
+      "limits": "不推断内部解析实现；房源卧室仅以交付缓存字段核对，未访问外站核实。"
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-02",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "否定和假设被误当成筛选指令",
+      "expected": "“不接受合租/Studio”不能增加相应房型；询问“如果有电梯”不能变成每套必须有电梯，明确去掉后应移除。",
+      "actual": "T02纠正“单间和1至2卧合租，不能住我们一家”却筛选shared，只剩£625的一卧合租；T20“Studio和一卧不能满足六人四卧”却只保留3套Studio；T15假设电梯故障新增lift，T16明确去掉仍保留lift。",
+      "steps": [
+        "在T01结果后发送T02原文，观察room_type=shared及单间合租卡片。",
+        "T14得到Woodfall后按T15原文问“如果楼里有电梯”，再T16明确去掉；观察property_features一直含lift。",
+        "T19结果后发送T20原文，观察room_type=studio。"
+      ],
+      "exact_inputs": [
+        "结果里出现了单间和1至2卧合租，不能住我们一家。请纠正：只要 Watford 的整套3卧室或更多，月租不超过£2500；卧室数是硬条件。不要用便宜但卧室不足的房源补齐。无障碍、猫许可、11月15日入住仍需逐项核实。",
+        "For Woodfall Avenue, a 3-bedroom end-of-terrace house may have bedrooms upstairs. Can you prove there is a bedroom and accessible bathroom on the same step-free route, including doorway width, thresholds and turning space?\nIf a building has a lift, how should we assess a lift outage? Please give a practical viewing checklist and keep missing listing facts unknown.",
+        "请用中文继续。我刚才只是问“如果楼里有电梯”该怎样评估故障，不是要求每套必须有电梯。只要全程无台阶、卧室和可用卫生间同层，平层独立入口也可以。请去掉“必须有电梯”这一新增条件，不要改变3卧、£3200/月、High Barnet、猫和入住日；并给出看房时测门宽、门槛、回转空间及卫生间的核实清单。",
+        "请不要搜索，给这个备用对话一个简短的当前有效需求摘要，并明确当前列表里的 Studio 和一卧不能满足六人四卧需求。接下来几周我希望反复回来核查：你是否真的能自动每周检查新房源、价格和无障碍证据并通知我？只有实际支持且已经设置的能力才说已启用，否则给我手动复查流程。"
+      ],
+      "evidence": [
+        {
+          "turn": 2,
+          "file": "s1-c1-t02.json",
+          "screenshot": "s1-c1-t02.png",
+          "turn_id": "f8c1b6cb90524066b04d6230fefefbe2",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:31.879752+01:00"
+        },
+        {
+          "turn": 15,
+          "file": "s3-c2-t15-keyboard.json",
+          "screenshot": "s3-c2-t15-keyboard.png",
+          "turn_id": "7e7676176b04475f8172d146e4ec673e",
+          "request_id": "cb27b4d3176e45918ae3ccf650ee9943",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:12.429000+01:00"
+        },
+        {
+          "turn": 16,
+          "file": "s3-c2-t16.json",
+          "screenshot": "s3-c2-t16.png",
+          "turn_id": "3972bdbda56b412fa1711e451074b0ec",
+          "request_id": "c4d69bd01e0f4b9a99049c840cd6e48c",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:35.249832+01:00"
+        },
+        {
+          "turn": 20,
+          "file": "s3-c2-t20.json",
+          "screenshot": "s3-c2-t20.png",
+          "turn_id": "fcbe4e3968d144ab9f436c5e7dbcb723",
+          "request_id": "604e8726fcb045f99324a8c427d5f2ac",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:33:03.058672+01:00"
+        }
+      ],
+      "reproducibility": "合租、Studio、电梯三个语义场景均出现；一次独立运行。",
+      "impact": "家庭用于排除不合适房型、讨论核实方法时，系统反而缩小到不合格选项或添加不必要条件。",
+      "limits": "T15/T16没有声称房源有电梯；错误在需求与筛选，不是虚构房屋设施。"
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-03",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "聊天声称空结果或已改条件，搜索面板仍展示旧预算及旧合格标签",
+      "expected": "最新搜索结论、表单和当前搜索列表应同步；已被新硬预算淘汰的旧卡片不应仍显示Within Budget。",
+      "actual": "T03/T04声称修正整租三卧并无结果，右侧仍有一卧合租。T24降至£1500并回答空结果，表单仍£2000，当前Search标签下仍显示£1820 Granby Row和Within Budget；T25确认该标签错且£320超预算，但界面仍未更新。",
+      "steps": [
+        "按T21–T23建立Manchester三卧£2000搜索并收藏Granby Row。",
+        "发送T24原文，把预算严格降到£1500。",
+        "查看当前Search面板和预算框（不是仅查看Saved标签）；发送T25追问，观察仍未修正。"
+      ],
+      "exact_inputs": [
+        "Our budget is now a strict £1500 per month in Manchester. Keep at least 3 bedrooms and the same 2026-11-30 move-in date. We will not bring the dog, so remove any pet requirement. Wheelchair access remains essential. Refresh the search; please show an empty result if none meet the price and bedroom count rather than substituting smaller homes or higher prices.",
+        "Your text says no results at my new £1500 monthly limit, but the right-hand panel still shows Granby Row at £1820 with a Within Budget label. I need a clear decision record for my family. Is that saved or stale result actually within my current budget, and can you ensure the current search list and criteria reflect the latest limit without treating that property as eligible?"
+      ],
+      "evidence": [
+        {
+          "turn": 3,
+          "file": "s1-c1-t03.json",
+          "screenshot": "s1-c1-t03.png",
+          "turn_id": "3a18cf6ad70d4f898d9c722a9e9aca0d",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:42.630860+01:00"
+        },
+        {
+          "turn": 4,
+          "file": "s1-c1-t04.json",
+          "screenshot": "s1-c1-t04.png",
+          "turn_id": "55a1f48eb6d34837b566b46339a58349",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:24:19.902357+01:00"
+        },
+        {
+          "turn": 24,
+          "file": "s4-c3-t24.json",
+          "screenshot": "s4-c3-t24.png",
+          "turn_id": "4c9e7559b17f4fc9b04028429afc28b9",
+          "request_id": "857ba4258a784f2988c9fa2168c244fd",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:35:41.481444+01:00"
+        },
+        {
+          "turn": 25,
+          "file": "s4-c3-t25.json",
+          "screenshot": "s4-c3-t25.png",
+          "turn_id": "39e77c7d46aa4542b497201941d2ce04",
+          "request_id": "72d639c49a8c41f0a5d66ee0304ca327",
+          "conversation_id": "205170a28d5245538f14f9f421cb7e89",
+          "time_london": "2026-10-19T06:36:00.493787+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s4-t24-stale-budget-ui.json",
+        "s4-c3-t24.png"
+      ],
+      "reproducibility": "C1和C3两个对话中观察到同类不一致。",
+      "impact": "依赖卡片比较的家庭可能误把超预算或卧室不足的旧房源作为当前合格候选；用户需手动判断哪部分可信。",
+      "limits": "未假定工具确实执行了助手所说的全部重搜；可直接确认的是交付文字、字段和列表不同步。"
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-04",
+      "classification": "product_defect",
+      "severity": "high",
+      "priority": "P1",
+      "title": "入住日期在保留及跨方案变更时被误改为月初或旧月份",
+      "expected": "已确定2026-11-15应在简写11月15日时保留；只修改备用方案为2026-12-01时应使用新日期。",
+      "actual": "T02、T08提11月15日，响应条件却2026-11-01；T09完整ISO日期能恢复2026-11-15。T19明确备用改2026-12-01，同时说明主方案11月15日不变，备用条件却2026-11-01。",
+      "steps": [
+        "T01设定2026-11-15后发送T02或T08简写日期，查看日期框/响应条件。",
+        "T09用完整ISO纠正。",
+        "备用C2发送T19原文，检查实际move_in_date与新日期不符。"
+      ],
+      "exact_inputs": [
+        "结果里出现了单间和1至2卧合租，不能住我们一家。请纠正：只要 Watford 的整套3卧室或更多，月租不超过£2500；卧室数是硬条件。不要用便宜但卧室不足的房源补齐。无障碍、猫许可、11月15日入住仍需逐项核实。",
+        "需求有变化：月租上限提高到£2800，地点扩大为 Watford 和 High Barnet 两个区域。仍然至少3间独立卧室、五口人整租、11月15日入住、无台阶是硬条件，猫目前只是可能。请重新找，并分清已确认不合格与仍待核实的候选，不要把未知当满足。",
+        "表单日期现在显示11月1日，这是错的；请改回2026-11-15，并不要以后只因我省略年份就改成月初。另外我们决定一定带一只室内猫，所以宠物许可从偏好变成必须核实的硬条件。请更新这两个条件，保留£2800、Watford和High Barnet、3卧室及无台阶，并说明没有宠物证据的候选该怎样处理。",
+        "只修改这个 High Barnet 备用对话：另一位成年亲属也将同住，所以变成六人，至少4间独立卧室，预算上限£4000/月，入住日期改成2026-12-01。猫和无台阶要求不变。Watford主方案的3卧、£2800和11月15日不要跟着改。请重新找备用房，并明确标出卧室是否真的有4间。"
+      ],
+      "evidence": [
+        {
+          "turn": 2,
+          "file": "s1-c1-t02.json",
+          "screenshot": "s1-c1-t02.png",
+          "turn_id": "f8c1b6cb90524066b04d6230fefefbe2",
+          "request_id": null,
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:23:31.879752+01:00"
+        },
+        {
+          "turn": 8,
+          "file": "s2-c1-t08.json",
+          "screenshot": "s2-c1-t08.png",
+          "turn_id": "5013d894d97d4c908aa33ef3e8c2d926",
+          "request_id": "d3837fb1e22c49b386da754340f98f90",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:26:57.100517+01:00"
+        },
+        {
+          "turn": 9,
+          "file": "s2-c1-t09.json",
+          "screenshot": "s2-c1-t09.png",
+          "turn_id": "f92eec6444164e019c17922c9d91f6b7",
+          "request_id": "eac91e9f64b342e0bb388075a2ff7312",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:27:24.468544+01:00"
+        },
+        {
+          "turn": 19,
+          "file": "s3-c2-t19.json",
+          "screenshot": "s3-c2-t19.png",
+          "turn_id": "49e5cb52e92546f08b5b5d525ea39ac2",
+          "request_id": "162fee8cdcd44046905c831244e7b680",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:47.762418+01:00"
+        }
+      ],
+      "reproducibility": "两个对话中出现；完整ISO单一日期在T09/T14/T22正常。",
+      "impact": "固定搬家日家庭会基于错误日期判断候选与安排搬家。",
+      "limits": "缓存房源本身没有已核实可入住日期；这是搜索需求记录错误，不是确认该日房源可用。"
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-05",
+      "classification": "product_defect",
+      "severity": "medium",
+      "priority": "P2",
+      "title": "咨询通勤和学校后原有搜索表单全部清空",
+      "expected": "咨询候选的通勤、学校和活动空间时，应保留已经确定的区域、预算、卧室和入住日。",
+      "actual": "T09条件为Watford/High Barnet、£2800、3卧、2026-11-15。T10咨询通勤和小学，响应search_criteria={}，表单区域、预算、卧室、日期均空；T11/T12继续保持空表单，但文字还能复述原需求。",
+      "steps": [
+        "在C1按T08/T09建立有效条件。",
+        "发送T10原文咨询通勤与学校。",
+        "检查s2-t10-cleared-form.json及T10右侧表单；继续T11比较价格，表单仍空。"
+      ],
+      "exact_inputs": [
+        "再加决策背景：我一周三天要到 King’s Cross，理想门到门40分钟以内；奶奶出行必须有无障碍路线。请比较目前两套的通勤与附近小学、儿童活动空间。你能实际核实哪些数据？如果不能联网，不要给具体分钟、学校名额或保证安全，请给我们可自己核查的步骤。"
+      ],
+      "evidence": [
+        {
+          "turn": 9,
+          "file": "s2-c1-t09.json",
+          "screenshot": "s2-c1-t09.png",
+          "turn_id": "f92eec6444164e019c17922c9d91f6b7",
+          "request_id": "eac91e9f64b342e0bb388075a2ff7312",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:27:24.468544+01:00"
+        },
+        {
+          "turn": 10,
+          "file": "s2-c1-t10.json",
+          "screenshot": "s2-c1-t10.png",
+          "turn_id": "363dddd8a0f34ead9df72a89aaeacd94",
+          "request_id": "c8c24596d8d443f89cadd56fcf5b4cfc",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:03.151447+01:00"
+        },
+        {
+          "turn": 11,
+          "file": "s2-c1-t11.json",
+          "screenshot": "s2-c1-t11.png",
+          "turn_id": "008f9838132c4febbbbc5ca793023d25",
+          "request_id": "b57d0759480a4a64ba9010fe4ed6d93a",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:15.167733+01:00"
+        },
+        {
+          "turn": 12,
+          "file": "s2-c1-t12.json",
+          "screenshot": "s2-c1-t12.png",
+          "turn_id": "c67fc01bfb834f3196b29f48bd587ab8",
+          "request_id": "4cda236dddd64597ab86e66504f3535f",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:40.654026+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s2-t10-cleared-form.json"
+      ],
+      "reproducibility": "一个触发场景，之后连续两轮仍为空；没有另起新对话复测。",
+      "impact": "长期反复核查候选会破坏可见的需求记录，增加重填与误点搜索的风险。",
+      "limits": "不推断后端持久条件是否全部丢失；文字语境仍保存，直接证据仅表单和交付响应字段。"
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-06",
+      "classification": "design_concern",
+      "severity": "medium",
+      "priority": "P2",
+      "title": "宠物硬条件缺少与其他必需条件一致的可见核实状态",
+      "expected": "猫许可升级为硬条件后，每套候选应明确展示猫许可已证实、已否定或未知，并能在反复查房中看出仍需核实。",
+      "actual": "T09明确一定带猫且升级硬条件，搜索答复和candidate_unknown_reasons只列step-free/lift/availability；T14仍未列猫许可。T16软偏好含indoor cat allowed，T19猫许可也仅在soft_preferences。T12文字能够记住猫已是硬条件，T18能在追问时说明未知。",
+      "steps": [
+        "发送T09原文把猫从偏好升级为硬条件。",
+        "比较T09候选未知项与T12交接中的硬条件。",
+        "在备用C2检查T14/T16/T19未知项及软偏好。"
+      ],
+      "exact_inputs": [
+        "表单日期现在显示11月1日，这是错的；请改回2026-11-15，并不要以后只因我省略年份就改成月初。另外我们决定一定带一只室内猫，所以宠物许可从偏好变成必须核实的硬条件。请更新这两个条件，保留£2800、Watford和High Barnet、3卧室及无台阶，并说明没有宠物证据的候选该怎样处理。",
+        "Keep the 3-bedroom minimum. Change this backup search to £3200 per calendar month, not £3200 per week, and only High Barnet. I am not authorising a smaller home or a different area. Please check whether the stored search criteria now match that correction and try again, preserving 2026-11-15 and the wheelchair and cat requirements."
+      ],
+      "evidence": [
+        {
+          "turn": 9,
+          "file": "s2-c1-t09.json",
+          "screenshot": "s2-c1-t09.png",
+          "turn_id": "f92eec6444164e019c17922c9d91f6b7",
+          "request_id": "eac91e9f64b342e0bb388075a2ff7312",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:27:24.468544+01:00"
+        },
+        {
+          "turn": 12,
+          "file": "s2-c1-t12.json",
+          "screenshot": "s2-c1-t12.png",
+          "turn_id": "c67fc01bfb834f3196b29f48bd587ab8",
+          "request_id": "4cda236dddd64597ab86e66504f3535f",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:28:40.654026+01:00"
+        },
+        {
+          "turn": 14,
+          "file": "s3-c2-t14.json",
+          "screenshot": "s3-c2-t14.png",
+          "turn_id": "9f45b0127a494afa861c26ec62174d9c",
+          "request_id": "2c978065098245b89fb29c0869a2c934",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:30:29.877157+01:00"
+        },
+        {
+          "turn": 16,
+          "file": "s3-c2-t16.json",
+          "screenshot": "s3-c2-t16.png",
+          "turn_id": "3972bdbda56b412fa1711e451074b0ec",
+          "request_id": "c4d69bd01e0f4b9a99049c840cd6e48c",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:31:35.249832+01:00"
+        },
+        {
+          "turn": 18,
+          "file": "s3-c2-t18.json",
+          "screenshot": "s3-c2-t18.png",
+          "turn_id": "53d031505678495eb8fdccc55419d17f",
+          "request_id": "235385733a604f00bc6ca4d159d78b71",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:14.900536+01:00"
+        },
+        {
+          "turn": 19,
+          "file": "s3-c2-t19.json",
+          "screenshot": "s3-c2-t19.png",
+          "turn_id": "49e5cb52e92546f08b5b5d525ea39ac2",
+          "request_id": "162fee8cdcd44046905c831244e7b680",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:47.762418+01:00"
+        }
+      ],
+      "reproducibility": "两个对话多轮均见搜索状态未显示猫许可，逐房追问能正确说明未知。",
+      "impact": "家庭无法从列表得知宠物条件是否进入正式核实清单，容易把需要反复追问的未知项遗漏。",
+      "limits": "仅确认缺少可见落实和字段一致性，不据此断言后台从未考虑宠物，也没有发现助手明确谎称允许猫。"
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-07",
+      "classification": "design_concern",
+      "severity": "medium",
+      "priority": "P2",
+      "title": "收藏卡缺少缓存时效和预算标签基准，长期回看易误解",
+      "expected": "收藏应显示来源/更新时间或明确未知、当前仍在租未知，并说明预算标签沿用哪次条件；家庭硬条件状态应便于回看。",
+      "actual": "保存和恢复的卡片主要显示地址、价格、Within Budget、Contact agent，未看到缓存时间及无障碍/宠物未知摘要。恢复A的C1时，全局收藏同时显示£3000 Woodfall的Within Budget，未标注其来自£3200备用预算；C1预算文字为£2800。T18追问后助手承认不知道抓取日期、当前是否在租，也说明预算和排名不代表满足家庭硬条件。",
+      "steps": [
+        "收藏Villiers Road和备用Woodfall，关闭重开并在C1查看Saved。",
+        "对照s5-original-identity-restored.json中收藏标签与C1交接预算。",
+        "发送T18原文确认缓存日期及标签边界。"
+      ],
+      "evidence": [
+        {
+          "turn": 18,
+          "file": "s3-c2-t18.json",
+          "screenshot": "s3-c2-t18.png",
+          "turn_id": "53d031505678495eb8fdccc55419d17f",
+          "request_id": "235385733a604f00bc6ca4d159d78b71",
+          "conversation_id": "f5c8dc3380da4ea4a1724880954dd715",
+          "time_london": "2026-10-19T06:32:14.900536+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s3-mobile-restored-favorite.png",
+        "s5-original-identity-restored.json",
+        "s5-primary-two-favorites.png"
+      ],
+      "reproducibility": "桌面和390px视口、重启前后均可见同类简化卡片。",
+      "impact": "数次回访后很难在不重读聊天的情况下区分哪套只是旧候选、预算标签基于哪个方案，以及哪些家庭条件未核实。",
+      "limits": "Within Budget本身只声称价格匹配，不将其解读成系统明确保证无障碍。真实数据老化与实时可用性因历史快照环境不能验证。"
+    },
+    {
+      "persona": "family",
+      "report": "family/REPORT.md",
+      "id": "FAM-08",
+      "classification": "design_concern",
+      "severity": "low",
+      "priority": "P3",
+      "title": "关闭重开后中文界面恢复英文，语言连续性不足",
+      "expected": "中文家庭重复返回时最好保留界面语言，或清楚提供恢复选项。",
+      "actual": "S1使用中文界面；S2关闭重开、S3手机重开、S5返回A均恢复EN，已有中文聊天仍在。可点击中文切回。部分重新渲染历史消息的操作按钮出现英文。",
+      "steps": [
+        "点击中文切换界面，完成对话并保存浏览器存储。",
+        "关闭重开同一profile，观察.lang-btn.active及按钮文本。"
+      ],
+      "evidence": [
+        {
+          "turn": 7,
+          "file": "s2-c1-t07.json",
+          "screenshot": "s2-c1-t07.png",
+          "turn_id": "d180df8ec83b4d34a82a8de9f65927b0",
+          "request_id": "c88bc80c10134ff2ad0c9d13c07a50bd",
+          "conversation_id": "30b8a2ee3ca5446ba8ea22efe41e7a1e",
+          "time_london": "2026-10-19T06:26:29.252882+01:00"
+        }
+      ],
+      "extra_evidence": [
+        "s2-reopen-state.json",
+        "s3-restart-ui-state.json",
+        "s5-original-identity-restored.json"
+      ],
+      "reproducibility": "三个返回点均观察到默认EN。",
+      "impact": "中文照护家庭每次回来都需再次切换；历史内容与操作语言混杂。",
+      "limits": "未测试系统浏览器语言偏好，不把宿主CJK字形缺失算作本项缺陷。"
+    },
+    {
+      "persona": "cross_identity_supplement",
+      "report": "cross_identity/REPORT.md",
+      "id": "SEC-01",
+      "classification": "product_defect",
+      "severity": "P1",
+      "title": "删除账号未撤销已签发会话，旧Cookie仍可写入且跨服务重启有效",
+      "expected": "忘记我删除账号后所有旧会话立即失效；强制登录API返回401，不能再创建已删除身份的数据。",
+      "actual": "A和公开API新建C均在forgotten=true、账号记录删除和密码登录401之后，旧Cookie仍authenticated=true且POST会话201；C在重启后仍可读新建记录。",
+      "evidence": [
+        {
+          "phase": "strict",
+          "request_seqs": [
+            30,
+            33,
+            34,
+            35,
+            36
+          ]
+        },
+        {
+          "phase": "reproduce",
+          "request_seqs": [
+            3,
+            4,
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "phase": "after-restart",
+          "request_seqs": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "reproducibility": "Two independently created synthetic accounts; public-API-only C reproduction and real restart confirmed.",
+      "limits": "Requires possession of an already-issued valid cookie. No cookie signature forgery, no cross-account content disclosure, old messages were deleted.",
+      "recommendation": "Central server-validated identity: account active/existing and session not revoked; delete account revokes all issued sessions."
+    },
+    {
+      "persona": "cross_identity_supplement",
+      "report": "cross_identity/REPORT.md",
+      "id": "SEC-02",
+      "classification": "design_concern",
+      "severity": "P2",
+      "title": "普通退出清除当前浏览器，但未撤销提前保留的合法Cookie副本",
+      "expected": "Security target: logout revokes the current login session including copies of its token.",
+      "actual": "B当前客户端退出后401；同次登录Cookie副本仍GET会话列表200。",
+      "evidence": [
+        {
+          "phase": "strict",
+          "request_seqs": [
+            25,
+            26,
+            27
+          ]
+        }
+      ],
+      "reproducibility": "One controlled synthetic B login/copy/logout sequence.",
+      "limits": "Classified as a revocation design target, not an undocumented signature bypass or credential-free account takeover.",
+      "recommendation": "Issue revocable session IDs and revoke the current session on logout; use user session version or all-session revocation on deletion."
+    }
+  ]
+}

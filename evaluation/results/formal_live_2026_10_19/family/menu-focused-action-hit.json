@@ -1,0 +1,24 @@
+{
+  "aria": "Compare side by side",
+  "rect": {
+    "x": 156.2786865234375,
+    "y": 136.5,
+    "width": 26,
+    "height": 26,
+    "top": 136.5,
+    "right": 182.2786865234375,
+    "bottom": 162.5,
+    "left": 156.2786865234375
+  },
+  "sidebar": {
+    "x": -6.799434185028076,
+    "y": 60,
+    "width": 280,
+    "height": 784,
+    "top": 60,
+    "right": 273.2005658149719,
+    "bottom": 844,
+    "left": -6.799434185028076
+  },
+  "hitAtActualCenter": null
+}

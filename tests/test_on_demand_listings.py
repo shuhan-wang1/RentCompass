@@ -135,7 +135,9 @@ def test_stale_if_error_serves_old_cache_flagged(fresh_cache, monkeypatch):
     with sqlite3.connect(fresh_cache.path) as db:
         db.execute("UPDATE listings SET fetched = ?", (time.time() - 10_000_000,))
 
-    monkeypatch.setattr(om_mod, "find_rich_onthemarket", lambda *a, **k: [])  # live scrape yields nothing
+    def failed_live(*args, **kwargs):
+        raise om_mod.otm_access.OTMSourceError("unavailable", "transport_error")
+    monkeypatch.setattr(om_mod, "find_rich_onthemarket", failed_live)
 
     res = on_demand.get_listings("Manchester", 1, 1, 500, 1200)
     assert res["meta"]["source"] == "stale-cache"
@@ -147,8 +149,10 @@ def test_no_data_returns_honest_empty_never_demo(fresh_cache, monkeypatch):
     monkeypatch.setattr(om_mod, "find_rich_onthemarket", lambda *a, **k: [])
     res = on_demand.get_listings("Nowheresville", 1, 1, 500, 1200)
     assert res["rows"] == []
-    assert res["meta"]["source"] == "none"
-    assert "No live listings" in res["meta"]["message"]
+    assert res["meta"]["source"] == "scraped"
+    assert res["meta"]["source_status"] == "ok"
+    assert res["meta"]["retrieval_complete"] is True
+    assert "sample" in res["meta"]["message"]
 
 
 def test_scrape_exception_with_no_cache_is_honest_empty(fresh_cache, monkeypatch):

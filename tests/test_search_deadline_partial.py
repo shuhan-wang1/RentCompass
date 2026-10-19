@@ -119,7 +119,8 @@ def test_deadline_already_passed_marks_all_uncached_incomplete(offline, monkeypa
     assert res["partial_note"]                                       # non-empty note present
     note = res["partial_note"].lower()
     assert "more listings may exist" in note                         # states listings MAY exist
-    assert "do not conclude" in note                                 # forbids claiming emptiness
+    assert "do not conclude" not in note
+    assert "partial results" in note                                 # forbids claiming emptiness
     assert res["cache_stats"] == {"hits": 0, "misses": 2}
     assert res["status"] == "no_results"
     # Honest: the empty message is the partial note, not "couldn't find any".
@@ -492,8 +493,9 @@ def test_degraded_commute_unverified_strips_fields_and_bans_claims(offline, monk
     assert res["commute_unverified"] is True
     note = res["commute_note"].lower()
     assert note                                            # a note always rides with results
-    assert "not verified" in note
-    assert "do not state" in note or "do not promise" in note
+    assert "not been verified" in note
+    assert "do not state" not in note and "do not promise" not in note
+    assert res["commute_unverified"] is True
     # Listings must NOT carry any (stale/guessed) commute field the model could echo.
     assert res["recommendations"]
     for r in res["recommendations"]:
@@ -534,10 +536,12 @@ def test_partial_note_forbids_extrapolating_numbers(offline, monkeypatch):
     note = res["partial_note"].lower()
     # unchanged honesty clauses …
     assert "more listings may exist" in note
-    assert "do not conclude" in note
+    assert "do not conclude" not in note
+    assert "partial results" in note
     # … plus the new number-honesty clause.
-    assert "only the prices and figures" in note
-    assert "do not estimate or extrapolate" in note
+    assert "islington" in note
+    assert res["area_status"]["Islington"] == "incomplete"
+    assert "do not estimate or extrapolate" not in note
 
 
 # ══════════════════════════════════════════════════════════════════════════

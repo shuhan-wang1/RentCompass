@@ -1,0 +1,151 @@
+{
+  "audit_date": "2026-10-19",
+  "audit_execution_complete": true,
+  "product_acceptance": "FAIL",
+  "product_source_unchanged": true,
+  "personas": {
+    "student": {
+      "api_alex_requests": 14,
+      "status_counts": {
+        "200": 13,
+        "429": 1
+      },
+      "completed_chat_ledgers": 13,
+      "chat_turns_with_model": 13,
+      "form_search_direct_requests": 0,
+      "user_actions": 14,
+      "chat_latency_median_seconds": 5.071,
+      "actual_tool_dispatches": 17,
+      "terminal_ask_user_calls": 1
+    },
+    "professional": {
+      "api_alex_requests": 13,
+      "status_counts": {
+        "200": 13
+      },
+      "completed_chat_ledgers": 13,
+      "chat_turns_with_model": 12,
+      "form_search_direct_requests": 1,
+      "user_actions": 14,
+      "chat_latency_median_seconds": 6.946,
+      "actual_tool_dispatches": 22,
+      "terminal_ask_user_calls": 0
+    },
+    "family": {
+      "api_alex_requests": 14,
+      "status_counts": {
+        "200": 14
+      },
+      "completed_chat_ledgers": 14,
+      "chat_turns_with_model": 14,
+      "form_search_direct_requests": 0,
+      "user_actions": 14,
+      "chat_latency_median_seconds": 8.39,
+      "actual_tool_dispatches": 49,
+      "terminal_ask_user_calls": 0
+    }
+  },
+  "user_actions_total": 42,
+  "api_alex_requests_total": 41,
+  "completed_persona_chat_turns": 40,
+  "persona_chat_turns_with_real_model": 39,
+  "tools_registered": 14,
+  "tools_e2e_covered": 14,
+  "api_authorization": {
+    "requests": 259,
+    "checks": 253,
+    "passed": 253
+  },
+  "tool_integration": {
+    "layer": "tool_integration",
+    "checks": 50,
+    "passed": 50,
+    "failed": []
+  },
+  "upstream_fault_integration": {
+    "checks": 19,
+    "passed": 19,
+    "failed": []
+  },
+  "http_sse_protocol": {
+    "checks": 34,
+    "passed": 34,
+    "failed": []
+  },
+  "concurrency_disconnect": {
+    "checks": 8,
+    "passed": 8,
+    "failed": []
+  },
+  "auth_ui": {
+    "checks": 9,
+    "passed": 9
+  },
+  "runtime_memory_scope": {
+    "checks": 1,
+    "passed": 1
+  },
+  "business_invariants": {
+    "checks": 2,
+    "passed": 0,
+    "failed": [
+      "fare-and-duration-bind-same-itinerary-positive-get_transport_info",
+      "fare-and-duration-bind-same-itinerary-transport-mode-fare"
+    ]
+  },
+  "model_outage": {
+    "checks": 4,
+    "passed": 3,
+    "failed": [
+      "model503-not-misclassified-time-budget"
+    ]
+  },
+  "model_requests": {
+    "observed": 228,
+    "real_upstream_requests": 219,
+    "synthetic_503": 8,
+    "synthetic_tool_call_responses": 1,
+    "total_reported_tokens": 1216920,
+    "sequence_gaps": []
+  },
+  "actual_container_restarts": 4,
+  "network": {
+    "container_network_mode": "none",
+    "container_readonly_root": true,
+    "public_port_bindings": {},
+    "browser_origin": "http://127.0.0.1:15006",
+    "model_upstream_allowlist": [
+      "api.deepseek.com"
+    ],
+    "otm_transport_attempts": 0,
+    "socket_external_attempts_blocked": 0,
+    "housing_producer_cache_only": true,
+    "model_call_budget": 320,
+    "model_token_budget": 1600000,
+    "browser_external_requests_are_aborted": true
+  },
+  "scope_limits": [
+    "Frozen historical listings; no live housing availability or current price verified",
+    "Synthetic TfL/Police/OSM/weather/web transport responses; live upstream conformance not established",
+    "Minutes-long repeated sessions and actual restarts; not a multiweek wall-clock soak",
+    "Current fc_loop configuration only; optional manager/MCP architectures not exercised",
+    "Map HTML and escaping tested; external map tiles, listing images and View Deal navigation blocked"
+  ],
+  "cleanup": {
+    "temporary_container_running": false,
+    "temporary_loopback_port_closed": true,
+    "stopped_own_processes": [
+      "proxy",
+      "relay",
+      "serve"
+    ],
+    "credential_and_storage_files_removed": 12,
+    "production_containers_still_running": [
+      "uk-rent-app-fc",
+      "uk-rent-app",
+      "uk-rent-searxng",
+      "uk-rent-valkey"
+    ],
+    "production_mutation_performed": false
+  }
+}

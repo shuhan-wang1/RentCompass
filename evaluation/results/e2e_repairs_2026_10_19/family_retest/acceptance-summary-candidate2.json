@@ -1,0 +1,150 @@
+{
+  "summary": {
+    "verdict": "FAIL",
+    "tester_background": "有本次UI修复背景；不是盲测员。暂停期间按root明确任务定向查看UI并修复revision及双语原因契约，没有读取其他persona文件。",
+    "candidate_phases": {
+      "frozen_candidate_1": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "updated_restarted_candidate_2": [
+        8,
+        9,
+        10
+      ]
+    },
+    "real_chat_requests": 10,
+    "http_statuses": {
+      "200": 10
+    },
+    "latency_seconds": {
+      "min": 3.927,
+      "max": 17.724,
+      "median": 9.913499999999999,
+      "sum": 102.109
+    },
+    "client_errors": [],
+    "verified_trace_rounds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "verified_tool_counts": {
+      "calculate_commute": 17,
+      "search_properties": 3,
+      "get_property_details": 3,
+      "search_nearby_pois": 2,
+      "check_safety": 1,
+      "get_weather": 2
+    },
+    "verified_tool_total": 28,
+    "trace_notice": "这里只计当前own-dispatches实际已有日志；若尚未包含R8-R10，其工具归属待root更新，不以模型自述代替。",
+    "conversation_id": "83b3c2a05bac40949776659286bdc6ee",
+    "limits": "禁止外部网站/OTM及生产端口；公共驱动阻断所有非15008浏览器请求。房源历史快照、其余provider合成、模型真实。10轮已用尽，无追加模型请求。"
+  },
+  "round_tool_mapping": [
+    {
+      "round": 1,
+      "request_ids": [
+        "e3ef0f40df8b4cc3a4f98c973670607f"
+      ],
+      "tool_counts": {
+        "calculate_commute": 11,
+        "search_properties": 1,
+        "get_property_details": 2
+      },
+      "verified_calls": 14
+    },
+    {
+      "round": 2,
+      "request_ids": [
+        "14e8e15d7b3941cfbde388ff7cca140e"
+      ],
+      "tool_counts": {
+        "get_property_details": 1,
+        "search_nearby_pois": 1
+      },
+      "verified_calls": 2
+    },
+    {
+      "round": 3,
+      "request_ids": [
+        "701cdef7ca4045d18f4b7cbb2e9d2046"
+      ],
+      "tool_counts": {
+        "check_safety": 1,
+        "search_nearby_pois": 1
+      },
+      "verified_calls": 2
+    },
+    {
+      "round": 4,
+      "request_ids": [
+        "dd49c8e05d734b10aaf9da6a963e68d9"
+      ],
+      "tool_counts": {
+        "get_weather": 1,
+        "calculate_commute": 1
+      },
+      "verified_calls": 2
+    },
+    {
+      "round": 5,
+      "request_ids": [
+        "a6cff0c8503a48cfa596e3ca7bcd88d2"
+      ],
+      "tool_counts": {
+        "get_weather": 1
+      },
+      "verified_calls": 1
+    },
+    {
+      "round": 6,
+      "request_ids": [
+        "4aa0f80277f341f89a4a829f4acfec28"
+      ],
+      "tool_counts": {
+        "search_properties": 1
+      },
+      "verified_calls": 1
+    },
+    {
+      "round": 7,
+      "request_ids": [
+        "762346d1b9d045c886e29747f97ab756"
+      ],
+      "tool_counts": {
+        "search_properties": 1,
+        "calculate_commute": 5
+      },
+      "verified_calls": 6
+    },
+    {
+      "round": 8,
+      "request_ids": [],
+      "tool_counts": {},
+      "verified_calls": 0
+    },
+    {
+      "round": 9,
+      "request_ids": [],
+      "tool_counts": {},
+      "verified_calls": 0
+    },
+    {
+      "round": 10,
+      "request_ids": [],
+      "tool_counts": {},
+      "verified_calls": 0
+    }
+  ]
+}

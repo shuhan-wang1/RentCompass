@@ -76,6 +76,7 @@ from core.candidate_validation import (
     validate_search_payload_with_provider,
 )
 from core import refine_results
+from core.constraint_updates import commute_query_forbidden
 from core.memory_contract import (
     compose_memory_contract_response,
     memory_contract_from_artifact,
@@ -119,7 +120,7 @@ _CARD_FORMATTERS = {
 # search_properties statuses that carry an actual result set. `found` is the exact-match
 # pool; `no_exact_match_but_similar` is the closest-recall fallback. Both must repaint the
 # listing panel — neither is a plain chat answer.
-_SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar"})
+_SEARCH_RESULT_STATUSES = frozenset({"found", "no_exact_match_but_similar", "no_results"})
 
 
 # ─── ToolSpec (contract D fallback) ─────────────────────────────────
@@ -595,6 +596,7 @@ def _build_messages(state: AgentState) -> list:
     focus_records = _focus_records(ec)
     context_block = {
         "accumulated_criteria": state.get("accumulated_search_criteria") or {},
+        "current_date": (state.get('extracted_context') or {}).get('current_date'),
         "focused_property": ec.get("focused_property") or (
             focus_records[-1] if focus_records else None),
         "focus_stack": focus_records,
@@ -1602,7 +1604,9 @@ def _cued_dimensions(message: str) -> list:
     fetch a dimension it then apologises for, or apologise for one it fetched. Since
     2026-07-27 that agreement extends across ARCHES too.
     """
-    return dimensions.cued_dimensions(message)
+    from core.constraint_updates import commute_query_forbidden
+    result = dimensions.cued_dimensions(message)
+    return [dim for dim in result if dim != 'commute'] if commute_query_forbidden(message) else result
 
 
 def _dimension_satisfying_tools(dim: str) -> tuple:
@@ -1829,6 +1833,111 @@ def _dimension_fanout_calls(state: AgentState, batch_calls: list, cur_msg: str, 
     return added
 
 
+def _explicit_transport_reads(state: dict, batch_calls: list, message: str) -> list:
+    """Complete explicit fare/card/status lookups even when the model emits prose.
+
+    Unlike broad dimension cues, these are concrete requests for live tool data.
+    Every query type is attempted once; unknown endpoints/zones stay unknown.
+    """
+    import re
+    text = message or ''
+    if re.search(r'(?:don.t|do not) (?:query|check|look up)|不要(?:查询|查票价|查线路)', text, re.I):
+        return []
+    requested = []
+    if re.search(r'travelcard|(?:周|月)票|交通卡价格', text, re.I):
+        requested.append('travelcard')
+    if re.search(r'line status|service status|线路状态|运行状态', text, re.I):
+        requested.append('line_status')
+    if re.search(r'(?:single|peak|off.peak) fares?|单程票价|高峰.*票价', text, re.I):
+        requested.append('fare')
+    if re.search(r'\b(?:journey|route)\b|到达|抵达', text, re.I) and re.search(r'arriv|depart|\b(?:am|pm|tomorrow)\b|\d{1,2}:\d{2}|明天|明早', text, re.I):
+        # A fare lookup already returns the selected itinerary and its time evidence.
+        if 'fare' not in requested:
+            requested.append('journey')
+    if not requested:
+        return []
+    attempted = {tc.get('args', {}).get('query_type', 'auto') for tc in batch_calls or []
+                 if tc.get('name') == 'get_transport_info'}
+    for artifact in state.get('tool_artifacts') or []:
+        if artifact.get('tool') == 'get_transport_info':
+            attempted.add((artifact.get('raw_data') or {}).get('query_type', 'auto'))
+            # A failed/denied query may have no raw_data. Do not retry it blindly.
+            if not artifact.get('raw_data'):
+                attempted.update(requested)
+    if 'auto' in attempted:
+        return []
+    ctx = _dimension_location_context(state, batch_calls)
+    # Resolve only explicit current endpoints; no new place is inferred.
+    endpoint = re.search(r'\bfrom\s+(.{2,65}?)\s+to\s+(.{2,65}?)(?=[.,;!?]|\s+(?:on|for|at|including|arriving|arrive|departing|leaving|by)\b|$)', text, re.I)
+    origin = endpoint.group(1).strip() if endpoint else ctx.get('area')
+    destination = endpoint.group(2).strip() if endpoint else ctx.get('commute_destination')
+    calls = []
+    for query in requested:
+        if query in attempted:
+            continue
+        args = {'query_type': query, 'user_query': text}
+        if query in ('fare', 'journey', 'travelcard'):
+            if origin:
+                args['from_location'] = origin
+            if destination:
+                args['to_location'] = destination
+            if query in ('fare', 'journey') and not (origin and destination):
+                continue
+        if query == 'travelcard':
+            zone = re.search(r'\bzones?\s*1\s*[-–to]+\s*([2-6])\b', text, re.I)
+            if zone:
+                args['end_zone'] = int(zone.group(1))
+        if query in ('fare', 'journey'):
+            try:
+                from core.tools.get_transport_info import _requested_journey_time
+                requested_time = _requested_journey_time(user_query=text)
+                if requested_time:
+                    args.update({key: value for key, value in requested_time[1].items()
+                                 if key in ('date', 'time', 'time_is')})
+            except ValueError:
+                # Keep the original query: the tool returns its typed validation error.
+                pass
+        calls.append(('get_transport_info', args))
+    return calls
+
+
+def _explicit_weather_reads(state: dict, batch_calls: list, message: str) -> list:
+    """An explicitly requested weather read may run independently of housing clarification."""
+    import re
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    text = message or ''
+    if not re.search(r'\bweather\b|天气', text, re.I):
+        return []
+    if re.search(r'(?:do not|don.t).{0,15}(?:weather|forecast)|不要.{0,8}天气', text, re.I):
+        return []
+    if any(call.get('name') == 'get_weather' for call in batch_calls or []):
+        return []
+    if any(item.get('tool') == 'get_weather' for item in state.get('tool_artifacts') or []):
+        return []
+    location = _dimension_location_context(state, batch_calls).get('area')
+    explicit = re.search(r'\bweather\s+(?:in|for)\s+([A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,3})', text)
+    if explicit:
+        location = explicit.group(1)
+    if not location:
+        return []
+    args = {'location': location}
+    # Scope calendar extraction to the weather sentence so a housing move-in date
+    # cannot silently become the requested forecast date.
+    sentence = next((part for part in re.split(r'[.!?。！？]', text)
+                     if re.search(r'\bweather\b|天气', part, re.I)), text)
+    today = datetime.now(ZoneInfo('Europe/London')).date()
+    day = re.search(r'(?<!\d)(\d{4}-\d{2}-\d{2})(?!\d)', sentence)
+    if re.search(r'\btomorrow\b|明天|明早', sentence, re.I):
+        args['target_date'] = (today + timedelta(days=1)).isoformat()
+    elif day:
+        args['target_date'] = day.group(1)
+    clock = re.search(r'(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)', sentence)
+    if args.get('target_date') and clock:
+        args['target_time'] = f'{int(clock.group(1)):02d}:{clock.group(2)}'
+    return [('get_weather', args)]
+
+
 def _criteria_room_type_label(criteria: dict) -> Optional[str]:
     """From a search_properties criteria echo (its `search_criteria` / `known_criteria`), return a
     room-type label in a form graders._room_type_in_text will match — i.e. a string CONTAINING
@@ -1994,7 +2103,10 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             safety_lines.append((str(place), raw.get("safety_score"), str(level)))
 
     if lang == "zh":
-        if reason == "no_reliable_numbers":
+        if reason == 'provider_error':
+            opener = '模型服务暂时不可用。以下仅列出本轮已经取得的结果：'
+            closer = '未完成的部分可以稍后重试。'
+        elif reason == "no_reliable_numbers":
             # 「未能获取」是诚实的 partial-disclosure 标记（graders._honest_partial_disclosed），
             # 满足 must_mention_source_if_evidence 的无证据分支；不含任何「超时/时间限制」措辞。
             opener = "抱歉，我未能获取到可靠的具体数字，先按已核实的信息回答："
@@ -2033,7 +2145,10 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
     else:
-        if reason == "no_reliable_numbers":
+        if reason == 'provider_error':
+            opener = 'The model service is temporarily unavailable. These are the results already obtained this turn:'
+            closer = 'You can retry the unfinished parts later.'
+        elif reason == "no_reliable_numbers":
             # "couldn't retrieve" is an honest partial-disclosure marker
             # (graders._honest_partial_disclosed), satisfying the no-evidence branch of
             # must_mention_source_if_evidence — with NO "ran long / cut short / time budget"
@@ -2076,7 +2191,9 @@ def _artifact_grounded_fallback_answer(state: AgentState, reason: str = "time_bu
             lines.append("Still outstanding from what you asked for this turn:")
             lines.extend("- " + m for m in missing_lines)
         lines.append(closer)
-    return "\n".join(lines)
+    from core.candidate_validation import render_structured_evidence_fallback
+    evidence = render_structured_evidence_fallback(state, language=lang)
+    return '\n\n'.join(part for part in ('\n'.join(lines), evidence) if part)
 
 
 def _deterministic_wrap_answer(state: AgentState) -> str:
@@ -2179,6 +2296,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         #    run a real search.
         _refine_pool = apply_preference_filter(
             _refinable_previous_results(ec), state.get("user_preferences") or {})
+        memory_gate = _load_memory_gate()
+        if memory_gate is not None and memory_gate.user_authorizes_memory(cm):
+            _refine_pool = []
         if _refine_pool:
             _refine_plan = refine_results.plan_refinement(cm, _refine_pool)
             if _refine_plan is not None:
@@ -2450,6 +2570,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         """
         added = _dimension_fanout_calls(state, batch_calls, cur_msg,
                                         specs=_spec_map(), read_policy=_load_tool_policy())
+        if 'get_transport_info' in _spec_map():
+            added.extend(_explicit_transport_reads(state, batch_calls, cur_msg))
+        if 'get_weather' in _spec_map():
+            added.extend(_explicit_weather_reads(state, batch_calls, cur_msg))
         if not added:
             return []
         try:
@@ -2507,7 +2631,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         names it honestly. Abandonment degrades to the apology, never to a claim.
         """
         if _executed_read_count(state) <= 0:
-            return []
+            cur_msg = ((state.get('extracted_context') or {}).get('current_message') or '')
+            if not (_explicit_transport_reads(state, [], cur_msg) or
+                    _explicit_weather_reads(state, [], cur_msg)):
+                return []
         elapsed_now = (time.monotonic() - turn_start) if turn_start else 0.0
         if turn_start and elapsed_now > (_turn_soft_wrap_s() - _min_batch_s()):
             return []
@@ -2528,6 +2655,20 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         ec = state.get("extracted_context") or {}
         reply_language = _reply_language_from_ctx(
             ec, ec.get("current_message") or _current_message(state.get("user_query") or ""))
+        from core.constraint_updates import independent_memory_task
+        current_memory_message = ec.get('current_message') or _current_message(state.get('user_query') or '')
+        saved_artifact = next((item for item in reversed(state.get('tool_artifacts') or [])
+                               if item.get('tool') == 'remember' and _is_executed(item)), None)
+        if (saved_artifact is not None and memory_contract_from_artifact(saved_artifact).get('success')
+                and not independent_memory_task(current_memory_message)
+                and not any(item.get('tool') not in ('remember','recall_memory',None)
+                            for item in state.get('tool_artifacts') or [])):
+            # The observed write completes a memory-only request. A second model hop
+            # must not invent a new budget conflict or alter the acknowledged text.
+            return Command(update={'response_type':'answer'}, goto='format_output_fc')
+        if any(item.get('tool') == 'ask_user' for item in state.get('tool_artifacts') or []):
+            # Independent reads requested alongside clarification have now been attempted.
+            return Command(update={}, goto='format_output_fc')
         first_entry = not messages
         try:
             _register_base_prompt_variants()
@@ -2633,7 +2774,14 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         except Exception as exc:
             logger.warning("fc_loop.plan_llm_failed type=%s", type(exc).__name__)
             elapsed = (time.monotonic() - turn_start) if turn_start else 0.0
-            return await _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start)
+            if isinstance(exc, TimeoutError) and elapsed >= wrap_edge:
+                return await _wrap_up(state, messages, specs, loop_turn, elapsed, turn_start)
+            text = _artifact_grounded_fallback_answer(state, reason='provider_error')
+            return Command(update={
+                'final_response': text, 'response_type': 'error',
+                'tool_data': {'error_code': 'model_provider_unavailable', 'retryable': True},
+                'loop_turn': loop_turn,
+            }, goto='format_output_fc')
         tool_calls = list(getattr(resp, "tool_calls", None) or [])
         if (explicit_memory_required
                 and not any(tc.get("name") == "remember" for tc in tool_calls)):
@@ -2654,15 +2802,32 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 # ask_user (contract A): terminal. Record its model-provided fields as an
                 # artifact; format_output_fc derives known_criteria deterministically.
                 args = ask.get("args") or {}
+                from core.tools.ask_user import normalize_options
                 payload = {
                     "status": "ask_user",
                     "question": args.get("question", ""),
                     "clarification_kind": args.get("clarification_kind", "other"),
                     "missing_fields": args.get("missing_fields", []) or [],
                     "missing_optional_fields": args.get("missing_optional_fields", []) or [],
+                    "options": normalize_options(args.get('options')),
                 }
                 artifacts = list(state.get("tool_artifacts") or [])
                 artifacts.append(_artifact(loop_turn - 1, "ask_user", payload))
+                independent = (_explicit_transport_reads(state, [], current_message) +
+                               _explicit_weather_reads(state, [], current_message))
+                available = {spec.name: spec for spec in specs}
+                independent = [(name, params) for name, params in independent
+                    if name in available and getattr(available[name], 'side_effect', 'none') != 'write'
+                    and not getattr(available[name], 'terminal', False)
+                    and _read_tool_denial(_load_tool_policy(), name, params, current_message) is None]
+                if independent:
+                    read_message = AIMessage(content='', tool_calls=[
+                        {'name': name, 'args': params, 'id': f'clarify_read_{loop_turn}_{index}', 'type': 'tool_call'}
+                        for index, (name, params) in enumerate(independent)])
+                    return Command(update={
+                        'messages': messages + [read_message], 'loop_turn': loop_turn,
+                        'tool_artifacts': artifacts,
+                    }, goto='execute_tools')
                 return Command(update={
                     "messages": messages + [resp], "loop_turn": loop_turn,
                     "tool_artifacts": artifacts,
@@ -2707,6 +2872,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             has_other_result = any(
                 artifact.get("tool") != "remember" and _is_executed(artifact)
                 for artifact in (state.get("tool_artifacts") or []))
+            from core.constraint_updates import independent_memory_task
+            has_other_result = has_other_result or independent_memory_task(
+                (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or '')
             text = compose_memory_contract_response(
                 text, memory_contract, language=lang, preserve_content=has_other_result)
         return Command(update={
@@ -2724,8 +2892,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         p = dict(params or {})
         ec = state.get("extracted_context") or {}
         acc = state.get("accumulated_search_criteria") or {}
-        if not p.get("current_message"):
-            p["current_message"] = ec.get("current_message", "")
+        from core.langgraph_agent import _apply_explicit_criteria_updates
+        acc = _apply_explicit_criteria_updates(acc, ec.get('current_message') or '')
+        p["current_message"] = ec.get("current_message", "")
         # A hard filter the model invented (a plausible budget, a bedroom count, "shared")
         # narrows the search to nothing while staying invisible to the user. Drop anything
         # not traceable to the accumulated criteria or to this turn's own words, BEFORE the
@@ -2746,6 +2915,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             switched = None
         if switched:
             p["area"] = switched
+            p["areas"] = [switched]
         if not p.get("area") and acc.get("area"):
             p["area"] = acc["area"]
         if not switched and not p.get("areas") and acc.get("areas"):
@@ -2761,6 +2931,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             p["no_commute"] = True
         if acc.get("bedrooms") is not None and not p.get("bedrooms"):
             p["bedrooms"] = acc["bedrooms"]
+        p['bedrooms_minimum'] = bool(p.get('bedrooms_minimum', acc.get('bedrooms_minimum')))
         if acc.get("room_type") and not p.get("room_type"):
             p["room_type"] = acc["room_type"]
         if acc.get("move_in_date") and not p.get("move_in_date"):
@@ -2776,6 +2947,36 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         rl = ec.get("reply_language")
         if rl and not p.get("reply_language"):
             p["reply_language"] = rl
+        # Known user constraints are authoritative, including explicit clearing (None)
+        # and zero-bedroom studios. The model may supply only genuinely unknown slots.
+        for stored, argument in (
+            ('area', 'area'), ('areas', 'areas'), ('max_budget', 'max_budget'),
+            ('bedrooms', 'bedrooms'), ('bedrooms_minimum', 'bedrooms_minimum'),
+            ('room_type', 'room_type'), ('move_in_date', 'move_in_date'),
+            ('property_features', 'property_features'), ('budget_period', 'budget_period'),
+            ('max_travel_time', 'max_commute_time'), ('no_commute', 'no_commute'),
+        ):
+            if stored in acc:
+                if acc[stored] is None:
+                    p.pop(argument, None)
+                else:
+                    p[argument] = acc[stored]
+        if acc.get('area') and not acc.get('areas'):
+            p['areas'] = [acc['area']]
+        if cd:
+            p['commute_destination'] = cd
+        if acc.get('no_commute'):
+            p['max_commute_time'] = None
+        total_budget = acc.get('monthly_total_budget')
+        if isinstance(total_budget, (int, float)) and total_budget > 0:
+            # Rent alone cannot exceed the entire rent+transport allowance. This
+            # necessary bound does not establish that the combined cost fits.
+            rent_ceiling = p.get('max_budget')
+            p['max_budget'] = min(rent_ceiling, total_budget) if rent_ceiling else total_budget
+        from core.constraint_updates import commute_query_forbidden
+        if commute_query_forbidden(p['current_message']):
+            p['no_commute'] = True
+            p.pop('max_commute_time', None)
         return p
 
     def _derived_toolmsg(tool: str, result) -> tuple[str, bool]:
@@ -2864,13 +3065,36 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 merged = poi_canon.get(" ".join(str(args.get("address") or "").split()).lower())
                 if merged is not None:
                     args = dict(merged)
-                args = _inject_poi_coords(args, state)
+                from core.property_scope import has_property_reference
+                if not has_property_reference(cur_msg, ec):
+                    args = _inject_poi_coords(args, state)
+                cm = (state.get('extracted_context') or {}).get('current_message') or ''
+                poi_properties = (specs.get(name).input_schema.get('properties') or {}) if specs.get(name) else {}
+                if cm and {'user_query', 'poi_type', 'radius'}.issubset(poi_properties):
+                    from core.tools.search_nearby_pois import _infer_poi_types_from_query, _user_radius_m
+                    args['user_query'] = cm
+                    inferred = _infer_poi_types_from_query(cm)
+                    supplied = str(args.get('poi_type') or 'all')
+                    if supplied != 'all' and inferred:
+                        args['poi_type'] = ','.join(dict.fromkeys(
+                            [p.strip() for p in supplied.split(',') if p.strip()] + inferred))
+                    requested_radius = _user_radius_m(cm)
+                    if requested_radius is not None:
+                        args['radius'] = requested_radius
             elif name in ("recall_memory", "remember"):
                 # PRIVACY (mirror legacy execute_tool_node): namespace from state, and
                 # fail closed on a missing user_id rather than falling into the shared
                 # 'default' memory bucket.
                 args["user_id"] = state.get("user_id") or ""
                 args["session_id"] = state.get("session_id", "default")
+            if name in ('calculate_commute_cost', 'check_transport_cost'):
+                office_days = (state.get('accumulated_search_criteria') or {}).get('office_days_per_week')
+                spec = specs.get(name)
+                if office_days is not None and spec and 'office_days_per_week' in (spec.input_schema.get('properties') or {}):
+                    args['office_days_per_week'] = office_days
+            if name in ('check_safety', 'search_nearby_pois', 'get_transport_info'):
+                from core.property_scope import grounded_property_read_args
+                args = grounded_property_read_args(name, args, cur_msg, ec)
             digest = _params_digest(name, args)
             if (name, digest) in seen:
                 plan.append((tc, digest, "skip_dup", args))
@@ -3937,7 +4161,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 continue
             result = result_by_idx[i]
             if (name == "search_properties" and getattr(result, "success", False)
-                    and isinstance(getattr(result, "data", None), dict)):
+                    and isinstance(getattr(result, "data", None), dict)
+                    and not commute_query_forbidden(
+                        (state.get('extracted_context') or {}).get('current_message') or '')):
                 # Candidate-level commute checks are real tool work, not a free post-process.
                 # They share the turn's absolute soft deadline, remaining cumulative tool
                 # budget, fan-out cap and semaphore; their elapsed time is charged below.
@@ -4234,6 +4460,9 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
         has_other_result = any(
             artifact.get("tool") != "remember" and _is_executed(artifact)
             for artifact in artifacts)
+        from core.constraint_updates import independent_memory_task
+        has_other_result = has_other_result or independent_memory_task(
+            (state.get('extracted_context') or {}).get('current_message') or state.get('user_query') or '')
 
         def _apply_memory_contract(response: str) -> str:
             return compose_memory_contract_response(
@@ -4273,8 +4502,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                 "missing_optional_fields": data.get("missing_optional_fields", []),
                 "clarification_kind": data.get("clarification_kind", "other"),
                 "known_criteria": _derive_known_criteria(acc),
+                "options": data.get('options') or [],
             }
             response = _sanitize_final_response(data.get("question", "") or final_response)
+            from core.candidate_validation import render_structured_evidence_fallback
+            evidence = render_structured_evidence_fallback(state, language=lang)
+            if evidence:
+                response += '\n\n' + evidence
             return {"final_response": _apply_memory_contract(response),
                     "response_type": "clarification", "tool_data": tool_data}
 
@@ -4298,8 +4532,7 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             # reported them under `similar_properties`. Matching only "found" dropped the
             # whole artifact, so the panel stayed empty and a real search result shipped as a
             # plain chat reply — the same failure ISSUE #78 fixed for over-budget-only rows.
-            if (raw.get("status") in _SEARCH_RESULT_STATUSES and search_found is None
-                    and _search_payload_has_candidates(raw)):
+            if raw.get("status") in _SEARCH_RESULT_STATUSES and search_found is None:
                 search_found = raw
             if raw.get("status") == "need_clarification" and search_clarify is None:
                 search_clarify = raw
@@ -4321,7 +4554,10 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             validation = search_found.get("candidate_validation") or {}
             requires_status = bool(validation.get("excluded") or validation.get("unknown")
                                     or (validation.get("constraints") or {}).get("max_commute_minutes"))
-            if similar_only and search_found.get("status") == "no_exact_match_but_similar":
+            if search_found.get('status') == 'no_results':
+                response = search_found.get('message') or search_found.get('summary') or (
+                    '当前检索数据中没有匹配项。' if language == 'zh' else 'No matches in the retrieved data.')
+            elif similar_only and search_found.get("status") == "no_exact_match_but_similar":
                 # A similar-recall result failed no stated constraint — the exact-match pool
                 # was simply empty. render_candidate_status would file every row under
                 # "excluded / does not meet" and drop its price, so this path renders its own
@@ -4335,6 +4571,13 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
                             if requires_status else
                             final_response or search_found.get("summary")
                             or f"I found {len(recs)} properties.")
+            if search_found.get('source_message') and search_found['source_message'] not in response:
+                response = search_found['source_message'] + '\n\n' + response
+            if requires_status or len(artifacts) > 1:
+                from core.candidate_validation import render_structured_evidence_fallback
+                evidence = render_structured_evidence_fallback(state, language=language)
+                if evidence:
+                    response = response + '\n\n' + evidence
             response_type = "search"
             # Structured cards (safety/POI/commute) also present this turn ride along in tool_data.
             _merge_cards(artifacts, tool_data)
@@ -4474,6 +4717,9 @@ def _derive_known_criteria(acc: dict) -> dict:
         "budget_period": acc.get("budget_period"),
         "room_type": acc.get("room_type"),
         "move_in_date": acc.get("move_in_date"),
+        "max_changes": acc.get("max_changes"),
+        "monthly_total_budget": acc.get("monthly_total_budget"),
+        "office_days_per_week": acc.get("office_days_per_week"),
         "property_features": acc.get("property_features") or [],
         "soft_preferences": acc.get("soft_preferences") or [],
     }
@@ -4500,7 +4746,14 @@ def build_fc_graph(tool_registry, *, extract_preferences_node, critic_node,
         agent_llm=agent_llm,
         specialist_dispatch=specialist_dispatch,
     )
-    ident = instrument or (lambda name, fn: fn)
+    from uk_rent_agent.agent.progress import with_progress
+
+    instrument_node = instrument or (lambda name, fn: fn)
+
+    def ident(name, fn):
+        stage = {"extract_preferences": "understanding", "execute_tools": "searching",
+                 "critic": "checking", "agent": "writing"}.get(name)
+        return with_progress(stage, instrument_node(name, fn))
     use_store = store is not None
 
     graph = StateGraph(AgentState)

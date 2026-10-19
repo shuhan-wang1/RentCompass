@@ -1,0 +1,361 @@
+{
+  "source": "already persisted completed form turn; original driver-truncated evidence preserved separately",
+  "turn_id": "6b4cdfebf27a435b857e749b88e01963",
+  "message": "- No listing is both fully eligible and verified.\nExcluded / does not meet:\n- Unex Tower, 7 Station Street, London, E15: alternative is outside the declared hard result set; monthly price 2300 exceeds budget 2000; monthly rent 2300 alone exceeds total budget 2150\nNot verified:\n- High Street, Stratford, E15: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Cressingham Road, London, SE13: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Deanery Road, London, E15: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Molesworth Street, London, SE13: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Lee High Road, London, SE13: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Copperworks Wharf Sugar House Island E15: monthly travel cost is not verified for this listing, destination and attendance; bedroom count is not verified; cannot verify the commute condition\n- River Heights, E15: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Dermody Road, Hithergreen, SE13: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Station Road, Lewisham: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\n- Rick Roberts Way, London, E15: monthly travel cost is not verified for this listing, destination and attendance; cannot verify the commute condition\nThese listings are cached; prices and availability may have changed. Confirm with the agent.",
+  "recommendations": [
+    {
+      "rank": 1,
+      "address": "Unex Tower, 7 Station Street, London, E15",
+      "price": "£2300/month",
+      "budget_status": "⚠️ 超预算 £300",
+      "score": 35.12,
+      "score_breakdown": {
+        "price": 0.0,
+        "commute": 18.47,
+        "semantic": 7.9,
+        "freshness": 8.75
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "soft_violation",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/14951549/",
+      "images": [
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.541389, -0.003575",
+      "distance_miles": 0.01,
+      "explanation": "1 bedroom flat to rent in Unex Tower, 7 Station Street, London, E15 (TfL transit: 25 min to Bank station, London)",
+      "area": "Stratford",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "25 min to Bank station, London",
+      "travel_time_source": "routing",
+      "alternative": true,
+      "candidate_status": "excluded",
+      "status_reason": "over_budget",
+      "qualification": {
+        "status": "excluded",
+        "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2300 exceeds budget 2000",
+          "monthly rent 2300 alone exceeds total budget 2150"
+        ],
+        "unknown_reasons": [
+          "commute tool skipped"
+        ],
+        "constraints": {
+          "max_budget_monthly": 2000.0,
+          "monthly_total_budget": 2150.0,
+          "office_days_per_week": 2.0,
+          "max_commute_minutes": 45.0,
+          "commute_destination": "Bank station, London",
+          "no_commute": false,
+          "max_changes": null,
+          "bedrooms": 1.0,
+          "bedrooms_minimum": false,
+          "room_type": "whole",
+          "areas": [
+            "lewisham",
+            "stratford"
+          ],
+          "move_in_date": null,
+          "property_features": []
+        },
+        "source": "structured_listing"
+      },
+      "budget_basis": 2000.0
+    }
+  ],
+  "response_metadata": {},
+  "persisted_criteria": {
+    "destination": "Bank station, London",
+    "max_budget": 2000,
+    "max_travel_time": 45,
+    "property_features": [],
+    "soft_preferences": [],
+    "amenities_of_interest": [],
+    "monthly_total_budget": 2150,
+    "office_days_per_week": 2,
+    "commute_destination": "Bank station, London",
+    "area": "Lewisham",
+    "areas": [
+      "Lewisham",
+      "Stratford"
+    ],
+    "room_type": "whole",
+    "bedrooms": 1,
+    "bedrooms_minimum": false,
+    "no_commute": false,
+    "constraint_sources": {
+      "area": {
+        "source": "form",
+        "value": "Lewisham"
+      },
+      "areas": {
+        "source": "form",
+        "value": [
+          "Lewisham",
+          "Stratford"
+        ]
+      },
+      "monthly_total_budget": {
+        "source": "user_message",
+        "value": 2150,
+        "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+      },
+      "office_days_per_week": {
+        "source": "user_message",
+        "value": 2,
+        "text": "My employer now only needs me in the office two days a week, Tuesday and Thursday. Please increase my rent ceiling to £2,000 per month, while keeping the separate rent-plus-commuting ceiling at £2,150 per month. I still want a self-contained whole one-bedroom flat in Lewisham or Stratford, about 45 minutes or less to Bank station. Please update my search and show the actual suitable or clearly labelled unverified listings."
+      },
+      "bedrooms": {
+        "source": "form",
+        "value": 1
+      },
+      "bedrooms_minimum": {
+        "source": "form",
+        "value": false
+      },
+      "room_type": {
+        "source": "form",
+        "value": "whole"
+      },
+      "commute_destination": {
+        "source": "form",
+        "value": "Bank station, London"
+      },
+      "destination": {
+        "source": "user_message",
+        "value": "Bank station, London",
+        "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+      },
+      "max_travel_time": {
+        "source": "form",
+        "value": 45
+      },
+      "no_commute": {
+        "source": "form",
+        "value": false
+      },
+      "max_budget": {
+        "source": "form",
+        "value": 2000
+      },
+      "budget_period": {
+        "source": "form",
+        "value": "month"
+      },
+      "move_in_date": {
+        "source": "form",
+        "value": null
+      }
+    },
+    "budget_period": "month",
+    "plans": {
+      "Lewisham": {
+        "destination": "Bank station, London",
+        "max_budget": 1850,
+        "max_travel_time": 45,
+        "property_features": [],
+        "soft_preferences": [],
+        "amenities_of_interest": [],
+        "monthly_total_budget": 2150,
+        "office_days_per_week": 3,
+        "commute_destination": "Bank station, London",
+        "area": "Lewisham",
+        "areas": [
+          "Lewisham",
+          "Stratford"
+        ],
+        "room_type": "whole",
+        "bedrooms": 1,
+        "bedrooms_minimum": false,
+        "no_commute": false,
+        "constraint_sources": {
+          "area": {
+            "source": "user_message",
+            "value": "Lewisham",
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "areas": {
+            "source": "user_message",
+            "value": [
+              "Lewisham",
+              "Stratford"
+            ],
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "monthly_total_budget": {
+            "source": "user_message",
+            "value": 2150,
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "office_days_per_week": {
+            "source": "user_message",
+            "value": 3,
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "value": 1,
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "value": false,
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "room_type": {
+            "source": "user_message",
+            "value": "whole",
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "commute_destination": {
+            "source": "user_message",
+            "value": "Bank station, London",
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "destination": {
+            "source": "user_message",
+            "value": "Bank station, London",
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "value": 45,
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "no_commute": {
+            "source": "user_message",
+            "value": false,
+            "text": "I'm moving to London for a job near Bank station. I'll be in the office three days a week. Please help me find a self-contained one-bedroom flat in Lewisham or Stratford, with rent up to £1,850 per month and rent plus commuting no more than £2,150 per month. I'd like a public-transport commute of about 45 minutes or less. What suitable places can you show me?"
+          },
+          "max_budget": {
+            "source": "user_message",
+            "value": 1850,
+            "text": " Please keep the £1,850 rent limit separate from the £2,150 rent-and-commute limit, and tell me what you could actually verify"
+          },
+          "budget_period": {
+            "source": "user_message",
+            "value": "month",
+            "text": " Please keep the £1,850 rent limit separate from the £2,150 rent-and-commute limit, and tell me what you could actually verify"
+          }
+        },
+        "budget_period": "month"
+      }
+    },
+    "move_in_date": null,
+    "criteria_repair_provenance": [
+      {
+        "field": "max_budget",
+        "reason": "parser_value_corrected",
+        "previous_value": 1850,
+        "value": 1850,
+        "message_id": 27
+      }
+    ],
+    "max_budget_monthly": 2000,
+    "max_commute_time": 45
+  },
+  "persisted_results": [
+    {
+      "rank": 1,
+      "address": "Unex Tower, 7 Station Street, London, E15",
+      "price": "£2300/month",
+      "budget_status": "⚠️ 超预算 £300",
+      "score": 35.12,
+      "score_breakdown": {
+        "price": 0.0,
+        "commute": 18.47,
+        "semantic": 7.9,
+        "freshness": 8.75
+      },
+      "property_type": "1 bed Flat",
+      "room_type": "whole",
+      "bedrooms": 1,
+      "match_type": "soft_violation",
+      "source": "OnTheMarket (cached)",
+      "possibly_outdated": false,
+      "url": "https://www.onthemarket.com/details/14951549/",
+      "images": [
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-0-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-1-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-2-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-3-480x320.jpg",
+        "https://media.onthemarket.com/properties/14951549/1638581326/image-4-480x320.jpg"
+      ],
+      "geo_location": "51.541389, -0.003575",
+      "distance_miles": 0.01,
+      "explanation": "1 bedroom flat to rent in Unex Tower, 7 Station Street, London, E15 (TfL transit: 25 min to Bank station, London)",
+      "area": "Stratford",
+      "description": "",
+      "available_from": "",
+      "availability_status": "",
+      "verified_features": [],
+      "unverified_features": [],
+      "absent_features": [],
+      "travel_time": "25 min to Bank station, London",
+      "travel_time_source": "routing",
+      "alternative": true,
+      "candidate_status": "excluded",
+      "status_reason": "over_budget",
+      "qualification": {
+        "status": "excluded",
+        "reasons": [
+          "alternative is outside the declared hard result set",
+          "monthly price 2300 exceeds budget 2000",
+          "monthly rent 2300 alone exceeds total budget 2150"
+        ],
+        "unknown_reasons": [
+          "commute tool skipped"
+        ],
+        "constraints": {
+          "max_budget_monthly": 2000.0,
+          "monthly_total_budget": 2150.0,
+          "office_days_per_week": 2.0,
+          "max_commute_minutes": 45.0,
+          "commute_destination": "Bank station, London",
+          "no_commute": false,
+          "max_changes": null,
+          "bedrooms": 1.0,
+          "bedrooms_minimum": false,
+          "room_type": "whole",
+          "areas": [
+            "lewisham",
+            "stratford"
+          ],
+          "move_in_date": null,
+          "property_features": []
+        },
+        "source": "structured_listing",
+        "reason_messages": {
+          "en": [
+            "alternative is outside the declared hard result set",
+            "monthly price 2300 exceeds budget 2000",
+            "monthly rent 2300 alone exceeds total budget 2150",
+            "commute tool skipped"
+          ],
+          "zh": [
+            "该房源是备选，未满足全部已声明条件",
+            "月租 £2300 超过预算 £2000",
+            "仅月租 £2300 就已超过每月总预算 £2150",
+            "通勤条件尚未核实（未完成查询）"
+          ]
+        }
+      },
+      "budget_basis": 2000.0
+    }
+  ],
+  "scope_note": "Persisted assistant fields and turn snapshot; not claimed to be the byte-for-byte original HTTP body."
+}

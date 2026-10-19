@@ -1,0 +1,142 @@
+[
+  {
+    "url": "http://127.0.0.1:15008/api/auth/me",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "24",
+      "date": "Mon, 19 Oct 2026 09:37:57 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"authenticated\": false}"
+  },
+  {
+    "url": "http://127.0.0.1:15008/api/conversations",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "2030",
+      "date": "Mon, 19 Oct 2026 09:37:57 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"conversations\": [{\"agent_arch\": \"fc_loop\", \"agent_version\": \"e2e-repair-frozen-working-tree\", \"branch_depth\": 0, \"created_at\": \"2026-10-19T09:35:53.123480+00:00\", \"edited_slot_turn_id\": null, \"fork_reason\": null, \"forked_from_turn_id\": null, \"id\": \"fe73ac63d23c48bf9bb80c0a86f02257\", \"message_count\": 4, \"parent_conversation_id\": null, \"root_conversation_id\": \"fe73ac63d23c48bf9bb80c0a86f02257\", \"strict\": false, \"title\": \"我开了一个新会话，继续按我之前已经保存的长期默认帮我找房。请说明本次实际使用的筛…\", \"updated_at\": \"2026-10-19T09:37:28.730495+00:00\"}, {\"agent_arch\": \"fc_loop\", \"agent_version\": \"e2e-repair-frozen-working-tree\", \"branch_depth\": 0, \"created_at\": \"2026-10-19T09:00:33.528659+00:00\", \"edited_slot_turn_id\": null, \"fork_reason\": null, \"forked_from_turn_id\": null, \"id\": \"51817b80f9ea41649667074bee9a3b7f\", \"message_count\": 8, \"parent_conversation_id\": null, \"root_conversation_id\": \"51817b80f9ea41649667074bee9a3b7f\", \"strict\": false, \"title\": \"这是我新开的对话。请按我之前保存的长期默认继续找房，并先告诉我你实际读取到了什么…\", \"updated_at\": \"2026-10-19T09:23:51.035577+00:00\"}, {\"agent_arch\": \"fc_loop\", \"agent_version\": \"e2e-repair-frozen-working-tree\", \"branch_depth\": 0, \"created_at\": \"2026-10-19T08:56:21.123961+00:00\", \"edited_slot_turn_id\": null, \"fork_reason\": null, \"forked_from_turn_id\": null, \"id\": \"50644e40a5f84f7f8b2926a5a9252fb0\", \"message_count\": 12, \"parent_conversation_id\": null, \"root_conversation_id\": \"50644e40a5f84f7f8b2926a5a9252fb0\", \"strict\": false, \"title\": \"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\", \"updated_at\": \"2026-10-19T09:00:00.697911+00:00\"}]}"
+  },
+  {
+    "url": "http://127.0.0.1:15008/api/conversations/fe73ac63d23c48bf9bb80c0a86f02257/messages",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "12243",
+      "date": "Mon, 19 Oct 2026 09:37:57 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"messages\": [{\"content\": \"我开了一个新会话，继续按我之前已经保存的长期默认帮我找房。请说明本次实际使用的筛选条件，以及有哪些已经核实符合或仍待核实的候选。\", \"id\": 93, \"role\": \"user\", \"timestamp\": \"2026-10-19T09:35:54.159307+00:00\", \"turn_id\": \"d771d4cce1b545e591f0af65e6eaeb1c\"}, {\"content\": \"- 没有同时满足且已核实的房源。\\n已排除/不符合：\\n- Barrowgate Road, London W4：该房源是备选，未满足全部已声明条件；月租 £2450 超过预算 £2400；经核实通勤为 32 分钟，超过 30 分钟上限\\n房源来自缓存，价格和出租状态可能已变化；请联系中介核实。\\n\\n返回的路线：Acacia House, 51 Kingston Road, New Malden, London → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n该行程仅对应上述起点，不代表其他房源的通勤时长，也未证明准点到达或无台阶通行。\\n返回的路线：White City Estate, London W12 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n返回的路线：High Street, London N8 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n返回的路线：Caroline Close, London N10 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n返回的路线：Fortescue Road, Colliers Wood, Greater London → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n返回的路线：River Mill One, London → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n返回的路线：Barrowgate Road, London W4 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n返回的路线：Hewitt Quays, Barking, London IG11 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\\n返回的路线：Acacia House, 51 Kingston Road, New Malden, London KT3 → Gower Street, London WC1E 6BT，32 分钟（路线规划器返回的最快行程）。\", \"id\": 95, \"recommendations\": [{\"absent_features\": [], \"address\": \"Barrowgate Road, London W4\", \"alternative\": true, \"area\": \"London\", \"availability_status\": \"\", \"available_from\": \"\", \"bedrooms\": 2, \"budget_basis\": 2400.0, \"budget_status\": \"⚠️ 超预算 £50\", \"budget_status_code\": \"over\", \"candidate_reasons\": [\"alternative is outside the declared hard result set\", \"monthly price 2450 exceeds budget 2400\", \"measured commute 32 min exceeds limit 30 min\"], \"candidate_status\": \"excluded\", \"candidate_unknown_reasons\": [], \"description\": \"\", \"distance_miles\": null, \"explanation\": \"2 bedroom flat to rent in Barrowgate Road, London W4\", \"geo_location\": \"51.48840449999999, -0.2603863\", \"images\": [\"https://media.onthemarket.com/properties/20304142/1643043315/image-0-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-1-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-2-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-3-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-4-480x320.jpg\"], \"match_type\": \"soft_violation\", \"possibly_outdated\": true, \"price\": \"£2450/month\", \"property_type\": \"2 bed Flat\", \"qualification\": {\"constraints\": {\"areas\": [\"london\"], \"bedrooms\": 2.0, \"bedrooms_minimum\": false, \"commute_destination\": \"Gower Street, London WC1E 6BT\", \"max_budget_monthly\": 2400.0, \"max_commute_minutes\": 30.0, \"monthly_total_budget\": null, \"move_in_date\": null, \"no_commute\": false, \"office_days_per_week\": null, \"property_features\": [], \"room_type\": \"whole\"}, \"reason_messages\": {\"en\": [\"alternative is outside the declared hard result set\", \"monthly price 2450 exceeds budget 2400\", \"measured commute 32 min exceeds limit 30 min\"], \"zh\": [\"该房源是备选，未满足全部已声明条件\", \"月租 £2450 超过预算 £2400\", \"经核实通勤为 32 分钟，超过 30 分钟上限\"]}, \"reasons\": [\"alternative is outside the declared hard result set\", \"monthly price 2450 exceeds budget 2400\", \"measured commute 32 min exceeds limit 30 min\"], \"source\": \"structured_listing\", \"status\": \"excluded\", \"unknown_reasons\": []}, \"rank\": 1, \"room_type\": \"whole\", \"score\": 99.0, \"score_breakdown\": {}, \"source\": \"OnTheMarket (cached)\", \"status_reason\": \"over_budget\", \"unverified_features\": [], \"url\": \"https://www.onthemarket.com/details/20304142/\", \"verified_commute_minutes\": 32.0, \"verified_features\": []}], \"response_type\": \"search\", \"role\": \"assistant\", \"timestamp\": \"2026-10-19T09:36:08.850202+00:00\", \"turn_id\": \"d771d4cce1b545e591f0af65e6eaeb1c\"}, {\"content\": \"刚才同一套备选，文字说通勤已经核实，卡片却说缺少通勤证据。到底哪一个状态可靠？请只核对刚才的结果，不重新找房，也不改变当前筛选或长期默认。\", \"id\": 103, \"role\": \"user\", \"timestamp\": \"2026-10-19T09:37:26.568707+00:00\", \"turn_id\": \"dd360e324233473caefab6ebbcb50337\"}, {\"content\": \"以卡片为准：这套备选的通勤状态是“缺少通勤证据”，文字里“已核实”的说法不成立。\\n\\n原因说明\\n- 卡片上的状态来自房源记录本身，该记录没有附带可用的通勤数据，所以显示为缺少通勤证据。\\n- 是路线规划器对某个起点地址返回的行程结果，并不是针对这套备选房源地址核实的通勤时长。把那个数字写成“这套房已核实通勤”是错的，我为此更正。\\n- 因此这套备选目前的状态是：价格 £2450/月（缓存记录价，超出 £2400 预算 £50），通勤未核实。\\n\\n本次没有重新搜索，也没有改动当前筛选条件或长期默认。若需要，我可以只针对这套备选的完整地址单独做一次通勤核对，把结果绑定到该地址上。\\n\\n注：部分通勤结论缺少可对应的证据，已从回答中移除。\", \"id\": 104, \"response_type\": \"chat\", \"role\": \"assistant\", \"timestamp\": \"2026-10-19T09:37:28.730495+00:00\", \"turn_id\": \"dd360e324233473caefab6ebbcb50337\"}], \"view_state\": {\"criteria\": {\"amenities_of_interest\": [], \"bedrooms\": 2, \"bedrooms_minimum\": false, \"budget_period\": \"month\", \"commute_destination\": \"Gower Street, London WC1E 6BT\", \"constraint_sources\": {\"bedrooms\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": 2}, \"bedrooms_minimum\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": false}, \"budget_period\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": \"month\"}, \"commute_destination\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": \"Gower Street, London WC1E 6BT\"}, \"destination\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": \"Gower Street, London WC1E 6BT\"}, \"max_budget\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": 2400}, \"max_travel_time\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": 30}, \"no_commute\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": false}, \"room_type\": {\"memory_id\": \"semantic_0d7f04738ad93d97f5c671870971093a\", \"source\": \"saved_preference\", \"value\": \"whole\"}}, \"destination\": \"Gower Street, London WC1E 6BT\", \"max_budget\": 2400, \"max_travel_time\": 30, \"no_commute\": false, \"property_features\": [], \"room_type\": \"whole\", \"soft_preferences\": []}, \"operation\": \"replace\", \"results\": [{\"absent_features\": [], \"address\": \"Barrowgate Road, London W4\", \"alternative\": true, \"area\": \"London\", \"availability_status\": \"\", \"available_from\": \"\", \"bedrooms\": 2, \"budget_basis\": 2400.0, \"budget_status\": \"⚠️ 超预算 £50\", \"budget_status_code\": \"over\", \"candidate_reasons\": [\"alternative is outside the declared hard result set\", \"monthly price 2450 exceeds budget 2400\"], \"candidate_status\": \"excluded\", \"candidate_unknown_reasons\": [\"commute evidence is missing\"], \"description\": \"\", \"distance_miles\": null, \"explanation\": \"2 bedroom flat to rent in Barrowgate Road, London W4\", \"geo_location\": \"51.48840449999999, -0.2603863\", \"images\": [\"https://media.onthemarket.com/properties/20304142/1643043315/image-0-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-1-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-2-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-3-480x320.jpg\", \"https://media.onthemarket.com/properties/20304142/1643043315/image-4-480x320.jpg\"], \"match_type\": \"soft_violation\", \"possibly_outdated\": true, \"price\": \"£2450/month\", \"property_type\": \"2 bed Flat\", \"qualification\": {\"constraints\": {\"areas\": [], \"bedrooms\": 2.0, \"bedrooms_minimum\": false, \"commute_destination\": \"Gower Street, London WC1E 6BT\", \"max_budget_monthly\": 2400.0, \"max_commute_minutes\": 30.0, \"monthly_total_budget\": null, \"move_in_date\": null, \"no_commute\": false, \"office_days_per_week\": null, \"property_features\": [], \"room_type\": \"whole\"}, \"reason_messages\": {\"en\": [\"alternative is outside the declared hard result set\", \"monthly price 2450 exceeds budget 2400\", \"commute evidence is missing\"], \"zh\": [\"该房源是备选，未满足全部已声明条件\", \"月租 £2450 超过预算 £2400\", \"缺少该房源的通勤证据\"]}, \"reasons\": [\"alternative is outside the declared hard result set\", \"monthly price 2450 exceeds budget 2400\"], \"source\": \"structured_listing\", \"status\": \"excluded\", \"unknown_reasons\": [\"commute evidence is missing\"]}, \"rank\": 1, \"room_type\": \"whole\", \"score\": 99.0, \"score_breakdown\": {}, \"source\": \"OnTheMarket (cached)\", \"status_reason\": \"over_budget\", \"unverified_features\": [], \"url\": \"https://www.onthemarket.com/details/20304142/\", \"verified_features\": []}], \"revision\": 2}}"
+  },
+  {
+    "url": "http://127.0.0.1:15008/api/conversations/fe73ac63d23c48bf9bb80c0a86f02257/version_map",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "22",
+      "date": "Mon, 19 Oct 2026 09:37:57 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"version_groups\": {}}"
+  },
+  {
+    "url": "http://127.0.0.1:15008/api/favorites",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "1536",
+      "date": "Mon, 19 Oct 2026 09:37:57 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"favorites\": [{\"address\": \"The Grove, Enfield\", \"availability_status\": \"\", \"available_from\": \"\", \"budget_basis\": 3000, \"budget_status\": \"✅ 在预算内\", \"explanation\": \"3 bedroom house to rent in The Grove, Enfield\", \"geo_location\": \"51.658153, -0.103044\", \"images\": [\"https://media.onthemarket.com/properties/20335504/1644305883/image-0-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-1-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-2-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-3-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-4-480x320.jpg\"], \"match_type\": \"perfect\", \"possibly_outdated\": true, \"price\": \"£2300/month\", \"qualification\": {\"constraints\": {\"areas\": [], \"bedrooms\": 3, \"bedrooms_minimum\": false, \"commute_destination\": \"Gower Street, London WC1E 6BT\", \"max_budget_monthly\": 3000, \"max_commute_minutes\": null, \"move_in_date\": null, \"no_commute\": false, \"property_features\": [], \"room_type\": \"whole\"}, \"reasons\": [], \"source\": \"structured_listing\", \"status\": \"eligible\", \"unknown_reasons\": []}, \"rank\": 1, \"saved_at\": \"2026-10-19T08:57:20.359Z\", \"source_conversation_title\": \"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\", \"travel_time\": \"\", \"url\": \"https://www.onthemarket.com/details/20335504/\", \"user_id\": \"15f470821e334cc68b70d7f959b67421\"}]}"
+  }
+]

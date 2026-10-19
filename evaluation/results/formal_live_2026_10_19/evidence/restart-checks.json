@@ -1,0 +1,47 @@
+[
+  {
+    "persona": "student",
+    "case": "same-signed-session-restores-identical-history-after-process-restart",
+    "before": {
+      "status": 200,
+      "sha256": "b81f85ff2125c2c4884a35cf0deec09aafdeab54ff17c61aded8a547e1546c9a",
+      "message_count": 4
+    },
+    "after": {
+      "status": 200,
+      "sha256": "b81f85ff2125c2c4884a35cf0deec09aafdeab54ff17c61aded8a547e1546c9a",
+      "message_count": 4
+    },
+    "passed": true
+  },
+  {
+    "persona": "professional",
+    "case": "same-signed-session-restores-identical-history-after-process-restart",
+    "before": {
+      "status": 200,
+      "sha256": "2466381ff166beb5582440d02f98ca8eb7e58a3e32fef6555b912561988cdb04",
+      "message_count": 6
+    },
+    "after": {
+      "status": 200,
+      "sha256": "2466381ff166beb5582440d02f98ca8eb7e58a3e32fef6555b912561988cdb04",
+      "message_count": 6
+    },
+    "passed": true
+  },
+  {
+    "persona": "family",
+    "case": "same-signed-session-restores-identical-history-after-process-restart",
+    "before": {
+      "status": 200,
+      "sha256": "e4a88c951dde73aebb7f83e17630c56e21161951937892f7a025235ef58580be",
+      "message_count": 6
+    },
+    "after": {
+      "status": 200,
+      "sha256": "e4a88c951dde73aebb7f83e17630c56e21161951937892f7a025235ef58580be",
+      "message_count": 6
+    },
+    "passed": true
+  }
+]

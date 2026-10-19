@@ -1,0 +1,17 @@
+{
+  "tag": "BUTTON",
+  "id": "menuToggle",
+  "text": "",
+  "outline": "rgb(220, 38, 38) solid 2px",
+  "boxShadow": "none",
+  "rect": {
+    "x": 16,
+    "y": 10.5,
+    "width": 38,
+    "height": 38,
+    "top": 10.5,
+    "right": 54,
+    "bottom": 48.5,
+    "left": 16
+  }
+}

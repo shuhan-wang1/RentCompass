@@ -1,0 +1,14 @@
+[
+  {
+    "test": "tests.test_on_demand_listings.test_live_manchester_is_city_correct",
+    "reason": "set RUN_LIVE_SCRAPE=1 to hit the real OnTheMarket site"
+  },
+  {
+    "test": "tests.test_classify_place.test_live_osm_suburb_is_area",
+    "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+  },
+  {
+    "test": "tests.test_classify_place.test_live_osm_university_is_destination",
+    "reason": "set RUN_LIVE_OSM=1 to hit the real Nominatim service"
+  }
+]

@@ -1,0 +1,129 @@
+{
+  "viewport": 390,
+  "documentWidth": 390,
+  "sidebar": {
+    "x": 0,
+    "y": 60,
+    "width": 280,
+    "height": 784,
+    "top": 60,
+    "right": 280,
+    "bottom": 844,
+    "left": 0
+  },
+  "sidebarWidth": 279,
+  "controls": [
+    {
+      "id": "newChatBtn",
+      "text": "New",
+      "aria": null,
+      "rect": {
+        "x": 192,
+        "y": 76,
+        "width": 71,
+        "height": 28,
+        "top": 76,
+        "right": 263,
+        "bottom": 104,
+        "left": 192
+      },
+      "centerHit": true
+    },
+    {
+      "id": "",
+      "text": "我们家是两位成人和一名8岁孩子，其中一位成人使用轮椅，另有一只猫。请找Strat…\njust now",
+      "aria": null,
+      "rect": {
+        "x": 28,
+        "y": 125,
+        "width": 359.078125,
+        "height": 49,
+        "top": 125,
+        "right": 387.078125,
+        "bottom": 174,
+        "left": 28
+      },
+      "centerHit": true
+    },
+    {
+      "id": "",
+      "text": "",
+      "aria": "Compare side by side",
+      "rect": {
+        "x": 387.078125,
+        "y": 136.5,
+        "width": 26,
+        "height": 26,
+        "top": 136.5,
+        "right": 413.078125,
+        "bottom": 162.5,
+        "left": 387.078125
+      },
+      "centerHit": false
+    },
+    {
+      "id": "",
+      "text": "",
+      "aria": "Branch",
+      "rect": {
+        "x": 415.078125,
+        "y": 136.5,
+        "width": 26,
+        "height": 26,
+        "top": 136.5,
+        "right": 441.078125,
+        "bottom": 162.5,
+        "left": 415.078125
+      },
+      "centerHit": false
+    },
+    {
+      "id": "",
+      "text": "",
+      "aria": "Rename",
+      "rect": {
+        "x": 443.078125,
+        "y": 136.5,
+        "width": 26,
+        "height": 26,
+        "top": 136.5,
+        "right": 469.078125,
+        "bottom": 162.5,
+        "left": 443.078125
+      },
+      "centerHit": false
+    },
+    {
+      "id": "",
+      "text": "",
+      "aria": "Delete",
+      "rect": {
+        "x": 471.078125,
+        "y": 136.5,
+        "width": 26,
+        "height": 26,
+        "top": 136.5,
+        "right": 497.078125,
+        "bottom": 162.5,
+        "left": 471.078125
+      },
+      "centerHit": false
+    },
+    {
+      "id": "userMenuBtn",
+      "text": "G\nGuest",
+      "aria": null,
+      "rect": {
+        "x": 10,
+        "y": 786,
+        "width": 259,
+        "height": 48,
+        "top": 786,
+        "right": 269,
+        "bottom": 834,
+        "left": 10
+      },
+      "centerHit": true
+    }
+  ]
+}

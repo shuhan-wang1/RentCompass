@@ -1,0 +1,211 @@
+[
+  {
+    "tool": "search_properties",
+    "real_conversation_execute_attempts": 16,
+    "logical_successes": 16,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "166f859735b247b8a7e874237ebd4ae4",
+      "1a197fb419704e07ab5dc76c9c530530",
+      "1bcf22e407964141bcd705052c6f94b5",
+      "4aa0f80277f341f89a4a829f4acfec28",
+      "5fda137e81a34cff85821c862be3e17b",
+      "68d4f8a9279b4fecb3bb38c4a804d9ff",
+      "762346d1b9d045c886e29747f97ab756",
+      "789dc635d4014461b20b93c6a9f6279d",
+      "954db6795fb84cf5a29d0a7d556b19ad",
+      "9f19f92df5954ca9a14f67f12c319360",
+      "b188ab12e4eb4aa9b562a6d36c262731",
+      "ce98518bf60f4221885b6a4775a1b300",
+      "dc5c75a2347a4689bc9bde2130100ba4",
+      "e36c8aec3b6d497a95e01244ac008bf2",
+      "e3ef0f40df8b4cc3a4f98c973670607f"
+    ]
+  },
+  {
+    "tool": "calculate_commute",
+    "real_conversation_execute_attempts": 75,
+    "logical_successes": 64,
+    "logical_failures": 11,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "0571e7170d194317a978fc1d1ce23765",
+      "1bcf22e407964141bcd705052c6f94b5",
+      "3219fc77d66a43648194e3e43262f395",
+      "4129dba6a6ad453e943aabdf07db579a",
+      "5fda137e81a34cff85821c862be3e17b",
+      "762346d1b9d045c886e29747f97ab756",
+      "762665d0250449fbb2ee75b500883384",
+      "789dc635d4014461b20b93c6a9f6279d",
+      "954db6795fb84cf5a29d0a7d556b19ad",
+      "9f19f92df5954ca9a14f67f12c319360",
+      "b188ab12e4eb4aa9b562a6d36c262731",
+      "ce98518bf60f4221885b6a4775a1b300",
+      "dc5c75a2347a4689bc9bde2130100ba4",
+      "dd49c8e05d734b10aaf9da6a963e68d9",
+      "e3ef0f40df8b4cc3a4f98c973670607f",
+      "resilience-4d94f4e1a15746959730ad97f84a8c8b"
+    ]
+  },
+  {
+    "tool": "calculate_commute_cost",
+    "real_conversation_execute_attempts": 7,
+    "logical_successes": 5,
+    "logical_failures": 2,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "2923273799174128ae83e652b3e03404",
+      "e36c8aec3b6d497a95e01244ac008bf2",
+      "ec79a23605f54bd2b95fc3f014901d1d"
+    ]
+  },
+  {
+    "tool": "check_safety",
+    "real_conversation_execute_attempts": 3,
+    "logical_successes": 3,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "3219fc77d66a43648194e3e43262f395",
+      "701cdef7ca4045d18f4b7cbb2e9d2046",
+      "762665d0250449fbb2ee75b500883384"
+    ]
+  },
+  {
+    "tool": "get_weather",
+    "real_conversation_execute_attempts": 10,
+    "logical_successes": 10,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "0571e7170d194317a978fc1d1ce23765",
+      "1340227ce73945ce85390e719bf1d084",
+      "19f1088b47f74b188caa1c6f73214a75",
+      "4129dba6a6ad453e943aabdf07db579a",
+      "5a38314d276a4d4abdd3dd614ea9b2fa",
+      "690d2f50a8924e4590325ecf75790c46",
+      "8c2e54e4dc8d4dc6a41d2f57de1300d3",
+      "a6cff0c8503a48cfa596e3ca7bcd88d2",
+      "d5a62c4e0edf43748e6e27c9cc9b5c1e",
+      "dd49c8e05d734b10aaf9da6a963e68d9"
+    ]
+  },
+  {
+    "tool": "web_search",
+    "real_conversation_execute_attempts": 1,
+    "logical_successes": 1,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "0571e7170d194317a978fc1d1ce23765"
+    ]
+  },
+  {
+    "tool": "search_nearby_pois",
+    "real_conversation_execute_attempts": 3,
+    "logical_successes": 3,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "14e8e15d7b3941cfbde388ff7cca140e",
+      "701cdef7ca4045d18f4b7cbb2e9d2046",
+      "998a99d46b234a7b8dbf1ffb7292e8f3"
+    ]
+  },
+  {
+    "tool": "get_property_details",
+    "real_conversation_execute_attempts": 12,
+    "logical_successes": 12,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "14e8e15d7b3941cfbde388ff7cca140e",
+      "276dfe5541cb46cf947e4c1964a2aeca",
+      "4129dba6a6ad453e943aabdf07db579a",
+      "5a38314d276a4d4abdd3dd614ea9b2fa",
+      "dbb4930f65474504a7ad9a3630811ab6",
+      "e3ef0f40df8b4cc3a4f98c973670607f"
+    ]
+  },
+  {
+    "tool": "check_transport_cost",
+    "real_conversation_execute_attempts": 1,
+    "logical_successes": 1,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "4895d4416b6e41d58ee6fb3af1f9725e"
+    ]
+  },
+  {
+    "tool": "get_transport_info",
+    "real_conversation_execute_attempts": 7,
+    "logical_successes": 5,
+    "logical_failures": 2,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "5a38314d276a4d4abdd3dd614ea9b2fa",
+      "dbb4930f65474504a7ad9a3630811ab6",
+      "ec79a23605f54bd2b95fc3f014901d1d"
+    ]
+  },
+  {
+    "tool": "remember",
+    "real_conversation_execute_attempts": 1,
+    "logical_successes": 1,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "f22c425295b549a8bebecf43d7fbecf4"
+    ]
+  },
+  {
+    "tool": "recall_memory",
+    "real_conversation_execute_attempts": 2,
+    "logical_successes": 2,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "3cbb37141b7e488f8bf0ec7c695ff183",
+      "7fa291ed86d14d6085c536c1eb711c2b"
+    ]
+  },
+  {
+    "tool": "ask_user",
+    "real_conversation_execute_attempts": 0,
+    "logical_successes": 0,
+    "logical_failures": 0,
+    "executor_terminal_calls": 2,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "0ae76025d2e7492cb9d178f9d9aa7312",
+      "51ce4bc6dffa4deeae150c961e1f23a8"
+    ]
+  },
+  {
+    "tool": "compare_or_rank_areas",
+    "real_conversation_execute_attempts": 3,
+    "logical_successes": 3,
+    "logical_failures": 0,
+    "executor_terminal_calls": 0,
+    "covered_in_browser_conversation": true,
+    "request_ids": [
+      "3219fc77d66a43648194e3e43262f395",
+      "762665d0250449fbb2ee75b500883384",
+      "resilience-4d94f4e1a15746959730ad97f84a8c8b"
+    ]
+  }
+]

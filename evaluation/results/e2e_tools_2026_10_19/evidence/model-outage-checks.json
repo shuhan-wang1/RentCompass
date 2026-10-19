@@ -1,0 +1,20 @@
+[
+  {
+    "case": "model503-bounded-response",
+    "passed": true,
+    "seconds": 1.94
+  },
+  {
+    "case": "model503-no-invented-weather",
+    "passed": true
+  },
+  {
+    "case": "model-provider-recovery-actual-weather",
+    "passed": true
+  },
+  {
+    "case": "model503-not-misclassified-time-budget",
+    "passed": false,
+    "actual_message": "Sorry — this turn ran long, so here is a brief answer from what I have gathered so far (it may be incomplete):\nI do not yet have listing results ready to show.\nThis answer was cut short by the time budget; let me know and I can finish it."
+  }
+]

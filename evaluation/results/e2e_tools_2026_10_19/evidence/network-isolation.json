@@ -1,0 +1,15 @@
+{
+  "container_network_mode": "none",
+  "container_readonly_root": true,
+  "public_port_bindings": {},
+  "browser_origin": "http://127.0.0.1:15006",
+  "model_upstream_allowlist": [
+    "api.deepseek.com"
+  ],
+  "otm_transport_attempts": 0,
+  "socket_external_attempts_blocked": 0,
+  "housing_producer_cache_only": true,
+  "model_call_budget": 320,
+  "model_token_budget": 1600000,
+  "browser_external_requests_are_aborted": true
+}

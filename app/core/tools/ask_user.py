@@ -15,6 +15,7 @@ async def ask_user_impl(
     clarification_kind: str = "other",
     missing_fields: List[str] = None,
     missing_optional_fields: List[str] = None,
+    options: List[dict] = None,
 ) -> dict:
     """回显模型提供的澄清字段（不做任何补齐/臆测）。"""
     return {
@@ -24,7 +25,18 @@ async def ask_user_impl(
         "clarification_kind": clarification_kind,
         "missing_fields": list(missing_fields or []),
         "missing_optional_fields": list(missing_optional_fields or []),
+        "options": normalize_options(options),
     }
+
+
+def normalize_options(options) -> list:
+    """Bounded display text and explicit reply values; rendering has no side effect."""
+    if not isinstance(options, list):
+        return []
+    return [dict(label=str(item['label'])[:200], value=str(item['value'])[:500])
+            for item in (options or [])[:8]
+            if isinstance(item, dict) and isinstance(item.get('label'), str)
+            and isinstance(item.get('value'), str) and item['label'].strip() and item['value'].strip()]
 
 
 ask_user_tool = Tool(
@@ -59,6 +71,16 @@ ask_user_tool = Tool(
                 'items': {'type': 'string'},
                 'default': [],
                 'description': 'optional criteria fields still missing',
+            },
+            'options': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'properties': {'label': {'type': 'string'}, 'value': {'type': 'string'}},
+                    'required': ['label', 'value'],
+                },
+                'description': 'Clickable choices when appropriate. label is displayed; value is sent only after the user clicks.',
+                'default': [],
             },
         },
         'required': ['question'],

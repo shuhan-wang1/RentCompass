@@ -1,0 +1,22 @@
+{
+  "conversation_id": "7fc8c690d7bf4e54ab7cf39d8967764a",
+  "criteria": {
+    "areas": [
+      "Camden"
+    ],
+    "room_type": "whole",
+    "bedrooms": 2,
+    "max_budget": 2400,
+    "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+    "max_travel_time": 30,
+    "bedrooms_minimum": false,
+    "no_commute": false,
+    "move_in_date": null
+  },
+  "favorites_count": 2,
+  "favorite_identities": [
+    "https://www.onthemarket.com/details/14141441/",
+    "https://www.onthemarket.com/details/20578363/"
+  ],
+  "result_identities": []
+}

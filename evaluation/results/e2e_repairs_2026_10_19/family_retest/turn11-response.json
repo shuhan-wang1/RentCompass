@@ -1,0 +1,1219 @@
+{
+  "time": 1792402570.0468647,
+  "message": "Search Camden only. Set the maximum monthly rent to £3,000, a whole home and at least two bedrooms. We are still two adults, a six-year-old, a wheelchair user and a cat. Genuine step-free street-to-door access and enough internal wheelchair space are essential, and our cat needs permission; keep the 50-minute public-transport commute limit to UCL. A lift is only a preference, not a requirement: a genuinely step-free ground-floor home is fine. Please apply these active housing criteria now, distinguish hard requirements from preferences and unknown evidence, and show the matching cached candidates.\n",
+  "seconds": 12.612,
+  "error": null,
+  "result": {
+    "status": 200,
+    "payload": {
+      "area_recommendations": [],
+      "conversation_id": "83b3c2a05bac40949776659286bdc6ee",
+      "message": "- No listing is both fully eligible and verified.\nNot verified:\n- St. Augustine's Road, Camden Square, NW1: required features are not verified: wheelchair-accessible, step-free\n- Rochester Road, Kentish Town: required features are not verified: wheelchair-accessible, step-free; cannot verify the commute condition\n- Dartmouth Park Hill, Dartmouth Park, London, NW5: required features are not verified: wheelchair-accessible, step-free\n- Parkway, London, NW1: required features are not verified: wheelchair-accessible, step-free\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: St. Augustine's Road, Camden Square, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nReturned journey: Dartmouth Park Hill, Dartmouth Park, London, NW5 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Parkway, London, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Camden → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).",
+      "recommendations": [
+        {
+          "absent_features": [],
+          "address": "St. Augustine's Road, Camden Square, NW1",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1",
+          "geo_location": "51.544399, -0.129503",
+          "images": [
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2400/month",
+          "property_type": "2 bed Apartment",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free"
+            ]
+          },
+          "rank": 1,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free"
+          ],
+          "url": "https://www.onthemarket.com/details/20262177/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Rochester Road, Kentish Town",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free",
+            "commute tool failed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Rochester Road, Kentish Town",
+          "geo_location": "51.545511, -0.140153",
+          "images": [
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2600/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free",
+                "commute tool failed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行",
+                "通勤条件尚未核实（查询失败）"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free",
+              "commute tool failed"
+            ]
+          },
+          "rank": 2,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free"
+          ],
+          "url": "https://www.onthemarket.com/details/8225050/",
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Dartmouth Park Hill, Dartmouth Park, London, NW5",
+          "geo_location": "51.560934, -0.141327",
+          "images": [
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-3-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2600/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free"
+            ]
+          },
+          "rank": 3,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free"
+          ],
+          "url": "https://www.onthemarket.com/details/20259367/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Parkway, London, NW1",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Parkway, London, NW1",
+          "geo_location": "51.538582, -0.143305",
+          "images": [
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2650/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free"
+            ]
+          },
+          "rank": 4,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free"
+          ],
+          "url": "https://www.onthemarket.com/details/20259996/",
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        }
+      ],
+      "response_type": "search",
+      "search_criteria": {
+        "amenities_of_interest": [],
+        "area": "Camden",
+        "areas": [
+          "Camden"
+        ],
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "area": {
+            "message_id": 94,
+            "original_source": {
+              "source": "user_message",
+              "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+              "value": "Camden"
+            },
+            "reason": "read_only_or_ancillary_source",
+            "source": "criteria_recovery",
+            "value": "Camden"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": true
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+            "value": 3000
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 50
+          },
+          "property_features": {
+            "source": "user_message",
+            "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+            "value": [
+              "wheelchair-accessible",
+              "step-free"
+            ]
+          },
+          "room_type": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": "whole"
+          }
+        },
+        "criteria_repair_provenance": [
+          {
+            "field": "area",
+            "message_id": 6,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Watford"
+          },
+          {
+            "field": "area",
+            "message_id": 94,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Camden"
+          }
+        ],
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 3000,
+        "max_budget_monthly": 3000,
+        "max_travel_time": 50,
+        "move_in_date": null,
+        "no_commute": false,
+        "plans": {
+          "Camden": {
+            "amenities_of_interest": [],
+            "area": "Camden",
+            "areas": [
+              "Camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "budget_period": "month",
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "constraint_sources": {
+              "area": {
+                "message_id": 94,
+                "original_source": {
+                  "source": "user_message",
+                  "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+                  "value": "Camden"
+                },
+                "reason": "read_only_or_ancillary_source",
+                "source": "criteria_recovery",
+                "value": "Camden"
+              },
+              "bedrooms": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": 2
+              },
+              "bedrooms_minimum": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": true
+              },
+              "max_budget": {
+                "source": "user_message",
+                "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+                "value": 3000
+              },
+              "max_travel_time": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": 50
+              },
+              "property_features": {
+                "source": "user_message",
+                "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+                "value": [
+                  "wheelchair-accessible",
+                  "step-free"
+                ]
+              },
+              "room_type": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": "whole"
+              }
+            },
+            "criteria_repair_provenance": [
+              {
+                "field": "area",
+                "message_id": 6,
+                "previous_value": "Camden",
+                "reason": "read_only_or_ancillary_source",
+                "value": "Watford"
+              },
+              {
+                "field": "area",
+                "message_id": 94,
+                "previous_value": "Camden",
+                "reason": "read_only_or_ancillary_source",
+                "value": "Camden"
+              }
+            ],
+            "destination": "Gower Street, London WC1E 6BT",
+            "max_budget": 3000,
+            "max_travel_time": 50,
+            "property_features": [
+              "wheelchair-accessible",
+              "step-free"
+            ],
+            "room_type": "whole",
+            "soft_preferences": [
+              "Would like lift",
+              "Would like step-free"
+            ]
+          }
+        },
+        "property_features": [
+          "wheelchair-accessible",
+          "step-free"
+        ],
+        "rent_filter_ceiling_monthly": null,
+        "room_type": "whole",
+        "soft_preferences": [
+          "Would like lift",
+          "Would like step-free"
+        ]
+      },
+      "turn_id": "8efa0797d2934691a6b31742ccb39d9b",
+      "view_state": {
+        "criteria": {
+          "amenities_of_interest": [],
+          "area": "Camden",
+          "areas": [
+            "Camden"
+          ],
+          "bedrooms": 2,
+          "bedrooms_minimum": true,
+          "budget_period": "month",
+          "commute_destination": "Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "area": {
+              "message_id": 94,
+              "original_source": {
+                "source": "user_message",
+                "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+                "value": "Camden"
+              },
+              "reason": "read_only_or_ancillary_source",
+              "source": "criteria_recovery",
+              "value": "Camden"
+            },
+            "bedrooms": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": 2
+            },
+            "bedrooms_minimum": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": true
+            },
+            "max_budget": {
+              "source": "user_message",
+              "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+              "value": 3000
+            },
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": 50
+            },
+            "property_features": {
+              "source": "user_message",
+              "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+              "value": [
+                "wheelchair-accessible",
+                "step-free"
+              ]
+            },
+            "room_type": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": "whole"
+            }
+          },
+          "criteria_repair_provenance": [
+            {
+              "field": "area",
+              "message_id": 6,
+              "previous_value": "Camden",
+              "reason": "read_only_or_ancillary_source",
+              "value": "Watford"
+            },
+            {
+              "field": "area",
+              "message_id": 94,
+              "previous_value": "Camden",
+              "reason": "read_only_or_ancillary_source",
+              "value": "Camden"
+            }
+          ],
+          "destination": "Gower Street, London WC1E 6BT",
+          "max_budget": 3000,
+          "max_travel_time": 50,
+          "plans": {
+            "Camden": {
+              "amenities_of_interest": [],
+              "area": "Camden",
+              "areas": [
+                "Camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "budget_period": "month",
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "constraint_sources": {
+                "area": {
+                  "message_id": 94,
+                  "original_source": {
+                    "source": "user_message",
+                    "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+                    "value": "Camden"
+                  },
+                  "reason": "read_only_or_ancillary_source",
+                  "source": "criteria_recovery",
+                  "value": "Camden"
+                },
+                "bedrooms": {
+                  "source": "user_message",
+                  "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                  "value": 2
+                },
+                "bedrooms_minimum": {
+                  "source": "user_message",
+                  "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                  "value": true
+                },
+                "max_budget": {
+                  "source": "user_message",
+                  "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+                  "value": 3000
+                },
+                "max_travel_time": {
+                  "source": "user_message",
+                  "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                  "value": 50
+                },
+                "property_features": {
+                  "source": "user_message",
+                  "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+                  "value": [
+                    "wheelchair-accessible",
+                    "step-free"
+                  ]
+                },
+                "room_type": {
+                  "source": "user_message",
+                  "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                  "value": "whole"
+                }
+              },
+              "criteria_repair_provenance": [
+                {
+                  "field": "area",
+                  "message_id": 6,
+                  "previous_value": "Camden",
+                  "reason": "read_only_or_ancillary_source",
+                  "value": "Watford"
+                },
+                {
+                  "field": "area",
+                  "message_id": 94,
+                  "previous_value": "Camden",
+                  "reason": "read_only_or_ancillary_source",
+                  "value": "Camden"
+                }
+              ],
+              "destination": "Gower Street, London WC1E 6BT",
+              "max_budget": 3000,
+              "max_travel_time": 50,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free"
+              ],
+              "room_type": "whole",
+              "soft_preferences": [
+                "Would like lift",
+                "Would like step-free"
+              ]
+            }
+          },
+          "property_features": [
+            "wheelchair-accessible",
+            "step-free"
+          ],
+          "room_type": "whole",
+          "soft_preferences": [
+            "Would like lift",
+            "Would like step-free"
+          ]
+        },
+        "operation": "replace",
+        "results": [
+          {
+            "absent_features": [],
+            "address": "St. Augustine's Road, Camden Square, NW1",
+            "area": "Camden",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 3000,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1",
+            "geo_location": "51.544399, -0.129503",
+            "images": [
+              "https://media.onthemarket.com/properties/20262177/1641684511/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20262177/1641684511/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20262177/1641684511/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20262177/1641684511/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20262177/1641684511/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£2400/month",
+            "property_type": "2 bed Apartment",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "camden"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 3000,
+                "max_commute_minutes": 50,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [
+                  "wheelchair-accessible",
+                  "step-free"
+                ],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "required features are not verified: wheelchair-accessible, step-free"
+                ],
+                "zh": [
+                  "必需设施尚未核实：轮椅通行条件、无台阶通行"
+                ]
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: wheelchair-accessible, step-free"
+              ]
+            },
+            "rank": 1,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "wheelchair-accessible",
+              "step-free"
+            ],
+            "url": "https://www.onthemarket.com/details/20262177/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Rochester Road, Kentish Town",
+            "area": "Camden",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 3000,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free",
+              "commute tool failed"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in Rochester Road, Kentish Town",
+            "geo_location": "51.545511, -0.140153",
+            "images": [
+              "https://media.onthemarket.com/properties/8225050/1641682894/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/8225050/1641682894/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/8225050/1641682894/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/8225050/1641682894/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/8225050/1641682894/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£2600/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "camden"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 3000,
+                "max_commute_minutes": 50,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [
+                  "wheelchair-accessible",
+                  "step-free"
+                ],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "required features are not verified: wheelchair-accessible, step-free",
+                  "commute tool failed"
+                ],
+                "zh": [
+                  "必需设施尚未核实：轮椅通行条件、无台阶通行",
+                  "通勤条件尚未核实（查询失败）"
+                ]
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: wheelchair-accessible, step-free",
+                "commute tool failed"
+              ]
+            },
+            "rank": 2,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "wheelchair-accessible",
+              "step-free"
+            ],
+            "url": "https://www.onthemarket.com/details/8225050/",
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+            "area": "Camden",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 3000,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in Dartmouth Park Hill, Dartmouth Park, London, NW5",
+            "geo_location": "51.560934, -0.141327",
+            "images": [
+              "https://media.onthemarket.com/properties/20259367/1641644008/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20259367/1641644008/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20259367/1641644008/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20259367/1641644008/image-3-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£2600/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "camden"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 3000,
+                "max_commute_minutes": 50,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [
+                  "wheelchair-accessible",
+                  "step-free"
+                ],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "required features are not verified: wheelchair-accessible, step-free"
+                ],
+                "zh": [
+                  "必需设施尚未核实：轮椅通行条件、无台阶通行"
+                ]
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: wheelchair-accessible, step-free"
+              ]
+            },
+            "rank": 3,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "wheelchair-accessible",
+              "step-free"
+            ],
+            "url": "https://www.onthemarket.com/details/20259367/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          },
+          {
+            "absent_features": [],
+            "address": "Parkway, London, NW1",
+            "area": "Camden",
+            "availability_status": "",
+            "available_from": "",
+            "bedrooms": 2,
+            "budget_basis": 3000,
+            "budget_status": "✅ 在预算内",
+            "budget_status_code": "within",
+            "candidate_reasons": [],
+            "candidate_status": "unknown",
+            "candidate_unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free"
+            ],
+            "description": "",
+            "distance_miles": null,
+            "explanation": "2 bedroom flat to rent in Parkway, London, NW1",
+            "geo_location": "51.538582, -0.143305",
+            "images": [
+              "https://media.onthemarket.com/properties/20259996/1641653647/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20259996/1641653647/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20259996/1641653647/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20259996/1641653647/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20259996/1641653647/image-4-480x320.jpg"
+            ],
+            "match_type": "perfect",
+            "possibly_outdated": true,
+            "price": "£2650/month",
+            "property_type": "2 bed Flat",
+            "qualification": {
+              "constraints": {
+                "areas": [
+                  "camden"
+                ],
+                "bedrooms": 2,
+                "bedrooms_minimum": true,
+                "commute_destination": "Gower Street, London WC1E 6BT",
+                "max_budget_monthly": 3000,
+                "max_commute_minutes": 50,
+                "monthly_total_budget": null,
+                "move_in_date": null,
+                "no_commute": false,
+                "office_days_per_week": null,
+                "property_features": [
+                  "wheelchair-accessible",
+                  "step-free"
+                ],
+                "room_type": "whole"
+              },
+              "reason_messages": {
+                "en": [
+                  "required features are not verified: wheelchair-accessible, step-free"
+                ],
+                "zh": [
+                  "必需设施尚未核实：轮椅通行条件、无台阶通行"
+                ]
+              },
+              "reasons": [],
+              "source": "structured_listing",
+              "status": "unknown",
+              "unknown_reasons": [
+                "required features are not verified: wheelchair-accessible, step-free"
+              ]
+            },
+            "rank": 4,
+            "room_type": "whole",
+            "score": 100,
+            "score_breakdown": {},
+            "source": "OnTheMarket (cached)",
+            "status_reason": "required conditions are not fully verified",
+            "unverified_features": [
+              "wheelchair-accessible",
+              "step-free"
+            ],
+            "url": "https://www.onthemarket.com/details/20259996/",
+            "verified_commute_minutes": 32,
+            "verified_features": []
+          }
+        ],
+        "revision": 11
+      }
+    }
+  },
+  "request": {
+    "url": "/api/alex",
+    "body": "{\"message\": \"Search Camden only. Set the maximum monthly rent to £3,000, a whole home and at least two bedrooms. We are still two adults, a six-year-old, a wheelchair user and a cat. Genuine step-free street-to-door access and enough internal wheelchair space are essential, and our cat needs permission; keep the 50-minute public-transport commute limit to UCL. A lift is only a preference, not a requirement: a genuinely step-free ground-floor home is fine. Please apply these active housing criteria now, distinguish hard requirements from preferences and unknown evidence, and show the matching cached candidates.\", \"context\": {\"viewed_properties\": [{\"address\": \"Croxley View, Watford, WD18\", \"price\": \"£1600/month\", \"travel_time\": \"\", \"url\": \"https://www.onthemarket.com/details/20472490/\"}, {\"address\": \"St. Augustine's Road, Camden Square, NW1\", \"price\": \"£2400/month\", \"travel_time\": \"\", \"url\": \"https://www.onthemarket.com/details/20262177/\"}], \"focus_stack\": [{\"address\": \"Croxley View, Watford, WD18\", \"price\": \"£1600/month\", \"travel_time\": \"\", \"url\": \"https://www.onthemarket.com/details/20472490/\"}, {\"address\": \"St. Augustine's Road, Camden Square, NW1\", \"price\": \"£2400/month\", \"travel_time\": \"\", \"url\": \"https://www.onthemarket.com/details/20262177/\"}], \"property\": {\"address\": \"St. Augustine's Road, Camden Square, NW1\", \"price\": \"£2400/month\", \"travel_time\": \"\", \"url\": \"https://www.onthemarket.com/details/20262177/\"}}, \"is_continuation\": false, \"language\": \"en\", \"ui_language\": \"en\", \"conversation_id\": \"83b3c2a05bac40949776659286bdc6ee\"}",
+    "headers": {
+      "Content-Type": "application/json",
+      "Accept": "text/event-stream",
+      "X-Conversation-ID": "83b3c2a05bac40949776659286bdc6ee"
+    }
+  },
+  "dom": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement; a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nCroxley View, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nNevill Grove, Watford, WD24: required features are not verified: step-free, lift, wheelchair-accessible\nRaven Close, Watford WD18: required features are not verified: step-free, lift, wheelchair-accessible\nRegent Street, Watford WD24: required features are not verified: step-free, lift, wheelchair-accessible\nSutton Road WD17, Watford, WD17: required features are not verified: step-free, lift, wheelchair-accessible\nChester Road, WD18 0LJ, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nVilliers Road, Watford, WD19: required features are not verified: step-free, lift, wheelchair-accessible\nSt. Albans Road, Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\nRickmansworth Road, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nThe Clarendon, Watford | Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Nevill Grove, Watford, WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Raven Close, Watford WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Regent Street, Watford WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Sutton Road WD17, Watford, WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Villiers Road, Watford, WD19 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: St. Albans Road, Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Rickmansworth Road, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Watford → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned listing details: Croxley View, Watford, WD18; £1600 pcm; 2 bed Flat.\n\nReported features: No Agent Fees, Students Can Enquire.\n\nAvailability: Contact agent. Confirm current availability with the agent.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned listing details: Nevill Grove, Watford, WD24; £1600 pcm; 2 bed Terraced house.\n\nReported features: Terrace.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nBranch from here\nFor this flat I just selected with Ask AI, open its full cached property details. Is there actual evidence for step-free access from the street, doorway/bathroom dimensions and written permission for our cat? Also find primary schools, a GP or medical centre, and a pharmacy within 1 km of this specific flat. Give names and distances, state the reference point and whether distances are straight-line or walking, and don't claim a school place or wheelchair access without evidence.\nEdit message\nALEX\n\nHere is what the cached data actually supports for Croxley View, Watford, WD18 (https://www.onthemarket.com/details/20472490/).\n\n1. Cached listing details\n\nPrice: £1,600 pcm; type: 2 bed flat; availability: \"Contact agent\".\nDescription: \"2 bedroom flat to rent in Croxley View, Watford, WD18\".\nAmenities listed: \"No Agent Fees\", \"Students Can Enquire\".\nSource: OnTheMarket (cached snapshot), fetched 2026-10-19, cache status fresh. This lookup did not contact or refresh the listing, so price and availability are not live-verified — confirm with the agent.\n\n2. Your three accessibility/pet questions — no evidence in the cache\n\nStep-free access from the street: not stated anywhere in the cached record. No evidence either way.\nDoorway and bathroom dimensions: not recorded. No measurements available.\nWritten permission for your cat: not recorded. The only policy-type fields (guest policy, payment rules, excluded features) are empty, and nothing mentions pets. Absence of a pet clause is not permission — it must be confirmed in writing by the landlord/agent.\n\nAlso note: the listing has no lift or wheelchair-accessibility field at all, so nothing here supports treating this flat as accessible. A lift, even if one existed, would not by itself prove step-free entry or internal turning space.\n\n3. Nearby schools, GP and pharmacy\n\nReference point: the coordinates supplied for \"Croxley View, Watford, WD18\" (51.646597, -0.423485), taken as the listing's location. The tool flags that this coordinate identity is caller-supplied and not independently verified. Distances are straight-line, not walking distance.\n\nRadius caveat: you asked for 1 km; the tool's maximum is 800 m, so only 800 m was searched. Anything between 800 m and 1 km was not checked.\n\nResults (OpenStreetMap Overpass), all at 130 m straight-line:\n\nSchool: \"School [audit fixture]\" — 130 m\nGP / medical clinic: \"Doctors [audit fixture]\" — 130 m\nPharmacy: \"Pharmacy [audit fixture]\" — 130 m\n\nImportant caveats on these three: the names returned are placeholder/audit-fixture labels, not real named schools, practices or pharmacies, and all three share identical coordinates and opening hours — so I cannot give you genuine names or treat them as confirmed local facilities. The lookup did complete for all three categories (none failed or were skipped), but these records do not verify primary-school phase, school places, catchment, GP registration, or wheelchair access at any of them.\n\nWhat to do next\n\nAsk the agent in writing for: a photo or description of the entrance approach and any steps, internal door widths and bathroom dimensions, and explicit written consent for the cat.\nFor real school/GP/pharmacy names, I can re-run the nearby search at a tighter radius, or you can check Ofsted and NHS service finder directly. I can also check crime data for this address if useful.\nBranch from here\nNow check police-recorded crime around this same Croxley View flat. Please show the actual reference point, data months, radius or coverage, and counts; distinguish that from a general Watford assessment. What can and cannot be concluded about coming home after dark with a six-year-old and wheelchair user? Don't call an area safe merely from a headline score.\nEdit message\nALEX\n\nCrime around Croxley View, Watford, WD18 — what the data actually covers\n\nThe reference point (important)\n\nThe crime figures were pulled for the geocoded point for \"Croxley View, Watford, WD18\" at area precision — that is, a point resolved for the postcode area, not the exact building.\n\nCoordinates used: 51.6565, -0.3903 (source: Nominatim).\n\nData months and coverage\n\nMonths covered: June 2026, July 2026, August 2026 (3 months, all successful, no failed months, not partial).\nRadius: approximately 1 mile (1,609 metres), which is the police API's default radius rather than a radius chosen for this property.\nDistance basis: straight-line, not walking route.\nSource: data.police.uk street-level crime API.\n\nCounts recorded\n\nTotal over the 3 months: 135 incidents\nMonthly average: 45\nMost recent month (August 2026): 45\nTrend: described as stable\nCategory breakdown: Anti Social Behaviour 90, Burglary 45\n\nNote that the breakdown accounts for all 135 records across just two categories, so the mix here is narrow — it does not tell you about vehicle crime, theft, violence, or robbery in the area, because those categories do not appear in the returned breakdown.\n\nThe headline score, and why it should not be read as a verdict\n\nThe 99/100 \"Very Safe\" figure is a relative rank against a sample of 13 UK areas, not an absolute measure of risk.\n\nThe tool's own caveat is that counts are footfall-sensitive and that this should be \"one input, not a verdict.\" A high score here means this area recorded fewer incidents than most of the sampled areas over the same window — nothing more.\n\nThis is not a general Watford assessment\n\nEverything above is tied to the single geocoded point for the WD18 area around Croxley View, within roughly a mile.\n\nIt is not a Watford-wide picture, and it should not be used to characterise other parts of Watford, nor to compare this flat against the other Watford listings you were shown.\n\nSeparately, the nearby-places data returned in this session was queried against \"Watford\" using caller-supplied coordinates that are not independently verified as this property, so those amenity distances should not be attributed to Croxley View either.\n\nWhat can and cannot be concluded about coming home after dark with a six-year-old and a wheelchair user\n\nWhat the data can support:\n\nOver June–August 2026, within about a mile of the WD18 area point, police recorded roughly 45 incidents a month, with anti-social behaviour and burglary the only categories broken out.\nThat volume is lower than most of the 13 sampled areas, which is the basis for the high score.\n\nWhat it cannot support:\n\nNothing about the actual walking route from any transport stop to the flat, after dark or otherwise.\n\nThe data is straight-line and area-level\n\nit says nothing about lighting, pavement quality, dropped kerbs, crossing points, or whether a wheelchair can pass.\n\nNothing about the specific building or street frontage — the reference point is not the address.\nNothing about time of day. The counts are monthly totals with no night-time split, so they cannot tell you what \"after dark\" looks like.\nNothing about risk to a child or a wheelchair user specifically. These are aggregate incident counts, not victim-level or vulnerability-adjusted data.\nNothing about burglary exposure for this particular flat — the 45 burglary records are spread across roughly a three-square-mile circle, not this property.\nNothing about the other crime types that matter most for a walk home, since they are absent from the breakdown.\n\nPractical next steps\n\nAsk the letting agent directly about the entrance: step-free approach, lift dimensions and reliability, door widths, and any ramp gradient — your hard requirements (step-free, lift, wheelchair-accessible) are not something crime data can confirm.\nWalk the actual route at dusk before committing, ideally with the wheelchair, and check lighting, crossing points, and pavement width.\nFor street-level detail, your local police force publishes neighbourhood policing information and you can raise specific concerns with the local safer neighbourhood team\n\ndata.police.uk lets you query a custom point and radius if you want figures closer to the building than one mile.\n\nTreat the 99/100 as a comparative indicator only.\n\nIt is not evidence that the area is safe, and it is not evidence that it is unsafe.\n\nPlease double-check the exact prices against the source listing.\n\nThe safety lookup's own reference is Croxley View, Watford, WD18 (precision: area); the nearby lookup does not prove it used the property's coordinates.\n\nPolice records returned for Croxley View, Watford, WD18: 135 incidents across 3 covered months (2026-06, 2026-07, 2026-08).\n\nRecorded incidents depend on coverage and footfall; they do not establish personal safety or a London-wide ranking.\n\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\nNearby record (restaurant): Restaurant [audit fixture], 130m.\n\nNearby record (supermarket): Tesco Express [audit fixture], 130m.\n\nNearby record (convenience): Tesco Express [audit fixture], 130m.\n\nNearby record (cafe): Cafe [audit fixture], 130m.\n\nNearby reference: Watford (precision: listing_coordinates). Distances are straight-line, not walking routes or verified property access.\n\nBranch from here\nWe might view this flat today and then travel to UCL. Please check Watford's current weather and any next-day forecast actually available, then calculate public transport from this selected Croxley View home to UCL. Keep the weather result separate from the journey result. Does the fastest itinerary establish a reliable, step-free trip within our 50-minute limit with a child and wheelchair, or what is still unverified?\nEdit message\nALEX\n\nWeather (Watford, current)\n\n14.2°C, feels like 12.8°C, light rain, humidity 72%, wind 11.5, UV 1.2.\nNo next-day forecast was returned by the weather service — only current conditions are available, so I cannot give you tomorrow's outlook.\nPractical note: light rain today, so take an umbrella for the viewing.\n\nJourney (Croxley View, Watford WD18 to Gower Street, London WC1E 6BT, public transport)\n\nbasis \"tfl_journey_plan\" (includes walking legs and interchanges).\nThat is inside your 50-minute limit on paper.\nHowever, the itinerary content itself is unusable: the returned legs are labelled \"Audit fixture line\" / \"Audit origin\" / \"Audit destination\" and explicitly marked \"SYNTHETIC TEST DATA: audit route\". but the route detail is not a real, verifiable itinerary — I cannot tell you which stations, lines, or walking legs it involves.\n\n**Does this establish a reliable\n\nNo. What is established\n\nwhich is under your 50-minute cap.\n\nWhat remains unverified\n\nThe actual route: no real stations, lines, or interchanges are identified, so I cannot confirm whether it uses Watford Junction, Watford High Street, or a bus link, nor whether it is the fastest real option.\nStep-free status: TfL journey plans do not by themselves prove step-free access at every station, platform, or interchange. No step-free evidence was returned for any leg.\nStreet-to-door access at Croxley View: still unverified (no step-free entrance evidence in the cached listing).\nthe plan does not account for accessibility needs, waiting times, or assistance requirements.\nWatford Junction's fare-zone coverage remains unknown, so I have not priced this journey.\n\nSuggested next step: I can re-run the journey with a step-free preference and pull the real itinerary detail, and separately check the nearest station and its step-free access. Would you like me to do that?\n\nNote: some commute claims could not be verified and have been removed from this answer.\n\nBranch from here\nSeparately, what is the current weather in Camden, London for a day trip? Don't run a commute calculation this round. This is only a weather question: our housing search must stay in Watford with the same budget, minimum bedrooms and family access/pet needs.\nEdit message\nALEX\n\nCurrent weather in Camden, London (day trip)\n\nTemperature: 14.2°C, feels like 12.8°C\nCondition: light rain\nHumidity: 72%\nWind: 11.5\nUV index: 1.2 (low)\nRainfall chance: not returned by the service\n\nPractical note: light rain is falling, so take an umbrella or waterproof layer for a day out. UV is low, so no sun protection needed.\n\nThis is current conditions only — the weather service did not return a forecast for later today or tomorrow, so I cannot tell you how the weather will develop during your trip.\n\nAs you asked, no commute calculation was run this round, and your housing search stays unchanged: whole home in Watford, at least two bedrooms, up to £2,500 per month, with step-free street access and internal space essential, a lift as a preference only, and pet permission and wheelchair access treated as unverified unless evidenced.\n\nNote: some commute claims could not be verified and have been removed from this answer.\n\nBranch from here\nLet's try a temporary, much tighter housing-search experiment. Replace the area with Camden only, the maximum monthly rent with £500, and the minimum bedroom count with four, still for a whole home. For this experiment only, a lift must also be present; keep genuine step-free access and our cat requirement too. Search exactly those conditions and say if there are no candidates; don't silently relax them or call an over-budget home a match.\nEdit message\nALEX\n\nI couldn't find listings matching your criteria near Camden in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.\n\nBranch from here\nDiscard that experiment entirely: the £500 budget, four-bedroom requirement and mandatory lift are withdrawn. Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences; step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nSt. Augustine's Road, Camden Square, NW1: required features are not verified: step-free, wheelchair-accessible\nRochester Road, Kentish Town: required features are not verified: step-free, wheelchair-accessible; cannot verify the commute condition\nDartmouth Park Hill, Dartmouth Park, London, NW5: required features are not verified: step-free, wheelchair-accessible\nParkway, London, NW1: required features are not verified: step-free, wheelchair-accessible\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: St. Augustine's Road, Camden Square, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Dartmouth Park Hill, Dartmouth Park, London, NW5 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Parkway, London, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Camden → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nBranch from here\nWe have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nCroxley View, Watford, WD18: required features are not verified: wheelchair-accessible, step-free\nNevill Grove, Watford, WD24: required features are not verified: wheelchair-accessible, step-free\nRaven Close, Watford WD18: required features are not verified: wheelchair-accessible, step-free\nRegent Street, Watford WD24: required features are not verified: wheelchair-accessible, step-free\nSutton Road WD17, Watford, WD17: required features are not verified: wheelchair-accessible, step-free\nChester Road, WD18 0LJ, Watford, WD18: required features are not verified: wheelchair-accessible, step-free\nVilliers Road, Watford, WD19: required features are not verified: wheelchair-accessible, step-free\nSt. Albans Road, Hertfordshire WD17: required features are not verified: wheelchair-accessible, step-free\nRickmansworth Road, Watford, WD18: required features are not verified: wheelchair-accessible, step-free\nThe Clarendon, Watford | Hertfordshire WD17: required features are not verified: wheelchair-accessible, step-free\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Nevill Grove, Watford, WD24 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Raven Close, Watford WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Regent Street, Watford WD24 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Sutton Road WD17, Watford, WD17 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Villiers Road, Watford, WD19 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: St. Albans Road, Hertfordshire WD17 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Rickmansworth Road, Watford, WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nBranch from here\nFor a separate day trip, what is the current weather in Islington, London? Don't run a commute calculation this round. This is only a weather lookup: do not change any housing-search area, budget, bedroom, access, pet or other condition, and do not move the housing search to Islington.\nEdit message\nALEX\n\nThe current weather in Islington, London is 14.2°C with light rain. It feels like 12.8°C, humidity is at 72%, wind speed is 11.5 km/h, and the UV index is low at 1.2. There is a chance of rain, so it is worth taking an umbrella if you are heading out.\n\nAs requested, I have not run a commute calculation, and your housing search conditions remain unchanged — the search area, budget, bedroom count, and access requirements are all as they were. Your current focus remains St. Augustine's Road, Camden Square, NW1.\n\nIf you would like, I can help with anything else on the housing side, such as checking transport links for a viewing day.\n\nPlease double-check the exact prices against the source listing.\n\nBranch from here\nFor the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.\nEdit message\nALEX\n\n1.\n\nProperty details (reopened from the saved listing link)\n\n*St.\n\nAugustine's Road, Camden Square, NW1* — https://www.onthemarket.com/details/20262177/\n\nPrice: £2,400 pcm\nType: 2 bed Apartment\nAvailability: Contact agent\nDescription: \"2 bedroom apartment to rent in St.\n\nAugustine's Road, Camden Square, NW1\"\n\nAmenities listed: \"A two double bedroom first floor flat, Lots of built in storage\"\n\nImportant caveat: this is a cached OnTheMarket snapshot.\n\nThe lookup did not contact or refresh the listing, so the price and availability are not verified as live or current.\n\nConfirm both with the listing agent before relying on them.\n\nIs your access and pet criteria actually evidenced?\n\nStreet-to-door step-free access: Not evidenced.\n\nThe listing says nothing about the entrance, threshold, path, or any steps from the street to the door.\n\nThe only access-related detail is \"first floor flat,\" which tells you there is at least one level to reach — it does not confirm how you get there.\n\nInternal doorway and bathroom space: Not evidenced.\n\nThe description mentions two double bedrooms and built-in storage only.\n\nThere is no information on door widths, corridor turning space, bathroom layout, or whether a wheelchair can be manoeuvred inside.\n\nLift: Not evidenced.\n\nA first floor flat with no lift mentioned is a warning sign for a wheelchair user, but the listing neither confirms nor rules out a lift.\n\nPermission for your cat: Not evidenced.\n\nThe listing contains no pet policy, no guest policy, and no payment rules — those fields are empty in the snapshot.\n\nIn short: none of your hard requirements (wheelchair-accessible, step-free) or your cat request is confirmed by this listing.\n\nThese must be verified directly with the agent and, ideally, on a viewing.\n\nAsk specifically about: number of steps from pavement to front door, any ramp or lift, door widths, bathroom door and internal turning space, and written pet permission.\n\n2.\n\nWeather for the viewing in Camden\n\nLocation: Camden, London\nCurrent temperature: 14.2°C, feels like 12.8°C\nCondition: Light Rain\nHumidity: 72%, wind 11.5, UV index 1.2\nGuidance: rain is possible, so bring an umbrella\n\nPractical note for an accessible viewing: light rain plus a first floor flat makes it worth confirming in advance whether there is any covered waiting area and whether the entrance route is slippery or obstructed.\n\n3.\n\nJourney from this flat to UCL\n\nFrom: St.\n\nAugustine's Road, Camden Square, London NW1\n\nTo: University College London, Gower Street, London WC1E 6BT\nMode: public transport (TfL Journey Planner)\nFastest itinerary returned: categorised as medium\n\nWhat the returned fastest itinerary does NOT verify for a wheelchair user and a child\n\nincluding walking legs and interchanges.\n\nIt does not tell you\n\nWhether every station on the route is step-free (lift access to platforms, gap between train and platform).\nWhether the walking legs are step-free, how long they are, or whether kerbs, crossings, and pavements are suitable for a wheelchair and a pushchair.\nWhether interchanges involve stairs, escalators only, or long corridors.\nWhether there is space on trains for a wheelchair and a child's buggy at the time you would travel.\nAnything about the reliability of the specific line at viewing time.\n\nBefore committing, check TfL's step-free station information for each station on the route and consider a practice run at the same time of day.\n\nScope note\n\nAs requested, I did not run a new property search, and the weather lookup for Camden was treated purely as viewing-day information — it does not change your housing criteria.\n\nYour hard requirements remain wheelchair-accessible and step-free, with a lift as a soft preference.\n\nNote: some commute claims could not be verified and have been removed from this answer.\n\nThe listing details are cached; current price and availability were not verified live. Confirm with the agent.\n\nReturned listing details: St. Augustine's Road, Camden Square, NW1; £2,400 pcm; 2 bed Apartment.\n\nReported features: A two double bedroom first floor flat, Lots of built in storage.\n\nAvailability: Contact agent. Confirm current availability with the agent.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nCurrent weather returned for Camden, London: 14.2°C, Light Rain.\n\nOnly current conditions were returned; no multi-day forecast is verified.\n\nA numerical rain probability was not returned.\n\nReturned journey: St. Augustine's Road, Camden Square, London NW1 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nBranch from here\nSearch Camden only. Set the maximum monthly rent to £3,000, a whole home and at least two bedrooms. We are still two adults, a six-year-old, a wheelchair user and a cat. Genuine step-free street-to-door access and enough internal wheelchair space are essential, and our cat needs permission; keep the 50-minute public-transport commute limit to UCL. A lift is only a preference, not a requirement: a genuinely step-free ground-floor home is fine. Please apply these active housing criteria now, distinguish hard requirements from preferences and unknown evidence, and show the matching cached candidates.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nSt. Augustine's Road, Camden Square, NW1: required features are not verified: wheelchair-accessible, step-free\nRochester Road, Kentish Town: required features are not verified: wheelchair-accessible, step-free; cannot verify the commute condition\nDartmouth Park Hill, Dartmouth Park, London, NW5: required features are not verified: wheelchair-accessible, step-free\nParkway, London, NW1: required features are not verified: wheelchair-accessible, step-free\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: St. Augustine's Road, Camden Square, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Dartmouth Park Hill, Dartmouth Park, London, NW5 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Parkway, London, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Camden → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nBranch from here",
+  "criteria": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nWe are two adults, a six-year-old and a …\njust now\nNew chat\n35m ago\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nWe are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement; a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nCroxley View, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nNevill Grove, Watford, WD24: required features are not verified: step-free, lift, wheelchair-accessible\nRaven Close, Watford WD18: required features are not verified: step-free, lift, wheelchair-accessible\nRegent Street, Watford WD24: required features are not verified: step-free, lift, wheelchair-accessible\nSutton Road WD17, Watford, WD17: required features are not verified: step-free, lift, wheelchair-accessible\nChester Road, WD18 0LJ, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nVilliers Road, Watford, WD19: required features are not verified: step-free, lift, wheelchair-accessible\nSt. Albans Road, Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\nRickmansworth Road, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nThe Clarendon, Watford | Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Nevill Grove, Watford, WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Raven Close, Watford WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Regent Street, Watford WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Sutton Road WD17, Watford, WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Villiers Road, Watford, WD19 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: St. Albans Road, Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Rickmansworth Road, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Watford → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned listing details: Croxley View, Watford, WD18; £1600 pcm; 2 bed Flat.\n\nReported features: No Agent Fees, Students Can Enquire.\n\nAvailability: Contact agent. Confirm current availability with the agent.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned listing details: Nevill Grove, Watford, WD24; £1600 pcm; 2 bed Terraced house.\n\nReported features: Terrace.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nBranch from here\nFor this flat I just selected with Ask AI, open its full cached property details. Is there actual evidence for step-free access from the street, doorway/bathroom dimensions and written permission for our cat? Also find primary schools, a GP or medical centre, and a pharmacy within 1 km of this specific flat. Give names and distances, state the reference point and whether distances are straight-line or walking, and don't claim a school place or wheelchair access without evidence.\nEdit message\nALEX\n\nHere is what the cached data actually supports for Croxley View, Watford, WD18 (https://www.onthemarket.com/details/20472490/).\n\n1. Cached listing details\n\nPrice: £1,600 pcm; type: 2 bed flat; availability: \"Contact agent\".\nDescription: \"2 bedroom flat to rent in Croxley View, Watford, WD18\".\nAmenities listed: \"No Agent Fees\", \"Students Can Enquire\".\nSource: OnTheMarket (cached snapshot), fetched 2026-10-19, cache status fresh. This lookup did not contact or refresh the listing, so price and availability are not live-verified — confirm with the agent.\n\n2. Your three accessibility/pet questions — no evidence in the cache\n\nStep-free access from the street: not stated anywhere in the cached record. No evidence either way.\nDoorway and bathroom dimensions: not recorded. No measurements available.\nWritten permission for your cat: not recorded. The only policy-type fields (guest policy, payment rules, excluded features) are empty, and nothing mentions pets. Absence of a pet clause is not permission — it must be confirmed in writing by the landlord/agent.\n\nAlso note: the listing has no lift or wheelchair-accessibility field at all, so nothing here supports treating this flat as accessible. A lift, even if one existed, would not by itself prove step-free entry or internal turning space.\n\n3. Nearby schools, GP and pharmacy\n\nReference point: the coordinates supplied for \"Croxley View, Watford, WD18\" (51.646597, -0.423485), taken as the listing's location. The tool flags that this coordinate identity is caller-supplied and not independently verified. Distances are straight-line, not walking distance.\n\nRadius caveat: you asked for 1 km; the tool's maximum is 800 m, so only 800 m was searched. Anything between 800 m and 1 km was not checked.\n\nResults (OpenStreetMap Overpass), all at 130 m straight-line:\n\nSchool: \"School [audit fixture]\" — 130 m\nGP / medical clinic: \"Doctors [audit fixture]\" — 130 m\nPharmacy: \"Pharmacy [audit fixture]\" — 130 m\n\nImportant caveats on these three: the names returned are placeholder/audit-fixture labels, not real named schools, practices or pharmacies, and all three share identical coordinates and opening hours — so I cannot give you genuine names or treat them as confirmed local facilities. The lookup did complete for all three categories (none failed or were skipped), but these records do not verify primary-school phase, school places, catchment, GP registration, or wheelchair access at any of them.\n\nWhat to do next\n\nAsk the agent in writing for: a photo or description of the entrance approach and any steps, internal door widths and bathroom dimensions, and explicit written consent for the cat.\nFor real school/GP/pharmacy names, I can re-run the nearby search at a tighter radius, or you can check Ofsted and NHS service finder directly. I can also check crime data for this address if useful.\nBranch from here\nNow check police-recorded crime around this same Croxley View flat. Please show the actual reference point, data months, radius or coverage, and counts; distinguish that from a general Watford assessment. What can and cannot be concluded about coming home after dark with a six-year-old and wheelchair user? Don't call an area safe merely from a headline score.\nEdit message\nALEX\n\nCrime around Croxley View, Watford, WD18 — what the data actually covers\n\nThe reference point (important)\n\nThe crime figures were pulled for the geocoded point for \"Croxley View, Watford, WD18\" at area precision — that is, a point resolved for the postcode area, not the exact building.\n\nCoordinates used: 51.6565, -0.3903 (source: Nominatim).\n\nData months and coverage\n\nMonths covered: June 2026, July 2026, August 2026 (3 months, all successful, no failed months, not partial).\nRadius: approximately 1 mile (1,609 metres), which is the police API's default radius rather than a radius chosen for this property.\nDistance basis: straight-line, not walking route.\nSource: data.police.uk street-level crime API.\n\nCounts recorded\n\nTotal over the 3 months: 135 incidents\nMonthly average: 45\nMost recent month (August 2026): 45\nTrend: described as stable\nCategory breakdown: Anti Social Behaviour 90, Burglary 45\n\nNote that the breakdown accounts for all 135 records across just two categories, so the mix here is narrow — it does not tell you about vehicle crime, theft, violence, or robbery in the area, because those categories do not appear in the returned breakdown.\n\nThe headline score, and why it should not be read as a verdict\n\nThe 99/100 \"Very Safe\" figure is a relative rank against a sample of 13 UK areas, not an absolute measure of risk.\n\nThe tool's own caveat is that counts are footfall-sensitive and that this should be \"one input, not a verdict.\" A high score here means this area recorded fewer incidents than most of the sampled areas over the same window — nothing more.\n\nThis is not a general Watford assessment\n\nEverything above is tied to the single geocoded point for the WD18 area around Croxley View, within roughly a mile.\n\nIt is not a Watford-wide picture, and it should not be used to characterise other parts of Watford, nor to compare this flat against the other Watford listings you were shown.\n\nSeparately, the nearby-places data returned in this session was queried against \"Watford\" using caller-supplied coordinates that are not independently verified as this property, so those amenity distances should not be attributed to Croxley View either.\n\nWhat can and cannot be concluded about coming home after dark with a six-year-old and a wheelchair user\n\nWhat the data can support:\n\nOver June–August 2026, within about a mile of the WD18 area point, police recorded roughly 45 incidents a month, with anti-social behaviour and burglary the only categories broken out.\nThat volume is lower than most of the 13 sampled areas, which is the basis for the high score.\n\nWhat it cannot support:\n\nNothing about the actual walking route from any transport stop to the flat, after dark or otherwise.\n\nThe data is straight-line and area-level\n\nit says nothing about lighting, pavement quality, dropped kerbs, crossing points, or whether a wheelchair can pass.\n\nNothing about the specific building or street frontage — the reference point is not the address.\nNothing about time of day. The counts are monthly totals with no night-time split, so they cannot tell you what \"after dark\" looks like.\nNothing about risk to a child or a wheelchair user specifically. These are aggregate incident counts, not victim-level or vulnerability-adjusted data.\nNothing about burglary exposure for this particular flat — the 45 burglary records are spread across roughly a three-square-mile circle, not this property.\nNothing about the other crime types that matter most for a walk home, since they are absent from the breakdown.\n\nPractical next steps\n\nAsk the letting agent directly about the entrance: step-free approach, lift dimensions and reliability, door widths, and any ramp gradient — your hard requirements (step-free, lift, wheelchair-accessible) are not something crime data can confirm.\nWalk the actual route at dusk before committing, ideally with the wheelchair, and check lighting, crossing points, and pavement width.\nFor street-level detail, your local police force publishes neighbourhood policing information and you can raise specific concerns with the local safer",
+  "stages": [
+    {
+      "t": 1792402557517,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792402557567,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792402558087,
+      "text": "Understanding your request…"
+    },
+    {
+      "t": 1792402558123,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792402560459,
+      "text": "Looking up the requested information…"
+    },
+    {
+      "t": 1792402561702,
+      "text": "Preparing your answer…"
+    },
+    {
+      "t": 1792402565348,
+      "text": "Checking the evidence…"
+    },
+    {
+      "t": 1792402569767,
+      "text": "Saving your results…"
+    }
+  ],
+  "pre": {
+    "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nWe are two adults, a six-year-old and a …\n11m ago\nNew chat\n35m ago\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nWe are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement; a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nCroxley View, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nNevill Grove, Watford, WD24: required features are not verified: step-free, lift, wheelchair-accessible\nRaven Close, Watford WD18: required features are not verified: step-free, lift, wheelchair-accessible\nRegent Street, Watford WD24: required features are not verified: step-free, lift, wheelchair-accessible\nSutton Road WD17, Watford, WD17: required features are not verified: step-free, lift, wheelchair-accessible\nChester Road, WD18 0LJ, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nVilliers Road, Watford, WD19: required features are not verified: step-free, lift, wheelchair-accessible\nSt. Albans Road, Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\nRickmansworth Road, Watford, WD18: required features are not verified: step-free, lift, wheelchair-accessible\nThe Clarendon, Watford | Hertfordshire WD17: required features are not verified: step-free, lift, wheelchair-accessible\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Nevill Grove, Watford, WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Raven Close, Watford WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Regent Street, Watford WD24 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Sutton Road WD17, Watford, WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Villiers Road, Watford, WD19 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: St. Albans Road, Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Rickmansworth Road, Watford, WD18 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Watford → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned listing details: Croxley View, Watford, WD18; £1600 pcm; 2 bed Flat.\n\nReported features: No Agent Fees, Students Can Enquire.\n\nAvailability: Contact agent. Confirm current availability with the agent.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned listing details: Nevill Grove, Watford, WD24; £1600 pcm; 2 bed Terraced house.\n\nReported features: Terrace.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nBranch from here\nFor this flat I just selected with Ask AI, open its full cached property details. Is there actual evidence for step-free access from the street, doorway/bathroom dimensions and written permission for our cat? Also find primary schools, a GP or medical centre, and a pharmacy within 1 km of this specific flat. Give names and distances, state the reference point and whether distances are straight-line or walking, and don't claim a school place or wheelchair access without evidence.\nEdit message\nALEX\n\nHere is what the cached data actually supports for Croxley View, Watford, WD18 (https://www.onthemarket.com/details/20472490/).\n\n1. Cached listing details\n\nPrice: £1,600 pcm; type: 2 bed flat; availability: \"Contact agent\".\nDescription: \"2 bedroom flat to rent in Croxley View, Watford, WD18\".\nAmenities listed: \"No Agent Fees\", \"Students Can Enquire\".\nSource: OnTheMarket (cached snapshot), fetched 2026-10-19, cache status fresh. This lookup did not contact or refresh the listing, so price and availability are not live-verified — confirm with the agent.\n\n2. Your three accessibility/pet questions — no evidence in the cache\n\nStep-free access from the street: not stated anywhere in the cached record. No evidence either way.\nDoorway and bathroom dimensions: not recorded. No measurements available.\nWritten permission for your cat: not recorded. The only policy-type fields (guest policy, payment rules, excluded features) are empty, and nothing mentions pets. Absence of a pet clause is not permission — it must be confirmed in writing by the landlord/agent.\n\nAlso note: the listing has no lift or wheelchair-accessibility field at all, so nothing here supports treating this flat as accessible. A lift, even if one existed, would not by itself prove step-free entry or internal turning space.\n\n3. Nearby schools, GP and pharmacy\n\nReference point: the coordinates supplied for \"Croxley View, Watford, WD18\" (51.646597, -0.423485), taken as the listing's location. The tool flags that this coordinate identity is caller-supplied and not independently verified. Distances are straight-line, not walking distance.\n\nRadius caveat: you asked for 1 km; the tool's maximum is 800 m, so only 800 m was searched. Anything between 800 m and 1 km was not checked.\n\nResults (OpenStreetMap Overpass), all at 130 m straight-line:\n\nSchool: \"School [audit fixture]\" — 130 m\nGP / medical clinic: \"Doctors [audit fixture]\" — 130 m\nPharmacy: \"Pharmacy [audit fixture]\" — 130 m\n\nImportant caveats on these three: the names returned are placeholder/audit-fixture labels, not real named schools, practices or pharmacies, and all three share identical coordinates and opening hours — so I cannot give you genuine names or treat them as confirmed local facilities. The lookup did complete for all three categories (none failed or were skipped), but these records do not verify primary-school phase, school places, catchment, GP registration, or wheelchair access at any of them.\n\nWhat to do next\n\nAsk the agent in writing for: a photo or description of the entrance approach and any steps, internal door widths and bathroom dimensions, and explicit written consent for the cat.\nFor real school/GP/pharmacy names, I can re-run the nearby search at a tighter radius, or you can check Ofsted and NHS service finder directly. I can also check crime data for this address if useful.\nBranch from here\nNow check police-recorded crime around this same Croxley View flat. Please show the actual reference point, data months, radius or coverage, and counts; distinguish that from a general Watford assessment. What can and cannot be concluded about coming home after dark with a six-year-old and wheelchair user? Don't call an area safe merely from a headline score.\nEdit message\nALEX\n\nCrime around Croxley View, Watford, WD18 — what the data actually covers\n\nThe reference point (important)\n\nThe crime figures were pulled for the geocoded point for \"Croxley View, Watford, WD18\" at area precision — that is, a point resolved for the postcode area, not the exact building.\n\nCoordinates used: 51.6565, -0.3903 (source: Nominatim).\n\nData months and coverage\n\nMonths covered: June 2026, July 2026, August 2026 (3 months, all successful, no failed months, not partial).\nRadius: approximately 1 mile (1,609 metres), which is the police API's default radius rather than a radius chosen for this property.\nDistance basis: straight-line, not walking route.\nSource: data.police.uk street-level crime API.\n\nCounts recorded\n\nTotal over the 3 months: 135 incidents\nMonthly average: 45\nMost recent month (August 2026): 45\nTrend: described as stable\nCategory breakdown: Anti Social Behaviour 90, Burglary 45\n\nNote that the breakdown accounts for all 135 records across just two categories, so the mix here is narrow — it does not tell you about vehicle crime, theft, violence, or robbery in the area, because those categories do not appear in the returned breakdown.\n\nThe headline score, and why it should not be read as a verdict\n\nThe 99/100 \"Very Safe\" figure is a relative rank against a sample of 13 UK areas, not an absolute measure of risk.\n\nThe tool's own caveat is that counts are footfall-sensitive and that this should be \"one input, not a verdict.\" A high score here means this area recorded fewer incidents than most of the sampled areas over the same window — nothing more.\n\nThis is not a general Watford assessment\n\nEverything above is tied to the single geocoded point for the WD18 area around Croxley View, within roughly a mile.\n\nIt is not a Watford-wide picture, and it should not be used to characterise other parts of Watford, nor to compare this flat against the other Watford listings you were shown.\n\nSeparately, the nearby-places data returned in this session was queried against \"Watford\" using caller-supplied coordinates that are not independently verified as this property, so those amenity distances should not be attributed to Croxley View either.\n\nWhat can and cannot be concluded about coming home after dark with a six-year-old and a wheelchair user\n\nWhat the data can support:\n\nOver June–August 2026, within about a mile of the WD18 area point, police recorded roughly 45 incidents a month, with anti-social behaviour and burglary the only categories broken out.\nThat volume is lower than most of the 13 sampled areas, which is the basis for the high score.\n\nWhat it cannot support:\n\nNothing about the actual walking route from any transport stop to the flat, after dark or otherwise.\n\nThe data is straight-line and area-level\n\nit says nothing about lighting, pavement quality, dropped kerbs, crossing points, or whether a wheelchair can pass.\n\nNothing about the specific building or street frontage — the reference point is not the address.\nNothing about time of day. The counts are monthly totals with no night-time split, so they cannot tell you what \"after dark\" looks like.\nNothing about risk to a child or a wheelchair user specifically. These are aggregate incident counts, not victim-level or vulnerability-adjusted data.\nNothing about burglary exposure for this particular flat — the 45 burglary records are spread across roughly a three-square-mile circle, not this property.\nNothing about the other crime types that matter most for a walk home, since they are absent from the breakdown.\n\nPractical next steps\n\nAsk the letting agent directly about the entrance: step-free approach, lift dimensions and reliability, door widths, and any ramp gradient — your hard requirements (step-free, lift, wheelchair-accessible) are not something crime data can confirm.\nWalk the actual route at dusk before committing, ideally with the wheelchair, and check lighting, crossing points, and pavement width.\nFor street-level detail, your local police force publishes neighbourhood policing information and you can raise specific concerns with the local safer neighbourhood team\n\ndata.police.uk lets you query a custom point and radius if you want figures closer to the building than one mile.\n\nTreat the 99/100 as a comparative indicator only.\n\nIt is not evidence that the area is safe, and it is not evidence that it is unsafe.\n\nPlease double-check the exact prices against the source listing.\n\nThe safety lookup's own reference is Croxley View, Watford, WD18 (precision: area); the nearby lookup does not prove it used the property's coordinates.\n\nPolice records returned for Croxley View, Watford, WD18: 135 incidents across 3 covered months (2026-06, 2026-07, 2026-08).\n\nRecorded incidents depend on coverage and footfall; they do not establish personal safety or a London-wide ranking.\n\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\nNearby record (restaurant): Restaurant [audit fixture], 130m.\n\nNearby record (supermarket): Tesco Express [audit fixture], 130m.\n\nNearby record (convenience): Tesco Express [audit fixture], 130m.\n\nNearby record (cafe): Cafe [audit fixture], 130m.\n\nNearby reference: Watford (precision: listing_coordinates). Distances are straight-line, not walking routes or verified property access.\n\nBranch from here\nWe might view this flat today and then travel to UCL. Please check Watford's current weather and any next-day forecast actually available, then calculate public transport from this selected Croxley View home to UCL. Keep the weather result separate from the journey result. Does the fastest itinerary establish a reliable, step-free trip within our 50-minute limit with a child and wheelchair, or what is still unverified?\nEdit message\nALEX\n\nWeather (Watford, current)\n\n14.2°C, feels like 12.8°C, light rain, humidity 72%, wind 11.5, UV 1.2.\nNo next-day forecast was returned by the weather service — only current conditions are available, so I cannot give you tomorrow's outlook.\nPractical note: light rain today, so take an umbrella for the viewing.\n\nJourney (Croxley View, Watford WD18 to Gower Street, London WC1E 6BT, public transport)\n\nbasis \"tfl_journey_plan\" (includes walking legs and interchanges).\nThat is inside your 50-minute limit on paper.\nHowever, the itinerary content itself is unusable: the returned legs are labelled \"Audit fixture line\" / \"Audit origin\" / \"Audit destination\" and explicitly marked \"SYNTHETIC TEST DATA: audit route\". but the route detail is not a real, verifiable itinerary — I cannot tell you which stations, lines, or walking legs it involves.\n\n**Does this establish a reliable\n\nNo. What is established\n\nwhich is under your 50-minute cap.\n\nWhat remains unverified\n\nThe actual route: no real stations, lines, or interchanges are identified, so I cannot confirm whether it uses Watford Junction, Watford High Street, or a bus link, nor whether it is the fastest real option.\nStep-free status: TfL journey plans do not by themselves prove step-free access at every station, platform, or interchange. No step-free evidence was returned for any leg.\nStreet-to-door access at Croxley View: still unverified (no step-free entrance evidence in the cached listing).\nthe plan does not account for accessibility needs, waiting times, or assistance requirements.\nWatford Junction's fare-zone coverage remains unknown, so I have not priced this journey.\n\nSuggested next step: I can re-run the journey with a step-free preference and pull the real itinerary detail, and separately check the nearest station and its step-free access. Would you like me to do that?\n\nNote: some commute claims could not be verified and have been removed from this answer.\n\nBranch from here\nSeparately, what is the current weather in Camden, London for a day trip? Don't run a commute calculation this round. This is only a weather question: our housing search must stay in Watford with the same budget, minimum bedrooms and family access/pet needs.\nEdit message\nALEX\n\nCurrent weather in Camden, London (day trip)\n\nTemperature: 14.2°C, feels like 12.8°C\nCondition: light rain\nHumidity: 72%\nWind: 11.5\nUV index: 1.2 (low)\nRainfall chance: not returned by the service\n\nPractical note: light rain is falling, so take an umbrella or waterproof layer for a day out. UV is low, so no sun protection needed.\n\nThis is current conditions only — the weather service did not return a forecast for later today or tomorrow, so I cannot tell you how the weather will develop during your trip.\n\nAs you asked, no commute calculation was run this round, and your housing search stays unchanged: whole home in Watford, at least two bedrooms, up to £2,500 per month, with step-free street access and internal space essential, a lift as a preference only, and pet permission and wheelchair access treated as unverified unless evidenced.\n\nNote: some commute claims could not be verified and have been removed from this answer.\n\nBranch from here\nLet's try a temporary, much tighter housing-search experiment. Replace the area with Camden only, the maximum monthly rent with £500, and the minimum bedroom count with four, still for a whole home. For this experiment only, a lift must also be present; keep genuine step-free access and our cat requirement too. Search exactly those conditions and say if there are no candidates; don't silently relax them or call an over-budget home a match.\nEdit message\nALEX\n\nI couldn't find listings matching your criteria near Camden in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.\n\nBranch from here\nDiscard that experiment entirely: the £500 budget, four-bedroom requirement and mandatory lift are withdrawn. Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences; step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nSt. Augustine's Road, Camden Square, NW1: required features are not verified: step-free, wheelchair-accessible\nRochester Road, Kentish Town: required features are not verified: step-free, wheelchair-accessible; cannot verify the commute condition\nDartmouth Park Hill, Dartmouth Park, London, NW5: required features are not verified: step-free, wheelchair-accessible\nParkway, London, NW1: required features are not verified: step-free, wheelchair-accessible\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: St. Augustine's Road, Camden Square, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Dartmouth Park Hill, Dartmouth Park, London, NW5 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Parkway, London, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Camden → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nBranch from here\nWe have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.\nEdit message\nALEX\nNo listing is both fully eligible and verified.\n\nNot verified:\n\nCroxley View, Watford, WD18: required features are not verified: wheelchair-accessible, step-free\nNevill Grove, Watford, WD24: required features are not verified: wheelchair-accessible, step-free\nRaven Close, Watford WD18: required features are not verified: wheelchair-accessible, step-free\nRegent Street, Watford WD24: required features are not verified: wheelchair-accessible, step-free\nSutton Road WD17, Watford, WD17: required features are not verified: wheelchair-accessible, step-free\nChester Road, WD18 0LJ, Watford, WD18: required features are not verified: wheelchair-accessible, step-free\nVilliers Road, Watford, WD19: required features are not verified: wheelchair-accessible, step-free\nSt. Albans Road, Hertfordshire WD17: required features are not verified: wheelchair-accessible, step-free\nRickmansworth Road, Watford, WD18: required features are not verified: wheelchair-accessible, step-free\nThe Clarendon, Watford | Hertfordshire WD17: required features are not verified: wheelchair-accessible, step-free\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: Croxley View, Watford, WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nReturned journey: Nevill Grove, Watford, WD24 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Raven Close, Watford WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Regent Street, Watford WD24 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Sutton Road WD17, Watford, WD17 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Chester Road, WD18 0LJ, Watford, WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Villiers Road, Watford, WD19 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: St. Albans Road, Hertfordshire WD17 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: Rickmansworth Road, Watford, WD18 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nReturned journey: The Clarendon, Watford | Hertfordshire WD17 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nBranch from here\nFor a separate day trip, what is the current weather in Islington, London? Don't run a commute calculation this round. This is only a weather lookup: do not change any housing-search area, budget, bedroom, access, pet or other condition, and do not move the housing search to Islington.\nEdit message\nALEX\n\nThe current weather in Islington, London is 14.2°C with light rain. It feels like 12.8°C, humidity is at 72%, wind speed is 11.5 km/h, and the UV index is low at 1.2. There is a chance of rain, so it is worth taking an umbrella if you are heading out.\n\nAs requested, I have not run a commute calculation, and your housing search conditions remain unchanged — the search area, budget, bedroom count, and access requirements are all as they were. Your current focus remains St. Augustine's Road, Camden Square, NW1.\n\nIf you would like, I can help with anything else on the housing side, such as checking transport links for a viewing day.\n\nPlease double-check the exact prices against the source listing.\n\nBranch from here\nFor the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.\nEdit message\nALEX\n\n1.\n\nProperty details (reopened from the saved listing link)\n\n*St.\n\nAugustine's Road, Camden Square, NW1* — https://www.onthemarket.com/details/20262177/\n\nPrice: £2,400 pcm\nType: 2 bed Apartment\nAvailability: Contact agent\nDescription: \"2 bedroom apartment to rent in St.\n\nAugustine's Road, Camden Square, NW1\"\n\nAmenities listed: \"A two double bedroom first floor flat, Lots of built in storage\"\n\nImportant caveat: this is a cached OnTheMarket snapshot.\n\nThe lookup did not contact or refresh the listing, so the price and availability are not verified as live or current.\n\nConfirm both with the listing agent before relying on them.\n\nIs your access and pet criteria actually evidenced?\n\nStreet-to-door step-free access: Not evidenced.\n\nThe listing says nothing about the entrance, threshold, path, or any steps from the street to the door.\n\nThe only access-related detail is \"first floor flat,\" which tells you there is at least one level to reach — it does not confirm how you get there.\n\nInternal doorway and bathroom space: Not evidenced.\n\nThe description mentions two double bedrooms and built-in storage only.\n\nThere is no information on door widths, corridor turning space, bathroom layout, or whether a wheelchair can be manoeuvred inside.\n\nLift: Not evidenced.\n\nA first floor flat with no lift mentioned is a warning sign for a wheelchair user, but the listing neither confirms nor rules out a lift.\n\nPermission for your cat: Not evidenced.\n\nThe listing contains no pet policy, no guest policy, and no payment rules — those fields are empty in the snapshot.\n\nIn short: none of your hard requirements (wheelchair-accessible, step-free) or your cat request is confirmed by this listing.\n\nThese must be verified directly with the agent and, ideally, on a viewing.\n\nAsk specifically about: number of steps from pavement to front door, any ramp or lift, door widths, bathroom door and internal turning space, and written pet permission.\n\n2.\n\nWeather for the viewing in Camden\n\nLocation: Camden, London\nCurrent temperature: 14.2°C, feels like 12.8°C\nCondition: Light Rain\nHumidity: 72%, wind 11.5, UV index 1.2\nGuidance: rain is possible, so bring an umbrella\n\nPractical note for an accessible viewing: light rain plus a first floor flat makes it worth confirming in advance whether there is any covered waiting area and whether the entrance route is slippery or obstructed.\n\n3.\n\nJourney from this flat to UCL\n\nFrom: St.\n\nAugustine's Road, Camden Square, London NW1\n\nTo: University College London, Gower Street, London WC1E 6BT\nMode: public transport (TfL Journey Planner)\nFastest itinerary returned: categorised as medium\n\nWhat the returned fastest itinerary does NOT verify for a wheelchair user and a child\n\nincluding walking legs and interchanges.\n\nIt does not tell you\n\nWhether every station on the route is step-free (lift access to platforms, gap between train and platform).\nWhether the walking legs are step-free, how long they are, or whether kerbs, crossings, and pavements are suitable for a wheelchair and a pushchair.\nWhether interchanges involve stairs, escalators only, or long corridors.\nWhether there is space on trains for a wheelchair and a child's buggy at the time you would travel.\nAnything about the reliability of the specific line at viewing time.\n\nBefore committing, check TfL's step-free station information for each station on the route and consider a practice run at the same time of day.\n\nScope note\n\nAs requested, I did not run a new property search, and the weather lookup for Camden was treated purely as viewing-day information — it does not change your housing criteria.\n\nYour hard requirements remain wheelchair-accessible and step-free, with a lift as a soft preference.\n\nNote: some commute claims could not be verified and have been removed from this answer.\n\nThe listing details are cached; current price and availability were not verified live. Confirm with the agent.\n\nReturned listing details: St. Augustine's Road, Camden Square, NW1; £2,400 pcm; 2 bed Apartment.\n\nReported features: A two double bedroom first floor flat, Lots of built in storage.\n\nAvailability: Contact agent. Confirm current availability with the agent.\n\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nCurrent weather returned for Camden, London: 14.2°C, Light Rain.\n\nOnly current conditions were returned; no multi-day forecast is verified.\n\nA numerical rain probability was not returned.\n\nReturned journey: St. Augustine's Road, Camden Square, London NW1 → University College London, Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\n\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\n\nBranch from here\nFocusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n1\nSearch criteria\nArea\n*\nCamden\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\n5\n#1\nWatford\nCroxley View, Watford, WD18\n£1600/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Croxley View, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#2\nWatford\nNevill Grove, Watford, WD24\n£1600/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Nevill Grove, Watford, WD24\nView Deal\nMap\nAsk AI\n5\n#3\nWatford\nRaven Close, Watford WD18\n£1650/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Raven Close, Watford WD18\nView Deal\nMap\nAsk AI\n5\n#4\nWatford\nRegent Street, Watford WD24\n£1700/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Regent Street, Watford WD24\nView Deal\nMap\nAsk AI\n5\n#5\nWatford\nSutton Road WD17, Watford, WD17\n£1700/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Sutton Road WD17, Watford, WD17\nView Deal\nMap\nAsk AI\n5\n#6\nWatford\nChester Road, WD18 0LJ, Watford, WD18\n£1700/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom terraced house to rent in Chester Road, WD18 0LJ, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#7\nWatford\nVilliers Road, Watford, WD19\n£1800/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n3 bedroom flat to rent in Villiers Road, Watford, WD19\nView Deal\nMap\nAsk AI\n5\n#8\nWatford\nSt. Albans Road, Hertfordshire WD17\n£1850/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in St. Albans Road, Hertfordshire WD17\nView Deal\nMap\nAsk AI\n5\n#9\nWatford\nRickmansworth Road, Watford, WD18\n£1900/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Rickmansworth Road, Watford, WD18\nView Deal\nMap\nAsk AI\n5\n#10\nWatford\nThe Clarendon, Watford | Hertfordshire WD17\n£2250/month\nWithin Budget\nDoes not meet these criteria\narea watford is outside the requested areas\nrequired features are not verified: wheelchair-accessible, step-free\ncommute evidence is missing\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in The Clarendon, Watford | Hertfordshire WD17\nView Deal\nMap\nAsk AI",
+    "focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...",
+    "forms": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "value": "",
+        "checked": false,
+        "aria": "Area"
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "value": "3000",
+        "checked": false,
+        "aria": "Budget"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "month",
+        "checked": null,
+        "aria": "Budget period"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "2",
+        "checked": null,
+        "aria": "Bedrooms"
+      },
+      {
+        "tag": "INPUT",
+        "type": "checkbox",
+        "value": "on",
+        "checked": true,
+        "aria": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "whole",
+        "checked": null,
+        "aria": "Room type"
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "value": "University College London, Gower Street, London WC1E 6BT",
+        "checked": false,
+        "aria": "Commute to"
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "value": "50",
+        "checked": false,
+        "aria": "Max commute (min)"
+      },
+      {
+        "tag": "INPUT",
+        "type": "checkbox",
+        "value": "on",
+        "checked": false,
+        "aria": null
+      },
+      {
+        "tag": "INPUT",
+        "type": "date",
+        "value": "",
+        "checked": false,
+        "aria": "Move-in date"
+      }
+    ]
+  },
+  "response_ids": [
+    {
+      "x-request-id": "9f19f92df5954ca9a14f67f12c319360"
+    }
+  ],
+  "post_ui": {
+    "criteria": "Area\n*\nCamden\n×\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch",
+    "forms": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "value": "",
+        "checked": false,
+        "aria": "Area"
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "value": "3000",
+        "checked": false,
+        "aria": "Budget"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "month",
+        "checked": null,
+        "aria": "Budget period"
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "2",
+        "checked": null,
+        "aria": "Bedrooms"
+      },
+      {
+        "tag": "INPUT",
+        "type": "checkbox",
+        "value": "on",
+        "checked": true,
+        "aria": null
+      },
+      {
+        "tag": "SELECT",
+        "type": "select-one",
+        "value": "whole",
+        "checked": null,
+        "aria": "Room type"
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "value": "Gower Street, London WC1E 6BT",
+        "checked": false,
+        "aria": "Commute to"
+      },
+      {
+        "tag": "INPUT",
+        "type": "number",
+        "value": "50",
+        "checked": false,
+        "aria": "Max commute (min)"
+      },
+      {
+        "tag": "INPUT",
+        "type": "checkbox",
+        "value": "on",
+        "checked": false,
+        "aria": null
+      },
+      {
+        "tag": "INPUT",
+        "type": "date",
+        "value": "",
+        "checked": false,
+        "aria": "Move-in date"
+      }
+    ],
+    "card_count": 4,
+    "cards": "5\n#1\nCamden\nSt. Augustine's Road, Camden Square, NW1\n£2400/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1\nView Deal\nMap\nAsk AI\n5\n#2\nCamden\nRochester Road, Kentish Town\n£2600/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\ncommute tool failed\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Rochester Road, Kentish Town\nView Deal\nMap\nAsk AI\n4\n#3\nCamden\nDartmouth Park Hill, Dartmouth Park, London, NW5\n£2600/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Dartmouth Park Hill, Dartmouth Park, London, NW5\nView Deal\nMap\nAsk AI\n5\n#4\nCamden\nParkway, London, NW1\n£2650/month\nWithin Budget\nConditions need verification\nrequired features are not verified: wheelchair-accessible, step-free\nCached listing may have changed; confirm with the agent.\nMove-in date: contact agent\n2 bedroom flat to rent in Parkway, London, NW1\nView Deal\nMap\nAsk AI",
+    "view_urls": [
+      "https://www.onthemarket.com/details/20262177/",
+      "https://www.onthemarket.com/details/8225050/",
+      "https://www.onthemarket.com/details/20259367/",
+      "https://www.onthemarket.com/details/20259996/"
+    ],
+    "focus": "Focusing on 2 properties\nClear all\nCroxley View, Watford, W...\nSt. Augustine's Road, Ca...",
+    "favorite_count": "1"
+  }
+}

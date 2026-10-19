@@ -4,6 +4,7 @@ Tool: Search Nearby POIs (使用 OpenStreetMap)
 """
 
 import os
+import re
 import threading
 import time
 import math
@@ -30,7 +31,7 @@ def clamp_radius(radius) -> int:
     """A usable metre radius: the default when missing/unparseable, capped at MAX_RADIUS."""
     try:
         r = int(float(radius))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return DEFAULT_RADIUS
     if r <= 0:
         return DEFAULT_RADIUS
@@ -93,7 +94,7 @@ POI_PACING_S = float(os.getenv("POI_PACING_S", "0.3"))
 POI_RESULT_TTL_S = float(os.getenv("POI_RESULT_TTL_S", "259200"))        # 3 days
 POI_EMPTY_RESULT_TTL_S = float(os.getenv("POI_EMPTY_RESULT_TTL_S", "900"))  # 15 min
 # Per-request HTTP ceiling for one Overpass call when nothing else bounds it.
-POI_OVERPASS_TIMEOUT_S = 30
+POI_OVERPASS_TIMEOUT_S = 3
 
 
 def _batch_window_s() -> float:
@@ -276,6 +277,16 @@ POI_TYPES = {
         "query": '["amenity"="pharmacy"]',
         "icon": "💊",
         "name": "Pharmacy"
+    },
+    "school": {
+        "query": '["amenity"="school"]',
+        "icon": "🏫",
+        "name": "School"
+    },
+    "gp": {
+        "query": '["amenity"~"^(doctors|clinic)$"]',
+        "icon": "🩺",
+        "name": "Doctors / Medical Clinic"
     },
     "gym": {
         "query": '["leisure"="fitness_centre"]',
@@ -490,13 +501,19 @@ def geocode_address(address: str, deadline: Optional[float] = None) -> Optional[
             # country_codes: every listing in this product is in the UK, so a same-name place
             # abroad is never the answer. (It does NOT settle London vs Stratford-upon-Avon —
             # both are GB; address_variants handles that by asking for London first.)
-            location = geolocator.geocode(variant, country_codes="gb")
+            remaining = deadline - time.monotonic() if deadline is not None else 20.0
+            if remaining <= 0:
+                return None
+            location = geolocator.geocode(variant, country_codes="gb",
+                                          timeout=min(10.0, remaining / 2))
             if location:
                 print("✅ [Geocode] 成功 coordinates_resolved=True")
                 coords = (location.latitude, location.longitude)
                 if key:
                     _geocode_store(key, coords)
                 return coords
+            if deadline is not None and deadline - time.monotonic() <= 0.5:
+                return None
             time.sleep(0.5)  # 避免请求过快
 
         print(f"❌ [Geocode] 所有变体都失败了 ({attempted} 个)")
@@ -525,9 +542,8 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
             request is issued, so without this the LAST request issued could still run its full
             30s past the deadline and hand the batch window the win anyway. Passing the
             remaining budget keeps one request from outliving the budget that authorised it.
-            NOTE the residual: ``overpass_request`` rotates mirrors and retries
-            (``max_rounds=2``), so the worst case is still a multiple of this — bounding that
-            needs a deadline parameter inside ``overpass_request`` itself.
+            The same deadline also bounds mirror failover and pacing inside
+            ``overpass_request``; each category gets a share of the tool budget.
     """
     if poi_type not in POI_TYPES:
         return []
@@ -545,6 +561,7 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     (
         node{query_filter}(around:{radius},{lat},{lon});
         way{query_filter}(around:{radius},{lat},{lon});
+        relation{query_filter}(around:{radius},{lat},{lon});
     );
     out center body;
     """
@@ -581,11 +598,11 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
     # A genuinely empty cell (no gym within 300 m) is real, though, and must stay reportable:
     # when EVERY mirror says empty, one confirming request settles it. Zero is only ever
     # stated after a mirror we have no reason to distrust says zero.
-    req_timeout = POI_OVERPASS_TIMEOUT_S if timeout is None else max(1, int(timeout))
+    req_timeout = POI_OVERPASS_TIMEOUT_S if timeout is None else max(0.001, float(timeout))
     eff_timeout = min(POI_OVERPASS_TIMEOUT_S, req_timeout)
     unconfirmed_empty = False
     try:
-        data = overpass_request(query, timeout=eff_timeout, expect_nonempty=True,
+        data = overpass_request(query, timeout=eff_timeout, max_rounds=1, expect_nonempty=True,
                                deadline=deadline)
     except OverpassEmpty as e:
         # Every reachable mirror answered a clean empty 200. Report zero — no gym within
@@ -601,7 +618,7 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
             f"❌ OSM 查询失败 type={poi_type} "
             f"exception_type={type(exc).__name__}"
         )
-        raise RuntimeError(f"Overpass API request failed for {poi_type}") from exc
+        raise
 
     pois = []
     for element in data.get("elements", []):
@@ -628,6 +645,9 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
             distance_m = _calculate_distance(origin_lat, origin_lon, poi_lat, poi_lon)
 
         poi = {
+            "osm_type": element.get('type'),
+            "osm_id": element.get('id'),
+            "source": "OpenStreetMap Overpass",
             "name": name,
             "type": POI_TYPES[poi_type]["name"],
             "icon": POI_TYPES[poi_type]["icon"],
@@ -638,6 +658,8 @@ def query_osm_pois(lat: float, lon: float, poi_type: str, radius: int = DEFAULT_
             "cuisine": tags.get("cuisine"),
             "brand": brand,
             "opening_hours": tags.get("opening_hours"),
+            "school_level": tags.get('school:level') or tags.get('isced:level'),
+            "healthcare": tags.get('healthcare'),
         }
         pois.append(poi)
 
@@ -705,7 +727,7 @@ def _infer_poi_types_from_query(user_query: str) -> List[str]:
     # 普通餐厅
     if any(kw in user_query for kw in ['餐厅', '餐馆', '饭店', '吃饭', '吃的']):
         inferred.append('restaurant')
-    if any(kw in query_lower for kw in ['restaurant', 'food', 'eat', 'dining']):
+    if any(kw in query_lower for kw in ['restaurant', 'food', 'dining']) or re.search(r'\beat\b', query_lower):
         inferred.append('restaurant')
     
     # 超市
@@ -732,6 +754,14 @@ def _infer_poi_types_from_query(user_query: str) -> List[str]:
     if any(kw in query_lower for kw in ['pharmacy', 'chemist', 'boots']):
         inferred.append('pharmacy')
     
+    # 健身房
+    if re.search(r'\b(?:schools?|primary schools?|secondary schools?)\b', query_lower) or any(
+            word in user_query for word in ('学校', '小学', '中学')):
+        inferred.append('school')
+    if re.search(r'\b(?:gp|gps|doctors?|medical cent(?:re|er)|clinic)\b', query_lower) or any(
+            word in user_query for word in ('家庭医生', '全科医生', '医疗中心', '诊所')):
+        inferred.append('gp')
+
     # 健身房
     if any(kw in user_query for kw in ['健身', '健身房', '运动']):
         inferred.append('gym')
@@ -821,21 +851,59 @@ def _skipped_note(skipped: List[str], budget_s: float) -> str:
             f"（部分结果：已达搜索时间上限，未查询：{joined}。）")
 
 
-def _requested_types(poi_type: str) -> List[str]:
-    """Parse ``poi_type`` as a comma/space separated LIST of known types, in order, deduped.
+_POI_ALIASES = {
+    'schools': 'school', 'primary school': 'school', 'primary schools': 'school',
+    'secondary school': 'school', 'secondary schools': 'school',
+    'doctor': 'gp', 'doctors': 'gp', 'gps': 'gp', 'medical centre': 'gp',
+    'medical center': 'gp', 'medical_centre': 'gp', 'medical_center': 'gp',
+    'clinic': 'gp', 'clinics': 'gp', 'general practitioner': 'gp',
+}
 
-    One call per type was the other half of the budget burn: five calls meant five geocodes
-    and five deadlines where one call can cover every type under a single geocode. Returns
-    [] when nothing in the string is a known type, so the caller keeps its fuzzy matching."""
-    if not poi_type:
-        return []
-    tokens = [t.strip().lower() for t in str(poi_type).replace('|', ',').split(',')]
-    out: List[str] = []
-    for token in tokens:
-        for word in ([token] if token in POI_TYPES else token.split()):
+
+def _type_plan(poi_type: str) -> tuple[List[str], List[str]]:
+    """Keep unsupported explicit categories visible instead of replacing them with food."""
+    known, unsupported = [], []
+    for token in re.split(r'[,|;]', str(poi_type or '')):
+        token = token.strip().lower()
+        if not token:
+            continue
+        candidate = _POI_ALIASES.get(token, token)
+        if candidate in POI_TYPES:
+            matches = [candidate]
+        else:
+            # Preserve the legacy natural-language aliases (e.g. food or Tesco).
+            matches = _infer_poi_types_from_query(token)
+            if not matches:
+                matches = [_POI_ALIASES.get(word, word) for word in token.split()
+                           if _POI_ALIASES.get(word, word) in POI_TYPES]
+        known.extend(t for t in matches if t not in known)
+        if not matches and token not in unsupported:
+            unsupported.append(token)
+    return known, unsupported
+
+
+def _requested_types(poi_type: str) -> List[str]:
+    # Kept as the legacy strict-token parser for callers that use [] to request
+    # their own fuzzy matching. The execution planner below handles aliases.
+    out = []
+    for token in re.split(r'[,|;]', str(poi_type or '').lower()):
+        token = token.strip()
+        candidate = _POI_ALIASES.get(token, token)
+        for word in ([candidate] if candidate in POI_TYPES else token.split()):
+            word = _POI_ALIASES.get(word, word)
             if word in POI_TYPES and word not in out:
                 out.append(word)
     return out
+
+
+def _user_radius_m(query: str):
+    match = re.search(r'(\d+(?:\.\d+)?)\s*(kilomet(?:re|er)s?|km|公里|千米|met(?:re|er)s?|米|m)(?![a-z])',
+                      query or '', re.I)
+    if not match:
+        return None
+    value = float(match.group(1))
+    unit = match.group(2).lower()
+    return int(value * (1000 if unit.startswith(('k', '公里', '千米')) else 1))
 
 
 def search_nearby_pois_impl(
@@ -844,224 +912,191 @@ def search_nearby_pois_impl(
     radius: int = DEFAULT_RADIUS,
     user_query: str = "",
     latitude: float = None,
-    longitude: float = None
+    longitude: float = None,
 ) -> dict:
-    """
-    使用 OpenStreetMap 搜索地址周边的 POI
+    """One bounded lookup with explicit execution, failure and spatial evidence.
 
-    NOTE: this is a PLAIN SYNC function on purpose. It performs synchronous geocoding,
-    Overpass HTTP requests and pacing sleeps; registering it as sync means Tool.execute runs
-    it in an executor thread so the asyncio event loop stays responsive and the fc-loop's
-    per-tool asyncio.wait_for can actually fire. All requested POI types share ONE
-    time.monotonic() deadline (``poi_search_budget_s()``, derived to sit strictly inside the
-    fc-loop batch window): once the deadline passes, the remaining types are returned as
-    skipped with an honest note rather than silently overrunning.
-
-    Args:
-        address: 要搜索的地址
-        poi_type: POI 类型，可传多个（逗号分隔）(restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, all)
-        radius: 搜索半径（米）。默认 DEFAULT_RADIUS（300m，约四分钟步行），上限 MAX_RADIUS。
-        user_query: 用户原始查询（可选，用于智能推断 POI 类型）
-        latitude, longitude: 该地址的已知坐标（可选）。传了就跳过地理编码 —— 房源缓存里
-            本来就有 geo_location，用它比拿展示名去 Nominatim 反推更准也更快。
+    A missing category is never an empty answer. Explicit poi_type controls what
+    runs; categories mentioned only in user_query are reported as unqueried.
+    Schools/clinics are OSM records, not proof of admissions, GP registration or
+    wheelchair access. Existing per-type cache/retries and shared deadline apply.
     """
     budget_s = poi_search_budget_s()
-    deadline = time.monotonic() + budget_s
-    # One place decides the radius: a caller (or the model) asking for 2 km gets the ceiling.
-    radius = clamp_radius(radius)
+    started_at = time.monotonic()
+    deadline = started_at + budget_s
     try:
-        # 🆕 如果有 user_query，根据用户查询智能推断 POI 类型
-        if user_query and poi_type == "all":
-            inferred_types = _infer_poi_types_from_query(user_query)
-            if inferred_types:
-                print(f"🧠 [OSM POI] 推断 POI 类型 inferred_count={len(inferred_types)}")
-        else:
-            inferred_types = None
-
-        print(
-            f"🗺️ [OSM POI] 搜索 requested_type_chars={len(poi_type)} "
-            f"address_chars={len(address)} radius_m={radius}"
-        )
-
-        # Coordinates the caller already owns beat anything geocoding can recover from a
-        # display name. The listing cache carries geo_location per listing; a listing string
-        # like "Caledonian Road, London" otherwise geocodes to the middle of a 2 km road,
-        # centring the radius on a point the tenant does not live at (and, for
-        # "Rugby House 6 Great Ormond Street, Islington WC1N", on nothing at all).
-        exact_coords = False
-        if coords_in_uk(latitude, longitude):
-            coords = (float(latitude), float(longitude))
-            exact_coords = True
-            print("📍 [OSM POI] 使用调用方提供的坐标 coordinates_supplied=True")
-        else:
-            # 地理编码（受同一个 deadline 约束，不能超出授权它的预算）
-            coords = geocode_address(address, deadline=deadline)
+        requested_radius = int(float(radius))
+    except (TypeError, ValueError, OverflowError):
+        requested_radius = None
+    radius = clamp_radius(radius)
+    inferred = _infer_poi_types_from_query(user_query or '')
+    if str(poi_type).lower() == 'all':
+        types = inferred or ['restaurant', 'supermarket', 'convenience', 'cafe']
+        unsupported = []
+        unqueried = []
+    else:
+        types, unsupported = _type_plan(poi_type)
+        unqueried = [t for t in inferred if t not in types]
+    desired_radius = _user_radius_m(user_query)
+    executed, completed, empty, failed, skipped = [], [], [], [], []
+    category_status = {t: {'status': 'not_executed'} for t in types}
+    category_status.update({t: {'status': 'unsupported'} for t in unsupported})
+    category_status.update({t: {'status': 'not_requested'} for t in unqueried})
+    payload = {
+        'success': False, 'address': address, 'pois': {},
+        'source': 'OpenStreetMap Overpass',
+        'requested_radius_m': requested_radius, 'radius_m': radius,
+        'user_requested_radius_m': desired_radius,
+        'radius_clamped': requested_radius is not None and requested_radius != radius,
+        'requested_types': types, 'executed_types': executed,
+        'completed_types': completed, 'empty_types': empty, 'failed_types': failed,
+        'skipped_types': skipped, 'unsupported_types': unsupported,
+        'unqueried_types': unqueried, 'category_status': category_status,
+        'reference_point': None,
+        'budget_seconds': budget_s,
+    }
+    notes = []
+    if requested_radius is not None and requested_radius != radius:
+        notes.append(f'Requested radius {requested_radius}m; actual search radius {radius}m '
+                     f'(configured maximum {MAX_RADIUS}m).')
+    if desired_radius is not None and desired_radius != radius:
+        notes.append(f'The user asked for {desired_radius}m; only {radius}m was searched.')
+    if unsupported:
+        notes.append('Unsupported categories, NOT queried: ' + ', '.join(unsupported) + '.')
+    if unqueried:
+        notes.append('Mentioned categories NOT requested or queried: ' + ', '.join(unqueried) + '.')
+    if not types:
+        payload.update(error='No supported POI category was requested.',
+                       search_status='unsupported', retryable=False, note=' '.join(notes))
+        return payload
+    try:
+        exact = coords_in_uk(latitude, longitude)
+        coords = ((float(latitude), float(longitude)) if exact else
+                  geocode_address(address, deadline=min(deadline, time.monotonic() + budget_s / 3)))
         if not coords:
-            return {
-                "success": False,
-                "error": f"Could not find coordinates for address: {address}",
-                "address": address,
-                "pois": {},
-            }
-
+            skipped.extend(types)
+            for pending in types:
+                category_status[pending] = {'status': 'skipped', 'reason': 'geocoding_unavailable',
+                                            'radius_m': radius}
+            payload.update(error='Could not find coordinates for the requested address.',
+                           search_status='not_executed', retryable=True, partial=True,
+                           service_status='unavailable', unknown_types=list(types),
+                           elapsed_seconds=round(time.monotonic() - started_at, 3))
+            return payload
         lat, lon = coords
-        print("📍 坐标已解析 coordinates_resolved=True")
-
-        # What every distance below is measured FROM. This tool geocodes the query string,
-        # so for an AREA question ("how is Hackney?") the origin is a borough centroid and
-        # "Tesco 110m" means 110 m from a cartographic centre, not from a home. Network-free
-        # (string classifier) so it costs the POI hot path nothing.
         from core.place_reference import query_reference
-        ref = query_reference(address)
-        if exact_coords:
-            # The caller passed the listing's OWN coordinates, so the hedging a geocoded
-            # string earns does not apply — say so, or the model repeats "this is an area
-            # centre, not the property" about a point that IS the property.
-            ref = dict(ref)
-            ref["precision"] = "listing_coordinates"
-            ref["is_specific_address"] = True
-            ref["measured_from"] = (
-                f"the listing's own coordinates for {address!r} ({lat:.5f}, {lon:.5f}), "
-                f"supplied with the request rather than geocoded. Distances are "
-                f"straight-line (as the crow flies), not walking distance.")
-
-        results = {}
-
-        # 确定要查询的 POI 类型
-        # 🆕 优先使用从 user_query 推断的类型
-        requested = _requested_types(poi_type) if poi_type != "all" else []
-        if inferred_types:
-            types_to_query = inferred_types
-        elif poi_type == "all":
-            types_to_query = ["restaurant", "supermarket", "convenience", "cafe"]
-        elif requested:
-            # One call, N types, ONE geocode and ONE deadline — the whole point of accepting
-            # a list instead of making the model fan out a call per type.
-            types_to_query = requested
+        ref = dict(query_reference(address))
+        ref.update(lat=lat, lon=lon,
+                   coordinate_source='caller_supplied' if exact else 'address_geocoding')
+        if exact:
+            ref.update(precision='listing_coordinates', is_specific_address=True,
+                       coordinate_identity_verified=False,
+                       measured_from=(f'the supplied coordinates for {address!r}, supplied with the request '
+                                      'rather than geocoded. Their property identity is not independently '
+                                      'verified. Distances are straight-line, not walking distance.'))
         else:
-            # 尝试智能匹配
-            poi_type_lower = poi_type.lower()
-            if "chinese" in poi_type_lower or "asian" in poi_type_lower:
-                types_to_query = ["chinese_restaurant"]
-            elif "restaurant" in poi_type_lower or "food" in poi_type_lower:
-                types_to_query = ["restaurant", "chinese_restaurant"]
-            elif "supermarket" in poi_type_lower or "tesco" in poi_type_lower or "sainsbury" in poi_type_lower:
-                types_to_query = ["supermarket"]
-            elif "store" in poi_type_lower or "shop" in poi_type_lower or "convenience" in poi_type_lower:
-                types_to_query = ["convenience", "supermarket"]
-            else:
-                types_to_query = ["restaurant", "supermarket", "convenience"]
-
-        print(f"🔍 [OSM POI] 查询类型 type_count={len(types_to_query)}")
-
-        # 查询每种类型（传递原点坐标用于距离计算）。共享一个 monotonic 截止时间：
-        # 截止后不再发起任何 per-type 请求，把剩余类型如实标为 skipped。
-        skipped: List[str] = []
-        for idx, ptype in enumerate(types_to_query):
+            # The ladder can fall back to a street/postcode; string specificity
+            # does not establish the precision of the geocoding hit it actually used.
+            ref.update(query_precision_hint=ref.get('precision'),
+                       precision='area' if ref.get('precision') == 'area' else 'unknown',
+                       is_specific_address=False)
+        payload['reference_point'] = ref
+        results = payload['pois']
+        for index, ptype in enumerate(types):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                # No per-type request may be issued after the deadline.
-                skipped = list(types_to_query[idx:])
-                print(f"  ⏱️ [OSM POI] 预算已用尽 skipped_count={len(skipped)}")
+                skipped.extend(types[index:])
+                for pending in types[index:]:
+                    category_status[pending] = {'status': 'skipped', 'reason': 'time_budget',
+                                                'radius_m': radius}
                 break
-            # Clamp THIS request to what is left, so the last one issued cannot outlive the
-            # deadline that let it start and hand the batch window the win.
-            pois = query_osm_pois(lat, lon, ptype, radius, origin_lat=lat, origin_lon=lon,
-                                  timeout=remaining, deadline=deadline)
-            if pois:
-                results[ptype] = pois[:5]  # 每种类型最多 5 个
-                print(f"  ✅ 找到 {len(pois)} 个 {POI_TYPES[ptype]['name']}")
-            # 只有还有下一个类型且仍在预算内时才 pace，避免无谓地把时间推过截止点。
-            if idx < len(types_to_query) - 1 and time.monotonic() < deadline:
-                time.sleep(POI_PACING_S)
-
-        note = _skipped_note(skipped, budget_s) if skipped else None
-
-        # A station name is the one POI the model has repeatedly supplied from memory
-        # (observed: the same WC1H property reported as "Covent Garden" in one turn and
-        # "Russell Square" — the correct answer — in another). Nothing in this repo ever
-        # produced "Covent Garden", so it was invented in the gap left by a tool that can
-        # return an empty station list. When stations were asked for, the answer now comes
-        # from TfL's own index, including the case where there is none.
-        station_block = None
-        if "tube_station" in types_to_query:
-            station_block = _resolve_nearest_station(address, lat, lon)
-
-        if not results:
-            payload = {
-                "success": True,
-                "address": address,
-                "reference_point": ref,
-                "pois": {},
-            }
-            if station_block:
-                payload.update(station_block)
-            if skipped:
-                payload["message"] = (
-                    "No results were gathered within the time budget. " + note)
-                payload["partial"] = True
-                payload["skipped_types"] = skipped
-                payload["note"] = note
-            else:
-                payload["message"] = (
-                    f"No {poi_type} found within {radius}m of {ref['measured_from']}")
-            return payload
-
-        # 格式化输出
-        formatted = []
-        for ptype, pois in results.items():
-            for poi in pois:
-                # 🆕 添加距离显示
-                distance_str = poi.get('distance_display', 'N/A')
-                entry = f"{poi['icon']} {poi['name']} - {distance_str}"
-                if poi.get('cuisine'):
-                    entry += f" ({poi['cuisine']})"
-                if poi.get('brand') and poi.get('brand').lower() not in poi.get('name', '').lower():
-                    entry += f" [{poi['brand']}]"
-                formatted.append(entry)
-
-        # The reference point goes into the SUMMARY STRING, not only into a sibling field:
-        # a sibling field is exactly what route_source was, and nothing read it.
-        summary = (f"Found {sum(len(p) for p in results.values())} places within {radius}m, "
-                   f"measured in a straight line from {ref['measured_from']}\n"
-                   + "\n".join(formatted))
-        if station_block and station_block.get("note"):
-            summary = summary + "\n" + station_block["note"]
-        if note:
-            summary = summary + "\n" + note
-
-        payload = {
-            "success": True,
-            "address": address,
-            "radius_m": radius,
-            "reference_point": ref,
-            "summary": summary,
-            "pois": results,
-        }
-        if station_block:
-            payload.update(station_block)
+            executed.append(ptype)
+            try:
+                # Reserve a fair share for every remaining category. A failing
+                # school lookup must leave GP a chance, and already completed
+                # categories are returned even if a later provider fails.
+                category_deadline = min(deadline, time.monotonic() + remaining / (len(types) - index))
+                pois = query_osm_pois(lat, lon, ptype, radius, origin_lat=lat, origin_lon=lon,
+                                      timeout=remaining, deadline=category_deadline)
+                completed.append(ptype)
+                category_status[ptype] = {'status': 'found' if pois else 'empty',
+                                          'result_count': min(len(pois), 5),
+                                          'radius_m': radius, 'source': 'OpenStreetMap Overpass'}
+                if pois:
+                    results[ptype] = pois[:5]
+                else:
+                    empty.append(ptype)
+            except Exception as exc:
+                failed.append(ptype)
+                category_status[ptype] = {'status': 'failed', 'error': 'POI lookup failed',
+                                          'error_type': type(exc).__name__, 'retryable': True,
+                                          'service_status': getattr(exc, 'service_status', 'unavailable'),
+                                          'attempts': getattr(exc, 'attempts', None),
+                                          'radius_m': radius, 'source': 'OpenStreetMap Overpass'}
+            if index < len(types) - 1 and time.monotonic() < deadline:
+                time.sleep(min(POI_PACING_S, max(0.0, deadline - time.monotonic())))
         if skipped:
-            payload["partial"] = True
-            payload["skipped_types"] = skipped
-            payload["note"] = note
+            notes.append(_skipped_note(skipped, budget_s))
+        if failed:
+            notes.append('Lookup FAILED (not an empty result): ' + ', '.join(failed) + '.')
+        if 'school' in types or 'gp' in types:
+            notes.append('School/clinic map records do not verify primary-school phase, '
+                         'school places, GP registration, catchment or wheelchair access.')
+        # Nearest-station evidence is a separate TfL lookup with its own radius.
+        if 'tube_station' in completed:
+            if deadline - time.monotonic() >= 12:
+                station = _resolve_nearest_station(address, lat, lon)
+                station['nearest_station_radius_m'] = 1500
+                payload.update(station)
+                if station.get('note'):
+                    notes.append(station['note'])
+            else:
+                payload.update(nearest_station=None, other_stations_nearby=[])
+                notes.append('Nearest-station lookup was NOT executed: insufficient time budget.')
+        partial = bool(failed or skipped or unsupported or unqueried or
+                       (requested_radius is not None and requested_radius != radius) or
+                       (desired_radius is not None and desired_radius != radius))
+        payload.update(success=bool(completed), partial=partial,
+                       search_status='partial' if partial and completed else
+                                     'complete' if completed else 'failed',
+                       service_status='degraded' if completed and (failed or skipped) else
+                                      'unavailable' if failed or skipped else 'healthy',
+                       unknown_types=list(dict.fromkeys(failed + skipped + unsupported + unqueried)),
+                       elapsed_seconds=round(time.monotonic() - started_at, 3))
+        if not completed:
+            payload['error'] = 'Nearby POI lookup failed'
+            payload['failure_note'] = 'No requested category completed; do not report this as no nearby places.'
+            payload['retryable'] = bool(failed or skipped)
+        formatted = []
+        for pois in results.values():
+            for place in pois:
+                formatted.append(f"{place.get('icon', '')} {place.get('name', 'Unnamed')} - "
+                                 f"{place.get('distance_display', 'N/A')}")
+        count = sum(len(places) for places in results.values())
+        summary = (f'Found {count} places in completed categories within the actual {radius}m '
+                   f'straight-line search radius, measured from {ref["measured_from"]}\n' +
+                   '\n'.join(formatted))
+        if not count:
+            payload['message'] = ('No places returned for completed categories: ' +
+                                  ', '.join(completed) + f' within {radius}m of {ref["measured_from"]}. '
+                                  'Unexecuted or failed categories are unknown.'
+                                  if completed else payload['error'])
+        if notes:
+            summary += '\n' + ' '.join(notes)
+            payload['note'] = ' '.join(notes)
+        payload['summary'] = summary
         return payload
-
     except Exception as exc:
-        print(f"❌ [OSM POI] 错误 exception_type={type(exc).__name__}")
-        return {
-            "success": False,
-            "error": "Nearby POI lookup failed",
-            "address": address,
-            "pois": {},
-            "retryable": True,
-        }
+        print(f'Nearby POI lookup failed; exception_type={type(exc).__name__}')
+        payload.update(error='Nearby POI lookup failed', search_status='failed', retryable=True)
+        return payload
 
 
 # 创建工具实例
 search_nearby_pois_tool = Tool(
     name="search_nearby_pois",
     
-    description="""Find nearby places (restaurants, supermarkets, convenience stores, cafes, pharmacies, gyms, parks, bus stops, tube stations, banks, ATMs) around an address using OpenStreetMap. Use for any "what's nearby" / "is there a ... near" question. Do NOT confuse with check_safety, which is for crime/safety questions only.
+    description="""Find nearby places (restaurants, supermarkets, convenience stores, cafes, pharmacies, schools, GP/doctors/medical clinics, gyms, parks, bus stops, tube stations, banks, ATMs) around an address using OpenStreetMap. Use for any "what's nearby" / "is there a ... near" question. Do NOT confuse with check_safety, which is for crime/safety questions only. requested_types/executed_types/completed_types/empty_types/failed_types/skipped_types/unsupported_types/unqueried_types distinguish an empty completed lookup from something NOT checked. Never claim no school/GP from a missing category. Quote the actual radius_m and requested_radius_m/user_requested_radius_m when they differ. School and clinic records do not verify admissions, registrations, primary-school phase or wheelchair access.
 DISTANCES HAVE A REFERENCE POINT: the result's `reference_point.measured_from` says what the metres are measured from. For an AREA query it is the area's geocoded centre, not a home — quote the distance together with that reference, never as "X metres from the property". Ask with poi_type=tube_station to get a `nearest_station` field resolved from TfL; if it is null the nearest station is NOT established and you must not name one.
 搜索某地址附近的设施（餐厅/超市/交通站点等）。""",
     
@@ -1076,7 +1111,7 @@ DISTANCES HAVE A REFERENCE POINT: the result's `reference_point.measured_from` s
             },
             'poi_type': {
                 'type': 'string',
-                'description': 'Type(s) of POI, COMMA-SEPARATED for several at once (e.g. "supermarket,convenience,tube_station"). One call covering every type you need is much faster than one call per type. Known types: restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, gym, park, bus_stop, tube_station, bank, atm, or "all"',
+                'description': 'Type(s) of POI, COMMA-SEPARATED for several at once (e.g. "school,gp,supermarket"). One call covering every type you need is much faster than one call per type. Known types: restaurant, chinese_restaurant, supermarket, convenience, cafe, pharmacy, school, gp (doctors/medical clinics), gym, park, bus_stop, tube_station, bank, atm, or "all". Unsupported categories are returned explicitly, never replaced with unrelated categories.',
                 'default': 'all'
             },
             'radius': {

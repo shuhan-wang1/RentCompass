@@ -164,6 +164,7 @@ pool stays warm as the rollback target ([Appendix A](#appendix-a--the-legacy-arc
                               ▼
               Starlette ASGI shell  (uk_rent_agent.web.asgi)
                  ├── GET /health          served natively
+                 ├── POST /api/alex       native async JSON / stage SSE
                  └── Mount("/")  ──▶ Flask app (app/app.py)
                               │
               ┌───────────────┼────────────────────────┐
@@ -662,6 +663,9 @@ user criteria
   and degrades honestly when the pool is rate-limited.
 - The RAG layer combines FAISS listing embeddings, SQLite conversation memory,
   and persisted area knowledge.
+- Listing recall owns a candidate snapshot and FAISS index per request. The
+  embedding model/cache are shared; ordinary and similar fallback recall use
+  the same request snapshot, including across concurrent searches.
 - Every search-side time budget is configurable (`SEARCH_*`, `POI_*`) so the tool
   can return a smaller honest answer instead of blowing the turn ceiling.
 
@@ -715,6 +719,14 @@ carries `X-Agent-Arch` / `X-Agent-Version`. `/api/alex` echoes `conversation_id`
 and `turn_id` on every outcome including errors. Agent/provider failures return
 HTTP 502 and serialization failures return HTTP 500 while retaining those IDs,
 so the client can adopt the transaction without mistaking a failure for success.
+
+The ASGI chat route also accepts `Accept: text/event-stream`. It emits public
+`step` events with a `stage` (`understanding`, `searching`, `checking`, `writing`,
+`saving`), followed by `final` with `{status, payload}`. The payload is the same
+verified, persisted JSON response described above. Validation/auth/rate-limit
+failures remain ordinary HTTP errors; after streaming starts, the final event
+carries the application status (including 502/500). No model draft or tool
+payload is streamed. Disconnecting cancels execution and releases the turn lease.
 
 ---
 
@@ -1321,7 +1333,7 @@ uk_rent_recommendation/
 │   ├── tools/                  idempotency
 │   └── web/                    ASGI shell, Flask wrapper, auth/session/conversation
 │                               stores, identity, rate limiting
-│                               (streaming.py is an SSE helper; no route wires it yet)
+│                               native async chat, public stage SSE + verified final JSON
 │
 ├── app/                        domain application
 │   ├── app.py                  Flask routes, canary record assembly, focus/registry wiring

@@ -1,0 +1,387 @@
+[
+  {
+    "case": "account-survives-config-restart-A",
+    "actor": "A",
+    "request_seq": 1,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-owner-read-A",
+    "actor": "A",
+    "request_seq": 2,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-cross-account-denied-A",
+    "actor": "A",
+    "request_seq": 3,
+    "expected_status": [
+      404
+    ],
+    "actual_status": 404,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "account-survives-config-restart-B",
+    "actor": "B",
+    "request_seq": 4,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-owner-read-B",
+    "actor": "B",
+    "request_seq": 5,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-cross-account-denied-B",
+    "actor": "B",
+    "request_seq": 6,
+    "expected_status": [
+      404
+    ],
+    "actual_status": 404,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/conversations",
+    "actor": "G",
+    "request_seq": 7,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/conversations/05c2dbf26a174ca6ba337a69a4c4506a/messages",
+    "actor": "G",
+    "request_seq": 8,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/favorites",
+    "actor": "G",
+    "request_seq": 9,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/conversations/05c2dbf26a174ca6ba337a69a4c4506a",
+    "actor": "G",
+    "request_seq": 10,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/conversations/05c2dbf26a174ca6ba337a69a4c4506a/fork",
+    "actor": "G",
+    "request_seq": 11,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/clear_history",
+    "actor": "G",
+    "request_seq": 12,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/forget_me",
+    "actor": "G",
+    "request_seq": 13,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-G-/api/alex",
+    "actor": "G",
+    "request_seq": 14,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/conversations",
+    "actor": "H",
+    "request_seq": 15,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/conversations/05c2dbf26a174ca6ba337a69a4c4506a/messages",
+    "actor": "H",
+    "request_seq": 16,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/favorites",
+    "actor": "H",
+    "request_seq": 17,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/conversations/05c2dbf26a174ca6ba337a69a4c4506a",
+    "actor": "H",
+    "request_seq": 18,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/conversations/05c2dbf26a174ca6ba337a69a4c4506a/fork",
+    "actor": "H",
+    "request_seq": 19,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/clear_history",
+    "actor": "H",
+    "request_seq": 20,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/forget_me",
+    "actor": "H",
+    "request_seq": 21,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "strict-guest-gate-H-/api/alex",
+    "actor": "H",
+    "request_seq": 22,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "tampered-cookie-denied",
+    "actor": "TAMPERED_A",
+    "request_seq": 23,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "tampered-cookie-not-authenticated",
+    "actor": "TAMPERED_A",
+    "request_seq": 24,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "logout-current-client",
+    "actor": "B",
+    "request_seq": 25,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "logout-current-client-blocked",
+    "actor": "B",
+    "request_seq": 26,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "logout-revokes-existing-copy",
+    "actor": "B_SESSION_COPY",
+    "request_seq": 27,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": "Controlled copy of synthetic B cookie only; if accepted this is a session-revocation design limitation, not a signature bypass."
+  },
+  {
+    "case": "login-B-restores-own",
+    "actor": "B",
+    "request_seq": 28,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "erase-bound-to-caller-not-body-user",
+    "actor": "A",
+    "request_seq": 30,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "erasure-preserves-other-account",
+    "actor": "B",
+    "request_seq": 31,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "erased-current-client-logged-out",
+    "actor": "A",
+    "request_seq": 32,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "erased-password-no-longer-works",
+    "actor": "A",
+    "request_seq": 33,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "erased-account-old-session-revoked-auth-state",
+    "actor": "A_SESSION_COPY",
+    "request_seq": 34,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "erased-account-old-session-revoked-read",
+    "actor": "A_SESSION_COPY",
+    "request_seq": 35,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "erased-account-old-session-revoked-write",
+    "actor": "A_SESSION_COPY",
+    "request_seq": 36,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  }
+]

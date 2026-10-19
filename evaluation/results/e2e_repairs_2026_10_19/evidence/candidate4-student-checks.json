@@ -1,0 +1,26 @@
+[
+  {
+    "case": "chat-completes-with-success",
+    "passed": true
+  },
+  {
+    "case": "defaults-restored-without-restatement",
+    "passed": true
+  },
+  {
+    "case": "same-listing-commute-evidence-in-response-and-card",
+    "passed": true
+  },
+  {
+    "case": "at-least-one-exact-listing-route-replayed",
+    "passed": true
+  },
+  {
+    "case": "cards-immediately-visible",
+    "passed": true
+  },
+  {
+    "case": "history-and-evidence-survive-browser-refresh",
+    "passed": true
+  }
+]

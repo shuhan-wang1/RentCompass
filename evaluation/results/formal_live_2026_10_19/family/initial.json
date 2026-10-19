@@ -1,0 +1,524 @@
+{
+  "url": "http://127.0.0.1:15009/",
+  "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nNo conversations yet. Start a new chat.\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nNo properties found\n\nTry adjusting your budget or location.",
+  "controls": [
+    {
+      "tag": "BUTTON",
+      "id": "menuToggle",
+      "text": "",
+      "value": "",
+      "type": "submit",
+      "aria": "Conversations menu",
+      "expanded": "false",
+      "rect": {
+        "x": 16,
+        "y": 10.5,
+        "w": 38,
+        "h": 38
+      }
+    },
+    {
+      "tag": "A",
+      "id": "",
+      "text": "RentCompass",
+      "value": null,
+      "type": "",
+      "aria": "RentCompass",
+      "expanded": null,
+      "rect": {
+        "x": 66,
+        "y": 14.5,
+        "w": 175.328125,
+        "h": 30
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "EN",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 298,
+        "y": 18.5,
+        "w": 38,
+        "h": 22
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "中文",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 336,
+        "y": 18.5,
+        "w": 34,
+        "h": 22
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "newChatBtn",
+      "text": "New",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": -88,
+        "y": 76,
+        "w": 71,
+        "h": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "userMenuBtn",
+      "text": "G\nGuest",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": -270,
+        "y": 786,
+        "w": 259,
+        "h": 48
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "loginBtn",
+      "text": "\n                        \n                        Log in / Register\n                    ",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "renameUserBtn",
+      "text": "\n                        \n                        Rename\n                    ",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "switchUserBtn",
+      "text": "\n                        \n                        Switch user\n                    ",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "forgetMeBtn",
+      "text": "\n                        \n                        Delete my data\n                    ",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "logoutBtn",
+      "text": "\n                        \n                        Log out\n                    ",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Near UCL",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 24,
+        "y": 441.203125,
+        "w": 82,
+        "h": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Safe areas",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 114,
+        "y": 441.203125,
+        "w": 88,
+        "h": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Rent stats",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 210,
+        "y": 441.203125,
+        "w": 86,
+        "h": 28
+      }
+    },
+    {
+      "tag": "TEXTAREA",
+      "id": "chatInput",
+      "text": "",
+      "value": "",
+      "type": "textarea",
+      "aria": "Message Alex",
+      "expanded": null,
+      "rect": {
+        "x": 37,
+        "y": 494.203125,
+        "w": 270,
+        "h": 38.1875
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "sendBtn",
+      "text": "",
+      "value": "",
+      "type": "submit",
+      "aria": "Send",
+      "expanded": null,
+      "rect": {
+        "x": 317,
+        "y": 494.390625,
+        "w": 36,
+        "h": 36
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "btn-results",
+      "text": "Search",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 144,
+        "y": 585.390625,
+        "w": 106,
+        "h": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "btn-favorites",
+      "text": "Saved\n0",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 252,
+        "y": 585.390625,
+        "w": 118,
+        "h": 28
+      }
+    },
+    {
+      "tag": "DIV",
+      "id": "criteriaHeader",
+      "text": "Search criteria",
+      "value": null,
+      "type": null,
+      "aria": null,
+      "expanded": "false",
+      "rect": {
+        "x": 17,
+        "y": 645.390625,
+        "w": 356,
+        "h": 45.609375
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "value": "",
+      "type": "text",
+      "aria": "Area",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "value": "",
+      "type": "number",
+      "aria": "Budget",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "text": "per monthper week",
+      "value": "month",
+      "type": "select-one",
+      "aria": "Budget period",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "text": "AnyStudio123456",
+      "value": "",
+      "type": "select-one",
+      "aria": "Bedrooms",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "value": "on",
+      "type": "checkbox",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "SELECT",
+      "id": "",
+      "text": "AnyWhole propertyStudioEn-suite roomShared room",
+      "value": "",
+      "type": "select-one",
+      "aria": "Room type",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "value": "",
+      "type": "text",
+      "aria": "Commute to",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "value": "",
+      "type": "number",
+      "aria": "Max commute (min)",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "value": "on",
+      "type": "checkbox",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "INPUT",
+      "id": "",
+      "text": "",
+      "value": "",
+      "type": "date",
+      "aria": "Move-in date",
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Search",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "\n            \n        ",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "\n                    \n                ",
+      "value": "",
+      "type": "submit",
+      "aria": null,
+      "expanded": null,
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      }
+    }
+  ],
+  "layout": {
+    "innerWidth": 390,
+    "scrollWidth": 390,
+    "active": {
+      "tag": "BODY",
+      "id": ""
+    }
+  }
+}

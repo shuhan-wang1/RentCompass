@@ -1,0 +1,211 @@
+{
+  "summary": {
+    "persona": "轮椅使用者、两成人与6岁孩子、猫的家庭",
+    "chat_endpoint": "POST /api/alex",
+    "chat_requests": 14,
+    "form_search_requests": 0,
+    "conversation_id": "20c727d1949c4efebe5e5891bfa696fd",
+    "http_statuses": {
+      "200": 14
+    },
+    "latency_seconds": {
+      "min": 3.98,
+      "median": 8.39,
+      "max": 17.589,
+      "sum": 129.202
+    },
+    "client_timeout_or_error_count": 0,
+    "page_errors": [],
+    "browser_sessions": 19,
+    "external_browser_requests_blocked": 274,
+    "tool_calls": {
+      "calculate_commute": 28,
+      "search_properties": 4,
+      "get_property_details": 7,
+      "search_nearby_pois": 2,
+      "check_safety": 2,
+      "get_weather": 6
+    },
+    "tool_call_total": 49,
+    "failed_tool_calls": 5,
+    "restart_restored_user_messages": 14,
+    "read_only_final_probe_chat_requests": 0,
+    "evidence_notice": "Never publish family-storage.json contents or browser cookies. No such values are included in this report."
+  },
+  "issues": [
+    {
+      "id": "F01",
+      "severity": "P1",
+      "title": "条件修改在模型、工具、返回状态和UI之间不一致，实际按错误条件找房",
+      "turns": [
+        8,
+        11,
+        13,
+        14
+      ],
+      "expected": "明确的地点、预算与卧室替换应同步到工具参数、结果及表单；撤销的条件不应继续筛选。",
+      "actual": "R8要求Camden instead of Watford，工具area=Watford、areas=[Camden]，工具合并两区15套，最终只显示Watford10套。R11要求£500，实际search_properties仍max_budget=3000。R13明确撤销4卧并指定至少2，实际搜索仍bedrooms=4、bedrooms_minimum=false，错误地筛成无结果；工具area为Watford，但返回/UI仍Camden。R14口头回顾Watford/至少2正确，实际恢复的表单仍Camden/4卧且至少复选框未选。",
+      "evidence": [
+        "turn08-response.json",
+        "turn11-response.json",
+        "turn13-response.json",
+        "turn14-response.json",
+        "dispatch-excerpt.json (turns 8,11,13,14)",
+        "ui-after-restart.json",
+        "15-restart-restored-settled.png"
+      ]
+    },
+    {
+      "id": "F02",
+      "severity": "P1",
+      "title": "地区级警方结果被最终答案声称为房源坐标级检查",
+      "turns": [
+        5
+      ],
+      "expected": "要么以房源坐标实际检查，要么清楚说只检查了Watford地区。",
+      "actual": "R5最终说“check ran around the listing’s own coordinates”；真实check_safety仅传area=Watford，返回address=Watford，没有房源纬经度。POI调用才有51.646597/-0.423485。用户因而无法区分地区数据与指定房源证据。R4曾正确承认地区范围，R5反而错误升级了证据精度。",
+      "evidence": [
+        "turn05-response.json",
+        "dispatch-excerpt.json (turn 5 check_safety versus search_nearby_pois)"
+      ]
+    },
+    {
+      "id": "F03",
+      "severity": "P2",
+      "title": "天气请求污染房屋地点，并在明确禁止时仍自动执行通勤",
+      "turns": [
+        7,
+        9,
+        10,
+        13,
+        14
+      ],
+      "expected": "天气地点不修改找房条件；“不要通勤计算”应阻止该额外调用或至少准确披露实际行为。",
+      "actual": "R9请求Camden天气且写Leave housing search criteria unchanged；后续payload constraint_sources.area却引用该天气消息作为Camden房屋地点来源。R7、R10、R14均明确禁止commute，真实仍各调用calculate_commute；R14还用旧Camden→UCL。R7/R14最终称未运行，R10一句称未运行、括号又承认调用，自相矛盾。",
+      "evidence": [
+        "turn07-response.json",
+        "turn09-response.json",
+        "turn10-response.json",
+        "turn13-response.json (constraint_sources.area)",
+        "turn14-response.json",
+        "dispatch-excerpt.json (turns 7,10,14)"
+      ]
+    },
+    {
+      "id": "F04",
+      "severity": "P2",
+      "title": "学校/GP实际未查询，却以无结果口吻回答；半径也偏离请求",
+      "turns": [
+        3,
+        5
+      ],
+      "expected": "查询学校、GP和超市的所需类别与1km范围；无法支持的类别应说未查询/不支持，不能据未查作无结果。",
+      "actual": "R3 search_nearby_pois仅poi_type=supermarket,convenience,pharmacy、radius=800，未请求school或GP。最终称附近搜索没有学校/医疗中心。R5调用省略poi_type/radius，实际只默认supermarket且300m，最终仍说学校/GP无结果。R5坦白半径不是1km，但未重试完成任务。",
+      "evidence": [
+        "turn03-response.json",
+        "turn05-response.json",
+        "dispatch-excerpt.json (turns 3,5)"
+      ]
+    },
+    {
+      "id": "F05",
+      "severity": "P2",
+      "title": "否定与撤销的lift条件仍被作为硬要求，宠物条件跨层丢失",
+      "turns": [
+        1,
+        2,
+        5,
+        8,
+        13,
+        14
+      ],
+      "expected": "“不要假设有lift就是无障碍”和“lift optional”不能变成必须有lift；猫许可应作为需要核实的家庭条件保留。",
+      "actual": "R1把含否定/警示的lift提及加入property_features；R2/R5口头承诺不再要求lift，R8/R13真实搜索仍硬性lift。猫并非被模型完全忘记：R1/R2详情问题确实询问宠物，R8 accumulated_preferences及工具soft_preferences有cat permitted；但R8最终payload soft_preferences为空，R13实际accumulated_preferences只有Would like lift，未保留猫。R14口头仍正确记得猫并明确许可无证据。",
+      "evidence": [
+        "turn01-response.json",
+        "turn02-response.json",
+        "turn08-response.json",
+        "turn13-response.json",
+        "turn14-response.json",
+        "dispatch-excerpt.json (turns 1,2,8,13,14)"
+      ]
+    },
+    {
+      "id": "F06",
+      "severity": "P2",
+      "title": "刷新后所选房源上下文退化，已存在URL仍重新按歧义地址查询",
+      "turns": [
+        2,
+        3,
+        4
+      ],
+      "expected": "从Ask AI选定的精确房源应可在重新打开页面后继续使用；已保留的viewed_properties URL应可用于解析。",
+      "actual": "R2点击首卡Ask AI后request带property/focus_stack及精确URL，详情精确成功。重开浏览器后的R3仅剩viewed_properties仍含相同URL，模型却按Croxley View地址查询，得到两条同名歧义并让用户重新提供链接。R4仍未利用已有URL，直到R5粘贴完整链接才恢复。",
+      "evidence": [
+        "turn02-response.json (pre.ask_ai_requests=[] and request context)",
+        "turn03-response.json",
+        "turn04-response.json",
+        "dispatch-excerpt.json (turns 2-5)"
+      ]
+    },
+    {
+      "id": "F07",
+      "severity": "P2",
+      "title": "多工具组合的天气答案被整段吞掉",
+      "turns": [
+        6
+      ],
+      "expected": "即使通勤无法确认为轮椅可用，也应返回已取得的天气，并分项说明通勤限制。",
+      "actual": "R6 get_weather成功，calculate_commute也返回32分钟合成路线；最终只有“The commute condition could not be verified for the listing this round.”，完全没有天气、出处或进一步说明。合成路线不应充当真实无障碍证据，但这不应抹去独立天气结果。R7另问才得到当前天气。",
+      "evidence": [
+        "turn06-response.json",
+        "dispatch-excerpt.json (turns 6,7)"
+      ]
+    },
+    {
+      "id": "F08",
+      "severity": "P2",
+      "title": "明确撤销旧预算后仍被不必要的冲突确认阻断",
+      "turns": [
+        12
+      ],
+      "expected": "Discard that £500/four-bedroom experiment + Restore ... £2500应视为明确替换。",
+      "actual": "R12零工具调用，助手坚持“尚未明确撤销£500”，要求£500/£2500二选一；用户已清楚表示丢弃旧实验，额外确认消耗一轮并阻断恢复。",
+      "evidence": [
+        "turn12-response.json",
+        "dispatch-excerpt.json (turn 12 empty tool_dispatches)"
+      ]
+    },
+    {
+      "id": "F09",
+      "severity": "P2",
+      "title": "历史缓存价格被描述为live/current asking rent",
+      "turns": [
+        2
+      ],
+      "expected": "历史快照的£1600只能称缓存记录价格，不能宣称当前市场有效。",
+      "actual": "卡片原本正确标注cached/possibly_outdated，R2却说“live listing record”“current asking rent as published”。随后建议联系中介核实，减轻风险但并未撤回当前性断言。R14改称cached record更准确。",
+      "evidence": [
+        "turn01-response.json",
+        "turn02-response.json",
+        "turn14-response.json",
+        "dispatch-excerpt.json (get_property_details thin record)"
+      ]
+    },
+    {
+      "id": "F10",
+      "severity": "P2",
+      "title": "手机侧栏关闭时焦点进入屏外，打开后Escape无效且焦点进入遮罩背景",
+      "turns": [],
+      "expected": "关闭的侧栏控件不可Tab访问；打开菜单应有清楚焦点行为和退出方式。",
+      "actual": "390×844关闭菜单时Tab落到New x=-88及Guest x=-270，焦点完全看不见；Enter打开后Escape仍保持侧栏和遮罩。320px打开菜单后Tab继续进入聊天输入/搜索等被遮罩背景。Menu按钮无aria-expanded。条件面板则有role=button/tabindex/aria-expanded并可Enter展开。",
+      "evidence": [
+        "ui-initial.json",
+        "ui-controls.json",
+        "ui-narrow.json",
+        "02-menu-open.png",
+        "03-menu-escape.png"
+      ]
+    }
+  ]
+}

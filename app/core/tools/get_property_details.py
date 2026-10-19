@@ -17,6 +17,10 @@ result and NO price at all.
 """
 
 import pandas as pd
+import json
+import math
+import time
+from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple
 from core.tool_system import Tool, ToolResult
 import re
@@ -37,7 +41,64 @@ def load_property_database() -> pd.DataFrame:
         return pd.DataFrame()
     if not rows:
         return pd.DataFrame()
+    # iter_cached_listings intentionally exposes rows only. Attach freshness from
+    # the same local store, and only when the stored row matches this snapshot.
+    # A concurrent cache update must not give an older row a newer timestamp.
+    try:
+        from core.scraping.on_demand import _cache, TTL_HOURS
+        cache = _cache()
+        with cache._lock, cache._connect() as db:
+            entries = db.execute('SELECT rows, fetched FROM listings').fetchall()
+        timestamps = {}
+        for encoded, fetched in entries:
+            for row in json.loads(encoded) or []:
+                if not isinstance(row, dict):
+                    continue
+                identity = json.dumps(row, sort_keys=True, default=str)
+                timestamps[identity] = max(float(fetched or 0), timestamps.get(identity, 0))
+        rows = [dict(row, _cache_fetched_at=timestamps.get(json.dumps(
+            row, sort_keys=True, default=str)), _cache_ttl_seconds=TTL_HOURS * 3600)
+                for row in rows]
+    except Exception:
+        # Missing metadata is unknown freshness, never evidence of a live check.
+        pass
     return pd.DataFrame(rows)
+
+
+def _listing_provenance(row: Dict) -> Dict:
+    fetched = row.get('_cache_fetched_at')
+    ttl = row.get('_cache_ttl_seconds')
+    try:
+        fetched = float(fetched)
+        if not math.isfinite(fetched) or fetched <= 0:
+            fetched = None
+    except (TypeError, ValueError):
+        fetched = None
+    try:
+        ttl = float(ttl)
+        if not math.isfinite(ttl) or ttl <= 0:
+            ttl = None
+    except (TypeError, ValueError):
+        ttl = None
+    age = max(0, time.time() - fetched) if fetched is not None else None
+    status = ('stale' if age >= ttl else 'fresh') if age is not None and ttl else 'unknown'
+    source_url = str(row.get('URL') or '')
+    source = 'OnTheMarket (cached)' if 'onthemarket.com/' in source_url else 'Local listing cache'
+    fetched_at = datetime.fromtimestamp(fetched, timezone.utc).isoformat() if fetched else None
+    note = ('Cached listing snapshot; this lookup did not contact or refresh the listing. '
+            'The recorded price and availability are not verified as live/current. '
+            'Confirm them with the listing agent before relying on them.')
+    if status == 'stale':
+        note = 'Expired cache entry. ' + note
+    elif status == 'unknown':
+        note = 'Cache age is unknown. ' + note
+    return {
+        'source': source, 'data_source': source, 'source_url': source_url,
+        'from_cache': True, 'live_verified': False, 'possibly_outdated': True,
+        'cache_status': status, 'fetched_at': fetched_at,
+        'cache_age_seconds': round(age, 3) if age is not None else None,
+        'cache_ttl_seconds': ttl, 'freshness_note': note,
+    }
 
 
 def normalize_text(text: str) -> str:
@@ -449,11 +510,12 @@ def format_property_details(property_data: Dict, match_note: Optional[str] = Non
     payment_rules = property_data.get('Payment_Rules', '')
     excluded_features = property_data.get('Excluded_Features', '')
     url = property_data.get('URL', '')
-    available_from = property_data.get('Available From', 'Now')
+    available_from = property_data.get('Available From') or 'Contact agent'
 
     # 身份核对结论写在最前面：读到这段文字的人（或模型）能立刻看出
     # 返回的是不是他问的那一套房，而不是只能看到一个价格。
-    header = f"{match_note}\n\n" if match_note else ""
+    provenance = _listing_provenance(property_data)
+    header = (f"{match_note}\n\n" if match_note else '') + provenance['freshness_note'] + '\n\n'
 
     # 构建详细信息
     details = f"""{header}📍 **{address}**
@@ -591,7 +653,19 @@ def get_property_details_impl(
                 if _URL_TOKEN_RE.search(token):
                     hit = find_cached_listing_by_url(token)
                     if hit:
-                        primary, verdict = hit, "exact_url"
+                        primary, verdict = dict(hit), "exact_url"
+                        # The URL helper returns the raw row; the DataFrame has
+                        # freshness for the identical row from this local snapshot.
+                        if 'URL' in df:
+                            for _, cached in df[df['URL'].astype(str).str.rstrip('/') ==
+                                                 str(hit.get('URL', '')).rstrip('/')].iterrows():
+                                raw = {k: v for k, v in cached.to_dict().items()
+                                       if not k.startswith('_cache_') and not (
+                                           isinstance(v, float) and math.isnan(v))}
+                                if all(raw.get(k) == v for k, v in hit.items()):
+                                    primary['_cache_fetched_at'] = cached.get('_cache_fetched_at')
+                                    primary['_cache_ttl_seconds'] = cached.get('_cache_ttl_seconds')
+                                    break
                         corroborated = ["listing_url"]
                         break
         except Exception as exc:
@@ -700,6 +774,7 @@ def get_property_details_impl(
                       f"The price below belongs to THIS listing.")
 
     formatted_details = format_property_details(primary, match_note=match_note)
+    provenance = _listing_provenance(primary)
 
     # 提取关键信息用于回答特定问题
     room_type = primary.get('Room_Type_Category', '') or ''
@@ -711,11 +786,14 @@ def get_property_details_impl(
     has_private_kitchen = 'own kitchen' in room_type.lower() or 'private kitchen' in room_type.lower()
 
     result = {
+        **provenance,
+        'provenance': dict(provenance),
         "success": True,
         "found": True,
         "search_query": search_query,
         "match": match_block,
         "property": {
+            **provenance,
             "address": primary.get('Address', ''),
             "price": primary.get('Price', ''),
             "room_type": room_type,
@@ -765,7 +843,7 @@ def get_property_details_impl(
 get_property_details_tool = Tool(
     name="get_property_details",
     description="""Get a specific property's full details from the local cache (description, amenities, visitor/payment policy, room type) — same source as search, more accurate than the web. Use when the user asks about a specific listing, clicks "Ask AI" on one, or asks about any previously recommended listing. The RECOMMENDED LISTINGS INDEX in context holds only summaries; pass a listing's URL to property_url for an exact cache hit (avoids same-name ambiguity), else use its name or address.
-This tool VERIFIES that the row it found is the listing you asked for (name + postcode + house number) and returns `match.verdict`. If it returns found=false (verdict no_match / ambiguous / url_not_in_cache) then the listing is NOT in the cache: say so, and never quote a price, room type or size from a different listing.
+This tool VERIFIES listing IDENTITY, not current availability. It reads only local cached snapshots and never refreshes a listing. Preserve source, cache_status, fetched_at and freshness_note; even a fresh cache is not a live/current asking-price or availability verification. If it returns found=false (verdict no_match / ambiguous / url_not_in_cache), never quote another listing's price, room type or size.
 获取某房源的完整详情；优先用该房源 URL 精确命中缓存。若返回 found=false，说明缓存里没有这套房，不要用别的房源代替。""",
     parameters={
         "type": "object",

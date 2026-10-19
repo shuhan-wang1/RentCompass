@@ -1,0 +1,909 @@
+{
+  "summary": {
+    "persona": "第一次赴英、中文为主、预算紧张、长期反复找房的国际留学生",
+    "url": "http://127.0.0.1:15004",
+    "test_date": "2026-10-19",
+    "actual_chat_turns": 27,
+    "all_chat_requests_status_200": true,
+    "chat_timeouts": 0,
+    "conversations": 5,
+    "simulated_usage_sessions": 5,
+    "chat_bearing_sessions": 4,
+    "longest_conversation_turns": 12,
+    "browser_launches_recorded": 7,
+    "ui_test_start_utc": "2026-10-19T04:57:03.847090+00:00",
+    "ui_test_end_utc": "2026-10-19T05:10:00.320489+00:00",
+    "ui_test_duration_minutes": 12.94,
+    "chat_latency_median_seconds": 4.277,
+    "chat_latency_max_seconds": 25.04,
+    "screenshots": 44,
+    "restart": {
+      "requested_at": "safe idle after S2; approximately 05:03 UTC",
+      "parent_confirmation": "actual stop/start complete; /health 200; same source/config/database; no expected answer supplied",
+      "ui_verified_at_utc": "2026-10-19T05:04:27.454867Z",
+      "verified": "C1 12 visible user turns + saved Otter Close, favCount1",
+      "evidence": "s3-restart-restored-favorites.png; actions.jsonl"
+    },
+    "scope": "black-box UI only, delivered DOM/public response; no product source, other reports, external sites or real contact/payment/personal information; sequential LLM sends",
+    "sessions": [
+      {
+        "session": "S1",
+        "utc_start": "2026-10-19T04:57:03Z",
+        "utc_end": "2026-10-19T05:00:35Z",
+        "device": "desktop 1440×960",
+        "identity": "original guest",
+        "conversations": "C1",
+        "turns": "T01–T12",
+        "chat_count": 12,
+        "purpose": "首次中文发现、低预算、条件更正、同房追问、未知、收藏、连续12轮",
+        "outcome": "找到1套历史备选并收藏；条件/日期/来源解释多处不一致"
+      },
+      {
+        "session": "S2",
+        "utc_start": "2026-10-19T05:00:43Z",
+        "utc_end": "2026-10-19T05:03:25Z (approx safe idle)",
+        "device": "mobile 390×844; desktop fallback",
+        "identity": "same guest, retained storage",
+        "conversations": "C1 reopened",
+        "turns": "none (mechanical UI only)",
+        "chat_count": 0,
+        "purpose": "关闭重开、中文偏好、历史/收藏恢复、手机账号入口；测试脚本选择器恢复",
+        "outcome": "历史与收藏恢复；语言重置；手机账号入口越界；错误选择器属于驱动而非产品"
+      },
+      {
+        "session": "S3",
+        "utc_start": "2026-10-19T05:04:15Z",
+        "utc_end": "2026-10-19T05:08:50Z",
+        "device": "desktop 1440×960",
+        "identity": "same guest then fictional registered account",
+        "conversations": "C1 restore; C2 T13–20; C3 T21–25",
+        "turns": "T13–T25",
+        "chat_count": 13,
+        "purpose": "真实服务重启恢复、注册、换城市、pw/pcm、两房比较、房源身份、偏好跨对话/更改",
+        "outcome": "访客12轮和收藏恢复；账号注册后另起空数据；找到2套合租及1套studio；记忆失败重试后恢复"
+      },
+      {
+        "session": "S4",
+        "utc_start": "2026-10-19T05:08:51Z",
+        "utc_end": "2026-10-19T05:09:17Z",
+        "device": "mobile 390×844",
+        "identity": "same registered account, retained storage",
+        "conversations": "C3 restore; C4 new",
+        "turns": "T26",
+        "chat_count": 1,
+        "purpose": "再次关闭重开、最新偏好、账号会话与2套收藏恢复",
+        "outcome": "正确回忆£1000整套studio；不能直接识别收藏身份但没有声称都匹配"
+      },
+      {
+        "session": "S5",
+        "utc_start": "2026-10-19T05:09:18Z",
+        "utc_end": "2026-10-19T05:10:00Z",
+        "device": "desktop 1440×960",
+        "identity": "fresh guest then login to own test account",
+        "conversations": "C5; account C2/C3/C4 restored",
+        "turns": "T27",
+        "chat_count": 1,
+        "purpose": "新访客隔离、账号登录恢复、手动会话重命名/打开",
+        "outcome": "新访客空历史/收藏且不知道偏好；登录恢复3条账号会话2套收藏；重命名成功"
+      }
+    ],
+    "conversations_detail": [
+      {
+        "label": "C1",
+        "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+        "turn_numbers": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "turn_count": 12,
+        "identity": "original guest"
+      },
+      {
+        "label": "C2",
+        "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+        "turn_numbers": [
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20
+        ],
+        "turn_count": 8,
+        "identity": "fictional registered account"
+      },
+      {
+        "label": "C3",
+        "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+        "turn_numbers": [
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "turn_count": 5,
+        "identity": "fictional registered account"
+      },
+      {
+        "label": "C4",
+        "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+        "turn_numbers": [
+          26
+        ],
+        "turn_count": 1,
+        "identity": "fictional registered account"
+      },
+      {
+        "label": "C5",
+        "conversation_id": "c68a0e50ea594345b95712a239d7d89b",
+        "turn_numbers": [
+          27
+        ],
+        "turn_count": 1,
+        "identity": "fresh guest"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "STU-01",
+      "title": "手机侧栏账号入口整体落在视口外，无法正常点击",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "390×844手机打开菜单后，账号/登录入口应在可视或可滚动到的位置。",
+      "actual": "aside固定在y=60但高844，bottom=904；账号按钮y=846、h=48，超过视口844。页面滚动300后按钮仍y=846。正常Playwright点击因outside viewport超时；桌面同入口可正常点击。",
+      "reproduction_steps": [
+        "以390×844打开网页。",
+        "点左上菜单。",
+        "尝试点击左下Guest；正常滚动300再试。",
+        "对照actions.jsonl中的getBoundingClientRect结果。"
+      ],
+      "evidence": [],
+      "screenshots": [
+        "s2-mobile-menu.png",
+        "s2-mobile-account-below-viewport.png"
+      ],
+      "reproducibility": "两个手机浏览器打开过程中均遇到；一次独立坐标+滚动复核。",
+      "limitations": "未测试真实手机软键盘、其他高度或横屏；并未用强制点击绕过。"
+    },
+    {
+      "id": "STU-02",
+      "title": "房源编号被当作两千万英镑月预算，打断正常追问",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "“链接编号20037182”仅作为房源身份；沿用上一轮明确£1200/月。",
+      "actual": "T7回答出现£900与£20,037,182/月冲突，并明确自述把链接编号误读成金额；忽略最近£1200预算，要求用户再澄清。",
+      "reproduction_steps": [
+        "同一对话搜到Otter Close，£1200/月。",
+        "发送T7原文，包含“链接编号20037182”和价格换算问题。",
+        "观察预算冲突段落。"
+      ],
+      "evidence": [
+        {
+          "turn": 6,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "fd3141b29790464880bcb87292fcc352",
+          "utc": "2026-10-19T04:58:40.629880+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 6
+        },
+        {
+          "turn": 7,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "be3139c68d77488fb0753fd6073656a7",
+          "utc": "2026-10-19T04:58:49.951939+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 7
+        },
+        {
+          "turn": 8,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "99f1e2672795421bb6d0777a9ec12f8a",
+          "utc": "2026-10-19T04:59:03.750192+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 8
+        }
+      ],
+      "screenshots": [
+        "s1-t07.png",
+        "s1-t08.png"
+      ],
+      "reproducibility": "一次自然追问命中；未额外消耗轮次批量测试其他编号。",
+      "limitations": "可确认响应错误；未直接检查长期存储，不能断言£20,037,182实际写入数据库。"
+    },
+    {
+      "id": "STU-03",
+      "title": "跟进同一批房源时生成错误的Beverly Road详情链接",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "回复的Beverly Road链接与卡片19909957保持一致。",
+      "actual": "T18正文写details/19643971/，同一响应recommendations和实际卡片href均为details/19909957/。T19在用户指出后撤回错误链接。",
+      "reproduction_steps": [
+        "按T15得到Parrs Wood Road与Beverly Road。",
+        "连续比较、核对第一套，再发送T18原文。",
+        "比较正文链接与同一payload recommendations[1].url/卡片href。"
+      ],
+      "evidence": [
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 18,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "8d0e628a6dae47b2b11ab4a8d8f0bd83",
+          "utc": "2026-10-19T05:06:48.609170+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 18
+        },
+        {
+          "turn": 19,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "dd87dc425f964874be207ef2079a0741",
+          "utc": "2026-10-19T05:07:00.399434+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 19
+        }
+      ],
+      "screenshots": [
+        "s3-t18.png",
+        "s3-t19.png"
+      ],
+      "reproducibility": "一次完整多轮流程复现，正文与结构化结果直接矛盾。",
+      "limitations": "没有打开任一外部链接；不判断错误链接实际指向何物。"
+    },
+    {
+      "id": "STU-04",
+      "title": "明确取消筛选后仍保留旧通勤，或把今天日期写成入住日期",
+      "severity": "high",
+      "classification": "product_defect",
+      "expected": "取消通勤硬筛选后max_travel_time应清空；“不要任何入住日期”应为null；历史/current日期不应被当作入住日期。",
+      "actual": "T4已要求取消通勤硬筛选，search_criteria仍45分钟/no_commute=false；T5助手称旧参数残留不影响，但未提供更新。T6说“我不通勤”后才正确null。T14取消入住筛选却自述保留2026-11-01；T15明确“不要任何入住日期”并提到今天2026-10-19，公开search_criteria却写move_in_date=2026-10-19；T22最终可正确清空。",
+      "reproduction_steps": [
+        "按T1设45分钟与入住时间。",
+        "按T4明确取消通勤，检查公开payload。",
+        "在C2设入住2026-11-01，再发T14取消日期。",
+        "发送T15原文，检查move_in_date。"
+      ],
+      "evidence": [
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 5,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "bdf49edf967143d0986bbf8485e1f708",
+          "utc": "2026-10-19T04:58:27.834503+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 5
+        },
+        {
+          "turn": 6,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "fd3141b29790464880bcb87292fcc352",
+          "utc": "2026-10-19T04:58:40.629880+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 6
+        },
+        {
+          "turn": 14,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "23944698c2544bb39c7ef8eebc4bec5e",
+          "utc": "2026-10-19T05:05:52.532605+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 14
+        },
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 22,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9f8b82404a664ff1add5995d76eaf215",
+          "utc": "2026-10-19T05:07:47.331550+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 22
+        }
+      ],
+      "screenshots": [
+        "s1-t04.png",
+        "s1-t06.png",
+        "s3-t14.png",
+        "s3-t15.png"
+      ],
+      "reproducibility": "多个不同条件更改均观察到；有成功恢复对照。",
+      "limitations": "T14内部参数仅根据助手自述，T4/T15有公开payload独立证据；无法确定筛选错误实际排除了哪些缓存房源。"
+    },
+    {
+      "id": "STU-05",
+      "title": "只请求比较房源后搜索条件面板被整体清空",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "比较结果应保留Fallowfield、£780/月和已选通勤/日期状态。",
+      "actual": "T15公开search_criteria有区域和780预算；T16比较响应search_criteria={}，面板区域与预算变空。T17追问后继续返回{}，助手还虚构成“最新检索无结果、旧房源残留”的来源说明。",
+      "reproduction_steps": [
+        "执行T15显示两套候选。",
+        "执行T16租金与条件比较。",
+        "观察右侧面板及search_criteria。"
+      ],
+      "evidence": [
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 16,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "288599aaa3a543138a493076f0a60485",
+          "utc": "2026-10-19T05:06:21.617228+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 16
+        },
+        {
+          "turn": 17,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "005615fdc18846dca45dab906226eb7b",
+          "utc": "2026-10-19T05:06:36.471620+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 17
+        }
+      ],
+      "screenshots": [
+        "s3-t15.png",
+        "s3-t16.png",
+        "s3-t18.png"
+      ],
+      "reproducibility": "一次比较触发，之后数轮保持空条件。",
+      "limitations": "未点击清空后的表单搜索，未验证其后端默认值。"
+    },
+    {
+      "id": "STU-06",
+      "title": "助手反复声称存在用户未提供且不能更改的旧入住日期",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "新身份首次输入应从本次内容获取日期；更正后对话与面板应一致。",
+      "actual": "T1首次聊天即声称此前记录2027-10-01。T2显式更正2026-10-25后仍称改不了；T4公开payload已是2026-10-25，T5/T10却继续声称内部仍2027-10-01。",
+      "reproduction_steps": [
+        "全新浏览器身份发送T1原文。",
+        "明确更正日期为2026-10-25。",
+        "比较T4结构化条件与T5/T10正文。"
+      ],
+      "evidence": [
+        {
+          "turn": 1,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "973bf3384b44481bb021645dc629ab20",
+          "utc": "2026-10-19T04:57:20.688750+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 1
+        },
+        {
+          "turn": 2,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "be1cc516ebb94559b6a55a89dfcd1cc4",
+          "utc": "2026-10-19T04:57:38.107097+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 2
+        },
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 5,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "bdf49edf967143d0986bbf8485e1f708",
+          "utc": "2026-10-19T04:58:27.834503+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 5
+        },
+        {
+          "turn": 10,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "152ef572b55e4206b6404a3c92b5e3d3",
+          "utc": "2026-10-19T04:59:56.428308+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 10
+        }
+      ],
+      "screenshots": [
+        "s1-t01.png",
+        "s1-t02.png",
+        "s1-t10.png"
+      ],
+      "reproducibility": "C1多轮持续出现；未在新身份重复最初长提示。",
+      "limitations": "来源未核实。不能将这条异常日期定性为跨用户数据泄漏或数据库污染。"
+    },
+    {
+      "id": "STU-07",
+      "title": "把筛选无结果说成整个区域无数据，之后又撤回",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "区分缓存不覆盖、筛选无匹配、可租状态未知；不要杜撰检索历史。",
+      "actual": "T2/T3断言Camden等区域级无数据，T5又称Stratford/Islington为空，尽管T4已返回Stratford的Otter Close。T11被追问后更正为筛选无结果。C2 T17又将刚检索出的两套说成更早结果，T18撤回。",
+      "reproduction_steps": [
+        "在预算较低时搜Camden等区域。",
+        "按T3要求明确是无覆盖还是筛选无结果。",
+        "对照后续实际候选与T11更正。",
+        "C2按T15—T18核对房源来源。"
+      ],
+      "evidence": [
+        {
+          "turn": 2,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "be1cc516ebb94559b6a55a89dfcd1cc4",
+          "utc": "2026-10-19T04:57:38.107097+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 2
+        },
+        {
+          "turn": 3,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "b40bf3489483498999f98e932413ce16",
+          "utc": "2026-10-19T04:57:55.235138+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 3
+        },
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 5,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "bdf49edf967143d0986bbf8485e1f708",
+          "utc": "2026-10-19T04:58:27.834503+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 5
+        },
+        {
+          "turn": 10,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "152ef572b55e4206b6404a3c92b5e3d3",
+          "utc": "2026-10-19T04:59:56.428308+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 10
+        },
+        {
+          "turn": 11,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "25eb37c1de7f4f7bb800595fb10c2d47",
+          "utc": "2026-10-19T05:00:11.431651+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 11
+        },
+        {
+          "turn": 17,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "005615fdc18846dca45dab906226eb7b",
+          "utc": "2026-10-19T05:06:36.471620+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 17
+        },
+        {
+          "turn": 18,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "8d0e628a6dae47b2b11ab4a8d8f0bd83",
+          "utc": "2026-10-19T05:06:48.609170+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 18
+        }
+      ],
+      "screenshots": [
+        "s1-t03.png",
+        "s1-t05.png",
+        "s1-t11.png",
+        "s3-t17.png"
+      ],
+      "reproducibility": "两个对话中出现不同形式的来源/无结果解释错误。",
+      "limitations": "没有源码或原始缓存检查；以可见候选、公开响应和助手自行更正为证据。"
+    },
+    {
+      "id": "STU-08",
+      "title": "保存偏好时吞掉同时提出的复述、摘要和恢复帮助",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "保存完成后还应完成用户同轮的确认复述/摘要/找回操作说明。",
+      "actual": "T8要求列预算地区日期；T12要求下次摘要与如何恢复；T20明确“逐项复述，不要只说记住了”；均只返回“我已经记住了”。T25要求成功/失败也只得到同一句。",
+      "reproduction_steps": [
+        "发送T12或T20原文，将记忆保存与复述/恢复帮助一起提出。",
+        "检查message字段与可见助手回答。"
+      ],
+      "evidence": [
+        {
+          "turn": 8,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "99f1e2672795421bb6d0777a9ec12f8a",
+          "utc": "2026-10-19T04:59:03.750192+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 8
+        },
+        {
+          "turn": 12,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "1f0b22485670466f804ca4e0308f0a86",
+          "utc": "2026-10-19T05:00:27.147278+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 12
+        },
+        {
+          "turn": 20,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "ad43b7e38a3b433592a3b548d42854cf",
+          "utc": "2026-10-19T05:07:16.791824+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 20
+        },
+        {
+          "turn": 25,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "115b0b2839c9449aac261918f3691f5c",
+          "utc": "2026-10-19T05:08:37.855988+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 25
+        }
+      ],
+      "screenshots": [
+        "s1-t12.png",
+        "s3-t20.png",
+        "s3-t25.png"
+      ],
+      "reproducibility": "4次不同自然表达都返回同一简短确认。",
+      "limitations": "后续T21和T26确实成功回忆，故不是“没有保存”的证据，而是任务响应不完整。"
+    },
+    {
+      "id": "STU-09",
+      "title": "长期偏好更新出现一次保存失败，重试后可恢复",
+      "severity": "medium",
+      "classification": "observed_failure_unattributed",
+      "expected": "最新城市/预算/房型应可靠保存，失败后提供明确重试路径。",
+      "actual": "T22公开回答“记忆保存失败，本轮没有确认写入”。T24解释旧偏好可能仍在；T25确认重试；关闭重开后的新对话T26能正确回忆£1000整套studio。",
+      "reproduction_steps": [
+        "已有£780合租长期偏好。",
+        "发送T22更改为£1000整套studio并搜索。",
+        "保存失败后按T24/T25提示重试，再重开浏览器新建会话核对。"
+      ],
+      "evidence": [
+        {
+          "turn": 22,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9f8b82404a664ff1add5995d76eaf215",
+          "utc": "2026-10-19T05:07:47.331550+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 22
+        },
+        {
+          "turn": 24,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9cf4d336eea94f4ca9f99573d3700a4c",
+          "utc": "2026-10-19T05:08:21.349735+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 24
+        },
+        {
+          "turn": 25,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "115b0b2839c9449aac261918f3691f5c",
+          "utc": "2026-10-19T05:08:37.855988+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 25
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s3-t22.png",
+        "s3-t24.png",
+        "s4-t26.png"
+      ],
+      "reproducibility": "单次保存失败，后续重试恢复。",
+      "limitations": "没有后端根因证据；离线嵌入缓存/模型工具或产品可靠性均可能相关，不认定为已定位的系统性缺陷。"
+    },
+    {
+      "id": "STU-10",
+      "title": "中文界面语言在浏览器关闭重开后回到英文",
+      "severity": "low",
+      "classification": "product_defect",
+      "expected": "主要中文用户已经切换中文，返回时应保留语言选择。",
+      "actual": "S1选中文并明确中文偏好；S2/S3/S4重开时导航、提示与按钮回英文，需要再次点中文。恢复的原对话内容仍是中文。",
+      "reproduction_steps": [
+        "点右上中文。",
+        "关闭浏览器，保留storage_state，再以同profile打开。",
+        "等待对话/收藏加载后核对静态按钮与导航。"
+      ],
+      "evidence": [
+        {
+          "turn": 12,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "1f0b22485670466f804ca4e0308f0a86",
+          "utc": "2026-10-19T05:00:27.147278+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 12
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s1-00-zh-desktop.png",
+        "s2-c1-restored-mobile.png",
+        "s3-restart-restored-favorites.png"
+      ],
+      "reproducibility": "多个浏览器重开复现。",
+      "limitations": "此处仅评估语言偏好持久化；截图中中文方框由宿主CJK字体缺失导致，另列环境限制。"
+    },
+    {
+      "id": "STU-11",
+      "title": "从访客注册账号后原对话和收藏消失在当前视图，缺少迁移/恢复说明",
+      "severity": "medium",
+      "classification": "design_concern",
+      "expected": "准备长期使用的访客应在注册前知道原数据是否迁移，以及如何继续原研究。",
+      "actual": "注册前访客有12轮C1和1套Otter收藏。创建账号成功后列表为空、收藏0，UI只提示账号创建成功；无可见迁移或原访客恢复说明。之后账号保存和登录恢复正常。",
+      "reproduction_steps": [
+        "访客查房并收藏Otter Close。",
+        "通过菜单注册虚构测试账号。",
+        "对照注册成功前后对话与收藏。"
+      ],
+      "evidence": [],
+      "screenshots": [
+        "s3-restart-restored-favorites.png",
+        "s3-registration-success.png"
+      ],
+      "reproducibility": "一次注册观察。",
+      "limitations": "不声称访客数据已删除；先前storage已作为证据保留。未使用内部身份标识强制恢复，也未读取其他用户数据；正常UI找回原访客路径未验证。"
+    },
+    {
+      "id": "STU-12",
+      "title": "历史过期缓存元数据没有在房源卡片/收藏中显著呈现",
+      "severity": "medium",
+      "classification": "design_concern",
+      "expected": "候选卡片与收藏应明显表明历史缓存/可能过期/未核实，并区分预算满足与整体匹配。",
+      "actual": "公开recommendations明确source=OnTheMarket(cached)、possibly_outdated=true、candidate_status=unknown/excluded；卡片只有预算标签、排名和“入住时间请咨询”，没有缓存时间/可能过期/整体未知或排除标签。收藏旧合租房在新studio偏好下仍显示“预算范围内”。助手多数追问中会解释未核实。",
+      "reproduction_steps": [
+        "搜到T6或T15的历史候选。",
+        "对照公开payload与右侧卡片。",
+        "收藏后重开并改变偏好，在收藏页检查标注。"
+      ],
+      "evidence": [
+        {
+          "turn": 4,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "3662f98b31234a03b0f04a1f7173ef96",
+          "utc": "2026-10-19T04:58:16.479554+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 4
+        },
+        {
+          "turn": 6,
+          "conversation_id": "3f15e6a0d3774b95afd69270501d39e2",
+          "turn_id": "fd3141b29790464880bcb87292fcc352",
+          "utc": "2026-10-19T04:58:40.629880+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 6
+        },
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        },
+        {
+          "turn": 22,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "9f8b82404a664ff1add5995d76eaf215",
+          "utc": "2026-10-19T05:07:47.331550+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 22
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s1-t06.png",
+        "s3-t15.png",
+        "s4-account-mobile-favorites.png",
+        "s4-login-favorites-restored.png"
+      ],
+      "reproducibility": "多个搜索与收藏卡片一致。",
+      "limitations": "历史数据本身、图片阻断和不能确认实时可租是环境限制；问题仅针对已有过期元数据未直观呈现。"
+    },
+    {
+      "id": "STU-13",
+      "title": "显式新建的多个长期会话始终同名“新会话”",
+      "severity": "low",
+      "classification": "design_concern",
+      "expected": "多次回来研究不同城市/方案时，应易于识别对话。",
+      "actual": "账号三条有实际内容的会话在多轮结束、关闭重开、重新登录后都叫“新会话”。手动重命名可成功并正确打开该对话。",
+      "reproduction_steps": [
+        "点新建创建账号C2、C3、C4，各发送实际内容。",
+        "退出重开或换浏览器登录。",
+        "观察标题列表，再手动重命名验证可操作。"
+      ],
+      "evidence": [
+        {
+          "turn": 13,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "068c4d771b2a428c988aadda97682896",
+          "utc": "2026-10-19T05:05:34.656465+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 13
+        },
+        {
+          "turn": 21,
+          "conversation_id": "dc804b1d2f55446b8df238fd8c0a641a",
+          "turn_id": "35cd1ff9056049cdb464bf9f8b9f8640",
+          "utc": "2026-10-19T05:07:28.774128+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 21
+        },
+        {
+          "turn": 26,
+          "conversation_id": "6c8b6c1ae42e411fbf2564f714b1d8e8",
+          "turn_id": "c66944a4ae9a4f368dc95568f365a463",
+          "utc": "2026-10-19T05:09:06.956201+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 26
+        }
+      ],
+      "screenshots": [
+        "s4-login-restores-account.png",
+        "s4-conversation-rename-restored.png"
+      ],
+      "reproducibility": "三条会话一致，手动更名成功。",
+      "limitations": "未假定产品承诺自动命名；作为长期使用发现性问题，而非数据损坏。"
+    },
+    {
+      "id": "STU-14",
+      "title": "将13天后的入住日期描述为遥远未来，建议半年内再查",
+      "severity": "medium",
+      "classification": "product_defect",
+      "expected": "使用当前日期2026-10-19，正确识别2026-11-01仅13天后；不能无证据归因“普遍尚未放出”。",
+      "actual": "T13称11月1日距离现在较远，T14称“2026年11月的房源现在普遍还没放出，临近半年内再查命中率会高很多”。用户T15需纠正当前日期。",
+      "reproduction_steps": [
+        "在测试日期2026-10-19请求2026-11-01入住。",
+        "无结果后询问£780/月历史研究并取消日期。",
+        "观察T13/T14的时间解释。"
+      ],
+      "evidence": [
+        {
+          "turn": 13,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "068c4d771b2a428c988aadda97682896",
+          "utc": "2026-10-19T05:05:34.656465+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 13
+        },
+        {
+          "turn": 14,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "23944698c2544bb39c7ef8eebc4bec5e",
+          "utc": "2026-10-19T05:05:52.532605+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 14
+        },
+        {
+          "turn": 15,
+          "conversation_id": "21e956289878470e81c34ad2ad8c8402",
+          "turn_id": "67373708b9144bff9d32ebdc75a58458",
+          "utc": "2026-10-19T05:06:07.866518+00:00",
+          "raw_file": "student-turns.jsonl",
+          "raw_line": 15
+        }
+      ],
+      "screenshots": [
+        "s3-t13.png",
+        "s3-t14.png"
+      ],
+      "reproducibility": "同一对话两轮出现。",
+      "limitations": "不评价真实市场挂牌节奏；只指出日期关系错误和没有证据的无结果归因。"
+    }
+  ],
+  "positive_observations": [
+    "中文聊天自然可理解；核心预算解释和未核实项能用中文完成，英文询问草稿保留占位符且不发送。",
+    "£1100/月→£253.85/周、£13200/年，以及£650/月→£150/周、£7800/年，£715/月→£165/周、£8580/年及差额均正确。",
+    "没有治安/POI/交通数据时多次明确未知，不保证女性夜间出行安全；不把账单、担保人政策和可租状态当作已核实。",
+    "原访客对话/收藏在浏览器关闭重开及真实服务重启后恢复；账号2套收藏和3条会话通过新浏览器正常登录恢复。",
+    "T21跨对话准确回忆£780合租/独立卫浴/中文/无担保人；T22报告保存失败，T25重试后T26新会话回忆最新£1000整套studio。",
+    "新访客不显示原账号历史/收藏，也明确不知道其偏好；基本身份隔离在这次UI范围内通过。",
+    "手动重命名会话可用；手机房源卡片在390px宽下没有页面横向溢出（document.scrollWidth=390）。",
+    "27次请求均200、无聊天超时；中位完成4.277秒，最长25.04秒。无429，未进行限流绕过。"
+  ],
+  "environment_limitations": [
+    {
+      "id": "ENV-01",
+      "type": "environment_limitation",
+      "description": "只可检索历史公开缓存、缺少实时可租状态；不能以本测试证明真实市场没有房或房源今天仍可租。snapshot原始抓取日期2026-07-12至2026-10-06。"
+    },
+    {
+      "id": "ENV-02",
+      "type": "environment_limitation",
+      "description": "浏览器只允许精确localhost origin。外部房源图片、字体、地图和服务均阻断；截图空白图片及CJK方框不认定为产品缺陷。Unicode DOM已保留。"
+    },
+    {
+      "id": "ENV-03",
+      "type": "environment_limitation",
+      "description": "TfL/治安/POI等调用无结果；按brief评估回答诚实性，不把数据提供方不可用当产品本身故障。"
+    },
+    {
+      "id": "ENV-04",
+      "type": "test_infrastructure",
+      "description": "首次执行python命令不存在，改用python3；沙箱loopback失败后按brief以require_escalated运行。部分CSS占位符变化及转义导致定位超时，已自行纠正，未算产品缺陷。"
+    }
+  ],
+  "unverified_hypotheses": [
+    {
+      "id": "HYP-01",
+      "description": "T17把房型分析is_ensuite=false和未列出设施当作明确不提供卫浴。原始字段的业务含义及真实房源设施没有外部验证，可能存在将未知推定为否的风险，不能定性已证实缺陷。"
+    },
+    {
+      "id": "HYP-02",
+      "description": "T1意外2027-10-01日期的来源未知；未证实跨用户泄漏。后续独立fresh identity基本隔离通过。"
+    },
+    {
+      "id": "HYP-03",
+      "description": "新对话助手不能读取当前收藏身份，要求用户贴名称；可能是能力边界或集成缺口。只验证UI收藏持久化，未穷尽AI咨询按钮与收藏联动。"
+    },
+    {
+      "id": "HYP-04",
+      "description": "没有真正等待数天/数周，未验证定时提醒、缓存自然过期、长期自动摘要变化、真实市场、移动端软键盘/屏幕阅读器、密码重置或账户删除。"
+    }
+  ]
+}

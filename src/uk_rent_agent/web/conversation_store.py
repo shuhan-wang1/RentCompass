@@ -247,6 +247,8 @@ class ConversationStore:
                 self._conn.execute(f"ALTER TABLE conversations ADD COLUMN {name} {decl}")
         if "turn_id" not in _cols("messages"):
             self._conn.execute("ALTER TABLE messages ADD COLUMN turn_id TEXT")
+        if 'response_metadata_json' not in _cols('messages'):
+            self._conn.execute('ALTER TABLE messages ADD COLUMN response_metadata_json TEXT')
         # Backfill: pre-fork rows are their own root.
         self._conn.execute(
             "UPDATE conversations SET root_conversation_id=id WHERE root_conversation_id IS NULL"
@@ -539,7 +541,7 @@ class ConversationStore:
     def get_messages(self, user_id: str, cid: str) -> list[dict]:
         with self._lock:
             rows = self._conn.execute(
-                """SELECT id, role, content, response_type, recommendations_json,
+                """SELECT id, role, content, response_type, recommendations_json, response_metadata_json,
                           timestamp, turn_id
                    FROM messages WHERE user_id=? AND conversation_id=? ORDER BY id ASC""",
                 (user_id, cid),
@@ -550,6 +552,13 @@ class ConversationStore:
                    "timestamp": r["timestamp"], "turn_id": r["turn_id"]}
             if r["response_type"]:
                 msg["response_type"] = r["response_type"]
+            if r['response_metadata_json']:
+                try:
+                    msg['metadata'] = json.loads(r['response_metadata_json'])
+                    if 'options' in msg['metadata']:
+                        msg['options'] = msg['metadata']['options']
+                except (TypeError, ValueError):
+                    pass
             if r["recommendations_json"]:
                 try:
                     msg["recommendations"] = json.loads(r["recommendations_json"])
@@ -689,6 +698,12 @@ class ConversationStore:
                            WHERE user_id=? AND conversation_id=?""",
                         (user_id, cid),
                     )
+
+                if create_title:
+                    self._conn.execute("""UPDATE conversations SET title=?
+                        WHERE user_id=? AND id=? AND title IN ('New chat','新会话','New conversation')
+                        AND NOT EXISTS (SELECT 1 FROM messages WHERE user_id=? AND conversation_id=?)""",
+                        (create_title, user_id, cid, user_id, cid))
 
                 cur = self._conn.execute(
                     """INSERT INTO messages
@@ -839,7 +854,7 @@ class ConversationStore:
         with self._lock:
             row = self._conn.execute(
                 """SELECT t.status, t.conversation_id, t.id AS turn_id,
-                          m.content, m.response_type, m.recommendations_json
+                          m.content, m.response_type, m.recommendations_json, m.response_metadata_json
                    FROM turns t
                    LEFT JOIN messages m ON m.id=t.assistant_message_id
                    WHERE t.user_id=? AND t.id=?""",
@@ -861,6 +876,15 @@ class ConversationStore:
                 payload["recommendations"] = json.loads(row["recommendations_json"])
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
+        if row['response_metadata_json']:
+            try:
+                payload.update(json.loads(row['response_metadata_json']))
+            except (TypeError, ValueError):
+                pass
+        from uk_rent_agent.web.view_state import view_state
+        state = view_state(self.get_turn_snapshot(user_id, turn_id))
+        if state is not None:
+            payload['view_state'] = state
         return payload
 
     def finalize_request_turn(
@@ -875,6 +899,7 @@ class ConversationStore:
         snapshot: dict | None = None,
         snapshot_schema_version: int = 1,
         background_jobs: list[dict] | None = None,
+        response_metadata: dict | None = None,
     ) -> dict:
         """Atomically persist the assistant, terminal state, snapshot and outbox jobs."""
         if status not in {"completed", "failed"}:
@@ -917,6 +942,9 @@ class ConversationStore:
                     ),
                 )
                 assistant_id = int(cur.lastrowid)
+                if response_metadata:
+                    self._conn.execute('UPDATE messages SET response_metadata_json=? WHERE id=?',
+                                       (json.dumps(response_metadata, ensure_ascii=False), assistant_id))
                 updated = self._conn.execute(
                     """UPDATE turns SET status=?, completed_at=?, assistant_message_id=?
                        WHERE user_id=? AND id=? AND status='running'""",
@@ -1507,7 +1535,7 @@ class ConversationStore:
 
         msg_map: dict[int, int] = {}
         src_msgs = self._conn.execute(
-            """SELECT id, role, content, response_type, recommendations_json,
+            """SELECT id, role, content, response_type, recommendations_json, response_metadata_json,
                       timestamp, turn_id
                FROM messages WHERE user_id=? AND conversation_id=? ORDER BY id ASC""",
             (user_id, source_cid),
@@ -1536,6 +1564,9 @@ class ConversationStore:
                  new_turn),
             )
             msg_map[mid] = cur.lastrowid
+            if m['response_metadata_json']:
+                self._conn.execute('UPDATE messages SET response_metadata_json=? WHERE id=?',
+                                   (m['response_metadata_json'], cur.lastrowid))
 
         for t in src_turns:
             new_umid = msg_map.get(t["user_message_id"]) if t["user_message_id"] is not None else None

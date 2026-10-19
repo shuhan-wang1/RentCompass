@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-19",
+  "user_authorization": "User explicitly authorized cross-identity API checks in the current turn.",
+  "data_scope": "All accounts A/B/C and guests G/H created for this supplement in a fresh isolated database. No production or prior persona messages accessed.",
+  "http_requests": 259,
+  "assertions": 253,
+  "passed": 244,
+  "failed": 9,
+  "cross_owner_matrix_cases": 96,
+  "cross_owner_matrix_failed": 0,
+  "original_authz_regression_phase": {
+    "phase": "guest",
+    "requests": 210,
+    "checks": 205,
+    "passed": 205,
+    "failed": []
+  },
+  "phase_counts": [
+    {
+      "phase": "guest",
+      "requests": 210,
+      "checks": 205,
+      "passed": 205
+    },
+    {
+      "phase": "strict",
+      "requests": 37,
+      "checks": 36,
+      "passed": 32
+    },
+    {
+      "phase": "reproduce",
+      "requests": 8,
+      "checks": 8,
+      "passed": 6
+    },
+    {
+      "phase": "after-restart",
+      "requests": 4,
+      "checks": 4,
+      "passed": 1
+    }
+  ],
+  "failure_groups": {
+    "SEC-01_deleted_account_session_not_revoked": 8,
+    "SEC-02_logout_copy_not_revoked_design_target": 1
+  },
+  "status_counts": {
+    "200": 81,
+    "201": 17,
+    "404": 137,
+    "400": 4,
+    "401": 20
+  },
+  "network": {
+    "mode": "none",
+    "read_only_root": true,
+    "port_bindings": {}
+  },
+  "blocked_external_attempts": 0,
+  "model_calls": 0,
+  "OnTheMarket_requests": 0,
+  "source_changed_files": [],
+  "limits": [
+    "Synthetic API fixture testing; not a complete penetration test.",
+    "Messages and completed turns seeded using the existing store only for the fresh fixture conversations; HTTP ownership/authentication logic was not mocked.",
+    "C deletion reproduction used only public APIs and required no seeded messages.",
+    "Logout copy revocation is assessed as a security design target, distinct from deletion contract failure."
+  ]
+}

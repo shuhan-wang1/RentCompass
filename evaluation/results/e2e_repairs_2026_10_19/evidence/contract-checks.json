@@ -1,0 +1,2746 @@
+[
+  {
+    "case": "positive-search_properties",
+    "layer": "tool_integration",
+    "tool": "search_properties",
+    "args": {
+      "area": "Watford",
+      "max_budget": 1800,
+      "bedrooms": 1,
+      "room_type": "whole",
+      "no_commute": true,
+      "confirmed": true
+    },
+    "started": 1792403191.5844595,
+    "seconds": 8.283,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "status": "found",
+        "total_found": 4,
+        "data_source": "OnTheMarket (cached)",
+        "possibly_outdated": false,
+        "search_criteria": {
+          "area": "Watford",
+          "areas": [
+            "Watford"
+          ],
+          "commute_destination": null,
+          "no_commute": true,
+          "bedrooms": 1,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "room_type": "whole",
+          "move_in_date": null,
+          "destination": "Watford",
+          "max_budget": 1800,
+          "max_travel_time": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "known_criteria": {
+          "area": "Watford",
+          "areas": [
+            "Watford"
+          ],
+          "commute_destination": null,
+          "max_budget": 1800,
+          "max_travel_time": null,
+          "no_commute": true,
+          "bedrooms": 1,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "room_type": "whole",
+          "move_in_date": null,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "recommendations": [
+          {
+            "rank": 1,
+            "address": "Sydney Road, Watford, Hertfordshire, WD18",
+            "price": "£1495/month",
+            "budget_status": "✅ 在预算内",
+            "score": 69.64,
+            "score_breakdown": {
+              "price": 36.13,
+              "semantic": 20.05,
+              "freshness": 13.46
+            },
+            "property_type": "1 bed Flat",
+            "room_type": "whole",
+            "bedrooms": 1,
+            "match_type": "perfect",
+            "source": "OnTheMarket (cached)",
+            "possibly_outdated": false,
+            "url": "https://www.onthemarket.com/details/16401282/",
+            "images": [
+              "https://media.onthemarket.com/properties/16401282/1649946738/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/16401282/1639920709/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/16401282/1639920709/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/16401282/1639920709/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/16401282/1639920709/image-4-480x320.jpg"
+            ],
+            "geo_location": "51.649506, -0.4187",
+            "distance_miles": 1.06,
+            "explanation": "1 bedroom flat to rent in Sydney Road, Watford, Hertfordshire, WD18",
+            "area": "Watford",
+            "description": "",
+            "available_from": "",
+            "availability_status": "",
+            "verified_features": [],
+            "unverified_features": [],
+            "absent_features": []
+          },
+          {
+            "rank": 2,
+            "address": "Flanders Court, WD17 1BN, Watford, WD17",
+            "price": "£1350/month",
+            "budget_status": "✅ 在预算内",
+            "score": 64.67,
+            "score_breakdown": {
+              "price": 38.22,
+              "semantic": 12.99,
+              "freshness": 13.46
+            },
+            "property_type": "1 bed Flat",
+            "room_type": "whole",
+            "bedrooms": 1,
+            "match_type": "perfect",
+            "source": "OnTheMarket (cached)",
+            "possibly_outdated": false,
+            "url": "https://www.onthemarket.com/details/20481146/",
+            "images": [
+              "https://media.onthemarket.com/properties/20481146/1649903243/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20481146/1649903243/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20481146/1649903243/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20481146/1649903243/image-3-480x320.jpg"
+            ],
+            "geo_location": "51.661107, -0.400599",
+            "distance_miles": 0.45,
+            "explanation": "1 bedroom flat to rent in Flanders Court, WD17 1BN, Watford, WD17",
+            "area": "Watford",
+            "description": "",
+            "available_from": "",
+            "availability_status": "",
+            "verified_features": [],
+            "unverified_features": [],
+            "absent_features": []
+          },
+          {
+            "rank": 3,
+            "address": "Burrell House, Watford WD24",
+            "price": "£1600/month",
+            "budget_status": "✅ 在预算内",
+            "score": 63.71,
+            "score_breakdown": {
+              "price": 34.62,
+              "semantic": 15.63,
+              "freshness": 13.46
+            },
+            "property_type": "1 bed Apartment",
+            "room_type": "whole",
+            "bedrooms": 1,
+            "match_type": "perfect",
+            "source": "OnTheMarket (cached)",
+            "possibly_outdated": false,
+            "url": "https://www.onthemarket.com/details/20094930/",
+            "images": [
+              "https://media.onthemarket.com/properties/20094930/1643807058/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/20094930/1643807058/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/20094930/1643807058/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/20094930/1643807058/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/20094930/1643807058/image-4-480x320.jpg"
+            ],
+            "geo_location": "51.67955371, -0.39631212",
+            "distance_miles": 1.67,
+            "explanation": "1 bedroom apartment to rent in Burrell House, Watford WD24",
+            "area": "Watford",
+            "description": "",
+            "available_from": "",
+            "availability_status": "",
+            "verified_features": [],
+            "unverified_features": [],
+            "absent_features": []
+          },
+          {
+            "rank": 4,
+            "address": "Malden Road, Hertfordshire WD17",
+            "price": "£1350/month",
+            "budget_status": "✅ 在预算内",
+            "score": 64.24,
+            "score_breakdown": {
+              "price": 38.22,
+              "semantic": 12.56,
+              "freshness": 13.46
+            },
+            "property_type": "1 bed Flat",
+            "room_type": "whole",
+            "bedrooms": 1,
+            "match_type": "perfect",
+            "source": "OnTheMarket (cached)",
+            "possibly_outdated": false,
+            "url": "https://www.onthemarket.com/details/16427844/",
+            "images": [
+              "https://media.onthemarket.com/properties/16427844/1629794916/image-0-480x320.jpg",
+              "https://media.onthemarket.com/properties/16427844/1629794916/image-1-480x320.jpg",
+              "https://media.onthemarket.com/properties/16427844/1629794916/image-2-480x320.jpg",
+              "https://media.onthemarket.com/properties/16427844/1629794916/image-3-480x320.jpg",
+              "https://media.onthemarket.com/properties/16427844/1629794916/image-4-480x320.jpg"
+            ],
+            "geo_location": "51.662356, -0.401345",
+            "distance_miles": 0.54,
+            "explanation": "1 bedroom flat to rent in Malden Road, Hertfordshire WD17",
+            "area": "Watford",
+            "description": "",
+            "available_from": "",
+            "availability_status": "",
+            "verified_features": [],
+            "unverified_features": [],
+            "absent_features": []
+          }
+        ],
+        "over_budget_alternatives": [],
+        "over_budget_alternatives_label": "",
+        "perfect_count": 4,
+        "soft_count": 0,
+        "summary": "I found 4 current listings in Watford (Whole property). Prices range £1350–£1600/month (median ~£1495). Filters applied: budget ≤£1800/month, room type Whole property. See the full listings in the right-hand panel.",
+        "area_recommendations": [],
+        "partial": false,
+        "incomplete_areas": [],
+        "partial_note": "",
+        "cache_stats": {
+          "hits": 1,
+          "misses": 0
+        },
+        "area_status": {
+          "Watford": "results"
+        },
+        "retrieval_outcome": "candidates_returned",
+        "commute_unverified": false,
+        "commute_note": ""
+      },
+      "error": null,
+      "execution_time_ms": 8271.771669387817,
+      "tool_name": "search_properties",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-calculate_commute",
+    "layer": "tool_integration",
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E"
+    },
+    "started": 1792403199.8679187,
+    "seconds": 0.025,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "from_address": "Camden, London NW1",
+        "to_address": "UCL, London WC1E",
+        "mode": "transit",
+        "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+        "route_legs": [
+          {
+            "mode": "tube",
+            "lines": [
+              "Audit fixture line"
+            ],
+            "duration_minutes": 32,
+            "summary": "SYNTHETIC TEST DATA: audit route",
+            "from": "Audit origin",
+            "to": "Audit destination"
+          }
+        ],
+        "route_source": "TfL Journey Planner",
+        "basis": "tfl_journey_plan",
+        "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+        "success": true,
+        "duration_minutes": 32,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)"
+      },
+      "error": null,
+      "execution_time_ms": 25.16937255859375,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-calculate_commute_cost",
+    "layer": "tool_integration",
+    "tool": "calculate_commute_cost",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E",
+      "travel_type": "adult"
+    },
+    "started": 1792403199.893167,
+    "seconds": 0.012,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "office_days_per_week": null,
+        "commuting_days_per_month": 22.0,
+        "weeks_per_month": 4.333333333333333,
+        "frequency_basis": "legacy_22_commuting_days_per_month",
+        "success": true,
+        "from_address": "Camden, London NW1",
+        "to_address": "UCL, London WC1E",
+        "mode": "transit",
+        "uses_public_transport": true,
+        "commute": {
+          "duration_minutes": 32,
+          "duration_category": "Medium (20-45 min)",
+          "is_acceptable": true,
+          "basis": "tfl_journey_plan",
+          "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges."
+        },
+        "transport_cost_available": false,
+        "partial": true,
+        "transport_cost": {
+          "error": "Unable to determine zones for one or both addresses. Cannot calculate transport cost.",
+          "from_zone": null,
+          "to_zone": 1,
+          "office_days_per_week": null,
+          "commuting_days_per_month": 22.0,
+          "weeks_per_month": 4.333333333333333,
+          "frequency_basis": "legacy_22_commuting_days_per_month",
+          "coverage_verified": false,
+          "zone_basis": "not_established",
+          "coverage_note": "No zonal price is assigned when either address has an unknown zone."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 12.422561645507812,
+      "tool_name": "calculate_commute_cost",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-check_safety",
+    "layer": "tool_integration",
+    "tool": "check_safety",
+    "args": {
+      "address": "Bloomsbury London"
+    },
+    "started": 1792403199.9056478,
+    "seconds": 0.006,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "address": "Bloomsbury London",
+        "safety_score": 99,
+        "safety_level": "Very Safe",
+        "crime_data": {
+          "reference_point": {
+            "query": "Bloomsbury London",
+            "precision": "area",
+            "is_specific_address": false,
+            "distance_basis": "straight_line",
+            "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+            "lat": 51.523,
+            "lon": -0.127,
+            "coordinate_source": "nominatim",
+            "resolved_name": "Bloomsbury London"
+          },
+          "source": "data.police.uk",
+          "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+          "radius_miles": 1.0,
+          "radius_m": 1609.344,
+          "radius_basis": "provider_default_approximately_one_mile",
+          "cache_status": "fresh",
+          "from_cache": true,
+          "queried_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "successful_months": [
+            "2026-08",
+            "2026-07",
+            "2026-06"
+          ],
+          "failed_months": [],
+          "partial": false,
+          "data_months": [
+            "2026-06",
+            "2026-07",
+            "2026-08"
+          ],
+          "months_covered": 3,
+          "fetched_at": "2026-10-19T08:56:11.742329+00:00",
+          "total_crimes_6m": 135,
+          "crimes_per_month": 45.0,
+          "most_recent_month_count": 45,
+          "crime_trend": "stable",
+          "category_breakdown": {
+            "Anti Social Behaviour": 90,
+            "Burglary": 45
+          }
+        },
+        "scoring_explanation": "**How this score was produced:**\n\n1. **Source**: data.police.uk (official UK police crime data)\n2. **Coverage**: about a 1 mile radius around this point, last 3 months\n3. **Records**: 135 incidents (about 45 per month)\n4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a\n   flat count. This area is **quieter than most areas we sampled**, which maps to **99/100**.\n5. **Important limitation**: Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\n📊 **Trend**: Crime rate is relatively stable.",
+        "safety_analysis": "Location: Bloomsbury London; actual query point: the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool\nData months: 2026-06, 2026-07, 2026-08; 3-month total: 135 incidents; monthly average: 45.\nCoverage: the police endpoint defaults to approximately a 1 mile radius; it does not establish the safety of a walking route or an individual home.\nAnti Social Behaviour: 90 incidents\nBurglary: 45 incidents\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "crimes_per_month": 45.0,
+        "months_covered": 3,
+        "radius_miles": 1.0,
+        "radius_m": 1609.344,
+        "radius_basis": "provider_default_approximately_one_mile",
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "area",
+          "is_specific_address": false,
+          "distance_basis": "straight_line",
+          "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "nominatim",
+          "resolved_name": "Bloomsbury London"
+        },
+        "source": "data.police.uk",
+        "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+        "data_months": [
+          "2026-06",
+          "2026-07",
+          "2026-08"
+        ],
+        "queried_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "successful_months": [
+          "2026-08",
+          "2026-07",
+          "2026-06"
+        ],
+        "failed_months": [],
+        "partial": false,
+        "from_cache": true,
+        "cache_status": "fresh",
+        "possibly_outdated": false,
+        "fetched_at": "2026-10-19T08:56:11.742329+00:00",
+        "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+        "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "recommendation": "This area has a safety level of Very Safe with a safety score of 99/100 (compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)). Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+        "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+      },
+      "error": null,
+      "execution_time_ms": 6.114006042480469,
+      "tool_name": "check_safety",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-get_weather",
+    "layer": "tool_integration",
+    "tool": "get_weather",
+    "args": {
+      "location": "Bloomsbury London"
+    },
+    "started": 1792403199.9118545,
+    "seconds": 0.003,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "location": "Bloomsbury London",
+        "latitude": 51.523,
+        "longitude": -0.127,
+        "current_temp": 14.2,
+        "condition": "Light Rain",
+        "humidity": 72,
+        "wind_speed": 11.5,
+        "uv_index": 1.2,
+        "feels_like": 12.8,
+        "rainfall_chance": null,
+        "recommendation": "可能有雨，看房记得带伞"
+      },
+      "error": null,
+      "execution_time_ms": 2.8243064880371094,
+      "tool_name": "get_weather",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-web_search",
+    "layer": "tool_integration",
+    "tool": "web_search",
+    "args": {
+      "query": "London renting neighbourhood guidance audit fixture"
+    },
+    "started": 1792403199.9147577,
+    "seconds": 0.003,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_metadata": {
+          "length": 51
+        },
+        "results": "[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details.",
+        "detailed_data": {
+          "web_search": "[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 2.8786659240722656,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-search_nearby_pois",
+    "layer": "tool_integration",
+    "tool": "search_nearby_pois",
+    "args": {
+      "address": "Bloomsbury London",
+      "poi_type": "supermarket,pharmacy",
+      "latitude": 51.523,
+      "longitude": -0.127,
+      "radius": 300
+    },
+    "started": 1792403199.9176974,
+    "seconds": 0.686,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "address": "Bloomsbury London",
+        "pois": {
+          "supermarket": [
+            {
+              "osm_type": "node",
+              "osm_id": 900001,
+              "source": "OpenStreetMap Overpass",
+              "name": "Tesco Express [audit fixture]",
+              "type": "Supermarket",
+              "icon": "🛒",
+              "lat": 51.524,
+              "lon": -0.126,
+              "distance_m": 131,
+              "distance_display": "130m",
+              "cuisine": null,
+              "brand": "Tesco",
+              "opening_hours": "Mo-Su 08:00-20:00",
+              "school_level": null,
+              "healthcare": null
+            }
+          ],
+          "pharmacy": [
+            {
+              "osm_type": "node",
+              "osm_id": 900001,
+              "source": "OpenStreetMap Overpass",
+              "name": "Pharmacy [audit fixture]",
+              "type": "Pharmacy",
+              "icon": "💊",
+              "lat": 51.524,
+              "lon": -0.126,
+              "distance_m": 131,
+              "distance_display": "130m",
+              "cuisine": null,
+              "brand": "",
+              "opening_hours": "Mo-Su 08:00-20:00",
+              "school_level": null,
+              "healthcare": null
+            }
+          ]
+        },
+        "source": "OpenStreetMap Overpass",
+        "requested_radius_m": 300,
+        "radius_m": 300,
+        "user_requested_radius_m": null,
+        "radius_clamped": false,
+        "requested_types": [
+          "supermarket",
+          "pharmacy"
+        ],
+        "executed_types": [
+          "supermarket",
+          "pharmacy"
+        ],
+        "completed_types": [
+          "supermarket",
+          "pharmacy"
+        ],
+        "empty_types": [],
+        "failed_types": [],
+        "skipped_types": [],
+        "unsupported_types": [],
+        "unqueried_types": [],
+        "category_status": {
+          "supermarket": {
+            "status": "found",
+            "result_count": 1,
+            "radius_m": 300,
+            "source": "OpenStreetMap Overpass"
+          },
+          "pharmacy": {
+            "status": "found",
+            "result_count": 1,
+            "radius_m": 300,
+            "source": "OpenStreetMap Overpass"
+          }
+        },
+        "reference_point": {
+          "query": "Bloomsbury London",
+          "precision": "listing_coordinates",
+          "is_specific_address": true,
+          "distance_basis": "straight_line",
+          "measured_from": "the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+          "lat": 51.523,
+          "lon": -0.127,
+          "coordinate_source": "caller_supplied",
+          "coordinate_identity_verified": false
+        },
+        "partial": false,
+        "search_status": "complete",
+        "summary": "Found 2 places in completed categories within the actual 300m straight-line search radius, measured from the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n🛒 Tesco Express [audit fixture] - 130m\n💊 Pharmacy [audit fixture] - 130m"
+      },
+      "error": null,
+      "execution_time_ms": 685.8947277069092,
+      "tool_name": "search_nearby_pois",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-get_property_details",
+    "layer": "tool_integration",
+    "tool": "get_property_details",
+    "args": {
+      "property_url": "https://www.onthemarket.com/details/19427057/"
+    },
+    "started": 1792403200.60366,
+    "seconds": 0.368,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "source": "OnTheMarket (cached)",
+        "data_source": "OnTheMarket (cached)",
+        "source_url": "https://www.onthemarket.com/details/19427057/",
+        "from_cache": true,
+        "live_verified": false,
+        "possibly_outdated": true,
+        "cache_status": "fresh",
+        "fetched_at": "2026-07-09T14:50:51.186892+00:00",
+        "cache_age_seconds": 8794549.784,
+        "cache_ttl_seconds": 315360000.0,
+        "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+        "provenance": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/19427057/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-07-09T14:50:51.186892+00:00",
+          "cache_age_seconds": 8794549.784,
+          "cache_ttl_seconds": 315360000.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+        },
+        "success": true,
+        "found": true,
+        "search_query": "https://www.onthemarket.com/details/19427057/",
+        "match": {
+          "verdict": "exact_url",
+          "requested": "https://www.onthemarket.com/details/19427057/",
+          "requested_name": "",
+          "requested_postcode": "",
+          "resolved": "Cecil Street, Watford WD24",
+          "resolved_postcode": "wd24",
+          "corroborated_by": [
+            "listing_url"
+          ],
+          "reasons": []
+        },
+        "property": {
+          "source": "OnTheMarket (cached)",
+          "data_source": "OnTheMarket (cached)",
+          "source_url": "https://www.onthemarket.com/details/19427057/",
+          "from_cache": true,
+          "live_verified": false,
+          "possibly_outdated": true,
+          "cache_status": "fresh",
+          "fetched_at": "2026-07-09T14:50:51.186892+00:00",
+          "cache_age_seconds": 8794549.784,
+          "cache_ttl_seconds": 315360000.0,
+          "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+          "address": "Cecil Street, Watford WD24",
+          "price": "£795 pcm",
+          "room_type": "1 bed House share",
+          "description": "1 bedroom in a house share to rent in Cecil Street, Watford WD24",
+          "amenities": "Furnished, Ensuite",
+          "guest_policy": "",
+          "payment_rules": "",
+          "excluded_features": "",
+          "url": "https://www.onthemarket.com/details/19427057/",
+          "available_from": "Contact agent",
+          "geo_location": "51.67115, -0.397433"
+        },
+        "room_type_analysis": {
+          "is_studio": false,
+          "is_shared_room": false,
+          "is_ensuite": false,
+          "has_private_kitchen": false,
+          "room_type_category": "1 bed House share"
+        },
+        "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Cecil Street, Watford WD24).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Cecil Street, Watford WD24**\n\n💰 **价格**: £795 pcm\n🏠 **房型**: 1 bed House share\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n1 bedroom in a house share to rent in Cecil Street, Watford WD24\n\n✨ **设施与配置**:\nFurnished, Ensuite\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/19427057/",
+        "total_matches": 1,
+        "message": "找到房产: Cecil Street, Watford WD24（已核对与请求一致）"
+      },
+      "error": null,
+      "execution_time_ms": 368.15667152404785,
+      "tool_name": "get_property_details",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-check_transport_cost",
+    "layer": "tool_integration",
+    "tool": "check_transport_cost",
+    "args": {
+      "end_zone": 3,
+      "travel_type": "adult"
+    },
+    "started": 1792403200.9718819,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "data": {
+          "office_days_per_week": null,
+          "commuting_days_per_month": 22.0,
+          "weeks_per_month": 4.333333333333333,
+          "frequency_basis": "legacy_22_commuting_days_per_month",
+          "payg_weekly_estimate": null,
+          "payg_monthly_estimate": 231.0,
+          "payg_estimate_kind": "daily_cap_upper_bound",
+          "return_trips_per_week": null,
+          "payg_assumptions": "One return commuting day per office day; uses the published daily cap, not a verified single/return fare. Actual singles may cost less. Monthly average uses 52 weeks / 12 months when office days are supplied; holidays and additional travel are not modelled.",
+          "zones": "Zone 1-3",
+          "user_type": "Adult",
+          "prices": {
+            "monthly_pass": "£201.60",
+            "weekly_pass": "£52.50",
+            "daily_cap_payg": "£10.50 (standard daily cap; no 18+ Student PAYG discount)"
+          },
+          "note": "Student discount (30% off) applies to Travelcards (Weekly/Monthly), NOT Pay As You Go single fares.",
+          "source": "Transport for London 2026 zonal caps and Travelcard prices",
+          "source_url": "https://content.tfl.gov.uk/adult-fares.pdf",
+          "effective_date": "2026-03-01",
+          "fare_edition": "2026",
+          "currency": "GBP",
+          "daily_cap": 10.5,
+          "monthly_travelcard": 201.6,
+          "weekly_travelcard": 52.5,
+          "coverage_verified": false,
+          "coverage_note": "These prices apply only to the explicitly selected TfL zones. They do not verify that an address, station or whole route is covered; out-of-zone stations such as Watford Junction require a separately verified fare/extension."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 0.16546249389648438,
+      "tool_name": "check_transport_cost",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-get_transport_info",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "journey",
+      "from_location": "Camden London",
+      "to_location": "Liverpool Street London"
+    },
+    "started": 1792403200.9720845,
+    "seconds": 0.01,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_type": "journey",
+        "coverage": "london",
+        "from": {
+          "input": "Camden London",
+          "resolved_station": "Camden [audit fixture]",
+          "naptan": "940GZZTEST51539142"
+        },
+        "to": {
+          "input": "Liverpool Street London",
+          "resolved_station": "Liverpool Street [audit fixture]",
+          "naptan": "940GZZTEST5151782"
+        },
+        "duration_minutes": 32,
+        "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+        "route_legs": [
+          {
+            "mode": "tube",
+            "lines": [
+              "Audit fixture line"
+            ],
+            "duration_minutes": 32,
+            "summary": "SYNTHETIC TEST DATA: audit route",
+            "from": "Audit origin",
+            "to": "Audit destination"
+          }
+        ],
+        "selected_itinerary_id": "tfl:f81e10e931bd2b7d",
+        "fastest_journey": {
+          "itinerary_id": "tfl:f81e10e931bd2b7d",
+          "duration_minutes": 32,
+          "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+          "route_legs": [
+            {
+              "mode": "tube",
+              "lines": [
+                "Audit fixture line"
+              ],
+              "duration_minutes": 32,
+              "summary": "SYNTHETIC TEST DATA: audit route",
+              "from": "Audit origin",
+              "to": "Audit destination"
+            }
+          ],
+          "source": "TfL Unified API Journey Planner",
+          "fare_available": true,
+          "fare_basis": "journey_itinerary",
+          "fare_pence": 425,
+          "fare_gbp": 4.25,
+          "fare_display": "£4.25",
+          "fare_itinerary_id": "tfl:f81e10e931bd2b7d"
+        },
+        "cheapest_journey": {
+          "itinerary_id": "tfl:68cdd0af40327aaa",
+          "duration_minutes": 44,
+          "route_summary": "Tube Audit fixture line to Audit destination (44 min)",
+          "route_legs": [
+            {
+              "mode": "tube",
+              "lines": [
+                "Audit fixture line"
+              ],
+              "duration_minutes": 44,
+              "summary": "SYNTHETIC TEST DATA: audit route",
+              "from": "Audit origin",
+              "to": "Audit destination"
+            }
+          ],
+          "source": "TfL Unified API Journey Planner",
+          "fare_available": true,
+          "fare_basis": "journey_itinerary",
+          "fare_pence": 280,
+          "fare_gbp": 2.8,
+          "fare_display": "£2.80",
+          "fare_itinerary_id": "tfl:68cdd0af40327aaa"
+        },
+        "source": "TfL Unified API Journey Planner",
+        "from_cache": true,
+        "cache_status": "fresh",
+        "stations_used": "Camden [audit fixture] -> Liverpool Street [audit fixture]",
+        "fare_available": true,
+        "fare_pence": 425,
+        "fare_gbp": 4.25,
+        "fare_display": "£4.25",
+        "fare_basis": "journey_itinerary",
+        "fare_itinerary_id": "tfl:f81e10e931bd2b7d",
+        "fare_matches_itinerary": true,
+        "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard."
+      },
+      "error": null,
+      "execution_time_ms": 10.008573532104492,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-recall_memory",
+    "layer": "tool_integration",
+    "tool": "recall_memory",
+    "args": {
+      "query": "SYNTHETIC_CONTRACT_PRIVATE quiet UCL",
+      "user_id": "e2e_contract_a",
+      "session_id": "contract_two"
+    },
+    "started": 1792403200.9821985,
+    "seconds": 0.041,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "count": 0,
+        "memories": [],
+        "formatted": ""
+      },
+      "error": null,
+      "execution_time_ms": 40.82655906677246,
+      "tool_name": "recall_memory",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-remember",
+    "layer": "tool_integration",
+    "tool": "remember",
+    "args": {
+      "content": "SYNTHETIC_CONTRACT_PRIVATE: quiet housing near UCL",
+      "user_id": "e2e_contract_a",
+      "session_id": "contract_one",
+      "idempotency_key": "contract-memory-one"
+    },
+    "started": 1792403201.023093,
+    "seconds": 0.01,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "id": "semantic_086265c7edff4c16a1c8a8585b2f5400",
+        "stored": "SYNTHETIC_CONTRACT_PRIVATE: quiet housing near UCL",
+        "mtype": "semantic"
+      },
+      "error": null,
+      "execution_time_ms": 6.90770149230957,
+      "tool_name": "remember",
+      "version": "1",
+      "idempotency_key": "contract-memory-one",
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-ask_user",
+    "layer": "tool_integration",
+    "tool": "ask_user",
+    "args": {
+      "question": "Which city would you like to live in?",
+      "clarification_kind": "missing_area",
+      "missing_fields": [
+        "area"
+      ]
+    },
+    "started": 1792403201.032894,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "status": "ask_user",
+        "question": "Which city would you like to live in?",
+        "clarification_kind": "missing_area",
+        "missing_fields": [
+          "area"
+        ],
+        "missing_optional_fields": [],
+        "options": []
+      },
+      "error": null,
+      "execution_time_ms": 0.20432472229003906,
+      "tool_name": "ask_user",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "positive-compare_or_rank_areas",
+    "layer": "tool_integration",
+    "tool": "compare_or_rank_areas",
+    "args": {
+      "city": "London",
+      "candidate_areas": [
+        "Camden",
+        "Islington",
+        "Bloomsbury"
+      ],
+      "priorities": [
+        "value",
+        "safety"
+      ],
+      "budget_hint": {
+        "amount": 1800,
+        "period": "month"
+      }
+    },
+    "started": 1792403201.0331397,
+    "seconds": 0.022,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "status": "ok",
+        "areas": [
+          {
+            "name": "Camden",
+            "slug": "camden",
+            "rent": {
+              "min": 850.0,
+              "max": 5000.0,
+              "median": 2100.0,
+              "sample_size": 95,
+              "freshness_days": 0,
+              "low_sample": false
+            },
+            "commute_minutes": null,
+            "budget_match_rate": 0.368,
+            "score": {
+              "total": 74.2,
+              "components": {
+                "value": 74.2
+              },
+              "weights": {
+                "value": 1.0
+              }
+            },
+            "sources": [
+              "OnTheMarket listing cache"
+            ],
+            "no_data": false
+          },
+          {
+            "name": "Bloomsbury",
+            "slug": "bloomsbury",
+            "rent": {
+              "min": 1090.0,
+              "max": 7367.0,
+              "median": 2097.5,
+              "sample_size": 82,
+              "freshness_days": 0,
+              "low_sample": false
+            },
+            "commute_minutes": null,
+            "budget_match_rate": 0.293,
+            "score": {
+              "total": 71.7,
+              "components": {
+                "value": 71.7
+              },
+              "weights": {
+                "value": 1.0
+              }
+            },
+            "sources": [
+              "OnTheMarket listing cache"
+            ],
+            "no_data": false
+          },
+          {
+            "name": "Islington",
+            "slug": "islington",
+            "rent": {
+              "min": 1517.0,
+              "max": 5000.0,
+              "median": 2400.0,
+              "sample_size": 59,
+              "freshness_days": 0,
+              "low_sample": false
+            },
+            "commute_minutes": null,
+            "budget_match_rate": 0.153,
+            "score": {
+              "total": 6.1,
+              "components": {
+                "value": 6.1
+              },
+              "weights": {
+                "value": 1.0
+              }
+            },
+            "sources": [
+              "OnTheMarket listing cache"
+            ],
+            "no_data": false
+          }
+        ],
+        "explanation_notes": [
+          "Composite score = weighted sum of 0-100 components (value = lower median rent, adjusted by how many cached listings fall under budget; commute = shorter time). Weights come from your priorities and sum to 1: value=1.0.",
+          "Rent statistics cover mixed cached listings without room-type or bedroom filtering. Budget match measures rent only. Freshness is the cache age, not verification of current price or availability. Area commute times do not verify individual homes.",
+          "Safety and amenities were requested but have no cheap offline data here, so they are excluded from the score (not estimated).",
+          "No commute destination was given, so commute is excluded and commute_minutes is null."
+        ],
+        "priorities": [
+          "value",
+          "safety"
+        ],
+        "weights": {
+          "value": 1.0
+        },
+        "evidence_scope": {
+          "rent_sample": "mixed_cached_listings",
+          "room_type_filtered": false,
+          "bedrooms_filtered": false,
+          "budget_match_basis": "rent_only",
+          "freshness_basis": "cache_fetch_time",
+          "live_verified": false,
+          "commute_scope": "area_reference_point"
+        }
+      },
+      "error": null,
+      "execution_time_ms": 21.94976806640625,
+      "tool_name": "compare_or_rank_areas",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "unknown-field-rejected-search_properties",
+    "layer": "tool_integration",
+    "tool": "search_properties",
+    "args": {
+      "area": "Watford",
+      "max_budget": 1800,
+      "bedrooms": 1,
+      "room_type": "whole",
+      "no_commute": true,
+      "confirmed": true,
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0551493,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "search_properties",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-calculate_commute",
+    "layer": "tool_integration",
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0552502,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-calculate_commute_cost",
+    "layer": "tool_integration",
+    "tool": "calculate_commute_cost",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E",
+      "travel_type": "adult",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.055276,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "calculate_commute_cost",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-check_safety",
+    "layer": "tool_integration",
+    "tool": "check_safety",
+    "args": {
+      "address": "Bloomsbury London",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0553029,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "check_safety",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-get_weather",
+    "layer": "tool_integration",
+    "tool": "get_weather",
+    "args": {
+      "location": "Bloomsbury London",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0553296,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "get_weather",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-web_search",
+    "layer": "tool_integration",
+    "tool": "web_search",
+    "args": {
+      "query": "London renting neighbourhood guidance audit fixture",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.055348,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-search_nearby_pois",
+    "layer": "tool_integration",
+    "tool": "search_nearby_pois",
+    "args": {
+      "address": "Bloomsbury London",
+      "poi_type": "supermarket,pharmacy",
+      "latitude": 51.523,
+      "longitude": -0.127,
+      "radius": 300,
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0553641,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "search_nearby_pois",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-get_property_details",
+    "layer": "tool_integration",
+    "tool": "get_property_details",
+    "args": {
+      "property_url": "https://www.onthemarket.com/details/19427057/",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0553868,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "get_property_details",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-check_transport_cost",
+    "layer": "tool_integration",
+    "tool": "check_transport_cost",
+    "args": {
+      "end_zone": 3,
+      "travel_type": "adult",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0554025,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "check_transport_cost",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-get_transport_info",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "journey",
+      "from_location": "Camden London",
+      "to_location": "Liverpool Street London",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0554194,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-recall_memory",
+    "layer": "tool_integration",
+    "tool": "recall_memory",
+    "args": {
+      "query": "SYNTHETIC_CONTRACT_PRIVATE quiet UCL",
+      "user_id": "e2e_contract_a",
+      "session_id": "contract_two",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0554383,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "recall_memory",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-remember",
+    "layer": "tool_integration",
+    "tool": "remember",
+    "args": {
+      "content": "SYNTHETIC_CONTRACT_PRIVATE: quiet housing near UCL",
+      "user_id": "e2e_contract_a",
+      "session_id": "contract_one",
+      "idempotency_key": "contract-memory-one",
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0554588,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "remember",
+      "version": "1",
+      "idempotency_key": "contract-memory-one",
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-ask_user",
+    "layer": "tool_integration",
+    "tool": "ask_user",
+    "args": {
+      "question": "Which city would you like to live in?",
+      "clarification_kind": "missing_area",
+      "missing_fields": [
+        "area"
+      ],
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.055494,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "ask_user",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-field-rejected-compare_or_rank_areas",
+    "layer": "tool_integration",
+    "tool": "compare_or_rank_areas",
+    "args": {
+      "city": "London",
+      "candidate_areas": [
+        "Camden",
+        "Islington",
+        "Bloomsbury"
+      ],
+      "priorities": [
+        "value",
+        "safety"
+      ],
+      "budget_hint": {
+        "amount": 1800,
+        "period": "month"
+      },
+      "UNRECOGNIZED_AUDIT_FIELD": true
+    },
+    "started": 1792403201.0555134,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "compare_or_rank_areas",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "transport-mode-fare",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "fare",
+      "from_location": "Camden London",
+      "to_location": "Liverpool Street London",
+      "end_zone": 3,
+      "line": "Central",
+      "user_query": "Are there delays on Central line?"
+    },
+    "started": 1792403201.0555377,
+    "seconds": 0.011,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_type": "fare",
+        "coverage": "london",
+        "from": {
+          "input": "Camden London",
+          "resolved_station": "Camden [audit fixture]",
+          "naptan": "940GZZTEST51539142"
+        },
+        "to": {
+          "input": "Liverpool Street London",
+          "resolved_station": "Liverpool Street [audit fixture]",
+          "naptan": "940GZZTEST5151782"
+        },
+        "duration_minutes": 32,
+        "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+        "route_legs": [
+          {
+            "mode": "tube",
+            "lines": [
+              "Audit fixture line"
+            ],
+            "duration_minutes": 32,
+            "summary": "SYNTHETIC TEST DATA: audit route",
+            "from": "Audit origin",
+            "to": "Audit destination"
+          }
+        ],
+        "selected_itinerary_id": "tfl:f81e10e931bd2b7d",
+        "fastest_journey": {
+          "itinerary_id": "tfl:f81e10e931bd2b7d",
+          "duration_minutes": 32,
+          "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+          "route_legs": [
+            {
+              "mode": "tube",
+              "lines": [
+                "Audit fixture line"
+              ],
+              "duration_minutes": 32,
+              "summary": "SYNTHETIC TEST DATA: audit route",
+              "from": "Audit origin",
+              "to": "Audit destination"
+            }
+          ],
+          "source": "TfL Unified API Journey Planner",
+          "fare_available": true,
+          "fare_basis": "journey_itinerary",
+          "fare_pence": 425,
+          "fare_gbp": 4.25,
+          "fare_display": "£4.25",
+          "fare_itinerary_id": "tfl:f81e10e931bd2b7d"
+        },
+        "cheapest_journey": {
+          "itinerary_id": "tfl:68cdd0af40327aaa",
+          "duration_minutes": 44,
+          "route_summary": "Tube Audit fixture line to Audit destination (44 min)",
+          "route_legs": [
+            {
+              "mode": "tube",
+              "lines": [
+                "Audit fixture line"
+              ],
+              "duration_minutes": 44,
+              "summary": "SYNTHETIC TEST DATA: audit route",
+              "from": "Audit origin",
+              "to": "Audit destination"
+            }
+          ],
+          "source": "TfL Unified API Journey Planner",
+          "fare_available": true,
+          "fare_basis": "journey_itinerary",
+          "fare_pence": 280,
+          "fare_gbp": 2.8,
+          "fare_display": "£2.80",
+          "fare_itinerary_id": "tfl:68cdd0af40327aaa"
+        },
+        "source": "TfL Unified API Journey Planner",
+        "from_cache": true,
+        "cache_status": "fresh",
+        "stations_used": "Camden [audit fixture] -> Liverpool Street [audit fixture]",
+        "fare_available": true,
+        "fare_pence": 425,
+        "fare_gbp": 4.25,
+        "fare_display": "£4.25",
+        "fare_basis": "journey_itinerary",
+        "fare_itinerary_id": "tfl:f81e10e931bd2b7d",
+        "fare_matches_itinerary": true,
+        "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard."
+      },
+      "error": null,
+      "execution_time_ms": 11.147260665893555,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "transport-mode-travelcard",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "travelcard",
+      "from_location": "Camden London",
+      "to_location": "Liverpool Street London",
+      "end_zone": 3,
+      "line": "Central",
+      "user_query": "Are there delays on Central line?"
+    },
+    "started": 1792403201.0667512,
+    "seconds": 0.001,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_type": "travelcard",
+        "coverage": "london",
+        "coverage_scope": "zonal_price_table_only",
+        "coverage_verified": false,
+        "zone_basis": "explicit_zone_table",
+        "endpoint_zones": {},
+        "coverage_note": "This is a price for the specified or approximately inferred zones, not verified coverage of the named stations or full journey. Out-of-zone stations require separately verified extensions/fares.",
+        "zones": "Zone 1-3",
+        "user_type": "Adult",
+        "monthly_gbp": 201.6,
+        "monthly_display": "£201.60",
+        "weekly_gbp": 52.5,
+        "weekly_display": "£52.50",
+        "daily_cap_gbp": 10.5,
+        "daily_cap_display": "£10.50",
+        "note": "Student (30% off) applies to weekly/monthly Travelcards, NOT pay-as-you-go.",
+        "source": "Transport for London 2026 zonal caps and Travelcard prices",
+        "source_url": "https://content.tfl.gov.uk/adult-fares.pdf",
+        "effective_date": "2026-03-01",
+        "fare_edition": "2026"
+      },
+      "error": null,
+      "execution_time_ms": 0.7135868072509766,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "transport-mode-line_status",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "line_status",
+      "from_location": "Camden London",
+      "to_location": "Liverpool Street London",
+      "end_zone": 3,
+      "line": "Central",
+      "user_query": "Are there delays on Central line?"
+    },
+    "started": 1792403201.0675404,
+    "seconds": 0.004,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_type": "line_status",
+        "coverage": "london",
+        "line_filter": "Central",
+        "lines": [
+          {
+            "name": "Central",
+            "status": "Severe Delays",
+            "severity": 6,
+            "reason": "SYNTHETIC TEST DATA: signalling scenario",
+            "has_disruption": true
+          }
+        ],
+        "summary": "Central line: Severe Delays",
+        "any_disruption": true,
+        "source": "TfL Unified API (live line status)"
+      },
+      "error": null,
+      "execution_time_ms": 3.514528274536133,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "transport-mode-auto",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "auto",
+      "from_location": "Camden London",
+      "to_location": "Liverpool Street London",
+      "end_zone": 3,
+      "line": "Central",
+      "user_query": "Are there delays on Central line?"
+    },
+    "started": 1792403201.0711164,
+    "seconds": 0.004,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_type": "line_status",
+        "coverage": "london",
+        "line_filter": "Central",
+        "lines": [
+          {
+            "name": "Central",
+            "status": "Severe Delays",
+            "severity": 6,
+            "reason": "SYNTHETIC TEST DATA: signalling scenario",
+            "has_disruption": true
+          }
+        ],
+        "summary": "Central line: Severe Delays",
+        "any_disruption": true,
+        "source": "TfL Unified API (live line status)"
+      },
+      "error": null,
+      "execution_time_ms": 3.698587417602539,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "commute-mode-walking",
+    "layer": "tool_integration",
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E",
+      "mode": "walking"
+    },
+    "started": 1792403201.0748782,
+    "seconds": 0.012,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "from_address": "Camden, London NW1",
+        "to_address": "UCL, London WC1E",
+        "mode": "walking",
+        "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+        "route_legs": [
+          {
+            "mode": "tube",
+            "lines": [
+              "Audit fixture line"
+            ],
+            "duration_minutes": 32,
+            "summary": "SYNTHETIC TEST DATA: audit route",
+            "from": "Audit origin",
+            "to": "Audit destination"
+          }
+        ],
+        "route_source": "TfL Journey Planner",
+        "basis": "tfl_journey_plan",
+        "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+        "success": true,
+        "duration_minutes": 32,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)"
+      },
+      "error": null,
+      "execution_time_ms": 11.490583419799805,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "commute-mode-bicycling",
+    "layer": "tool_integration",
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E",
+      "mode": "bicycling"
+    },
+    "started": 1792403201.0864346,
+    "seconds": 0.007,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "from_address": "Camden, London NW1",
+        "to_address": "UCL, London WC1E",
+        "mode": "bicycling",
+        "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+        "route_legs": [
+          {
+            "mode": "tube",
+            "lines": [
+              "Audit fixture line"
+            ],
+            "duration_minutes": 32,
+            "summary": "SYNTHETIC TEST DATA: audit route",
+            "from": "Audit origin",
+            "to": "Audit destination"
+          }
+        ],
+        "route_source": "TfL Journey Planner",
+        "basis": "tfl_journey_plan",
+        "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+        "success": true,
+        "duration_minutes": 32,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)"
+      },
+      "error": null,
+      "execution_time_ms": 6.470441818237305,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "commute-mode-driving",
+    "layer": "tool_integration",
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E",
+      "mode": "driving"
+    },
+    "started": 1792403201.0929742,
+    "seconds": 0.008,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "from_address": "Camden, London NW1",
+        "to_address": "UCL, London WC1E",
+        "mode": "driving",
+        "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+        "route_legs": [
+          {
+            "mode": "tube",
+            "lines": [
+              "Audit fixture line"
+            ],
+            "duration_minutes": 32,
+            "summary": "SYNTHETIC TEST DATA: audit route",
+            "from": "Audit origin",
+            "to": "Audit destination"
+          }
+        ],
+        "route_source": "TfL Journey Planner",
+        "basis": "tfl_journey_plan",
+        "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+        "success": true,
+        "duration_minutes": 32,
+        "is_acceptable": true,
+        "duration_category": "Medium (20-45 min)"
+      },
+      "error": null,
+      "execution_time_ms": 8.136987686157227,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "student-fares",
+    "layer": "tool_integration",
+    "tool": "check_transport_cost",
+    "args": {
+      "end_zone": 3,
+      "travel_type": "student"
+    },
+    "started": 1792403201.1011865,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "data": {
+          "office_days_per_week": null,
+          "commuting_days_per_month": 22.0,
+          "weeks_per_month": 4.333333333333333,
+          "frequency_basis": "legacy_22_commuting_days_per_month",
+          "payg_weekly_estimate": null,
+          "payg_monthly_estimate": 231.0,
+          "payg_estimate_kind": "daily_cap_upper_bound",
+          "return_trips_per_week": null,
+          "payg_assumptions": "One return commuting day per office day; uses the published daily cap, not a verified single/return fare. Actual singles may cost less. Monthly average uses 52 weeks / 12 months when office days are supplied; holidays and additional travel are not modelled.",
+          "zones": "Zone 1-3",
+          "user_type": "18+ Student Oyster",
+          "prices": {
+            "monthly_pass": "£141.00",
+            "weekly_pass": "£36.70",
+            "daily_cap_payg": "£10.50 (standard daily cap; no 18+ Student PAYG discount)"
+          },
+          "note": "Student discount (30% off) applies to Travelcards (Weekly/Monthly), NOT Pay As You Go single fares.",
+          "source": "Transport for London 2026 zonal caps and Travelcard prices",
+          "source_url": "https://content.tfl.gov.uk/18-plus-student-oyster-photocard-fares.pdf",
+          "effective_date": "2026-03-01",
+          "fare_edition": "2026",
+          "currency": "GBP",
+          "daily_cap": 10.5,
+          "monthly_travelcard": 141.0,
+          "weekly_travelcard": 36.7,
+          "coverage_verified": false,
+          "coverage_note": "These prices apply only to the explicitly selected TfL zones. They do not verify that an address, station or whole route is covered; out-of-zone stations such as Watford Junction require a separately verified fare/extension."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 0.25010108947753906,
+      "tool_name": "check_transport_cost",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "outside-london-coverage",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "journey",
+      "from_location": "Manchester",
+      "to_location": "UCL London"
+    },
+    "started": 1792403201.101467,
+    "seconds": 0.007,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "coverage": "outside_london",
+        "query": "Manchester",
+        "message": "TfL (Transport for London) only covers London, so I can't pull live fares, journeys or line status for 'Manchester'. For public transport there, check the local operator (e.g. Transport for Greater Manchester at tfgm.com, or National Rail at nationalrail.co.uk).",
+        "source": "TfL Unified API (coverage check)"
+      },
+      "error": null,
+      "execution_time_ms": 6.908893585205078,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "exact-url-miss",
+    "layer": "tool_integration",
+    "tool": "get_property_details",
+    "args": {
+      "property_url": "https://rental-fixture.invalid/no-such-listing"
+    },
+    "started": 1792403201.108444,
+    "seconds": 1.173,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "found": false,
+        "search_query": "https://rental-fixture.invalid/no-such-listing",
+        "match": {
+          "verdict": "url_not_in_cache",
+          "requested": "https://rental-fixture.invalid/no-such-listing",
+          "requested_name": "",
+          "requested_postcode": "",
+          "resolved": null,
+          "reasons": [
+            "no cached listing has URL https://rental-fixture.invalid/no-such-listing"
+          ]
+        },
+        "did_you_mean": [],
+        "message": "NOT FOUND: that listing URL is not in the local cache. Do NOT state a price, room type or any other detail for it, and do NOT substitute a different listing. 该 URL 不在缓存中；不要用别的房源代替。",
+        "suggestion": "Re-run the property search for this area so the listing is cached, then ask again."
+      },
+      "error": null,
+      "execution_time_ms": 1172.581672668457,
+      "tool_name": "get_property_details",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "memory-replay",
+    "layer": "tool_integration",
+    "tool": "remember",
+    "args": {
+      "content": "SYNTHETIC_CONTRACT_PRIVATE: quiet housing near UCL",
+      "user_id": "e2e_contract_a",
+      "session_id": "contract_one",
+      "idempotency_key": "contract-memory-one"
+    },
+    "started": 1792403202.2810917,
+    "seconds": 0.001,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "id": "semantic_086265c7edff4c16a1c8a8585b2f5400",
+        "stored": "SYNTHETIC_CONTRACT_PRIVATE: quiet housing near UCL",
+        "mtype": "semantic"
+      },
+      "error": null,
+      "execution_time_ms": null,
+      "tool_name": "remember",
+      "version": "1",
+      "idempotency_key": "contract-memory-one",
+      "outcome": "replayed"
+    }
+  },
+  {
+    "case": "memory-other-user-isolation",
+    "layer": "tool_integration",
+    "tool": "recall_memory",
+    "args": {
+      "query": "SYNTHETIC_CONTRACT_PRIVATE",
+      "user_id": "e2e_contract_b"
+    },
+    "started": 1792403202.2818935,
+    "seconds": 0.001,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "count": 0,
+        "memories": [],
+        "formatted": ""
+      },
+      "error": null,
+      "execution_time_ms": 1.2912750244140625,
+      "tool_name": "recall_memory",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "memory-missing-user",
+    "layer": "tool_integration",
+    "tool": "recall_memory",
+    "args": {
+      "query": "SYNTHETIC_CONTRACT_PRIVATE"
+    },
+    "started": 1792403202.2832277,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": {
+        "success": false,
+        "count": 0,
+        "memories": [],
+        "formatted": "",
+        "error": "user_id is required to recall per-user memory"
+      },
+      "error": "user_id is required to recall per-user memory",
+      "execution_time_ms": 0.21076202392578125,
+      "tool_name": "recall_memory",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "failed"
+    }
+  },
+  {
+    "case": "memory-write-no-key",
+    "layer": "tool_integration",
+    "tool": "remember",
+    "args": {
+      "content": "do not store",
+      "user_id": "e2e_contract_b"
+    },
+    "started": 1792403202.2834597,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "idempotency_key is required for write tools",
+      "execution_time_ms": null,
+      "tool_name": "remember",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "nested-web-readonly-composition",
+    "layer": "tool_integration",
+    "tool": "web_search",
+    "args": {
+      "query": "Bloomsbury weather and travel research",
+      "sub_queries": [
+        {
+          "tool": "get_weather",
+          "params": {
+            "location": "Bloomsbury London"
+          }
+        },
+        {
+          "tool": "calculate_commute",
+          "params": {
+            "from_address": "Camden, London NW1",
+            "to_address": "UCL, London WC1E"
+          }
+        },
+        {
+          "tool": "web_search_only",
+          "params": {
+            "query": "London renting guidance audit fixture"
+          }
+        }
+      ]
+    },
+    "started": 1792403202.2835097,
+    "seconds": 0.023,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_metadata": {
+          "length": 38
+        },
+        "results": "### get_weather\n---\n{\n  \"location\": \"Bloomsbury London\",\n  \"latitude\": 51.523,\n  \"longitude\": -0.127,\n  \"current_temp\": 14.2,\n  \"condition\": \"Light Rain\",\n  \"humidity\": 72,\n  \"wind_speed\": 11.5,\n  \"uv_index\": 1.2,\n  \"feels_like\": 12.8,\n  \"rainfall_chance\": null,\n  \"recommendation\": \"可能有雨，看房记得带伞\"\n}\n---\n\n---\n### calculate_commute\n---\n{\n  \"from_address\": \"Camden, London NW1\",\n  \"to_address\": \"UCL, London WC1E\",\n  \"mode\": \"transit\",\n  \"route_summary\": \"Tube Audit fixture line to Audit destination (32 min)\",\n  \"route_legs\": [\n    {\n      \"mode\": \"tube\",\n      \"lines\": [\n        \"Audit fixture line\"\n      ],\n      \"duration_minutes\": 32,\n      \"summary\": \"SYNTHETIC TEST DATA: audit route\",\n      \"from\": \"Audit origin\",\n      \"to\": \"Audit destination\"\n    }\n  ],\n  \"route_source\": \"TfL Journey Planner\",\n  \"basis\": \"tfl_journey_plan\",\n  \"basis_note\": \"Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.\",\n  \"success\": true,\n  \"duration_minutes\": 32,\n  \"is_acceptable\": true,\n  \"duration_category\": \"Medium (20-45 min)\"\n}\n---\n\n---\n### Web Search (query length: 37)\n---\n[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details.\n---\n",
+        "detailed_data": {
+          "get_weather_1": {
+            "location": "Bloomsbury London",
+            "latitude": 51.523,
+            "longitude": -0.127,
+            "current_temp": 14.2,
+            "condition": "Light Rain",
+            "humidity": 72,
+            "wind_speed": 11.5,
+            "uv_index": 1.2,
+            "feels_like": 12.8,
+            "rainfall_chance": null,
+            "recommendation": "可能有雨，看房记得带伞"
+          },
+          "calculate_commute_2": {
+            "from_address": "Camden, London NW1",
+            "to_address": "UCL, London WC1E",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "web_search_3": "[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 22.472858428955078,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "nested-web-all-six-allowed-children",
+    "layer": "tool_integration",
+    "tool": "web_search",
+    "args": {
+      "query": "Bloomsbury viewing research",
+      "sub_queries": [
+        {
+          "tool": "check_safety",
+          "params": {
+            "address": "Bloomsbury London"
+          }
+        },
+        {
+          "tool": "get_weather",
+          "params": {
+            "location": "Bloomsbury London"
+          }
+        },
+        {
+          "tool": "search_nearby_pois",
+          "params": {
+            "address": "Bloomsbury London",
+            "poi_type": "supermarket,pharmacy",
+            "latitude": 51.523,
+            "longitude": -0.127,
+            "radius": 300
+          }
+        },
+        {
+          "tool": "get_property_details",
+          "params": {
+            "property_url": "https://www.onthemarket.com/details/19427057/"
+          }
+        },
+        {
+          "tool": "calculate_commute",
+          "params": {
+            "from_address": "Camden, London NW1",
+            "to_address": "UCL, London WC1E"
+          }
+        },
+        {
+          "tool": "web_search_only",
+          "params": {
+            "query": "London renting guidance audit fixture"
+          }
+        }
+      ]
+    },
+    "started": 1792403202.3060336,
+    "seconds": 0.397,
+    "passed": true,
+    "expected_success": true,
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "query_metadata": {
+          "length": 27
+        },
+        "results": "### check_safety\n---\n{\n  \"address\": \"Bloomsbury London\",\n  \"safety_score\": 99,\n  \"safety_level\": \"Very Safe\",\n  \"crime_data\": {\n    \"reference_point\": {\n      \"query\": \"Bloomsbury London\",\n      \"precision\": \"area\",\n      \"is_specific_address\": false,\n      \"distance_basis\": \"straight_line\",\n      \"measured_from\": \"the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool\",\n      \"lat\": 51.523,\n      \"lon\": -0.127,\n      \"coordinate_source\": \"nominatim\",\n      \"resolved_name\": \"Bloomsbury London\"\n    },\n    \"source\": \"data.police.uk\",\n    \"source_url\": \"https://data.police.uk/api/crimes-street/all-crime\",\n    \"radius_miles\": 1.0,\n    \"radius_m\": 1609.344,\n    \"radius_basis\": \"provider_default_approximately_one_mile\",\n    \"cache_status\": \"fresh\",\n    \"from_cache\": true,\n    \"queried_months\": [\n      \"2026-08\",\n      \"2026-07\",\n      \"2026-06\"\n    ],\n    \"successful_months\": [\n      \"2026-08\",\n      \"2026-07\",\n      \"2026-06\"\n    ],\n    \"failed_months\": [],\n    \"partial\": false,\n    \"data_months\": [\n      \"2026-06\",\n      \"2026-07\",\n      \"2026-08\"\n    ],\n    \"months_covered\": 3,\n    \"fetched_at\": \"2026-10-19T08:56:11.742329+00:00\",\n    \"total_crimes_6m\": 135,\n    \"crimes_per_month\": 45.0,\n    \"most_recent_month_count\": 45,\n    \"crime_trend\": \"stable\",\n    \"category_breakdown\": {\n      \"Anti Social Behaviour\": 90,\n      \"Burglary\": 45\n    }\n  },\n  \"scoring_explanation\": \"**How this score was produced:**\\n\\n1. **Source**: data.police.uk (official UK police crime data)\\n2. **Coverage**: about a 1 mile radius around this point, last 3 months\\n3. **Records**: 135 incidents (about 45 per month)\\n4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a\\n   flat count. This area is **quieter than most areas we sampled**, which maps to **99/100**.\\n5. **Important limitation**: Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\\n\\n📊 **Trend**: Crime rate is relatively stable.\",\n  \"safety_analysis\": \"Location: Bloomsbury London; actual query point: the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool\\nData months: 2026-06, 2026-07, 2026-08; 3-month total: 135 incidents; monthly average: 45.\\nCoverage: the police endpoint defaults to approximately a 1 mile radius; it does not establish the safety of a walking route or an individual home.\\nAnti Social Behaviour: 90 incidents\\nBurglary: 45 incidents\\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\",\n  \"crimes_per_month\": 45.0,\n  \"months_covered\": 3,\n  \"radius_miles\": 1.0,\n  \"radius_m\": 1609.344,\n  \"radius_basis\": \"provider_default_approximately_one_mile\",\n  \"reference_point\": {\n    \"query\": \"Bloomsbury London\",\n    \"precision\": \"area\",\n    \"is_specific_address\": false,\n    \"distance_basis\": \"straight_line\",\n    \"measured_from\": \"the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool\",\n    \"lat\": 51.523,\n    \"lon\": -0.127,\n    \"coordinate_source\": \"nominatim\",\n    \"resolved_name\": \"Bloomsbury London\"\n  },\n  \"source\": \"data.police.uk\",\n  \"source_url\": \"https://data.police.uk/api/crimes-street/all-crime\",\n  \"data_months\": [\n    \"2026-06\",\n    \"2026-07\",\n    \"2026-08\"\n  ],\n  \"queried_months\": [\n    \"2026-08\",\n    \"2026-07\",\n    \"2026-06\"\n  ],\n  \"successful_months\": [\n    \"2026-08\",\n    \"2026-07\",\n    \"2026-06\"\n  ],\n  \"failed_months\": [],\n  \"partial\": false,\n  \"from_cache\": true,\n  \"cache_status\": \"fresh\",\n  \"possibly_outdated\": false,\n  \"fetched_at\": \"2026-10-19T08:56:11.742329+00:00\",\n  \"reference_basis\": \"compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)\",\n  \"caveat\": \"Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\",\n  \"recommendation\": \"This area has a safety level of Very Safe with a safety score of 99/100 (compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)). Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\",\n  \"next_action_hint\": \"NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations.\"\n}\n---\n\n---\n### get_weather\n---\n{\n  \"location\": \"Bloomsbury London\",\n  \"latitude\": 51.523,\n  \"longitude\": -0.127,\n  \"current_temp\": 14.2,\n  \"condition\": \"Light Rain\",\n  \"humidity\": 72,\n  \"wind_speed\": 11.5,\n  \"uv_index\": 1.2,\n  \"feels_like\": 12.8,\n  \"rainfall_chance\": null,\n  \"recommendation\": \"可能有雨，看房记得带伞\"\n}\n---\n\n---\n### search_nearby_pois\n---\n{\n  \"success\": true,\n  \"address\": \"Bloomsbury London\",\n  \"pois\": {\n    \"supermarket\": [\n      {\n        \"osm_type\": \"node\",\n        \"osm_id\": 900001,\n        \"source\": \"OpenStreetMap Overpass\",\n        \"name\": \"Tesco Express [audit fixture]\",\n        \"type\": \"Supermarket\",\n        \"icon\": \"🛒\",\n        \"lat\": 51.524,\n        \"lon\": -0.126,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"Tesco\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\",\n        \"school_level\": null,\n        \"healthcare\": null\n      }\n    ],\n    \"pharmacy\": [\n      {\n        \"osm_type\": \"node\",\n        \"osm_id\": 900001,\n        \"source\": \"OpenStreetMap Overpass\",\n        \"name\": \"Pharmacy [audit fixture]\",\n        \"type\": \"Pharmacy\",\n        \"icon\": \"💊\",\n        \"lat\": 51.524,\n        \"lon\": -0.126,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\",\n        \"school_level\": null,\n        \"healthcare\": null\n      }\n    ]\n  },\n  \"source\": \"OpenStreetMap Overpass\",\n  \"requested_radius_m\": 300,\n  \"radius_m\": 300,\n  \"user_requested_radius_m\": null,\n  \"radius_clamped\": false,\n  \"requested_types\": [\n    \"supermarket\",\n    \"pharmacy\"\n  ],\n  \"executed_types\": [\n    \"supermarket\",\n    \"pharmacy\"\n  ],\n  \"completed_types\": [\n    \"supermarket\",\n    \"pharmacy\"\n  ],\n  \"empty_types\": [],\n  \"failed_types\": [],\n  \"skipped_types\": [],\n  \"unsupported_types\": [],\n  \"unqueried_types\": [],\n  \"category_status\": {\n    \"supermarket\": {\n      \"status\": \"found\",\n      \"result_count\": 1,\n      \"radius_m\": 300,\n      \"source\": \"OpenStreetMap Overpass\"\n    },\n    \"pharmacy\": {\n      \"status\": \"found\",\n      \"result_count\": 1,\n      \"radius_m\": 300,\n      \"source\": \"OpenStreetMap Overpass\"\n    }\n  },\n  \"reference_point\": {\n    \"query\": \"Bloomsbury London\",\n    \"precision\": \"listing_coordinates\",\n    \"is_specific_address\": true,\n    \"distance_basis\": \"straight_line\",\n    \"measured_from\": \"the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\",\n    \"lat\": 51.523,\n    \"lon\": -0.127,\n    \"coordinate_source\": \"caller_supplied\",\n    \"coordinate_identity_verified\": false\n  },\n  \"partial\": false,\n  \"search_status\": \"complete\",\n  \"summary\": \"Found 2 places in completed categories within the actual 300m straight-line search radius, measured from the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\\n🛒 Tesco Express [audit fixture] - 130m\\n💊 Pharmacy [audit fixture] - 130m\"\n}\n---\n\n---\n### get_property_details\n---\n{\n  \"source\": \"OnTheMarket (cached)\",\n  \"data_source\": \"OnTheMarket (cached)\",\n  \"source_url\": \"https://www.onthemarket.com/details/19427057/\",\n  \"from_cache\": true,\n  \"live_verified\": false,\n  \"possibly_outdated\": true,\n  \"cache_status\": \"fresh\",\n  \"fetched_at\": \"2026-07-09T14:50:51.186892+00:00\",\n  \"cache_age_seconds\": 8794551.505,\n  \"cache_ttl_seconds\": 315360000.0,\n  \"freshness_note\": \"Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\",\n  \"provenance\": {\n    \"source\": \"OnTheMarket (cached)\",\n    \"data_source\": \"OnTheMarket (cached)\",\n    \"source_url\": \"https://www.onthemarket.com/details/19427057/\",\n    \"from_cache\": true,\n    \"live_verified\": false,\n    \"possibly_outdated\": true,\n    \"cache_status\": \"fresh\",\n    \"fetched_at\": \"2026-07-09T14:50:51.186892+00:00\",\n    \"cache_age_seconds\": 8794551.505,\n    \"cache_ttl_seconds\": 315360000.0,\n    \"freshness_note\": \"Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\"\n  },\n  \"success\": true,\n  \"found\": true,\n  \"search_query\": \"https://www.onthemarket.com/details/19427057/\",\n  \"match\": {\n    \"verdict\": \"exact_url\",\n    \"requested\": \"https://www.onthemarket.com/details/19427057/\",\n    \"requested_name\": \"\",\n    \"requested_postcode\": \"\",\n    \"resolved\": \"Cecil Street, Watford WD24\",\n    \"resolved_postcode\": \"wd24\",\n    \"corroborated_by\": [\n      \"listing_url\"\n    ],\n    \"reasons\": []\n  },\n  \"property\": {\n    \"source\": \"OnTheMarket (cached)\",\n    \"data_source\": \"OnTheMarket (cached)\",\n    \"source_url\": \"https://www.onthemarket.com/details/19427057/\",\n    \"from_cache\": true,\n    \"live_verified\": false,\n    \"possibly_outdated\": true,\n    \"cache_status\": \"fresh\",\n    \"fetched_at\": \"2026-07-09T14:50:51.186892+00:00\",\n    \"cache_age_seconds\": 8794551.505,\n    \"cache_ttl_seconds\": 315360000.0,\n    \"freshness_note\": \"Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\",\n    \"address\": \"Cecil Street, Watford WD24\",\n    \"price\": \"£795 pcm\",\n    \"room_type\": \"1 bed House share\",\n    \"description\": \"1 bedroom in a house share to rent in Cecil Street, Watford WD24\",\n    \"amenities\": \"Furnished, Ensuite\",\n    \"guest_policy\": \"\",\n    \"payment_rules\": \"\",\n    \"excluded_features\": \"\",\n    \"url\": \"https://www.onthemarket.com/details/19427057/\",\n    \"available_from\": \"Contact agent\",\n    \"geo_location\": \"51.67115, -0.397433\"\n  },\n  \"room_type_analysis\": {\n    \"is_studio\": false,\n    \"is_shared_room\": false,\n    \"is_ensuite\": false,\n    \"has_private_kitchen\": false,\n    \"room_type_category\": \"1 bed House share\"\n  },\n  \"formatted_details\": \"✅ Identity confirmed by listing URL: this IS the listing you asked about (Cecil Street, Watford WD24).\\n\\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\\n\\n📍 **Cecil Street, Watford WD24**\\n\\n💰 **价格**: £795 pcm\\n🏠 **房型**: 1 bed House share\\n📅 **可入住日期**: Contact agent\\n\\n📝 **描述**:\\n1 bedroom in a house share to rent in Cecil Street, Watford WD24\\n\\n✨ **设施与配置**:\\nFurnished, Ensuite\\n\\n👥 **访客政策**:\\n\\n\\n💳 **付款规则**:\\n\\n\\n⛔ **不包含的设施**:\\n\\n\\n🔗 **链接**: https://www.onthemarket.com/details/19427057/\",\n  \"total_matches\": 1,\n  \"message\": \"找到房产: Cecil Street, Watford WD24（已核对与请求一致）\"\n}\n---\n\n---\n### calculate_commute\n---\n{\n  \"from_address\": \"Camden, London NW1\",\n  \"to_address\": \"UCL, London WC1E\",\n  \"mode\": \"transit\",\n  \"route_summary\": \"Tube Audit fixture line to Audit destination (32 min)\",\n  \"route_legs\": [\n    {\n      \"mode\": \"tube\",\n      \"lines\": [\n        \"Audit fixture line\"\n      ],\n      \"duration_minutes\": 32,\n      \"summary\": \"SYNTHETIC TEST DATA: audit route\",\n      \"from\": \"Audit origin\",\n      \"to\": \"Audit destination\"\n    }\n  ],\n  \"route_source\": \"TfL Journey Planner\",\n  \"basis\": \"tfl_journey_plan\",\n  \"basis_note\": \"Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.\",\n  \"success\": true,\n  \"duration_minutes\": 32,\n  \"is_acceptable\": true,\n  \"duration_category\": \"Medium (20-45 min)\"\n}\n---\n\n---\n### Web Search (query length: 37)\n---\n[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details.\n---\n",
+        "detailed_data": {
+          "check_safety_1": {
+            "address": "Bloomsbury London",
+            "safety_score": 99,
+            "safety_level": "Very Safe",
+            "crime_data": {
+              "reference_point": {
+                "query": "Bloomsbury London",
+                "precision": "area",
+                "is_specific_address": false,
+                "distance_basis": "straight_line",
+                "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+                "lat": 51.523,
+                "lon": -0.127,
+                "coordinate_source": "nominatim",
+                "resolved_name": "Bloomsbury London"
+              },
+              "source": "data.police.uk",
+              "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+              "radius_miles": 1.0,
+              "radius_m": 1609.344,
+              "radius_basis": "provider_default_approximately_one_mile",
+              "cache_status": "fresh",
+              "from_cache": true,
+              "queried_months": [
+                "2026-08",
+                "2026-07",
+                "2026-06"
+              ],
+              "successful_months": [
+                "2026-08",
+                "2026-07",
+                "2026-06"
+              ],
+              "failed_months": [],
+              "partial": false,
+              "data_months": [
+                "2026-06",
+                "2026-07",
+                "2026-08"
+              ],
+              "months_covered": 3,
+              "fetched_at": "2026-10-19T08:56:11.742329+00:00",
+              "total_crimes_6m": 135,
+              "crimes_per_month": 45.0,
+              "most_recent_month_count": 45,
+              "crime_trend": "stable",
+              "category_breakdown": {
+                "Anti Social Behaviour": 90,
+                "Burglary": 45
+              }
+            },
+            "scoring_explanation": "**How this score was produced:**\n\n1. **Source**: data.police.uk (official UK police crime data)\n2. **Coverage**: about a 1 mile radius around this point, last 3 months\n3. **Records**: 135 incidents (about 45 per month)\n4. **Method**: ranked against a sample of 13 UK areas rather than deducted from a\n   flat count. This area is **quieter than most areas we sampled**, which maps to **99/100**.\n5. **Important limitation**: Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.\n\n📊 **Trend**: Crime rate is relatively stable.",
+            "safety_analysis": "Location: Bloomsbury London; actual query point: the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool\nData months: 2026-06, 2026-07, 2026-08; 3-month total: 135 incidents; monthly average: 45.\nCoverage: the police endpoint defaults to approximately a 1 mile radius; it does not establish the safety of a walking route or an individual home.\nAnti Social Behaviour: 90 incidents\nBurglary: 45 incidents\nCounts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+            "crimes_per_month": 45.0,
+            "months_covered": 3,
+            "radius_miles": 1.0,
+            "radius_m": 1609.344,
+            "radius_basis": "provider_default_approximately_one_mile",
+            "reference_point": {
+              "query": "Bloomsbury London",
+              "precision": "area",
+              "is_specific_address": false,
+              "distance_basis": "straight_line",
+              "measured_from": "the geocoded point for 'Bloomsbury London', at area precision; not coordinates borrowed from another tool",
+              "lat": 51.523,
+              "lon": -0.127,
+              "coordinate_source": "nominatim",
+              "resolved_name": "Bloomsbury London"
+            },
+            "source": "data.police.uk",
+            "source_url": "https://data.police.uk/api/crimes-street/all-crime",
+            "data_months": [
+              "2026-06",
+              "2026-07",
+              "2026-08"
+            ],
+            "queried_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "successful_months": [
+              "2026-08",
+              "2026-07",
+              "2026-06"
+            ],
+            "failed_months": [],
+            "partial": false,
+            "from_cache": true,
+            "cache_status": "fresh",
+            "possibly_outdated": false,
+            "fetched_at": "2026-10-19T08:56:11.742329+00:00",
+            "reference_basis": "compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)",
+            "caveat": "Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+            "recommendation": "This area has a safety level of Very Safe with a safety score of 99/100 (compared against 13 sampled UK areas (2026-05 data.police.uk, ~1 mile radius)). Counts come from data.police.uk within about a 1 mile radius and are footfall-sensitive: busy central and nightlife districts record a lot of theft from visitors, which is not the same as risk to someone living there. Use this as one input, not a verdict.",
+            "next_action_hint": "NOW use Final Answer to summarize this safety information for the user. Do NOT call search_properties again - the user already has property recommendations."
+          },
+          "get_weather_2": {
+            "location": "Bloomsbury London",
+            "latitude": 51.523,
+            "longitude": -0.127,
+            "current_temp": 14.2,
+            "condition": "Light Rain",
+            "humidity": 72,
+            "wind_speed": 11.5,
+            "uv_index": 1.2,
+            "feels_like": 12.8,
+            "rainfall_chance": null,
+            "recommendation": "可能有雨，看房记得带伞"
+          },
+          "search_nearby_pois_3": {
+            "success": true,
+            "address": "Bloomsbury London",
+            "pois": {
+              "supermarket": [
+                {
+                  "osm_type": "node",
+                  "osm_id": 900001,
+                  "source": "OpenStreetMap Overpass",
+                  "name": "Tesco Express [audit fixture]",
+                  "type": "Supermarket",
+                  "icon": "🛒",
+                  "lat": 51.524,
+                  "lon": -0.126,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "Tesco",
+                  "opening_hours": "Mo-Su 08:00-20:00",
+                  "school_level": null,
+                  "healthcare": null
+                }
+              ],
+              "pharmacy": [
+                {
+                  "osm_type": "node",
+                  "osm_id": 900001,
+                  "source": "OpenStreetMap Overpass",
+                  "name": "Pharmacy [audit fixture]",
+                  "type": "Pharmacy",
+                  "icon": "💊",
+                  "lat": 51.524,
+                  "lon": -0.126,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "",
+                  "opening_hours": "Mo-Su 08:00-20:00",
+                  "school_level": null,
+                  "healthcare": null
+                }
+              ]
+            },
+            "source": "OpenStreetMap Overpass",
+            "requested_radius_m": 300,
+            "radius_m": 300,
+            "user_requested_radius_m": null,
+            "radius_clamped": false,
+            "requested_types": [
+              "supermarket",
+              "pharmacy"
+            ],
+            "executed_types": [
+              "supermarket",
+              "pharmacy"
+            ],
+            "completed_types": [
+              "supermarket",
+              "pharmacy"
+            ],
+            "empty_types": [],
+            "failed_types": [],
+            "skipped_types": [],
+            "unsupported_types": [],
+            "unqueried_types": [],
+            "category_status": {
+              "supermarket": {
+                "status": "found",
+                "result_count": 1,
+                "radius_m": 300,
+                "source": "OpenStreetMap Overpass"
+              },
+              "pharmacy": {
+                "status": "found",
+                "result_count": 1,
+                "radius_m": 300,
+                "source": "OpenStreetMap Overpass"
+              }
+            },
+            "reference_point": {
+              "query": "Bloomsbury London",
+              "precision": "listing_coordinates",
+              "is_specific_address": true,
+              "distance_basis": "straight_line",
+              "measured_from": "the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.",
+              "lat": 51.523,
+              "lon": -0.127,
+              "coordinate_source": "caller_supplied",
+              "coordinate_identity_verified": false
+            },
+            "partial": false,
+            "search_status": "complete",
+            "summary": "Found 2 places in completed categories within the actual 300m straight-line search radius, measured from the supplied coordinates for 'Bloomsbury London', supplied with the request rather than geocoded. Their property identity is not independently verified. Distances are straight-line, not walking distance.\n🛒 Tesco Express [audit fixture] - 130m\n💊 Pharmacy [audit fixture] - 130m"
+          },
+          "get_property_details_4": {
+            "source": "OnTheMarket (cached)",
+            "data_source": "OnTheMarket (cached)",
+            "source_url": "https://www.onthemarket.com/details/19427057/",
+            "from_cache": true,
+            "live_verified": false,
+            "possibly_outdated": true,
+            "cache_status": "fresh",
+            "fetched_at": "2026-07-09T14:50:51.186892+00:00",
+            "cache_age_seconds": 8794551.505,
+            "cache_ttl_seconds": 315360000.0,
+            "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+            "provenance": {
+              "source": "OnTheMarket (cached)",
+              "data_source": "OnTheMarket (cached)",
+              "source_url": "https://www.onthemarket.com/details/19427057/",
+              "from_cache": true,
+              "live_verified": false,
+              "possibly_outdated": true,
+              "cache_status": "fresh",
+              "fetched_at": "2026-07-09T14:50:51.186892+00:00",
+              "cache_age_seconds": 8794551.505,
+              "cache_ttl_seconds": 315360000.0,
+              "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them."
+            },
+            "success": true,
+            "found": true,
+            "search_query": "https://www.onthemarket.com/details/19427057/",
+            "match": {
+              "verdict": "exact_url",
+              "requested": "https://www.onthemarket.com/details/19427057/",
+              "requested_name": "",
+              "requested_postcode": "",
+              "resolved": "Cecil Street, Watford WD24",
+              "resolved_postcode": "wd24",
+              "corroborated_by": [
+                "listing_url"
+              ],
+              "reasons": []
+            },
+            "property": {
+              "source": "OnTheMarket (cached)",
+              "data_source": "OnTheMarket (cached)",
+              "source_url": "https://www.onthemarket.com/details/19427057/",
+              "from_cache": true,
+              "live_verified": false,
+              "possibly_outdated": true,
+              "cache_status": "fresh",
+              "fetched_at": "2026-07-09T14:50:51.186892+00:00",
+              "cache_age_seconds": 8794551.505,
+              "cache_ttl_seconds": 315360000.0,
+              "freshness_note": "Cached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.",
+              "address": "Cecil Street, Watford WD24",
+              "price": "£795 pcm",
+              "room_type": "1 bed House share",
+              "description": "1 bedroom in a house share to rent in Cecil Street, Watford WD24",
+              "amenities": "Furnished, Ensuite",
+              "guest_policy": "",
+              "payment_rules": "",
+              "excluded_features": "",
+              "url": "https://www.onthemarket.com/details/19427057/",
+              "available_from": "Contact agent",
+              "geo_location": "51.67115, -0.397433"
+            },
+            "room_type_analysis": {
+              "is_studio": false,
+              "is_shared_room": false,
+              "is_ensuite": false,
+              "has_private_kitchen": false,
+              "room_type_category": "1 bed House share"
+            },
+            "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (Cecil Street, Watford WD24).\n\nCached listing snapshot; this lookup did not contact or refresh the listing. The recorded price and availability are not verified as live/current. Confirm them with the listing agent before relying on them.\n\n📍 **Cecil Street, Watford WD24**\n\n💰 **价格**: £795 pcm\n🏠 **房型**: 1 bed House share\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n1 bedroom in a house share to rent in Cecil Street, Watford WD24\n\n✨ **设施与配置**:\nFurnished, Ensuite\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/19427057/",
+            "total_matches": 1,
+            "message": "找到房产: Cecil Street, Watford WD24（已核对与请求一致）"
+          },
+          "calculate_commute_5": {
+            "from_address": "Camden, London NW1",
+            "to_address": "UCL, London WC1E",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "web_search_6": "[1] Title: SYNTHETIC TEST DATA — neighbourhood research\n    Link: https://www.gov.uk/private-renting\n    Summary: SYNTHETIC TEST DATA, not live advice. Check lease terms and local authority sources. This fixture does not verify accessibility, school admission, tenancy availability or agent contact details."
+        }
+      },
+      "error": null,
+      "execution_time_ms": 396.9252109527588,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": "complete"
+    }
+  },
+  {
+    "case": "nested-web-write-rejected",
+    "layer": "tool_integration",
+    "tool": "web_search",
+    "args": {
+      "query": "test rejected write",
+      "sub_queries": [
+        {
+          "tool": "remember",
+          "params": {
+            "content": "forbidden nested write",
+            "user_id": "e2e_contract_a"
+          }
+        }
+      ]
+    },
+    "started": 1792403202.7030206,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "nested-web-recursion-rejected",
+    "layer": "tool_integration",
+    "tool": "web_search",
+    "args": {
+      "query": "test rejected recursion",
+      "sub_queries": [
+        {
+          "tool": "web_search",
+          "params": {
+            "query": "nested recursive"
+          }
+        }
+      ]
+    },
+    "started": 1792403202.703147,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "web_search",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "ask-user-invalid-kind",
+    "layer": "tool_integration",
+    "tool": "ask_user",
+    "args": {
+      "question": "q",
+      "clarification_kind": "invalid"
+    },
+    "started": 1792403202.7031832,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "ask_user",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "transport-zone-invalid",
+    "layer": "tool_integration",
+    "tool": "get_transport_info",
+    "args": {
+      "query_type": "travelcard",
+      "end_zone": 99
+    },
+    "started": 1792403202.7032304,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "get_transport_info",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "commute-invalid-mode",
+    "layer": "tool_integration",
+    "tool": "calculate_commute",
+    "args": {
+      "from_address": "Camden, London NW1",
+      "to_address": "UCL, London WC1E",
+      "mode": "teleport"
+    },
+    "started": 1792403202.7032886,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "ValidationError: invalid parameters",
+      "execution_time_ms": null,
+      "tool_name": "calculate_commute",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  },
+  {
+    "case": "unknown-tool",
+    "layer": "tool_integration",
+    "tool": "no_such_tool",
+    "args": {},
+    "started": 1792403202.7033615,
+    "seconds": 0.0,
+    "passed": true,
+    "expected_success": false,
+    "result": {
+      "success": false,
+      "data": null,
+      "error": "工具 'no_such_tool' 不存在",
+      "execution_time_ms": null,
+      "tool_name": "no_such_tool",
+      "version": "1",
+      "idempotency_key": null,
+      "outcome": null
+    }
+  }
+]

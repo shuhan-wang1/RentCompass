@@ -1,0 +1,288 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+............................................F........................... [  4%]
+........................................................................ [  5%]
+........................................................................ [  7%]
+........................................................................ [  8%]
+........................................................................ [  9%]
+........................................................................ [ 11%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 15%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 19%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+.......................................s..s............................. [ 26%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+........................................................................ [ 39%]
+........................................................................ [ 41%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+........F..............F...F............................................ [ 46%]
+......................F.....F...F...................F................... [ 48%]
+........................................................................ [ 49%]
+........................................................................ [ 50%]
+........................................................................ [ 52%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+...............................F........................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 65%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+........................................................................ [ 76%]
+........................................................................ [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+....................s................................................... [ 87%]
+.............................F.......................................... [ 89%]
+........................................................................ [ 90%]
+........................................................................ [ 92%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 99%]
+.............................................                            [100%]
+=================================== FAILURES ===================================
+____________ test_weekly_budget_converts_then_enforces_hard_ceiling ____________
+
+stub_env = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c73e5a81760>
+
+    def test_weekly_budget_converts_then_enforces_hard_ceiling(stub_env, monkeypatch):
+        # £350/week -> ceil(round(350 * 52 / 12, 2)) = £1517/month ceiling.
+        _install_listings(monkeypatch, [
+            _row("A, London", 1500),   # <= 1515 -> in budget
+            _row("B, London", 1515),   # exactly at converted ceiling -> in budget
+            _row("C, London", 1600),   # over -> alternative (<= 1742)
+            _row("D, London", 1800),   # over 1.15x (>1742) -> excluded
+        ])
+        res = _run(area="Camden", max_budget=350, budget_period="week", reply_language="en")
+        assert res["status"] == "found"
+>       assert res["search_criteria"]["max_budget"] == 1517      # converted to monthly
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert 1516.6666666666667 == 1517
+
+tests/test_hard_budget.py:185: AssertionError
+----------------------------- Captured stdout call -----------------------------
+   ✅ 实时房源 4 个 (areas=1, cached=False)
+   [GEO] Verified 4/4 listings within 2 miles of requested area(s); rejected 0
+   ✅ RAG 返回 4 个候选房源
+
+💰 [SEARCH] 应用过滤 (预算=开)...
+   ✅ 完全符合: 2 | ⚠️ 超预算可考虑: 1
+__________ test_deadline_already_passed_marks_all_uncached_incomplete __________
+
+offline = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c73e49d58e0>
+
+    def test_deadline_already_passed_marks_all_uncached_incomplete(offline, monkeypatch):
+        monkeypatch.setattr(on_demand, "get_listings",
+                            _make_fake_get_listings(scraped={"Camden": [_row("1 A St", 1500, "Camden")]}))
+        t0 = time.monotonic()
+        res = _run(area="Camden", areas=["Camden", "Islington"], no_commute=True, confirmed=True,
+                   max_budget=3000, bedrooms=1, reply_language="en",
+                   _deadline_monotonic=time.monotonic() - 1.0)   # already in the past
+        wall = time.monotonic() - t0
+    
+        assert res["partial"] is True
+        assert set(res["incomplete_areas"]) == {"Camden", "Islington"}   # nothing scraped
+        assert res["partial_note"]                                       # non-empty note present
+        note = res["partial_note"].lower()
+        assert "more listings may exist" in note                         # states listings MAY exist
+>       assert "do not conclude" in note                                 # forbids claiming emptiness
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: assert 'do not conclude' in 'partial results: the search time budget was reached before camden, islington could be fully searched, so more listings may exist there.'
+
+tests/test_search_deadline_partial.py:122: AssertionError
+----------------------------- Captured stdout call -----------------------------
+   ✅ 实时房源 0 个 (areas=2, cached=False)
+   ⏱️ 截止余量不足（-2.2s < 1.5s）→ 降级为价格升序结果（跳过语义排序/通勤/详情丰富）
+________ test_degraded_commute_unverified_strips_fields_and_bans_claims ________
+
+offline = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c73e41e7cb0>
+
+    def test_degraded_commute_unverified_strips_fields_and_bans_claims(offline, monkeypatch):
+        monkeypatch.setenv("SEARCH_RETURN_MARGIN_S", "0")
+        monkeypatch.setenv("SEARCH_RANK_HEADROOM_S", "5.0")   # tiny budget -> force the degraded path
+        # Cached rows so Phase 1 serves listings without any scrape.
+        monkeypatch.setattr(on_demand, "get_listings",
+                            _make_fake_get_listings(cached={"Camden": [_row("1 Camden Rd", 1500, "Camden")]}))
+    
+        res = _run(area="Camden", commute_destination="UCL", max_commute_time=40,
+                   confirmed=True, max_budget=3000, bedrooms=1, reply_language="en",
+                   _deadline_monotonic=time.monotonic() + 2.0)   # 2.0 < 5.0 headroom -> degraded
+    
+        assert res["status"] == "found"
+        assert res["commute_unverified"] is True
+        note = res["commute_note"].lower()
+        assert note                                            # a note always rides with results
+>       assert "not verified" in note
+E       AssertionError: assert 'not verified' in 'commute times have not been verified for these listings this round. a narrower area or a specific destination can help complete that check.'
+
+tests/test_search_deadline_partial.py:495: AssertionError
+----------------------------- Captured stdout call -----------------------------
+   ✅ 实时房源 1 个 (areas=1, cached=True)
+   ⏱️ 截止余量不足（2.0s < 5.0s）→ 降级为价格升序结果（跳过语义排序/通勤/详情丰富）
+   ✅ RAG 返回 1 个候选房源
+
+💰 [SEARCH] 应用过滤 (预算=开)...
+   ✅ 完全符合: 1 | ⚠️ 超预算可考虑: 0
+_______________ test_partial_note_forbids_extrapolating_numbers ________________
+
+offline = None
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c73e41e4d70>
+
+    def test_partial_note_forbids_extrapolating_numbers(offline, monkeypatch):
+        fake = _make_fake_get_listings(
+            cached={"Camden": [_row("1 A St", 1500, "Camden")]},        # warm -> has real figures
+            scraped={"Islington": [_row("9 Upper St", 1400, "Islington")]})  # cold -> never reached
+        monkeypatch.setattr(on_demand, "get_listings", fake)
+    
+        res = _run(area="Camden", areas=["Camden", "Islington"], no_commute=True, confirmed=True,
+                   max_budget=3000, bedrooms=1, reply_language="en",
+                   _deadline_monotonic=time.monotonic() - 1.0)   # Islington unsearched -> incomplete
+    
+        assert res["partial"] is True
+        assert res["incomplete_areas"] == ["Islington"]
+        note = res["partial_note"].lower()
+        # unchanged honesty clauses …
+        assert "more listings may exist" in note
+>       assert "do not conclude" in note
+E       AssertionError: assert 'do not conclude' in 'partial results: the search time budget was reached before islington could be fully searched, so more listings may exist there.'
+
+tests/test_search_deadline_partial.py:537: AssertionError
+----------------------------- Captured stdout call -----------------------------
+   ✅ 实时房源 1 个 (areas=2, cached=False)
+   ⏱️ 截止余量不足（-2.2s < 1.5s）→ 降级为价格升序结果（跳过语义排序/通勤/详情丰富）
+   ✅ RAG 返回 1 个候选房源
+
+💰 [SEARCH] 应用过滤 (预算=开)...
+   ✅ 完全符合: 1 | ⚠️ 超预算可考虑: 0
+________ test_incomplete_artifacts_do_not_reappear_in_fallback[denied] _________
+
+flag = 'denied'
+
+    @pytest.mark.parametrize("flag", ["timed_out", "denied", "abandoned", "outcome_unknown"])
+    def test_incomplete_artifacts_do_not_reappear_in_fallback(flag):
+        a = weather(); a[flag] = True
+>       assert cv.render_structured_evidence_fallback(state(a)) == ""
+E       AssertionError: assert 'Weather fore...sable result.' == ''
+E         
+E         + Weather forecast could not be verified this turn; the service did not return a usable result.
+
+tests/test_e2e_evidence_preservation.py:147: AssertionError
+_______ test_incomplete_artifacts_do_not_reappear_in_fallback[timed_out] _______
+
+flag = 'timed_out'
+
+    @pytest.mark.parametrize("flag", ["timed_out", "denied", "abandoned", "outcome_unknown"])
+    def test_incomplete_artifacts_do_not_reappear_in_fallback(flag):
+        a = weather(); a[flag] = True
+>       assert cv.render_structured_evidence_fallback(state(a)) == ""
+E       AssertionError: assert 'Weather fore...sable result.' == ''
+E         
+E         + Weather forecast could not be verified this turn; the service did not return a usable result.
+
+tests/test_e2e_evidence_preservation.py:147: AssertionError
+____ test_incomplete_artifacts_do_not_reappear_in_fallback[outcome_unknown] ____
+
+flag = 'outcome_unknown'
+
+    @pytest.mark.parametrize("flag", ["timed_out", "denied", "abandoned", "outcome_unknown"])
+    def test_incomplete_artifacts_do_not_reappear_in_fallback(flag):
+        a = weather(); a[flag] = True
+>       assert cv.render_structured_evidence_fallback(state(a)) == ""
+E       AssertionError: assert 'Weather fore...sable result.' == ''
+E         
+E         + Weather forecast could not be verified this turn; the service did not return a usable result.
+
+tests/test_e2e_evidence_preservation.py:147: AssertionError
+_______ test_incomplete_artifacts_do_not_reappear_in_fallback[abandoned] _______
+
+flag = 'abandoned'
+
+    @pytest.mark.parametrize("flag", ["timed_out", "denied", "abandoned", "outcome_unknown"])
+    def test_incomplete_artifacts_do_not_reappear_in_fallback(flag):
+        a = weather(); a[flag] = True
+>       assert cv.render_structured_evidence_fallback(state(a)) == ""
+E       AssertionError: assert 'Weather fore...sable result.' == ''
+E         
+E         + Weather forecast could not be verified this turn; the service did not return a usable result.
+
+tests/test_e2e_evidence_preservation.py:147: AssertionError
+_ test_explicit_cat_permission_is_a_structured_hard_requirement[Search Camden only, a whole home. Our cat needs permission.] _
+
+message = 'Search Camden only, a whole home. Our cat needs permission.'
+
+    @pytest.mark.parametrize('message', [
+        'Search Camden only, a whole home. Our cat needs permission.',
+        'Step-free access remains essential, as do permission for our cat and the UCL commute limit.',
+        'Permission for our cat is essential. Find whole homes in Camden.',
+        '必须允许养猫，整租两居。',
+    ])
+    def test_explicit_cat_permission_is_a_structured_hard_requirement(message):
+        result = _apply_explicit_criteria_updates({}, message)
+>       assert 'cats allowed' in result['property_features']
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'property_features'
+
+tests/test_saved_defaults_and_weather_boundaries.py:74: KeyError
+_________ test_apply_explicit_criteria_weekly_is_normalised_to_monthly _________
+
+lga = <module 'core.langgraph_agent' from '/home/shuhan/uk_rent_recommendation/app/core/langgraph_agent.py'>
+
+    def test_apply_explicit_criteria_weekly_is_normalised_to_monthly(lga):
+        acc = {"max_budget": 1200}
+        out = lga._apply_explicit_criteria_updates(acc, "I can do £250 per week max")
+>       assert out["max_budget"] == int(round(250 * 52 / 12))
+E       assert 1083.3333333333333 == 1083
+E        +  where 1083 = int(1083)
+E        +    where 1083 = round(((250 * 52) / 12))
+
+tests/test_followup_routing.py:90: AssertionError
+=============================== warnings summary ===============================
+src/uk_rent_agent/web/asgi.py:14
+  /home/shuhan/uk_rent_recommendation/src/uk_rent_agent/web/asgi.py:14: StarletteDeprecationWarning: starlette.middleware.wsgi is deprecated and will be removed in a future release. Please refer to https://github.com/abersheeran/a2wsgi as a replacement.
+    from starlette.middleware.wsgi import WSGIMiddleware
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_hard_budget.py::test_weekly_budget_converts_then_enforces_hard_ceiling
+FAILED tests/test_search_deadline_partial.py::test_deadline_already_passed_marks_all_uncached_incomplete
+FAILED tests/test_search_deadline_partial.py::test_degraded_commute_unverified_strips_fields_and_bans_claims
+FAILED tests/test_search_deadline_partial.py::test_partial_note_forbids_extrapolating_numbers
+FAILED tests/test_e2e_evidence_preservation.py::test_incomplete_artifacts_do_not_reappear_in_fallback[denied]
+FAILED tests/test_e2e_evidence_preservation.py::test_incomplete_artifacts_do_not_reappear_in_fallback[timed_out]
+FAILED tests/test_e2e_evidence_preservation.py::test_incomplete_artifacts_do_not_reappear_in_fallback[outcome_unknown]
+FAILED tests/test_e2e_evidence_preservation.py::test_incomplete_artifacts_do_not_reappear_in_fallback[abandoned]
+FAILED tests/test_saved_defaults_and_weather_boundaries.py::test_explicit_cat_permission_is_a_structured_hard_requirement[Search Camden only, a whole home. Our cat needs permission.]
+FAILED tests/test_followup_routing.py::test_apply_explicit_criteria_weekly_is_normalised_to_monthly
+10 failed, 5072 passed, 3 skipped, 1 warning in 223.34s (0:03:43)

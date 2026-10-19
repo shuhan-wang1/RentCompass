@@ -1,0 +1,61 @@
+家庭身份独立黑盒测试报告
+日期：2026-10-19（Europe/London）
+目标：http://127.0.0.1:15009
+身份：两位成人、一名8岁孩子，其中一位成人使用轮椅，另有一只猫。
+浏览器：AuditBrowser(mobile=True)，390 × 844。profile=family；所有测试产物仅写本目录。
+状态：已完成3/3真实聊天并关闭浏览器。未访问OnTheMarket或任何房源外链；浏览器仅尝试的外部资源为被driver拦截的Google字体样式。page_errors=[]。
+
+测试边界与阻塞
+真实配置模型运行；没有房源成功夹具。按公开BRIEF，单次真实OnTheMarket robots预检为CloudFront 403，此后房源请求只重放该403、没有继续访问站点。因此，本报告不能认证真实房源成功获取、实际匹配正确率、无障碍或猫许可的房源级证据判断、详情/收藏或外链路径。对“没有捏造符合房源”的结论仅限于本次0推荐样本。未读取产品文件、父报告或其他身份测试记录。
+
+请求标识
+conversation_id：31d24203be794c72982a020ccf45b0f8
+1. turn_id=3a2d28b70d0b48099428d4658ce43978
+   request_id=f235d076615a4647afc7bf07cd4d4b4c
+   HTTP200 / response_type=search / 10.431s / recommendations=[]。
+   request_id来自父代理对测试服务本人ConversationStore.turns记录的独立核对；首轮标准driver未采集响应头。本测试未读取该服务实现或其他报告。
+2. turn_id=750328f02f1f440c9d91507a695b50f6
+   request_id=6d4c7f545d074874883d7ba8b9228327
+   HTTP200 / response_type=chat / 6.605s。
+   request_id由本浏览器实际HTTP响应x-request-id取得，见turn2-raw-transport.json。
+3. turn_id=a21aff1cbaef4e0898f542452b006bd6
+   request_id=6b0963c03f074905b5bbb1fbcd8d32d8
+   HTTP200 / response_type=search / 6.383s / recommendations=[]。
+   request_id由本浏览器实际HTTP响应x-request-id取得，见turn3-raw-transport.json、turn3-transport-identifiers.json。
+
+通过的实际断言
+P1 缺少无障碍/猫许可证据时不应保证适配：第二轮纯咨询给出假设广告“lift access”“pets considered”，没有入口台阶/门宽/内部尺寸/业主许可。回复开头明确“不能认定适合”，指出有lift不等于轮椅适用，pets considered不是书面同意，缺少尺寸与路线信息属于未知。要求完整路径照片/视频、净门宽、电梯尺寸、走廊/卫生间/转身空间以及猫的书面许可。该假设问题通过；实际候选级判断被403阻塞。
+P2 只读咨询保持已存条件：turn1与turn2的view_state.criteria深比较完全一致（revision由1到2）；第二轮response_type=chat，未返回新房源。复述文字包含Stratford或Leyton、2800/月、两卧整租、11月15日、真实全程无台阶、内部空间与猫书面许可。此处“保持”指未额外变更既有结构化状态，不代表该状态完整。
+P3 基础字段与预算更新持久化：初始2800/月、两卧、whole、2026-11-15在刷新后仍可见；第三轮只改预算为2700，刷新后Budget=2700、Bedrooms=2、Room type=whole、Move-in date=2026-11-15。本人/messages GET返回6条用户/助手消息，证明聊天历史留存。
+P4 核心窄屏键盘菜单：初始Tab落到Conversations menu，显示2px红色轮廓；Enter展开后aria-expanded=true、sidebar role=dialog/aria-modal=true/aria-hidden=false，焦点移到New。Shift+Tab可从New到菜单按钮并反向环绕到Guest，Tab从末项环绕回菜单按钮，Escape关闭并返回菜单按钮且有可见焦点。关闭侧栏时inert=true。带长会话后Tab也能把被裁剪的Compare按钮滚动到可见处（x163.08、宽26，centerHit=true、2px轮廓），Escape仍返回菜单按钮。因此不能把下述触控可见性问题描述为全部键盘操作不可用。
+P5 在各已采样状态下document.documentElement.scrollWidth=innerWidth=390，未观察到整个页面横向溢出；浏览器无pageerror。
+
+失败与可复现观察
+F1 区域选择丢失/无法从持久条件恢复（高优先级）。第一轮明确“Stratford或Leyton”，search_criteria却只有area=Leyton、areas=[Leyton]。view_state.criteria完全没有area或areas。刷新后Search criteria中的Area输入框空白。第三轮用英语明确“BOTH Stratford and Leyton”，这次search_criteria.areas正确包含二者，但view_state.criteria仍无area/areas；再次刷新Area仍空白。相同本人/messages API也没有持久化的区域字段。这是独立于房源来源403的UI/状态问题。
+证据：turn1-family-search.json，after-turn1-refresh.json/png，turn3-family-clarification-search.json，after-turn3-refresh.json/png，final-persisted-messages-api.json。
+
+F2 家庭必须条件未在可审核结构化条件中完整表示（高优先级，实际筛选影响因403未认证）。两次搜索明确要求猫的书面许可、从人行道到各必需房间的完整无台阶路径、轮椅门宽/走廊/转身空间。两次search_criteria及最终持久view_state只有property_features=["step-free"]；没有独立的猫许可、内部空间或路径细节值。用户原文仍存在聊天历史及constraint_sources.text中，故不是用户原始消息丢失。第二轮自然语言复述保留这些必须条件，但与实际保存的结构化条件不一致。第三轮明确要求解释实际应用条件，最终回复也没有说明未能表达/核验这些条件。lift保持在soft_preferences，符合只作偏好；step-free同时出现在硬property_features和soft_preferences=["Would like lift","Would like step-free"]，本测试没有证据把它判断为“已经降级为仅偏好”。
+证据：三轮原始payload、final-persisted-messages-api.json。需要以本人工具台账核对实际传给搜索工具的参数；本黑盒报告不声称已证明未看到的内部过滤行为。
+
+F3 来源状态解释不足，第三轮回复未直接回答用户问题（中优先级）。首轮只说Leyton附近本次检索未找到符合条件房源、建议核对拼写/调预算，末尾补充“未获得可用候选数据，不能据此判断市场上没有房源”。这个限定语正确，但没有说明来源403/不可访问。第三轮问“实际应用哪些条件、来源今天是否能核验”，回复为：
+“Partial results: the search time budget was reached before Leyton could be fully searched, so more listings may exist there. Do not conclude that these areas have no listings. State only the prices and figures that actually appear in the returned listings; do not estimate or extrapolate any numbers for the areas that were not fully searched.”
+该回复有0条推荐，未列出实际应用条件、未给出来源可核验性，且包含对讲述者的命令式文本。已知BRIEF房源源不可用；是否另外真实触发时间预算，应由父代理工具台账核对，本报告不从6.383s耗时推断原因造假。未声称市场无房、未生成虚假房源是有限通过点。
+证据：turn1-family-search.json/png，turn3-family-clarification-search.json/png；English正文截图可读。
+
+F4 窄屏长会话标题裁剪侧栏操作（中优先级，当前渲染环境复现）。390宽屏中菜单稳定打开后，sidebar宽280，长自动会话标题按钮x28、宽359.08，Compare/Branch/Rename/Delete分别x387.08/415.08/443.08/471.08、宽26，均被280宽侧栏裁剪，实际中心点无法命中。稳定截图只显示被截断的标题，没有这些按钮。键盘Tab能自动横向滚动并显示Compare，故发现限定为初始触控/鼠标可发现与可见性，而不是键盘完全不可达。
+证据：menu-long-title-layout.json，menu-long-title-stable.json/png；反例/范围：final-menu-compare-focus-hit.json、final-menu-compare-tab.png、final-menu-escape-focus-return.json/png。
+
+原始证据
+- family-turns.jsonl：3个实际聊天的用户文本、原始解析payload、请求body、DOM文字、进度阶段与耗时。
+- turn1-family-search.json、turn2-readonly-evidence.json、turn3-family-clarification-search.json：各轮独立完整记录；同名png为实际截图。
+- turn2-raw-transport.json、turn3-raw-transport.json：本人浏览器拦截真实响应头与原始SSE正文，没有增加请求。
+- network.jsonl：本人浏览器刷新产生的实际loopback API原始响应，包含/messages的持久状态；流式/alex首轮未在该事件捕获器中记录，已由driver payload保留。
+- final-persisted-messages-api.json：同浏览器cookie/明确本人conversation_id的只读GET。
+- interim-assertions.json、assertions.json：实际自动比较结果。
+- family-browser-metadata.jsonl、family-storage.json：关闭记录与本人profile；无需向其他身份复用。
+- after-turn1-conversation-api.json为猜测GET /api/conversations/ID的405；final-preferences-api.json为猜测/api/preferences?conversation_id=本人ID的404。这是测试探针结果，不作为产品缺陷；未写入或删除服务数据。
+
+方法限制与诚实记录
+1. 初始自写DOM快照误将document.activeElement.outerHTML在BODY焦点时序列化，意外在工具输出带出客户端内联脚本尾部。发现后立即关闭浏览器，改为只取active元素tag/id，清理本人initial.json中的该内容并使用同profile重启。未据该脚本制定断言、调用实现函数或读取产品文件。严格意义上本测试不应被描述为“完全未接触任何客户端源码”；后续证据与结论来自用户可见DOM、键盘操作和本人实际网络payload。
+2. 沙箱浏览器截图缺少中文glyph，Google字体请求由公共driver拦截；没有修改字体/环境。中文语义依据原始DOM/payload，中文视觉排版不作认证。长标题侧栏问题只认证本渲染环境，不推断所有系统字体下都相同。
+3. 未发出消息、邮件、预约或外部请求，未编辑产品源码/配置/生产服务，未运行第四次聊天。浏览器已关闭。

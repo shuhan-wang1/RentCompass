@@ -1,0 +1,82 @@
+中文留学生独立端到端审计 — 2026-10-19
+状态：7/7 次真实聊天已完成，全部来自公开UI；修复前失败及修复后结果均保留。已补本人实际Tool.execute摘录，并核对根部最终真实进程重启后的恢复14/14、Saved界面4/4通过证据。本画像审计收尾；不是全产品全通过结论。有效私密storage继续保留且排除公开归档。
+
+范围与隔离
+服务 http://127.0.0.1:15019；仅操作公开UI及UI正常发出的本地API。未读产品源码或既往报告。所有外部图片/字体/瓦片/网站请求均被浏览器拦截；没有直接访问OnTheMarket或外部模型API。模型聊天只由UI发起，每次原始body、SSE/JSON、DOM、表单及截图存本目录。最多7轮硬限制写在驱动中，非chat模式还拦截/api/alex。
+画像：中文研究生，UCL Bloomsbury，先独住、后准备和同学整租，精确月预算，关注可租与交通费用证据。
+证据目录 /tmp/rentcompass-fix-live-20261019/student
+私密文件 student-storage.json 不可公开归档。未注册账号或发送外部消息。
+
+实际对话
+R1 询问“下学期来伦敦读研，想在Camden找住处”。UI正常提出预算/房型/目的地澄清。正文谈Camden，view_state却为London。Playwright无法读取首轮SSE body，未重发；同一身份重开后，从UI实际请求的conversation messages JSON恢复助手原文和view_state。证据01-request.json、01-recovery-local-network.json、01-recovery-dom.txt/png。turn f4346ac693e946098ba7eb8a207015f2。
+R2 明确“只Camden，不是伦敦全区；整租一居；£2166.67；UCL Gower45分钟”。服务器状态仍London，无卧室和房型，目的地null。推荐为W9/W14/N22的Studio及2卧，正文及recommendations为通勤查询失败unknown，但同一payload.view_state.results全部eligible，UI写“已验证满足本次条件”并同时显示estimated, unverified通勤。证据02-request/response/events/sse、02-controls-dom/state及02.png。turn 68c107aaf6cf4f29a9bd0b8a0376ba1c。
+R3 本地服务更新/进程重启后，同一访客、同一会话，完全重述R2文本。Camden/whole/1/2166.67/UCL/45全部进入view_state和可见表单。Frognal£1800、工具返回38分钟，recommendations与view.results同为eligible且一致；Anglers£2250/Carlow£2400在正文明确为超预算备选。证据03-*。turn 0defae20f8354fe78198fd40d6b739f7。
+R4 指代第一套Frognal并与旧收藏Apt108比较，要求两套完整缓存详情+按每周3天计算Frognal交通费，不新搜、不改条件。回答分别说明1bed/Studio、厨卫证据不足、缓存非实时可租、旧收藏不在Camden。月交通£115.70明确为每日cap上界估算、覆盖未核实，租金加交通约£1915.70，不作为已核实硬预算结论。条件/结果38分钟保持一致。正文通勤时间小节无数字、底部structured补38分钟并重复详情及移除提示，记为可读性观察。证据04-*。turn d0d48e80842d4161918176a3cafbbc95。
+R5 明确“保存并替换长期默认：Camden/whole/正好2卧/2400/UCL30；只保存不搜索”。答复说已记住，但引用被截成“我准备和同学整租一套，各有一间卧室。请入住日未定。这条消息只”，要求再次在旧2166.67与新2400选择。view_state已改2400/30，卧室仍1，与用户正好2不符；Frognal因38>30被排除，没有误绿。root依据真实服务记录确认remember确已成功保存完整原文，故不可把最终回复截断误报为工具写入截断。证据05-*。turn 1f2c31e8de5249329225476e5666d6fb。
+
+问题与当前状态
+S1 P1 条件丢失/区域过宽、错误卧室与房型。R2失败，R3在更新服务后同文重试通过。不得抹去初始真实失败。
+S2 P1 失败通勤被snapshot重校验成eligible，正文与卡片矛盾，收藏继承误绿。R2复现；服务更新后旧收藏改为“仍有条件待核实”，R3两种payload资格一致，通过已测场景。
+S3 P2 表单预算2166.67截为2166，而服务器2166.67。未点击表单Search，不能声称已证实提交预算会变化。重启更新后表单2166.67，通过显示复核。
+S4 P1/P2 长期默认替换：正好2卧仍1；明确替换后仍要求预算澄清且回复与状态自相矛盾；保存内容显示误删。R5真实失败；更新服务后R6同文保存、R7新会话恢复均通过已测场景。实际remember完整保存经root服务证据确认，不等同于存储丢失。
+
+非模型UI检查
+收藏Apt108作为未核实研究备选，关闭重开浏览器后收藏仍在，来源会话和收藏时£2166.67保留。后收藏Frognal，总2条。
+第一次真实进程重启后使用同一student-storage.json，原会话、历史和收藏恢复；错误绿色撤回，预算精度恢复。证据03-before-restart-saved-*。
+通过公开登录对话框“下载访客研究备份”成功导出05-guest-research.json，含1会话10消息和2条正确收藏身份；05-export-check.json。导出未调用模型。
+
+工具执行证据边界
+SSE只有stage（如searching），不能单凭stage认定具体工具实际执行。root统一记录真实工具dispatch/终止账本；目前root明确确认R5remember成功且原文完整。现已收到并读取仅本画像own-tool-ledger.json，真实执行覆盖详见下文新增工具证据；不能把最终回复的自述当执行证明。
+
+限制
+7轮内是短时多轮/跨会话/真实进程重启模拟，不是数周长期使用验证。房源是有限缓存样本，不代表完整市场，也不能证明实时仍可租。返回交通时长/票价仅按工具证据报告，浏览器不验证外部上游实况。截图中文出现方框与本地浏览器字体/外部字体拦截环境有关；中文原文以DOM/JSON为准，不据此判生产产品缺陷。
+剩余：最终统一真实进程重启后的无聊天恢复及收藏文案/编号核查。真实工具执行摘录已补齐。临时合租因总请求预算及修复重试未覆盖，不以已测试整租替代此缺口。
+
+
+收尾结果：R6/R7
+R6 完全复用R5输入，经第二次本地服务更新后保存确认完整包含Camden、whole、正好2卧、£2400、UCL Gower30分钟、入住未定，不再截断、预算冲突或误报移除通勤断言。view_state实际为2/2400/30；旧Frognal保持38分钟，并因卧室1≠2及38>30被排除。证据06-*。turn 31edad62d63c40cbb98df8a84ecbb024。
+R7 在同一浏览器点击“新建”后立即发送（没有重新加载误回旧会话），请求完全不含Camden/房型/卧室/预算/分钟数。新cid为7fc8c690d7bf4e54ab7cf39d8967764a，旧cid为bd64dd5d9b12410586b93a31b812a6f0。实际view_state恢复Camden/whole/正好2卧/£2400/UCL30；返回0候选，并明确“本次候选中没有满足当前筛选的房源；这不代表市场上没有房源”。无放宽条件。证据07-before-message、07-request/response/sse/dom/state/png。turn c346e478a8744485ba2f2a553d00be5f。
+13项定向事后数据断言全部通过（final-functional-checks.json），只覆盖实测修复后场景，不能替代全产品测试。R1/R2为初始服务；R3/R4/R5为第一次更新后服务；R6/R7为第二次更新后服务。不能把七轮合并当成同一个版本全通过。
+
+历史显示观察与当时未复测项（S5/S6最终实测见末尾）
+S5 P2 收藏资格作用域：新会话采用2卧/30分钟，Frognal是1卧/38分钟，当前结果不合格；收藏卡仍按保存时1卧/45分钟的资格显示“已验证满足本次条件”。保留历史资格可能有意，但文案“本次”未区分当前条件与收藏时条件，容易误读。建议显示“满足收藏时条件”，并展示原卧室/通勤限制，或显式重校当前条件。证据05-saved-after-change、07-saved-cross-session（新会话实际条件来自07-response）。不能据此声称服务端保存的历史资格数据丢失。
+S6 P3 两条收藏均显示#1（各自原结果rank），同一Saved视图不便通过序号指代。证据07-saved-cross-session-dom/png。未额外发送指代聊天以避免超过上限。
+S7 P3 R7用户要求“先说清本次实际采用条件”，回复正文仅给空样本说明，没有复述条件；右侧表单和view_state全部正确。建议正文附实际筛选摘要，勿提示用户重复已经保存的条件。
+R4正文通勤时长小节缺数，底部structured保留38分钟并重复详情/移除提示，是当时可读性观察；第二次更新后未消耗模型重放R4，当前状态未再确认。
+
+UI持久化与交接
+跨会话收藏2条均保持，身份为Apt108和Frognal；源会话和收藏时£2166.67仍可见。07-saved-cross-session-local-network.json存当前真实收藏返回。
+最终恢复baseline：recovery-baseline.json（新cid、Camden/whole/2/2400/UCL30、2条收藏、当前空结果集）。
+只读恢复程序：/home/shuhan/.cache/rentcompass-ci-venv/bin/python /tmp/rentcompass-fix-live-20261019/student/recovery_check.py recovery-after-final-restart
+驱动inspect模式硬拦截/api/alex；最终所有浏览器进程已关闭。统一重启前预检14/14通过，见recovery-before-final-restart-checks.json；该预检只是刷新恢复，不冒称真实新一次进程重启。
+私密student-storage.json保留供root统一重启核查，必须排除公开归档。全部原始请求/响应均未写请求cookie或密码。
+
+
+真实工具证据补充（仅本画像，own-tool-ledger.json）
+边界：根部按本画像已认证会话/请求提供18条实际Tool.execute记录及7轮索引；未读取其他画像记录或产品源码。turn-index.json与摘录中7轮turn_id一致。该摘录不包括图执行器管理的终止型ask_user，因此不能从此摘录为空推断未澄清；本轮未独立证明ask_user具体调用次数。
+实际调用总数：search_properties 4；calculate_commute 9；get_property_details 2；calculate_commute_cost 1；remember 2。共18，其中9条success=true；其余包含R1正常的需澄清返回和8条地址解析失败，不能把“正常需澄清”当技术故障。
+R1 search_properties实际执行，args area/areas=London，返回success=false、status=need_clarification、clarification_kind=soft_criteria；缺预算/房型/通勤，入住为可选。功能澄清已实际观察，但Camden错误写成London在真实工具参数中亦可见。
+R2 search_properties实际成功，真实args仍London，预算2166.67、UCL Bloomsbury Gower45，但bedrooms/room_type均未传。随后6次calculate_commute均success=false，error为地址解析失败。这些调用不支持“已验证符合通勤”，与当轮UI误绿形成直接工具反证。
+R3 search_properties真实args为Camden、whole、bedrooms=1、2166.67、规范UCL Gower、45。随后Frognal的calculate_commute成功并返回38分钟；Anglers/Carlow各自地址解析失败。每个实体的证据彼此独立；不会拿Frognal成功替代另外两套。
+R4实际多工具组合链完成：两次get_property_details均成功、from_cache=true、live_verified=false。Frognal以精确property_url=20578363查询，Apt108以完整property_name查询；各自返回source_url分别为20578363及14141441，与本画像已收藏身份一致。不能声称两次都在args传了URL，但两次结果匹配正确缓存房源。calculate_commute_cost实际成功，args office_days_per_week=3，结果commuting_days_per_month=13、内部commute=38分钟/basis=tfl_journey_plan；monthly_cost与payg_monthly_estimate均115.70，payg_estimate_kind=daily_cap_upper_bound、coverage_verified=false。回答的估算/覆盖未知限制有真实工具支持。
+R5 remember实际成功。args.content与result.data.stored完全一致，去除消息末尾换行后，也与147字符用户输入完全一致；包括2卧/2400/UCL30等所有要求。完整stored不出现在最终回复中（其引文被删残）。这是“工具确已完整保存，最终回复显示错误及条件状态错误”，绝不是“remember丢字/失败”。工具记录语义memory已保存，后续状态仍1卧是独立问题。
+R6 remember实际成功。存储的是126字符规范化偏好文本，包含Camden/whole/正好2卧/2400/UCL Gower30/入住未定；args.content==result.data.stored，且完整stored逐字出现在可见“已保存的原文”引文中。该规范化文本不是用户147字符消息的逐字副本；报告只据实认定完整展示实际保存内容，且所有条件保留。
+R7 search_properties实际执行且成功。args从新会话中恢复Camden/whole/bedrooms=2/2400/UCL30，用户当轮并未重述这些值；view_state同样正确。摘录没有显式recall_memory的Tool.execute记录，故不能列为该工具已执行。功能层面的跨会话保存偏好恢复通过，机制可能是系统自动恢复，工具计数与功能结论分开。
+机器摘要：tool-coverage-checks.json；完整原始摘录：own-tool-ledger.json。记忆内容可见性比对为R5=false、R6=true，均以实际stored内容核对，不依赖助手自述。
+
+根部修复通知与尚待只读核查
+根部已告知S5收藏作用域文案、S6收藏编号已修，离线UI91项通过。这是根部修复/离线验证信息，不冒充本画像新的浏览器实测。原05/07截图失败证据完整保留。最终统一进程重启后，本画像只读打开Saved，核对文案是否明确收藏时条件、序号是否唯一连续，再更新实测状态。S7“R7正文未复述实际条件”继续保留为低优先建议。
+
+
+最终真实进程重启后证据核对 — 本画像审计收尾
+按根部通知，仅只读本画像recovery-after-read-projection-checks.json、final-saved-label-checks.json及final-saved-read-projection-dom.txt，没有启动浏览器或增加模型请求。根部在真实服务进程重启后实际运行恢复与Saved检查；以下为对这些原始本画像证据的核对，不能混同于只做刷新前的预检。
+
+恢复检查14/14通过（recovery-after-read-projection-checks.json）：同一新会话7fc8c690d7bf4e54ab7cf39d8967764a恢复；Camden、whole、正好2卧、£2400、UCL Gower、30分钟、非最低卧室数、需要通勤、入住未定等条件保持；2条收藏数量与身份保持；当前空结果集保持；no_model_requests=true。这构成真实进程重启后的持久化实测证据，区别于此前recovery-before-final-restart的刷新预检。
+
+Saved界面4/4通过（final-saved-label-checks.json），并与原始DOM逐项核对：
+- S5已实际通过：Apt108显示“收藏时条件仍待核实”，Frognal显示“已验证满足收藏时条件”；两条都明确“收藏时通勤上限：45 分钟”，不再用“满足本次条件”误指当前2卧/30分钟筛选。
+- S6已实际通过：Apt108为#1，Frognal为#2，Saved视图序号连续且唯一。
+- no_model_requests=true，聊天总量仍7，不因收尾复核增加聊天。
+原05/07截图和DOM中的错误作用域标签、重复#1全部保留，最终证据只证明后来修复已在此只读Saved场景通过，不回写或删除历史失败。
+
+最终结论边界：已测修复后搜索条件/精确便士/资格一致性、详情费用证据、保存默认及新会话使用默认、收藏导出、真实进程重启恢复在上述具体场景通过。R7正文未按用户要求先复述实际条件（S7/P3）继续作为低优先建议；R4小节缺数字而structured补充保留的旧可读性观察未消费额外模型重放。临时合租仍未覆盖，未作数周长期使用或完整市场/外部上游实况验证。不得将这些有限场景结果表述为“全产品全过”。

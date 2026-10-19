@@ -1,0 +1,38 @@
+[
+  {
+    "case": "login-dialog-via-real-menu",
+    "passed": true
+  },
+  {
+    "case": "register-real-api-through-ui",
+    "passed": true
+  },
+  {
+    "case": "auth-survives-browser-reload",
+    "passed": true
+  },
+  {
+    "case": "logout-real-ui",
+    "passed": true
+  },
+  {
+    "case": "strict-api-rejects-after-logout",
+    "passed": true
+  },
+  {
+    "case": "wrong-password-visible-and-not-authenticated",
+    "passed": true
+  },
+  {
+    "case": "correct-login-recovers-after-error",
+    "passed": true
+  },
+  {
+    "case": "no-chat-requests",
+    "passed": true
+  },
+  {
+    "case": "no-browser-runtime-error",
+    "passed": true
+  }
+]

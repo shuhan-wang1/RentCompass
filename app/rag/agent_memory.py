@@ -760,6 +760,29 @@ class AgentMemory:
                 return True
         return False
 
+    def semantic_records(self, *, user_id=None) -> list:
+        """Read this user's durable facts without episodic/relevance crowding.
+
+        Explicit restoration needs the saved preference itself. A top-six mixed
+        relevance result can consist entirely of reflections and omit that record.
+        Semantic facts are user-global; episodic branch records never enter here.
+        """
+        uid = _valid_user_id(user_id)
+        if uid is None:
+            return []
+        try:
+            result = self.col.get(where={'$and': [{'user_id': uid}, {'mtype': 'semantic'}]})
+        except Exception:
+            return []
+        records = []
+        for record_id, document, metadata in zip(result.get('ids') or [],
+                result.get('documents') or [], result.get('metadatas') or []):
+            if not isinstance(metadata, dict) or metadata.get('user_id') != uid or metadata.get('mtype') != 'semantic':
+                continue
+            records.append({'id': record_id, 'text': document, 'mtype': 'semantic',
+                            'created_at': metadata.get('created_at')})
+        return sorted(records, key=lambda m: str(m.get('created_at') or ''), reverse=True)
+
     def retrieve(self, query, session_id="default", user_id=None, n=6,
                  branch_lineage=None) -> list:
         """Generative-Agents scored retrieval: relevance + recency + importance.
@@ -811,7 +834,8 @@ class AgentMemory:
         top = scored[:n]
         self._touch([t[1] for t in top])
         return [{"id": t[1], "text": t[2], "mtype": t[3].get("mtype"),
-                 "importance": t[3].get("importance"), "score": round(t[0], 3)} for t in top]
+                 "importance": t[3].get("importance"), "score": round(t[0], 3),
+                 "created_at": t[3].get('created_at')} for t in top]
 
     def _touch(self, ids):
         if not ids:

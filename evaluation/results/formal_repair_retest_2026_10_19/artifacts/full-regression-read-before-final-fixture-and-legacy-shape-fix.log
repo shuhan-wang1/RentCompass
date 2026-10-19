@@ -1,0 +1,193 @@
+........................................................................ [  1%]
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+........................................................................ [  8%]
+........................................................................ [  9%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 13%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+......................................................s................. [ 17%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................................................................ [ 28%]
+........................................................................ [ 29%]
+........................................................................ [ 31%]
+........................................................................ [ 32%]
+........................................................................ [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 36%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+........................................................................ [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
+................F....................................................... [ 44%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+................................s....................s.................. [ 48%]
+........................................................................ [ 50%]
+........................................................................ [ 51%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+........................................................................ [ 56%]
+........................................................................ [ 58%]
+........................................................................ [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 63%]
+........................................................................ [ 64%]
+........................................................................ [ 66%]
+........................................................................ [ 67%]
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 71%]
+........................................................................ [ 73%]
+........................................................................ [ 74%]
+........................................................................ [ 75%]
+........................................................................ [ 77%]
+........................................................................ [ 78%]
+........................................................................ [ 79%]
+........................................................................ [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 90%]
+........................................................................ [ 91%]
+........................................................................ [ 93%]
+........................................................................ [ 94%]
+.........................F.............................................. [ 96%]
+........................................................................ [ 97%]
+........................................................................ [ 98%]
+..................................................................       [100%]
+=================================== FAILURES ===================================
+__________ test_empty_results_and_criteria_survive_replay_and_restart __________
+
+tmp_path = PosixPath('/tmp/rentcompass-fix-live-20261019/runtime/pytest/test_empty_results_and_criteri0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x76f7a46805f0>
+
+    def test_empty_results_and_criteria_survive_replay_and_restart(tmp_path, monkeypatch):
+        store = ConversationStore(tmp_path / 'conversations.sqlite3')
+        monkeypatch.setattr(runtime, 'conversation_store', store)
+        monkeypatch.setattr(runtime, '_session_store', SessionStore())
+        monkeypatch.setattr(runtime, '_runtime_config', replace(runtime._runtime_config, require_auth=False, allow_legacy_client_user_id=False))
+        monkeypatch.setattr(runtime._api_rate_limiter, 'allow', lambda *a, **k: (True, 0))
+        monkeypatch.setattr(runtime, '_ensure_outbox_worker', lambda: None)
+    
+        async def agent(message, context, continuation, user_id, conversation_id, request_id, ui_language='en', turn=None):
+            results = [{'address': 'Old flat', 'price': '£1820/month', 'url': 'https://rental-fixture.invalid/old'}] if message == 'first' else ([] if message == 'empty' else None)
+            criteria = {'area': 'Manchester', 'max_budget': 2000 if message == 'first' else 1500}
+            runtime._write_back_turn(user_id, conversation_id, message, 'answer', results,
+                                     accumulated_search_criteria=criteria, turn_id=turn['id'])
+            payload = {'message': 'answer', 'response_type': 'search' if results is not None else 'chat'}
+            if results is not None:
+                payload['recommendations'] = results
+            return payload
+    
+        monkeypatch.setattr(runtime, 'handle_with_react_agent', agent)
+        client = runtime.app.test_client()
+        first = client.post('/api/alex', json={'message': 'first'}, headers={'X-Request-Id': 'first'}).json
+        cid = first['conversation_id']
+        assert len(first['view_state']['results']) == 1
+        empty = client.post('/api/alex', json={'message': 'empty', 'conversation_id': cid}, headers={'X-Request-Id': 'empty'}).json
+        assert empty['view_state']['results'] == []
+        assert empty['view_state']['revision'] == 2 and empty['view_state']['criteria']['max_budget'] == 1500
+        replay = client.post('/api/alex', json={'message': 'empty', 'conversation_id': cid}, headers={'X-Request-Id': 'empty'}).json
+        assert replay['view_state'] == empty['view_state']
+        monkeypatch.setattr(runtime, '_session_store', SessionStore())
+        consulted = client.post('/api/alex', json={'message': 'consult', 'conversation_id': cid}).json
+        assert consulted['view_state']['results'] == [] and consulted['view_state']['revision'] == 3
+        loaded = client.get('/api/conversations/' + cid + '/messages').json
+>       assert loaded['view_state'] == consulted['view_state']
+E       AssertionError: assert {'criteria': ...'revision': 3} == {'criteria': ...'revision': 3}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'criteria': {'area': 'Manchester', 'areas': ['Manchester'], 'destination': None, 'max_budget': 1500}} != {'criteria': {'area': 'Manchester', 'max_budget': 1500}}
+E         Use -v to get more diff
+
+tests/test_persona_behavior_regressions.py:151: AssertionError
+----------------------------- Captured stdout call -----------------------------
+[state] 💾 已保存 1 个搜索结果到上下文（注册表 1 条）
+[state] 💾 已保存 0 个搜索结果到上下文（注册表 1 条）
+------------------------------ Captured log call -------------------------------
+INFO     canary:app.py:1025 {"event": "canary.turn", "telemetry_schema_version": 3, "ts": "2026-10-19T13:17:51.729688+00:00", "endpoint": "alex", "agent_arch": "legacy", "candidate_sha": "1df0d4f", "strict": false, "variant_id": "legacy:strict-0:specialists-0", "rollout_id": null, "rollout_stage": null, "configured_candidate_percent": null, "traffic_source": "direct", "assigned_pool": "direct", "request_id": "first", "conversation_id": "39548b56084a4f05beed3309b979c85f", "user_id_hash": "f0f0acfd8cbc7f6269b837039025ac97", "user_id_hash_status": "keyed", "http_status": 200, "turn_outcome": "ok", "soft_wrapped": false, "wrapped_by": null, "partial": false, "tool_budget_timeout": false, "security": {"denied_write_count": 0, "tainted_write_executed_count": 0, "forbidden_write_executed_count": 0, "write_audit": []}, "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0, "turn_latency_ms": 1.5, "llm_calls": 0, "tool_batches": null, "llm_usage": null, "llm_usage_status": "partial", "forbidden_read": null, "no_evidence_numbers": null, "eval_only": ["forbidden_read", "no_evidence_numbers"], "tool_ledger_status": "unavailable", "llm_observer_installed": true}
+INFO     canary:app.py:1025 {"event": "canary.turn", "telemetry_schema_version": 3, "ts": "2026-10-19T13:17:51.733971+00:00", "endpoint": "alex", "agent_arch": "legacy", "candidate_sha": "1df0d4f", "strict": false, "variant_id": "legacy:strict-0:specialists-0", "rollout_id": null, "rollout_stage": null, "configured_candidate_percent": null, "traffic_source": "direct", "assigned_pool": "direct", "request_id": "empty", "conversation_id": "39548b56084a4f05beed3309b979c85f", "user_id_hash": "f0f0acfd8cbc7f6269b837039025ac97", "user_id_hash_status": "keyed", "http_status": 200, "turn_outcome": "ok", "soft_wrapped": false, "wrapped_by": null, "partial": false, "tool_budget_timeout": false, "security": {"denied_write_count": 0, "tainted_write_executed_count": 0, "forbidden_write_executed_count": 0, "write_audit": []}, "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0, "turn_latency_ms": 0.8, "llm_calls": 0, "tool_batches": null, "llm_usage": null, "llm_usage_status": "partial", "forbidden_read": null, "no_evidence_numbers": null, "eval_only": ["forbidden_read", "no_evidence_numbers"], "tool_ledger_status": "unavailable", "llm_observer_installed": true}
+INFO     canary:app.py:1025 {"event": "canary.turn", "telemetry_schema_version": 3, "ts": "2026-10-19T13:17:51.739721+00:00", "endpoint": "alex", "agent_arch": "legacy", "candidate_sha": "1df0d4f", "strict": false, "variant_id": "legacy:strict-0:specialists-0", "rollout_id": null, "rollout_stage": null, "configured_candidate_percent": null, "traffic_source": "direct", "assigned_pool": "direct", "request_id": "13a41f791db244da9bb2356506a1ab1f", "conversation_id": "39548b56084a4f05beed3309b979c85f", "user_id_hash": "f0f0acfd8cbc7f6269b837039025ac97", "user_id_hash_status": "keyed", "http_status": 200, "turn_outcome": "ok", "soft_wrapped": false, "wrapped_by": null, "partial": false, "tool_budget_timeout": false, "security": {"denied_write_count": 0, "tainted_write_executed_count": 0, "forbidden_write_executed_count": 0, "write_audit": []}, "dsml_blocked": 0, "dsml_leak": 0, "provider_schema_400_count": 0, "turn_latency_ms": 1.7, "llm_calls": 0, "tool_batches": null, "llm_usage": null, "llm_usage_status": "partial", "forbidden_read": null, "no_evidence_numbers": null, "eval_only": ["forbidden_read", "no_evidence_numbers"], "tool_ledger_status": "unavailable", "llm_observer_installed": true}
+_ test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history _
+
+chat = (<starlette.applications.Starlette object at 0x76f7a59d2630>, <uk_rent_agent.web.chat_transport.NativeChatEndpoint object at 0x76f7a59d28a0>, <uk_rent_agent.web.conversation_store.ConversationStore object at 0x76f7a59d2090>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x76f7a59d22d0>
+
+    def test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history(chat, monkeypatch):
+        _, _, store = chat
+        owner = 'snapshot-owner'
+        cid = store.create_conversation(owner)['id']
+        message = ('Keep my current £2,000/month rent cap separate from the £2,150/month '
+                   'rent-plus-commute ceiling, based on two office days a week')
+        message_id = store.add_message(owner, cid, 'user', message)['id']
+        turn_id = store.begin_turn(owner, cid, request_id='read-recovery-test', user_message_id=message_id)['id']
+        criteria = {'max_budget':2150,'max_budget_monthly':2000,'budget_period':'month',
+                    'monthly_total_budget':2150,'office_days_per_week':2,
+                    'destination':"King's Cross",'max_travel_time':45,
+                    'constraint_sources':{'max_budget':{'source':'user_message','value':2150,'text':message}}}
+        row = {'address':'Angel Lane','travel_time':"37 min to King's Cross",
+               'explanation':"2 bedroom flat (TfL transit: 37 min to King's Cross)",
+               'qualification':{'status':'unknown','constraints':hard_constraints(criteria),
+                                'unknown_reasons':['commute evidence is missing'],'reasons':[]}}
+        snapshot = build_turn_snapshot(turn_id=turn_id, persistent_state={
+            'accumulated_search_criteria':criteria,'extracted_context':{'view_results':[row]}},context_revision=9)
+        original = copy.deepcopy(snapshot)
+        store.save_turn_snapshot(owner,cid,turn_id,snapshot)
+>       assistant_id = store.add_message(owner,cid,'assistant','Earlier recorded reply')['id']
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_formal_snapshot_read_recovery.py:30: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <uk_rent_agent.web.conversation_store.ConversationStore object at 0x76f7a59d2090>
+user_id = 'snapshot-owner', turn_id = '2f593ff3f26d44aeb7c4aaecfb51db23'
+assistant_message_id = None
+
+    def complete_turn(self, user_id: str, turn_id: str,
+                      assistant_message_id: int | None = None) -> dict | None:
+        """Mark a turn 'completed' (sets completed_at). Optionally record the
+        assistant message id. Returns the updated turn dict, or None if not found."""
+        now = _now_iso()
+        with self._lock:
+            if assistant_message_id is not None:
+                cur = self._conn.execute(
+                    """UPDATE turns SET status='completed', completed_at=?,
+                              assistant_message_id=? WHERE user_id=? AND id=?""",
+                    (now, assistant_message_id, user_id, turn_id),
+                )
+            else:
+>               cur = self._conn.execute(
+                    "UPDATE turns SET status='completed', completed_at=? WHERE user_id=? AND id=?",
+                    (now, user_id, turn_id),
+                )
+E               sqlite3.IntegrityError: completed turn requires assistant_message_id
+
+src/uk_rent_agent/web/conversation_store.py:1228: IntegrityError
+=============================== warnings summary ===============================
+src/uk_rent_agent/web/asgi.py:14
+  /home/shuhan/uk_rent_recommendation/src/uk_rent_agent/web/asgi.py:14: StarletteDeprecationWarning: starlette.middleware.wsgi is deprecated and will be removed in a future release. Please refer to https://github.com/abersheeran/a2wsgi as a replacement.
+    from starlette.middleware.wsgi import WSGIMiddleware
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_persona_behavior_regressions.py::test_empty_results_and_criteria_survive_replay_and_restart
+FAILED tests/test_formal_snapshot_read_recovery.py::test_get_and_cold_session_recover_source_and_card_text_without_rewriting_history
+2 failed, 5317 passed, 3 skipped, 1 warning in 220.44s (0:03:40)

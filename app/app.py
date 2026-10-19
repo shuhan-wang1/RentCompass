@@ -14,6 +14,7 @@ except Exception:
 import asyncio
 import uuid
 import copy
+import math
 import threading
 import os
 import time
@@ -41,6 +42,7 @@ from uk_rent_agent.web.auth_store import (
     AuthStore, AuthError, InvalidUsername, WeakPassword, UsernameTaken,
 )
 from uk_rent_agent.config import Config
+from uk_rent_agent.agent.progress import report_progress
 from uk_rent_agent.agent.architecture import MANAGER_V1_ARCH, uses_fc_runtime
 from uk_rent_agent.web.rate_limit import SlidingWindowRateLimiter
 from uk_rent_agent.agent.persistence import get_sqlite_checkpointer, get_prefs_store, graph_config
@@ -53,6 +55,8 @@ from core.data_loader import load_mock_properties_from_csv, load_properties
 from core.tool_system import create_tool_registry
 from core.langgraph_agent import build_agent_graph, create_initial_state
 from core.tools.search_properties import search_properties_impl
+from core.tenancy_reference import monthly_from_weekly
+from core.source_status import retrieval_metadata
 from core.context_assembler import (
     assemble as assemble_context,
     build_turn_snapshot,
@@ -67,84 +71,13 @@ from core.llm_interface import call_ollama
 from core.candidate_validation import (
     render_candidate_status, validate_search_payload_with_provider,
 )
+from uk_rent_agent.web.view_state import view_state
 
 
-def _consume_abandoned_graph_task(task) -> None:
-    try:
-        task.exception()
-    except (asyncio.CancelledError, Exception):
-        pass
-
-
-class _GraphLoopRunner:
-    """One loop-local graph/provider generation in a bounded self-healing pool."""
-
-    def __init__(self):
-        self._start_lock = threading.Lock()
-        self._ready = threading.Event()
-        self._loop = None
-        self._thread = None
-        self._quarantined = False
-        self.graph = None
-
-    def _serve(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        self._loop = loop
-        self._ready.set()
-        loop.run_forever()
-
-    def _ensure_started(self):
-        with self._start_lock:
-            if self._thread is None or not self._thread.is_alive():
-                self._ready.clear()
-                self._thread = threading.Thread(
-                    target=self._serve, name="agent_graph_loop", daemon=True,
-                )
-                self._thread.start()
-        if not self._ready.wait(timeout=5):
-            raise RuntimeError("agent graph loop failed to start")
-        if self._loop is None:
-            raise RuntimeError("agent graph loop unavailable")
-
-    def available(self):
-        with self._start_lock:
-            return not self._quarantined
-
-    def submit(self, coroutine):
-        self._ensure_started()
-        with self._start_lock:
-            if self._quarantined:
-                coroutine.close()
-                raise RuntimeError("agent graph loop is quarantined")
-            loop = self._loop
-        return asyncio.run_coroutine_threadsafe(coroutine, loop)
-
-    def quarantine(self, recovered_callback):
-        """Reject new work until a queued heartbeat proves this loop is responsive."""
-        self._ensure_started()
-        with self._start_lock:
-            if self._quarantined:
-                return False
-            self._quarantined = True
-            loop = self._loop
-
-        async def _heartbeat():
-            return True
-
-        probe = asyncio.run_coroutine_threadsafe(_heartbeat(), loop)
-
-        def _recovered(_future):
-            try:
-                _future.result()
-            except BaseException:
-                return
-            with self._start_lock:
-                self._quarantined = False
-            recovered_callback(self)
-
-        probe.add_done_callback(_recovered)
-        return True
+from uk_rent_agent.agent.execution import (
+    GraphLoopRunner as _GraphLoopRunner,
+    consume_abandoned_graph_task as _consume_abandoned_graph_task,
+)
 
 
 _GRAPH_RUNNER_CAPACITY = 2
@@ -288,6 +221,7 @@ _agent_init_lock = threading.Lock()
 def _ensure_agent_runtime():
     """Return an atomically published, loop-bound graph/provider generation."""
     global agent_graph, tool_registry, agent_tool_provider
+
 
     # The same lock is used by runner rotation, so callers can only observe a
     # complete (runner, graph) generation. A stale caller still retains the old
@@ -1111,6 +1045,8 @@ def _get_session(user_id, conversation_id):
         try:
             snap = conversation_store.latest_snapshot(user_id, conversation_id)
             if snap:
+                from core.snapshot_recovery import recover_snapshot
+                snap = recover_snapshot(snap, conversation_store.get_messages(user_id, conversation_id))
                 patch = snapshot_to_session_patch(snap)  # SnapshotSchemaError on old ver
                 ps = sess.persistent_state
                 if patch.get("user_preferences"):
@@ -1118,13 +1054,16 @@ def _get_session(user_id, conversation_id):
                 if patch.get("accumulated_search_criteria"):
                     ps["accumulated_search_criteria"] = patch["accumulated_search_criteria"]
                 ec = ps.setdefault("extracted_context", {})
+                if isinstance(patch.get("search_retrieval"), dict):
+                    ec["search_retrieval"] = patch["search_retrieval"]
                 if patch.get("rolling_summary"):
                     ec["rolling_summary"] = patch["rolling_summary"]
                 if patch.get("rolling_summary_through_turn_id"):
                     ec["rolling_summary_through_turn_id"] = patch["rolling_summary_through_turn_id"]
-                if patch.get("last_results") and not sess.last_results:
-                    sess.last_results = patch["last_results"]
-                    previous, structured = _build_results_context(patch["last_results"])
+                if 'view_results' in snap or patch.get("last_results"):
+                    sess.last_results = snap.get('view_results', patch['last_results'])
+                    ec['view_results'] = sess.last_results
+                    previous, structured = _build_results_context(sess.last_results)
                     ec["previous_search_results"] = previous
                     ec["last_results"] = structured
                 # 累计推荐注册表随快照存活重启/fork（轻量条目，体积可控）。
@@ -1144,10 +1083,10 @@ def _get_session(user_id, conversation_id):
             # Rehydrate the last structured search as well as text history. A browser
             # refresh must not make property follow-ups lose their target merely because
             # the in-memory cache was evicted.
-            if not sess.last_results:
+            if not sess.last_results and 'view_results' not in sess.persistent_state.get('extracted_context', {}):
                 for message in reversed(conversation_store.get_messages(user_id, conversation_id)):
                     recommendations = message.get('recommendations')
-                    if message.get('role') == 'assistant' and isinstance(recommendations, list) and recommendations:
+                    if message.get('role') == 'assistant' and isinstance(recommendations, list):
                         sess.last_results = recommendations
                         previous, structured = _build_results_context(recommendations)
                         sess.persistent_state.setdefault('extracted_context', {})
@@ -1259,7 +1198,7 @@ def _emit_canary_boundary_5xx() -> None:
             # request id) and appends a uuid4 so distinct turns stay distinct.
             request_id=(getattr(g, "canary_request_id", None)
                         or f"unknown:{uuid.uuid4().hex}"),
-            http_status=500,
+            http_status=200 if getattr(g, "chat_streaming", False) else 500,
             turn_outcome=OUTCOME_SERVER_ERROR,
             turn_latency_ms=latency,
             # None (not unknown_turn_signals()) so this goes through the SAME overlay
@@ -1369,14 +1308,8 @@ def _authed_user_id():
     be overridden by a (spoofable) client-supplied user_id. Returns None for guests, which
     preserves the original header/query/cookie/mint resolution untouched.
     """
-    try:
-        if session.get('authenticated'):
-            uid = session.get('auth_user_id')
-            if valid_user_id(uid or ''):
-                return uid
-    except Exception:
-        pass
-    return None
+    view = _validated_auth()
+    return view['user_id'] if view else None
 
 
 def resolve_identity(data=None):
@@ -1565,20 +1498,38 @@ def index():
 # keep the original self-declared-id behaviour, so this layer is purely additive.
 # ============================================================================
 
+_AUTH_SESSION_KEYS = ('authenticated', 'auth_user_id', 'auth_sid', 'username', 'display_name', 'user_id')
+
+
+def _validated_auth():
+    """Resolve one live server-side principal for every transport in this request."""
+    if hasattr(g, 'validated_auth'):
+        return g.validated_auth
+    view = None
+    if session.get('authenticated'):
+        view = auth_store.get_session(session.get('auth_sid'))
+        if not view or view['user_id'] != session.get('auth_user_id'):
+            view = None
+            g.invalid_auth_session = True
+            for key in _AUTH_SESSION_KEYS:
+                session.pop(key, None)
+    g.validated_auth = view
+    return view
+
+
 def _current_auth() -> dict:
     """Public auth view for the current session, or {"authenticated": False} for a guest."""
-    if session.get('authenticated') and valid_user_id(session.get('auth_user_id') or ''):
-        return {
-            "authenticated": True,
-            "user_id": session.get('auth_user_id'),
-            "username": session.get('username'),
-            "display_name": session.get('display_name') or session.get('username'),
-        }
+    view = _validated_auth()
+    if view:
+        return {"authenticated": True, **view}
     return {"authenticated": False}
 
 
 def _establish_session(view: dict) -> None:
     """Persist a verified account into the signed session cookie."""
+    auth_store.revoke_session(session.get('auth_sid'))
+    session.clear()
+    session['auth_sid'] = auth_store.create_session(view['user_id'], _runtime_config.session_ttl_seconds)
     session['authenticated'] = True
     session['auth_user_id'] = view['user_id']
     session['username'] = view['username']
@@ -1589,14 +1540,15 @@ def _establish_session(view: dict) -> None:
 @app.before_request
 def _enforce_auth():
     """When REQUIRE_AUTH is on, gate every /api/* route (except /api/auth/*) behind login."""
-    if not _runtime_config.require_auth:
-        return None
     if request.method == 'OPTIONS':
         return None  # never block CORS preflight
     path = request.path or ''
     if not path.startswith('/api/') or path.startswith('/api/auth/'):
         return None
-    if session.get('authenticated'):
+    view = _validated_auth()
+    if view:
+        return None
+    if not _runtime_config.require_auth and not getattr(g, 'invalid_auth_session', False):
         return None
     return jsonify({"error": "authentication required"}), 401
 
@@ -1636,7 +1588,8 @@ def _limit_expensive_api_requests():
     )
     if allowed:
         return None
-    response = jsonify({"error": "too many requests; please try again shortly"})
+    response = jsonify({'error': 'too many requests; please try again shortly',
+                        'error_code': 'rate_limited', 'retry_after': retry_after})
     response.status_code = 429
     response.headers['Retry-After'] = str(retry_after)
     return response
@@ -1675,7 +1628,8 @@ def auth_login():
 @app.route('/api/auth/logout', methods=['POST'])
 def auth_logout():
     """Clear the authenticated identity (and the guest fallback id) from the session."""
-    for k in ('authenticated', 'auth_user_id', 'username', 'display_name', 'user_id'):
+    auth_store.revoke_session(session.get('auth_sid'))
+    for k in _AUTH_SESSION_KEYS:
         session.pop(k, None)
     return jsonify({"authenticated": False})
 
@@ -1717,6 +1671,31 @@ def _request_replay_response(user_id: str, request_id: str, turn: dict):
     return response
 
 
+def _prepare_chat_request():
+    """Resolve the request once for both the JSON and streaming transports."""
+    prepared = getattr(g, "prepared_chat_request", None)
+    if prepared is not None:
+        return prepared
+    from uk_rent_agent.web.chat_request import ChatRequest
+
+    data = get_json_or_400()
+    _validate_conversation_id(data)
+    user_id, _ = resolve_identity(data)
+    try:
+        message = normalize_message(data.get('message'))
+    except InvalidMessage as exc:
+        raise ApiError(400, str(exc))
+    prepared = ChatRequest(
+        data=data, user_id=user_id, message=message,
+        context=data.get('context', {}) or {},
+        is_continuation=data.get('is_continuation', False),
+        ui_language=_normalize_ui_language(data.get('ui_language')),
+        request_id=new_request_id(request.headers.get("X-Request-Id")),
+    )
+    g.prepared_chat_request = prepared
+    return prepared
+
+
 @app.route('/api/alex', methods=['POST'])
 async def api_alex():
     """
@@ -1730,21 +1709,14 @@ async def api_alex():
     - 是否需要搜索附近设施（调用 search_nearby_pois 工具）
     - 或者直接回答用户问题
     """
-    # --- parse + validate (these raise ApiError → JSON 4xx, NOT 500) -----------
-    data = get_json_or_400()
-    _validate_conversation_id(data)  # reject list/dict/non-string cid before it hits sqlite
-    user_id, _session_id = resolve_identity(data)
-    try:
-        user_message = normalize_message(data.get('message'))
-    except InvalidMessage as e:
-        raise ApiError(400, str(e))
-
-    context = data.get('context', {}) or {}
-    is_continuation = data.get('is_continuation', False)
-    # 前端 UI 语言（并行 agent 发送 ui_language）；缺失/非法按 'en'。用于回复语言决策。
-    ui_language = _normalize_ui_language(data.get('ui_language'))
-
-    request_id = new_request_id(request.headers.get("X-Request-Id"))
+    prepared = _prepare_chat_request()
+    data = prepared.data
+    user_id = prepared.user_id
+    user_message = prepared.message
+    context = prepared.context
+    is_continuation = prepared.is_continuation
+    ui_language = prepared.ui_language
+    request_id = prepared.request_id
     # Idempotency is user-global, not merely conversation-local. This matters when
     # the first request implicitly creates a conversation and the client retries
     # before it has received that conversation id.
@@ -1837,6 +1809,7 @@ async def api_alex():
     try:
         # 所有请求都通过 ReAct Agent 处理
         with request_context(request_id, user_id):
+            report_progress("understanding")
             payload = await handle_with_react_agent(
                 user_message, context, is_continuation, user_id, conversation_id, request_id,
                 ui_language=ui_language, turn=turn,
@@ -1847,6 +1820,21 @@ async def api_alex():
         # at all — see _emit_canary_cancelled_turn. Record it, then re-raise
         # UNCHANGED: swallowing a cancellation would leave this coroutine running
         # after its caller stopped waiting.
+        try:
+            conversation_store.finalize_request_turn(
+                user_id, turn_id, status="failed", response_type="error",
+                assistant_content=("请求已取消。" if _resolve_reply_language(user_message, ui_language) == "zh"
+                                   else "Request cancelled."),
+                recommendations=[], snapshot=None, background_jobs=[],
+            )
+        except Exception as exc:
+            logger.error("agent.turn.cancel_persistence_failed", extra={"error_type": type(exc).__name__})
+            try:
+                conversation_store.fail_turn(user_id, turn_id)
+            except Exception as cleanup_exc:
+                logger.error("agent.turn.cancel_cleanup_failed", extra={"error_type": type(cleanup_exc).__name__})
+        finally:
+            _session_store.clear(user_id, conversation_id)
         _emit_canary_cancelled_turn(
             endpoint=ENDPOINT_ALEX, conversation_id=conversation_id,
             user_id=user_id, request_id=request_id, started=_turn_started_ms)
@@ -1929,10 +1917,14 @@ async def api_alex():
                 "turn_id": turn_id,
             }
 
+    if _snapshot is not None:
+        payload['view_state'] = view_state(_snapshot)
+
     # Assistant message, terminal status and snapshot are committed together. A
     # database failure escapes to the API 500 handler; fail_turn releases the lease
     # so the conversation is not permanently wedged.
     try:
+        report_progress("saving")
         conversation_store.finalize_request_turn(
             user_id,
             turn_id,
@@ -1942,6 +1934,9 @@ async def api_alex():
             recommendations=payload.get("recommendations"),
             snapshot=_snapshot,
             background_jobs=([] if _terminal_failed else _background_jobs),
+            response_metadata={k: payload[k] for k in (
+                'options', 'clarification_kind', 'missing_fields', 'missing_optional_fields',
+                'known_criteria', 'error_code', 'retryable', 'retry_after') if k in payload},
         )
     except Exception as e:
         logger.error(
@@ -1990,11 +1985,12 @@ async def api_alex():
     response = _dsml_boundary_check(response, payload)
 
     # Canary: one structured record per turn (both archs; fc signals default when absent).
-    # http_status reflects the actual response, including a controlled agent 502.
+    # Streaming transport commits HTTP 200 before the final event, whose status
+    # carries a controlled application error. Keep telemetry tied to HTTP itself.
     _emit_canary_turn(
         endpoint=ENDPOINT_ALEX,
         conversation_id=conversation_id, user_id=user_id, request_id=request_id,
-        http_status=response.status_code,
+        http_status=200 if getattr(g, "chat_streaming", False) else response.status_code,
         turn_outcome=(OUTCOME_SERVER_ERROR if _serialization_failed else
                       OUTCOME_CRASH if _turn_crashed else
                       OUTCOME_AGENT_ERROR if payload.get("response_type") == "error"
@@ -2526,6 +2522,10 @@ def _build_turn_snapshot_after_turn(user_id, conversation_id, turn_id):
         context_revision = 1
     with _session_store.turn_lock(user_id, conversation_id):
         _sess = _get_session(user_id, conversation_id)
+        from core.candidate_validation import revalidate_view_results
+        _sess.last_results = revalidate_view_results(
+            _sess.last_results or [], _sess.persistent_state.get('accumulated_search_criteria'))
+        _sess.persistent_state.setdefault('extracted_context', {})['view_results'] = _sess.last_results
         return build_turn_snapshot(
             turn_id=turn_id,
             persistent_state=_sess.persistent_state,
@@ -2664,7 +2664,7 @@ def _spawn_rolling_summary_update(user_id, conversation_id, dropped_turns,
 def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
                      recommendations, *, user_preferences=_UNSET,
                      accumulated_search_criteria=_UNSET, criteria_overwrite=None,
-                     turn_id=None, reply_language="en"):
+                     turn_id=None, reply_language="en", search_retrieval=_UNSET):
     """Atomic phase-3 L2 write-back shared by the ReAct path (handle_with_react_agent)
     and the deterministic /api/search_direct endpoint (pure refactor — the ReAct path's
     behaviour is unchanged from the previously-inlined version).
@@ -2701,10 +2701,13 @@ def _write_back_turn(user_id, conversation_id, user_message, assistant_text,
             # into the rolling summary (background) — otherwise their context is lost.
             dropped_turns = [dict(h) for h in _sess.history[:-MAX_HISTORY_LENGTH]]
             del _sess.history[:-MAX_HISTORY_LENGTH]
-        if recommendations:
+        if search_retrieval is not _UNSET:
+            _sess.persistent_state.setdefault('extracted_context', {})['search_retrieval'] = search_retrieval
+        if recommendations is not None:
             _sess.last_results = recommendations
             _sess.persistent_state.setdefault('extracted_context', {})
             _ec = _sess.persistent_state['extracted_context']
+            _ec['view_results'] = list(recommendations)
             _ec['previous_search_results'] = prev_results_context
             _ec['last_results'] = structured_results
             # 累计推荐注册表：把本轮推荐 merge 进历史注册表（去重/首见 index 稳定/上限），
@@ -2761,6 +2764,10 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     """
     global agent_graph, tool_registry, agent_tool_provider
 
+    from core.constraint_updates import resolve_clarification_reply
+    _conversation_messages = conversation_store.get_messages(user_id, conversation_id)
+    user_message = resolve_clarification_reply(user_message, _conversation_messages)
+
     # ── Phase 1: snapshot THIS conversation's L2 state under the per-conv lock ──
     # The turn lock makes the read here and the write-back in phase 3 atomic vs.
     # concurrent same-conversation requests, WITHOUT being held across the slow LLM
@@ -2775,10 +2782,21 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         # extracted_context 里只留 6 条）。在同一把锁内浅拷贝，避免跨慢速 LLM 调用再次加锁。
         last_results_snapshot = list(_sess.last_results or [])
 
-    request_graph = _ensure_agent_runtime()
+    from core.criteria_recovery import repair_criteria_sources, preferences_after_criteria_repair
+    persistent_snapshot['accumulated_search_criteria'] = await asyncio.to_thread(
+        repair_criteria_sources, persistent_snapshot.get('accumulated_search_criteria') or {},
+        _conversation_messages)
+    persistent_snapshot['user_preferences'] = preferences_after_criteria_repair(
+        persistent_snapshot.get('user_preferences') or {},
+        persistent_snapshot['accumulated_search_criteria'])
+
+    request_graph = await asyncio.to_thread(_ensure_agent_runtime)
 
     # ── 构建本轮 extracted_context ──────────────────────────────
     extracted_context = dict(persistent_snapshot.get('extracted_context', {}))
+    from datetime import datetime as _datetime
+    from zoneinfo import ZoneInfo
+    extracted_context['current_date'] = _datetime.now(ZoneInfo('Europe/London')).date().isoformat()
 
     # Refinement-in-place needs the COMPLETE set the panel is currently rendering, not the
     # 6-row prompt digest in extracted_context['last_results'] — narrowing over the digest
@@ -2880,17 +2898,34 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # 长期记忆（Generative-Agents 评分检索）——按 user_id 命名空间共享（跨会话），branch_lineage
     # 让分叉会话只看到它真正继承的 episodic 记忆（semantic/reflection 仍全局）。
     _mem_block = ""
+    _mems = []
+    _semantic_defaults = []
     try:
         from rag.agent_memory import get_agent_memory
         _am = get_agent_memory()
         _lineage = conversation_store.get_branch_lineage(user_id, conversation_id)
         _mems = _am.retrieve(user_message, session_id=user_id, user_id=user_id, n=6,
                              branch_lineage=_lineage)
+        from core.constraint_updates import references_saved_criteria
+        if references_saved_criteria(user_message):
+            _semantic_defaults = _am.semantic_records(user_id=user_id)
         _mem_block = _am.format_for_prompt(_mems)
         if _mem_block:
             print(f"[Memory] 🧠 注入 {len(_mems)} 条相关记忆")
     except Exception as _e:
         print(f"[Memory] retrieve skipped; error_type={type(_e).__name__}")
+
+    from core.constraint_updates import restore_saved_criteria
+    persistent_snapshot['accumulated_search_criteria'] = restore_saved_criteria(
+        persistent_snapshot.get('accumulated_search_criteria') or {},
+        _semantic_defaults or _mems, user_message)
+    selected_memory_ids = {source.get('memory_id') for source in (
+        persistent_snapshot['accumulated_search_criteria'].get('constraint_sources') or {}).values()
+        if isinstance(source, dict) and source.get('source') == 'saved_preference'}
+    selected_defaults = [record for record in _semantic_defaults if record.get('id') in selected_memory_ids]
+    if selected_defaults:
+        _mems = selected_defaults + [record for record in _mems if record.get('id') not in selected_memory_ids]
+        _mem_block = _am.format_for_prompt(_mems[:6])
 
     # Assemble the legacy query as before. FC-compatible arches have a dedicated channel for
     # long-term memory; putting the same block into user_query would show it twice in
@@ -3039,6 +3074,91 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     response_text = final_state.get('final_response', '')
     response_type = final_state.get('response_type', 'answer')
     tool_data = final_state.get('tool_data', {})
+    if isinstance(tool_data, dict) and 'recommendations' in tool_data:
+        # Check the final user constraints again, independently of the tool's echo.
+        from core.candidate_validation import validate_candidates, candidate_reason_text
+        from core.criteria_contract import reconcile_search_criteria
+        accumulated = reconcile_search_criteria(
+            final_state.get('accumulated_search_criteria') or {}, tool_data.get('search_criteria') or {})
+        final_state['accumulated_search_criteria'] = accumulated
+        actual_criteria = dict(accumulated)
+        if accumulated.get('max_budget') is not None:
+            actual_criteria['rent_filter_ceiling_monthly'] = (tool_data.get('search_criteria') or {}).get('max_budget_monthly')
+            actual_criteria['max_budget_monthly'] = accumulated['max_budget']
+        ledger = validate_candidates(tool_data.get('recommendations') or [], actual_criteria,
+                                     tool_data.get('commute_evidence') or [],
+                                     transport_cost_evidence=final_state.get('tool_artifacts') or [])
+        checked = []
+        for status in ledger['statuses']:
+            row = dict(status['candidate'])
+            row['qualification'] = {
+                'status': status['status'], 'reasons': status['reasons'],
+                'unknown_reasons': status['unknown_reasons'],
+                'constraints': ledger['constraints'], 'source': 'structured_listing',
+                'reason_messages': {lang: [candidate_reason_text(reason, language=lang)
+                    for reason in status['reasons'] + status['unknown_reasons']] for lang in ('en', 'zh')},
+            }
+            row['budget_basis'] = ledger['constraints']['max_budget_monthly']
+            row['budget_status_code'] = ('over' if row.get('candidate_reasons') and any(
+                'exceeds budget' in reason for reason in row['candidate_reasons']) else
+                'within' if row['budget_basis'] is not None else 'unspecified')
+            if row['budget_basis'] is None:
+                row['budget_status'] = ''
+            checked.append(row)
+        tool_data = dict(tool_data, recommendations=checked, search_criteria=actual_criteria)
+        if ledger['excluded'] or ledger['unknown']:
+            response_text = render_candidate_status(ledger, language=extracted_context.get('reply_language', 'en'))
+            from core.candidate_validation import render_structured_evidence_fallback
+            evidence = render_structured_evidence_fallback(final_state, language=extracted_context.get('reply_language', 'en'))
+            if evidence:
+                response_text += '\n\n' + evidence
+        final_state['tool_data'] = tool_data
+    from core.memory_contract import (memory_contract_from_artifact,
+        strip_saved_content_quote, compose_memory_contract_response)
+    memory_artifact = next((artifact for artifact in reversed(final_state.get('tool_artifacts') or [])
+                            if artifact.get('tool') == 'remember'), None)
+    memory_contract = (memory_contract_from_artifact(memory_artifact) if memory_artifact else
+                       final_state.get('memory_write_contract') or {})
+    _memory_language = extracted_context.get('reply_language', 'en')
+    # Verify provider claims separately from the exact user text the memory tool saved.
+    response_text = strip_saved_content_quote(response_text, memory_contract, _memory_language)
+    from core.listing_identity import bind_listing_links, listing_entities
+    response_text = bind_listing_links(response_text, listing_entities([
+        tool_data, final_state.get('tool_artifacts') or [], extracted_context,
+        _get_session(user_id, conversation_id).last_results,
+    ]))
+    from core.candidate_validation import (validate_evidence_scope, humanize_requirement_text,
+        render_nearby_failure_notice)
+    response_text = validate_evidence_scope(response_text, final_state)
+    from core.constraint_updates import validate_current_criteria_recap
+    response_text = validate_current_criteria_recap(
+        response_text, final_state.get('accumulated_search_criteria') or {},
+        message=user_message, language=extracted_context.get('reply_language', 'en'))
+    response_text = humanize_requirement_text(response_text, language=_memory_language)
+    _nearby_notice = render_nearby_failure_notice(final_state, language=_memory_language)
+    if _nearby_notice and _nearby_notice not in response_text:
+        response_text += '\n\n' + _nearby_notice
+    if memory_contract.get('requested'):
+        from core.constraint_updates import independent_memory_task
+        other_result = any(artifact.get('tool') not in ('remember','recall_memory','ask_user',None)
+                           and artifact.get('success') is True
+                           for artifact in final_state.get('tool_artifacts') or [])
+        response_text = compose_memory_contract_response(
+            response_text, memory_contract, language=_memory_language,
+            preserve_content=other_result or independent_memory_task(user_message))
+    # Explicit frequency arithmetic uses this turn's observed fare, never a stored
+    # price or an inferred property cost. The estimate cannot qualify a candidate.
+    from core.commuting_estimate import estimate_monthly_commuting, render_monthly_commuting_estimate
+    for artifact in reversed(final_state.get('tool_artifacts') or []):
+        if artifact.get('tool') != 'get_transport_info' or artifact.get('success') is not True:
+            continue
+        estimate = estimate_monthly_commuting(user_message, artifact.get('raw_data') or {})
+        if estimate:
+            tool_data = dict(tool_data, monthly_commuting_estimate=estimate)
+            rendered = render_monthly_commuting_estimate(estimate, language=extracted_context.get('reply_language', 'en'))
+            if rendered and rendered not in response_text:
+                response_text += '\n\n' + rendered
+            break
     recommendations = tool_data.get('recommendations')
 
     # ── Tool-markup guard, LAYER 1: before anything persists this ──
@@ -3075,7 +3195,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
     # in the report did), so the panel must not shrink just because no tool ran. Placed
     # ahead of _write_back_turn and the conversation-store write so the persisted message
     # carries them too — otherwise a page reload would reproduce the empty panel.
-    if not recommendations:
+    if recommendations is None:
         try:
             _cached = _get_session(user_id, conversation_id).last_results
             if _narrates_cached_listings(response_text, _cached):
@@ -3097,6 +3217,8 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         accumulated_search_criteria=final_state.get('accumulated_search_criteria', _UNSET),
         turn_id=(turn.get("id") if isinstance(turn, dict) else None),
         reply_language=extracted_context.get('reply_language', 'en'),
+        search_retrieval=(retrieval_metadata(tool_data)
+                          if isinstance(tool_data, dict) and 'recommendations' in tool_data else _UNSET),
     )
 
     # ── 长期记忆：随 turn 原子提交到 durable outbox，响应路径不做 LLM/SQLite 写入 ──
@@ -3124,7 +3246,7 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
 
     # ── 构建响应 payload（conversation_id 由调用方 api_alex 注入）──
     _tool_data = tool_data if isinstance(tool_data, dict) else {}
-    if recommendations:
+    if recommendations is not None:
         # Frontend contract: forward the canonical search_criteria (Agent 2's
         # format_output stores it in tool_data for found searches) so the search form
         # can reflect what was actually searched. Defaults to {} when absent.
@@ -3132,9 +3254,11 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
             "response_type": "search",
             "message": response_text,
             "recommendations": recommendations,
-            "search_criteria": _tool_data.get('search_criteria') or {},
+            "search_criteria": _tool_data.get('search_criteria') or final_state.get('accumulated_search_criteria') or {},
             # 🆕 目的地附近推荐居住区（可点击 chips → 多区域再搜）。
             "area_recommendations": _tool_data.get('area_recommendations') or [],
+            **retrieval_metadata(_tool_data),
+            **({"monthly_commuting_estimate": _tool_data["monthly_commuting_estimate"]} if _tool_data.get("monthly_commuting_estimate") else {}),
         }
 
     if response_type == 'question' or response_type == 'clarification':
@@ -3160,12 +3284,24 @@ async def handle_with_react_agent(user_message: str, context: dict, is_continuat
         # soft recommended-criteria gate ('soft_criteria') for the frontend.
         if 'clarification_kind' in _tool_data:
             payload["clarification_kind"] = _tool_data['clarification_kind']
+        if 'options' in _tool_data:
+            payload['options'] = _tool_data['options']
+        if _tool_data.get("monthly_commuting_estimate"):
+            payload["monthly_commuting_estimate"] = _tool_data["monthly_commuting_estimate"]
         return payload
 
     if response_type == 'answer':
         return {
             "response_type": "chat",
             "message": response_text,
+            **({"monthly_commuting_estimate": _tool_data["monthly_commuting_estimate"]} if _tool_data.get("monthly_commuting_estimate") else {}),
+        }
+
+    if response_type == 'error':
+        return {
+            'response_type': 'error', 'message': response_text,
+            'error_code': _tool_data.get('error_code') or 'agent_error',
+            'retryable': bool(_tool_data.get('retryable')),
         }
 
     return {
@@ -3218,6 +3354,24 @@ def _coerce_optional_int(value, field_name, *, min_value, max_value):
         raise ApiError(400, f"{field_name} must be between {min_value} and {max_value}")
     return n
 
+
+
+def _coerce_optional_money(value, field_name, *, min_value, max_value):
+    """A rent ceiling is a currency amount; accepting pennies must not relax it."""
+    from decimal import Decimal, InvalidOperation
+    if value is None or value == '':
+        return None
+    try:
+        if isinstance(value, bool):
+            raise ValueError
+        amount = Decimal(str(value).strip())
+        if not amount.is_finite():
+            raise ValueError
+        if not Decimal(str(min_value)) <= amount <= Decimal(str(max_value)):
+            raise ValueError
+    except (InvalidOperation, ValueError, TypeError):
+        raise ApiError(400, f'{field_name} must be an amount between {min_value} and {max_value} without rounding')
+    return float(amount) if amount % 1 else int(amount)
 
 def _coerce_bool(value) -> bool:
     """Coerce a JSON bool (or a common truthy string) to a real bool."""
@@ -3342,10 +3496,11 @@ async def api_search_direct():
     #   max_budget      £[1, 100000]  — 0 is not a real limit; reject fractional/absurd.
     #   bedrooms        [0, 20]       — 0 = studio/any; reject negative and >20.
     #   max_commute_time [1, 300] min — reject 0/negative and absurdly large.
-    max_budget = _coerce_optional_int(
+    max_budget = _coerce_optional_money(
         criteria.get('max_budget'), "max_budget", min_value=1, max_value=100000)
     bedrooms = _coerce_optional_int(
         criteria.get('bedrooms'), "bedrooms", min_value=0, max_value=20)
+    bedrooms_minimum = _coerce_bool(criteria.get('bedrooms_minimum'))
     max_commute_time = _coerce_optional_int(
         criteria.get('max_commute_time'), "max_commute_time", min_value=1, max_value=300)
     no_commute = _coerce_bool(criteria.get('no_commute'))
@@ -3362,7 +3517,7 @@ async def api_search_direct():
     room_type = criteria.get('room_type')
     if isinstance(room_type, str):
         room_type = room_type.strip().lower() or None
-        if room_type not in ('studio', 'ensuite', 'shared'):
+        if room_type not in ('studio', 'ensuite', 'shared', 'whole'):
             room_type = None
     else:
         room_type = None
@@ -3460,6 +3615,21 @@ async def api_search_direct():
 
     # --- call the search tool DIRECTLY (no LangGraph / critic / memory) ---------
     try:
+        # Unexposed hard constraints (pets/accessibility/total budget/attendance/changes)
+        # belong to this conversation, even when the visible form submits only its slots.
+        from core.criteria_contract import apply_form_criteria
+        with _session_store.turn_lock(user_id, conversation_id):
+            _retained = copy.deepcopy(_get_session(user_id, conversation_id).persistent_state.get(
+                'accumulated_search_criteria') or {})
+        _form_criteria = {
+            'area':area, 'areas':areas, 'commute_destination':commute_destination,
+            'max_budget':monthly_from_weekly(max_budget) if max_budget and budget_period == 'week' else max_budget,
+            'max_travel_time':max_commute_time, 'no_commute':no_commute,
+            'bedrooms':bedrooms, 'bedrooms_minimum':bedrooms_minimum, 'budget_period':'month',
+            'room_type':room_type, 'move_in_date':move_in_date,
+        }
+        _direct_criteria = apply_form_criteria(_retained, _form_criteria)
+
         from core.agent_loop import _turn_ceiling_s
         _direct_deadline = time.monotonic() + _turn_ceiling_s()
         with request_context(request_id, user_id):
@@ -3472,9 +3642,15 @@ async def api_search_direct():
                 max_commute_time=max_commute_time,
                 no_commute=no_commute,
                 bedrooms=bedrooms,
+                bedrooms_minimum=bedrooms_minimum,
                 budget_period=budget_period,
                 room_type=room_type,
                 move_in_date=move_in_date,
+                property_features=_direct_criteria.get('property_features') or [],
+                accumulated_preferences=_direct_criteria.get('soft_preferences') or [],
+                monthly_total_budget=_direct_criteria.get('monthly_total_budget'),
+                office_days_per_week=_direct_criteria.get('office_days_per_week'),
+                max_changes=_direct_criteria.get('max_changes'),
                 # The panel Search button is an explicit user confirmation, so this path
                 # BYPASSES the soft criteria gate (never returns a soft clarification).
                 confirmed=True,
@@ -3486,6 +3662,7 @@ async def api_search_direct():
             # The tool returns structured failures instead of raising. Do not turn a
             # provider/RAG failure into the misleading "no matching properties" state.
             raise RuntimeError((result or {}).get('error', 'property search failed'))
+        result = dict(result, search_criteria={**(result.get('search_criteria') or {}), **_direct_criteria})
         result, commute_evidence = await validate_search_payload_with_provider(
             tool_registry, result,
             timeout_s=20.0, deadline_monotonic=_direct_deadline)
@@ -3494,7 +3671,9 @@ async def api_search_direct():
             result["candidate_status_text"] = render_candidate_status(
                 result["candidate_validation"], language=reply_language)
         # 工具已按 reply_language 本地化 summary；仅兜底文案由本端点自己本地化。
-        recommendations = result.get('recommendations') or []
+        from core.langgraph_agent import _structured_search_tool_data
+        result, panel_data = _structured_search_tool_data(result, {}, commute_evidence=commute_evidence)
+        recommendations = panel_data['recommendations']
         if recommendations:
             _fallback = (f"为你找到 {len(recommendations)} 套匹配房源。" if reply_language == 'zh'
                          else f"Found {len(recommendations)} matching properties.")
@@ -3516,6 +3695,7 @@ async def api_search_direct():
             "unverified_candidates": result.get("unverified_candidates") or [],
             "commute_evidence": result.get("commute_evidence") or [],
             "area_recommendations": result.get('area_recommendations') or [],
+            **retrieval_metadata(result),
         }
     except asyncio.CancelledError:
         # Same reason as /api/alex: a cancelled turn must not vanish from the
@@ -3582,21 +3762,10 @@ async def api_search_direct():
             # No long-term-memory write occurs on this deterministic path.
             _write_back_turn(
                 user_id, conversation_id, readable, message, recommendations,
-                criteria_overwrite={
-                    'area': area,
-                    'areas': areas,
-                    'commute_destination': commute_destination,
-                    'destination': commute_destination,
-                    'max_budget': max_budget,
-                    'max_travel_time': max_commute_time,
-                    'no_commute': no_commute,
-                    'bedrooms': bedrooms,
-                    'budget_period': budget_period,
-                    'room_type': room_type,
-                    'move_in_date': move_in_date,
-                },
+                accumulated_search_criteria=_direct_criteria,
                 turn_id=turn_id,
                 reply_language=reply_language,
+                search_retrieval=retrieval_metadata(result),
             )
             _snapshot = _build_turn_snapshot_after_turn(
                 user_id, conversation_id, turn_id
@@ -3628,6 +3797,9 @@ async def api_search_direct():
         finally:
             _background_jobs = list(_turn_background_jobs.get() or [])
             _turn_background_jobs.reset(_outbox_token)
+
+    if _snapshot is not None:
+        payload['view_state'] = view_state(_snapshot)
 
     try:
         conversation_store.finalize_request_turn(
@@ -3754,7 +3926,10 @@ def get_conversation_messages(cid):
     user_id, _ = _identity_from_request()
     if conversation_store.get_conversation(user_id, cid) is None:
         raise ApiError(404, "conversation not found")
-    return jsonify({"messages": conversation_store.get_messages(user_id, cid)})
+    from core.snapshot_recovery import recover_snapshot
+    messages = conversation_store.get_messages(user_id, cid)
+    snapshot = recover_snapshot(conversation_store.latest_snapshot(user_id, cid), messages)
+    return jsonify({"messages": messages, "view_state": view_state(snapshot)})
 
 
 # fork_conversation errors → (http status, stable error code, client message). Returned
@@ -4049,9 +4224,7 @@ def forget_me():
             and credentials_ok and hot_ok
         )
         if complete:
-            for key in (
-                "authenticated", "auth_user_id", "username", "display_name", "user_id"
-            ):
+            for key in _AUTH_SESSION_KEYS:
                 session.pop(key, None)
         logger.info(
             "privacy.erasure.completed" if complete else "privacy.erasure.partial",
@@ -4097,7 +4270,9 @@ def add_favorite():
 def get_favorites_list():
     """Return all of the resolved user's saved properties (full stored dicts)."""
     user_id, _ = _identity_from_request()
-    return jsonify({"favorites": conversation_store.list_favorites(user_id)})
+    from core.candidate_validation import revalidate_saved_favorite
+    return jsonify({"favorites": [revalidate_saved_favorite(row)
+        for row in conversation_store.list_favorites(user_id)]})
 
 
 @app.route('/api/favorites/<path:url>', methods=['DELETE'])

@@ -1,0 +1,79 @@
+[
+  {
+    "case": "fresh-C-register",
+    "actor": "C_FRESH_PUBLIC_API",
+    "request_seq": 1,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "fresh-C-create",
+    "actor": "C_FRESH_PUBLIC_API",
+    "request_seq": 2,
+    "expected_status": [
+      201
+    ],
+    "actual_status": 201,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "fresh-C-delete-complete",
+    "actor": "C_FRESH_PUBLIC_API",
+    "request_seq": 3,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "fresh-C-password-revoked",
+    "actor": "C_FRESH_PUBLIC_API",
+    "request_seq": 4,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "fresh-C-old-data-was-deleted",
+    "actor": "C_PREDELETE_SESSION_COPY",
+    "request_seq": 5,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "fresh-C-old-cookie-auth-revoked",
+    "actor": "C_PREDELETE_SESSION_COPY",
+    "request_seq": 6,
+    "expected_status": [
+      200
+    ],
+    "actual_status": 200,
+    "passed": true,
+    "detail": null
+  },
+  {
+    "case": "fresh-C-old-cookie-write-revoked",
+    "actor": "C_PREDELETE_SESSION_COPY",
+    "request_seq": 7,
+    "expected_status": [
+      401
+    ],
+    "actual_status": 401,
+    "passed": true,
+    "detail": null
+  }
+]

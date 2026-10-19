@@ -1,0 +1,1668 @@
+[
+  {
+    "area_recommendations": [],
+    "conversation_id": "83b3c2a05bac40949776659286bdc6ee",
+    "message": "- No listing is both fully eligible and verified.\nNot verified:\n- St. Augustine's Road, Camden Square, NW1: required features are not verified: wheelchair-accessible, step-free, cats allowed\n- Rochester Road, Kentish Town: required features are not verified: wheelchair-accessible, step-free, cats allowed; cannot verify the commute condition\n- Dartmouth Park Hill, Dartmouth Park, London, NW5: required features are not verified: wheelchair-accessible, step-free, cats allowed\n- Parkway, London, NW1: required features are not verified: wheelchair-accessible, step-free, cats allowed\nThese listings are cached; prices and availability may have changed. Confirm with the agent.\n\nReturned journey: St. Augustine's Road, Camden Square, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nThis origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.\nReturned journey: Dartmouth Park Hill, Dartmouth Park, London, NW5 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Parkway, London, NW1 → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).\nReturned journey: Camden → Gower Street, London WC1E 6BT, 32 minutes (the planner's fastest returned itinerary).",
+    "recommendations": [
+      {
+        "absent_features": [],
+        "address": "St. Augustine's Road, Camden Square, NW1",
+        "area": "Camden",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 2,
+        "budget_basis": 3000,
+        "budget_status": "✅ 在预算内",
+        "budget_status_code": "within",
+        "candidate_reasons": [],
+        "candidate_status": "unknown",
+        "candidate_unknown_reasons": [
+          "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+        ],
+        "description": "",
+        "distance_miles": null,
+        "explanation": "2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1",
+        "geo_location": "51.544399, -0.129503",
+        "images": [
+          "https://media.onthemarket.com/properties/20262177/1641684511/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262177/1641684511/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262177/1641684511/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262177/1641684511/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/20262177/1641684511/image-4-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": true,
+        "price": "£2400/month",
+        "property_type": "2 bed Apartment",
+        "qualification": {
+          "constraints": {
+            "areas": [
+              "camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "max_budget_monthly": 3000,
+            "max_commute_minutes": 50,
+            "monthly_total_budget": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": null,
+            "property_features": [
+              "wheelchair-accessible",
+              "step-free",
+              "cats allowed"
+            ],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ],
+            "zh": [
+              "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ]
+        },
+        "rank": 1,
+        "room_type": "whole",
+        "score": 100,
+        "score_breakdown": {},
+        "source": "OnTheMarket (cached)",
+        "status_reason": "required conditions are not fully verified",
+        "unverified_features": [
+          "wheelchair-accessible",
+          "step-free",
+          "cats allowed"
+        ],
+        "url": "https://www.onthemarket.com/details/20262177/",
+        "verified_commute_evidence": {
+          "candidate_key": "url:https://www.onthemarket.com/details/20262177",
+          "duration_minutes": 32,
+          "evidence_status": "success",
+          "from_address": "St. Augustine's Road, Camden Square, NW1",
+          "raw_data": {
+            "basis": "tfl_journey_plan",
+            "duration_minutes": 32,
+            "from_address": "St. Augustine's Road, Camden Square, NW1",
+            "route_source": "TfL Journey Planner",
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "success": true,
+          "to_address": "Gower Street, London WC1E 6BT"
+        },
+        "verified_commute_minutes": 32,
+        "verified_features": []
+      },
+      {
+        "absent_features": [],
+        "address": "Rochester Road, Kentish Town",
+        "area": "Camden",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 2,
+        "budget_basis": 3000,
+        "budget_status": "✅ 在预算内",
+        "budget_status_code": "within",
+        "candidate_reasons": [],
+        "candidate_status": "unknown",
+        "candidate_unknown_reasons": [
+          "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+          "commute tool failed"
+        ],
+        "description": "",
+        "distance_miles": null,
+        "explanation": "2 bedroom flat to rent in Rochester Road, Kentish Town",
+        "geo_location": "51.545511, -0.140153",
+        "images": [
+          "https://media.onthemarket.com/properties/8225050/1641682894/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/8225050/1641682894/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/8225050/1641682894/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/8225050/1641682894/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/8225050/1641682894/image-4-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": true,
+        "price": "£2600/month",
+        "property_type": "2 bed Flat",
+        "qualification": {
+          "constraints": {
+            "areas": [
+              "camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "max_budget_monthly": 3000,
+            "max_commute_minutes": 50,
+            "monthly_total_budget": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": null,
+            "property_features": [
+              "wheelchair-accessible",
+              "step-free",
+              "cats allowed"
+            ],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+              "commute tool failed"
+            ],
+            "zh": [
+              "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed",
+              "通勤条件尚未核实（查询失败）"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+            "commute tool failed"
+          ]
+        },
+        "rank": 2,
+        "room_type": "whole",
+        "score": 100,
+        "score_breakdown": {},
+        "source": "OnTheMarket (cached)",
+        "status_reason": "required conditions are not fully verified",
+        "unverified_features": [
+          "wheelchair-accessible",
+          "step-free",
+          "cats allowed"
+        ],
+        "url": "https://www.onthemarket.com/details/8225050/",
+        "verified_features": []
+      },
+      {
+        "absent_features": [],
+        "address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+        "area": "Camden",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 2,
+        "budget_basis": 3000,
+        "budget_status": "✅ 在预算内",
+        "budget_status_code": "within",
+        "candidate_reasons": [],
+        "candidate_status": "unknown",
+        "candidate_unknown_reasons": [
+          "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+        ],
+        "description": "",
+        "distance_miles": null,
+        "explanation": "2 bedroom flat to rent in Dartmouth Park Hill, Dartmouth Park, London, NW5",
+        "geo_location": "51.560934, -0.141327",
+        "images": [
+          "https://media.onthemarket.com/properties/20259367/1641644008/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/20259367/1641644008/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/20259367/1641644008/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/20259367/1641644008/image-3-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": true,
+        "price": "£2600/month",
+        "property_type": "2 bed Flat",
+        "qualification": {
+          "constraints": {
+            "areas": [
+              "camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "max_budget_monthly": 3000,
+            "max_commute_minutes": 50,
+            "monthly_total_budget": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": null,
+            "property_features": [
+              "wheelchair-accessible",
+              "step-free",
+              "cats allowed"
+            ],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ],
+            "zh": [
+              "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ]
+        },
+        "rank": 3,
+        "room_type": "whole",
+        "score": 100,
+        "score_breakdown": {},
+        "source": "OnTheMarket (cached)",
+        "status_reason": "required conditions are not fully verified",
+        "unverified_features": [
+          "wheelchair-accessible",
+          "step-free",
+          "cats allowed"
+        ],
+        "url": "https://www.onthemarket.com/details/20259367/",
+        "verified_commute_evidence": {
+          "candidate_key": "url:https://www.onthemarket.com/details/20259367",
+          "duration_minutes": 32,
+          "evidence_status": "success",
+          "from_address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+          "raw_data": {
+            "basis": "tfl_journey_plan",
+            "duration_minutes": 32,
+            "from_address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+            "route_source": "TfL Journey Planner",
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "success": true,
+          "to_address": "Gower Street, London WC1E 6BT"
+        },
+        "verified_commute_minutes": 32,
+        "verified_features": []
+      },
+      {
+        "absent_features": [],
+        "address": "Parkway, London, NW1",
+        "area": "Camden",
+        "availability_status": "",
+        "available_from": "",
+        "bedrooms": 2,
+        "budget_basis": 3000,
+        "budget_status": "✅ 在预算内",
+        "budget_status_code": "within",
+        "candidate_reasons": [],
+        "candidate_status": "unknown",
+        "candidate_unknown_reasons": [
+          "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+        ],
+        "description": "",
+        "distance_miles": null,
+        "explanation": "2 bedroom flat to rent in Parkway, London, NW1",
+        "geo_location": "51.538582, -0.143305",
+        "images": [
+          "https://media.onthemarket.com/properties/20259996/1641653647/image-0-480x320.jpg",
+          "https://media.onthemarket.com/properties/20259996/1641653647/image-1-480x320.jpg",
+          "https://media.onthemarket.com/properties/20259996/1641653647/image-2-480x320.jpg",
+          "https://media.onthemarket.com/properties/20259996/1641653647/image-3-480x320.jpg",
+          "https://media.onthemarket.com/properties/20259996/1641653647/image-4-480x320.jpg"
+        ],
+        "match_type": "perfect",
+        "possibly_outdated": true,
+        "price": "£2650/month",
+        "property_type": "2 bed Flat",
+        "qualification": {
+          "constraints": {
+            "areas": [
+              "camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "max_budget_monthly": 3000,
+            "max_commute_minutes": 50,
+            "monthly_total_budget": null,
+            "move_in_date": null,
+            "no_commute": false,
+            "office_days_per_week": null,
+            "property_features": [
+              "wheelchair-accessible",
+              "step-free",
+              "cats allowed"
+            ],
+            "room_type": "whole"
+          },
+          "reason_messages": {
+            "en": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ],
+            "zh": [
+              "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+            ]
+          },
+          "reasons": [],
+          "source": "structured_listing",
+          "status": "unknown",
+          "unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ]
+        },
+        "rank": 4,
+        "room_type": "whole",
+        "score": 100,
+        "score_breakdown": {},
+        "source": "OnTheMarket (cached)",
+        "status_reason": "required conditions are not fully verified",
+        "unverified_features": [
+          "wheelchair-accessible",
+          "step-free",
+          "cats allowed"
+        ],
+        "url": "https://www.onthemarket.com/details/20259996/",
+        "verified_commute_evidence": {
+          "candidate_key": "url:https://www.onthemarket.com/details/20259996",
+          "duration_minutes": 32,
+          "evidence_status": "success",
+          "from_address": "Parkway, London, NW1",
+          "raw_data": {
+            "basis": "tfl_journey_plan",
+            "duration_minutes": 32,
+            "from_address": "Parkway, London, NW1",
+            "route_source": "TfL Journey Planner",
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "success": true,
+          "to_address": "Gower Street, London WC1E 6BT"
+        },
+        "verified_commute_minutes": 32,
+        "verified_features": []
+      }
+    ],
+    "response_type": "search",
+    "search_criteria": {
+      "amenities_of_interest": [],
+      "area": "Camden",
+      "areas": [
+        "Camden"
+      ],
+      "bedrooms": 2,
+      "bedrooms_minimum": true,
+      "budget_period": "month",
+      "commute_destination": "Gower Street, London WC1E 6BT",
+      "constraint_sources": {
+        "area": {
+          "message_id": 94,
+          "original_source": {
+            "source": "user_message",
+            "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+            "value": "Camden"
+          },
+          "reason": "read_only_or_ancillary_source",
+          "source": "criteria_recovery",
+          "value": "Camden"
+        },
+        "bedrooms": {
+          "source": "user_message",
+          "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+          "value": 2
+        },
+        "bedrooms_minimum": {
+          "source": "user_message",
+          "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+          "value": true
+        },
+        "max_budget": {
+          "source": "user_message",
+          "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+          "value": 3000
+        },
+        "max_travel_time": {
+          "source": "user_message",
+          "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+          "value": 50
+        },
+        "property_features": {
+          "source": "user_message",
+          "text": "Search Camden only. Set the maximum monthly rent to £3,000, a whole home and at least two bedrooms. Genuine step-free street-to-door access and enough internal wheelchair space are essential. Our cat needs permission. Keep the 50-minute public-transport commute limit to UCL. A lift is only a preference, not a requirement. Search the cached candidates and keep missing access and cat-permission evidence unknown.",
+          "value": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ]
+        },
+        "room_type": {
+          "source": "user_message",
+          "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+          "value": "whole"
+        }
+      },
+      "criteria_repair_provenance": [
+        {
+          "field": "area",
+          "message_id": 6,
+          "previous_value": "Camden",
+          "reason": "read_only_or_ancillary_source",
+          "value": "Watford"
+        },
+        {
+          "field": "area",
+          "message_id": 94,
+          "previous_value": "Camden",
+          "reason": "read_only_or_ancillary_source",
+          "value": "Camden"
+        }
+      ],
+      "destination": "Gower Street, London WC1E 6BT",
+      "max_budget": 3000,
+      "max_budget_monthly": 3000,
+      "max_travel_time": 50,
+      "move_in_date": null,
+      "no_commute": false,
+      "plans": {
+        "Camden": {
+          "amenities_of_interest": [],
+          "area": "Camden",
+          "areas": [
+            "Camden"
+          ],
+          "bedrooms": 2,
+          "bedrooms_minimum": true,
+          "budget_period": "month",
+          "commute_destination": "Gower Street, London WC1E 6BT",
+          "constraint_sources": {
+            "area": {
+              "message_id": 94,
+              "original_source": {
+                "source": "user_message",
+                "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+                "value": "Camden"
+              },
+              "reason": "read_only_or_ancillary_source",
+              "source": "criteria_recovery",
+              "value": "Camden"
+            },
+            "bedrooms": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": 2
+            },
+            "bedrooms_minimum": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": true
+            },
+            "max_budget": {
+              "source": "user_message",
+              "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+              "value": 3000
+            },
+            "max_travel_time": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": 50
+            },
+            "property_features": {
+              "source": "user_message",
+              "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+              "value": [
+                "wheelchair-accessible",
+                "step-free"
+              ]
+            },
+            "room_type": {
+              "source": "user_message",
+              "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+              "value": "whole"
+            }
+          },
+          "criteria_repair_provenance": [
+            {
+              "field": "area",
+              "message_id": 6,
+              "previous_value": "Camden",
+              "reason": "read_only_or_ancillary_source",
+              "value": "Watford"
+            },
+            {
+              "field": "area",
+              "message_id": 94,
+              "previous_value": "Camden",
+              "reason": "read_only_or_ancillary_source",
+              "value": "Camden"
+            }
+          ],
+          "destination": "Gower Street, London WC1E 6BT",
+          "max_budget": 3000,
+          "max_travel_time": 50,
+          "property_features": [
+            "wheelchair-accessible",
+            "step-free"
+          ],
+          "room_type": "whole",
+          "soft_preferences": [
+            "Would like lift",
+            "Would like step-free"
+          ]
+        }
+      },
+      "property_features": [
+        "wheelchair-accessible",
+        "step-free",
+        "cats allowed"
+      ],
+      "rent_filter_ceiling_monthly": null,
+      "room_type": "whole",
+      "soft_preferences": [
+        "Would like lift",
+        "Would like step-free"
+      ]
+    },
+    "turn_id": "342cd2b14de244c3b68a26c91db09730",
+    "view_state": {
+      "criteria": {
+        "amenities_of_interest": [],
+        "area": "Camden",
+        "areas": [
+          "Camden"
+        ],
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "area": {
+            "message_id": 94,
+            "original_source": {
+              "source": "user_message",
+              "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+              "value": "Camden"
+            },
+            "reason": "read_only_or_ancillary_source",
+            "source": "criteria_recovery",
+            "value": "Camden"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": true
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+            "value": 3000
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 50
+          },
+          "property_features": {
+            "source": "user_message",
+            "text": "Search Camden only. Set the maximum monthly rent to £3,000, a whole home and at least two bedrooms. Genuine step-free street-to-door access and enough internal wheelchair space are essential. Our cat needs permission. Keep the 50-minute public-transport commute limit to UCL. A lift is only a preference, not a requirement. Search the cached candidates and keep missing access and cat-permission evidence unknown.",
+            "value": [
+              "wheelchair-accessible",
+              "step-free",
+              "cats allowed"
+            ]
+          },
+          "room_type": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": "whole"
+          }
+        },
+        "criteria_repair_provenance": [
+          {
+            "field": "area",
+            "message_id": 6,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Watford"
+          },
+          {
+            "field": "area",
+            "message_id": 94,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Camden"
+          }
+        ],
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 3000,
+        "max_travel_time": 50,
+        "plans": {
+          "Camden": {
+            "amenities_of_interest": [],
+            "area": "Camden",
+            "areas": [
+              "Camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "budget_period": "month",
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "constraint_sources": {
+              "area": {
+                "message_id": 94,
+                "original_source": {
+                  "source": "user_message",
+                  "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+                  "value": "Camden"
+                },
+                "reason": "read_only_or_ancillary_source",
+                "source": "criteria_recovery",
+                "value": "Camden"
+              },
+              "bedrooms": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": 2
+              },
+              "bedrooms_minimum": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": true
+              },
+              "max_budget": {
+                "source": "user_message",
+                "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+                "value": 3000
+              },
+              "max_travel_time": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": 50
+              },
+              "property_features": {
+                "source": "user_message",
+                "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+                "value": [
+                  "wheelchair-accessible",
+                  "step-free"
+                ]
+              },
+              "room_type": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": "whole"
+              }
+            },
+            "criteria_repair_provenance": [
+              {
+                "field": "area",
+                "message_id": 6,
+                "previous_value": "Camden",
+                "reason": "read_only_or_ancillary_source",
+                "value": "Watford"
+              },
+              {
+                "field": "area",
+                "message_id": 94,
+                "previous_value": "Camden",
+                "reason": "read_only_or_ancillary_source",
+                "value": "Camden"
+              }
+            ],
+            "destination": "Gower Street, London WC1E 6BT",
+            "max_budget": 3000,
+            "max_travel_time": 50,
+            "property_features": [
+              "wheelchair-accessible",
+              "step-free"
+            ],
+            "room_type": "whole",
+            "soft_preferences": [
+              "Would like lift",
+              "Would like step-free"
+            ]
+          }
+        },
+        "property_features": [
+          "wheelchair-accessible",
+          "step-free",
+          "cats allowed"
+        ],
+        "room_type": "whole",
+        "soft_preferences": [
+          "Would like lift",
+          "Would like step-free"
+        ]
+      },
+      "operation": "replace",
+      "results": [
+        {
+          "absent_features": [],
+          "address": "St. Augustine's Road, Camden Square, NW1",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1",
+          "geo_location": "51.544399, -0.129503",
+          "images": [
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2400/month",
+          "property_type": "2 bed Apartment",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ]
+          },
+          "rank": 1,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/20262177/",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20262177",
+            "duration_minutes": 32,
+            "evidence_status": "success",
+            "from_address": "St. Augustine's Road, Camden Square, NW1",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "duration_minutes": 32,
+              "from_address": "St. Augustine's Road, Camden Square, NW1",
+              "route_source": "TfL Journey Planner",
+              "to_address": "Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Rochester Road, Kentish Town",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+            "commute tool failed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Rochester Road, Kentish Town",
+          "geo_location": "51.545511, -0.140153",
+          "images": [
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2600/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+                "commute tool failed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed",
+                "通勤条件尚未核实（查询失败）"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+              "commute tool failed"
+            ]
+          },
+          "rank": 2,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/8225050/",
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Dartmouth Park Hill, Dartmouth Park, London, NW5",
+          "geo_location": "51.560934, -0.141327",
+          "images": [
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-3-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2600/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ]
+          },
+          "rank": 3,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/20259367/",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20259367",
+            "duration_minutes": 32,
+            "evidence_status": "success",
+            "from_address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "duration_minutes": 32,
+              "from_address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+              "route_source": "TfL Journey Planner",
+              "to_address": "Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Parkway, London, NW1",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Parkway, London, NW1",
+          "geo_location": "51.538582, -0.143305",
+          "images": [
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2650/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ]
+          },
+          "rank": 4,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/20259996/",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20259996",
+            "duration_minutes": 32,
+            "evidence_status": "success",
+            "from_address": "Parkway, London, NW1",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "duration_minutes": 32,
+              "from_address": "Parkway, London, NW1",
+              "route_source": "TfL Journey Planner",
+              "to_address": "Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        }
+      ],
+      "revision": 15
+    }
+  },
+  {
+    "conversation_id": "83b3c2a05bac40949776659286bdc6ee",
+    "message": "The current weather in Islington, London is 14.2°C with light rain. It feels like 12.8°C, humidity is at 72%, and wind speed is 11.5 km/h. The UV index is low at 1.2. Since rain is likely, it is worth taking an umbrella if you head out.\n\nAs you asked, I have not run any commute calculation, and your housing search conditions remain unchanged — the current focus is still St. Augustine's Road, Camden Square, NW1 at £2400/month, and your access requirements (wheelchair-accessible, step-free) stay as they are. The search has not been moved to Islington.\n\nIf you would like, I can look up live TfL journey details or fares for your day trip, or return to comparing the Camden listings.\n\nPlease double-check the exact prices against the source listing.",
+    "response_type": "chat",
+    "turn_id": "63f93828382b4dd4901be9c4e97b92ff",
+    "view_state": {
+      "criteria": {
+        "amenities_of_interest": [],
+        "area": "Camden",
+        "areas": [
+          "Camden"
+        ],
+        "bedrooms": 2,
+        "bedrooms_minimum": true,
+        "budget_period": "month",
+        "commute_destination": "Gower Street, London WC1E 6BT",
+        "constraint_sources": {
+          "area": {
+            "message_id": 94,
+            "original_source": {
+              "source": "user_message",
+              "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+              "value": "Camden"
+            },
+            "reason": "read_only_or_ancillary_source",
+            "source": "criteria_recovery",
+            "value": "Camden"
+          },
+          "bedrooms": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 2
+          },
+          "bedrooms_minimum": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": true
+          },
+          "max_budget": {
+            "source": "user_message",
+            "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+            "value": 3000
+          },
+          "max_travel_time": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": 50
+          },
+          "property_features": {
+            "source": "user_message",
+            "text": "Search Camden only. Set the maximum monthly rent to £3,000, a whole home and at least two bedrooms. Genuine step-free street-to-door access and enough internal wheelchair space are essential. Our cat needs permission. Keep the 50-minute public-transport commute limit to UCL. A lift is only a preference, not a requirement. Search the cached candidates and keep missing access and cat-permission evidence unknown.",
+            "value": [
+              "wheelchair-accessible",
+              "step-free",
+              "cats allowed"
+            ]
+          },
+          "room_type": {
+            "source": "user_message",
+            "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+            "value": "whole"
+          }
+        },
+        "criteria_repair_provenance": [
+          {
+            "field": "area",
+            "message_id": 6,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Watford"
+          },
+          {
+            "field": "area",
+            "message_id": 94,
+            "previous_value": "Camden",
+            "reason": "read_only_or_ancillary_source",
+            "value": "Camden"
+          }
+        ],
+        "destination": "Gower Street, London WC1E 6BT",
+        "max_budget": 3000,
+        "max_travel_time": 50,
+        "plans": {
+          "Camden": {
+            "amenities_of_interest": [],
+            "area": "Camden",
+            "areas": [
+              "Camden"
+            ],
+            "bedrooms": 2,
+            "bedrooms_minimum": true,
+            "budget_period": "month",
+            "commute_destination": "Gower Street, London WC1E 6BT",
+            "constraint_sources": {
+              "area": {
+                "message_id": 94,
+                "original_source": {
+                  "source": "user_message",
+                  "text": "For the last focused Camden flat, St. Augustine's Road, not the older Croxley View flat, reopen the full cached details using the selected card's exact saved listing link. Is street-to-door step-free access, internal doorway/bathroom space and permission for our cat actually evidenced? Also check current weather for the viewing in Camden and calculate public transport from that specific flat to UCL. Give separate, complete detail, weather and journey sections, explain what the returned fastest itinerary does not verify for a wheelchair user and child, and do not run a new property search or treat a weather location as a request to change housing criteria.",
+                  "value": "Camden"
+                },
+                "reason": "read_only_or_ancillary_source",
+                "source": "criteria_recovery",
+                "value": "Camden"
+              },
+              "bedrooms": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": 2
+              },
+              "bedrooms_minimum": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": true
+              },
+              "max_budget": {
+                "source": "user_message",
+                "text": " Search Camden only with a £3,000 per month ceiling, a whole home and at least two bedrooms. Remove lift from both hard requirements and preferences;  step-free street-to-door access and enough wheelchair space remain essential, as do permission for our cat and the 50-minute UCL commute limit. Please apply these replacements now without asking me to choose between old and new budgets.",
+                "value": 3000
+              },
+              "max_travel_time": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": 50
+              },
+              "property_features": {
+                "source": "user_message",
+                "text": "We have reopened the same family search. Keep Camden only, £3,000 per month, a whole home with at least two bedrooms, genuine step-free street access, enough wheelchair space, permission for our cat and the 50-minute UCL limit. A lift would be a preference, not a requirement: a genuinely step-free ground-floor home is fine. Search with that optional lift preference and show the actual active hard requirements separately from preferences and unknown evidence.",
+                "value": [
+                  "wheelchair-accessible",
+                  "step-free"
+                ]
+              },
+              "room_type": {
+                "source": "user_message",
+                "text": "We are two adults, a six-year-old and a cat looking for a whole home in Watford, at least two bedrooms, up to £2,500 per month, with a public-transport commute to UCL of at most 50 minutes. One adult uses a wheelchair: step-free access from the street and enough internal space are essential. A lift would be a preference, not a requirement;  a genuinely step-free ground-floor home is fine. Please search actual cached listings, and distinguish unverified wheelchair access and pet permission from confirmed facts. A lift alone must not be treated as proof of accessibility.",
+                "value": "whole"
+              }
+            },
+            "criteria_repair_provenance": [
+              {
+                "field": "area",
+                "message_id": 6,
+                "previous_value": "Camden",
+                "reason": "read_only_or_ancillary_source",
+                "value": "Watford"
+              },
+              {
+                "field": "area",
+                "message_id": 94,
+                "previous_value": "Camden",
+                "reason": "read_only_or_ancillary_source",
+                "value": "Camden"
+              }
+            ],
+            "destination": "Gower Street, London WC1E 6BT",
+            "max_budget": 3000,
+            "max_travel_time": 50,
+            "property_features": [
+              "wheelchair-accessible",
+              "step-free"
+            ],
+            "room_type": "whole",
+            "soft_preferences": [
+              "Would like lift",
+              "Would like step-free"
+            ]
+          }
+        },
+        "property_features": [
+          "wheelchair-accessible",
+          "step-free",
+          "cats allowed"
+        ],
+        "room_type": "whole",
+        "soft_preferences": [
+          "Would like lift",
+          "Would like step-free"
+        ]
+      },
+      "operation": "replace",
+      "results": [
+        {
+          "absent_features": [],
+          "address": "St. Augustine's Road, Camden Square, NW1",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom apartment to rent in St. Augustine's Road, Camden Square, NW1",
+          "geo_location": "51.544399, -0.129503",
+          "images": [
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20262177/1641684511/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2400/month",
+          "property_type": "2 bed Apartment",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ]
+          },
+          "rank": 1,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/20262177/",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20262177",
+            "duration_minutes": 32,
+            "evidence_status": "success",
+            "from_address": "St. Augustine's Road, Camden Square, NW1",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "duration_minutes": 32,
+              "from_address": "St. Augustine's Road, Camden Square, NW1",
+              "route_source": "TfL Journey Planner",
+              "to_address": "Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Rochester Road, Kentish Town",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+            "commute tool failed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Rochester Road, Kentish Town",
+          "geo_location": "51.545511, -0.140153",
+          "images": [
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/8225050/1641682894/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2600/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+                "commute tool failed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed",
+                "通勤条件尚未核实（查询失败）"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed",
+              "commute tool failed"
+            ]
+          },
+          "rank": 2,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/8225050/",
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Dartmouth Park Hill, Dartmouth Park, London, NW5",
+          "geo_location": "51.560934, -0.141327",
+          "images": [
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259367/1641644008/image-3-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2600/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ]
+          },
+          "rank": 3,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/20259367/",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20259367",
+            "duration_minutes": 32,
+            "evidence_status": "success",
+            "from_address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "duration_minutes": 32,
+              "from_address": "Dartmouth Park Hill, Dartmouth Park, London, NW5",
+              "route_source": "TfL Journey Planner",
+              "to_address": "Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        },
+        {
+          "absent_features": [],
+          "address": "Parkway, London, NW1",
+          "area": "Camden",
+          "availability_status": "",
+          "available_from": "",
+          "bedrooms": 2,
+          "budget_basis": 3000,
+          "budget_status": "✅ 在预算内",
+          "budget_status_code": "within",
+          "candidate_reasons": [],
+          "candidate_status": "unknown",
+          "candidate_unknown_reasons": [
+            "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+          ],
+          "description": "",
+          "distance_miles": null,
+          "explanation": "2 bedroom flat to rent in Parkway, London, NW1",
+          "geo_location": "51.538582, -0.143305",
+          "images": [
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-0-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-1-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-2-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-3-480x320.jpg",
+            "https://media.onthemarket.com/properties/20259996/1641653647/image-4-480x320.jpg"
+          ],
+          "match_type": "perfect",
+          "possibly_outdated": true,
+          "price": "£2650/month",
+          "property_type": "2 bed Flat",
+          "qualification": {
+            "constraints": {
+              "areas": [
+                "camden"
+              ],
+              "bedrooms": 2,
+              "bedrooms_minimum": true,
+              "commute_destination": "Gower Street, London WC1E 6BT",
+              "max_budget_monthly": 3000,
+              "max_commute_minutes": 50,
+              "monthly_total_budget": null,
+              "move_in_date": null,
+              "no_commute": false,
+              "office_days_per_week": null,
+              "property_features": [
+                "wheelchair-accessible",
+                "step-free",
+                "cats allowed"
+              ],
+              "room_type": "whole"
+            },
+            "reason_messages": {
+              "en": [
+                "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+              ],
+              "zh": [
+                "必需设施尚未核实：轮椅通行条件、无台阶通行、cats allowed"
+              ]
+            },
+            "reasons": [],
+            "source": "structured_listing",
+            "status": "unknown",
+            "unknown_reasons": [
+              "required features are not verified: wheelchair-accessible, step-free, cats allowed"
+            ]
+          },
+          "rank": 4,
+          "room_type": "whole",
+          "score": 100,
+          "score_breakdown": {},
+          "source": "OnTheMarket (cached)",
+          "status_reason": "required conditions are not fully verified",
+          "unverified_features": [
+            "wheelchair-accessible",
+            "step-free",
+            "cats allowed"
+          ],
+          "url": "https://www.onthemarket.com/details/20259996/",
+          "verified_commute_evidence": {
+            "candidate_key": "url:https://www.onthemarket.com/details/20259996",
+            "duration_minutes": 32,
+            "evidence_status": "success",
+            "from_address": "Parkway, London, NW1",
+            "raw_data": {
+              "basis": "tfl_journey_plan",
+              "duration_minutes": 32,
+              "from_address": "Parkway, London, NW1",
+              "route_source": "TfL Journey Planner",
+              "to_address": "Gower Street, London WC1E 6BT"
+            },
+            "success": true,
+            "to_address": "Gower Street, London WC1E 6BT"
+          },
+          "verified_commute_minutes": 32,
+          "verified_features": []
+        }
+      ],
+      "revision": 17
+    }
+  }
+]

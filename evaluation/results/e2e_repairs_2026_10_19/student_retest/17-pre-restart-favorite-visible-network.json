@@ -1,0 +1,30 @@
+[
+  {
+    "url": "http://127.0.0.1:15008/api/favorites",
+    "status": 200,
+    "method": "GET",
+    "request_headers": {
+      "accept": "*/*",
+      "cookie": "[REDACTED]",
+      "referer": "http://127.0.0.1:15008/",
+      "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "sec-ch-ua": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Linux\""
+    },
+    "request_body": null,
+    "response_headers": {
+      "x-agent-version": "e2e-repair-frozen-working-tree",
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "http://127.0.0.1:15008",
+      "content-length": "1536",
+      "date": "Mon, 19 Oct 2026 09:02:43 GMT",
+      "x-agent-arch": "fc_loop",
+      "content-type": "application/json",
+      "x-agent-specialists": "0",
+      "server": "uvicorn",
+      "vary": "Cookie"
+    },
+    "response_body": "{\"favorites\": [{\"address\": \"The Grove, Enfield\", \"availability_status\": \"\", \"available_from\": \"\", \"budget_basis\": 3000, \"budget_status\": \"✅ 在预算内\", \"explanation\": \"3 bedroom house to rent in The Grove, Enfield\", \"geo_location\": \"51.658153, -0.103044\", \"images\": [\"https://media.onthemarket.com/properties/20335504/1644305883/image-0-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-1-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-2-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-3-480x320.jpg\", \"https://media.onthemarket.com/properties/20335504/1644305883/image-4-480x320.jpg\"], \"match_type\": \"perfect\", \"possibly_outdated\": true, \"price\": \"£2300/month\", \"qualification\": {\"constraints\": {\"areas\": [], \"bedrooms\": 3, \"bedrooms_minimum\": false, \"commute_destination\": \"Gower Street, London WC1E 6BT\", \"max_budget_monthly\": 3000, \"max_commute_minutes\": null, \"move_in_date\": null, \"no_commute\": false, \"property_features\": [], \"room_type\": \"whole\"}, \"reasons\": [], \"source\": \"structured_listing\", \"status\": \"eligible\", \"unknown_reasons\": []}, \"rank\": 1, \"saved_at\": \"2026-10-19T08:57:20.359Z\", \"source_conversation_title\": \"我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…\", \"travel_time\": \"\", \"url\": \"https://www.onthemarket.com/details/20335504/\", \"user_id\": \"15f470821e334cc68b70d7f959b67421\"}]}"
+  }
+]

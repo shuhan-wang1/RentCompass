@@ -1,0 +1,22 @@
+{
+  "conversations": {
+    "same": true,
+    "before_status": 200,
+    "after_status": 200
+  },
+  "original-messages": {
+    "same": true,
+    "before_status": 200,
+    "after_status": 200
+  },
+  "current-messages": {
+    "same": true,
+    "before_status": 200,
+    "after_status": 200
+  },
+  "favorites": {
+    "same": true,
+    "before_status": 200,
+    "after_status": 200
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "chat_attrs": {
+    "class": "chat-messages",
+    "id": "chatMessages"
+  },
+  "input_attrs": {
+    "class": "chat-textarea",
+    "id": "chatInput",
+    "rows": "1",
+    "placeholder": "Message Alex...",
+    "oninput": "autoResize(this)",
+    "onkeydown": "handleEnter(event)"
+  },
+  "narrow": {
+    "width": 320,
+    "scrollWidth": 320
+  },
+  "menu_tab": [
+    {
+      "tag": "A",
+      "id": "",
+      "text": "RentCompass",
+      "box": {
+        "x": 66,
+        "y": 14.5,
+        "width": 175.328125,
+        "height": 30
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "EN",
+      "box": {
+        "x": 245.328125,
+        "y": 11.5,
+        "width": 38.25,
+        "height": 36
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "中文",
+      "box": {
+        "x": 283.578125,
+        "y": 11.5,
+        "width": 27.203125,
+        "height": 36
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "newChatBtn",
+      "text": "New",
+      "box": {
+        "x": 188.8253173828125,
+        "y": 76,
+        "width": 71.28125,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "userMenuBtn",
+      "text": "G\nGuest",
+      "box": {
+        "x": 9.310835838317871,
+        "y": 582,
+        "width": 259,
+        "height": 48
+      }
+    },
+    {
+      "tag": "DIV",
+      "id": "chatMessages",
+      "text": "ALEX\nHello! I'm Alex. I can help you find apartments in London.\n\nTry asking me:\n\"Find a 1-bed near King's Cross under £2000\"\n\"What is the vibe like in Hackney?\"\n\"Show me flats with a 20min commute to UCL\"",
+      "box": {
+        "x": 0,
+        "y": 138.1875,
+        "width": 320,
+        "height": 163.625
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Near UCL",
+      "box": {
+        "x": 24,
+        "y": 318.8125,
+        "width": 82.3125,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Safe areas",
+      "box": {
+        "x": 114.3125,
+        "y": 318.8125,
+        "width": 89.40625,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "",
+      "text": "Rent stats",
+      "box": {
+        "x": 211.71875,
+        "y": 318.8125,
+        "width": 86.578125,
+        "height": 28
+      }
+    },
+    {
+      "tag": "TEXTAREA",
+      "id": "chatInput",
+      "text": "",
+      "box": {
+        "x": 37,
+        "y": 371.8125,
+        "width": 200,
+        "height": 38.1875
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "sendBtn",
+      "text": "",
+      "box": {
+        "x": 247,
+        "y": 372,
+        "width": 36,
+        "height": 36
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "btn-results",
+      "text": "Search",
+      "box": {
+        "x": 99.546875,
+        "y": 479,
+        "width": 104.625,
+        "height": 28
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "id": "btn-favorites",
+      "text": "Saved\n0",
+      "box": {
+        "x": 206.171875,
+        "y": 479,
+        "width": 117.296875,
+        "height": 28
+      }
+    }
+  ],
+  "requests": []
+}

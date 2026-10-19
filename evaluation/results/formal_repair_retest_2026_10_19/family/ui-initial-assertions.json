@@ -1,0 +1,10 @@
+{
+  "closed_sidebar_not_tabbable": true,
+  "touch_menu_opens": true,
+  "focus_moves_into_menu": true,
+  "escape_closes": true,
+  "escape_returns_focus": true,
+  "menu_traps_focus": true,
+  "390_no_horizontal_overflow": true,
+  "no_model_requests": true
+}

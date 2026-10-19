@@ -1,0 +1,21 @@
+{
+  "time": 1792415371.2794948,
+  "checks": {
+    "no_model_requests": true,
+    "same_conversation_restored": true,
+    "favorites_count": true,
+    "favorite_identities": true,
+    "criteria_areas": true,
+    "criteria_room_type": true,
+    "criteria_bedrooms": true,
+    "criteria_max_budget": true,
+    "criteria_commute_destination": true,
+    "criteria_max_travel_time": true,
+    "criteria_bedrooms_minimum": true,
+    "criteria_no_commute": true,
+    "criteria_move_in_date": true,
+    "visible_result_identities": true
+  },
+  "all_passed": true,
+  "label": "recovery-after-final-restart"
+}

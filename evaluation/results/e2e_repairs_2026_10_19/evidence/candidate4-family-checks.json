@@ -1,0 +1,46 @@
+[
+  {
+    "case": "chat-completes-with-success",
+    "passed": true
+  },
+  {
+    "case": "cat-permission-is-an-active-hard-constraint",
+    "passed": true
+  },
+  {
+    "case": "family-area-bedroom-and-budget-correct",
+    "passed": true
+  },
+  {
+    "case": "unknown-cat-permission-never-green",
+    "passed": true
+  },
+  {
+    "case": "chat-completes-with-success",
+    "passed": true
+  },
+  {
+    "case": "all-housing-criteria-unchanged-after-weather",
+    "passed": true
+  },
+  {
+    "case": "same-card-set-after-weather",
+    "passed": true
+  },
+  {
+    "case": "weather-value-retained",
+    "passed": true
+  },
+  {
+    "case": "no-false-commute-removal-note",
+    "passed": true
+  },
+  {
+    "case": "no-old-dangling-recap",
+    "passed": true
+  },
+  {
+    "case": "cards-survive-browser-refresh",
+    "passed": true
+  }
+]

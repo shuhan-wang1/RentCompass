@@ -1,0 +1,18 @@
+{
+  "existing_container_ids_and_start_times_unchanged": {
+    "uk-rent-app-fc": true,
+    "uk-rent-app": true,
+    "uk-rent-searxng": true,
+    "uk-rent-valkey": true
+  },
+  "only_test_process_groups_terminated": [
+    "relay",
+    "app"
+  ],
+  "isolated_ports_closed": {
+    "15019": true,
+    "19094": true
+  },
+  "public_site_not_reopened": true,
+  "at": 1792416153.4435155
+}

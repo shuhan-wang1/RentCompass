@@ -1,0 +1,39 @@
+{
+  "status": 200,
+  "body": {
+    "conversations": [
+      {
+        "agent_arch": "fc_loop",
+        "agent_version": "e2e-repair-frozen-working-tree",
+        "branch_depth": 0,
+        "created_at": "2026-10-19T09:00:33.528659+00:00",
+        "edited_slot_turn_id": null,
+        "fork_reason": null,
+        "forked_from_turn_id": null,
+        "id": "51817b80f9ea41649667074bee9a3b7f",
+        "message_count": 2,
+        "parent_conversation_id": null,
+        "root_conversation_id": "51817b80f9ea41649667074bee9a3b7f",
+        "strict": false,
+        "title": "这是我新开的对话。请按我之前保存的长期默认继续找房，并先告诉我你实际读取到了什么…",
+        "updated_at": "2026-10-19T09:00:48.720121+00:00"
+      },
+      {
+        "agent_arch": "fc_loop",
+        "agent_version": "e2e-repair-frozen-working-tree",
+        "branch_depth": 0,
+        "created_at": "2026-10-19T08:56:21.123961+00:00",
+        "edited_slot_turn_id": null,
+        "fork_reason": null,
+        "forked_from_turn_id": null,
+        "id": "50644e40a5f84f7f8b2926a5a9252fb0",
+        "message_count": 12,
+        "parent_conversation_id": null,
+        "root_conversation_id": "50644e40a5f84f7f8b2926a5a9252fb0",
+        "strict": false,
+        "title": "我和两个同学都是中文留学生，下个月去伦敦大学学院 UCL 读硕士，还没确定住处。…",
+        "updated_at": "2026-10-19T09:00:00.697911+00:00"
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+Independent English professional audit, 2026-10-19 UTC
+Current application: http://127.0.0.1:15019
+Current conversation: 817bd0754098483997d66252c68b338e
+Private storage: professional-private-storage.json (exclude from public archive)
+Browser allows only this localhost origin; external image/font/link/tile requests aborted.
+No product source/old reports read. No product code changed. No external listing requests made by audit client.
+
+Initial intended user constraints:
+- Lewisham or Stratford, self-contained whole one-bedroom home.
+- Rent <= GBP1850/month, separate rent+commute ceiling GBP2150/month.
+- Bank station, 3 office days/week, public transport around <=45 minutes.
+
+R1: 2026-10-19T12:24:35.218637Z to 12:24:48.286382Z, POST /api/alex 200.
+No properties displayed; assistant said only Lewisham commute was present and directed user elsewhere for listings.
+Literal incomplete user-visible statement: "Total journey time: which is within your 45-minute limit."
+Request, DOM and screenshot retained. CDP response.text failed on consumed SSE; this instrumentation limitation means R1 has no raw SSE body.
+
+Browser restarted from its own saved guest storage, restoring same conversation without model call.
+Fetch-response clone capture installed before subsequent requests.
+
+R2: 2026-10-19T12:25:51.117354Z to 12:26:14.027722Z, POST /api/alex 200.
+Repeated actual listings request and naturally asked for area/transport/cost comparison.
+Assistant still had no individual listings; gave mixed cached area statistics, Lewisham32min and Stratford38min, Zone1-3 prices with explicit estimated/coverage caveats.
+PAYG weekly GBP31.50 for 3 days, but requested monthly PAYG estimate not supplied; an additional four-week weekly-card calculation GBP210 was supplied.
+Response SSE, final payload, DOM and screenshot retained.
+Final SSE preserves rent1850, monthly_total_budget2150, office_days_per_week3, whole1bed, both areas, Bank and45min.
+
+Fallback UI action: clicked form Search with unchanged visible criteria, no /api/alex.
+Raw search_direct response and public currentResults/currentCriteria saved in form-search-evidence.json.
+Result: no fully eligible verified listings; two alternative cards Bonfield Road GBP1875 and George Hudson Tower GBP2000, explicitly over budget, unverified travel cost/commute; textual list of unverified candidates as well.
+
+Save interaction: first two clicks both hit the first card, toggling save then unsave, because aria-label remains "Save" even when active. This was a locator assumption, not a save failure.
+After checking DOM, clicked first card again and saw Saved1 plus active heart. Current actual favorite: Bonfield Road.
+Clicked first card Ask AI: focus selected, input empty, no automatic API/model call. No R3 sent.
+
+Parent requested pause after independent ledger identified search_properties strict-schema validation before execution. Parent reports monthly_total_budget/office_days_per_week injection not declared in strict schema; this is not an OnTheMarket upstream failure. Await exact own-turn ledger artifact before final tool attribution.
+Paused after 2 real model requests and 1 non-model form search. Saved paused-after-R02-and-form DOM/screenshot and storage. No further state-changing operations while pause pending.

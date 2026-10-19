@@ -1,0 +1,83 @@
+   ✅ 实时房源 5 个 (areas=1, cached=True)
+   [GEO] Verified 3/5 listings within 2 miles of requested area(s); rejected 2
+    -> [DEBUG] Initializing PropertyEmbeddingStore...
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 3312.48it/s]
+    -> [DEBUG] PropertyEmbeddingStore initialized successfully.
+    -> [DEBUG] FAISS index created with 3 properties
+    -> [DEBUG] Property name index_count=3
+    -> [RAG] Starting semantic search query_chars=35
+    -> [DEBUG] Searching query_chars=35
+    -> [DEBUG] Found 3 similar properties
+    -> [RAG] Got 3 semantic results
+    -> [DEBUG] _hybrid_rank input_count=3 budget_present=True
+    -> [DEBUG] _hybrid_rank result: 1 perfect + 2 soft_violation (0 rejected) = 3 total
+    -> [RAG] Returning 3 ranked results
+   ✅ RAG 返回 3 个候选房源
+
+🔍 [SEARCH] 根据房型过滤 room_type_chars=5
+   ✅ 房型过滤后剩余 3 个房源
+
+💰 [SEARCH] 应用过滤 (预算=开)...
+   ✅ 完全符合: 1 | ⚠️ 超预算可考虑: 2
+{"tool": "search_properties", "seconds": 6.601, "success": true, "exception": null}
+   🌤️  获取天气 location_chars=15 coordinates_supplied=True
+{"tool": "get_weather", "seconds": 0.953, "success": true, "exception": null}
+
+🏠 [PROPERTY DETAILS] 查询房产详情 name_chars=0 address_chars=0 url_supplied=True question_chars=67
+
+✅ [PROPERTY DETAILS] 身份核对通过 verdict=exact_url corroboration_count=1 is_studio=False
+{"tool": "get_property_details", "seconds": 0.02, "success": true, "exception": null}
+   🚇 [TfL] get_transport_info: type=line_status from_chars=0 to_chars=0 line_chars=7
+{"tool": "get_transport_info", "seconds": 0.09, "success": true, "exception": null}
+   🚇 [TfL] get_transport_info: type=journey from_chars=16 to_chars=12 line_chars=0
+{"tool": "get_transport_info", "seconds": 4.97, "success": true, "exception": null}
+   🚇 计算通勤 from_chars=24 to_chars=20 mode_supported=True
+{"tool": "calculate_commute", "seconds": 5.564, "success": true, "exception": null}
+
+   🚇 计算综合通勤成本 from_chars=24 to_chars=20 student_request=False mode_supported=True
+   ✅ Measured TfL journey route found
+   🚌 Route uses public transport (heuristic): True
+   📮 从地理编码获取 postcode postcode_present=True
+   📮 从地理编码获取 postcode postcode_present=True
+   📍 Looking up zonal fares
+{"tool": "calculate_commute_cost", "seconds": 0.881, "success": true, "exception": null}
+{"tool": "check_transport_cost", "seconds": 0.0, "success": true, "exception": null}
+   🔒 检查安全性 location_chars=17 language=en
+  -> [API Call] Getting official crime data address_chars=17
+     [OK] Coordinates resolved=True
+     -> Fetching 2026-08...
+       [OK] Found 4408 crimes in 2026-08
+     -> Fetching 2026-07...
+       [OK] Found 4896 crimes in 2026-07
+     -> Fetching 2026-06...
+       [OK] Found 4540 crimes in 2026-06
+     [OK] TOTAL: 13844 crimes across 3 queried months
+{"tool": "check_safety", "seconds": 8.959, "success": true, "exception": null}
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=37
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=8
+  [Overpass] mirror sidelined cooldown_s=300 reason_chars=11
+❌ OSM 查询失败 type=school exception_type=OverpassError
+❌ OSM 查询失败 type=gp exception_type=OverpassError
+❌ OSM 查询失败 type=school exception_type=OverpassError
+❌ OSM 查询失败 type=gp exception_type=OverpassError
+{"tool": "search_nearby_pois", "seconds": 9.225, "success": false, "exception": null}
+Web search returned no usable evidence query_chars=57
+Web search returned no usable evidence query_chars=57
+  -> [API Call] Web search query_chars=57
+  -> [SearXNG] Query intent: factual, constrained_engine_count: 1
+  -> [SearXNG] Searching query_chars=57 attempt=1 constrained=True
+  ⚠️ [SearXNG] Backend failure attempt=1 exception_type=ReadTimeout
+  -> [SearXNG] Retrying with default enabled engines
+  -> [SearXNG] Searching query_chars=57 attempt=2 constrained=False
+  -> [SearXNG] Raw result count: 0
+  ⚠️ [SearXNG] No results; unresponsive_engine_count=4
+  ⚠️ SearXNG returned no results query_chars=57
+  -> [API Call] Web search query_chars=57
+  ⚠️ SearXNG returned no results query_chars=57
+{"tool": "web_search", "seconds": 7.013, "success": false, "exception": null}
+{"tool": "compare_or_rank_areas", "seconds": 3.173, "success": true, "exception": null}
+{"tool": "remember", "seconds": 0.031, "success": true, "exception": null}
+{"tool": "recall_memory", "seconds": 0.005, "success": true, "exception": null}
+{"tool": "ask_user", "seconds": 0.0, "success": false, "exception": null}

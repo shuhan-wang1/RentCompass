@@ -26,8 +26,13 @@ this tool reads MUST be declared in the ``parameters`` schema below, or it is
 silently dropped before the function is called.
 """
 
+import hashlib
+import json
+import math
 import re
 import requests
+from datetime import datetime, timedelta, date as calendar_date
+from zoneinfo import ZoneInfo
 
 from core.tool_system import Tool
 from core import maps_service
@@ -272,36 +277,160 @@ def _station_fare(from_naptan: str, to_naptan: str) -> dict | None:
 
 
 def _journey_time_params():
-    """Journey-planning time: 'now' during normal service hours, else the next
-    morning 09:00 (late at night the planner returns night-bus-only itineraries
-    with bus fares, which would misrepresent "how much is the tube from X to Y").
+    """Without a requested day/time, let TfL plan for now.
 
-    Returns (query_params, planned_for_note); both empty for 'now'."""
-    try:
-        from datetime import datetime, timedelta
-        from zoneinfo import ZoneInfo
-        now = datetime.now(ZoneInfo("Europe/London"))
-    except Exception:
-        return {}, None
-    if 6 <= now.hour <= 21:
-        return {}, None
-    nxt = now if now.hour < 6 else now + timedelta(days=1)
-    return ({"date": nxt.strftime("%Y%m%d"), "time": "0900", "timeIs": "Departing"},
-            nxt.strftime("%Y-%m-%d") + " 09:00 (typical daytime service)")
+    A late-night request must not silently become a next-morning journey.
+    """
+    return {}, None
+
+
+def _london_now():
+    return datetime.now(ZoneInfo("Europe/London"))
+
+
+_MONTHS = {name.lower(): month for month in range(1, 13)
+           for name in (calendar_date(2000, month, 1).strftime('%B'),
+                        calendar_date(2000, month, 1).strftime('%b'))}
+_MONTH_PATTERN = '|'.join(sorted(_MONTHS, key=len, reverse=True))
+
+
+def _requested_journey_time(date=None, time=None, time_is=None, user_query=""):
+    """Resolve only declared calendar/time information in Europe/London.
+
+    Explicit fields win over free text. Relative days and omitted years use the
+    London clock; no date is invented for a clock time without a declared day.
+    Invalid dates and ambiguous/nonexistent DST wall times fail before HTTP.
+    """
+    now = _london_now()
+    query = (user_query or '').lower()
+    resolved_date, resolved_time = None, None
+    if date is not None:
+        if not isinstance(date, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date):
+            raise ValueError('date must be a real ISO date (YYYY-MM-DD).')
+        resolved_date = calendar_date.fromisoformat(date)
+    else:
+        iso = re.search(r'(?<!\d)(\d{4}-\d{2}-\d{2})(?!\d)', query)
+        day_month = re.search(r'\b(\d{1,2})(?:st|nd|rd|th)?\s+(' + _MONTH_PATTERN +
+                              r')\b(?:\s+(\d{4}))?', query)
+        month_day = re.search(r'\b(' + _MONTH_PATTERN + r')\s+(\d{1,2})(?:st|nd|rd|th)?'
+                              r'\b(?:,?\s+(\d{4}))?', query)
+        if iso:
+            resolved_date = calendar_date.fromisoformat(iso.group(1))
+        elif day_month or month_day:
+            match = day_month or month_day
+            day = int(match.group(1 if day_month else 2))
+            month = _MONTHS[match.group(2 if day_month else 1)]
+            resolved_date = calendar_date(int(match.group(3) or now.year), month, day)
+        declared_day = iso or day_month or month_day
+        if declared_day and resolved_date:
+            weekday = re.search(r'\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*,?\s*$',
+                                query[:declared_day.start()])
+            if weekday and weekday.group(1) != resolved_date.strftime('%A').lower():
+                raise ValueError('The stated weekday does not match the calendar date.')
+        relative = (now.date() + timedelta(days=1) if re.search(r'\btomorrow\b|明天|明早', query)
+                    else now.date() if re.search(r'\btoday\b|今天', query) else None)
+        if relative is not None:
+            if resolved_date is not None and resolved_date != relative:
+                raise ValueError('The stated calendar date and relative day disagree in Europe/London.')
+            resolved_date = relative
+
+    if time is not None:
+        if not isinstance(time, str) or not re.fullmatch(r'\d{2}:\d{2}', time):
+            raise ValueError('time must be a valid 24-hour clock time (HH:MM).')
+        resolved_time = datetime.strptime(time, '%H:%M').time()
+    else:
+        clock = re.search(r'(?<!\d)(\d{1,2}):(\d{2})\s*(a\.?m\.?|p\.?m\.?)?(?!\d)', query)
+        if not clock:
+            clock = re.search(r'(?<!\d)(\d{1,2})\s*(a\.?m\.?|p\.?m\.?)(?![a-z])', query)
+            hour, minute, meridiem = ((int(clock.group(1)), 0, clock.group(2))
+                                     if clock else (None, None, None))
+        else:
+            hour, minute, meridiem = int(clock.group(1)), int(clock.group(2)), clock.group(3)
+        if hour is not None:
+            if meridiem:
+                if not 1 <= hour <= 12:
+                    raise ValueError('The stated 12-hour clock time is invalid.')
+                hour = hour % 12 + (12 if meridiem.startswith('p') else 0)
+            resolved_time = datetime.strptime(f'{hour:02d}:{minute:02d}', '%H:%M').time()
+
+    if time_is is not None and time_is not in ('departure', 'arrival'):
+        raise ValueError('time_is must be departure or arrival.')
+    mode = time_is
+    if mode is None and resolved_time:
+        mode = ('arrival' if re.search(r'\barriv(?:e|es|ing|al)\b|到达|抵达', query)
+                else 'departure')
+    if resolved_time and resolved_date is None:
+        raise ValueError('A journey clock time needs a date or an explicit today/tomorrow.')
+    if time_is is not None and resolved_time is None:
+        raise ValueError('time_is requires a journey time.')
+    if not resolved_date and not resolved_time:
+        return None
+
+    params, evidence = {}, {'timezone': 'Europe/London', 'time_basis': 'user_requested'}
+    if resolved_date:
+        params['date'] = resolved_date.strftime('%Y%m%d')
+        evidence['date'] = resolved_date.isoformat()
+    if resolved_time:
+        wall = datetime.combine(resolved_date, resolved_time)
+        zone = ZoneInfo('Europe/London')
+        valid = {aware.utcoffset() for fold in (0, 1)
+                 if (aware := wall.replace(tzinfo=zone, fold=fold)).astimezone(ZoneInfo('UTC'))
+                 .astimezone(zone).replace(tzinfo=None) == wall}
+        if len(valid) != 1:
+            raise ValueError('The London time is ambiguous or nonexistent at the daylight-saving change.')
+        params.update(time=resolved_time.strftime('%H%M'),
+                      timeIs='Arriving' if mode == 'arrival' else 'Departing')
+        evidence.update(time=resolved_time.strftime('%H:%M'), time_is=mode,
+                        requested_at=wall.replace(tzinfo=zone).isoformat())
+    return params, evidence
 
 
 def _extract_journey(resp_json: dict):
     """From a JourneyResults response pick (fastest_journey, fare_journey).
 
-    ``fastest_journey`` drives duration/legs; ``fare_journey`` is the cheapest
-    journey that actually carries a fare block (TfL only prices some journeys)."""
+    The two records remain distinct: a cheapest journey's fare must never be
+    attached to the fastest journey's duration or legs."""
     journeys = [j for j in (resp_json or {}).get('journeys', []) if j.get('duration') is not None]
     if not journeys:
         return None, None
     fastest = min(journeys, key=lambda j: j['duration'])
-    fared = [j for j in journeys if (j.get('fare') or {}).get('totalCost') is not None]
-    fare_journey = min(fared, key=lambda j: j['fare']['totalCost']) if fared else None
+    fared = [j for j in journeys if _journey_fare_pence(j) is not None]
+    fare_journey = min(fared, key=_journey_fare_pence) if fared else None
     return fastest, fare_journey
+
+
+def _journey_fare_pence(journey: dict):
+    value = (journey.get('fare') or {}).get('totalCost')
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return int(number) if math.isfinite(number) and number >= 0 and number.is_integer() else None
+
+
+def _journey_evidence(journey: dict) -> dict:
+    """One indivisible itinerary: time, legs and price share the same identity."""
+    legs, summary = _summarise_legs(journey)
+    identity = hashlib.sha256(json.dumps(
+        journey, sort_keys=True, separators=(',', ':'), default=str,
+    ).encode()).hexdigest()[:16]
+    total = _journey_fare_pence(journey)
+    out = {
+        'itinerary_id': f'tfl:{identity}',
+        'duration_minutes': int(journey['duration']),
+        'changes_count': maps_service._tfl_changes_count(journey),
+        'route_summary': summary,
+        'route_legs': legs,
+        'source': 'TfL Unified API Journey Planner',
+        'fare_available': total is not None,
+        'fare_basis': 'journey_itinerary' if total is not None else None,
+    }
+    if total is not None:
+        out.update(fare_pence=total, fare_gbp=round(total / 100, 2),
+                   fare_display=_fmt_gbp(total), fare_itinerary_id=out['itinerary_id'])
+    return out
 
 
 def _summarise_legs(journey: dict):
@@ -397,7 +526,8 @@ def _do_line_status(line: str | None) -> dict:
     }
 
 
-def _do_journey(from_location: str, to_location: str, want_fare: bool) -> dict:
+def _do_journey(from_location: str, to_location: str, want_fare: bool,
+                requested_time=None) -> dict:
     if not from_location or not to_location:
         # Single endpoint: we can at least answer the non-London honesty case.
         solo = from_location or to_location
@@ -421,9 +551,16 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool) -> dict:
                 "error": f"Couldn't locate {'the start' if not frm.get('token') else 'the destination'} "
                          "on the TfL network. Try a nearby station name or a postcode."}
 
-    time_params, planned_for = _journey_time_params()
-    cache_key = create_cache_key('tfl_journey', frm['token'], to['token'], planned_for or 'now')
+    if requested_time is None:
+        time_params, planned_for = _journey_time_params()
+        time_evidence = None
+    else:
+        time_params, time_evidence = requested_time
+        planned_for = time_evidence.get('requested_at') or time_evidence.get('date')
+    cache_key = create_cache_key('tfl_journey', frm['token'], to['token'],
+                                 json.dumps(time_params, sort_keys=True))
     resp = _cache_get(cache_key, _JOURNEY_TTL if not want_fare else _FARE_TTL)
+    from_cache = resp is not None
     if resp is None:
         status, data = _tfl_get(f"/Journey/JourneyResults/{frm['token']}/to/{to['token']}",
                                 time_params, timeout=20)
@@ -439,15 +576,19 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool) -> dict:
             resp = data
             _cache_set(cache_key, resp)
         else:
-            # No TfL route -> honest "London only".
-            return _outside_london(f"{from_location} -> {to_location}")
+            return {'success': False, 'coverage': 'london',
+                    'error': 'TfL could not verify this journey for the requested time.',
+                    'service_status': 'unavailable' if status != 200 else 'no_route',
+                    'retryable': status != 200, 'journey_time': time_evidence,
+                    'source': 'TfL Unified API Journey Planner'}
 
     fastest, fare_journey = _extract_journey(resp)
     if fastest is None:
-        return _outside_london(f"{from_location} -> {to_location}")
+        return {'success': False, 'coverage': 'london', 'service_status': 'invalid_response',
+                'error': 'TfL returned no usable journey duration.', 'retryable': True}
 
-    legs, route_summary = _summarise_legs(fastest)
-    duration = int(fastest['duration'])
+    selected = _journey_evidence(fastest)
+    cheapest = _journey_evidence(fare_journey) if fare_journey is not None else None
 
     out = {
         "success": True,
@@ -455,24 +596,34 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool) -> dict:
         "coverage": "london",
         "from": {"input": from_location, "resolved_station": frm.get('name'), "naptan": frm.get('token')},
         "to": {"input": to_location, "resolved_station": to.get('name'), "naptan": to.get('token')},
-        "duration_minutes": duration,
-        "route_summary": route_summary,
-        "route_legs": legs,
-        "source": "TfL Unified API (live Journey Planner)",
+        "duration_minutes": selected['duration_minutes'],
+        "changes_count": selected['changes_count'],
+        "route_summary": selected['route_summary'],
+        "route_legs": selected['route_legs'],
+        "selected_itinerary_id": selected['itinerary_id'],
+        "fastest_journey": selected,
+        "cheapest_journey": cheapest,
+        "source": "TfL Unified API Journey Planner",
+        "from_cache": from_cache,
+        "cache_status": "fresh" if from_cache else "miss",
     }
     if planned_for:
         out["planned_for"] = planned_for
+    if time_evidence:
+        out['journey_time'] = time_evidence
     # Note which stops we matched (satisfies the disambiguation "note in output").
     if frm.get('name') or to.get('name'):
         out["stations_used"] = f"{frm.get('name') or from_location} -> {to.get('name') or to_location}"
 
-    fare_block = (fare_journey or fastest).get('fare') or {}
-    total = fare_block.get('totalCost')
+    total = _journey_fare_pence(fastest)
     if total is not None:
         out["fare_available"] = True
         out["fare_pence"] = int(total)
         out["fare_gbp"] = round(int(total) / 100, 2)      # numeric (critic-groundable)
         out["fare_display"] = _fmt_gbp(int(total))         # £-formatted
+        out["fare_basis"] = "journey_itinerary"
+        out["fare_itinerary_id"] = selected['itinerary_id']
+        out["fare_matches_itinerary"] = True
         out["fare_note"] = ("Adult pay-as-you-go single (contactless / Oyster). "
                             "For unlimited travel see a weekly/monthly Travelcard.")
         return out
@@ -486,6 +637,15 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool) -> dict:
         out["fare_gbp"] = round(main, 2)                   # numeric (critic-groundable)
         out["fare_pence"] = int(round(main * 100))
         out["fare_display"] = f"£{main:.2f}"               # £-formatted
+        out["fare_basis"] = "station_pair"
+        out["fare_itinerary_id"] = None
+        out["fare_matches_itinerary"] = False
+        out["station_fare"] = {
+            **station_fare,
+            "from_naptan": frm.get('token'), "to_naptan": to.get('token'),
+            "source": "TfL Single Fare Finder", "fare_basis": "station_pair",
+            "note": "Station-pair single fares; not verified for the selected journey's route or timing.",
+        }
         if 'off_peak_gbp' in station_fare and 'peak_gbp' in station_fare:
             off = station_fare['off_peak_gbp']
             out["fare_off_peak_gbp"] = round(off, 2)
@@ -495,8 +655,14 @@ def _do_journey(from_location: str, to_location: str, want_fare: bool) -> dict:
         else:
             out["fare_note"] = ("Adult pay-as-you-go single (contactless / Oyster, "
                                 "TfL Single Fare Finder).")
+        out["fare_note"] += (" This is a station-pair fare, not a fare confirmed for "
+                             "the selected itinerary; do not combine it with that "
+                             "itinerary's duration as a verified time/price offer.")
     else:
         out["fare_available"] = False
+        out["fare_basis"] = None
+        out["fare_itinerary_id"] = None
+        out["fare_matches_itinerary"] = False
         out["fare_note"] = ("TfL did not return a single fare for this exact routing "
                             "(often when it uses National Rail or coordinates rather than "
                             "Tube/DLR stations). See tfl.gov.uk/fares for a precise fare.")
@@ -507,20 +673,39 @@ def _do_travelcard(end_zone: int | None, from_location: str, to_location: str,
                    travel_type: str) -> dict:
     """Weekly/monthly Travelcard prices for Zone 1-N from the shared fare table."""
     zone = end_zone
+    endpoint_zones = {}
+    zone_basis = 'explicit_zone_table' if zone else 'postcode_district_estimate'
     if not zone:
         # Try to infer the furthest zone from a named destination/origin.
         try:
             from core.tools.calculate_commute_cost import _get_zone_from_address
-            zones = [z for z in (_get_zone_from_address(to_location or ""),
-                                 _get_zone_from_address(from_location or "")) if z]
-            zone = max(zones) if zones else None
+            for name, location in (('from', from_location), ('to', to_location)):
+                if location:
+                    endpoint_zones[name] = _get_zone_from_address(location)
+            unknown = [name for name, value in endpoint_zones.items() if value is None]
+            if unknown:
+                return {
+                    'success': False, 'query_type': 'travelcard',
+                    'coverage_verified': False, 'zone_basis': 'not_established',
+                    'endpoint_zones': endpoint_zones,
+                    'unknown_zone_locations': [from_location if name == 'from' else to_location
+                                               for name in unknown],
+                    'error': ('Unable to establish zones for every supplied endpoint. '
+                              'No Travelcard is claimed to cover this journey; obtain the '
+                              'unknown station fare/extension or request a hypothetical zone table.'),
+                }
+            zone = max(endpoint_zones.values()) if endpoint_zones else None
         except Exception:
             zone = None
     if not zone:
         return {"success": False,
                 "error": "Which London fare zone is the destination in (e.g. Zone 2), or which "
                          "station/area? Travelcards are priced Zone 1 to Zone N."}
-    zone = max(2, min(6, int(zone)))
+    zone = int(zone)
+    if not 1 <= zone <= 6:
+        return {'success': False, 'query_type': 'travelcard', 'coverage_verified': False,
+                'error': 'The available Travelcard table covers Zones 1-6 only; no extension price is known.'}
+    zone = max(2, zone)
     user_type = "student" if "student" in (travel_type or "").lower() else "adult"
     try:
         prices = get_zonal_fare(1, zone, user_type)
@@ -530,6 +715,13 @@ def _do_travelcard(end_zone: int | None, from_location: str, to_location: str,
         "success": True,
         "query_type": "travelcard",
         "coverage": "london",
+        'coverage_scope': 'zonal_price_table_only',
+        'coverage_verified': False,
+        'zone_basis': zone_basis,
+        'endpoint_zones': endpoint_zones,
+        'coverage_note': ('This is a price for the specified or approximately inferred zones, '
+                          'not verified coverage of the named stations or full journey. '
+                          'Out-of-zone stations require separately verified extensions/fares.'),
         "zones": f"Zone 1-{zone}",
         "user_type": "18+ Student Oyster" if user_type == "student" else "Adult",
         "monthly_gbp": prices['monthly'],
@@ -597,6 +789,9 @@ def get_transport_info_impl(
     end_zone: int = None,
     travel_type: str = "adult",
     user_query: str = "",
+    date: str = None,
+    time: str = None,
+    time_is: str = None,
 ) -> dict:
     """Live TfL transport info: journey/fare, Travelcard prices, or line status."""
     from_location = (from_location or "").strip()
@@ -617,7 +812,12 @@ def get_transport_info_impl(
             return _do_line_status(line)
         if qt == "travelcard":
             return _do_travelcard(end_zone, from_location, to_location, travel_type)
-        return _do_journey(from_location, to_location, want_fare=(qt == "fare"))
+        requested_time = _requested_journey_time(date, time, time_is, user_query)
+        return _do_journey(from_location, to_location, want_fare=(qt == "fare"),
+                           requested_time=requested_time)
+    except ValueError as exc:
+        return {'success': False, 'error': str(exc), 'error_code': 'invalid_journey_time',
+                'retryable': False, 'timezone': 'Europe/London'}
     except Exception as e:
         print(f"   ❌ [TfL] get_transport_info error_type={type(e).__name__}")
         return {"success": False, "error": "Transport lookup failed. See tfl.gov.uk."}
@@ -668,6 +868,18 @@ get_transport_info_tool = Tool(
                 "type": "string",
                 "description": "Original user question (used to auto-infer query_type).",
                 "default": "",
+            },
+            "date": {
+                "type": "string", "format": "date",
+                "description": "Requested journey date, YYYY-MM-DD, in Europe/London. Omit unless stated by the user.",
+            },
+            "time": {
+                "type": "string", "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+                "description": "Requested London local journey time, HH:MM (24-hour); requires a date.",
+            },
+            "time_is": {
+                "type": "string", "enum": ["departure", "arrival"],
+                "description": "Whether the requested time is departure or arrival (arrive by).",
             },
         },
         "required": [],

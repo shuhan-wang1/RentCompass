@@ -1,0 +1,9 @@
+{
+  "url": "/api/alex",
+  "body": "{\"message\": \"250 镑是每人每周、只算房租，不含水电网和 council tax。我确定和一位同学两人整租两居，每人最多每周 250 镑，所以整套最多每周 500 镑，按全年 52 周折算整套每月约 2166.67 镑；不要把 250 当整套预算。入住仍是 2026 年 11 月 15 日左右，去 UCL Bloomsbury 最长 30 分钟。请按这些条件查房源；若网站拒绝访问，请明确告诉我，不要把检索失败说成没有符合房源。\", \"context\": {\"viewed_properties\": []}, \"is_continuation\": true, \"language\": \"zh\", \"ui_language\": \"zh\", \"conversation_id\": \"8d6e107e605d4b81af03463111d59118\"}",
+  "headers": {
+    "Content-Type": "application/json",
+    "Accept": "text/event-stream",
+    "X-Conversation-ID": "8d6e107e605d4b81af03463111d59118"
+  }
+}

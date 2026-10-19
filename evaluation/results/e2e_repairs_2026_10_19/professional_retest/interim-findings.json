@@ -1,0 +1,123 @@
+{
+  "status": "restart_ready_after_turn_8",
+  "scope": "Independent black-box English professional persona; no product source, prior reports, or other tester evidence inspected",
+  "origin": "http://127.0.0.1:15008",
+  "turn_count": 8,
+  "conversation_id": "023e76a5ecbb4c04a7b34285b50e1ce5",
+  "user_id": "06dc55bfc4554339ad34a1e2672f9644",
+  "findings": [
+    {
+      "id": "PRO-01",
+      "result": "FAIL",
+      "severity": "P1",
+      "check": "Natural-language total budget is enforced in listing qualification",
+      "expected": "An explicit GBP 2200 monthly rent-plus-commute ceiling is preserved and listings above it are excluded or visibly labelled over budget; incomplete commute cost prevents verified affordability claims.",
+      "actual": "Turn 1 max_budget=null and no monthly_total_budget; 15 cards are eligible/Verified against these criteria, including rent-only GBP2250 to GBP3000. Turn 2 records monthly_total_budget=2200 but max_budget remains null and the old cards remain eligible.",
+      "evidence": [
+        "primary-turns.jsonl lines 1-2",
+        "01-search.png",
+        "02-compare.png",
+        "turns-summary.json"
+      ]
+    },
+    {
+      "id": "PRO-02",
+      "result": "FAIL",
+      "severity": "P1",
+      "check": "Explicit commute destination and corrections update durable criteria",
+      "expected": "Bank station is the destination from turn 1 and remains after explicit correction; fare tools should not use the phrase My office.",
+      "actual": "commute_destination and destination remain My office through turns 1-8, despite explicit correction in turns 2 and 6. Travelcard/fare failures refer to My office and no rent-plus-travel decision can be completed.",
+      "evidence": [
+        "primary-turns.jsonl lines 1-8",
+        "08-pre-restart-state.png",
+        "turns-summary.json"
+      ]
+    },
+    {
+      "id": "PRO-03",
+      "result": "FAIL",
+      "severity": "P1",
+      "check": "Requesting details of a returned studio opens details rather than excluding that studio",
+      "expected": "Answer deposit, furnishing, availability and fees from listing 14672649 with unknowns identified; preserve whole-home preference.",
+      "actual": "Turn 4 responds in 0.396s with No listing is both fully eligible and verified, room type does not match studio. It changes criteria to bedrooms=0 and room_type=studio and excludes the previously returned Studio. The requested details are omitted. Turn 5 later retrieves details successfully after a different request.",
+      "evidence": [
+        "primary-turns.jsonl line 4",
+        "04-listing-details.png",
+        "turns-summary.json"
+      ]
+    },
+    {
+      "id": "PRO-04",
+      "result": "FAIL",
+      "severity": "P2",
+      "check": "Favourite request points users to the in-app save action",
+      "expected": "Save through chat if supported, or explain the in-app heart button and any note limitation accurately.",
+      "actual": "Turn 8 honestly says nothing was saved but directs the user to favourite on OnTheMarket despite an in-app Save button. Manual in-app Save succeeds and /api/favorites confirms it. No visible note input was found and no note was saved.",
+      "evidence": [
+        "primary-turns.jsonl line 8",
+        "08-save-favorite.png",
+        "08-ui-save-favorites-api.json",
+        "08-after-ui-save.json"
+      ]
+    },
+    {
+      "id": "PRO-05",
+      "result": "FAIL",
+      "severity": "P2",
+      "check": "Assistant accurately reports the current office attendance criteria",
+      "expected": "After turn 6 changes attendance to five days, later explanations agree with office_days_per_week=5.",
+      "actual": "Turn 8 claims criteria currently records one office day a week and asks the user to confirm five again, while the same response view_state records office_days_per_week=5.",
+      "evidence": [
+        "primary-turns.jsonl lines 6 and 8",
+        "08-pre-restart-state.png"
+      ]
+    },
+    {
+      "id": "PRO-06",
+      "result": "PASS",
+      "severity": null,
+      "check": "Whole-home filtering and hybrid-day state updates",
+      "expected": "Return entire homes and apply three, one, then five office days per week.",
+      "actual": "Returned initial 15 records all room_type=whole; days are 3 at turn 1, 1 at turn 3, 5 at turn 6. Studio-detail parsing is separately failed in PRO-03.",
+      "evidence": [
+        "turns-summary.json"
+      ]
+    },
+    {
+      "id": "PRO-07",
+      "result": "PASS_WITH_LIMITATIONS",
+      "severity": null,
+      "check": "Fixture journey, adult fare, line-status and neighbourhood evidence are presented with limits",
+      "expected": "Surface returned evidence without claiming synthetic records are current real-world facts; distinguish single fare, monthly fare, straight-line distance and walking distance.",
+      "actual": "Turns 5-6 surface fixture 32-minute journey, adult singles GBP4.25/GBP2.80, Central Severe Delays and Northern/Victoria Good Service, while clearly naming synthetic placeholders. Turn 7 surfaces OSM fixture supermarket/cafe/gym within 800m, 130m straight-line, and warns gym School name and actual walking distance are unverified. No actual arrival-at-9am plan, monthly Travelcard comparison or walk route is delivered. Explicit web search invocation is unverified from black-box evidence.",
+      "evidence": [
+        "primary-turns.jsonl lines 5-7",
+        "05-journey-fare-status.png",
+        "06-hybrid-five-days.png",
+        "07-neighborhood-web.png"
+      ]
+    },
+    {
+      "id": "PRO-08",
+      "result": "PASS",
+      "severity": null,
+      "check": "Manual UI favourite and existing conversation survive ordinary refresh",
+      "expected": "History, criteria and favourite remain after reload.",
+      "actual": "After manual Save, API returns The Vale and UI Saved1; reload restores all eight user turns, same active conversation, visible criteria and Saved1.",
+      "evidence": [
+        "08-ui-save-favorites-api.json",
+        "08-pre-restart-state.json",
+        "08-pre-restart-state.png",
+        "primary-storage.json"
+      ]
+    }
+  ],
+  "capture_notes": [
+    "Exact outgoing /api/alex request bodies and decoded response payloads are preserved in primary-turns.jsonl.",
+    "The optional network listener could not retrieve raw SSE bodies through Playwright Response.text; those listener errors are recorded separately in network-errors.jsonl. They did not prevent helper-level decoded response capture.",
+    "All non-localhost browser requests, including listing images and external fonts, were aborted. No listing external link was opened.",
+    "A read-only guess of GET /api/conversations/<id> returned 405; no mutation occurred.",
+    "Historical frozen listing snapshots and synthetic HTTP fixtures cannot prove current rental availability, current real routes/fares/status or real nearby businesses.",
+    "True service restart and final two dialogue turns are pending the parent's coordinated restart notice."
+  ]
+}

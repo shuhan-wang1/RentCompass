@@ -1,0 +1,46 @@
+[
+  {
+    "case": "fare-and-duration-bind-same-itinerary-positive-get_transport_info",
+    "layer": "tool_business_invariant",
+    "passed": false,
+    "fixture_alternatives": [
+      {
+        "minutes": 32,
+        "fare_gbp": 4.25
+      },
+      {
+        "minutes": 44,
+        "fare_gbp": 2.8
+      }
+    ],
+    "actual": {
+      "minutes": 32,
+      "fare_gbp": 2.8,
+      "route_summary": "Tube Audit fixture line to Audit destination (32 min)"
+    },
+    "evidence": "contract-checks.json#positive-get_transport_info",
+    "source": "app/core/tools/get_transport_info.py:_extract_journey/_do_journey"
+  },
+  {
+    "case": "fare-and-duration-bind-same-itinerary-transport-mode-fare",
+    "layer": "tool_business_invariant",
+    "passed": false,
+    "fixture_alternatives": [
+      {
+        "minutes": 32,
+        "fare_gbp": 4.25
+      },
+      {
+        "minutes": 44,
+        "fare_gbp": 2.8
+      }
+    ],
+    "actual": {
+      "minutes": 32,
+      "fare_gbp": 2.8,
+      "route_summary": "Tube Audit fixture line to Audit destination (32 min)"
+    },
+    "evidence": "contract-checks.json#transport-mode-fare",
+    "source": "app/core/tools/get_transport_info.py:_extract_journey/_do_journey"
+  }
+]

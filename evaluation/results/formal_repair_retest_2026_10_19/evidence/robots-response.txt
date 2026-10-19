@@ -1,0 +1,97 @@
+User-agent: ClaudeBot
+Crawl-delay: 1
+
+User-agent: ULSTPropertyBot
+Disallow: /
+
+User-agent: AdsBot-Google
+Allow: /for-sale/*/*/
+Allow: /to-rent/*/*/
+Allow: /to-rent/commercial/
+
+User-agent: *
+# Blog allow all
+Allow: /content/
+# Disallow low value pages
+Disallow: */agents/*/contact/
+Disallow: */agents/contact/
+Disallow: /my-account/
+# Disallow nonindexable facets
+Disallow: */flat/
+Disallow: */apartment/
+
+# Disallow property images
+Disallow: /properties/*/img_
+Disallow: /properties/*/image-
+Disallow: /properties/*/epc-
+Disallow: /properties/*/floor-plan-
+
+# Disallow sub_prop_type bed facets apart from property, flats and houses
+Allow: *-bed-proper
+Allow: *-bed-flats-
+Allow: *-bed-houses
+Disallow: *-bed-
+
+Allow: */studio/
+Allow: */studio-west/
+Disallow: */studio-
+
+# Disallow Sales Agents
+Disallow: */sales-agents
+Disallow: */agents/search/
+Disallow: */agents/branch/*/properties/
+
+# Disallow redirect to agent homepages
+Disallow: /agents/website-redirect/
+
+# Disallow for banner redirects
+Disallow: /banners/local-agent-website-redirect/
+Disallow: /banners/alert-website-redirect/
+Disallow: /banners/mortgage-link-redirect/
+
+#Student
+Disallow: /student/*-bed-flats-
+Disallow: /student/*-bed-houses
+
+# Disallow everything from overseas except the landing page
+Disallow: /overseas/
+Allow: /overseas/$
+
+# Disallow parameters and house-prices pages
+Disallow: *max-bedrooms=
+Disallow: *new-home-flag=T
+Disallow: *sort-field=**
+Disallow: *let-agreed=** # Wildcards needed to be longer than allow rules e.g. *-bed-proper*
+Disallow: *online-viewings-first=
+Disallow: *under-offer=
+Disallow: *exclusive-first=
+Disallow: *view=map # Only exclude map. Grid may be needed for discovery.
+Disallow: *view=map-list
+Disallow: *view=map-only
+Disallow: *direction=
+Disallow: *max-price=
+Disallow: *min-bedrooms=
+Disallow: *prop-types=
+Disallow: *radius=
+Disallow: *min-price=
+Disallow: *modal=
+Disallow: *more-like-this=
+Disallow: *bounding-box=
+
+
+
+Sitemap: https://www.onthemarket.com/sitemap_house_prices.xml
+Sitemap: https://www.onthemarket.com/sitemap_static_hub.xml
+Sitemap: https://www.onthemarket.com/sitemap_new_homes_south_west_all.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_agents_0.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_farms_land_0.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_for_sale_0.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_for_sale_1.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_for_sale_2.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_new_homes_0.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_retirement_0.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_student_0.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_to_rent_0.xml
+Sitemap: https://www.onthemarket.com/search_channels/sitemap_auction_0.xml
+Sitemap: https://www.onthemarket.com/sitemap_london_roads_0.xml.gz
+Sitemap: https://www.onthemarket.com/sitemap_london_roads_1.xml.gz

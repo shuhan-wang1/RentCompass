@@ -210,6 +210,7 @@ services:
       # must NEVER read fc's LangGraph checkpoints — that state is treated as
       # untrusted/abandoned after rollback.
       CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"
+      OTM_ACCESS_STATE_PATH: "/app/.runtime/otm_access.sqlite3"
       CANARY_LOG_PATH: "/app/.runtime/logs/canary-legacy.jsonl"
     volumes:
       # Secrets (also read directly by config.from_env via load_dotenv).
@@ -337,6 +338,7 @@ services:
       # transcripts, turn leases, idempotency and the durable background outbox
       # survive cohort movement and rollback. Checkpoints remain architecture-local.
       CONVERSATION_DB_PATH: "/app/.runtime/conversations.sqlite3"
+      OTM_ACCESS_STATE_PATH: "/app/.runtime/otm_access.sqlite3"
       # Per-turn canary telemetry sink (event canary.turn), one bare-JSON line
       # per turn; consumed by scripts/canary_report.py --input .runtime/logs/.
       CANARY_LOG_PATH: "/app/.runtime/logs/canary-${CANARY_AGENT_ARCH:-fc_loop}.jsonl"

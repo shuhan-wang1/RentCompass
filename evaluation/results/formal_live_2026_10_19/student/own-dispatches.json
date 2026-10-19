@@ -1,0 +1,91 @@
+[
+  {
+    "started": 1792407608.2918746,
+    "request_id": "f429eb333ebb4b52bc2b81247f57eab0",
+    "tool": "search_properties",
+    "args": {
+      "area": "London",
+      "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+      "max_budget": 2167,
+      "budget_period": "month",
+      "room_type": "whole",
+      "bedrooms": 2,
+      "bedrooms_minimum": false,
+      "max_commute_time": 30,
+      "move_in_date": "2026-11-15",
+      "confirmed": true,
+      "criteria_gate_shown": true,
+      "reply_language": "zh",
+      "current_message": "250 镑是每人每周、只算房租，不含水电网和 council tax。我确定和一位同学两人整租两居，每人最多每周 250 镑，所以整套最多每周 500 镑，按全年 52 周折算整套每月约 2166.67 镑；不要把 250 当整套预算。入住仍是 2026 年 11 月 15 日左右，去 UCL Bloomsbury 最长 30 分钟。请按这些条件查房源；若网站拒绝访问，请明确告诉我，不要把检索失败说成没有符合房源。",
+      "property_features": [],
+      "idempotency_key": "86351f713d5edb8027ee0cf9c238a72ab2305672535e216dfee171c7bfedb4a5"
+    },
+    "context": {},
+    "result": {
+      "success": true,
+      "data": {
+        "success": true,
+        "status": "no_results",
+        "message": "本次检索数据中，在 London 附近没有找到符合条件的房源。请检查区域拼写，或调整预算/区域后重试（可使用右侧搜索表单）。 未获得可用候选数据，不能据此判断市场上没有房源。",
+        "recommendations": [],
+        "data_source": "OnTheMarket",
+        "search_criteria": {
+          "area": "London",
+          "areas": [
+            "London"
+          ],
+          "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+          "no_commute": false,
+          "bedrooms": 2,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "room_type": "whole",
+          "move_in_date": "2026-11-15",
+          "destination": "University College London, Gower Street, London WC1E 6BT",
+          "max_budget": 2167,
+          "max_travel_time": 30,
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "known_criteria": {
+          "area": "London",
+          "areas": [
+            "London"
+          ],
+          "commute_destination": "University College London, Gower Street, London WC1E 6BT",
+          "max_budget": 2167,
+          "max_travel_time": 30,
+          "no_commute": false,
+          "bedrooms": 2,
+          "bedrooms_minimum": false,
+          "budget_period": "month",
+          "room_type": "whole",
+          "move_in_date": "2026-11-15",
+          "property_features": [],
+          "soft_preferences": []
+        },
+        "area_recommendations": [],
+        "partial": false,
+        "incomplete_areas": [],
+        "partial_note": "",
+        "cache_stats": {
+          "hits": 0,
+          "misses": 1
+        },
+        "area_status": {
+          "London": "empty"
+        },
+        "retrieval_outcome": "no_source_candidates",
+        "commute_unverified": true,
+        "commute_note": "本轮未核实这些房源的通勤时间——请勿陈述或承诺任何通勤时长。可邀请用户缩小范围（更少区域，或指定一个通勤目的地）以便下次核实通勤。"
+      },
+      "error": null,
+      "execution_time_ms": 5388.427734375,
+      "tool_name": "search_properties",
+      "version": "1",
+      "idempotency_key": "86351f713d5edb8027ee0cf9c238a72ab2305672535e216dfee171c7bfedb4a5",
+      "outcome": "complete"
+    },
+    "elapsed_s": 5.389
+  }
+]

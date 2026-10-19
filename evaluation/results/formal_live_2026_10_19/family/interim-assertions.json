@@ -1,0 +1,16 @@
+{
+  "unchanged_criteria_in_readonly_turn": true,
+  "first_turn_missing_selected_area_in_view_state": true,
+  "first_turn_search_areas": [
+    "Leyton"
+  ],
+  "first_turn_features": [
+    "step-free"
+  ],
+  "first_turn_soft_preferences": [
+    "Would like lift",
+    "Would like step-free"
+  ],
+  "guarantee_test_reply_refuses_assumption": true,
+  "guarantee_test_reply_marks_missing_evidence_unknown": true
+}

@@ -1,0 +1,23 @@
+[
+  {
+    "turn": 1,
+    "turn_id": "6c604b9d1214480eaf8d191013d798ee",
+    "conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+    "request_id": null,
+    "request_id_note": "Not exposed in captured browser response or persisted messages API."
+  },
+  {
+    "turn": 2,
+    "turn_id": "f736ac6e41234bfda5e5c0cf5aee7a09",
+    "conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+    "request_id": null,
+    "request_id_note": "Not exposed in captured browser response or persisted messages API."
+  },
+  {
+    "turn": 3,
+    "turn_id": "5515366de4dd4a2e8dcb5d082db8655d",
+    "conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+    "request_id": null,
+    "request_id_note": "Not exposed in captured browser response or persisted messages API."
+  }
+]

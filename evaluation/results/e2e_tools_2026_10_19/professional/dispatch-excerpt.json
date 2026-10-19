@@ -1,0 +1,2516 @@
+[
+  {
+    "turn": 1,
+    "message": "I'm a full-time professional, renting alone rather than a student. Please find a whole one-bedroom flat in Watford for at most £1,800 per calendar month; no shared rooms. I work near King's Cross St Pancras and arrive by 9 am three days a week. My rent plus commuting budget is £2,100 a month, and I prefer a commute within 45 minutes. Show actual available listings and keep these requirements for this conversation.",
+    "tool_dispatches": [
+      {
+        "started": 1792395519.2938454,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Watford",
+          "to_address": "King's Cross St Pancras",
+          "idempotency_key": "59d4cb5d15fe17aa5ae3b75f0cc156b7093833197d6efcbb372faf3da48acd90"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Watford",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 22.443056106567383,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": "59d4cb5d15fe17aa5ae3b75f0cc156b7093833197d6efcbb372faf3da48acd90",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.023
+      },
+      {
+        "started": 1792395519.292323,
+        "tool": "search_properties",
+        "args": {
+          "area": "Watford",
+          "areas": [
+            "Watford"
+          ],
+          "commute_destination": "King's Cross St Pancras",
+          "max_budget": 2100,
+          "budget_period": "month",
+          "room_type": "whole",
+          "bedrooms": 1,
+          "bedrooms_minimum": false,
+          "max_commute_time": 45,
+          "confirmed": true,
+          "current_message": "I'm a full-time professional, renting alone rather than a student. Please find a whole one-bedroom flat in Watford for at most £1,800 per calendar month; no shared rooms. I work near King's Cross St Pancras and arrive by 9 am three days a week. My rent plus commuting budget is £2,100 a month, and I prefer a commute within 45 minutes. Show actual available listings and keep these requirements for this conversation.",
+          "reply_language": "en",
+          "limit": 10,
+          "idempotency_key": "86163d8cbb30403b0e2b0937cfbe88fd600e9d6f52f608ef6ec3b36330088aca"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "status": "found",
+            "total_found": 5,
+            "data_source": "OnTheMarket (cached)",
+            "possibly_outdated": true,
+            "search_criteria": {
+              "area": "Watford",
+              "areas": [
+                "Watford"
+              ],
+              "commute_destination": "King's Cross St Pancras",
+              "no_commute": false,
+              "bedrooms": 1,
+              "bedrooms_minimum": false,
+              "budget_period": "month",
+              "room_type": "whole",
+              "move_in_date": null,
+              "destination": "King's Cross St Pancras",
+              "max_budget": 2100,
+              "max_travel_time": 45,
+              "property_features": [],
+              "soft_preferences": []
+            },
+            "known_criteria": {
+              "area": "Watford",
+              "areas": [
+                "Watford"
+              ],
+              "commute_destination": "King's Cross St Pancras",
+              "max_budget": 2100,
+              "max_travel_time": 45,
+              "no_commute": false,
+              "bedrooms": 1,
+              "bedrooms_minimum": false,
+              "budget_period": "month",
+              "room_type": "whole",
+              "move_in_date": null,
+              "property_features": [],
+              "soft_preferences": []
+            },
+            "recommendations": [
+              {
+                "rank": 1,
+                "address": "North Approach, Watford, WD25",
+                "price": "£1100/month",
+                "budget_status": "✅ 在预算内",
+                "score": 100,
+                "score_breakdown": {},
+                "property_type": "1 bed Flat",
+                "room_type": "whole",
+                "bedrooms": 1,
+                "match_type": "perfect",
+                "source": "OnTheMarket (cached)",
+                "possibly_outdated": true,
+                "url": "https://www.onthemarket.com/details/20306221/",
+                "images": [
+                  "https://media.onthemarket.com/properties/20306221/1643181879/image-0-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20306221/1643181879/image-1-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20306221/1643181879/image-2-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20306221/1643181879/image-3-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20306221/1643181879/image-4-480x320.jpg"
+                ],
+                "geo_location": "51.691127, -0.400973",
+                "distance_miles": null,
+                "explanation": "1 bedroom flat to rent in North Approach, Watford, WD25",
+                "area": "Watford",
+                "description": "",
+                "available_from": "",
+                "availability_status": "",
+                "verified_features": [],
+                "unverified_features": [],
+                "absent_features": []
+              },
+              {
+                "rank": 2,
+                "address": "Flanders Court, WD17 1BN, Watford, WD17",
+                "price": "£1350/month",
+                "budget_status": "✅ 在预算内",
+                "score": 100,
+                "score_breakdown": {},
+                "property_type": "1 bed Flat",
+                "room_type": "whole",
+                "bedrooms": 1,
+                "match_type": "perfect",
+                "source": "OnTheMarket (cached)",
+                "possibly_outdated": true,
+                "url": "https://www.onthemarket.com/details/20481146/",
+                "images": [
+                  "https://media.onthemarket.com/properties/20481146/1649903243/image-0-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20481146/1649903243/image-1-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20481146/1649903243/image-2-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20481146/1649903243/image-3-480x320.jpg"
+                ],
+                "geo_location": "51.661107, -0.400599",
+                "distance_miles": null,
+                "explanation": "1 bedroom flat to rent in Flanders Court, WD17 1BN, Watford, WD17",
+                "area": "Watford",
+                "description": "",
+                "available_from": "",
+                "availability_status": "",
+                "verified_features": [],
+                "unverified_features": [],
+                "absent_features": []
+              },
+              {
+                "rank": 3,
+                "address": "Malden Road, Hertfordshire WD17",
+                "price": "£1350/month",
+                "budget_status": "✅ 在预算内",
+                "score": 100,
+                "score_breakdown": {},
+                "property_type": "1 bed Flat",
+                "room_type": "whole",
+                "bedrooms": 1,
+                "match_type": "perfect",
+                "source": "OnTheMarket (cached)",
+                "possibly_outdated": true,
+                "url": "https://www.onthemarket.com/details/16427844/",
+                "images": [
+                  "https://media.onthemarket.com/properties/16427844/1629794916/image-0-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16427844/1629794916/image-1-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16427844/1629794916/image-2-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16427844/1629794916/image-3-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16427844/1629794916/image-4-480x320.jpg"
+                ],
+                "geo_location": "51.662356, -0.401345",
+                "distance_miles": null,
+                "explanation": "1 bedroom flat to rent in Malden Road, Hertfordshire WD17",
+                "area": "Watford",
+                "description": "",
+                "available_from": "",
+                "availability_status": "",
+                "verified_features": [],
+                "unverified_features": [],
+                "absent_features": []
+              },
+              {
+                "rank": 4,
+                "address": "Sydney Road, Watford, Hertfordshire, WD18",
+                "price": "£1495/month",
+                "budget_status": "✅ 在预算内",
+                "score": 100,
+                "score_breakdown": {},
+                "property_type": "1 bed Flat",
+                "room_type": "whole",
+                "bedrooms": 1,
+                "match_type": "perfect",
+                "source": "OnTheMarket (cached)",
+                "possibly_outdated": true,
+                "url": "https://www.onthemarket.com/details/16401282/",
+                "images": [
+                  "https://media.onthemarket.com/properties/16401282/1649946738/image-0-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16401282/1639920709/image-1-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16401282/1639920709/image-2-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16401282/1639920709/image-3-480x320.jpg",
+                  "https://media.onthemarket.com/properties/16401282/1639920709/image-4-480x320.jpg"
+                ],
+                "geo_location": "51.649506, -0.4187",
+                "distance_miles": null,
+                "explanation": "1 bedroom flat to rent in Sydney Road, Watford, Hertfordshire, WD18",
+                "area": "Watford",
+                "description": "",
+                "available_from": "",
+                "availability_status": "",
+                "verified_features": [],
+                "unverified_features": [],
+                "absent_features": []
+              },
+              {
+                "rank": 5,
+                "address": "Burrell House, Watford WD24",
+                "price": "£1600/month",
+                "budget_status": "✅ 在预算内",
+                "score": 100,
+                "score_breakdown": {},
+                "property_type": "1 bed Apartment",
+                "room_type": "whole",
+                "bedrooms": 1,
+                "match_type": "perfect",
+                "source": "OnTheMarket (cached)",
+                "possibly_outdated": true,
+                "url": "https://www.onthemarket.com/details/20094930/",
+                "images": [
+                  "https://media.onthemarket.com/properties/20094930/1643807058/image-0-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20094930/1643807058/image-1-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20094930/1643807058/image-2-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20094930/1643807058/image-3-480x320.jpg",
+                  "https://media.onthemarket.com/properties/20094930/1643807058/image-4-480x320.jpg"
+                ],
+                "geo_location": "51.67955371, -0.39631212",
+                "distance_miles": null,
+                "explanation": "1 bedroom apartment to rent in Burrell House, Watford WD24",
+                "area": "Watford",
+                "description": "",
+                "available_from": "",
+                "availability_status": "",
+                "verified_features": [],
+                "unverified_features": [],
+                "absent_features": []
+              }
+            ],
+            "over_budget_alternatives": [],
+            "over_budget_alternatives_label": "",
+            "perfect_count": 5,
+            "soft_count": 0,
+            "summary": "I found 5 current listings in Watford (Whole property). Prices range £1100–£1600/month (median ~£1350). Filters applied: budget ≤£2100/month, room type Whole property, commute to King's Cross St Pancras. See the full listings in the right-hand panel. (Showing recent cached listings — a live refresh wasn't available just now, so some may be outdated.) Commute times were NOT verified for these listings this round — do not state or promise any commute duration for them. Invite the user to narrow the search (fewer areas, or a specific destination) so the commute can be checked.",
+            "area_recommendations": [],
+            "partial": false,
+            "incomplete_areas": [],
+            "partial_note": "",
+            "cache_stats": {
+              "hits": 1,
+              "misses": 0
+            },
+            "area_status": {
+              "Watford": "results"
+            },
+            "retrieval_outcome": "candidates_returned",
+            "commute_unverified": true,
+            "commute_note": "Commute times were NOT verified for these listings this round — do not state or promise any commute duration for them. Invite the user to narrow the search (fewer areas, or a specific destination) so the commute can be checked."
+          },
+          "error": null,
+          "execution_time_ms": 1041.649580001831,
+          "tool_name": "search_properties",
+          "version": "1",
+          "idempotency_key": "86163d8cbb30403b0e2b0937cfbe88fd600e9d6f52f608ef6ec3b36330088aca",
+          "outcome": "complete"
+        },
+        "elapsed_s": 1.042
+      },
+      {
+        "started": 1792395520.3366666,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Flanders Court, WD17 1BN, Watford, WD17",
+          "to_address": "King's Cross St Pancras",
+          "mode": "transit"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Flanders Court, WD17 1BN, Watford, WD17",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 21.588802337646484,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": null,
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.022
+      },
+      {
+        "started": 1792395520.3373015,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "North Approach, Watford, WD25",
+          "to_address": "King's Cross St Pancras",
+          "mode": "transit"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "North Approach, Watford, WD25",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 26.07583999633789,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": null,
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.026
+      },
+      {
+        "started": 1792395520.337489,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Malden Road, Hertfordshire WD17",
+          "to_address": "King's Cross St Pancras",
+          "mode": "transit"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Malden Road, Hertfordshire WD17",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 31.4178466796875,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": null,
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.032
+      },
+      {
+        "started": 1792395520.3371322,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Sydney Road, Watford, Hertfordshire, WD18",
+          "to_address": "King's Cross St Pancras",
+          "mode": "transit"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Sydney Road, Watford, Hertfordshire, WD18",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 36.612749099731445,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": null,
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.037
+      },
+      {
+        "started": 1792395520.3613052,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Burrell House, Watford WD24",
+          "to_address": "King's Cross St Pancras",
+          "mode": "transit"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Burrell House, Watford WD24",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 21.250486373901367,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": null,
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.022
+      }
+    ],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:38:43.860251+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "644dcf45420e487ebff9c97d56c3295b",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 6560.3,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 23761,
+          "output_tokens": 875,
+          "cache_read_tokens": 20352,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 23761,
+              "output_tokens": 875,
+              "cache_read_tokens": 20352
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "calculate_commute": {
+            "count": 6,
+            "p50_ms": 28.0,
+            "max_ms": 48.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "search_properties": {
+            "count": 1,
+            "p50_ms": 1045.0,
+            "max_ms": 1045.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395523.860251
+      }
+    ]
+  },
+  {
+    "turn": 2,
+    "message": "For North Approach, Watford, WD25 at £1,100 per month—the first flat you found—what would my typical morning commute to King's Cross St Pancras actually involve? Please calculate the door-to-door time, including walking and changes, and say how much of that estimate is reliable. My rent ceiling itself is £1,800; £2,100 is the ceiling for rent plus travel.",
+    "tool_dispatches": [
+      {
+        "started": 1792395546.1422591,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "North Approach, Watford, WD25",
+          "to_address": "King's Cross St Pancras, London",
+          "mode": "transit",
+          "idempotency_key": "5d58b207d3d19a4b0c2ed8933717de18c7453a643c71cce113f8593eb0eb19a2"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "North Approach, Watford, WD25",
+            "to_address": "King's Cross St Pancras, London",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 19.140958786010742,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": "5d58b207d3d19a4b0c2ed8933717de18c7453a643c71cce113f8593eb0eb19a2",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.019
+      }
+    ],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:39:14.142314+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "e77c14c3f2d64e0bbcda53f79ddfebcc",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 9422.4,
+        "llm_calls": 3,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 3,
+          "input_tokens": 25953,
+          "output_tokens": 1045,
+          "cache_read_tokens": 22400,
+          "models": {
+            "deepseek-flash": {
+              "calls": 3,
+              "input_tokens": 25953,
+              "output_tokens": 1045,
+              "cache_read_tokens": 22400
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "calculate_commute": {
+            "count": 1,
+            "p50_ms": 23.0,
+            "max_ms": 23.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395554.142314
+      }
+    ]
+  },
+  {
+    "turn": 3,
+    "message": "Could you check actual public-transport journeys from Watford Junction to King's Cross St Pancras for a weekday 9 am arrival? Compare the fastest sensible route with a cheaper option, including each leg and any changes. Please distinguish a returned journey from a general estimate.",
+    "tool_dispatches": [
+      {
+        "started": 1792395563.1940265,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Watford Junction, Watford",
+          "to_address": "King's Cross St Pancras, London",
+          "mode": "transit",
+          "idempotency_key": "e245e85da7a5dc599cd5bcbb6d7cc45b81d43a24f28a4c96f1110ff348866bae"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Watford Junction, Watford",
+            "to_address": "King's Cross St Pancras, London",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 17.523527145385742,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": "e245e85da7a5dc599cd5bcbb6d7cc45b81d43a24f28a4c96f1110ff348866bae",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.018
+      },
+      {
+        "started": 1792395563.1934347,
+        "tool": "get_transport_info",
+        "args": {
+          "query_type": "journey",
+          "from_location": "Watford Junction",
+          "to_location": "King's Cross St Pancras",
+          "user_query": "Weekday 9am arrival public transport journeys from Watford Junction to King's Cross St Pancras, fastest vs cheaper option",
+          "idempotency_key": "c1518c9a8e6bdb6742216e6ef2b23e86337b520c8f982ad1a647622c36661d34"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "query_type": "journey",
+            "coverage": "london",
+            "from": {
+              "input": "Watford Junction",
+              "resolved_station": "Watford [audit fixture]",
+              "naptan": "940GZZTEST51656390"
+            },
+            "to": {
+              "input": "King's Cross St Pancras",
+              "resolved_station": "Kings Cross [audit fixture]",
+              "naptan": "940GZZTEST51530123"
+            },
+            "duration_minutes": 32,
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "source": "TfL Unified API (live Journey Planner)",
+            "stations_used": "Watford [audit fixture] -> Kings Cross [audit fixture]",
+            "fare_available": true,
+            "fare_pence": 280,
+            "fare_gbp": 2.8,
+            "fare_display": "£2.80",
+            "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard."
+          },
+          "error": null,
+          "execution_time_ms": 35.099029541015625,
+          "tool_name": "get_transport_info",
+          "version": "1",
+          "idempotency_key": "c1518c9a8e6bdb6742216e6ef2b23e86337b520c8f982ad1a647622c36661d34",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.035
+      }
+    ],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:39:31.317703+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "53e0654ef874420480ae0942e0f728ed",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 9848.2,
+        "llm_calls": 3,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 3,
+          "input_tokens": 27495,
+          "output_tokens": 1355,
+          "cache_read_tokens": 23936,
+          "models": {
+            "deepseek-flash": {
+              "calls": 3,
+              "input_tokens": 27495,
+              "output_tokens": 1355,
+              "cache_read_tokens": 23936
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "get_transport_info": {
+            "count": 1,
+            "p50_ms": 39.0,
+            "max_ms": 39.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "calculate_commute": {
+            "count": 1,
+            "p50_ms": 22.0,
+            "max_ms": 22.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395571.317703
+      }
+    ]
+  },
+  {
+    "turn": 4,
+    "message": "What would travelling from Watford Junction to King's Cross St Pancras cost for three return trips per week? Calculate the weekly and average monthly total and check the transport prices you use, including whether daily caps or a season ticket change the answer. Then add it to North Approach's actual £1,100 monthly rent and compare with my £2,100 total ceiling. My rent-only ceiling remains £1,800.",
+    "tool_dispatches": [],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:39:49.463259+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "4a223d79eddd401e96010c4fe841301e",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 51.2,
+        "llm_calls": 0,
+        "tool_batches": 0,
+        "llm_usage": null,
+        "llm_usage_status": "no_llm_calls",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792395589.463259
+      }
+    ]
+  },
+  {
+    "turn": 5,
+    "message": "Before I rely on that budget, please look up the adult peak and off-peak single fares specifically from Watford Junction to King's Cross St Pancras on Oyster or contactless. State the currency and whether each figure is one-way or return, and explain any missing fare result instead of guessing.",
+    "tool_dispatches": [],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:40:25.654019+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "423f06e6136445f88b1bd2fe49cb75e7",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 3746.1,
+        "llm_calls": 1,
+        "tool_batches": 0,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 12147,
+          "output_tokens": 470,
+          "cache_read_tokens": 9600,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 12147,
+              "output_tokens": 470,
+              "cache_read_tokens": 9600
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792395625.654019
+      }
+    ]
+  },
+  {
+    "turn": 6,
+    "message": "Please check the weekly and monthly adult Travelcard prices that would cover this journey, including the necessary zones and the Watford Junction boundary. At three days in the office, is either better value than pay as you go? Show the arithmetic and do not assume a zones 1–2 card covers Watford.",
+    "tool_dispatches": [],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:40:47.638892+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "f7156ebc993049fd98ce22c9136f7a69",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 3173.1,
+        "llm_calls": 1,
+        "tool_batches": 0,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 12349,
+          "output_tokens": 373,
+          "cache_read_tokens": 10368,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 12349,
+              "output_tokens": 373,
+              "cache_read_tokens": 10368
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792395647.638892
+      }
+    ]
+  },
+  {
+    "turn": 7,
+    "message": "What is the current service status of the London Overground/Lioness route and the Northern line that might affect this commute? Please check line status, say when the information applies, and give me a practical alternative if either has problems.",
+    "tool_dispatches": [],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:41:13.762760+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "8a5be116df3a4d62965db7ba6d31dd88",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 3191.1,
+        "llm_calls": 1,
+        "tool_batches": 0,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 12517,
+          "output_tokens": 363,
+          "cache_read_tokens": 11136,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 12517,
+              "output_tokens": 363,
+              "cache_read_tokens": 11136
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792395673.76276
+      }
+    ]
+  },
+  {
+    "turn": 8,
+    "message": "Compare and rank Watford, Camden, Islington and Bloomsbury for my situation: a whole one-bedroom, £1,800 rent ceiling, £2,100 including the three-day commute to King's Cross, ideally within 45 minutes. Use the rent, time and transport-cost results you have actually obtained and make missing values clear.",
+    "tool_dispatches": [
+      {
+        "started": 1792395701.9650762,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Watford",
+          "to_address": "King's Cross St Pancras",
+          "idempotency_key": "6e3370a1513aefda562365ec82b7a613fb7f3b0e8a96e066d3205a977fec44da"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Watford",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 17.82536506652832,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": "6e3370a1513aefda562365ec82b7a613fb7f3b0e8a96e066d3205a977fec44da",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.018
+      },
+      {
+        "started": 1792395701.9673948,
+        "tool": "compare_or_rank_areas",
+        "args": {
+          "city": "London",
+          "destination": "King's Cross St Pancras",
+          "candidate_areas": [
+            "Watford",
+            "Camden",
+            "Islington",
+            "Bloomsbury"
+          ],
+          "budget_hint": {
+            "amount": 1800,
+            "period": "month"
+          },
+          "max_commute_minutes": 45,
+          "priorities": [
+            "value",
+            "commute"
+          ],
+          "reply_language": "en",
+          "idempotency_key": "ce9ed07617a2fbe208a4b2efd73d4f24bee974d97b9a22dbd09ab029cb817ed8"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "status": "ok",
+            "areas": [
+              {
+                "name": "Watford",
+                "slug": "watford",
+                "rent": {
+                  "min": 585.0,
+                  "max": 3500.0,
+                  "median": 1450.0,
+                  "sample_size": 67,
+                  "freshness_days": 0,
+                  "low_sample": false
+                },
+                "commute_minutes": 32,
+                "budget_match_rate": 0.821,
+                "score": {
+                  "total": 71.5,
+                  "components": {
+                    "value": 92.8,
+                    "commute": 28.9
+                  },
+                  "weights": {
+                    "value": 0.6667,
+                    "commute": 0.3333
+                  }
+                },
+                "sources": [
+                  "OnTheMarket listing cache",
+                  "commute routing"
+                ],
+                "no_data": false
+              },
+              {
+                "name": "Camden",
+                "slug": "camden",
+                "rent": {
+                  "min": 850.0,
+                  "max": 5000.0,
+                  "median": 2100.0,
+                  "sample_size": 95,
+                  "freshness_days": 0,
+                  "low_sample": false
+                },
+                "commute_minutes": 32,
+                "budget_match_rate": 0.368,
+                "score": {
+                  "total": 32.1,
+                  "components": {
+                    "value": 33.7,
+                    "commute": 28.9
+                  },
+                  "weights": {
+                    "value": 0.6667,
+                    "commute": 0.3333
+                  }
+                },
+                "sources": [
+                  "OnTheMarket listing cache",
+                  "commute routing"
+                ],
+                "no_data": false
+              },
+              {
+                "name": "Bloomsbury",
+                "slug": "bloomsbury",
+                "rent": {
+                  "min": 1090.0,
+                  "max": 7367.0,
+                  "median": 2097.5,
+                  "sample_size": 82,
+                  "freshness_days": 0,
+                  "low_sample": false
+                },
+                "commute_minutes": 32,
+                "budget_match_rate": 0.293,
+                "score": {
+                  "total": 30.2,
+                  "components": {
+                    "value": 30.8,
+                    "commute": 28.9
+                  },
+                  "weights": {
+                    "value": 0.6667,
+                    "commute": 0.3333
+                  }
+                },
+                "sources": [
+                  "OnTheMarket listing cache",
+                  "commute routing"
+                ],
+                "no_data": false
+              },
+              {
+                "name": "Islington",
+                "slug": "islington",
+                "rent": {
+                  "min": 1517.0,
+                  "max": 5000.0,
+                  "median": 2400.0,
+                  "sample_size": 59,
+                  "freshness_days": 0,
+                  "low_sample": false
+                },
+                "commute_minutes": 32,
+                "budget_match_rate": 0.153,
+                "score": {
+                  "total": 13.7,
+                  "components": {
+                    "value": 6.1,
+                    "commute": 28.9
+                  },
+                  "weights": {
+                    "value": 0.6667,
+                    "commute": 0.3333
+                  }
+                },
+                "sources": [
+                  "OnTheMarket listing cache",
+                  "commute routing"
+                ],
+                "no_data": false
+              }
+            ],
+            "explanation_notes": [
+              "Composite score = weighted sum of 0-100 components (value = lower median rent, adjusted by how many cached listings fall under budget; commute = shorter time). Weights come from your priorities and sum to 1: value=0.6667, commute=0.3333."
+            ],
+            "priorities": [
+              "value",
+              "commute"
+            ],
+            "weights": {
+              "value": 0.6667,
+              "commute": 0.3333
+            }
+          },
+          "error": null,
+          "execution_time_ms": 92.83852577209473,
+          "tool_name": "compare_or_rank_areas",
+          "version": "1",
+          "idempotency_key": "ce9ed07617a2fbe208a4b2efd73d4f24bee974d97b9a22dbd09ab029cb817ed8",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.093
+      }
+    ],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:41:51.714105+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "261675b073a048728c3f8617e52ea1cc",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 11506.7,
+        "llm_calls": 3,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 3,
+          "input_tokens": 30207,
+          "output_tokens": 1768,
+          "cache_read_tokens": 23296,
+          "models": {
+            "deepseek-flash": {
+              "calls": 3,
+              "input_tokens": 30207,
+              "output_tokens": 1768,
+              "cache_read_tokens": 23296
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "compare_or_rank_areas": {
+            "count": 1,
+            "p50_ms": 99.0,
+            "max_ms": 99.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "calculate_commute": {
+            "count": 1,
+            "p50_ms": 22.0,
+            "max_ms": 22.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395711.714105
+      }
+    ]
+  },
+  {
+    "turn": 9,
+    "message": "Could you use web sources to check what day-to-day life near Watford Junction is like for a working adult—groceries, an evening meal and access to the station? Give links and dates where available, and explain which findings actually affect my choice of that flat.",
+    "tool_dispatches": [
+      {
+        "started": 1792395762.6367304,
+        "tool": "search_nearby_pois",
+        "args": {
+          "address": "Watford Junction Station, Station Road, Watford WD17 1EU",
+          "poi_type": "supermarket,convenience,restaurant,cafe,tube_station,bus_stop",
+          "radius": 600,
+          "user_query": "day-to-day life near Watford Junction groceries evening meal station access"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "address": "Watford Junction Station, Station Road, Watford WD17 1EU",
+            "radius_m": 600,
+            "reference_point": {
+              "query": "Watford Junction Station, Station Road, Watford WD17 1EU",
+              "precision": "postcode",
+              "is_specific_address": true,
+              "distance_basis": "straight_line",
+              "measured_from": "the geocoded location of 'Watford Junction Station, Station Road, Watford WD17 1EU'. Distances are straight-line (as the crow flies), not walking distance."
+            },
+            "summary": "Found 6 places within 600m, measured in a straight line from the geocoded location of 'Watford Junction Station, Station Road, Watford WD17 1EU'. Distances are straight-line (as the crow flies), not walking distance.\n🛒 Tesco Express [audit fixture] - 130m\n🏪 Tesco Express [audit fixture] - 130m\n🍽️ Restaurant [audit fixture] - 130m\n☕ Cafe [audit fixture] - 130m\n🚇 School [audit fixture] - 130m\n🚌 School [audit fixture] - 130m\nNearest station per TfL StopPoint API: Watford [audit fixture] (120m straight-line). Name only stations from this result.",
+            "pois": {
+              "supermarket": [
+                {
+                  "name": "Tesco Express [audit fixture]",
+                  "type": "Supermarket",
+                  "icon": "🛒",
+                  "lat": 51.6575,
+                  "lon": -0.3893,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "Tesco",
+                  "opening_hours": "Mo-Su 08:00-20:00"
+                }
+              ],
+              "convenience": [
+                {
+                  "name": "Tesco Express [audit fixture]",
+                  "type": "Convenience Store",
+                  "icon": "🏪",
+                  "lat": 51.6575,
+                  "lon": -0.3893,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "Tesco",
+                  "opening_hours": "Mo-Su 08:00-20:00"
+                }
+              ],
+              "restaurant": [
+                {
+                  "name": "Restaurant [audit fixture]",
+                  "type": "Restaurant",
+                  "icon": "🍽️",
+                  "lat": 51.6575,
+                  "lon": -0.3893,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "",
+                  "opening_hours": "Mo-Su 08:00-20:00"
+                }
+              ],
+              "cafe": [
+                {
+                  "name": "Cafe [audit fixture]",
+                  "type": "Cafe",
+                  "icon": "☕",
+                  "lat": 51.6575,
+                  "lon": -0.3893,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "",
+                  "opening_hours": "Mo-Su 08:00-20:00"
+                }
+              ],
+              "tube_station": [
+                {
+                  "name": "School [audit fixture]",
+                  "type": "Tube Station",
+                  "icon": "🚇",
+                  "lat": 51.6575,
+                  "lon": -0.3893,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "",
+                  "opening_hours": "Mo-Su 08:00-20:00"
+                }
+              ],
+              "bus_stop": [
+                {
+                  "name": "School [audit fixture]",
+                  "type": "Bus Stop",
+                  "icon": "🚌",
+                  "lat": 51.6575,
+                  "lon": -0.3893,
+                  "distance_m": 131,
+                  "distance_display": "130m",
+                  "cuisine": null,
+                  "brand": "",
+                  "opening_hours": "Mo-Su 08:00-20:00"
+                }
+              ]
+            },
+            "nearest_station": {
+              "name": "Watford [audit fixture]",
+              "distance_m": 120,
+              "modes": [],
+              "naptan": "940GZZTEST51656390",
+              "source": "TfL StopPoint API"
+            },
+            "other_stations_nearby": [],
+            "note": "Nearest station per TfL StopPoint API: Watford [audit fixture] (120m straight-line). Name only stations from this result."
+          },
+          "error": null,
+          "execution_time_ms": 5042.0167446136475,
+          "tool_name": "search_nearby_pois",
+          "version": "1",
+          "idempotency_key": null,
+          "outcome": "complete"
+        },
+        "elapsed_s": 5.042
+      },
+      {
+        "started": 1792395762.6358745,
+        "tool": "web_search",
+        "args": {
+          "query": "living near Watford Junction station area guide supermarkets restaurants amenities commuter",
+          "sub_queries": [
+            {
+              "tool": "search_nearby_pois",
+              "params": {
+                "address": "Watford Junction Station, Station Road, Watford WD17 1EU",
+                "poi_type": "supermarket,convenience,restaurant,cafe,tube_station,bus_stop",
+                "radius": 600,
+                "user_query": "day-to-day life near Watford Junction groceries evening meal station access"
+              }
+            }
+          ],
+          "idempotency_key": "ce134e8bbc79dfeb9f5dac8a57361dffdd167ce694dbce46c9bd97aac103987a"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "query_metadata": {
+              "length": 91
+            },
+            "results": "### search_nearby_pois\n---\n{\n  \"success\": true,\n  \"address\": \"Watford Junction Station, Station Road, Watford WD17 1EU\",\n  \"radius_m\": 600,\n  \"reference_point\": {\n    \"query\": \"Watford Junction Station, Station Road, Watford WD17 1EU\",\n    \"precision\": \"postcode\",\n    \"is_specific_address\": true,\n    \"distance_basis\": \"straight_line\",\n    \"measured_from\": \"the geocoded location of 'Watford Junction Station, Station Road, Watford WD17 1EU'. Distances are straight-line (as the crow flies), not walking distance.\"\n  },\n  \"summary\": \"Found 6 places within 600m, measured in a straight line from the geocoded location of 'Watford Junction Station, Station Road, Watford WD17 1EU'. Distances are straight-line (as the crow flies), not walking distance.\\n🛒 Tesco Express [audit fixture] - 130m\\n🏪 Tesco Express [audit fixture] - 130m\\n🍽️ Restaurant [audit fixture] - 130m\\n☕ Cafe [audit fixture] - 130m\\n🚇 School [audit fixture] - 130m\\n🚌 School [audit fixture] - 130m\\nNearest station per TfL StopPoint API: Watford [audit fixture] (120m straight-line). Name only stations from this result.\",\n  \"pois\": {\n    \"supermarket\": [\n      {\n        \"name\": \"Tesco Express [audit fixture]\",\n        \"type\": \"Supermarket\",\n        \"icon\": \"🛒\",\n        \"lat\": 51.6575,\n        \"lon\": -0.3893,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"Tesco\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\"\n      }\n    ],\n    \"convenience\": [\n      {\n        \"name\": \"Tesco Express [audit fixture]\",\n        \"type\": \"Convenience Store\",\n        \"icon\": \"🏪\",\n        \"lat\": 51.6575,\n        \"lon\": -0.3893,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"Tesco\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\"\n      }\n    ],\n    \"restaurant\": [\n      {\n        \"name\": \"Restaurant [audit fixture]\",\n        \"type\": \"Restaurant\",\n        \"icon\": \"🍽️\",\n        \"lat\": 51.6575,\n        \"lon\": -0.3893,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\"\n      }\n    ],\n    \"cafe\": [\n      {\n        \"name\": \"Cafe [audit fixture]\",\n        \"type\": \"Cafe\",\n        \"icon\": \"☕\",\n        \"lat\": 51.6575,\n        \"lon\": -0.3893,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\"\n      }\n    ],\n    \"tube_station\": [\n      {\n        \"name\": \"School [audit fixture]\",\n        \"type\": \"Tube Station\",\n        \"icon\": \"🚇\",\n        \"lat\": 51.6575,\n        \"lon\": -0.3893,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\"\n      }\n    ],\n    \"bus_stop\": [\n      {\n        \"name\": \"School [audit fixture]\",\n        \"type\": \"Bus Stop\",\n        \"icon\": \"🚌\",\n        \"lat\": 51.6575,\n        \"lon\": -0.3893,\n        \"distance_m\": 131,\n        \"distance_display\": \"130m\",\n        \"cuisine\": null,\n        \"brand\": \"\",\n        \"opening_hours\": \"Mo-Su 08:00-20:00\"\n      }\n    ]\n  },\n  \"nearest_station\": {\n    \"name\": \"Watford [audit fixture]\",\n    \"distance_m\": 120,\n    \"modes\": [],\n    \"naptan\": \"940GZZTEST51656390\",\n    \"source\": \"TfL StopPoint API\"\n  },\n  \"other_stations_nearby\": [],\n  \"note\": \"Nearest station per TfL StopPoint API: Watford [audit fixture] (120m straight-line). Name only stations from this result.\"\n}\n---\n",
+            "detailed_data": {
+              "search_nearby_pois_1": {
+                "success": true,
+                "address": "Watford Junction Station, Station Road, Watford WD17 1EU",
+                "radius_m": 600,
+                "reference_point": {
+                  "query": "Watford Junction Station, Station Road, Watford WD17 1EU",
+                  "precision": "postcode",
+                  "is_specific_address": true,
+                  "distance_basis": "straight_line",
+                  "measured_from": "the geocoded location of 'Watford Junction Station, Station Road, Watford WD17 1EU'. Distances are straight-line (as the crow flies), not walking distance."
+                },
+                "summary": "Found 6 places within 600m, measured in a straight line from the geocoded location of 'Watford Junction Station, Station Road, Watford WD17 1EU'. Distances are straight-line (as the crow flies), not walking distance.\n🛒 Tesco Express [audit fixture] - 130m\n🏪 Tesco Express [audit fixture] - 130m\n🍽️ Restaurant [audit fixture] - 130m\n☕ Cafe [audit fixture] - 130m\n🚇 School [audit fixture] - 130m\n🚌 School [audit fixture] - 130m\nNearest station per TfL StopPoint API: Watford [audit fixture] (120m straight-line). Name only stations from this result.",
+                "pois": {
+                  "supermarket": [
+                    {
+                      "name": "Tesco Express [audit fixture]",
+                      "type": "Supermarket",
+                      "icon": "🛒",
+                      "lat": 51.6575,
+                      "lon": -0.3893,
+                      "distance_m": 131,
+                      "distance_display": "130m",
+                      "cuisine": null,
+                      "brand": "Tesco",
+                      "opening_hours": "Mo-Su 08:00-20:00"
+                    }
+                  ],
+                  "convenience": [
+                    {
+                      "name": "Tesco Express [audit fixture]",
+                      "type": "Convenience Store",
+                      "icon": "🏪",
+                      "lat": 51.6575,
+                      "lon": -0.3893,
+                      "distance_m": 131,
+                      "distance_display": "130m",
+                      "cuisine": null,
+                      "brand": "Tesco",
+                      "opening_hours": "Mo-Su 08:00-20:00"
+                    }
+                  ],
+                  "restaurant": [
+                    {
+                      "name": "Restaurant [audit fixture]",
+                      "type": "Restaurant",
+                      "icon": "🍽️",
+                      "lat": 51.6575,
+                      "lon": -0.3893,
+                      "distance_m": 131,
+                      "distance_display": "130m",
+                      "cuisine": null,
+                      "brand": "",
+                      "opening_hours": "Mo-Su 08:00-20:00"
+                    }
+                  ],
+                  "cafe": [
+                    {
+                      "name": "Cafe [audit fixture]",
+                      "type": "Cafe",
+                      "icon": "☕",
+                      "lat": 51.6575,
+                      "lon": -0.3893,
+                      "distance_m": 131,
+                      "distance_display": "130m",
+                      "cuisine": null,
+                      "brand": "",
+                      "opening_hours": "Mo-Su 08:00-20:00"
+                    }
+                  ],
+                  "tube_station": [
+                    {
+                      "name": "School [audit fixture]",
+                      "type": "Tube Station",
+                      "icon": "🚇",
+                      "lat": 51.6575,
+                      "lon": -0.3893,
+                      "distance_m": 131,
+                      "distance_display": "130m",
+                      "cuisine": null,
+                      "brand": "",
+                      "opening_hours": "Mo-Su 08:00-20:00"
+                    }
+                  ],
+                  "bus_stop": [
+                    {
+                      "name": "School [audit fixture]",
+                      "type": "Bus Stop",
+                      "icon": "🚌",
+                      "lat": 51.6575,
+                      "lon": -0.3893,
+                      "distance_m": 131,
+                      "distance_display": "130m",
+                      "cuisine": null,
+                      "brand": "",
+                      "opening_hours": "Mo-Su 08:00-20:00"
+                    }
+                  ]
+                },
+                "nearest_station": {
+                  "name": "Watford [audit fixture]",
+                  "distance_m": 120,
+                  "modes": [],
+                  "naptan": "940GZZTEST51656390",
+                  "source": "TfL StopPoint API"
+                },
+                "other_stations_nearby": [],
+                "note": "Nearest station per TfL StopPoint API: Watford [audit fixture] (120m straight-line). Name only stations from this result."
+              }
+            }
+          },
+          "error": null,
+          "execution_time_ms": 5043.793678283691,
+          "tool_name": "web_search",
+          "version": "1",
+          "idempotency_key": "ce134e8bbc79dfeb9f5dac8a57361dffdd167ce694dbce46c9bd97aac103987a",
+          "outcome": "complete"
+        },
+        "elapsed_s": 5.044
+      }
+    ],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:42:51.650659+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "76f966cb5a3f4329b14c6f6dc427e5e9",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 10884.3,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 28701,
+          "output_tokens": 718,
+          "cache_read_tokens": 23424,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 28701,
+              "output_tokens": 718,
+              "cache_read_tokens": 23424
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "web_search": {
+            "count": 1,
+            "p50_ms": 5045.0,
+            "max_ms": 5045.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395771.650659
+      }
+    ]
+  },
+  {
+    "turn": 10,
+    "message": "My employer has reduced attendance to two days each week. Keep my whole one-bedroom requirement and 1800 GBP rent-only cap, but reduce my rent-plus-travel cap to 1950 GBP. North Approach is still the actual candidate.\n\nThe previous fare, Travelcard and line-status answers said no result was returned. Please actually retry with the available tools before answering: get_transport_info with query_type fare for Watford Junction to King's Cross St Pancras; get_transport_info with query_type travelcard for the coverage that journey requires; and get_transport_info with query_type line_status for the Northern line and Overground/Lioness. Then use calculate_commute_cost for two return commuting days each week, and check_transport_cost to cross-check the relevant transport prices. If a tool fails, report its actual error, and try a supported fallback without inventing a fare. Give amounts with their periods and distinguish a one-way fare from a return trip. Finally add the supported travel total to the actual North Approach rent and check my latest combined cap.\n",
+    "tool_dispatches": [
+      {
+        "started": 1792395813.8825634,
+        "tool": "get_transport_info",
+        "args": {
+          "query_type": "travelcard",
+          "from_location": "Watford Junction",
+          "to_location": "King's Cross St Pancras",
+          "end_zone": 6,
+          "travel_type": "adult",
+          "user_query": "Adult weekly and monthly Travelcard covering Watford Junction to King's Cross St Pancras",
+          "idempotency_key": "b9e151d00a6613d9143aba58124c3ae3613f83c54969ecef925c9c79b20fa7fa"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "query_type": "travelcard",
+            "coverage": "london",
+            "zones": "Zone 1-6",
+            "user_type": "Adult",
+            "monthly_gbp": 313.4,
+            "monthly_display": "£313.40",
+            "weekly_gbp": 81.6,
+            "weekly_display": "£81.60",
+            "daily_cap_gbp": 16.3,
+            "daily_cap_display": "£16.30",
+            "note": "Student (30% off) applies to weekly/monthly Travelcards, NOT pay-as-you-go.",
+            "source": "Transport for London 2026 zonal caps and Travelcard prices",
+            "source_url": "https://content.tfl.gov.uk/adult-fares.pdf",
+            "effective_date": "2026-03-01",
+            "fare_edition": "2026"
+          },
+          "error": null,
+          "execution_time_ms": 1.9409656524658203,
+          "tool_name": "get_transport_info",
+          "version": "1",
+          "idempotency_key": "b9e151d00a6613d9143aba58124c3ae3613f83c54969ecef925c9c79b20fa7fa",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.002
+      },
+      {
+        "started": 1792395813.8860927,
+        "tool": "check_transport_cost",
+        "args": {
+          "end_zone": 6,
+          "travel_type": "adult",
+          "idempotency_key": "cebbef16b302751d647d340cd12391a4a1a55000283cbbfecebb758cccac55aa"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "data": {
+              "zones": "Zone 1-6",
+              "user_type": "Adult",
+              "prices": {
+                "monthly_pass": "£313.40",
+                "weekly_pass": "£81.60",
+                "daily_cap_payg": "£16.30 (standard daily cap; no 18+ Student PAYG discount)"
+              },
+              "note": "Student discount (30% off) applies to Travelcards (Weekly/Monthly), NOT Pay As You Go single fares.",
+              "source": "Transport for London 2026 zonal caps and Travelcard prices",
+              "source_url": "https://content.tfl.gov.uk/adult-fares.pdf",
+              "effective_date": "2026-03-01",
+              "fare_edition": "2026"
+            }
+          },
+          "error": null,
+          "execution_time_ms": 0.10013580322265625,
+          "tool_name": "check_transport_cost",
+          "version": "1",
+          "idempotency_key": "cebbef16b302751d647d340cd12391a4a1a55000283cbbfecebb758cccac55aa",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.0
+      },
+      {
+        "started": 1792395813.8838484,
+        "tool": "get_transport_info",
+        "args": {
+          "query_type": "line_status",
+          "line": "Lioness",
+          "user_query": "London Overground Lioness line status",
+          "idempotency_key": "2dfd0e6206926c9e4f2aef63818383036e787802aa009cf747c37739c9421079"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "query_type": "line_status",
+            "coverage": "london",
+            "line_filter": "Lioness",
+            "lines": [
+              {
+                "name": "Lioness",
+                "status": "Good Service",
+                "severity": 10,
+                "reason": null,
+                "has_disruption": false
+              }
+            ],
+            "summary": "Lioness line: Good Service",
+            "any_disruption": false,
+            "source": "TfL Unified API (live line status)"
+          },
+          "error": null,
+          "execution_time_ms": 16.787052154541016,
+          "tool_name": "get_transport_info",
+          "version": "1",
+          "idempotency_key": "2dfd0e6206926c9e4f2aef63818383036e787802aa009cf747c37739c9421079",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.017
+      },
+      {
+        "started": 1792395813.888352,
+        "tool": "get_transport_info",
+        "args": {
+          "query_type": "line_status",
+          "line": "Northern",
+          "user_query": "Northern line status",
+          "idempotency_key": "576473c7a74646d3fb2773665ccd53ab427bcda24bda2f7569d33d1a6abe5326"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "query_type": "line_status",
+            "coverage": "london",
+            "line_filter": "Northern",
+            "lines": [
+              {
+                "name": "Northern",
+                "status": "Good Service",
+                "severity": 10,
+                "reason": null,
+                "has_disruption": false
+              }
+            ],
+            "summary": "Northern line: Good Service",
+            "any_disruption": false,
+            "source": "TfL Unified API (live line status)"
+          },
+          "error": null,
+          "execution_time_ms": 20.673513412475586,
+          "tool_name": "get_transport_info",
+          "version": "1",
+          "idempotency_key": "576473c7a74646d3fb2773665ccd53ab427bcda24bda2f7569d33d1a6abe5326",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.021
+      },
+      {
+        "started": 1792395813.8831809,
+        "tool": "get_transport_info",
+        "args": {
+          "query_type": "fare",
+          "from_location": "Watford Junction",
+          "to_location": "King's Cross St Pancras",
+          "user_query": "Single fare from Watford Junction to King's Cross St Pancras",
+          "travel_type": "adult",
+          "idempotency_key": "b3ee8df4ebf03d4f952676f132cdb667bb4011d67279c99bec2324c0c6db1c1d"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "query_type": "fare",
+            "coverage": "london",
+            "from": {
+              "input": "Watford Junction",
+              "resolved_station": "Watford [audit fixture]",
+              "naptan": "940GZZTEST51656390"
+            },
+            "to": {
+              "input": "King's Cross St Pancras",
+              "resolved_station": "Kings Cross [audit fixture]",
+              "naptan": "940GZZTEST51530123"
+            },
+            "duration_minutes": 32,
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "source": "TfL Unified API (live Journey Planner)",
+            "stations_used": "Watford [audit fixture] -> Kings Cross [audit fixture]",
+            "fare_available": true,
+            "fare_pence": 280,
+            "fare_gbp": 2.8,
+            "fare_display": "£2.80",
+            "fare_note": "Adult pay-as-you-go single (contactless / Oyster). For unlimited travel see a weekly/monthly Travelcard."
+          },
+          "error": null,
+          "execution_time_ms": 29.93631362915039,
+          "tool_name": "get_transport_info",
+          "version": "1",
+          "idempotency_key": "b3ee8df4ebf03d4f952676f132cdb667bb4011d67279c99bec2324c0c6db1c1d",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.03
+      },
+      {
+        "started": 1792395813.8850315,
+        "tool": "calculate_commute_cost",
+        "args": {
+          "from_address": "North Approach, Watford, WD25",
+          "to_address": "King's Cross St Pancras, London",
+          "travel_type": "adult",
+          "mode": "transit",
+          "idempotency_key": "1adb31260474d77a0d0fdbe804e3dc69dabf66a224c6c84ee8e7e21123c5fdcd"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "from_address": "North Approach, Watford, WD25",
+            "to_address": "King's Cross St Pancras, London",
+            "mode": "transit",
+            "uses_public_transport": true,
+            "commute": {
+              "duration_minutes": 32,
+              "duration_category": "Medium (20-45 min)",
+              "is_acceptable": true,
+              "basis": "tfl_journey_plan",
+              "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges."
+            },
+            "transport_cost": {
+              "error": "Unable to determine zones for one or both addresses. Cannot calculate transport cost.",
+              "from_zone": null,
+              "to_zone": null
+            }
+          },
+          "error": null,
+          "execution_time_ms": 41.52274131774902,
+          "tool_name": "calculate_commute_cost",
+          "version": "1",
+          "idempotency_key": "1adb31260474d77a0d0fdbe804e3dc69dabf66a224c6c84ee8e7e21123c5fdcd",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.042
+      }
+    ],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:43:39.824934+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "5f65fd6e0816471aa62e472e36ca4c37",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 8453.4,
+        "llm_calls": 2,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 2,
+          "input_tokens": 28286,
+          "output_tokens": 1635,
+          "cache_read_tokens": 24064,
+          "models": {
+            "deepseek-flash": {
+              "calls": 2,
+              "input_tokens": 28286,
+              "output_tokens": 1635,
+              "cache_read_tokens": 24064
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "get_transport_info": {
+            "count": 4,
+            "p50_ms": 21.0,
+            "max_ms": 35.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "calculate_commute_cost": {
+            "count": 1,
+            "p50_ms": 48.0,
+            "max_ms": 48.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "check_transport_cost": {
+            "count": 1,
+            "p50_ms": 10.0,
+            "max_ms": 10.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792395819.824934
+      }
+    ]
+  },
+  {
+    "turn": 11,
+    "message": "I've reopened this conversation after a refresh. Please remind me of my current office days, rent ceiling, total monthly ceiling and preferred commute, then recommend the best actual flat we discussed using the latest budget rather than the original one.",
+    "tool_dispatches": [],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:44:56.932833+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "6275e085fd214dbc9d30794e4f7f9870",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 3550.5,
+        "llm_calls": 1,
+        "tool_batches": 0,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 13182,
+          "output_tokens": 454,
+          "cache_read_tokens": 11136,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 13182,
+              "output_tokens": 454,
+              "cache_read_tokens": 11136
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792395896.932833
+      }
+    ]
+  },
+  {
+    "turn": 13,
+    "message": "I'm back in my earlier Watford conversation. What are the current requirements here, and which of the previously shown properties fits them? Please keep the separate Camden studio search out of this decision.",
+    "tool_dispatches": [],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:49:33.892882+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "1d4bfa0886f0460aa81cee72e9de5b3d",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 3928.3,
+        "llm_calls": 1,
+        "tool_batches": 0,
+        "llm_usage": {
+          "calls": 1,
+          "input_tokens": 13270,
+          "output_tokens": 546,
+          "cache_read_tokens": 9600,
+          "models": {
+            "deepseek-flash": {
+              "calls": 1,
+              "input_tokens": 13270,
+              "output_tokens": 546,
+              "cache_read_tokens": 9600
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "_epoch": 1792396173.892882
+      }
+    ]
+  },
+  {
+    "turn": 14,
+    "message": "UI Ask AI on first actual returned property card.",
+    "tool_dispatches": [
+      {
+        "started": 1792396329.0604358,
+        "tool": "calculate_commute",
+        "args": {
+          "from_address": "Watford",
+          "to_address": "King's Cross St Pancras",
+          "idempotency_key": "b02a21fb6cb5c3e467f864cab5f9408811ba0f019392a05995d8d4acf3408c8d"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "from_address": "Watford",
+            "to_address": "King's Cross St Pancras",
+            "mode": "transit",
+            "route_summary": "Tube Audit fixture line to Audit destination (32 min)",
+            "route_legs": [
+              {
+                "mode": "tube",
+                "lines": [
+                  "Audit fixture line"
+                ],
+                "duration_minutes": 32,
+                "summary": "SYNTHETIC TEST DATA: audit route",
+                "from": "Audit origin",
+                "to": "Audit destination"
+              }
+            ],
+            "route_source": "TfL Journey Planner",
+            "basis": "tfl_journey_plan",
+            "basis_note": "Measured by the TfL Journey Planner: the fastest itinerary it returned for these two points, including walking legs and interchanges.",
+            "success": true,
+            "duration_minutes": 32,
+            "is_acceptable": true,
+            "duration_category": "Medium (20-45 min)"
+          },
+          "error": null,
+          "execution_time_ms": 10.386943817138672,
+          "tool_name": "calculate_commute",
+          "version": "1",
+          "idempotency_key": "b02a21fb6cb5c3e467f864cab5f9408811ba0f019392a05995d8d4acf3408c8d",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.011
+      },
+      {
+        "started": 1792396329.0599604,
+        "tool": "get_property_details",
+        "args": {
+          "property_url": "https://www.onthemarket.com/details/20306221/",
+          "question": "What is the room type, price, bedroom count, and is it a whole flat (not shared)?",
+          "idempotency_key": "f9557785ce07ef7ea5430211a530a77a728cd81574ec49049b5c92ae3eabcc68"
+        },
+        "context": {},
+        "result": {
+          "success": true,
+          "data": {
+            "success": true,
+            "found": true,
+            "search_query": "https://www.onthemarket.com/details/20306221/",
+            "match": {
+              "verdict": "exact_url",
+              "requested": "https://www.onthemarket.com/details/20306221/",
+              "requested_name": "",
+              "requested_postcode": "",
+              "resolved": "North Approach, Watford, WD25",
+              "resolved_postcode": "wd25",
+              "corroborated_by": [
+                "listing_url"
+              ],
+              "reasons": []
+            },
+            "property": {
+              "address": "North Approach, Watford, WD25",
+              "price": "£1,100 pcm",
+              "room_type": "1 bed Flat",
+              "description": "1 bedroom flat to rent in North Approach, Watford, WD25",
+              "amenities": "No Agent Fees, Property Reference Number: 3029260",
+              "guest_policy": "",
+              "payment_rules": "",
+              "excluded_features": "",
+              "url": "https://www.onthemarket.com/details/20306221/",
+              "available_from": "Contact agent",
+              "geo_location": "51.691127, -0.400973"
+            },
+            "room_type_analysis": {
+              "is_studio": false,
+              "is_shared_room": false,
+              "is_ensuite": false,
+              "has_private_kitchen": false,
+              "room_type_category": "1 bed Flat"
+            },
+            "formatted_details": "✅ Identity confirmed by listing URL: this IS the listing you asked about (North Approach, Watford, WD25).\n\n📍 **North Approach, Watford, WD25**\n\n💰 **价格**: £1,100 pcm\n🏠 **房型**: 1 bed Flat\n📅 **可入住日期**: Contact agent\n\n📝 **描述**:\n1 bedroom flat to rent in North Approach, Watford, WD25\n\n✨ **设施与配置**:\nNo Agent Fees, Property Reference Number: 3029260\n\n👥 **访客政策**:\n\n\n💳 **付款规则**:\n\n\n⛔ **不包含的设施**:\n\n\n🔗 **链接**: https://www.onthemarket.com/details/20306221/",
+            "total_matches": 1,
+            "message": "找到房产: North Approach, Watford, WD25（已核对与请求一致）"
+          },
+          "error": null,
+          "execution_time_ms": 42.723894119262695,
+          "tool_name": "get_property_details",
+          "version": "1",
+          "idempotency_key": "f9557785ce07ef7ea5430211a530a77a728cd81574ec49049b5c92ae3eabcc68",
+          "outcome": "complete"
+        },
+        "elapsed_s": 0.043
+      }
+    ],
+    "completed_turn_ledger": [
+      {
+        "event": "canary.turn",
+        "telemetry_schema_version": 3,
+        "ts": "2026-10-19T07:52:17.658122+00:00",
+        "endpoint": "alex",
+        "agent_arch": "fc_loop",
+        "candidate_sha": "e2e-tools-frozen-working-tree",
+        "strict": false,
+        "variant_id": "fc_loop:strict-0:specialists-0",
+        "rollout_id": null,
+        "rollout_stage": null,
+        "configured_candidate_percent": null,
+        "traffic_source": "direct",
+        "assigned_pool": "direct",
+        "request_id": "ef585d98371e4ab18c5ac353888902cc",
+        "conversation_id": "e45ca5204571422ca41a305ac1f670a9",
+        "user_id_hash": "a32465c70b0cbe4da35371f984d4419e",
+        "user_id_hash_status": "keyed",
+        "http_status": 200,
+        "turn_outcome": "ok",
+        "soft_wrapped": false,
+        "wrapped_by": null,
+        "partial": false,
+        "tool_budget_timeout": false,
+        "security": {
+          "denied_write_count": 0,
+          "tainted_write_executed_count": 0,
+          "forbidden_write_executed_count": 0,
+          "write_audit": []
+        },
+        "dsml_blocked": 0,
+        "dsml_leak": 0,
+        "provider_schema_400_count": 0,
+        "turn_latency_ms": 10058.6,
+        "llm_calls": 3,
+        "tool_batches": 1,
+        "llm_usage": {
+          "calls": 3,
+          "input_tokens": 29781,
+          "output_tokens": 1366,
+          "cache_read_tokens": 24832,
+          "models": {
+            "deepseek-flash": {
+              "calls": 3,
+              "input_tokens": 29781,
+              "output_tokens": 1366,
+              "cache_read_tokens": 24832
+            }
+          }
+        },
+        "llm_usage_status": "complete",
+        "forbidden_read": null,
+        "no_evidence_numbers": null,
+        "eval_only": [
+          "forbidden_read",
+          "no_evidence_numbers"
+        ],
+        "tool_ledger_status": "complete",
+        "llm_observer_installed": true,
+        "tool_latency": {
+          "get_property_details": {
+            "count": 1,
+            "p50_ms": 46.0,
+            "max_ms": 46.0,
+            "timed_out": 0,
+            "abandoned": 0
+          },
+          "calculate_commute": {
+            "count": 1,
+            "p50_ms": 32.0,
+            "max_ms": 32.0,
+            "timed_out": 0,
+            "abandoned": 0
+          }
+        },
+        "_epoch": 1792396337.658122
+      }
+    ]
+  }
+]

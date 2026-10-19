@@ -1,0 +1,99 @@
+{
+  "url": "http://127.0.0.1:15009/",
+  "body": "RentCompass\nEN\n中文\nCONVERSATIONS\nNew\nI'm moving to London for a job next to B…\njust now\nG\nGuest\nAI Assistant\n\nLondon Rental Intelligence\n\nI'm moving to London for a job next to Bank station. I go into the office Tuesday to Thursday and work from home the other days. My absolute budget is £2,100 a month for rent plus those commuting costs, excluding utility bills. I need a self-contained one-bedroom flat, not a room in a shared house, and a door-to-door commute of at most 35 minutes with no more than one change. Can you find current available flats and show the rent and actual public-transport fare separately so I can tell whether the total fits?\nEdit message\nALEX\n\nI couldn't find listings matching your criteria near London in the retrieved data. Please check the area spelling, or adjust the budget/area and try again (you can also use the search form on the right). No usable source candidates were retrieved; this does not establish that the market is empty.\n\nBranch from here\nNear UCL\nSafe areas\nRent stats\nListings\nSearch\nSaved\n0\nSearch criteria\nArea\n*\nBudget\nper month\nper week\nBedrooms\nAny\nStudio\n1\n2\n3\n4\n5\n6\nAt least this many bedrooms\nRoom type\nAny\nWhole property\nStudio\nEn-suite room\nShared room\nCommute to\nMax commute (min)\nI don't commute\nMove-in date\nYYYY-MM-DD\nSearch\nNo properties found\n\nTry adjusting your budget or location.",
+  "fields": [
+    {
+      "tag": "INPUT",
+      "type": "text",
+      "placeholder": "e.g. Camden — Enter to add",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "placeholder": "e.g. 1500",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "placeholder": null,
+      "value": "month",
+      "checked": null
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "placeholder": null,
+      "value": "",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "checkbox",
+      "placeholder": "",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "tag": "SELECT",
+      "type": "select-one",
+      "placeholder": null,
+      "value": "",
+      "checked": null
+    },
+    {
+      "tag": "INPUT",
+      "type": "text",
+      "placeholder": "e.g. UCL — optional",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "number",
+      "placeholder": "e.g. 40",
+      "value": "",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "checkbox",
+      "placeholder": "",
+      "value": "on",
+      "checked": false
+    },
+    {
+      "tag": "INPUT",
+      "type": "date",
+      "placeholder": "",
+      "value": "",
+      "checked": false
+    }
+  ],
+  "conversations_api": {
+    "status": 200,
+    "body": {
+      "conversations": [
+        {
+          "agent_arch": "fc_loop",
+          "agent_version": "live-test-frozen-working-tree",
+          "branch_depth": 0,
+          "created_at": "2026-10-19T10:59:10.952450+00:00",
+          "edited_slot_turn_id": null,
+          "fork_reason": null,
+          "forked_from_turn_id": null,
+          "id": "f108b7f2a8d048eca32f83ed764a7135",
+          "message_count": 2,
+          "parent_conversation_id": null,
+          "root_conversation_id": "f108b7f2a8d048eca32f83ed764a7135",
+          "strict": false,
+          "title": "I'm moving to London for a job next to B…",
+          "updated_at": "2026-10-19T10:59:19.965906+00:00"
+        }
+      ]
+    }
+  }
+}

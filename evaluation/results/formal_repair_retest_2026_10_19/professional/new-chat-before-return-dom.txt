@@ -1,0 +1,33 @@
+RentCompass
+EN
+中文
+CONVERSATIONS
+New
+New chat
+just now
+I'm moving to London for a job near Bank…
+1m ago
+G
+Guest
+AI Assistant
+
+London Rental Intelligence
+
+ALEX
+Hello! I'm Alex. I can help you find apartments in London.
+
+Try asking me:
+"Find a 1-bed near King's Cross under £2000"
+"What is the vibe like in Hackney?"
+"Show me flats with a 20min commute to UCL"
+Near UCL
+Safe areas
+Rent stats
+Listings
+Search
+Saved
+2
+Search criteria
+No properties found
+
+Try adjusting your budget or location.

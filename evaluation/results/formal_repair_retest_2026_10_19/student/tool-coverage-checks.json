@@ -1,0 +1,163 @@
+{
+  "boundary": "Only actual Tool.execute records for this persona authenticated conversation(s). Terminal ask_user is graph-managed and is not recorded here; no absence implies no clarification.",
+  "totals": {
+    "search_properties": 4,
+    "calculate_commute": 9,
+    "get_property_details": 2,
+    "calculate_commute_cost": 1,
+    "remember": 2
+  },
+  "turns": [
+    {
+      "round": 1,
+      "turn_id": "f4346ac693e946098ba7eb8a207015f2",
+      "actual_executions": [
+        {
+          "tool": "search_properties",
+          "success": false,
+          "error": null
+        }
+      ],
+      "ledger_turn_status": "completed"
+    },
+    {
+      "round": 2,
+      "turn_id": "68c107aaf6cf4f29a9bd0b8a0376ba1c",
+      "actual_executions": [
+        {
+          "tool": "search_properties",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        }
+      ],
+      "ledger_turn_status": "completed"
+    },
+    {
+      "round": 3,
+      "turn_id": "0defae20f8354fe78198fd40d6b739f7",
+      "actual_executions": [
+        {
+          "tool": "search_properties",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        },
+        {
+          "tool": "calculate_commute",
+          "success": false,
+          "error": "无法计算通勤时间（地址解析失败）"
+        }
+      ],
+      "ledger_turn_status": "completed"
+    },
+    {
+      "round": 4,
+      "turn_id": "d0d48e80842d4161918176a3cafbbc95",
+      "actual_executions": [
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "calculate_commute_cost",
+          "success": true,
+          "error": null
+        },
+        {
+          "tool": "get_property_details",
+          "success": true,
+          "error": null
+        }
+      ],
+      "ledger_turn_status": "completed"
+    },
+    {
+      "round": 5,
+      "turn_id": "1f2c31e8de5249329225476e5666d6fb",
+      "actual_executions": [
+        {
+          "tool": "remember",
+          "success": true,
+          "error": null
+        }
+      ],
+      "stored_equals_tool_arg": true,
+      "stored_equals_user_message": true,
+      "stored_content_visible_in_reply": false,
+      "stored_character_count": 147,
+      "ledger_turn_status": "completed"
+    },
+    {
+      "round": 6,
+      "turn_id": "31edad62d63c40cbb98df8a84ecbb024",
+      "actual_executions": [
+        {
+          "tool": "remember",
+          "success": true,
+          "error": null
+        }
+      ],
+      "stored_equals_tool_arg": true,
+      "stored_equals_user_message": false,
+      "stored_content_visible_in_reply": true,
+      "stored_character_count": 126,
+      "ledger_turn_status": "completed"
+    },
+    {
+      "round": 7,
+      "turn_id": "c346e478a8744485ba2f2a553d00be5f",
+      "actual_executions": [
+        {
+          "tool": "search_properties",
+          "success": true,
+          "error": null
+        }
+      ],
+      "ledger_turn_status": "completed"
+    }
+  ],
+  "coverage_limits": [
+    "No explicit recall_memory Tool.execute record; cross-conversation saved-default restoration is behaviorally verified by R7 request/tool args/view_state.",
+    "ask_user terminal paths are graph-managed and absent from this ledger; do not conclude no clarification. R1 search_properties explicitly returned needs_clarification."
+  ]
+}

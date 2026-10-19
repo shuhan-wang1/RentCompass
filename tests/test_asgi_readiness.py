@@ -30,7 +30,8 @@ def _install_runtime(monkeypatch, tmp_path, *, dead: int = 0):
     )
     monkeypatch.setitem(sys.modules, "uk_rent_agent._legacy_web_app", module)
     monkeypatch.setenv("APP_IMAGE_DIGEST", "sha256:" + "b" * 64)
-    monkeypatch.setenv("PROMPT_VERSION", "2.1.0")
+    from core.loop_prompts import FC_LOOP_SYSTEM_PROMPT_VERSION
+    monkeypatch.setenv("PROMPT_VERSION", FC_LOOP_SYSTEM_PROMPT_VERSION)
     monkeypatch.setenv("PROMPT_SCHEMA_SHA", "c" * 64)
     monkeypatch.setenv("ROUTING_MODE", "blue_green_shared_conversation_store")
     monkeypatch.setenv("RELEASE_METADATA_REQUIRED", "1")

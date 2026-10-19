@@ -483,51 +483,81 @@ class ConversationStore:
                 return None
         return self.get_conversation(user_id, cid)
 
+    def _raise_if_turn_running(self, user_id: str, cid: str | None = None) -> None:
+        """Refuse a destructive write while a live turn holds a lease; caller holds the
+        lock inside a ``BEGIN IMMEDIATE`` transaction.
+
+        DELETE and clear_history used to delete the lease, the turn and the transcript out
+        from under a RUNNING turn: the turn burned its model and tool calls, then failed at
+        persistence (TurnNotFound -> 500), and the still-running graph wrote the deleted
+        conversation's checkpoint thread back after ``_delete_checkpoint_thread`` had run —
+        user text surviving a delete (2026-10-19 C-03). ``begin_privacy_erasure`` already
+        refused to race a live lease; this is the same rule for the conversation-scoped
+        deletes. An EXPIRED lease (a killed process) does not block: the turn it named can
+        no longer write, and the delete removes it.
+        """
+        now = _now_iso()
+        query = ("""SELECT l.turn_id, l.expires_at, t.status
+                    FROM conversation_turn_leases l
+                    LEFT JOIN turns t ON t.id=l.turn_id AND t.user_id=l.user_id
+                    WHERE l.user_id=?""")
+        params: tuple = (user_id,)
+        if cid is not None:
+            query += " AND l.conversation_id=?"
+            params = (user_id, cid)
+        for lease in self._conn.execute(query, params).fetchall():
+            if lease["status"] == "running" and lease["expires_at"] > now:
+                remaining = (
+                    datetime.datetime.fromisoformat(lease["expires_at"])
+                    - datetime.datetime.fromisoformat(now)
+                ).total_seconds()
+                raise ConversationBusy(lease["turn_id"], max(1, int(remaining)))
+
     def delete_conversation(self, user_id: str, cid: str) -> bool:
+        """Delete one conversation and everything keyed by it.
+
+        Raises ``ConversationBusy`` while a turn is running in it (see
+        ``_raise_if_turn_running``)."""
         with self._lock:
-            cur = self._conn.execute(
-                "DELETE FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM messages WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turn_snapshots WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turns WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turn_requests WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM conversation_turn_leases WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.execute(
-                "DELETE FROM background_jobs WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.commit()
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                self._raise_if_turn_running(user_id, cid)
+                cur = self._conn.execute(
+                    "DELETE FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
+                )
+                for table in ("messages", "turn_snapshots", "turns", "turn_requests",
+                              "conversation_turn_leases", "background_jobs"):
+                    self._conn.execute(
+                        f"DELETE FROM {table} WHERE user_id=? AND conversation_id=?",
+                        (user_id, cid),
+                    )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
             # Children of a deleted parent keep their (now dangling) lineage pointers.
             return cur.rowcount > 0
 
     def delete_all_conversations(self, user_id: str) -> list[str]:
         """Delete every conversation + message for a user; return the deleted ids
-        (so the caller can drop the matching LangGraph checkpointer threads)."""
+        (so the caller can drop the matching LangGraph checkpointer threads).
+
+        Raises ``ConversationBusy`` while any of the user's turns is running."""
         with self._lock:
-            rows = self._conn.execute(
-                "SELECT id FROM conversations WHERE user_id=?", (user_id,)
-            ).fetchall()
-            cids = [r["id"] for r in rows]
-            self._conn.execute("DELETE FROM messages WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM turn_snapshots WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM turns WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM turn_requests WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM conversation_turn_leases WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM background_jobs WHERE user_id=?", (user_id,))
-            self._conn.execute("DELETE FROM conversations WHERE user_id=?", (user_id,))
-            self._conn.commit()
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                self._raise_if_turn_running(user_id)
+                rows = self._conn.execute(
+                    "SELECT id FROM conversations WHERE user_id=?", (user_id,)
+                ).fetchall()
+                cids = [r["id"] for r in rows]
+                for table in ("messages", "turn_snapshots", "turns", "turn_requests",
+                              "conversation_turn_leases", "background_jobs", "conversations"):
+                    self._conn.execute(f"DELETE FROM {table} WHERE user_id=?", (user_id,))
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         return cids
 
     def _privacy_inventory_unlocked(self, user_id: str) -> dict[str, int]:
@@ -596,39 +626,34 @@ class ConversationStore:
         return {"conversation_ids": cids, "before": before, "after": after}
 
     def clear_conversation_messages(self, user_id: str, cid: str) -> bool:
-        """Empty a conversation's transcript but keep the (renamed) row."""
+        """Empty a conversation's transcript but keep the (renamed) row.
+
+        Raises ``ConversationBusy`` while a turn is running in it (C-03)."""
         with self._lock:
-            exists = self._conn.execute(
-                "SELECT 1 FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
-            ).fetchone()
-            if not exists:
-                return False
-            self._conn.execute(
-                "DELETE FROM messages WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            # Resetting the transcript also drops its turns + snapshots.
-            self._conn.execute(
-                "DELETE FROM turn_snapshots WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turns WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM turn_requests WHERE user_id=? AND conversation_id=?", (user_id, cid)
-            )
-            self._conn.execute(
-                "DELETE FROM conversation_turn_leases WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.execute(
-                "DELETE FROM background_jobs WHERE user_id=? AND conversation_id=?",
-                (user_id, cid),
-            )
-            self._conn.execute(
-                "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
-                (_now_iso(), user_id, cid),
-            )
-            self._conn.commit()
+            try:
+                self._conn.execute("BEGIN IMMEDIATE")
+                exists = self._conn.execute(
+                    "SELECT 1 FROM conversations WHERE user_id=? AND id=?", (user_id, cid)
+                ).fetchone()
+                if not exists:
+                    self._conn.rollback()
+                    return False
+                self._raise_if_turn_running(user_id, cid)
+                # Resetting the transcript also drops its turns + snapshots.
+                for table in ("messages", "turn_snapshots", "turns", "turn_requests",
+                              "conversation_turn_leases", "background_jobs"):
+                    self._conn.execute(
+                        f"DELETE FROM {table} WHERE user_id=? AND conversation_id=?",
+                        (user_id, cid),
+                    )
+                self._conn.execute(
+                    "UPDATE conversations SET updated_at=? WHERE user_id=? AND id=?",
+                    (_now_iso(), user_id, cid),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         return True
 
     # ----------------------------------------------------------------- messages

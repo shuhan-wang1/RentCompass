@@ -2726,8 +2726,12 @@
             const supplied = typeof payload.message === 'string' ? payload.message
                 : typeof payload.error === 'string' ? payload.error
                 : typeof nested.message === 'string' ? nested.message : '';
+            // Only a rate limit locks the pane. A 409 "turn in progress" Retry-After is a
+            // short polling hint, not a cool-down (C-05).
+            const rateLimited = status === 429 || /rate_limit|too_many_requests/.test(code);
             return { message: key ? t(key).replace('{seconds}', seconds) : (supplied || t('error_connection')),
-                retryAfter: seconds, canRetry: ![400,401,403,404,422].includes(status), status: status };
+                retryAfter: seconds, rateLimited: rateLimited,
+                canRetry: ![400,401,403,404,422].includes(status), status: status };
         }
 
         function showRetryToast(pane, details) {
@@ -2748,7 +2752,7 @@
 
         function showChatError(pane, payload, status, headers, turnId) {
             const details = apiErrorDetails(payload, status, headers);
-            if (details.retryAfter) pane.retryUntil = Date.now() + details.retryAfter * 1000;
+            if (details.rateLimited && details.retryAfter) pane.retryUntil = Date.now() + details.retryAfter * 1000;
             addMessage(pane, cleanRawResponse(details.message), 'alex', { icon: 'error', turnId: turnId });
             pane.lastResponseType = 'error';
             showRetryToast(pane, details);

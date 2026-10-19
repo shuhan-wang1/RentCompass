@@ -1508,6 +1508,33 @@ def _reject_unstorable_text(data) -> None:
                 stack.append((value, depth + 1))
 
 
+# A 409 "turn in progress" is NOT rate limiting, and its Retry-After is a polling hint.
+# It used to carry the remaining LEASE (up to 900 s, the crash-recovery bound) even when
+# the live turn finished in seconds, and the UI turned that into a pane-wide "Too many
+# requests. Please wait 480 seconds" lock-out (2026-10-19 C-05). The lease bound is still
+# reported, in the body, as `lease_expires_in`.
+_BUSY_RETRY_HINT_S = 3
+
+
+def _busy_retry_after(exc) -> str:
+    return str(max(1, min(int(getattr(exc, "retry_after", 1) or 1), _BUSY_RETRY_HINT_S)))
+
+
+def _conversation_busy_response(exc, **body):
+    """The one 409 shape for a write refused because a turn holds the lease."""
+    payload = {
+        "error": "a conversation turn is still running; retry after it finishes",
+        "code": "turn_in_progress",
+        "running_turn_id": exc.turn_id,
+        "lease_expires_in": int(getattr(exc, "retry_after", 1) or 1),
+    }
+    payload.update(body)
+    response = jsonify(payload)
+    response.status_code = 409
+    response.headers["Retry-After"] = _busy_retry_after(exc)
+    return response
+
+
 def get_json_or_400() -> dict:
     """Parse a REQUIRED JSON object body, mapping Flask's HTML errors to JSON per contract.
 
@@ -2080,13 +2107,9 @@ async def api_alex():
             strict=DEEPSEEK_STRICT,
         )
     except ConversationBusy as exc:
-        response = jsonify({
-            "error": "another turn is already running for this conversation",
-            "running_turn_id": exc.turn_id,
-            "conversation_id": conversation_id,
-        })
-        response.status_code = 409
-        response.headers["Retry-After"] = str(exc.retry_after)
+        response = _conversation_busy_response(
+            exc, error="another turn is already running for this conversation",
+            conversation_id=conversation_id)
         response.headers["X-Request-Id"] = request_id
         return response
     except PrivacyErasureInProgress:
@@ -3948,13 +3971,9 @@ async def api_search_direct():
             strict=DEEPSEEK_STRICT,
         )
     except ConversationBusy as exc:
-        response = jsonify({
-            "error": "another turn is already running for this conversation",
-            "running_turn_id": exc.turn_id,
-            "conversation_id": conversation_id,
-        })
-        response.status_code = 409
-        response.headers["Retry-After"] = str(exc.retry_after)
+        response = _conversation_busy_response(
+            exc, error="another turn is already running for this conversation",
+            conversation_id=conversation_id)
         response.headers["X-Request-Id"] = request_id
         return response
     except PrivacyErasureInProgress:
@@ -4294,7 +4313,13 @@ def delete_conversation(cid):
     """Delete a conversation + its messages, hot-cache slice, and checkpointer thread.
     Does NOT touch long-term (SQLite) memory. 404 if not owned."""
     user_id, _ = _identity_from_request()
-    if not conversation_store.delete_conversation(user_id, cid):
+    try:
+        deleted = conversation_store.delete_conversation(user_id, cid)
+    except ConversationBusy as exc:
+        # Deleting under a running turn made that turn 500 after spending its model and
+        # tool budget, and its graph wrote the deleted checkpoint thread back (C-03).
+        return _conversation_busy_response(exc, deleted=False)
+    if not deleted:
         raise ApiError(404, "conversation not found")
     _session_store.clear(user_id, cid)
     _delete_checkpoint_thread(user_id, cid)
@@ -4459,11 +4484,18 @@ def clear_history():
         # conversation the caller doesn't own is a 404, not a silent no-op success.
         if conversation_store.get_conversation(user_id, cid) is None:
             raise ApiError(404, "conversation not found")
-        conversation_store.clear_conversation_messages(user_id, cid)
+        try:
+            conversation_store.clear_conversation_messages(user_id, cid)
+        except ConversationBusy as exc:     # same race as DELETE (C-03)
+            return _conversation_busy_response(exc, success=False)
         _session_store.clear(user_id, cid)
         _delete_checkpoint_thread(user_id, cid)
     else:
-        for c in conversation_store.delete_all_conversations(user_id):
+        try:
+            cleared = conversation_store.delete_all_conversations(user_id)
+        except ConversationBusy as exc:
+            return _conversation_busy_response(exc, success=False)
+        for c in cleared:
             _delete_checkpoint_thread(user_id, c)
         _session_store.clear_user(user_id)
     logger.info(
@@ -4486,15 +4518,7 @@ def forget_me():
     try:
         conversation_store.begin_privacy_erasure(user_id)
     except ConversationBusy as exc:
-        response = jsonify({
-            "forgotten": False,
-            "status": "busy",
-            "error": "a conversation turn is still running; retry after it finishes",
-            "running_turn_id": exc.turn_id,
-        })
-        response.status_code = 409
-        response.headers["Retry-After"] = str(exc.retry_after)
-        return response
+        return _conversation_busy_response(exc, forgotten=False, status="busy")
     except PrivacyErasureInProgress:
         response = jsonify({
             "forgotten": False,

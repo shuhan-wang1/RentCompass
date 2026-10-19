@@ -40,6 +40,7 @@ class _ValidatingProvider:
     def __init__(self, names):
         self.specs = [Spec(n, input_schema=_SPECS[n].input_schema) for n in names]
         self.calls = []
+        self.raw_calls = []
         self.rejected = []
 
     def list_specs(self):
@@ -50,6 +51,7 @@ class _ValidatingProvider:
 
     async def execute_tool(self, name, **params):
         tool = _REGISTRY.get(name)
+        self.raw_calls.append((name, dict(params)))
         clean = {k: v for k, v in params.items()
                  if not k.startswith("_") and k != "idempotency_key"}
         self.calls.append((name, clean))
@@ -158,3 +160,15 @@ def test_only_listing_coordinates_are_labelled_as_the_listings_own(monkeypatch):
                                           latitude=51.5397, longitude=-0.1425,
                                           _coordinate_source="listing")
     assert listing["reference_point"]["precision"] == "listing_coordinates"
+
+
+def test_a_model_cannot_supply_a_harness_only_argument(monkeypatch):
+    """Review: the model's own "_coordinate_source": "listing" relabelled its coordinates."""
+    monkeypatch.setenv("DEEPSEEK_STRICT", "0")
+    message = "Supermarkets near NW1 8NH?"
+    state = _state(message)
+    provider = _run(state, [("search_nearby_pois", {
+        "address": "NW1 8NH", "poi_type": "supermarket", "latitude": 51.5415,
+        "longitude": -0.1445, "_coordinate_source": "listing"})], ["search_nearby_pois"])
+    (_, raw), = provider.raw_calls
+    assert "_coordinate_source" not in raw

@@ -201,3 +201,30 @@ def test_titles_are_bounded(store):
     store.rename_conversation("u_title", created["id"], "y" * 5_000)
     assert len(store.get_conversation("u_title", created["id"])["title"]) <= 200
     assert store.create_conversation("u_title", "   ")["title"] == "New chat"
+
+
+def test_an_idempotency_key_is_bound_to_the_branch_point(store):
+    """C-07 (review): same key + same source + a different fork point replayed the first child."""
+    from uk_rent_agent.web.conversation_store import IdempotencyKeyReused
+
+    first = _victim_turn_starts(store, user="u_idem")
+    cid = first["conversation_id"]
+    second = store.start_request_turn("u_idem", cid, "req-idem-2", "and Camden?")
+    store.finalize_request_turn("u_idem", second["id"], status="completed",
+                                assistant_content="ok", snapshot={"accumulated_search_criteria": {}})
+    child = store.fork_conversation("u_idem", cid, after_turn_id=first["id"], idempotency_key="k")
+    assert store.fork_conversation("u_idem", cid, after_turn_id=first["id"],
+                                   idempotency_key="k")["id"] == child["id"]
+    with pytest.raises(IdempotencyKeyReused):
+        store.fork_conversation("u_idem", cid, after_turn_id=second["id"], idempotency_key="k")
+    edit = store.branch_for_edit("u_idem", cid, second["id"], idempotency_key="e")
+    assert store.branch_for_edit("u_idem", cid, second["id"], idempotency_key="e")["id"] == edit["id"]
+    with pytest.raises(IdempotencyKeyReused):
+        store.branch_for_edit("u_idem", cid, first["id"], idempotency_key="e")
+
+
+def test_a_branch_of_a_long_title_keeps_its_suffix(store):
+    first = _victim_turn_starts(store, user="u_long")
+    store.rename_conversation("u_long", first["conversation_id"], "t" * 200)
+    child = store.fork_conversation("u_long", first["conversation_id"])
+    assert child["title"].endswith(" (branch)") and len(child["title"]) <= 200

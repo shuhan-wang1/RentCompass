@@ -483,8 +483,9 @@ def _extract_total_budget(text: str):
     return monthly_from_weekly(value) if _budget_period_near(t, m.start(), m.end()) == 'week' else value
 
 
+# "bills" alone is not here: "budget £1500 including bills" describes the rent.
 _NOT_RENT_MONEY = re.compile(
-    r'\b(?:deposit|salary|earn\w*|income|wages?|after tax|fees?|bills?|council tax|'
+    r'\b(?:deposit|salary|earn\w*|income|wages?|after tax|fees?|council tax|'
     r'holding|admin)\b|押金|工资|收入|月薪|年薪', re.I)
 _RENT_CONTEXT = re.compile(
     r'\b(?:budget|rent|max(?:imum)?|under|up to|below|pcm|per month|a month|ceiling)\b|'
@@ -1253,7 +1254,10 @@ def _area_switch_target(text: str) -> str | None:
     source = str(text or "")
     for clause in re.split(r"[.;!?\n。；！？]", source):
         match = _SWITCH_FROM_TO.search(clause)
-        if match and not _NOT_ROUTE_SWITCH.search(clause):
+        # Route wording is tested only between the switch verb and the new place: "Switch
+        # the search from Islington to Camden, it's closer to work" is a switch; "change my
+        # commute from Islington to Camden" is not.
+        if match and not _NOT_ROUTE_SWITCH.search(clause[match.start():match.start(2)]):
             old, new = _match_known_area(match.group(1)), _match_known_area(match.group(2))
             if old and new and old != new:
                 return new

@@ -138,3 +138,29 @@ def test_forgetting_the_workplace_clears_it_instead_of_setting_it():
     assert other.get("commute_destination") == prior["commute_destination"]
     assert _apply_explicit_criteria_updates({}, "Forget that I work at Canary Wharf.").get(
         "commute_destination") is None
+
+
+@pytest.mark.parametrize("message", [
+    "My office is 3 days a week, find a 1-bed in Hackney",
+    "My office is Monday to Friday so I commute daily",
+    "My office is 10 minutes' walk from Liverpool Street",
+])
+def test_a_schedule_or_duration_is_not_a_destination(message):
+    assert _apply_explicit_criteria_updates({}, message).get("commute_destination") is None
+
+
+@pytest.mark.parametrize("message", [
+    "The lift isn't needed anymore", "Step-free access is no longer required",
+])
+def test_common_retraction_phrasings(message):
+    updated = _apply_explicit_criteria_updates({"property_features": ["lift", "step-free"]}, message)
+    assert len(updated["property_features"]) == 1
+
+
+def test_not_required_but_nice_stays_a_soft_preference():
+    updated = _apply_explicit_criteria_updates({}, "a lift is not required but would be nice")
+    assert updated.get("soft_preferences") == ["Would like lift"]
+
+
+def test_a_correction_after_bills_included_still_applies():
+    assert _extract_budget("Budget £1500 including bills, no wait, £1700")[0] == 1700

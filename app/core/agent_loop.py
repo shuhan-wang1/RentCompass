@@ -656,7 +656,8 @@ def _canonical_poi_args(batch: list) -> dict:
         # null-stripped, so it must be built from null-stripped args too: a strict-mode
         # call carries "latitude": null / "longitude": null, and copying the raw args back
         # failed every merged POI call with "ValidationError: invalid parameters" (B-06).
-        args = strip_null_args(tc.get("args") or {})
+        args = strip_null_args({k: v for k, v in (tc.get("args") or {}).items()
+                                if not str(k).startswith("_")})
         address = str(args.get("address") or "").strip()
         if not address:
             continue
@@ -3381,7 +3382,12 @@ def build_fc_nodes(tool_provider, *, enable_hitl=False, checkpointer=None, agent
             tc.get("name") in _UNTRUSTED_TOOLS for tc in batch)
         for tc in batch:
             name = tc.get("name")
-            args = dict(tc.get("args") or {})
+            # Underscore keys are HARNESS-only (injected after this point and re-attached by
+            # tool_system to funcs that declare them). A model — or injected text it obeyed —
+            # must not supply one: non-strict mode has no additionalProperties guard, and
+            # "_coordinate_source": "listing" would relabel the model's own coordinates.
+            args = {k: v for k, v in (tc.get("args") or {}).items()
+                    if not str(k).startswith("_")}
             if _strict_on():
                 # Strict schemas force every param present (null = omitted); drop nulls
                 # BEFORE injection/gating/digest so tool defaults apply and the

@@ -321,7 +321,11 @@ _ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
 #   tail:   "about the lift, not needed anymore."  (the retraction ENDS the sentence)
 #   before: "forget the lift", "drop the lift requirement"
 _RETRACTION_AFTER_RE = re.compile(
-    r"\s*(?:requirement\s+)?(?:(?:is|are|isn.t|aren.t)\s+)?(?:not|no longer)\s+(?:needed|necessary)\b",
+    r"\s*(?:(?:access|requirements?|filter)\s+)?"
+    # "is not required" is NOT here: "a lift is not required but would be nice" is a soft
+    # preference, handled by the hard/soft classifier; only "no longer required" retracts.
+    r"(?:(?:(?:is|are)\s+(?:not|no longer)|isn.t|aren.t|not|no longer)\s+(?:needed|necessary)"
+    r"|(?:(?:is|are)\s+)?no longer\s+required)\b",
     re.I)
 _RETRACTION_TAIL_RE = re.compile(
     r"[^.!?;。！？,，]{0,40}?[,，]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
@@ -727,6 +731,11 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # Persist that distinction before the LLM plans tools so all calls see the
     # same destination (not only search_properties, which also scans raw text).
     message_destination = extract_destination_from_text(current_message)
+    if isinstance(message_destination, dict) and re.fullmatch(
+            r'(?:my|the|our|an?)\s+(?:office|workplace|job|work)',
+            str(message_destination.get('name') or message_destination.get('address') or '').strip(),
+            re.I):
+        message_destination = None       # "My office" is a label, never an address
     # A labelled workplace is followed by the destination. "My office" itself
     # is never an address, even if a generic place classifier accepts it.
     # "my workplace is King's Cross station" names the place without a preposition; a
@@ -736,7 +745,10 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # must be capitalised: "my job is remote", "my work is hybrid", "my job is stressful"
     # name no place (review of the A-03 fix).
     labelled_destination = re.search(
-        r'\b(?:(?i:my (?:office|workplace)\s+is)\s+(?=[A-Z0-9])|'
+        r'\b(?:(?i:my (?:office|workplace)\s+is)\s+(?=[A-Z])'
+        r'(?!(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Weekdays?|Weekends?|'
+        r'January|February|March|April|May|June|July|August|September|October|November|'
+        r'December|Hybrid|Remote|Closed|Open)\b)|'
         r'(?i:(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
         r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+))([^.!?;\n]{2,90})',
         _dest_source)
@@ -766,7 +778,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
         # The place ends where the clause about it ends: "King's Cross, so I'd like a
         # commute of under 30 minutes" stored the whole fragment as the destination, and
         # every later commute lookup failed address resolution (A-03).
-        named = re.split(r'\s+and\s+|,\s*(?:and|where|so|but|which|because|as|i\b|i.[dm]\b|my\b)'
+        named = re.split(r'\s+and\s+|,\s*(?:and|where|so|but|which|because|as|i\b|i.[dm]\b|my\b|'
+                         r'find|looking|search|show|please)'
                          r'|\s+(?:so|but|because|since|which|where|while)\s+'
                          r'|\s+for\s+|\s+(?:arriving|leaving|departing)\b'
                          r'|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)',

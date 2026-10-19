@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS fork_requests (
     idempotency_key TEXT NOT NULL,
     conversation_id TEXT NOT NULL,
     created_at      TEXT NOT NULL,
+    request_fingerprint TEXT,
     PRIMARY KEY (user_id, idempotency_key)
 );
 CREATE TRIGGER IF NOT EXISTS turns_completed_requires_assistant_insert
@@ -266,9 +267,18 @@ class PrivacyErasureInProgress(RuntimeError):
 TITLE_MAX_CHARS = 200
 
 
-def _bounded_title(value, fallback: str) -> str:
+def _bounded_title(value, fallback: str, suffix: str = "") -> str:
+    """``value`` bounded; else ``fallback`` + ``suffix`` with the suffix always kept."""
     text = " ".join(str(value or "").split())
-    return (text[:TITLE_MAX_CHARS].rstrip() or fallback[:TITLE_MAX_CHARS])
+    if text:
+        return text[:TITLE_MAX_CHARS].rstrip()
+    room = max(0, TITLE_MAX_CHARS - len(suffix))
+    return (" ".join(str(fallback or "").split())[:room].rstrip() + suffix) or "New chat"
+
+
+def _fork_fingerprint(kind: str, source_cid: str, turn_id) -> str:
+    """The request an idempotency key was first used for: endpoint, source, branch point."""
+    return f"{kind}|{source_cid}|{str(turn_id or '').strip()}"
 
 
 class _TransactionGuardLock:
@@ -392,6 +402,10 @@ class ConversationStore:
         ):
             if name not in conv_cols:
                 self._conn.execute(f"ALTER TABLE conversations ADD COLUMN {name} {decl}")
+        if "request_fingerprint" not in _cols("fork_requests"):
+            # What the idempotency key was used FOR (endpoint, source, fork point), so a
+            # replay of the same key for a different request is refused (C-07).
+            self._conn.execute("ALTER TABLE fork_requests ADD COLUMN request_fingerprint TEXT")
         if "turn_id" not in _cols("messages"):
             self._conn.execute("ALTER TABLE messages ADD COLUMN turn_id TEXT")
         if 'response_metadata_json' not in _cols('messages'):
@@ -1564,15 +1578,18 @@ class ConversationStore:
             # 1. Idempotency replay (race-safe: serialized by the lock, PK backstop).
             if idempotency_key:
                 existing = self._conn.execute(
-                    """SELECT conversation_id FROM fork_requests
+                    """SELECT conversation_id, request_fingerprint FROM fork_requests
                        WHERE user_id=? AND idempotency_key=?""",
                     (user_id, idempotency_key),
                 ).fetchone()
                 if existing:
                     child = self.get_conversation(user_id, existing["conversation_id"])
                     if child is not None:
+                        recorded = existing["request_fingerprint"]
                         if (child.get("parent_conversation_id") != source_cid
-                                or child.get("fork_reason") == "edit"):
+                                or child.get("fork_reason") == "edit"
+                                or (recorded is not None and recorded != _fork_fingerprint(
+                                    "fork", source_cid, after_turn_id))):
                             raise IdempotencyKeyReused(idempotency_key)
                         child = dict(child)
                         child["idempotent"] = True
@@ -1619,7 +1636,7 @@ class ConversationStore:
                 # 4. Create the child conversation row.
                 child_cid = uuid.uuid4().hex
                 now = _now_iso()
-                child_title = _bounded_title(title, f"{src['title']} (branch)")
+                child_title = _bounded_title(title, src['title'], " (branch)")
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
                 # A branch starts with the source conversation's architecture provenance;
@@ -1655,9 +1672,11 @@ class ConversationStore:
                 if idempotency_key:
                     self._conn.execute(
                         """INSERT OR REPLACE INTO fork_requests
-                           (user_id, idempotency_key, conversation_id, created_at)
-                           VALUES(?,?,?,?)""",
-                        (user_id, idempotency_key, child_cid, _now_iso()),
+                           (user_id, idempotency_key, conversation_id, created_at,
+                            request_fingerprint)
+                           VALUES(?,?,?,?,?)""",
+                        (user_id, idempotency_key, child_cid, _now_iso(),
+                         _fork_fingerprint("fork", source_cid, after_turn_id)),
                     )
 
                 self._conn.commit()
@@ -1846,15 +1865,18 @@ class ConversationStore:
             # 1. Idempotency replay (shares the fork_requests table; serialized by the lock).
             if idempotency_key:
                 existing = self._conn.execute(
-                    """SELECT conversation_id FROM fork_requests
+                    """SELECT conversation_id, request_fingerprint FROM fork_requests
                        WHERE user_id=? AND idempotency_key=?""",
                     (user_id, idempotency_key),
                 ).fetchone()
                 if existing:
                     child = self.get_conversation(user_id, existing["conversation_id"])
                     if child is not None:
+                        recorded = existing["request_fingerprint"]
                         if (child.get("parent_conversation_id") != source_cid
-                                or child.get("fork_reason") != "edit"):
+                                or child.get("fork_reason") != "edit"
+                                or (recorded is not None and recorded != _fork_fingerprint(
+                                    "edit", source_cid, turn_id))):
                             raise IdempotencyKeyReused(idempotency_key)
                         child = dict(child)
                         child["idempotent"] = True
@@ -1911,7 +1933,7 @@ class ConversationStore:
                 self._conn.execute("BEGIN")
                 child_cid = uuid.uuid4().hex
                 now = _now_iso()
-                child_title = _bounded_title(title, f"{src['title']} (edit)")
+                child_title = _bounded_title(title, src['title'], " (edit)")
                 root = src["root_conversation_id"] or source_cid
                 depth = int(src["branch_depth"] or 0) + 1
                 # Edit branches inherit the source's architecture provenance.
@@ -1931,9 +1953,11 @@ class ConversationStore:
                 if idempotency_key:
                     self._conn.execute(
                         """INSERT OR REPLACE INTO fork_requests
-                           (user_id, idempotency_key, conversation_id, created_at)
-                           VALUES(?,?,?,?)""",
-                        (user_id, idempotency_key, child_cid, _now_iso()),
+                           (user_id, idempotency_key, conversation_id, created_at,
+                            request_fingerprint)
+                           VALUES(?,?,?,?,?)""",
+                        (user_id, idempotency_key, child_cid, _now_iso(),
+                         _fork_fingerprint("edit", source_cid, turn_id)),
                     )
                 self._conn.commit()
             except Exception:

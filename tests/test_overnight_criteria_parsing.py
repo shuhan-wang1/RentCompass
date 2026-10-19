@@ -98,3 +98,12 @@ def test_a_flat_share_room_is_not_a_verified_one_bed_flat():
 ])
 def test_a_regular_journey_is_not_an_area_switch(message):
     assert _extract_areas(message) == ["Hackney"]
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("Switch the search from Islington to Camden, it's closer to work", ["Camden"]),
+    ("I'm moving from Leeds to London for work, find me a 1-bed", ["London"]),
+    ("Change from Hackney to Camden please, I cycle to work", ["Camden"]),
+])
+def test_route_words_elsewhere_in_the_sentence_do_not_cancel_a_switch(message, expected):
+    assert _extract_areas(message) == expected

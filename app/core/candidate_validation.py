@@ -1739,7 +1739,9 @@ def _claim_is_evidenced(fragment: str, binding: dict | None, caps: set,
 def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None = None,
                            caps: set | None = None,
                            default_binding: dict | None = None,
-                           preference_context: bool = False) -> str | None:
+                           preference_context: bool = False,
+                           source_texts: list[str] | None = None,
+                           removed: list | None = None) -> str | None:
     """Drop the unverifiable commute assertions and keep everything else.
 
     Price, area, availability and an honest caveat are all still true and still useful when
@@ -1760,8 +1762,10 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     bindings = list(bindings or [])
     caps = set(caps or ())
     itinerary = _itinerary_bindings(text, bindings + ([default_binding] if default_binding else []))
+    removed = removed if removed is not None else []
     lines: list[str] = []
     for line in str(text or "").split("\n"):
+        removed_before_line = len(removed)
         bullet = _BULLET_PREFIX.match(line)
         prefix = bullet.group(1) if bullet else ""
         body = line[len(prefix):]
@@ -1793,6 +1797,8 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             O(fragments x line) (the B-01 class again)."""
             if _preference_commute_reference(fragment, caps, context=preference_line):
                 return True
+            if _quotes_source_text(fragment, source_texts):
+                return True
             return _claim_is_evidenced(fragment, _binding if _binding is not None else binding,
                                        caps, context=context, heading=heading,
                                        itinerary=itinerary)
@@ -1804,10 +1810,14 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
             lead = _without_abbreviation_dots(body[max(0, match.start() - 200):match.start()])
             return re.split(r"[,;:!?，；：。！？]|\.(?=\s|$)", lead)[-1]
 
-        body = _PARENTHETICAL.sub(
-            lambda m: "" if (_asserts_commute(m.group(0))
-                             and not _evidenced(m.group(0), context=_attached_clause(m)))
-            else m.group(0), body)
+        def _parenthetical(m) -> str:
+            if (_asserts_commute(m.group(0))
+                    and not _evidenced(m.group(0), context=_attached_clause(m))):
+                removed.append(m.group(0))
+                return ""
+            return m.group(0)
+
+        body = _PARENTHETICAL.sub(_parenthetical, body)
 
         labels = sorted({label for item in bindings for label in item["labels"] if label},
                         key=len, reverse=True)
@@ -1857,15 +1867,32 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
                           and not _evidenced(fragment, inherited))
                          or _dependent_commute_aside(fragment))):
                 drop = True
+            if (not drop and dropped_in_sentence and fragment.strip()
+                    and _DANGLING_AFTER_DROP.match(fragment)):
+                # "Cheapest route: with the same line pattern." / "Cons - the longest of the
+                # three.": what is left of a sentence whose figure went cannot stand (R1-10).
+                drop = True
             if drop:
+                removed.append(fragment)
                 dropped_in_sentence = True
                 continue  # its trailing separator goes with it
+            if dropped_in_sentence:
+                # "Features: and the listing says ..." - a coordinator left at the front.
+                fragment = _LEADING_COORDINATOR.sub(r"\1", fragment)
             if _SENTENCE_END.search(separator):
                 dropped_in_sentence = False
                 commute_context = False
             kept.append(fragment + separator)
 
+        if len(removed) == removed_before_line:
+            # Nothing was withdrawn from this line: keep it byte for byte. The tidy-up below
+            # used to strip a trailing ":" and that difference alone attached "some commute
+            # claims ... have been removed" to answers with no commute claim at all (R1-10).
+            lines.append(line)
+            continue
         rebuilt = "".join(kept)
+        if re.fullmatch(r"[*_#\s]*[^:：\n]{1,40}[:：]\s*[*_]*\s*", rebuilt) and not _MINUTE_TOKEN.search(rebuilt):
+            rebuilt = ""         # "Cheapest route:" with nothing left after it (R1-10)
         # Tidy up after removal: no doubled or dangling separators.
         rebuilt = re.sub(r"([,，；;、:：])\s*(?=[,，；;、:：])", "", rebuilt)
         rebuilt = re.sub(r"^[\s,，；;、]+", "", rebuilt)
@@ -1892,6 +1919,36 @@ def _redact_commute_claims(text: str, *, zh: bool, bindings: list[dict] | None =
     if not _HAS_CONTENT.search(result):
         return None
     return result
+
+
+# What is left of a sentence after its commute figure was withdrawn and that cannot stand
+# alone: a dependent continuation or a bare comparative about the removed figure.
+_DANGLING_AFTER_DROP = re.compile(
+    r"^\s*(?:(?:[-–—:]\s*)?(?:with|which|that|whereas|while|making it|so it|so this)\b"
+    r"|(?:the\s+)?(?:longest|shortest|fastest|slowest|quickest|longer|shorter|faster|slower|quicker)\b"
+    r"|(?:是|为)?(?:最长|最短|最快|最慢|较长|较短)(?:的)?(?:通勤)?\s*$)", re.I)
+_LEADING_COORDINATOR = re.compile(r"^(\s*)(?:and|but|or|plus|also)\s+(?=\S)", re.I)
+
+
+def _quotes_source_text(fragment: str, source_texts: list[str] | None) -> bool:
+    """True when every minute figure in ``fragment`` is quoted, with its own words, from a
+    tool result of this turn — "3 mins walk to British Library" from the listing's own
+    features is the listing's claim, not the model's, and must not be withdrawn (R1-10)."""
+    if not source_texts:
+        return False
+    figures = list(_MINUTE_TOKEN.finditer(fragment))
+    if not figures:
+        return False
+    blob = " ".join(" ".join(str(t).split()) for t in source_texts).lower()
+    for figure in figures:
+        # The figure plus up to three of its own following words ("3 mins walk to"), so a
+        # bare "25 minutes" never matches some unrelated listing sentence.
+        tail = re.match(r"[^,;.!?。，；！？]{0,40}", fragment[figure.end():]).group()
+        words = " ".join(tail.lower().split()[:3])
+        quoted = " ".join(figure.group().lower().split()) + ((" " + words) if words else "")
+        if not words or quoted not in blob:
+            return False
+    return True
 
 
 def _commute_unverified_note(zh: bool) -> str:
@@ -2303,9 +2360,11 @@ def validate_commute_response(response: str, state: dict) -> str:
         re.search(r"only\s+(?:save|remember)|只.{0,8}(?:保存|记住)|仅.{0,8}(?:保存|记住)|不用搜索|不要搜索", current, re.I)
         or not any(a.get("tool") in {"calculate_commute", "calculate_commute_cost", "get_transport_info"}
                    for a in state.get("tool_artifacts") or [])))
+    removed: list = []
     redacted = _redact_commute_claims(
         text, zh=zh, bindings=bindings, caps=_known_commute_caps(state),
-        default_binding=default, preference_context=memory_reference)
+        default_binding=default, preference_context=memory_reference,
+        source_texts=_listing_source_texts(state), removed=removed)
     if redacted is None:
         fallback = render_structured_evidence_fallback(state, language=language)
         if not fallback and len(original.strip()) >= _LEDGER_FALLBACK_MIN_CHARS:
@@ -2337,8 +2396,36 @@ def validate_commute_response(response: str, state: dict) -> str:
             redacted = f"{redacted}\n\n" + "\n".join(missing_lines)
     if redacted.strip() == original.strip():
         return original
+    if not removed:
+        # Only orphaned leftovers of an earlier pass were tidied (or nothing at all): no
+        # commute claim was withdrawn by THIS pass, so no note claims one was (R1-10).
+        return redacted
     note = _commute_unverified_note(zh)
     return redacted if note in redacted else f"{redacted}\n\n{note}"
+
+
+def _listing_source_texts(state: dict) -> list[str]:
+    """Listing text returned by this turn's tools (features, descriptions)."""
+    texts: list[str] = []
+    for artifact in state.get("tool_artifacts") or []:
+        raw = artifact.get("raw_data") if isinstance(artifact, dict) else None
+        if not isinstance(raw, dict):
+            continue
+        rows = []
+        for key in ("recommendations", "over_budget_alternatives", "properties"):
+            rows.extend(r for r in (raw.get(key) or []) if isinstance(r, dict))
+        rows.append(raw)
+        for row in rows:
+            for key in ("features", "key_features", "Key_Features", "description", "Description",
+                        "Detailed_Amenities", "amenities", "reported_features", "property_details"):
+                value = row.get(key)
+                if isinstance(value, (list, tuple)):
+                    texts.extend(str(v) for v in value if v)
+                elif isinstance(value, dict):
+                    texts.extend(f"{k} {v}" for k, v in value.items())
+                elif value:
+                    texts.append(str(value))
+    return texts
 
 
 async def validate_search_payload_with_provider(

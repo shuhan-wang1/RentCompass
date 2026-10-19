@@ -110,3 +110,19 @@ def test_a_description_of_the_job_is_not_a_destination(message):
 ])
 def test_a_retraction_of_something_else_keeps_the_lift(message):
     assert "lift" in (_apply_explicit_criteria_updates({}, message).get("property_features") or [])
+
+
+@pytest.mark.parametrize("message", [
+    "I do not need pets allowed any more", "pets allowed is no longer needed",
+])
+def test_a_pet_permission_withdrawal_removes_the_cat_filter(message):
+    """A-07: the withdrawal said "pets", the filter is "cats allowed"; it stayed hard."""
+    updated = _apply_explicit_criteria_updates({"property_features": ["cats allowed", "lift"]},
+                                               message)
+    assert updated["property_features"] == ["lift"]
+
+
+def test_a_cat_permission_requirement_is_unchanged():
+    assert "cats allowed" in _apply_explicit_criteria_updates(
+        {}, "I have a cat, the landlord must allow cats")["property_features"]
+    assert _apply_explicit_criteria_updates({}, "Do they allow pets?").get("property_features") is None

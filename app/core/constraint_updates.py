@@ -300,14 +300,20 @@ def cat_permission_update(text: str) -> bool | None:
     None means unchanged, False an explicit withdrawal, True a requirement.
     """
     for clause in re.split(r'[。.!?;；\n]', text or ''):
-        animal = re.search(r'\bcats?\b|猫', clause, re.I)
+        # "pets" too: "I do not need pets allowed any more" left the hard "cats allowed"
+        # filter in place (2026-10-19 A-07). A withdrawal may name pets generally; a
+        # requirement still has to pass the hard-cue test below.
+        animal = re.search(r'\b(?:cats?|pets?)\b|猫|宠物', clause, re.I)
         permission = re.search(r'permission|permitt|allow|accept|consent|许可|允许|同意|养猫|带猫', clause, re.I)
         if not (animal and permission):
             continue
         if re.search(r'(?:remove|drop|clear|(?:no longer|don.t|do not|doesn.t|does not) (?:need|require))'
-                     r'[^.!?]{0,50}(?:permission|requirement|filter|cat)'
+                     r'[^.!?]{0,50}(?:permission|requirement|filter|cats?|pets?)'
+                     r'|(?:cats?|pets?)\s+allowed\s+(?:is\s+)?(?:no longer|not)\s+(?:needed|necessary|required)'
                      r'|(?:取消|去掉|不再需要)[^。；]{0,18}(?:猫|宠物)(?:许可|筛选|条件)', clause, re.I):
             return False
+        if not re.search(r'\bcats?\b|猫', clause, re.I):
+            continue        # a pet requirement without a cat is not this slot
         if is_hypothetical(clause) or re.search(
                 r'\b(?:unknown|whether|does|can you|is it|do not assume|don.t assume|no permission|not required)\b'
                 r'|是否|未知|不要|暂时不|没有.{0,15}(?:许可|同意)', clause, re.I):

@@ -867,7 +867,8 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
             changed = True
     elif pet_requirement is False:
         existing = result.get('property_features') or []
-        filtered = [feature for feature in existing if feature != 'cats allowed']
+        filtered = [feature for feature in existing
+                    if feature not in ('cats allowed', 'pets allowed', 'pet-friendly')]
         if filtered != existing:
             result['property_features'] = filtered
             changed = True

@@ -155,7 +155,22 @@ def _extract_room_type(text: str):
             for match in re.finditer(re.escape(needle), t):
                 if mention_is_requirement(t, match.start(), match.end()):
                     return canonical
+    # "a 1-bed flat" / "two bedroom apartment" asks for a WHOLE home. With no room type a
+    # "1 bed Flat share" room satisfied bedrooms=1 and was presented under "Meets all
+    # declared conditions (verified)" for a 1-bed-flat request (2026-10-19 C-11, 5/5).
+    # A share/room phrasing never reaches here: the "shared" needles above win first.
+    if re.search(r"\b(?:a|one|single|double|twin)\s+room\b|\broom\s+in\s+(?:a|an|the)\b", t):
+        return None          # "a room in a 3-bed flat" is a room, not a whole flat
+    for match in _WHOLE_HOME_REQUEST.finditer(t):
+        if mention_is_requirement(t, match.start(), match.end()):
+            return "whole"
     return None
+
+
+_WHOLE_HOME_REQUEST = re.compile(
+    r"\b(?:\d+|one|two|three|four|five)[\s-]*(?:bed(?:room)?s?|br)[\s-]+"
+    r"(?:flat|apartment|house|maisonette|bungalow|home)\b(?![\s-]*(?:share|shares|mate))"
+    r"|[一二三四两1-5][室居](?:室)?(?:公寓|整套|住宅)", re.I)
 
 
 def _normalize_room_type(value):
@@ -1170,6 +1185,54 @@ def _match_known_area(fragment: str):
     return _KNOWN_AREAS[best_key] if best_key else None
 
 
+# An explicit AREA SWITCH names both the old and the new place, and the new one is not
+# the one a left-to-right scan keeps: "Move the search from Islington to Camden",
+# "Let's look at Camden instead of Islington", "Search in Camden rather than Islington"
+# all searched Islington again under a "verified" header, and "Switch from Islington to
+# Camden" changed nothing (2026-10-19 A-01, 3/3 live). A route question ("how long from
+# Camden to King's Cross") has no switch verb and is not an area switch.
+_SWITCH_FROM_TO = re.compile(
+    r"\b(?:move|switch|change|swap|shift|update|go|moving|switching|changing)\b"
+    r"[^.;!?\n]{0,40}?\bfrom\s+([a-z][a-z’'\-\s]{1,30}?)\s+to\s+([a-z][a-z’'\-\s]{1,30})", re.I)
+_INSTEAD_OF = re.compile(
+    r"([a-z][a-z’'\-\s]{0,30}?)\s*,?\s+(?:instead\s+of|rather\s+than)\s+([a-z][a-z’'\-\s]{1,30})",
+    re.I)
+_NOT_ROUTE_SWITCH = re.compile(r"\b(?:commute|commuting|journey|travel|route|trip|how long)\b", re.I)
+
+
+def _area_switch_target(text: str) -> str | None:
+    """The NEW area of an explicit "from X to Y" / "Y instead of X" switch, else None."""
+    source = str(text or "")
+    for clause in re.split(r"[.;!?\n。；！？]", source):
+        match = _SWITCH_FROM_TO.search(clause)
+        if match and not _NOT_ROUTE_SWITCH.search(clause):
+            old, new = _match_known_area(match.group(1)), _match_known_area(match.group(2))
+            if old and new and old != new:
+                return new
+        match = _INSTEAD_OF.search(clause)
+        if match:
+            new, old = _match_known_area(match.group(1)), _match_known_area(match.group(2))
+            if old and new and old != new:
+                return new
+    return None
+
+
+def _drop_city_qualifier(areas: list[str], phrase: str) -> list[str]:
+    """"Hackney, London" is ONE place: a London area qualified by its city, not two search
+    areas. Restoring a saved default "1-bed in Hackney, London" searched all of London and
+    labelled Chigwell IG7 and Shepherd's Bush W12 "verified" for a Hackney-only default
+    (2026-10-19 A-06, 4/4)."""
+    if "London" not in areas or len(areas) < 2:
+        return areas
+    london_areas = [a for a in areas if a != "London"
+                    and re.sub(r"[’']", "", a.lower()) in LONDON_AREAS]
+    if london_areas and re.search(
+            r"(?:" + "|".join(re.escape(a) for a in london_areas) + r")\s*,\s*london\b",
+            phrase, re.I):
+        return [a for a in areas if a != "London"]
+    return areas
+
+
 def _extract_areas(text: str) -> list[str]:
     """Explicit residential place alternatives in order; [] means no update.
 
@@ -1180,6 +1243,9 @@ def _extract_areas(text: str) -> list[str]:
     source = housing_update_text(text)
     if not source:
         return []
+    switched = _area_switch_target(source)
+    if switched:
+        return [switched]
     names = {**_KNOWN_AREAS, **_ZH_AREA_MAP}
     alternatives = '|'.join(re.escape(name) for name in sorted(names, key=len, reverse=True))
     place = rf'(?<![a-z])(?:{alternatives})(?![a-z])'
@@ -1201,6 +1267,7 @@ def _extract_areas(text: str) -> list[str]:
             canonical = names.get(raw) or names.get(key)
             if canonical and canonical not in areas:
                 areas.append(canonical)
+        areas = _drop_city_qualifier(areas, phrase)
         if len(areas) > 1:
             return areas
     area = _extract_area(source)
@@ -1254,6 +1321,9 @@ def _extract_area(text: str) -> str | None:
     text = housing_update_text(text)
     if not text or not text.strip():
         return None
+    switched = _area_switch_target(text)
+    if switched:
+        return switched
     # Coordinated residential alternatives belong to the list extractor.
     for clause in re.split(r'[。.!?;；\n]', text):
         if re.search(r'\b(?:search|find|keep|live|flats?)\b|找|住|搜', clause, re.I):

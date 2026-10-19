@@ -2090,34 +2090,52 @@ def _commute_note(is_cjk: bool) -> str:
             "A narrower area or a specific destination can help complete that check.")
 
 
-def _applied_filters_text(criteria: dict | None, is_cjk: bool) -> str:
-    """The filters a search actually applied, in the user's language ('' when none)."""
+def _applied_filter_parts(criteria: dict | None, is_cjk: bool) -> list[tuple[str, str]]:
+    """``[(kind, text)]`` for the filters a search actually applied, each named ONCE.
+
+    A studio search carries both ``bedrooms=0`` and ``room_type='studio'``; listing both
+    printed "studio, Studio" (R2-03)."""
     c = criteria if isinstance(criteria, dict) else {}
-    parts: list[str] = []
+    parts: list[tuple[str, str]] = []
+
+    def add(kind: str, text: str) -> None:
+        key = " ".join(str(text).lower().split())
+        if key and all(" ".join(t.lower().split()) != key for _k, t in parts):
+            parts.append((kind, text))
+
     budget = c.get('max_budget')
     if isinstance(budget, (int, float)) and not isinstance(budget, bool) and budget > 0:
-        parts.append(f"月租不超过 £{budget:,.0f}" if is_cjk else f"up to £{budget:,.0f}/month")
+        add('budget', f"月租不超过 £{budget:,.0f}" if is_cjk else f"up to £{budget:,.0f}/month")
     beds = c.get('bedrooms')
+    studio_by_beds = False
     if isinstance(beds, int) and not isinstance(beds, bool):
         if beds == 0:
-            parts.append("studio" if not is_cjk else "单间(studio)")
+            studio_by_beds = True
+            add('bedrooms', "studio" if not is_cjk else "单间(studio)")
         else:
             plus = "+" if c.get('bedrooms_minimum') else ""
-            parts.append(f"{beds}{plus} 居室" if is_cjk else
-                         f"{beds}{plus} bedroom{'s' if beds != 1 or plus else ''}")
+            add('bedrooms', f"{beds}{plus} 居室" if is_cjk else
+                f"{beds}{plus} bedroom{'s' if beds != 1 or plus else ''}")
     room_type = c.get('room_type')
-    if room_type:
-        parts.append(_room_type_label(room_type, is_cjk))
+    if room_type and not (studio_by_beds and str(room_type).lower() == 'studio'):
+        add('room_type', _room_type_label(room_type, is_cjk))
     for feature in c.get('property_features') or []:
         if isinstance(feature, str) and feature.strip():
-            parts.append(feature.strip())
+            add('feature', feature.strip())
     minutes, destination = c.get('max_travel_time'), c.get('commute_destination')
     if minutes and destination and not c.get('no_commute'):
-        parts.append(f"到 {destination} 通勤不超过 {minutes} 分钟" if is_cjk
-                     else f"within {minutes} min of {destination}")
+        add('commute', f"到 {destination} 通勤不超过 {minutes} 分钟" if is_cjk
+            else f"within {minutes} min of {destination}")
     if c.get('move_in_date'):
-        parts.append(f"{c['move_in_date']} 前可入住" if is_cjk else f"available by {c['move_in_date']}")
-    return ("、" if is_cjk else ", ").join(parts)
+        add('move_in', f"{c['move_in_date']} 前可入住" if is_cjk
+            else f"available by {c['move_in_date']}")
+    return parts
+
+
+def _applied_filters_text(criteria: dict | None, is_cjk: bool) -> str:
+    """The filters a search actually applied, in the user's language ('' when none)."""
+    return ("、" if is_cjk else ", ").join(text for _kind, text in
+                                          _applied_filter_parts(criteria, is_cjk))
 
 
 def _no_results_message(area: str, is_cjk: bool, *, criteria: dict | None = None,
@@ -2126,21 +2144,42 @@ def _no_results_message(area: str, is_cjk: bool, *, criteria: dict | None = None
 
     "Please check the area spelling" is said only when the area itself could not be
     resolved; a zero result caused by the budget, a room type or a commute limit used to
-    send the user off to re-spell a perfectly good area."""
-    filters = _applied_filters_text(criteria, is_cjk)
+    send the user off to re-spell a perfectly good area. The loosening hint names only
+    filters that were applied: "the commute limit" on a search with none read as if one had
+    been set (R2-03)."""
+    parts = _applied_filter_parts(criteria, is_cjk)
+    filters = ("、" if is_cjk else ", ").join(text for _kind, text in parts)
+    kinds = {kind for kind, _text in parts}
     if is_cjk:
+        examples = "或".join(label for kind, label in (("budget", "预算"), ("commute", "通勤时间"))
+                            if kind in kinds)
         lead = (f"本次检索数据中，在 {area} 附近没有找到符合以下条件的房源：{filters}。" if filters
                 else f"本次检索数据中，在 {area} 附近没有找到符合条件的房源。")
-        tail = ("请检查区域拼写，或换一个附近区域后重试（可使用右侧搜索表单）。" if area_unresolved
-                else "放宽其中一个条件（例如预算或通勤时间）可能会有结果，也可使用右侧搜索表单。")
+        if area_unresolved:
+            tail = "请检查区域拼写，或换一个附近区域后重试（可使用右侧搜索表单）。"
+        elif examples:
+            tail = f"放宽其中一个条件（例如{examples}）可能会有结果，也可使用右侧搜索表单。"
+        elif parts:
+            tail = "放宽其中一个条件可能会有结果，也可使用右侧搜索表单。"
+        else:
+            tail = "换一个附近区域可能会有结果，也可使用右侧搜索表单。"
         return lead + tail
+    examples = " or ".join(label for kind, label in (("budget", "the budget"),
+                                                      ("commute", "the commute limit"))
+                           if kind in kinds)
     lead = (f"I couldn't find listings near {area} in the retrieved data that match: {filters}."
             if filters else
             f"I couldn't find listings matching your criteria near {area} in the retrieved data.")
-    tail = (" Please check the area spelling, or try a nearby area (you can also use the search "
-            "form on the right)." if area_unresolved else
-            " Loosening one of these (for example the budget or the commute limit) may help; you "
-            "can also use the search form on the right.")
+    if area_unresolved:
+        tail = (" Please check the area spelling, or try a nearby area (you can also use the "
+                "search form on the right).")
+    elif examples:
+        tail = (f" Loosening one of these (for example {examples}) may help; you can also use "
+                "the search form on the right.")
+    elif parts:
+        tail = " Loosening one of these may help; you can also use the search form on the right."
+    else:
+        tail = " A nearby area may have results; you can also use the search form on the right."
     return lead + tail
 
 

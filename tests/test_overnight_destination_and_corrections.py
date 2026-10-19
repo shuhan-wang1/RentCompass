@@ -1,0 +1,56 @@
+"""Destination fragments and budget self-corrections (2026-10-19 A-03, A-05) — targeted only.
+
+* A-03 — "I work at King's Cross, so I'd like a commute of under 30 minutes" stored the
+  destination "King's Cross, so I'd like a commute of"; "I work from home so I don't commute at
+  all" stored "all"; the correction "my workplace is King's Cross station" changed nothing. Every
+  later commute lookup failed address resolution, 4 turns of zero results.
+* A-05 — "Budget £1,500, no wait, £1,700." searched at £1,500. Part of the cause was general:
+  a figure followed by a sentence-final full stop ("£1,700.") was invisible to the amount
+  patterns, whose ``(?![\\d.])`` guard was meant for decimals.
+
+The lift retraction and "go back to my original plan" from A-05 are NOT addressed here.
+"""
+from __future__ import annotations
+
+import pytest
+
+from core.langgraph_agent import _apply_explicit_criteria_updates
+from core.tools.search_properties import _extract_budget
+
+_PRIOR = {"commute_destination": "Old Place", "destination": "Old Place", "max_budget": 2000}
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("I work at King's Cross, so I'd like a commute of under 30 minutes.", "King's Cross"),
+    ("Sorry, to be clear: my workplace is King's Cross station.", "King's Cross station"),
+    ("I work near Euston station, under 25 minutes please", "Euston station"),
+    ("My office is in Shoreditch", "Shoreditch"),
+])
+def test_the_destination_ends_where_its_clause_ends(message, expected):
+    updated = _apply_explicit_criteria_updates(dict(_PRIOR), message)
+    assert updated["commute_destination"] == expected
+
+
+def test_not_commuting_names_no_destination():
+    updated = _apply_explicit_criteria_updates(
+        dict(_PRIOR), "I work from home so I don't commute at all.")
+    assert updated.get("commute_destination") != "all"
+    assert updated.get("no_commute") is True
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("Budget £1,500, no wait, £1,700.", 1700),
+    ("My budget is £1,800 a month, actually make that £1,900", 1900),
+    ("预算1500，不对，1700", 1700),
+    ("My budget is £1,800.", 1800),            # the sentence-final full stop
+    ("budget 2000.", 2000),
+    ("Find a flat for £1,750.50 a month", 1750.5),
+])
+def test_the_last_correction_wins(message, expected):
+    amount, period = _extract_budget(message)
+    assert amount == expected and period == "month"
+    assert _apply_explicit_criteria_updates(dict(_PRIOR), message)["max_budget"] == expected
+
+
+def test_a_question_between_two_prices_is_still_not_a_budget():
+    assert _extract_budget("flat at £1500 or £1700?") == (None, None)

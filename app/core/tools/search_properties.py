@@ -507,7 +507,21 @@ def _extract_budget(text: str):
     if re.search(r'房源|\blisting\b|\bproperty\b', t) and re.search(r'[?？]|多少', t) and not re.search(
             r'\b(?:set|keep|change|ceiling|budget)\b|预算|上限', t):
         return None, None
-    rent_amounts = [m for m in re.finditer(r'(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?![\d.])', t)
+    # A self-correction names the budget twice and retracts the first: "Budget £1,500, no
+    # wait, £1,700" searched at £1,500 (A-05, 2/2). The figure after the LAST correction
+    # marker wins, provided an earlier figure in the same message is what it corrects.
+    correction = None
+    for candidate in re.finditer(
+            r'(?:\bno\s*,?\s*wait\b|\bsorry\b|\bi\s+mean\b|\bmake\s+(?:that|it)\b|\bactually\b|'
+            r'\bcorrection\b|\bor\s+rather\b|\bscratch\s+that\b|不对|说错了|改成|应该是)'
+            r'[\s,，:：]*(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t, re.I):
+        correction = candidate
+    if correction is not None and re.search(r'(?<![\d.])\d{3,5}(?![\d.])', t[:correction.start()]):
+        return valid_amount(_money_value(correction.group(1)),
+                            _budget_period_near(t, correction.start(1), correction.end(1)))
+    # (?!\d|\.\d): a full stop after the figure ends the sentence, it is not a decimal
+    # point — "…, £1,700." used to be invisible to every amount pattern here.
+    rent_amounts = [m for m in re.finditer(r'(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
                     if _amount_role(t, m.start(), m.end()) == 'rent'
                     and not is_hypothetical(clause_at(t, m.start(), m.end()))]
     if rent_amounts:
@@ -516,7 +530,7 @@ def _extract_budget(text: str):
     # A clearly stated household of N with a per-person ceiling can express a
     # whole-property ceiling. Bedrooms alone never establish occupant count.
     persons = re.search(r'(?:我们|共|一共)?\s*([2-6二两三四五六])\s*(?:个人|人)|\b([2-6]|two|three|four|five|six)\s+(?:people|persons|tenants|friends)\b', t)
-    per_person = [m for m in re.finditer(r'(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?![\d.])', t)
+    per_person = [m for m in re.finditer(r'(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t)
                   if _amount_role(t, m.start(), m.end()) == 'per_person']
     if persons and len(per_person) == 1 and _extract_room_type(t) == 'whole' and not is_hypothetical(t):
         count_text = persons.group(1) or persons.group(2)

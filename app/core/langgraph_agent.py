@@ -699,12 +699,31 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     message_destination = extract_destination_from_text(current_message)
     # A labelled workplace is followed by the destination. "My office" itself
     # is never an address, even if a generic place classifier accepts it.
+    # "my workplace is King's Cross station" names the place without a preposition; a
+    # correction phrased that way used to change nothing (A-03). "St." is not a sentence end.
+    _dest_source = re.sub(r"\b(St|Dr|Mt)\.\s", r"\1 ", current_message)
     labelled_destination = re.search(
-        r'\b(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)\s+(?:is\s+)?(?:next to|near|at|to|in)\s+([^.!?;\n]{2,90})',
-        current_message, re.I)
+        r'\b(?:(?:my (?:office|workplace|work|job)\s+is)\s+(?:(?:next to|near|at|in)\s+)?|'
+        r'(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
+        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+)([^.!?;\n]{2,90})',
+        _dest_source, re.I)
+    if labelled_destination and re.search(
+            r"\b(?:don.t|do not|doesn.t|never|no longer|not)\s+(?:\w+\s+){0,2}commut\w*|\bno commute\b",
+            labelled_destination.string[:labelled_destination.end()], re.I):
+        # "I work from home so I don't commute at all" names no destination ("all").
+        labelled_destination = None
     if labelled_destination:
-        named = re.split(r'\s+and\s+|,\s*(?:and|where|i\b)|\s+for\s+|\s+(?:arriving|leaving|departing)\b|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)', labelled_destination.group(1), maxsplit=1, flags=re.I)[0].strip()
-        if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I):
+        # The place ends where the clause about it ends: "King's Cross, so I'd like a
+        # commute of under 30 minutes" stored the whole fragment as the destination, and
+        # every later commute lookup failed address resolution (A-03).
+        named = re.split(r'\s+and\s+|,\s*(?:and|where|so|but|which|because|as|i\b|i.[dm]\b|my\b)'
+                         r'|\s+(?:so|but|because|since|which|where|while)\s+'
+                         r'|\s+for\s+|\s+(?:arriving|leaving|departing)\b'
+                         r'|\s+(?:of\s+(?:about\s+)?|within\s+|under\s+|at most\s+)(?=\d)',
+                         labelled_destination.group(1), maxsplit=1, flags=re.I)[0].strip(" ,")
+        if named and not re.fullmatch(r'(?:my|the|an?)\s+(?:office|workplace)', named, re.I) \
+                and not re.fullmatch(r'(?:all|home|work|the moment|present|least|most|times?)',
+                                     named, re.I):
             message_destination = {'address': named, 'name': named}
     known_destination = _known_destination_address(named if labelled_destination else current_message)
     if message_destination or known_destination:

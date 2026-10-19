@@ -483,6 +483,38 @@ def _extract_total_budget(text: str):
     return monthly_from_weekly(value) if _budget_period_near(t, m.start(), m.end()) == 'week' else value
 
 
+_NOT_RENT_MONEY = re.compile(
+    r'\b(?:deposit|salary|earn\w*|income|wages?|after tax|fees?|bills?|council tax|'
+    r'holding|admin)\b|押金|工资|收入|月薪|年薪', re.I)
+_RENT_CONTEXT = re.compile(
+    r'\b(?:budget|rent|max(?:imum)?|under|up to|below|pcm|per month|a month|ceiling)\b|'
+    r'预算|租金|月租|上限|以内', re.I)
+
+
+def _corrects_a_budget(t: str, correction) -> bool:
+    """True when ``correction`` (a "no wait / actually / 不对 <amount>" match) retracts an
+    earlier RENT figure in the same clause run, and is itself a rent figure.
+
+    Without this a correction of any number won: "The deposit is £2000, sorry, £2500",
+    "I earn 4000, sorry 4500 after tax" and "1500, actually 1200 sq ft" all replaced
+    the budget (review of the A-05 fix)."""
+    start, end = correction.start(1), correction.end(1)
+    earlier = list(re.finditer(r'(?<![\d.])\d{3,5}(?!\d|\.\d)', t[:correction.start()]))
+    if not earlier:
+        return False
+    prior = earlier[-1]
+    bounds = list(re.finditer(r'[.!?。！？;；\n](?!\d)', t[:prior.start()]))
+    clause = t[(bounds[-1].end() if bounds else 0):min(len(t), end + 16)]
+    if not _RENT_CONTEXT.search(clause[:prior.end() - (bounds[-1].end() if bounds else 0) + 20]):
+        return False
+    if _NOT_RENT_MONEY.search(clause):
+        return False
+    if re.match(r'\s*(?:sq|square|ft|m2|minutes?|mins?|beds?|bedrooms?|people|persons?|%|分钟|平)',
+                t[end:], re.I):
+        return False
+    return not is_hypothetical(clause_at(t, start, end))
+
+
 def _extract_budget(text: str):
     """Pull an explicit monthly/weekly budget out of the *current* user message.
     Returns (amount:number, period:'week'|'month') or (None, None). Deterministic regex
@@ -516,7 +548,7 @@ def _extract_budget(text: str):
             r'\bcorrection\b|\bor\s+rather\b|\bscratch\s+that\b|不对|说错了|改成|应该是)'
             r'[\s,，:：]*(?:£\s*)?(?<![\d.])(\d{3,5}(?:\.\d{1,2})?)(?!\d|\.\d)', t, re.I):
         correction = candidate
-    if correction is not None and re.search(r'(?<![\d.])\d{3,5}(?![\d.])', t[:correction.start()]):
+    if correction is not None and _corrects_a_budget(t, correction):
         return valid_amount(_money_value(correction.group(1)),
                             _budget_period_near(t, correction.start(1), correction.end(1)))
     # (?!\d|\.\d): a full stop after the figure ends the sentence, it is not a decimal
@@ -1206,12 +1238,14 @@ def _match_known_area(fragment: str):
 # Camden" changed nothing (2026-10-19 A-01, 3/3 live). A route question ("how long from
 # Camden to King's Cross") has no switch verb and is not an area switch.
 _SWITCH_FROM_TO = re.compile(
-    r"\b(?:move|switch|change|swap|shift|update|go|moving|switching|changing)\b"
+    r"\b(?:move|switch|change|swap|shift|update|moving|switching|changing)\b"
     r"[^.;!?\n]{0,40}?\bfrom\s+([a-z][a-z’'\-\s]{1,30}?)\s+to\s+([a-z][a-z’'\-\s]{1,30})", re.I)
 _INSTEAD_OF = re.compile(
     r"([a-z][a-z’'\-\s]{0,30}?)\s*,?\s+(?:instead\s+of|rather\s+than)\s+([a-z][a-z’'\-\s]{1,30})",
     re.I)
-_NOT_ROUTE_SWITCH = re.compile(r"\b(?:commute|commuting|journey|travel|route|trip|how long)\b", re.I)
+_NOT_ROUTE_SWITCH = re.compile(
+    r"\b(?:commute|commuting|journey|travel|route|trip|how long|every day|daily|by (?:bike|bus|"
+    r"tube|train|car)|for work|to work|cycle|cycling)\b", re.I)
 
 
 def _area_switch_target(text: str) -> str | None:

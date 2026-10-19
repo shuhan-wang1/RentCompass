@@ -293,9 +293,11 @@ def erasure_request_fields(text: str) -> tuple:
 # Accessibility needs (wheelchair, step-free, lift) are deliberately NOT in the health
 # list: they are housing requirements the search uses, stated as property facts.
 _SENSITIVE_CLAUSE_PATTERNS = (
+    # Income words only: "a year" alone also describes a tenancy ("rent for a year in
+    # Hackney") and must not cost the user their area.
     ("income", re.compile(
-        r"\b(?:earn(?:s|ing)?|salary|salaries|income|wage|wages|take[- ]home|per annum|"
-        r"a year|annually|p\.?a\.?)\b|年薪|月薪|收入|工资", re.I)),
+        r"\b(?:earn(?:s|ing)?|salary|salaries|income|wage|wages|take[- ]home|per annum)\b|"
+        r"年薪|月薪|收入|工资", re.I)),
     ("immigration", re.compile(
         r"\b(?:visa|immigration|asylum|refugee|brp|biometric residence|indefinite leave|"
         r"settled status|pre-settled|right to remain|leave to remain|work permit)\b|"
@@ -307,7 +309,8 @@ _SENSITIVE_CLAUSE_PATTERNS = (
         r"illness|allerg\w*)\b|哮喘|糖尿病|癫痫|癌|怀孕|抑郁|焦虑|病情|疾病|过敏", re.I)),
 )
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
-_PHONE_RE = re.compile(r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?|\b0)\d(?:[\s-]?\d){8,9}(?!\d)")
+_PHONE_RE = re.compile(
+    r"(?<![\d£$])(?:\+44\s?\(?0?\)?\s?\d|\(0\d|\b0\d)(?:[\s)-]{0,2}\d){8,9}(?!\d)")
 # Clause boundaries: sentence/clause punctuation (a comma or full stop between digits is a
 # thousands separator or a decimal point, never a boundary), or "and/but" introducing a new
 # first-person clause ("... a year and I'm on a visa").

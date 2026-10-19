@@ -78,3 +78,35 @@ def test_a_retracted_feature_is_removed_and_not_re_added(message):
 ])
 def test_a_stated_feature_is_still_required(message):
     assert "lift" in (_apply_explicit_criteria_updates({}, message).get("property_features") or [])
+
+
+# ── review follow-ups ─────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("message", [
+    "My budget is £1500 a month. The deposit is £2000, sorry, £2500.",
+    "I earn 4000 a month, sorry 4500 after tax, and my budget is 1500",
+    "Budget 1500, actually 1200 sq ft minimum",
+    "Max £1500. If it were £1800, actually 2000 would be fine hypothetically",
+    "My budget is 1500. If I could, I would pay less",
+    "Budget 1500. Would you suggest areas if I were flexible?",
+])
+def test_only_a_corrected_rent_figure_replaces_the_budget(message):
+    assert _extract_budget(message)[0] == 1500
+
+
+@pytest.mark.parametrize("message", [
+    "My job is remote, find me a 1-bed in Hackney under 1500",
+    "My work is hybrid so find a 1-bed in Hackney",
+    "My job is in finance; find me a flat in Hackney",
+    "My job is stressful, so I want a quiet flat in Hackney",
+])
+def test_a_description_of_the_job_is_not_a_destination(message):
+    assert _apply_explicit_criteria_updates({}, message).get("commute_destination") is None
+
+
+@pytest.mark.parametrize("message", [
+    "I need a lift and it's not necessary to have a balcony",
+    "I need a lift, not needed: parking",
+])
+def test_a_retraction_of_something_else_keeps_the_lift(message):
+    assert "lift" in (_apply_explicit_criteria_updates({}, message).get("property_features") or [])

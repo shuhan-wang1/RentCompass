@@ -95,3 +95,10 @@ def test_the_categories_are_recorded_for_what_is_left():
     assert "health" in am_mod._classify_pii("I have asthma")
     assert am_mod.contains_sensitive("User is on a Skilled Worker visa")
     assert not am_mod.contains_sensitive("User wants a 1-bed flat in Hackney")
+
+
+def test_a_tenancy_length_is_not_income_and_bracketed_phones_are_caught():
+    assert am_mod.redact_sensitive("I want to rent for a year in Hackney, budget £1,800") == (
+        "I want to rent for a year in Hackney, budget £1,800", [])
+    redacted, found = am_mod.redact_sensitive("call (020) 7946 0958 please")
+    assert "7946" not in redacted and found == ["contact"]

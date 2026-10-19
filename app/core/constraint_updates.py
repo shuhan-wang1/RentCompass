@@ -94,8 +94,11 @@ def clause_at(text: str, start: int, end: int) -> str:
     lo = max(0, start - _CLAUSE_WINDOW)
     # finditer(text, pos, endpos) reports absolute offsets.
     left = max([m.end() for m in _CLAUSE_BOUNDARY.finditer(text, lo, start)] or [lo])
-    tail = _CLAUSE_BOUNDARY.search(text, end, min(len(text), end + _CLAUSE_WINDOW))
-    right = tail.start() if tail else min(len(text), end + _CLAUSE_WINDOW)
+    # The tail is searched in a SLICE, exactly as before: with pos=end the look-behind
+    # would see the digit before `end`, so "My budget is 1500. If I could ..." stopped
+    # treating that full stop as a boundary and read the next sentence's hypothetical.
+    tail = _CLAUSE_BOUNDARY.search(text[end:end + _CLAUSE_WINDOW])
+    right = end + tail.start() if tail else min(len(text), end + _CLAUSE_WINDOW)
     return text[left:right]
 
 

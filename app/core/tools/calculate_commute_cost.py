@@ -134,10 +134,14 @@ def _get_zone_from_address(address: str) -> Optional[int]:
 # Waterloo commute was priced as a Zone 1-5 Travelcard, £293.40 instead of £201.60
 # (2026-10-19 B-03).
 #
-# Where a district's stations straddle a boundary the HIGHER zone is used, so a
-# recommended Travelcard is never too narrow to cover the journey. A district not listed
-# here returns None and stays unpriced — the honest outcome the tool already reports
-# ("Unable to determine zones"), rather than a number invented from arithmetic.
+# District granularity is still an approximation (the tool labels it
+# ``zone_basis: postcode_district_estimate``): the table gives the zone of the district's
+# PRINCIPAL station(s), and where that station straddles a boundary (Stratford 2/3, Hendon
+# Central 3/4) the higher zone, so the recommended Travelcard covers it. A minor station in
+# an outer corner of a district can still sit a zone further out (Stamford Hill in N16,
+# Wood Street in E17). A district not listed here returns None and stays unpriced — the
+# honest outcome the tool already reports ("Unable to determine zones"), rather than a
+# number invented from arithmetic.
 _DISTRICT_ZONES = {
     **{d: 1 for d in ("W1", "SW1", "SE1", "SW3", "SW7")},
     **{d: 2 for d in (
@@ -149,12 +153,13 @@ _DISTRICT_ZONES = {
         "W2", "W6", "W8", "W9", "W10", "W11", "W12", "W14")},
     **{d: 3 for d in (
         "N2", "N6", "N8", "N15", "N17", "N19", "N22",
-        "NW2", "NW4", "NW10", "NW11",
+        "NW2", "NW10", "NW11",
         "E7", "E10", "E13", "E15", "E16", "E17", "E20",
         "SE3", "SE6", "SE10", "SE13", "SE23", "SE26", "SE27",
         "SW12", "SW13", "SW14", "SW15", "SW16", "SW17", "SW18", "SW19",
         "W3", "W4", "W5")},
-    **{d: 4 for d in ("N3", "N11", "N12", "N14", "NW7", "NW9", "E6", "E11", "E12", "SW20", "W7")},
+    **{d: 4 for d in ("N3", "N11", "N12", "N14", "NW4", "NW7", "NW9", "E6", "E11", "E12", "SW20",
+                      "W7")},
 }
 
 

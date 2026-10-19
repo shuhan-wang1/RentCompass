@@ -90,3 +90,11 @@ def test_a_flat_share_room_is_not_a_verified_one_bed_flat():
     ledger = validate_candidates([share, flat], dict(criteria, max_budget_monthly=1900), [])
     eligible = [s["candidate"]["address"] for s in ledger["eligible"]]
     assert "Flat Share - ALL Bills & Wifi Included - Bethnal Green" not in eligible
+
+
+@pytest.mark.parametrize("message", [
+    "I go from Hackney to Shoreditch every day for work, find me a flat in Hackney",
+    "Find a 1-bed in Hackney. I'd go from Hackney to Camden by bike",
+])
+def test_a_regular_journey_is_not_an_area_switch(message):
+    assert _extract_areas(message) == ["Hackney"]

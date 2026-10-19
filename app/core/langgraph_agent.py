@@ -309,31 +309,40 @@ _ACCESSIBILITY_SOFT_CUE_RE = re.compile(
 )
 _ACCESSIBILITY_NEGATED_NEED_RE = re.compile(
     r"\b(?:do not|don't|dont|does not|doesn't|doesnt) need\b|"
-    r"\b(?:not required|no need for)\b|不需要|不必|无需|不要|"
-    # A retraction is not a requirement either: "the lift, not needed anymore" kept
-    # property_features=["lift"] as a hard filter (2026-10-19 A-05).
-    r"\b(?:(?:is|are|it's|its)\s+)?not\s+(?:needed|necessary|essential)\b|"
-    r"\bno longer\s+(?:needed|necessary|required|need)\b|"
-    r"\b(?:forget|scrap|drop|remove|ditch)\s+(?:about\s+)?(?:the|that|my)\b",
+    r"\b(?:not required|no need for)\b|不需要|不必|无需|不要",
     re.IGNORECASE,
 )
 
-# "I changed my mind about the lift, not needed anymore": the retraction sits in the NEXT
-# clause of the same sentence, after the comma that ends the feature's own clause.
+# A retraction bound to THE FEATURE ITSELF (2026-10-19 A-05): "I changed my mind about the
+# lift, not needed anymore" kept property_features=["lift"] as a hard filter. Tied to the
+# mention, never to the clause, so "I need a lift and it's not necessary to have a balcony"
+# still requires the lift.
+#   after:  "lift not needed", "the lift is no longer necessary", "lift requirement isn't needed"
+#   tail:   "about the lift, not needed anymore."  (the retraction ENDS the sentence)
+#   before: "forget the lift", "drop the lift requirement"
+_RETRACTION_AFTER_RE = re.compile(
+    r"\s*(?:requirement\s+)?(?:(?:is|are|isn.t|aren.t)\s+)?(?:not|no longer)\s+(?:needed|necessary)\b",
+    re.I)
 _RETRACTION_TAIL_RE = re.compile(
-    r"[^.!?;。！？]{0,40}?[,，:：–—-]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
-    r"(?:(?:not|no longer)\s+(?:needed|necessary)|no longer\s+required)\b", re.I)
+    r"[^.!?;。！？,，]{0,40}?[,，]\s*(?:(?:it|that)(?:'s|\s+is)\s+)?"
+    r"(?:(?:not|no longer)\s+(?:needed|necessary)|no longer\s+required)"
+    r"(?:\s+any\s?more)?\s*(?:[.!?;。！？]|$)", re.I)
+_RETRACTION_BEFORE_RE = re.compile(
+    r"\b(?:forget|scrap|drop|remove|ditch)\s+(?:about\s+)?(?:the|that|my)\s+(?:\w+\s+){0,1}$",
+    re.I)
 
 
-def _retraction_follows(text: str, end: int) -> bool:
-    return bool(_RETRACTION_TAIL_RE.match(str(text or "")[end:end + 80]))
+def _feature_retracted_here(text: str, start: int, end: int) -> bool:
+    text = str(text or "")
+    return bool(_RETRACTION_AFTER_RE.match(text[end:end + 60])
+                or _RETRACTION_TAIL_RE.match(text[end:end + 90])
+                or _RETRACTION_BEFORE_RE.search(text[max(0, start - 40):start]))
 
 
-# The same retraction vocabulary, for removing an ACCUMULATED feature.
+# The clause-level retraction vocabulary, for removing an ACCUMULATED feature (unchanged).
 _FEATURE_RETRACTION_RE = re.compile(
-    r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|scrap|forget|ditch|no longer|'
-    r'don.t need|not needed|not necessary|optional|not required|'
-    r'not (?:a )?requirement|(?:is|would be) (?:a )?preference', re.I)
+    r'取消|删除|移除|去掉|不需要|不用|可选|非必须|remove|drop|no longer|don.t need|optional|'
+    r'not required|not (?:a )?requirement|(?:is|would be) (?:a )?preference', re.I)
 _ACCESSIBILITY_PROPERTY_CONTEXT_RE = re.compile(
     r"\b(?:flat|apartment|property|home|house|room|accommodation|listing|building|"
     r"entrance|entry|front door|doors?|doorways?|corridors?|bathroom)\b|\broute in\s*$|房源|房子|住房|住宅|公寓|房间|楼房|大楼|入口|卫生间|浴室",
@@ -392,7 +401,7 @@ def _extract_accessibility_requirements(message: str) -> dict[str, list[str]]:
 
     for feature, start, end in mentions:
         from core.constraint_updates import mention_is_requirement
-        if not mention_is_requirement(source, start, end) or _retraction_follows(source, end):
+        if not mention_is_requirement(source, start, end) or _feature_retracted_here(source, start, end):
             continue
         left = max(source.rfind(mark, 0, start) for mark in (";", "；", ",", "，", ".", "。", "!", "！", "?", "？"))
         right_candidates = [source.find(mark, end) for mark in
@@ -723,11 +732,14 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     # "my workplace is King's Cross station" names the place without a preposition; a
     # correction phrased that way used to change nothing (A-03). "St." is not a sentence end.
     _dest_source = re.sub(r"\b(St|Dr|Mt)\.\s", r"\1 ", current_message)
+    # The preposition-free form is only for "my office/workplace is <Place>", and the place
+    # must be capitalised: "my job is remote", "my work is hybrid", "my job is stressful"
+    # name no place (review of the A-03 fix).
     labelled_destination = re.search(
-        r'\b(?:(?:my (?:office|workplace|work|job)\s+is)\s+(?:(?:next to|near|at|in)\s+)?|'
-        r'(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
-        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+)([^.!?;\n]{2,90})',
-        _dest_source, re.I)
+        r'\b(?:(?i:my (?:office|workplace)\s+is)\s+(?=[A-Z0-9])|'
+        r'(?i:(?:my (?:office|workplace)|i work|commute|(?:a\s+)?(?:public[- ]transport\s+)?journey)'
+        r'\s+(?:is\s+)?(?:next to|near|at|to|in)\s+))([^.!?;\n]{2,90})',
+        _dest_source)
     if labelled_destination and re.search(
             r"\b(?:don.t|do not|doesn.t|never|no longer|not)\s+(?:\w+\s+){0,2}commut\w*|\bno commute\b",
             labelled_destination.string[:labelled_destination.end()], re.I):
@@ -872,7 +884,7 @@ def _apply_explicit_criteria_updates(accumulated: dict, current_message: str, *,
     for feature, start, end in _accessibility_feature_mentions(current_message):
         from core.constraint_updates import clause_at
         clause = clause_at(current_message, start, end)
-        if _FEATURE_RETRACTION_RE.search(clause) or _retraction_follows(current_message, end):
+        if _FEATURE_RETRACTION_RE.search(clause) or _feature_retracted_here(current_message, start, end):
             retracted.add(feature)
             for key in ('property_features', 'soft_preferences'):
                 previous = result.get(key) or []

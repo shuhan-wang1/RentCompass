@@ -1290,6 +1290,25 @@ _TRANSPORT_SUFFIX = re.compile(
     r"\s+)?(?:station|stop)$", re.I)
 
 
+def _journey_end_label(value: Any) -> tuple[str, str | None] | None:
+    """(resolved station, the address it stands in for) when the planner substituted a
+    station for the requested place, else None."""
+    if not isinstance(value, dict):
+        return None
+    station = str(value.get("resolved_station") or "").strip()
+    asked = str(value.get("input") or "").strip()
+    if not station or _label_key(station) == _label_key(asked):
+        return None
+    return station, asked or None
+
+
+def _render_end(end: tuple[str, str | None], zh: bool) -> str:
+    station, asked = end
+    if not asked:
+        return station
+    return f"{station}（{asked} 的就近车站）" if zh else f"{station} (nearest station to {asked})"
+
+
 def _place_labels(value: Any) -> list[str]:
     if isinstance(value, dict):
         values = [value.get("input"), value.get("resolved_station"), value.get("name")]
@@ -2086,8 +2105,21 @@ def render_structured_evidence_fallback(state: dict, *, language: str | None = N
                 origin = _place_labels(raw.get("from_address") or raw.get("from"))
                 target = _place_labels(raw.get("to_address") or raw.get("to"))
                 if value is not None and origin and target:
-                    add(f"Returned journey: {origin[0]} → {target[0]}, {value:g} minutes (the planner's fastest returned itinerary).",
-                        f"返回的路线：{origin[0]} → {target[0]}，{value:g} 分钟（路线规划器返回的最快行程）。")
+                    # A station-to-station plan is labelled with the STATIONS it ran between:
+                    # "Highgate West Hill, London N6 → UCL … 11 minutes" read as door-to-door
+                    # when TfL had resolved the origin to Archway station (R1-14).
+                    ends = [_journey_end_label(raw.get("from")), _journey_end_label(raw.get("to"))]
+                    if any(end for end in ends):
+                        start = ends[0] or (origin[0], None)
+                        finish = ends[1] or (target[0], None)
+                        add(f"Returned journey: {_render_end(start, False)} → {_render_end(finish, False)}, "
+                            f"{value:g} minutes station to station (the planner's fastest returned "
+                            "itinerary; walking to and from the stations is not included).",
+                            f"返回的路线：{_render_end(start, True)} → {_render_end(finish, True)}，"
+                            f"站到站 {value:g} 分钟（路线规划器返回的最快行程，不含往返车站的步行）。")
+                    else:
+                        add(f"Returned journey: {origin[0]} → {target[0]}, {value:g} minutes (the planner's fastest returned itinerary).",
+                            f"返回的路线：{origin[0]} → {target[0]}，{value:g} 分钟（路线规划器返回的最快行程）。")
                     add("This origin-specific itinerary does not verify another property's travel time, arrival reliability, or step-free access.",
                         "该行程仅对应上述起点，不代表其他房源的通勤时长，也未证明准点到达或无台阶通行。")
             if tool == "calculate_commute_cost":

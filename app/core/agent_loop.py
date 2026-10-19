@@ -185,8 +185,35 @@ def announces_unexecuted_tool(text, artifacts=None) -> bool:
             sentence = body[start + 1:min(ends) + 1 if ends else len(body)]
             if _OFFER_SENTENCE.search(sentence) or sentence.rstrip().endswith(("?", "？")):
                 continue
+            if not _announced_by_the_assistant(body[start + 1:match.start()], match.group(0)):
+                continue
             return True
     return False
+
+
+# Only the ASSISTANT can announce its own next action. "Right now you are looking for a studio
+# in Hackney with a £1,500 budget." recites the user's search; it matched the gerund pattern,
+# was nudged, and shipped with "I was not able to run that lookup this round" on an answer to
+# "what have you kept about me?" (R2-02). The gerund and 正在 patterns carry no subject of their
+# own, so theirs is read from the words before them: a first-person subject ("I'm checking",
+# "我正在查询") or none at all ("Checking that now.") announces; anyone else's does not.
+_GERUND_ANNOUNCEMENT = re.compile(r"^(?:searching|checking|looking)\b|^正在", re.IGNORECASE)
+_FIRST_PERSON_SUBJECT = re.compile(
+    r"(?:\bi(?:'|’)?m|\bi\s+am)(?:\s+(?:now|just|currently|still|also|quickly|already))*\s*$"
+    r"|我(?:现在|这就|马上|目前|已经)?\s*$", re.IGNORECASE)
+_SENTENCE_OPENER = re.compile(
+    r"^[\s*_#>\-•\d.)]*(?:(?:ok(?:ay)?|sure|right|alright|great|got\s+it|one\s+moment|"
+    r"no\s+problem|好的|好|稍等)[\s,，!！.。:：—–-]*)?$", re.IGNORECASE)
+
+
+def _announced_by_the_assistant(before: str, matched: str) -> bool:
+    """True unless a subject-less pattern (gerund / 正在) belongs to someone else's clause.
+
+    ``before`` is the sentence text preceding the match."""
+    if not _GERUND_ANNOUNCEMENT.match(str(matched or "").strip()):
+        return True       # every other pattern names the assistant itself (let me / I'll / 我来)
+    lead = str(before or "")
+    return bool(_FIRST_PERSON_SUBJECT.search(lead) or _SENTENCE_OPENER.match(lead))
 
 
 _OFFER_SENTENCE = re.compile(
